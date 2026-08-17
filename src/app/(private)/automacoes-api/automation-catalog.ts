@@ -223,7 +223,7 @@ export const camposPorCategoria: Record<Categoria, Array<{ value: string; label:
 };
 
 export const operadores: Array<{ value: Operador; label: string }> = [
-  { value: "igual", label: "é igual a" },
+  { value: "igual", label: "exata" },
   { value: "diferente", label: "é diferente de" },
   { value: "contem", label: "contém" },
   { value: "nao_contem", label: "não contém" },
@@ -238,6 +238,7 @@ export const operadores: Array<{ value: Operador; label: string }> = [
 export const acoesDisponiveis = [
   { value: "fluxo.iniciar", label: "Iniciar fluxo" },
   { value: "fluxo.interromper", label: "Interromper fluxo atual" },
+  { value: "whatsapp.enviar_mensagem", label: "Enviar mensagem" },
   { value: "whatsapp.enviar_template", label: "Enviar template WhatsApp" },
   { value: "email.enviar", label: "Enviar e-mail" },
   { value: "notificacao.responsavel", label: "Notificar responsável" },
@@ -327,5 +328,7 @@ export function quantidadeOffset(gatilho: Gatilho) {
 
 export function configuracaoPadraoAcao(tipo: string): Record<string, unknown> {
   if (tipo === "agenda.atualizar_status") return { status: "confirmado" };
+  if (tipo === "whatsapp.enviar_mensagem") return { mensagem: "" };
+  if (tipo === "conversa.transferir_setor") return { escopo_fila: "setor", setor_id: "" };
   return {};
 }

@@ -51,6 +51,7 @@ type Props = {
 
 function AcaoIcon({ tipo }: { tipo: string }) {
   if (tipo === "fluxo.iniciar") return <Workflow size={18} />;
+  if (tipo === "whatsapp.enviar_mensagem") return <Send size={18} />;
   if (tipo === "whatsapp.enviar_template") return <Send size={18} />;
   if (tipo === "email.enviar") return <Mail size={18} />;
   if (tipo === "contato.adicionar_etiqueta") return <Tag size={18} />;
@@ -69,6 +70,7 @@ export default function AutomationBuilderModal({
   onSave,
 }: Props) {
   const [etapa, setEtapa] = useState(1);
+  const [interrupcaoSugerida, setInterrupcaoSugerida] = useState(false);
   const gatilhos = gatilhosPorCategoria[form.categoria];
   const campos = camposPorCategoria[form.categoria];
   const permiteValor = (operador: Operador) => !["existe", "nao_existe"].includes(operador);
@@ -81,6 +83,34 @@ export default function AutomationBuilderModal({
     [form.acoes, form.condicoes.length, form.gatilho],
   );
 
+  function mudarEtapa(proximaEtapa: number) {
+    if (
+      proximaEtapa === 4 &&
+      !interrupcaoSugerida &&
+      form.condicoes.some((condicao) => condicao.campo === "mensagem.texto")
+    ) {
+      setInterrupcaoSugerida(true);
+
+      if (!form.acoes.some((acao) => acao.tipo_acao === "fluxo.interromper")) {
+        const acaoInterromper: Acao = {
+          ordem: 0,
+          tipo_acao: "fluxo.interromper",
+          configuracao_json: {},
+          ativo: true,
+        };
+
+        onChange({
+          ...form,
+          acoes: [acaoInterromper, ...form.acoes].map((acao, ordem) => ({
+            ...acao,
+            ordem,
+          })),
+        });
+      }
+    }
+
+    setEtapa(proximaEtapa);
+  }
 
   function selecionarCategoria(categoria: Categoria) {
     const primeiro = gatilhosPorCategoria[categoria][0];
@@ -204,6 +234,7 @@ export default function AutomationBuilderModal({
 
   function renderConfigAcao(acao: Acao, index: number) {
     const config = acao.configuracao_json;
+
     if (acao.tipo_acao === "fluxo.iniciar") {
       return (
         <label className={styles.formField} style={{ marginTop: 8 }}>
@@ -215,6 +246,20 @@ export default function AutomationBuilderModal({
         </label>
       );
     }
+
+    if (acao.tipo_acao === "whatsapp.enviar_mensagem") {
+      return (
+        <label className={styles.formField} style={{ marginTop: 8 }}>
+          <span>Mensagem</span>
+          <input
+            value={String(config.mensagem || "")}
+            onChange={(event) => configAcao(index, "mensagem", event.target.value)}
+            placeholder="Digite a mensagem que será enviada"
+          />
+        </label>
+      );
+    }
+
     if (acao.tipo_acao === "whatsapp.enviar_template") {
       const integracaoId = String(config.integracao_whatsapp_id || "");
       const templates = opcoes.templates.filter(
@@ -239,6 +284,7 @@ export default function AutomationBuilderModal({
         </>
       );
     }
+
     if (acao.tipo_acao === "email.enviar") {
       return (
         <>
@@ -247,21 +293,51 @@ export default function AutomationBuilderModal({
         </>
       );
     }
+
     if (acao.tipo_acao === "contato.adicionar_etiqueta") {
       return (
-        <label className={styles.formField} style={{ marginTop: 8 }}><span>Etiqueta</span><select value={String(config.etiqueta_id || "")} onChange={(event) => configAcao(index, "etiqueta_id", event.target.value)}><option value="">Selecione</option>{opcoes.etiquetas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
+        <label className={styles.formField} style={{ marginTop: 8 }}>
+          <span>Etiqueta</span>
+          <select value={String(config.etiqueta_id || "")} onChange={(event) => configAcao(index, "etiqueta_id", event.target.value)}>
+            <option value="">Selecione</option>
+            {opcoes.etiquetas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+          </select>
+        </label>
       );
     }
+
     if (acao.tipo_acao === "conversa.transferir_setor") {
+      const filaGeral = String(config.escopo_fila || "") === "geral";
+      const destino = filaGeral ? "__fila_geral__" : String(config.setor_id || "");
+
       return (
-        <label className={styles.formField} style={{ marginTop: 8 }}><span>Setor</span><select value={String(config.setor_id || "")} onChange={(event) => configAcao(index, "setor_id", event.target.value)}><option value="">Selecione</option>{opcoes.setores.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
+        <label className={styles.formField} style={{ marginTop: 8 }}>
+          <span>Destino</span>
+          <select
+            value={destino}
+            onChange={(event) => {
+              const valor = event.target.value;
+              atualizarAcao(index, {
+                configuracao_json: valor === "__fila_geral__"
+                  ? { ...config, escopo_fila: "geral", setor_id: null }
+                  : { ...config, escopo_fila: "setor", setor_id: valor },
+              });
+            }}
+          >
+            <option value="">Selecione</option>
+            <option value="__fila_geral__">Fila geral</option>
+            {opcoes.setores.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+          </select>
+        </label>
       );
     }
+
     if (acao.tipo_acao === "agenda.atualizar_status") {
       return (
         <label className={styles.formField} style={{ marginTop: 8 }}><span>Novo status</span><select value={String(config.status || "confirmado")} onChange={(event) => configAcao(index, "status", event.target.value)}><option value="agendado">Agendado</option><option value="confirmado">Confirmado</option><option value="realizado">Realizado</option><option value="cancelado">Cancelado</option><option value="faltou">Faltou</option></select></label>
       );
     }
+
     if (acao.tipo_acao === "integracao.consultar_api") {
       return (
         <>
@@ -270,6 +346,7 @@ export default function AutomationBuilderModal({
         </>
       );
     }
+
     return null;
   }
 
@@ -283,7 +360,7 @@ export default function AutomationBuilderModal({
 
         <div className={styles.steps}>
           {[{ n: 1, titulo: "Origem", sub: "O que será observado" }, { n: 2, titulo: "Quando", sub: "Gatilho da rotina" }, { n: 3, titulo: "Se", sub: "Condições opcionais" }, { n: 4, titulo: "Então", sub: "Ações do CRM" }].map((item) => (
-            <button key={item.n} className={`${styles.step} ${etapa === item.n ? styles.stepActive : ""} ${etapa > item.n ? styles.stepDone : ""}`} onClick={() => setEtapa(item.n)}><span>{etapa > item.n ? <Check size={13} /> : item.n}</span><div><b>{item.titulo}</b><small>{item.sub}</small></div></button>
+            <button key={item.n} className={`${styles.step} ${etapa === item.n ? styles.stepActive : ""} ${etapa > item.n ? styles.stepDone : ""}`} onClick={() => mudarEtapa(item.n)}><span>{etapa > item.n ? <Check size={13} /> : item.n}</span><div><b>{item.titulo}</b><small>{item.sub}</small></div></button>
           ))}
         </div>
 
@@ -326,8 +403,8 @@ export default function AutomationBuilderModal({
         </div>
 
         <footer className={styles.modalFooter}>
-          <button className={styles.ghostButton} onClick={() => etapa === 1 ? onClose() : setEtapa((atual) => atual - 1)}>{etapa === 1 ? "Cancelar" : "Voltar"}</button>
-          {etapa < 4 ? <button className={styles.primaryButton} onClick={() => setEtapa((atual) => atual + 1)} disabled={etapa === 1 && !form.nome.trim()}>Continuar <ArrowRight size={17} /></button> : <button className={styles.primaryButton} onClick={onSave} disabled={salvando || !form.nome.trim() || !form.acoes.length}>{salvando ? <Loader2 size={17} className={styles.spinning} /> : <Zap size={17} />} Salvar automação</button>}
+          <button className={styles.ghostButton} onClick={() => etapa === 1 ? onClose() : mudarEtapa(etapa - 1)}>{etapa === 1 ? "Cancelar" : "Voltar"}</button>
+          {etapa < 4 ? <button className={styles.primaryButton} onClick={() => mudarEtapa(etapa + 1)} disabled={etapa === 1 && !form.nome.trim()}>Continuar <ArrowRight size={17} /></button> : <button className={styles.primaryButton} onClick={onSave} disabled={salvando || !form.nome.trim() || !form.acoes.length}>{salvando ? <Loader2 size={17} className={styles.spinning} /> : <Zap size={17} />} Salvar automação</button>}
         </footer>
       </section>
     </div>
