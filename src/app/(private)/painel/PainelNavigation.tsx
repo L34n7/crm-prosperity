@@ -22,11 +22,21 @@ export default function PainelNavigation() {
     }
 
     const main = document.querySelector("main");
-    if (!main) return;
+    const hero = main?.querySelector(":scope > section");
+    if (!(hero instanceof HTMLElement)) return;
 
     const host = document.createElement("div");
     host.dataset.painelNavigationHost = "true";
-    main.prepend(host);
+    Object.assign(host.style, {
+      position: "absolute",
+      top: "10px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: "6",
+      width: "fit-content",
+      maxWidth: "calc(100% - 24px)",
+    });
+    hero.append(host);
     setPortalHost(host);
 
     return () => {
@@ -55,10 +65,10 @@ export default function PainelNavigation() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: "100%",
+        width: "fit-content",
         maxWidth: "100%",
         padding: 0,
-        margin: "0 0 4px",
+        margin: 0,
       }}
     >
       <nav
