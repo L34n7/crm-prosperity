@@ -3,38 +3,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import styles from "./WhatsAppMessageDecorations.module.css";
-
-type ReactionMetadata = {
-  emoji?: unknown;
-  remetente?: unknown;
-  evento_id?: unknown;
-  timestamp?: unknown;
-};
-
-type EditHistoryMetadata = {
-  conteudo?: unknown;
-  tipo_mensagem?: unknown;
-  substituido_em?: unknown;
-  evento_id?: unknown;
-};
-
-type MessageMetadata = {
-  reacoes_whatsapp?: unknown;
-  mensagem_editada_whatsapp?: unknown;
-  mensagem_revogada_whatsapp?: unknown;
-  historico_edicoes_whatsapp?: unknown;
-  conteudo_antes_revogacao?: unknown;
-};
-
-type MessageRow = {
-  id?: string | null;
-  conversa_id?: string | null;
-  conteudo?: string | null;
-  origem?: string | null;
-  remetente_tipo?: string | null;
-  metadata_json?: MessageMetadata | null;
-};
 
 type GroupedReaction = {
   emoji: string;
@@ -52,7 +20,10 @@ type MessageDecoration = {
   outgoing: boolean;
 };
 
-type DecorationKind = "content" | "state" | "reactions";
+type DecorationResponse = {
+  ok?: boolean;
+  decoracoes?: MessageDecoration[];
+};
 
 type MessageDomStructure = {
   bubble: HTMLElement;
@@ -61,110 +32,16 @@ type MessageDomStructure = {
 };
 
 const HOST_ATTRIBUTE = "data-whatsapp-message-decoration-host";
+const HIDDEN_ATTRIBUTE = "data-whatsapp-original-content-hidden";
 const MESSAGE_ATTRIBUTE = "data-whatsapp-message-decoration-id";
-const HIDDEN_CONTENT_ATTRIBUTE = "data-whatsapp-original-content-hidden";
-const SIGNATURE_ATTRIBUTE = "data-whatsapp-decoration-signature";
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
+function isHTMLElement(value: unknown): value is HTMLElement {
+  return typeof HTMLElement !== "undefined" && value instanceof HTMLElement;
 }
 
-function stringValue(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function parseReactions(value: unknown): GroupedReaction[] {
-  if (!Array.isArray(value)) return [];
-
-  const grouped = new Map<string, number>();
-
-  for (const item of value) {
-    if (!isObject(item)) continue;
-
-    const reaction = item as ReactionMetadata;
-    const emoji = stringValue(reaction.emoji);
-    if (!emoji) continue;
-
-    grouped.set(emoji, (grouped.get(emoji) || 0) + 1);
-  }
-
-  return Array.from(grouped.entries()).map(([emoji, count]) => ({
-    emoji,
-    count,
-  }));
-}
-
-function getPreviousEditedContent(value: unknown) {
-  if (!Array.isArray(value)) return null;
-
-  for (let index = value.length - 1; index >= 0; index -= 1) {
-    const item = value[index];
-    if (!isObject(item)) continue;
-
-    const historyItem = item as EditHistoryMetadata;
-    const content = stringValue(historyItem.conteudo);
-    if (content) return content;
-  }
-
-  return null;
-}
-
-function parseDecoration(message: MessageRow): MessageDecoration | null {
-  const messageId = stringValue(message.id);
-  if (!messageId) return null;
-
-  const metadata = isObject(message.metadata_json)
-    ? (message.metadata_json as MessageMetadata)
-    : {};
-
-  const reactions = parseReactions(metadata.reacoes_whatsapp);
-  const edited = metadata.mensagem_editada_whatsapp === true;
-  const revoked = metadata.mensagem_revogada_whatsapp === true;
-
-  if (!edited && !revoked && reactions.length === 0) return null;
-
-  const currentContent = stringValue(message.conteudo);
-  const previousContent = edited
-    ? getPreviousEditedContent(metadata.historico_edicoes_whatsapp)
-    : null;
-  const deletedContent = revoked
-    ? stringValue(metadata.conteudo_antes_revogacao) || currentContent || null
-    : null;
-
-  return {
-    messageId,
-    reactions,
-    edited,
-    revoked,
-    previousContent,
-    currentContent,
-    deletedContent,
-    outgoing: message.origem === "enviada",
-  };
-}
-
-function mergeDecoration(
-  current: Map<string, MessageDecoration>,
-  message: MessageRow,
-) {
-  const next = new Map(current);
-  const messageId = stringValue(message.id);
-
-  if (!messageId) return next;
-
-  const decoration = parseDecoration(message);
-  if (decoration) next.set(messageId, decoration);
-  else next.delete(messageId);
-
-  return next;
-}
-
-function elementChildren(element: Element | null) {
-  if (!element) return [];
-
-  return Array.from(element.children).filter(
-    (child): child is HTMLElement => child instanceof HTMLElement,
-  );
+function directChildren(element: Element | null) {
+  if (!element) return [] as HTMLElement[];
+  return Array.from(element.children).filter(isHTMLElement);
 }
 
 function isDecorationHost(element: HTMLElement) {
@@ -172,249 +49,278 @@ function isDecorationHost(element: HTMLElement) {
 }
 
 function getMessageDomStructure(row: HTMLElement): MessageDomStructure | null {
-  // Não usamos nomes das classes do CSS Module aqui. Em produção o Next/Turbopack
-  // pode transformar esses nomes e seletores como [class*=messageBubble] deixam de
-  // localizar os elementos. A estrutura abaixo usa apenas o DOM estável da timeline.
-  const bubble = elementChildren(row).find((element) => !isDecorationHost(element));
+  const rowChildren = directChildren(row).filter((item) => !isDecorationHost(item));
+  const bubble = rowChildren[0] || null;
   if (!bubble) return null;
 
-  const originalBubbleChildren = elementChildren(bubble).filter(
-    (element) => !isDecorationHost(element),
+  const bubbleChildren = directChildren(bubble).filter(
+    (item) => !isDecorationHost(item),
   );
 
-  if (originalBubbleChildren.length === 0) {
-    return {
-      bubble,
-      content: null,
-      meta: null,
-    };
+  if (bubbleChildren.length === 0) {
+    return { bubble, content: null, meta: null };
   }
 
-  // O último filho original do balão é messageMetaBottom. O anterior é
-  // messageContentRow; seu primeiro filho é messageContentFlex.
-  const meta = originalBubbleChildren[originalBubbleChildren.length - 1] || null;
+  const meta = bubbleChildren[bubbleChildren.length - 1] || null;
   const contentRow =
-    originalBubbleChildren.length >= 2
-      ? originalBubbleChildren[originalBubbleChildren.length - 2]
-      : null;
+    bubbleChildren.length >= 2
+      ? bubbleChildren[bubbleChildren.length - 2]
+      : bubbleChildren[0];
 
-  const content = contentRow
-    ? elementChildren(contentRow).find((element) => !isDecorationHost(element)) || null
-    : null;
-
-  return {
-    bubble,
-    content,
-    meta,
-  };
-}
-
-function findHost(
-  parent: HTMLElement,
-  messageId: string,
-  kind: DecorationKind,
-) {
-  const hosts = parent.querySelectorAll<HTMLElement>(
-    `[${HOST_ATTRIBUTE}="true"]`,
+  const contentChildren = directChildren(contentRow).filter(
+    (item) => !isDecorationHost(item),
   );
+  const content = contentChildren[0] || contentRow || null;
 
-  for (const host of hosts) {
-    if (
-      host.getAttribute(MESSAGE_ATTRIBUTE) === messageId &&
-      host.dataset.whatsappDecorationKind === kind
-    ) {
-      return host;
-    }
-  }
-
-  return null;
+  return { bubble, content, meta };
 }
 
-function ensureHost(
-  parent: HTMLElement,
-  messageId: string,
-  kind: DecorationKind,
-  tagName: "div" | "span",
-) {
-  const existing = findHost(parent, messageId, kind);
-  if (existing) return existing;
-
-  const host = document.createElement(tagName);
+function createHost(messageId: string, kind: string, tag = "div") {
+  const host = document.createElement(tag);
   host.setAttribute(HOST_ATTRIBUTE, "true");
   host.setAttribute(MESSAGE_ATTRIBUTE, messageId);
   host.dataset.whatsappDecorationKind = kind;
   return host;
 }
 
-function removeHosts(messageId: string, kind?: DecorationKind) {
-  document
-    .querySelectorAll<HTMLElement>(`[${HOST_ATTRIBUTE}="true"]`)
-    .forEach((host) => {
-      if (host.getAttribute(MESSAGE_ATTRIBUTE) !== messageId) return;
-      if (kind && host.dataset.whatsappDecorationKind !== kind) return;
-      host.remove();
-    });
-}
-
-function cleanupAllDecorations() {
+function cleanupDecorations() {
   document
     .querySelectorAll<HTMLElement>(`[${HOST_ATTRIBUTE}="true"]`)
     .forEach((host) => host.remove());
 
   document
-    .querySelectorAll<HTMLElement>(`[${HIDDEN_CONTENT_ATTRIBUTE}="true"]`)
-    .forEach((element) => element.removeAttribute(HIDDEN_CONTENT_ATTRIBUTE));
+    .querySelectorAll<HTMLElement>(`[${HIDDEN_ATTRIBUTE}="true"]`)
+    .forEach((element) => {
+      element.removeAttribute(HIDDEN_ATTRIBUTE);
+      element.style.removeProperty("display");
+    });
 }
 
-function applySignature(
-  host: HTMLElement,
-  signature: string,
-  render: () => void,
-) {
-  if (host.getAttribute(SIGNATURE_ATTRIBUTE) === signature) return;
-
-  host.replaceChildren();
-  render();
-  host.setAttribute(SIGNATURE_ATTRIBUTE, signature);
-}
-
-function createTextElement(
-  tagName: "div" | "span" | "p",
-  className: string,
+function textElement(
+  tag: "div" | "span" | "p",
   text: string,
+  styles: Partial<CSSStyleDeclaration> = {},
 ) {
-  const element = document.createElement(tagName);
-  element.className = className;
+  const element = document.createElement(tag);
   element.textContent = text;
+  Object.assign(element.style, styles);
   return element;
 }
 
-function renderMutationContent(
-  host: HTMLElement,
+function renderEditedOrDeleted(
+  structure: MessageDomStructure,
   decoration: MessageDecoration,
 ) {
-  host.className = styles.mutationContentHost;
+  const { content } = structure;
+  if (!content?.parentElement) return false;
 
-  const signature = JSON.stringify([
-    decoration.revoked,
-    decoration.edited,
-    decoration.previousContent,
-    decoration.currentContent,
-    decoration.deletedContent,
-  ]);
+  content.setAttribute(HIDDEN_ATTRIBUTE, "true");
+  content.style.setProperty("display", "none", "important");
 
-  applySignature(host, signature, () => {
-    if (decoration.revoked) {
-      const card = document.createElement("div");
-      card.className = styles.deletedContentCard;
+  const host = createHost(decoration.messageId, "content");
+  Object.assign(host.style, {
+    flex: "1 1 auto",
+    minWidth: "0",
+    maxWidth: "100%",
+  });
 
-      card.appendChild(
-        createTextElement(
-          "p",
-          styles.deletedOriginalText,
-          decoration.deletedContent || "Conteúdo removido",
-        ),
-      );
-      card.appendChild(
-        createTextElement(
-          "span",
-          styles.deletedBadge,
-          "Apagada pelo contato",
-        ),
-      );
-
-      host.appendChild(card);
-      return;
-    }
-
-    if (!decoration.edited) return;
-
+  if (decoration.revoked) {
     const card = document.createElement("div");
-    card.className = styles.editedContentCard;
+    Object.assign(card.style, {
+      display: "flex",
+      flexDirection: "column",
+      gap: "5px",
+      minWidth: "0",
+      padding: "7px 9px",
+      border: "1px dashed var(--crm-border, #cbd5e1)",
+      borderRadius: "9px",
+      background: "var(--crm-surface-soft, rgba(148, 163, 184, 0.10))",
+    });
+
+    card.appendChild(
+      textElement("p", decoration.deletedContent || "Conteúdo removido", {
+        margin: "0",
+        color: "var(--crm-text-strong, inherit)",
+        fontSize: "14px",
+        lineHeight: "1.4",
+        whiteSpace: "pre-wrap",
+        overflowWrap: "anywhere",
+        textDecoration: "line-through",
+        opacity: "0.72",
+      }),
+    );
+
+    card.appendChild(
+      textElement("span", "Apagada pelo contato", {
+        color: "var(--crm-text-muted, #64748b)",
+        fontSize: "10px",
+        fontStyle: "italic",
+        fontWeight: "700",
+        lineHeight: "1.2",
+      }),
+    );
+
+    host.appendChild(card);
+  } else if (decoration.edited) {
+    const card = document.createElement("div");
+    Object.assign(card.style, {
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+      minWidth: "0",
+      maxWidth: "100%",
+    });
 
     if (decoration.previousContent) {
       const previous = document.createElement("div");
-      previous.className = styles.editVersionPrevious;
+      Object.assign(previous.style, {
+        padding: "6px 8px",
+        borderLeft: "3px solid var(--crm-border, #cbd5e1)",
+        borderRadius: "7px",
+        background: "var(--crm-surface-soft, rgba(148, 163, 184, 0.10))",
+        opacity: "0.78",
+      });
       previous.appendChild(
-        createTextElement("span", styles.editVersionLabel, "Antes"),
+        textElement("span", "Antes", {
+          display: "block",
+          marginBottom: "2px",
+          color: "var(--crm-text-muted, #64748b)",
+          fontSize: "9px",
+          fontWeight: "800",
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+        }),
       );
       previous.appendChild(
-        createTextElement(
-          "p",
-          styles.editVersionText,
-          decoration.previousContent,
-        ),
+        textElement("p", decoration.previousContent, {
+          margin: "0",
+          color: "var(--crm-text-strong, inherit)",
+          fontSize: "14px",
+          lineHeight: "1.4",
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
+        }),
       );
       card.appendChild(previous);
     }
 
     const current = document.createElement("div");
-    current.className = styles.editVersionCurrent;
+    Object.assign(current.style, {
+      padding: "6px 8px",
+      borderLeft: "3px solid var(--crm-primary, #0891b2)",
+      borderRadius: "7px",
+      background: "var(--crm-primary-soft, rgba(8, 145, 178, 0.08))",
+    });
     current.appendChild(
-      createTextElement("span", styles.editVersionLabel, "Agora"),
+      textElement("span", "Agora", {
+        display: "block",
+        marginBottom: "2px",
+        color: "var(--crm-text-muted, #64748b)",
+        fontSize: "9px",
+        fontWeight: "800",
+        letterSpacing: "0.05em",
+        textTransform: "uppercase",
+      }),
     );
     current.appendChild(
-      createTextElement(
-        "p",
-        styles.editVersionText,
-        decoration.currentContent || "Mensagem editada",
-      ),
+      textElement("p", decoration.currentContent || "Mensagem editada", {
+        margin: "0",
+        color: "var(--crm-text-strong, inherit)",
+        fontSize: "14px",
+        lineHeight: "1.4",
+        whiteSpace: "pre-wrap",
+        overflowWrap: "anywhere",
+      }),
     );
     card.appendChild(current);
-
     host.appendChild(card);
-  });
+  }
+
+  content.insertAdjacentElement("afterend", host);
+  return true;
 }
 
-function renderStateLabel(host: HTMLElement, decoration: MessageDecoration) {
-  const text = decoration.revoked ? "apagada" : "editada";
-  const signature = `${text}:${decoration.revoked ? "1" : "0"}`;
+function renderState(structure: MessageDomStructure, decoration: MessageDecoration) {
+  const { meta } = structure;
+  if (!meta) return false;
 
-  host.className = `${styles.stateLabel} ${
-    decoration.revoked ? styles.stateDeleted : ""
-  }`;
-
-  applySignature(host, signature, () => {
-    host.textContent = text;
+  const host = createHost(decoration.messageId, "state", "span");
+  host.textContent = decoration.revoked ? "apagada" : "editada";
+  Object.assign(host.style, {
+    display: "inline-flex",
+    alignItems: "center",
+    marginLeft: "4px",
+    color: "var(--crm-text-muted, #64748b)",
+    fontSize: "10px",
+    fontStyle: "italic",
+    fontWeight: "650",
+    lineHeight: "1",
+    whiteSpace: "nowrap",
+    opacity: decoration.revoked ? "0.9" : "1",
   });
+  meta.appendChild(host);
+  return true;
 }
 
-function renderReactions(host: HTMLElement, decoration: MessageDecoration) {
-  host.className = `${styles.reactionList} ${
-    decoration.outgoing ? styles.reactionListOutgoing : ""
-  }`;
+function renderReactions(structure: MessageDomStructure, decoration: MessageDecoration) {
+  if (!decoration.reactions.length) return false;
+
+  const host = createHost(decoration.messageId, "reactions");
   host.setAttribute("aria-label", "Reações da mensagem");
-
-  const signature = JSON.stringify([
-    decoration.outgoing,
-    decoration.reactions.map((reaction) => [reaction.emoji, reaction.count]),
-  ]);
-
-  applySignature(host, signature, () => {
-    for (const reaction of decoration.reactions) {
-      const chip = document.createElement("span");
-      chip.className = styles.reactionChip;
-      chip.title = `${reaction.count} reação${
-        reaction.count === 1 ? "" : "ões"
-      } ${reaction.emoji}`;
-
-      chip.appendChild(
-        createTextElement("span", styles.reactionEmoji, reaction.emoji),
-      );
-
-      if (reaction.count > 1) {
-        chip.appendChild(
-          createTextElement(
-            "span",
-            styles.reactionCount,
-            String(reaction.count),
-          ),
-        );
-      }
-
-      host.appendChild(chip);
-    }
+  Object.assign(host.style, {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: decoration.outgoing ? "flex-end" : "flex-start",
+    gap: "4px",
+    width: "fit-content",
+    maxWidth: "100%",
+    marginTop: "4px",
+    marginLeft: decoration.outgoing ? "auto" : "0",
+    position: "relative",
+    zIndex: "3",
   });
+
+  for (const reaction of decoration.reactions) {
+    const chip = document.createElement("span");
+    chip.title = `${reaction.count} reação${reaction.count === 1 ? "" : "ões"} ${reaction.emoji}`;
+    Object.assign(chip.style, {
+      minWidth: "28px",
+      minHeight: "23px",
+      padding: "2px 7px",
+      border: "1px solid var(--crm-border, #cbd5e1)",
+      borderRadius: "999px",
+      background: "var(--crm-surface, #ffffff)",
+      color: "var(--crm-text-strong, #0f172a)",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "4px",
+      fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
+      fontSize: "15px",
+      lineHeight: "1",
+    });
+
+    chip.appendChild(textElement("span", reaction.emoji));
+
+    if (reaction.count > 1) {
+      chip.appendChild(
+        textElement("span", String(reaction.count), {
+          color: "var(--crm-text-muted, #64748b)",
+          fontFamily: '"Segoe UI", sans-serif',
+          fontSize: "10px",
+          fontWeight: "800",
+          lineHeight: "1",
+        }),
+      );
+    }
+
+    host.appendChild(chip);
+  }
+
+  structure.bubble.appendChild(host);
+  return true;
 }
 
 export default function WhatsAppMessageDecorations() {
@@ -425,233 +331,156 @@ export default function WhatsAppMessageDecorations() {
     "";
 
   const decorationsRef = useRef<Map<string, MessageDecoration>>(new Map());
-  const syncFrameRef = useRef<number | null>(null);
+  const applyingRef = useRef(false);
+  const applyTimerRef = useRef<number | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
 
-  const syncDecorations = useCallback(() => {
+  const applyDecorations = useCallback(() => {
     if (typeof document === "undefined") return;
 
-    const decorations = decorationsRef.current;
-    const activeIds = new Set(decorations.keys());
+    applyingRef.current = true;
+    cleanupDecorations();
 
-    document
-      .querySelectorAll<HTMLElement>(`[${HOST_ATTRIBUTE}="true"]`)
-      .forEach((host) => {
-        const messageId = host.getAttribute(MESSAGE_ATTRIBUTE) || "";
-        if (!activeIds.has(messageId)) host.remove();
-      });
-
-    document
-      .querySelectorAll<HTMLElement>(`[${HIDDEN_CONTENT_ATTRIBUTE}="true"]`)
-      .forEach((content) => {
-        const row = content.closest<HTMLElement>('[id^="mensagem-"]');
-        const messageId = row?.id.replace(/^mensagem-/, "") || "";
-        const decoration = decorations.get(messageId);
-
-        if (!decoration || (!decoration.edited && !decoration.revoked)) {
-          content.removeAttribute(HIDDEN_CONTENT_ATTRIBUTE);
-        }
-      });
-
-    for (const decoration of decorations.values()) {
+    for (const decoration of decorationsRef.current.values()) {
       const row = document.getElementById(`mensagem-${decoration.messageId}`);
       if (!row) continue;
 
       const structure = getMessageDomStructure(row);
       if (!structure) continue;
 
-      const { bubble, content, meta } = structure;
-      const mutated = decoration.edited || decoration.revoked;
-
-      if (mutated && content?.parentElement) {
-        content.setAttribute(HIDDEN_CONTENT_ATTRIBUTE, "true");
-
-        const host = ensureHost(
-          content.parentElement,
-          decoration.messageId,
-          "content",
-          "div",
-        );
-
-        if (content.nextElementSibling !== host) {
-          content.insertAdjacentElement("afterend", host);
-        }
-
-        renderMutationContent(host, decoration);
-      } else {
-        content?.removeAttribute(HIDDEN_CONTENT_ATTRIBUTE);
-        removeHosts(decoration.messageId, "content");
+      if (decoration.edited || decoration.revoked) {
+        renderEditedOrDeleted(structure, decoration);
+        renderState(structure, decoration);
       }
 
-      if (mutated && meta) {
-        const host = ensureHost(
-          meta,
-          decoration.messageId,
-          "state",
-          "span",
-        );
-
-        if (host.parentElement !== meta || !host.isConnected) {
-          meta.appendChild(host);
-        }
-
-        renderStateLabel(host, decoration);
-      } else {
-        removeHosts(decoration.messageId, "state");
-      }
-
-      if (decoration.reactions.length > 0) {
-        const host = ensureHost(
-          bubble,
-          decoration.messageId,
-          "reactions",
-          "div",
-        );
-
-        if (host.parentElement !== bubble || !host.isConnected) {
-          bubble.appendChild(host);
-        }
-
-        renderReactions(host, decoration);
-      } else {
-        removeHosts(decoration.messageId, "reactions");
-      }
+      renderReactions(structure, decoration);
     }
+
+    window.setTimeout(() => {
+      applyingRef.current = false;
+    }, 0);
   }, []);
 
-  const scheduleSync = useCallback(() => {
+  const scheduleApply = useCallback(() => {
     if (typeof window === "undefined") return;
-    if (syncFrameRef.current != null) return;
 
-    syncFrameRef.current = window.requestAnimationFrame(() => {
-      syncFrameRef.current = null;
-      syncDecorations();
-    });
-  }, [syncDecorations]);
+    if (applyTimerRef.current != null) {
+      window.clearTimeout(applyTimerRef.current);
+    }
+
+    applyTimerRef.current = window.setTimeout(() => {
+      applyTimerRef.current = null;
+      window.requestAnimationFrame(applyDecorations);
+    }, 30);
+  }, [applyDecorations]);
+
+  const loadDecorations = useCallback(async () => {
+    if (!conversaId) return;
+
+    try {
+      const params = new URLSearchParams({ conversa_id: conversaId });
+      const response = await fetch(
+        `/api/mensagens/decoracoes?${params.toString()}`,
+        { cache: "no-store" },
+      );
+      const data = (await response.json().catch(() => null)) as DecorationResponse | null;
+
+      if (!response.ok || !data?.ok || !Array.isArray(data.decoracoes)) {
+        return;
+      }
+
+      decorationsRef.current = new Map(
+        data.decoracoes.map((decoration) => [decoration.messageId, decoration]),
+      );
+      scheduleApply();
+    } catch {
+      // A decoração é complementar e nunca deve bloquear a conversa.
+    }
+  }, [conversaId, scheduleApply]);
+
+  const scheduleReload = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    if (refreshTimerRef.current != null) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      void loadDecorations();
+    }, 120);
+  }, [loadDecorations]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
 
-    cleanupAllDecorations();
+    cleanupDecorations();
     decorationsRef.current = new Map();
 
     if (!conversaId) return;
-
-    let cancelled = false;
-
-    async function loadDecorations() {
-      try {
-        const params = new URLSearchParams({
-          conversa_id: conversaId,
-          limite: "100",
-        });
-        const response = await fetch(`/api/mensagens?${params.toString()}`, {
-          cache: "no-store",
-        });
-        const data = await response.json().catch(() => null);
-
-        if (cancelled || !response.ok || !Array.isArray(data?.mensagens)) {
-          return;
-        }
-
-        const next = new Map<string, MessageDecoration>();
-
-        for (const message of data.mensagens as MessageRow[]) {
-          if (stringValue(message.conversa_id) !== conversaId) continue;
-
-          const decoration = parseDecoration(message);
-          if (decoration) next.set(decoration.messageId, decoration);
-        }
-
-        decorationsRef.current = next;
-        scheduleSync();
-      } catch {
-        // A decoração é complementar e não pode bloquear o atendimento.
-      }
-    }
 
     void loadDecorations();
 
     const supabase = createClient();
     const channel = supabase
-      .channel(`crm-whatsapp-message-decorations:${conversaId}`)
+      .channel(`crm-whatsapp-message-decorations-v2:${conversaId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "mensagens",
           filter: `conversa_id=eq.${conversaId}`,
         },
-        (payload) => {
-          decorationsRef.current = mergeDecoration(
-            decorationsRef.current,
-            payload.new as MessageRow,
-          );
-          scheduleSync();
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "mensagens",
-          filter: `conversa_id=eq.${conversaId}`,
-        },
-        (payload) => {
-          decorationsRef.current = mergeDecoration(
-            decorationsRef.current,
-            payload.new as MessageRow,
-          );
-          scheduleSync();
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "mensagens",
-          filter: `conversa_id=eq.${conversaId}`,
-        },
-        (payload) => {
-          const messageId = stringValue((payload.old as MessageRow)?.id);
-          if (!messageId) return;
-
-          const next = new Map(decorationsRef.current);
-          next.delete(messageId);
-          decorationsRef.current = next;
-          removeHosts(messageId);
-          scheduleSync();
-        },
+        () => scheduleReload(),
       )
       .subscribe();
 
     const observer = new MutationObserver(() => {
-      scheduleSync();
+      if (applyingRef.current) return;
+      scheduleApply();
     });
 
     observer.observe(document.body, {
       childList: true,
       subtree: true,
+      characterData: true,
     });
 
-    scheduleSync();
+    const applyInterval = window.setInterval(scheduleApply, 2500);
+    const refreshInterval = window.setInterval(() => {
+      void loadDecorations();
+    }, 30000);
+
+    const handleFocus = () => void loadDecorations();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void loadDecorations();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      cancelled = true;
       observer.disconnect();
       void supabase.removeChannel(channel);
+      window.clearInterval(applyInterval);
+      window.clearInterval(refreshInterval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
 
-      if (syncFrameRef.current != null) {
-        window.cancelAnimationFrame(syncFrameRef.current);
-        syncFrameRef.current = null;
+      if (applyTimerRef.current != null) {
+        window.clearTimeout(applyTimerRef.current);
+        applyTimerRef.current = null;
+      }
+      if (refreshTimerRef.current != null) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
       }
 
       decorationsRef.current = new Map();
-      cleanupAllDecorations();
+      cleanupDecorations();
     };
-  }, [conversaId, scheduleSync]);
+  }, [conversaId, loadDecorations, scheduleApply, scheduleReload]);
 
   return null;
 }
