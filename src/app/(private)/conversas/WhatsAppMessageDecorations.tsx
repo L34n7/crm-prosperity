@@ -59,16 +59,12 @@ type MessageDecoration = {
   outgoing: boolean;
 };
 
-type DecorationHosts = {
+type DecorationTargets = {
   messageId: string;
-  contentHost: HTMLElement | null;
-  stateHost: HTMLElement | null;
-  reactionHost: HTMLElement | null;
+  bubble: HTMLElement;
+  content: HTMLElement | null;
+  meta: HTMLElement | null;
 };
-
-const HOST_ATTRIBUTE = "data-whatsapp-message-decoration-host";
-const MESSAGE_ATTRIBUTE = "data-whatsapp-message-decoration-id";
-const MUTATED_CONTENT_ATTRIBUTE = "data-whatsapp-message-mutated-content";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -164,47 +160,7 @@ function mergeDecoration(
   return next;
 }
 
-function hostSelector(messageId: string, kind: string) {
-  return `[${HOST_ATTRIBUTE}="true"][${MESSAGE_ATTRIBUTE}="${messageId}"][data-whatsapp-decoration-kind="${kind}"]`;
-}
-
-function createHost(
-  parent: HTMLElement,
-  messageId: string,
-  kind: "content" | "state" | "reactions",
-) {
-  const existing = parent.querySelector<HTMLElement>(
-    hostSelector(messageId, kind),
-  );
-  if (existing) return existing;
-
-  const host = document.createElement(kind === "state" ? "span" : "div");
-  host.setAttribute(HOST_ATTRIBUTE, "true");
-  host.setAttribute(MESSAGE_ATTRIBUTE, messageId);
-  host.dataset.whatsappDecorationKind = kind;
-  parent.appendChild(host);
-  return host;
-}
-
-function removeHost(messageId: string, kind: string) {
-  document
-    .querySelectorAll<HTMLElement>(hostSelector(messageId, kind))
-    .forEach((host) => host.remove());
-}
-
-function removeAllHosts() {
-  document
-    .querySelectorAll<HTMLElement>(`[${HOST_ATTRIBUTE}="true"]`)
-    .forEach((host) => host.remove());
-
-  document
-    .querySelectorAll<HTMLElement>(`[${MUTATED_CONTENT_ATTRIBUTE}="true"]`)
-    .forEach((element) => {
-      element.removeAttribute(MUTATED_CONTENT_ATTRIBUTE);
-    });
-}
-
-function sameHosts(current: DecorationHosts[], next: DecorationHosts[]) {
+function sameTargets(current: DecorationTargets[], next: DecorationTargets[]) {
   if (current.length !== next.length) return false;
 
   const currentById = new Map(current.map((item) => [item.messageId, item]));
@@ -214,9 +170,9 @@ function sameHosts(current: DecorationHosts[], next: DecorationHosts[]) {
 
     return (
       !!currentItem &&
-      currentItem.contentHost === nextItem.contentHost &&
-      currentItem.stateHost === nextItem.stateHost &&
-      currentItem.reactionHost === nextItem.reactionHost
+      currentItem.bubble === nextItem.bubble &&
+      currentItem.content === nextItem.content &&
+      currentItem.meta === nextItem.meta
     );
   });
 }
@@ -254,6 +210,34 @@ function MutationContent({ decoration }: { decoration: MessageDecoration }) {
   );
 }
 
+function ReactionList({ decoration }: { decoration: MessageDecoration }) {
+  if (decoration.reactions.length === 0) return null;
+
+  return (
+    <div
+      className={`${styles.reactionList} ${
+        decoration.outgoing ? styles.reactionListOutgoing : ""
+      }`}
+      aria-label="Reações da mensagem"
+    >
+      {decoration.reactions.map((reaction) => (
+        <span
+          key={reaction.emoji}
+          className={styles.reactionChip}
+          title={`${reaction.count} reação${
+            reaction.count === 1 ? "" : "ões"
+          } ${reaction.emoji}`}
+        >
+          <span className={styles.reactionEmoji}>{reaction.emoji}</span>
+          {reaction.count > 1 ? (
+            <span className={styles.reactionCount}>{reaction.count}</span>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function WhatsAppMessageDecorations() {
   const searchParams = useSearchParams();
   const conversaId =
@@ -264,47 +248,22 @@ export default function WhatsAppMessageDecorations() {
   const [decorations, setDecorations] = useState<Map<string, MessageDecoration>>(
     () => new Map(),
   );
-  const [hosts, setHosts] = useState<DecorationHosts[]>([]);
-  const syncFrameRef = useRef<number | null>(null);
+  const [targets, setTargets] = useState<DecorationTargets[]>([]);
   const decorationsRef = useRef(decorations);
-  const hostsRef = useRef<DecorationHosts[]>([]);
+  const targetsRef = useRef<DecorationTargets[]>([]);
+  const syncFrameRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    decorationsRef.current = decorations;
-  }, [decorations]);
+  const replaceTargets = useCallback((nextTargets: DecorationTargets[]) => {
+    if (sameTargets(targetsRef.current, nextTargets)) return;
 
-  const replaceHosts = useCallback((nextHosts: DecorationHosts[]) => {
-    if (sameHosts(hostsRef.current, nextHosts)) return;
-
-    hostsRef.current = nextHosts;
-    setHosts(nextHosts);
+    targetsRef.current = nextTargets;
+    setTargets(nextTargets);
   }, []);
 
-  const syncHosts = useCallback(() => {
+  const syncTargets = useCallback(() => {
     if (typeof document === "undefined") return;
 
-    const activeIds = new Set(decorationsRef.current.keys());
-
-    document
-      .querySelectorAll<HTMLElement>(`[${HOST_ATTRIBUTE}="true"]`)
-      .forEach((host) => {
-        const messageId = host.getAttribute(MESSAGE_ATTRIBUTE) || "";
-        if (!activeIds.has(messageId)) host.remove();
-      });
-
-    document
-      .querySelectorAll<HTMLElement>(`[${MUTATED_CONTENT_ATTRIBUTE}="true"]`)
-      .forEach((element) => {
-        const row = element.closest<HTMLElement>('[id^="mensagem-"]');
-        const messageId = row?.id.replace(/^mensagem-/, "") || "";
-        const decoration = decorationsRef.current.get(messageId);
-
-        if (!decoration?.edited && !decoration?.revoked) {
-          element.removeAttribute(MUTATED_CONTENT_ATTRIBUTE);
-        }
-      });
-
-    const nextHosts: DecorationHosts[] = [];
+    const nextTargets: DecorationTargets[] = [];
 
     for (const decoration of decorationsRef.current.values()) {
       const row = document.getElementById(`mensagem-${decoration.messageId}`);
@@ -313,59 +272,23 @@ export default function WhatsAppMessageDecorations() {
       const bubble = row.querySelector<HTMLElement>('[class*="messageBubble"]');
       if (!bubble) continue;
 
-      const contentFlex = bubble.querySelector<HTMLElement>(
+      const content = bubble.querySelector<HTMLElement>(
         '[class*="messageContentFlex"]',
       );
-      const metaBottom = bubble.querySelector<HTMLElement>(
+      const meta = bubble.querySelector<HTMLElement>(
         '[class*="messageMetaBottom"]',
       );
 
-      let contentHost: HTMLElement | null = null;
-      let stateHost: HTMLElement | null = null;
-      let reactionHost: HTMLElement | null = null;
-
-      if ((decoration.edited || decoration.revoked) && contentFlex) {
-        contentFlex.setAttribute(MUTATED_CONTENT_ATTRIBUTE, "true");
-        contentHost = createHost(
-          contentFlex,
-          decoration.messageId,
-          "content",
-        );
-      } else {
-        contentFlex?.removeAttribute(MUTATED_CONTENT_ATTRIBUTE);
-        removeHost(decoration.messageId, "content");
-      }
-
-      if ((decoration.edited || decoration.revoked) && metaBottom) {
-        stateHost = createHost(
-          metaBottom,
-          decoration.messageId,
-          "state",
-        );
-      } else {
-        removeHost(decoration.messageId, "state");
-      }
-
-      if (decoration.reactions.length > 0) {
-        reactionHost = createHost(
-          bubble,
-          decoration.messageId,
-          "reactions",
-        );
-      } else {
-        removeHost(decoration.messageId, "reactions");
-      }
-
-      nextHosts.push({
+      nextTargets.push({
         messageId: decoration.messageId,
-        contentHost,
-        stateHost,
-        reactionHost,
+        bubble,
+        content,
+        meta,
       });
     }
 
-    replaceHosts(nextHosts);
-  }, [replaceHosts]);
+    replaceTargets(nextTargets);
+  }, [replaceTargets]);
 
   const scheduleSync = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -373,16 +296,21 @@ export default function WhatsAppMessageDecorations() {
 
     syncFrameRef.current = window.requestAnimationFrame(() => {
       syncFrameRef.current = null;
-      syncHosts();
+      syncTargets();
     });
-  }, [syncHosts]);
+  }, [syncTargets]);
+
+  useLayoutEffect(() => {
+    decorationsRef.current = decorations;
+    scheduleSync();
+  }, [decorations, scheduleSync]);
 
   useEffect(() => {
     if (!conversaId) {
+      decorationsRef.current = new Map();
       setDecorations(new Map());
-      hostsRef.current = [];
-      setHosts([]);
-      removeAllHosts();
+      targetsRef.current = [];
+      setTargets([]);
       return;
     }
 
@@ -412,9 +340,11 @@ export default function WhatsAppMessageDecorations() {
           if (decoration) next.set(decoration.messageId, decoration);
         }
 
+        decorationsRef.current = next;
         setDecorations(next);
+        scheduleSync();
       } catch {
-        // Os adornos são complementares e não podem bloquear o atendimento.
+        // A decoração é complementar e não pode bloquear o atendimento.
       }
     }
 
@@ -432,9 +362,11 @@ export default function WhatsAppMessageDecorations() {
           filter: `conversa_id=eq.${conversaId}`,
         },
         (payload) => {
-          setDecorations((current) =>
-            mergeDecoration(current, payload.new as MessageRow),
-          );
+          setDecorations((current) => {
+            const next = mergeDecoration(current, payload.new as MessageRow);
+            decorationsRef.current = next;
+            return next;
+          });
         },
       )
       .on(
@@ -446,9 +378,11 @@ export default function WhatsAppMessageDecorations() {
           filter: `conversa_id=eq.${conversaId}`,
         },
         (payload) => {
-          setDecorations((current) =>
-            mergeDecoration(current, payload.new as MessageRow),
-          );
+          setDecorations((current) => {
+            const next = mergeDecoration(current, payload.new as MessageRow);
+            decorationsRef.current = next;
+            return next;
+          });
         },
       )
       .on(
@@ -466,6 +400,7 @@ export default function WhatsAppMessageDecorations() {
           setDecorations((current) => {
             const next = new Map(current);
             next.delete(messageId);
+            decorationsRef.current = next;
             return next;
           });
         },
@@ -476,11 +411,7 @@ export default function WhatsAppMessageDecorations() {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [conversaId]);
-
-  useLayoutEffect(() => {
-    scheduleSync();
-  }, [decorations, scheduleSync]);
+  }, [conversaId, scheduleSync]);
 
   useEffect(() => {
     if (!conversaId || typeof MutationObserver === "undefined") return;
@@ -498,32 +429,33 @@ export default function WhatsAppMessageDecorations() {
 
     return () => {
       observer.disconnect();
+
       if (syncFrameRef.current != null) {
         window.cancelAnimationFrame(syncFrameRef.current);
         syncFrameRef.current = null;
       }
-      hostsRef.current = [];
-      setHosts([]);
-      removeAllHosts();
+
+      targetsRef.current = [];
+      setTargets([]);
     };
   }, [conversaId, scheduleSync]);
 
   return (
     <>
-      {hosts.map((host) => {
-        const decoration = decorations.get(host.messageId);
+      {targets.map((target) => {
+        const decoration = decorations.get(target.messageId);
         if (!decoration) return null;
 
         return (
-          <span key={host.messageId}>
-            {host.contentHost
+          <span key={target.messageId}>
+            {(decoration.edited || decoration.revoked) && target.content
               ? createPortal(
                   <MutationContent decoration={decoration} />,
-                  host.contentHost,
+                  target.content,
                 )
               : null}
 
-            {host.stateHost
+            {(decoration.edited || decoration.revoked) && target.meta
               ? createPortal(
                   <span
                     className={`${styles.stateLabel} ${
@@ -532,38 +464,14 @@ export default function WhatsAppMessageDecorations() {
                   >
                     {decoration.revoked ? "apagada" : "editada"}
                   </span>,
-                  host.stateHost,
+                  target.meta,
                 )
               : null}
 
-            {host.reactionHost && decoration.reactions.length > 0
+            {decoration.reactions.length > 0
               ? createPortal(
-                  <div
-                    className={`${styles.reactionList} ${
-                      decoration.outgoing ? styles.reactionListOutgoing : ""
-                    }`}
-                    aria-label="Reações da mensagem"
-                  >
-                    {decoration.reactions.map((reaction) => (
-                      <span
-                        key={reaction.emoji}
-                        className={styles.reactionChip}
-                        title={`${reaction.count} reação${
-                          reaction.count === 1 ? "" : "ões"
-                        } ${reaction.emoji}`}
-                      >
-                        <span className={styles.reactionEmoji}>
-                          {reaction.emoji}
-                        </span>
-                        {reaction.count > 1 ? (
-                          <span className={styles.reactionCount}>
-                            {reaction.count}
-                          </span>
-                        ) : null}
-                      </span>
-                    ))}
-                  </div>,
-                  host.reactionHost,
+                  <ReactionList decoration={decoration} />,
+                  target.bubble,
                 )
               : null}
           </span>
