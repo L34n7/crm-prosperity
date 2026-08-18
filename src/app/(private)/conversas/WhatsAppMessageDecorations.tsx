@@ -20,6 +20,7 @@ type MessageDecoration = {
 
 type DecorationResponse = {
   ok?: boolean;
+  conversa_id?: string;
   decoracoes?: MessageDecoration[];
 };
 
@@ -32,17 +33,7 @@ type MessageDomStructure = {
 const HOST_ATTRIBUTE = "data-whatsapp-message-decoration-host";
 const HIDDEN_ATTRIBUTE = "data-whatsapp-original-content-hidden";
 const MESSAGE_ATTRIBUTE = "data-whatsapp-message-decoration-id";
-
-function getConversationIdFromLocation() {
-  if (typeof window === "undefined") return "";
-
-  const params = new URLSearchParams(window.location.search);
-  return (
-    params.get("id")?.trim() ||
-    params.get("conversaId")?.trim() ||
-    ""
-  );
-}
+const MESSAGE_ROW_PREFIX = "mensagem-";
 
 function isHTMLElement(value: unknown): value is HTMLElement {
   return typeof HTMLElement !== "undefined" && value instanceof HTMLElement;
@@ -55,6 +46,28 @@ function directChildren(element: Element | null) {
 
 function isDecorationHost(element: HTMLElement) {
   return element.getAttribute(HOST_ATTRIBUTE) === "true";
+}
+
+function getAnchorMessageIdFromDom() {
+  if (typeof document === "undefined") return "";
+
+  const rows = document.querySelectorAll<HTMLElement>(`[id^="${MESSAGE_ROW_PREFIX}"]`);
+  for (const row of rows) {
+    const id = String(row.id || "").slice(MESSAGE_ROW_PREFIX.length).trim();
+    if (id) return id;
+  }
+
+  return "";
+}
+
+function getMessageRows(messageId: string) {
+  if (typeof document === "undefined" || !messageId) return [] as HTMLElement[];
+
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      `[id="${MESSAGE_ROW_PREFIX}${messageId}"]`,
+    ),
+  );
 }
 
 function getMessageDomStructure(row: HTMLElement): MessageDomStructure | null {
@@ -165,11 +178,12 @@ function renderEditedOrDeleted(
         fontSize: "10px",
         fontStyle: "italic",
         fontWeight: "700",
+        lineHeight: "1.2",
       }),
     );
 
     host.appendChild(card);
-  } else {
+  } else if (decoration.edited) {
     const card = document.createElement("div");
     Object.assign(card.style, {
       display: "flex",
@@ -195,6 +209,7 @@ function renderEditedOrDeleted(
           color: "var(--crm-text-muted, #64748b)",
           fontSize: "9px",
           fontWeight: "800",
+          letterSpacing: "0.05em",
           textTransform: "uppercase",
         }),
       );
@@ -225,6 +240,7 @@ function renderEditedOrDeleted(
         color: "var(--crm-text-muted, #64748b)",
         fontSize: "9px",
         fontWeight: "800",
+        letterSpacing: "0.05em",
         textTransform: "uppercase",
       }),
     );
@@ -246,7 +262,8 @@ function renderEditedOrDeleted(
 }
 
 function renderState(structure: MessageDomStructure, decoration: MessageDecoration) {
-  if (!structure.meta) return;
+  const { meta } = structure;
+  if (!meta) return;
 
   const host = createHost(decoration.messageId, "state", "span");
   host.textContent = decoration.revoked ? "apagada" : "editada";
@@ -258,9 +275,11 @@ function renderState(structure: MessageDomStructure, decoration: MessageDecorati
     fontSize: "10px",
     fontStyle: "italic",
     fontWeight: "650",
+    lineHeight: "1",
     whiteSpace: "nowrap",
+    opacity: decoration.revoked ? "0.9" : "1",
   });
-  structure.meta.appendChild(host);
+  meta.appendChild(host);
 }
 
 function renderReactions(structure: MessageDomStructure, decoration: MessageDecoration) {
@@ -272,6 +291,7 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
+    justifyContent: decoration.outgoing ? "flex-end" : "flex-start",
     gap: "4px",
     width: "fit-content",
     maxWidth: "100%",
@@ -283,6 +303,7 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
 
   for (const reaction of decoration.reactions) {
     const chip = document.createElement("span");
+    chip.title = `${reaction.count} reação${reaction.count === 1 ? "" : "ões"} ${reaction.emoji}`;
     Object.assign(chip.style, {
       minWidth: "28px",
       minHeight: "23px",
@@ -302,12 +323,15 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
     });
 
     chip.appendChild(textElement("span", reaction.emoji));
+
     if (reaction.count > 1) {
       chip.appendChild(
         textElement("span", String(reaction.count), {
           color: "var(--crm-text-muted, #64748b)",
+          fontFamily: '"Segoe UI", sans-serif',
           fontSize: "10px",
           fontWeight: "800",
+          lineHeight: "1",
         }),
       );
     }
@@ -319,29 +343,15 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
 }
 
 export default function WhatsAppMessageDecorations() {
-  const [conversaId, setConversaId] = useState("");
+  const [mensagemAncoraId, setMensagemAncoraId] = useState("");
   const decorationsRef = useRef<Map<string, MessageDecoration>>(new Map());
   const applyingRef = useRef(false);
   const applyTimerRef = useRef<number | null>(null);
+  const reloadTimerRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const syncFromLocation = () => {
-      const nextId = getConversationIdFromLocation();
-      setConversaId((current) => (current === nextId ? current : nextId));
-    };
-
-    syncFromLocation();
-    window.addEventListener("popstate", syncFromLocation);
-    window.addEventListener("hashchange", syncFromLocation);
-    const interval = window.setInterval(syncFromLocation, 300);
-
-    return () => {
-      window.removeEventListener("popstate", syncFromLocation);
-      window.removeEventListener("hashchange", syncFromLocation);
-      window.clearInterval(interval);
-    };
+  const syncAnchorFromDom = useCallback(() => {
+    const nextId = getAnchorMessageIdFromDom();
+    setMensagemAncoraId((current) => (current === nextId ? current : nextId));
   }, []);
 
   const applyDecorations = useCallback(() => {
@@ -351,17 +361,19 @@ export default function WhatsAppMessageDecorations() {
     cleanupDecorations();
 
     for (const decoration of decorationsRef.current.values()) {
-      const row = document.getElementById(`mensagem-${decoration.messageId}`);
-      if (!row) continue;
+      const rows = getMessageRows(decoration.messageId);
 
-      const structure = getMessageDomStructure(row);
-      if (!structure) continue;
+      for (const row of rows) {
+        const structure = getMessageDomStructure(row);
+        if (!structure) continue;
 
-      if (decoration.edited || decoration.revoked) {
-        renderEditedOrDeleted(structure, decoration);
-        renderState(structure, decoration);
+        if (decoration.edited || decoration.revoked) {
+          renderEditedOrDeleted(structure, decoration);
+          renderState(structure, decoration);
+        }
+
+        renderReactions(structure, decoration);
       }
-      renderReactions(structure, decoration);
     }
 
     window.setTimeout(() => {
@@ -371,7 +383,10 @@ export default function WhatsAppMessageDecorations() {
 
   const scheduleApply = useCallback(() => {
     if (typeof window === "undefined") return;
-    if (applyTimerRef.current != null) window.clearTimeout(applyTimerRef.current);
+
+    if (applyTimerRef.current != null) {
+      window.clearTimeout(applyTimerRef.current);
+    }
 
     applyTimerRef.current = window.setTimeout(() => {
       applyTimerRef.current = null;
@@ -380,35 +395,83 @@ export default function WhatsAppMessageDecorations() {
   }, [applyDecorations]);
 
   const loadDecorations = useCallback(async () => {
-    const id = conversaId || getConversationIdFromLocation();
-    if (!id) return;
+    const anchorId = mensagemAncoraId || getAnchorMessageIdFromDom();
+    if (!anchorId) return;
 
-    const params = new URLSearchParams({ conversa_id: id });
-    const response = await fetch(`/api/mensagens/decoracoes?${params.toString()}`, {
-      cache: "no-store",
+    try {
+      const params = new URLSearchParams({ mensagem_id: anchorId });
+      const response = await fetch(
+        `/api/mensagens/decoracoes?${params.toString()}`,
+        { cache: "no-store" },
+      );
+      const data = (await response.json().catch(() => null)) as DecorationResponse | null;
+
+      if (!response.ok || !data?.ok || !Array.isArray(data.decoracoes)) {
+        return;
+      }
+
+      decorationsRef.current = new Map(
+        data.decoracoes.map((decoration) => [decoration.messageId, decoration]),
+      );
+      scheduleApply();
+    } catch {
+      // As decorações são complementares e nunca devem bloquear a conversa.
+    }
+  }, [mensagemAncoraId, scheduleApply]);
+
+  const scheduleReload = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    if (reloadTimerRef.current != null) {
+      window.clearTimeout(reloadTimerRef.current);
+    }
+
+    reloadTimerRef.current = window.setTimeout(() => {
+      reloadTimerRef.current = null;
+      syncAnchorFromDom();
+      void loadDecorations();
+    }, 120);
+  }, [loadDecorations, syncAnchorFromDom]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    syncAnchorFromDom();
+
+    const discoveryObserver = new MutationObserver(() => {
+      if (applyingRef.current) return;
+      syncAnchorFromDom();
     });
-    const data = (await response.json().catch(() => null)) as DecorationResponse | null;
 
-    if (!response.ok || !data?.ok || !Array.isArray(data.decoracoes)) return;
+    discoveryObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
 
-    decorationsRef.current = new Map(
-      data.decoracoes.map((decoration) => [decoration.messageId, decoration]),
-    );
-    scheduleApply();
-  }, [conversaId, scheduleApply]);
+    const discoveryInterval = window.setInterval(syncAnchorFromDom, 500);
+
+    return () => {
+      discoveryObserver.disconnect();
+      window.clearInterval(discoveryInterval);
+    };
+  }, [syncAnchorFromDom]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
 
     cleanupDecorations();
     decorationsRef.current = new Map();
-    if (!conversaId) return;
+
+    if (!mensagemAncoraId) return;
 
     void loadDecorations();
 
     const observer = new MutationObserver(() => {
-      if (!applyingRef.current) scheduleApply();
+      if (applyingRef.current) return;
+      syncAnchorFromDom();
+      scheduleApply();
     });
+
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -416,10 +479,10 @@ export default function WhatsAppMessageDecorations() {
     });
 
     const applyInterval = window.setInterval(scheduleApply, 2000);
-    const reloadInterval = window.setInterval(() => void loadDecorations(), 15000);
-    const handleFocus = () => void loadDecorations();
+    const refreshInterval = window.setInterval(scheduleReload, 15000);
+    const handleFocus = () => scheduleReload();
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") void loadDecorations();
+      if (document.visibilityState === "visible") scheduleReload();
     };
 
     window.addEventListener("focus", handleFocus);
@@ -428,14 +491,29 @@ export default function WhatsAppMessageDecorations() {
     return () => {
       observer.disconnect();
       window.clearInterval(applyInterval);
-      window.clearInterval(reloadInterval);
+      window.clearInterval(refreshInterval);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
-      if (applyTimerRef.current != null) window.clearTimeout(applyTimerRef.current);
+
+      if (applyTimerRef.current != null) {
+        window.clearTimeout(applyTimerRef.current);
+        applyTimerRef.current = null;
+      }
+      if (reloadTimerRef.current != null) {
+        window.clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = null;
+      }
+
       decorationsRef.current = new Map();
       cleanupDecorations();
     };
-  }, [conversaId, loadDecorations, scheduleApply]);
+  }, [
+    mensagemAncoraId,
+    loadDecorations,
+    scheduleApply,
+    scheduleReload,
+    syncAnchorFromDom,
+  ]);
 
   return null;
 }

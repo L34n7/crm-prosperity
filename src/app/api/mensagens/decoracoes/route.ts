@@ -30,6 +30,10 @@ type MensagemRow = {
   metadata_json: unknown;
 };
 
+type MensagemAncoraRow = {
+  conversa_id: string;
+};
+
 type ReactionMetadata = {
   emoji?: unknown;
 };
@@ -133,12 +137,31 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const conversaId = String(searchParams.get("conversa_id") || "").trim();
+    const conversaIdInformada = String(searchParams.get("conversa_id") || "").trim();
+    const mensagemId = String(searchParams.get("mensagem_id") || "").trim();
+    let conversaId = conversaIdInformada;
+
+    if (!conversaId && mensagemId) {
+      const { data: mensagemAncora, error: mensagemAncoraError } = await supabaseAdmin
+        .from("mensagens")
+        .select("conversa_id")
+        .eq("id", mensagemId)
+        .maybeSingle<MensagemAncoraRow>();
+
+      if (mensagemAncoraError) {
+        return NextResponse.json(
+          { ok: false, error: mensagemAncoraError.message },
+          { status: 500 },
+        );
+      }
+
+      conversaId = String(mensagemAncora?.conversa_id || "").trim();
+    }
 
     if (!conversaId) {
       return NextResponse.json(
-        { ok: false, error: "conversa_id é obrigatório" },
-        { status: 400 },
+        { ok: false, error: "conversa_id ou mensagem_id é obrigatório" },
+        { status: mensagemId ? 404 : 400 },
       );
     }
 
@@ -199,12 +222,14 @@ export async function GET(request: Request) {
 
     console.info("[WHATSAPP_DECORACOES] carregadas", {
       conversaId,
+      origemResolucao: conversaIdInformada ? "conversa_id" : "mensagem_id",
+      mensagemId: mensagemId || null,
       mensagensConsultadas: data?.length || 0,
       decoracoes: decoracoes.length,
     });
 
     return NextResponse.json(
-      { ok: true, decoracoes },
+      { ok: true, conversa_id: conversaId, decoracoes },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
