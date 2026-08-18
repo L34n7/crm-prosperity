@@ -204,6 +204,23 @@ function removeAllHosts() {
     });
 }
 
+function sameHosts(current: DecorationHosts[], next: DecorationHosts[]) {
+  if (current.length !== next.length) return false;
+
+  const currentById = new Map(current.map((item) => [item.messageId, item]));
+
+  return next.every((nextItem) => {
+    const currentItem = currentById.get(nextItem.messageId);
+
+    return (
+      !!currentItem &&
+      currentItem.contentHost === nextItem.contentHost &&
+      currentItem.stateHost === nextItem.stateHost &&
+      currentItem.reactionHost === nextItem.reactionHost
+    );
+  });
+}
+
 function MutationContent({ decoration }: { decoration: MessageDecoration }) {
   if (decoration.revoked) {
     return (
@@ -249,12 +266,19 @@ export default function WhatsAppMessageDecorations() {
   );
   const [hosts, setHosts] = useState<DecorationHosts[]>([]);
   const syncFrameRef = useRef<number | null>(null);
-  const hostsSignatureRef = useRef("");
   const decorationsRef = useRef(decorations);
+  const hostsRef = useRef<DecorationHosts[]>([]);
 
   useEffect(() => {
     decorationsRef.current = decorations;
   }, [decorations]);
+
+  const replaceHosts = useCallback((nextHosts: DecorationHosts[]) => {
+    if (sameHosts(hostsRef.current, nextHosts)) return;
+
+    hostsRef.current = nextHosts;
+    setHosts(nextHosts);
+  }, []);
 
   const syncHosts = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -340,21 +364,8 @@ export default function WhatsAppMessageDecorations() {
       });
     }
 
-    const signature = nextHosts
-      .map(
-        (item) =>
-          `${item.messageId}:${item.contentHost ? "c" : ""}:${
-            item.stateHost ? "s" : ""
-          }:${item.reactionHost ? "r" : ""}`,
-      )
-      .sort()
-      .join("|");
-
-    if (signature !== hostsSignatureRef.current) {
-      hostsSignatureRef.current = signature;
-      setHosts(nextHosts);
-    }
-  }, []);
+    replaceHosts(nextHosts);
+  }, [replaceHosts]);
 
   const scheduleSync = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -369,7 +380,7 @@ export default function WhatsAppMessageDecorations() {
   useEffect(() => {
     if (!conversaId) {
       setDecorations(new Map());
-      hostsSignatureRef.current = "";
+      hostsRef.current = [];
       setHosts([]);
       removeAllHosts();
       return;
@@ -491,7 +502,7 @@ export default function WhatsAppMessageDecorations() {
         window.cancelAnimationFrame(syncFrameRef.current);
         syncFrameRef.current = null;
       }
-      hostsSignatureRef.current = "";
+      hostsRef.current = [];
       setHosts([]);
       removeAllHosts();
     };
