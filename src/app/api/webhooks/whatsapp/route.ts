@@ -5,6 +5,7 @@ import {
   countCoexistenceWebhookItems,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
+import { treatWhatsAppSpecialEvents } from "@/lib/whatsapp/process-special-events";
 import {
   enfileirarWebhookWhatsapp,
   processarWebhookWhatsappPorId,
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as WhatsAppWebhookBody;
 
     perf("WEBHOOK / body lido", inicioPost);
-    
+
     if (body.object !== "whatsapp_business_account") {
       return NextResponse.json(
         { success: false, error: "Evento nao e do WhatsApp" },
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const specialEvents = await treatWhatsAppSpecialEvents(body);
     const incomingMessages = extractIncomingMessages(body);
     const incomingStatuses = extractMessageStatuses(body);
     const coexistenceItems = countCoexistenceWebhookItems(body);
@@ -93,6 +95,7 @@ export async function POST(req: NextRequest) {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
       coexistenceItems,
+      specialEvents,
     });
 
     if (
@@ -101,15 +104,17 @@ export async function POST(req: NextRequest) {
       coexistenceItems.total === 0 &&
       !temEventoAdministrativo
     ) {
-      console.log("[WEBHOOK WHATSAPP] Evento recebido sem mensagens/status/coex:", {
+      console.log("[WEBHOOK WHATSAPP] Evento tratado sem mensagens/status/coex pendentes:", {
         fields: camposWebhook,
+        specialEvents,
       });
 
       return NextResponse.json(
         {
           success: true,
           queued: false,
-          message: "Evento recebido sem mensagens nem status processaveis",
+          message: "Evento recebido e tratado sem mensagens nem status processaveis",
+          specialEvents,
         },
         { status: 200 }
       );
@@ -119,11 +124,10 @@ export async function POST(req: NextRequest) {
 
     const eventoFila = await enfileirarWebhookWhatsapp(body);
 
-
     perf("WEBHOOK / enfileirar", inicioFila, {
       duplicado: eventoFila.duplicado,
       eventId: eventoFila.evento?.id ?? null,
-    });    
+    });
 
     if (eventoFila.evento?.id && !eventoFila.duplicado) {
       const limiteQstash = Number(
@@ -218,6 +222,7 @@ export async function POST(req: NextRequest) {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
       coexistenceItems: coexistenceItems.total,
+      specialEvents: specialEvents.totalMutations + specialEvents.stickers,
     });
 
     return NextResponse.json(
@@ -230,6 +235,7 @@ export async function POST(req: NextRequest) {
           incomingMessages: incomingMessages.length,
           incomingStatuses: incomingStatuses.length,
           coexistence: coexistenceItems,
+          specialEvents,
         },
       },
       { status: 200 }
