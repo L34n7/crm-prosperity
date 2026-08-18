@@ -1,0 +1,83 @@
+.stateLabel {
+  display: inline-flex;
+  align-items: center;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.stateDeleted {
+  opacity: 0.88;
+}
+
+.reactionList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  margin-top: 5px;
+  margin-bottom: -10px;
+  position: relative;
+  z-index: 1;
+}
+
+.reactionListOutgoing {
+  justify-content: flex-end;
+}
+
+.reactionChip {
+  min-width: 29px;
+  height: 24px;
+  padding: 2px 7px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  box-shadow: 0 1px 2px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-family:
+    "Segoe UI Emoji",
+    "Apple Color Emoji",
+    "Noto Color Emoji",
+    sans-serif;
+  line-height: 1;
+}
+
+.reactionEmoji {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.reactionCount {
+  color: var(--crm-text-muted);
+  font-family:
+    "Segoe UI",
+    sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+@media (max-width: 620px) {
+  .reactionList {
+    margin-top: 4px;
+    margin-bottom: -9px;
+  }
+
+  .reactionChip {
+    min-width: 27px;
+    height: 22px;
+    padding-inline: 6px;
+  }
+
+  .reactionEmoji {
+    font-size: 14px;
+  }
+}

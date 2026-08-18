@@ -5,12 +5,16 @@ import {
   countCoexistenceWebhookItems,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
-import { treatWhatsAppSpecialEvents } from "@/lib/whatsapp/process-special-events";
+import {
+  countWhatsAppSpecialMessageTypes,
+  treatWhatsAppSpecialEvents,
+} from "@/lib/whatsapp/process-special-events";
 import {
   enfileirarWebhookWhatsapp,
   processarWebhookWhatsappPorId,
   contarMensagensWebhookNoMesmoSegundo,
 } from "@/lib/whatsapp/webhook-queue";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { qstash } from "@/lib/qstash/client";
 
 export const runtime = "nodejs";
@@ -22,6 +26,42 @@ function perf(label: string, inicio: number, extra?: Record<string, unknown>) {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
   });
+}
+
+function metadataObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
+async function prepararEventoEspecialParaProcessamento(params: {
+  eventoId: string;
+  rawBody: WhatsAppWebhookBody;
+  processingBody: WhatsAppWebhookBody;
+  metadataAtual?: unknown;
+  specialCounts: ReturnType<typeof countWhatsAppSpecialMessageTypes>;
+  specialResult: Awaited<ReturnType<typeof treatWhatsAppSpecialEvents>>;
+}) {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { error } = await supabaseAdmin
+    .from("whatsapp_webhook_eventos")
+    .update({
+      body_json: params.processingBody,
+      metadata_json: {
+        ...metadataObject(params.metadataAtual),
+        special_event_counts: params.specialCounts,
+        special_event_result: params.specialResult,
+        raw_special_webhook_body: params.rawBody,
+        raw_special_webhook_preserved_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.eventoId);
+
+  if (error) {
+    throw new Error(
+      `Erro ao preparar evento especial do WhatsApp: ${error.message}`,
+    );
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -62,23 +102,23 @@ export async function POST(req: NextRequest) {
   const inicioPost = Date.now();
 
   try {
-    const body = (await req.json()) as WhatsAppWebhookBody;
+    const rawBody = (await req.json()) as WhatsAppWebhookBody;
 
     perf("WEBHOOK / body lido", inicioPost);
 
-    if (body.object !== "whatsapp_business_account") {
+    if (rawBody.object !== "whatsapp_business_account") {
       return NextResponse.json(
         { success: false, error: "Evento nao e do WhatsApp" },
         { status: 400 }
       );
     }
 
-    const specialEvents = await treatWhatsAppSpecialEvents(body);
-    const incomingMessages = extractIncomingMessages(body);
-    const incomingStatuses = extractMessageStatuses(body);
-    const coexistenceItems = countCoexistenceWebhookItems(body);
+    const specialCounts = countWhatsAppSpecialMessageTypes(rawBody);
+    const rawIncomingMessages = extractIncomingMessages(rawBody);
+    const rawIncomingStatuses = extractMessageStatuses(rawBody);
+    const rawCoexistenceItems = countCoexistenceWebhookItems(rawBody);
 
-    const camposWebhook = body.entry?.flatMap((entry) =>
+    const camposWebhook = rawBody.entry?.flatMap((entry) =>
       entry.changes?.map((change) => change.field)
     ) ?? [];
 
@@ -92,29 +132,28 @@ export async function POST(req: NextRequest) {
     );
 
     console.log("[WEBHOOK WHATSAPP] Evento recebido:", {
-      incomingMessages: incomingMessages.length,
-      incomingStatuses: incomingStatuses.length,
-      coexistenceItems,
-      specialEvents,
+      incomingMessages: rawIncomingMessages.length,
+      incomingStatuses: rawIncomingStatuses.length,
+      coexistenceItems: rawCoexistenceItems,
+      specialEvents: specialCounts,
     });
 
     if (
-      incomingMessages.length === 0 &&
-      incomingStatuses.length === 0 &&
-      coexistenceItems.total === 0 &&
+      rawIncomingMessages.length === 0 &&
+      rawIncomingStatuses.length === 0 &&
+      rawCoexistenceItems.total === 0 &&
+      specialCounts.total === 0 &&
       !temEventoAdministrativo
     ) {
-      console.log("[WEBHOOK WHATSAPP] Evento tratado sem mensagens/status/coex pendentes:", {
+      console.log("[WEBHOOK WHATSAPP] Evento recebido sem mensagens/status/coex:", {
         fields: camposWebhook,
-        specialEvents,
       });
 
       return NextResponse.json(
         {
           success: true,
           queued: false,
-          message: "Evento recebido e tratado sem mensagens nem status processaveis",
-          specialEvents,
+          message: "Evento recebido sem mensagens nem status processaveis",
         },
         { status: 200 }
       );
@@ -122,11 +161,34 @@ export async function POST(req: NextRequest) {
 
     const inicioFila = Date.now();
 
-    const eventoFila = await enfileirarWebhookWhatsapp(body);
+    // A fila e o body_hash recebem exatamente o JSON entregue pela Meta.
+    const eventoFila = await enfileirarWebhookWhatsapp(rawBody);
+
+    let processingBody = rawBody;
+    let specialResult: Awaited<ReturnType<typeof treatWhatsAppSpecialEvents>> | null = null;
+
+    if (eventoFila.evento?.id && !eventoFila.duplicado && specialCounts.total > 0) {
+      processingBody = structuredClone(rawBody);
+      specialResult = await treatWhatsAppSpecialEvents(processingBody);
+
+      await prepararEventoEspecialParaProcessamento({
+        eventoId: eventoFila.evento.id,
+        rawBody,
+        processingBody,
+        metadataAtual: eventoFila.evento.metadata_json,
+        specialCounts,
+        specialResult,
+      });
+    }
+
+    const incomingMessages = extractIncomingMessages(processingBody);
+    const incomingStatuses = extractMessageStatuses(processingBody);
+    const coexistenceItems = countCoexistenceWebhookItems(processingBody);
 
     perf("WEBHOOK / enfileirar", inicioFila, {
       duplicado: eventoFila.duplicado,
       eventId: eventoFila.evento?.id ?? null,
+      specialEvents: specialResult || specialCounts,
     });
 
     if (eventoFila.evento?.id && !eventoFila.duplicado) {
@@ -222,7 +284,7 @@ export async function POST(req: NextRequest) {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
       coexistenceItems: coexistenceItems.total,
-      specialEvents: specialEvents.totalMutations + specialEvents.stickers,
+      specialEvents: specialCounts.total,
     });
 
     return NextResponse.json(
@@ -235,7 +297,7 @@ export async function POST(req: NextRequest) {
           incomingMessages: incomingMessages.length,
           incomingStatuses: incomingStatuses.length,
           coexistence: coexistenceItems,
-          specialEvents,
+          specialEvents: specialResult || specialCounts,
         },
       },
       { status: 200 }

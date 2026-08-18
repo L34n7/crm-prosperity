@@ -22,6 +22,9 @@ type WhatsAppEdit = {
       body?: string;
     };
   };
+  text?: {
+    body?: string;
+  };
 };
 
 type WhatsAppSticker = {
@@ -65,6 +68,15 @@ export type WhatsAppSpecialEventsResult = {
   totalMutations: number;
 };
 
+export type WhatsAppSpecialMessageCounts = {
+  reactions: number;
+  revokes: number;
+  edits: number;
+  stickers: number;
+  unknown: number;
+  total: number;
+};
+
 const MUTATION_TYPES = new Set(["reaction", "revoke", "edit"]);
 const SUPPORTED_MESSAGE_TYPES = new Set([
   "text",
@@ -76,6 +88,10 @@ const SUPPORTED_MESSAGE_TYPES = new Set([
   "location",
   "button",
   "interactive",
+  "sticker",
+  "reaction",
+  "revoke",
+  "edit",
   "unsupported",
   "media_placeholder",
   "errors",
@@ -86,7 +102,9 @@ function timestampToIso(timestamp?: string | null) {
   if (!Number.isFinite(value) || value <= 0) return new Date().toISOString();
 
   const date = new Date(value < 100000000000 ? value * 1000 : value);
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  return Number.isNaN(date.getTime())
+    ? new Date().toISOString()
+    : date.toISOString();
 }
 
 function metadataObject(value: unknown): Record<string, unknown> {
@@ -106,37 +124,81 @@ function reactionList(value: unknown): ReactionMetadata[] {
   );
 }
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 async function findTargetMessage(params: {
   empresaId: string;
   externalId: string;
 }): Promise<StoredMessage | null> {
   const supabaseAdmin = getSupabaseAdmin();
-  const { data, error } = await supabaseAdmin
-    .from("mensagens")
-    .select("id, conversa_id, conteudo, tipo_mensagem, metadata_json")
-    .eq("empresa_id", params.empresaId)
-    .eq("mensagem_externa_id", params.externalId)
-    .maybeSingle();
 
-  if (error) {
-    throw new Error(`Erro ao localizar mensagem original: ${error.message}`);
+  for (let tentativa = 0; tentativa < 3; tentativa += 1) {
+    const { data, error } = await supabaseAdmin
+      .from("mensagens")
+      .select("id, conversa_id, conteudo, tipo_mensagem, metadata_json")
+      .eq("empresa_id", params.empresaId)
+      .eq("mensagem_externa_id", params.externalId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Erro ao localizar mensagem original: ${error.message}`);
+    }
+
+    if (data) {
+      return data as StoredMessage;
+    }
+
+    if (tentativa < 2) {
+      await wait(90 * (tentativa + 1));
+    }
   }
 
-  return (data as StoredMessage | null) ?? null;
+  return null;
+}
+
+function originalMessageIdFromReaction(message: WhatsAppSpecialMessage) {
+  return String(
+    message.reaction?.message_id || message.context?.id || "",
+  ).trim();
+}
+
+function originalMessageIdFromRevoke(message: WhatsAppSpecialMessage) {
+  return String(
+    message.revoke?.original_message_id || message.context?.id || "",
+  ).trim();
+}
+
+function originalMessageIdFromEdit(message: WhatsAppSpecialMessage) {
+  return String(
+    message.edit?.original_message_id || message.context?.id || "",
+  ).trim();
+}
+
+function editedText(message: WhatsAppSpecialMessage) {
+  return String(
+    message.edit?.message?.text?.body ||
+      message.edit?.text?.body ||
+      message.text?.body ||
+      "",
+  ).trim();
 }
 
 async function handleReaction(params: {
   empresaId: string;
   message: WhatsAppSpecialMessage;
 }) {
-  const originalMessageId = String(params.message.reaction?.message_id || "").trim();
-  if (!originalMessageId) return { found: false };
+  const originalMessageId = originalMessageIdFromReaction(params.message);
+  if (!originalMessageId) return { found: false, originalMessageId: null };
 
   const target = await findTargetMessage({
     empresaId: params.empresaId,
     externalId: originalMessageId,
   });
-  if (!target) return { found: false };
+  if (!target) return { found: false, originalMessageId };
 
   const supabaseAdmin = getSupabaseAdmin();
   const metadata = metadataObject(target.metadata_json);
@@ -174,6 +236,7 @@ async function handleReaction(params: {
           remetente: from || null,
           evento_id: eventId,
           timestamp: eventTimestamp,
+          mensagem_original_id: originalMessageId,
         },
       },
       updated_at: new Date().toISOString(),
@@ -185,28 +248,26 @@ async function handleReaction(params: {
     throw new Error(`Erro ao atualizar reação da mensagem: ${error.message}`);
   }
 
-  return { found: true };
+  return { found: true, originalMessageId };
 }
 
 async function handleRevoke(params: {
   empresaId: string;
   message: WhatsAppSpecialMessage;
 }) {
-  const originalMessageId = String(
-    params.message.revoke?.original_message_id || "",
-  ).trim();
-  if (!originalMessageId) return { found: false };
+  const originalMessageId = originalMessageIdFromRevoke(params.message);
+  if (!originalMessageId) return { found: false, originalMessageId: null };
 
   const target = await findTargetMessage({
     empresaId: params.empresaId,
     externalId: originalMessageId,
   });
-  if (!target) return { found: false };
+  if (!target) return { found: false, originalMessageId };
 
   const metadata = metadataObject(target.metadata_json);
   const eventId = String(params.message.id || "").trim() || null;
   if (eventId && metadata.revogacao_evento_id === eventId) {
-    return { found: true };
+    return { found: true, originalMessageId };
   }
 
   const supabaseAdmin = getSupabaseAdmin();
@@ -221,6 +282,7 @@ async function handleRevoke(params: {
         mensagem_revogada_whatsapp: true,
         revogada_em: eventTimestamp,
         revogacao_evento_id: eventId,
+        revogacao_mensagem_original_id: originalMessageId,
         conteudo_antes_revogacao:
           metadata.conteudo_antes_revogacao ?? target.conteudo,
         tipo_mensagem_antes_revogacao:
@@ -235,31 +297,29 @@ async function handleRevoke(params: {
     throw new Error(`Erro ao marcar mensagem como apagada: ${error.message}`);
   }
 
-  return { found: true };
+  return { found: true, originalMessageId };
 }
 
 async function handleEdit(params: {
   empresaId: string;
   message: WhatsAppSpecialMessage;
 }) {
-  const originalMessageId = String(
-    params.message.edit?.original_message_id || "",
-  ).trim();
-  if (!originalMessageId) return { found: false };
+  const originalMessageId = originalMessageIdFromEdit(params.message);
+  if (!originalMessageId) return { found: false, originalMessageId: null };
 
   const target = await findTargetMessage({
     empresaId: params.empresaId,
     externalId: originalMessageId,
   });
-  if (!target) return { found: false };
+  if (!target) return { found: false, originalMessageId };
 
-  const newText = String(params.message.edit?.message?.text?.body || "").trim();
-  if (!newText) return { found: true };
+  const newText = editedText(params.message);
+  if (!newText) return { found: true, originalMessageId };
 
   const metadata = metadataObject(target.metadata_json);
   const eventId = String(params.message.id || "").trim() || null;
   if (eventId && metadata.ultima_edicao_evento_id === eventId) {
-    return { found: true };
+    return { found: true, originalMessageId };
   }
 
   const historyRaw = Array.isArray(metadata.historico_edicoes_whatsapp)
@@ -281,6 +341,7 @@ async function handleEdit(params: {
         mensagem_editada_whatsapp: true,
         editada_em: eventTimestamp,
         ultima_edicao_evento_id: eventId,
+        edicao_mensagem_original_id: originalMessageId,
         historico_edicoes_whatsapp: [
           ...history,
           {
@@ -300,7 +361,7 @@ async function handleEdit(params: {
     throw new Error(`Erro ao atualizar mensagem editada: ${error.message}`);
   }
 
-  return { found: true };
+  return { found: true, originalMessageId };
 }
 
 function normalizeSticker(message: WhatsAppSpecialMessage) {
@@ -326,25 +387,71 @@ function normalizeUnknownType(message: WhatsAppSpecialMessage) {
   message.unsupported = {
     type,
   };
+
   return true;
 }
 
-function sanitizeNonLiveMessages(messages: WhatsAppIncomingRawMessage[] | undefined) {
+function sanitizeNonLiveMessages(
+  messages: WhatsAppIncomingRawMessage[] | undefined,
+) {
   if (!messages?.length) return;
 
-  const normalized: WhatsAppIncomingRawMessage[] = [];
+  const processable: WhatsAppIncomingRawMessage[] = [];
+
   for (const raw of messages) {
     const message = raw as WhatsAppSpecialMessage;
-    const type = String(message.type || "unknown");
+    const type = String(message.type || "unknown").trim() || "unknown";
 
     if (MUTATION_TYPES.has(type)) continue;
-    if (type === "sticker") normalizeSticker(message);
-    else normalizeUnknownType(message);
 
-    normalized.push(message);
+    if (type === "sticker") {
+      normalizeSticker(message);
+    } else {
+      normalizeUnknownType(message);
+    }
+
+    processable.push(message);
   }
 
-  messages.splice(0, messages.length, ...normalized);
+  messages.splice(0, messages.length, ...processable);
+}
+
+export function countWhatsAppSpecialMessageTypes(
+  body: WhatsAppWebhookBody,
+): WhatsAppSpecialMessageCounts {
+  const result: WhatsAppSpecialMessageCounts = {
+    reactions: 0,
+    revokes: 0,
+    edits: 0,
+    stickers: 0,
+    unknown: 0,
+    total: 0,
+  };
+
+  for (const entry of body.entry || []) {
+    for (const change of entry.changes || []) {
+      if (change.field !== "messages") continue;
+
+      for (const message of change.value?.messages || []) {
+        const type = String(message.type || "unknown").trim() || "unknown";
+
+        if (type === "reaction") result.reactions += 1;
+        else if (type === "revoke") result.revokes += 1;
+        else if (type === "edit") result.edits += 1;
+        else if (type === "sticker") result.stickers += 1;
+        else if (!SUPPORTED_MESSAGE_TYPES.has(type)) result.unknown += 1;
+      }
+    }
+  }
+
+  result.total =
+    result.reactions +
+    result.revokes +
+    result.edits +
+    result.stickers +
+    result.unknown;
+
+  return result;
 }
 
 export async function treatWhatsAppSpecialEvents(
@@ -376,7 +483,9 @@ export async function treatWhatsAppSpecialEvents(
         continue;
       }
 
-      const phoneNumberId = String(change.value?.metadata?.phone_number_id || "").trim();
+      const phoneNumberId = String(
+        change.value?.metadata?.phone_number_id || "",
+      ).trim();
       const messages = change.value?.messages || [];
       if (!messages.length) continue;
 
@@ -385,16 +494,24 @@ export async function treatWhatsAppSpecialEvents(
 
       for (const raw of messages) {
         const message = raw as WhatsAppSpecialMessage;
-        const type = String(message.type || "unknown");
+        const type = String(message.type || "unknown").trim() || "unknown";
 
         if (type === "sticker") {
-          if (normalizeSticker(message)) result.stickers += 1;
+          if (normalizeSticker(message)) {
+            result.stickers += 1;
+          } else {
+            message.type = "unsupported";
+            message.unsupported = { type: "sticker" };
+            result.unsupportedNormalized += 1;
+          }
           processable.push(message);
           continue;
         }
 
         if (!MUTATION_TYPES.has(type)) {
-          if (normalizeUnknownType(message)) result.unsupportedNormalized += 1;
+          if (normalizeUnknownType(message)) {
+            result.unsupportedNormalized += 1;
+          }
           processable.push(message);
           continue;
         }
@@ -403,17 +520,21 @@ export async function treatWhatsAppSpecialEvents(
 
         try {
           if (!empresaId && phoneNumberId) {
-            const integration = await findWhatsAppIntegrationByPhoneNumberId(phoneNumberId);
+            const integration =
+              await findWhatsAppIntegrationByPhoneNumberId(phoneNumberId);
             empresaId = integration?.empresa_id || "";
           }
 
           if (!empresaId) {
             result.errors += 1;
-            console.warn("[WHATSAPP EVENT] Integração não encontrada para mutação de mensagem", {
-              phoneNumberId,
-              type,
-              eventId: message.id || null,
-            });
+            console.warn(
+              "[WHATSAPP EVENT] Integração não encontrada para mutação de mensagem",
+              {
+                phoneNumberId,
+                type,
+                eventId: message.id || null,
+              },
+            );
             continue;
           }
 
@@ -430,6 +551,7 @@ export async function treatWhatsAppSpecialEvents(
               empresaId,
               type,
               eventId: message.id || null,
+              originalMessageId: handled.originalMessageId,
             });
           }
 
