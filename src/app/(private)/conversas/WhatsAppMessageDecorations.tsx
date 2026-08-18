@@ -1,8 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type GroupedReaction = {
   emoji: string;
@@ -34,6 +32,17 @@ type MessageDomStructure = {
 const HOST_ATTRIBUTE = "data-whatsapp-message-decoration-host";
 const HIDDEN_ATTRIBUTE = "data-whatsapp-original-content-hidden";
 const MESSAGE_ATTRIBUTE = "data-whatsapp-message-decoration-id";
+
+function getConversationIdFromLocation() {
+  if (typeof window === "undefined") return "";
+
+  const params = new URLSearchParams(window.location.search);
+  return (
+    params.get("id")?.trim() ||
+    params.get("conversaId")?.trim() ||
+    ""
+  );
+}
 
 function isHTMLElement(value: unknown): value is HTMLElement {
   return typeof HTMLElement !== "undefined" && value instanceof HTMLElement;
@@ -112,7 +121,7 @@ function renderEditedOrDeleted(
   decoration: MessageDecoration,
 ) {
   const { content } = structure;
-  if (!content?.parentElement) return false;
+  if (!content?.parentElement) return;
 
   content.setAttribute(HIDDEN_ATTRIBUTE, "true");
   content.style.setProperty("display", "none", "important");
@@ -156,12 +165,11 @@ function renderEditedOrDeleted(
         fontSize: "10px",
         fontStyle: "italic",
         fontWeight: "700",
-        lineHeight: "1.2",
       }),
     );
 
     host.appendChild(card);
-  } else if (decoration.edited) {
+  } else {
     const card = document.createElement("div");
     Object.assign(card.style, {
       display: "flex",
@@ -187,7 +195,6 @@ function renderEditedOrDeleted(
           color: "var(--crm-text-muted, #64748b)",
           fontSize: "9px",
           fontWeight: "800",
-          letterSpacing: "0.05em",
           textTransform: "uppercase",
         }),
       );
@@ -218,7 +225,6 @@ function renderEditedOrDeleted(
         color: "var(--crm-text-muted, #64748b)",
         fontSize: "9px",
         fontWeight: "800",
-        letterSpacing: "0.05em",
         textTransform: "uppercase",
       }),
     );
@@ -237,12 +243,10 @@ function renderEditedOrDeleted(
   }
 
   content.insertAdjacentElement("afterend", host);
-  return true;
 }
 
 function renderState(structure: MessageDomStructure, decoration: MessageDecoration) {
-  const { meta } = structure;
-  if (!meta) return false;
+  if (!structure.meta) return;
 
   const host = createHost(decoration.messageId, "state", "span");
   host.textContent = decoration.revoked ? "apagada" : "editada";
@@ -254,16 +258,13 @@ function renderState(structure: MessageDomStructure, decoration: MessageDecorati
     fontSize: "10px",
     fontStyle: "italic",
     fontWeight: "650",
-    lineHeight: "1",
     whiteSpace: "nowrap",
-    opacity: decoration.revoked ? "0.9" : "1",
   });
-  meta.appendChild(host);
-  return true;
+  structure.meta.appendChild(host);
 }
 
 function renderReactions(structure: MessageDomStructure, decoration: MessageDecoration) {
-  if (!decoration.reactions.length) return false;
+  if (!decoration.reactions.length) return;
 
   const host = createHost(decoration.messageId, "reactions");
   host.setAttribute("aria-label", "Reações da mensagem");
@@ -271,7 +272,6 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
-    justifyContent: decoration.outgoing ? "flex-end" : "flex-start",
     gap: "4px",
     width: "fit-content",
     maxWidth: "100%",
@@ -283,7 +283,6 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
 
   for (const reaction of decoration.reactions) {
     const chip = document.createElement("span");
-    chip.title = `${reaction.count} reação${reaction.count === 1 ? "" : "ões"} ${reaction.emoji}`;
     Object.assign(chip.style, {
       minWidth: "28px",
       minHeight: "23px",
@@ -303,15 +302,12 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
     });
 
     chip.appendChild(textElement("span", reaction.emoji));
-
     if (reaction.count > 1) {
       chip.appendChild(
         textElement("span", String(reaction.count), {
           color: "var(--crm-text-muted, #64748b)",
-          fontFamily: '"Segoe UI", sans-serif',
           fontSize: "10px",
           fontWeight: "800",
-          lineHeight: "1",
         }),
       );
     }
@@ -320,20 +316,33 @@ function renderReactions(structure: MessageDomStructure, decoration: MessageDeco
   }
 
   structure.bubble.appendChild(host);
-  return true;
 }
 
 export default function WhatsAppMessageDecorations() {
-  const searchParams = useSearchParams();
-  const conversaId =
-    searchParams.get("id")?.trim() ||
-    searchParams.get("conversaId")?.trim() ||
-    "";
-
+  const [conversaId, setConversaId] = useState("");
   const decorationsRef = useRef<Map<string, MessageDecoration>>(new Map());
   const applyingRef = useRef(false);
   const applyTimerRef = useRef<number | null>(null);
-  const refreshTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncFromLocation = () => {
+      const nextId = getConversationIdFromLocation();
+      setConversaId((current) => (current === nextId ? current : nextId));
+    };
+
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    window.addEventListener("hashchange", syncFromLocation);
+    const interval = window.setInterval(syncFromLocation, 300);
+
+    return () => {
+      window.removeEventListener("popstate", syncFromLocation);
+      window.removeEventListener("hashchange", syncFromLocation);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const applyDecorations = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -352,7 +361,6 @@ export default function WhatsAppMessageDecorations() {
         renderEditedOrDeleted(structure, decoration);
         renderState(structure, decoration);
       }
-
       renderReactions(structure, decoration);
     }
 
@@ -363,10 +371,7 @@ export default function WhatsAppMessageDecorations() {
 
   const scheduleApply = useCallback(() => {
     if (typeof window === "undefined") return;
-
-    if (applyTimerRef.current != null) {
-      window.clearTimeout(applyTimerRef.current);
-    }
+    if (applyTimerRef.current != null) window.clearTimeout(applyTimerRef.current);
 
     applyTimerRef.current = window.setTimeout(() => {
       applyTimerRef.current = null;
@@ -375,83 +380,43 @@ export default function WhatsAppMessageDecorations() {
   }, [applyDecorations]);
 
   const loadDecorations = useCallback(async () => {
-    if (!conversaId) return;
+    const id = conversaId || getConversationIdFromLocation();
+    if (!id) return;
 
-    try {
-      const params = new URLSearchParams({ conversa_id: conversaId });
-      const response = await fetch(
-        `/api/mensagens/decoracoes?${params.toString()}`,
-        { cache: "no-store" },
-      );
-      const data = (await response.json().catch(() => null)) as DecorationResponse | null;
+    const params = new URLSearchParams({ conversa_id: id });
+    const response = await fetch(`/api/mensagens/decoracoes?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const data = (await response.json().catch(() => null)) as DecorationResponse | null;
 
-      if (!response.ok || !data?.ok || !Array.isArray(data.decoracoes)) {
-        return;
-      }
+    if (!response.ok || !data?.ok || !Array.isArray(data.decoracoes)) return;
 
-      decorationsRef.current = new Map(
-        data.decoracoes.map((decoration) => [decoration.messageId, decoration]),
-      );
-      scheduleApply();
-    } catch {
-      // A decoração é complementar e nunca deve bloquear a conversa.
-    }
+    decorationsRef.current = new Map(
+      data.decoracoes.map((decoration) => [decoration.messageId, decoration]),
+    );
+    scheduleApply();
   }, [conversaId, scheduleApply]);
-
-  const scheduleReload = useCallback(() => {
-    if (typeof window === "undefined") return;
-
-    if (refreshTimerRef.current != null) {
-      window.clearTimeout(refreshTimerRef.current);
-    }
-
-    refreshTimerRef.current = window.setTimeout(() => {
-      refreshTimerRef.current = null;
-      void loadDecorations();
-    }, 120);
-  }, [loadDecorations]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
 
     cleanupDecorations();
     decorationsRef.current = new Map();
-
     if (!conversaId) return;
 
     void loadDecorations();
 
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`crm-whatsapp-message-decorations-v2:${conversaId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "mensagens",
-          filter: `conversa_id=eq.${conversaId}`,
-        },
-        () => scheduleReload(),
-      )
-      .subscribe();
-
     const observer = new MutationObserver(() => {
-      if (applyingRef.current) return;
-      scheduleApply();
+      if (!applyingRef.current) scheduleApply();
     });
-
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       characterData: true,
     });
 
-    const applyInterval = window.setInterval(scheduleApply, 2500);
-    const refreshInterval = window.setInterval(() => {
-      void loadDecorations();
-    }, 30000);
-
+    const applyInterval = window.setInterval(scheduleApply, 2000);
+    const reloadInterval = window.setInterval(() => void loadDecorations(), 15000);
     const handleFocus = () => void loadDecorations();
     const handleVisibility = () => {
       if (document.visibilityState === "visible") void loadDecorations();
@@ -462,25 +427,15 @@ export default function WhatsAppMessageDecorations() {
 
     return () => {
       observer.disconnect();
-      void supabase.removeChannel(channel);
       window.clearInterval(applyInterval);
-      window.clearInterval(refreshInterval);
+      window.clearInterval(reloadInterval);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
-
-      if (applyTimerRef.current != null) {
-        window.clearTimeout(applyTimerRef.current);
-        applyTimerRef.current = null;
-      }
-      if (refreshTimerRef.current != null) {
-        window.clearTimeout(refreshTimerRef.current);
-        refreshTimerRef.current = null;
-      }
-
+      if (applyTimerRef.current != null) window.clearTimeout(applyTimerRef.current);
       decorationsRef.current = new Map();
       cleanupDecorations();
     };
-  }, [conversaId, loadDecorations, scheduleApply, scheduleReload]);
+  }, [conversaId, loadDecorations, scheduleApply]);
 
   return null;
 }
