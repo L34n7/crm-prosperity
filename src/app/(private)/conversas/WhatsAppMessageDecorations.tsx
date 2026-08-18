@@ -54,6 +54,12 @@ type MessageDecoration = {
 
 type DecorationKind = "content" | "state" | "reactions";
 
+type MessageDomStructure = {
+  bubble: HTMLElement;
+  content: HTMLElement | null;
+  meta: HTMLElement | null;
+};
+
 const HOST_ATTRIBUTE = "data-whatsapp-message-decoration-host";
 const MESSAGE_ATTRIBUTE = "data-whatsapp-message-decoration-id";
 const HIDDEN_CONTENT_ATTRIBUTE = "data-whatsapp-original-content-hidden";
@@ -151,6 +157,56 @@ function mergeDecoration(
   else next.delete(messageId);
 
   return next;
+}
+
+function elementChildren(element: Element | null) {
+  if (!element) return [];
+
+  return Array.from(element.children).filter(
+    (child): child is HTMLElement => child instanceof HTMLElement,
+  );
+}
+
+function isDecorationHost(element: HTMLElement) {
+  return element.getAttribute(HOST_ATTRIBUTE) === "true";
+}
+
+function getMessageDomStructure(row: HTMLElement): MessageDomStructure | null {
+  // Não usamos nomes das classes do CSS Module aqui. Em produção o Next/Turbopack
+  // pode transformar esses nomes e seletores como [class*=messageBubble] deixam de
+  // localizar os elementos. A estrutura abaixo usa apenas o DOM estável da timeline.
+  const bubble = elementChildren(row).find((element) => !isDecorationHost(element));
+  if (!bubble) return null;
+
+  const originalBubbleChildren = elementChildren(bubble).filter(
+    (element) => !isDecorationHost(element),
+  );
+
+  if (originalBubbleChildren.length === 0) {
+    return {
+      bubble,
+      content: null,
+      meta: null,
+    };
+  }
+
+  // O último filho original do balão é messageMetaBottom. O anterior é
+  // messageContentRow; seu primeiro filho é messageContentFlex.
+  const meta = originalBubbleChildren[originalBubbleChildren.length - 1] || null;
+  const contentRow =
+    originalBubbleChildren.length >= 2
+      ? originalBubbleChildren[originalBubbleChildren.length - 2]
+      : null;
+
+  const content = contentRow
+    ? elementChildren(contentRow).find((element) => !isDecorationHost(element)) || null
+    : null;
+
+  return {
+    bubble,
+    content,
+    meta,
+  };
 }
 
 function findHost(
@@ -400,15 +456,10 @@ export default function WhatsAppMessageDecorations() {
       const row = document.getElementById(`mensagem-${decoration.messageId}`);
       if (!row) continue;
 
-      const bubble = row.querySelector<HTMLElement>('[class*="messageBubble"]');
-      if (!bubble) continue;
+      const structure = getMessageDomStructure(row);
+      if (!structure) continue;
 
-      const content = bubble.querySelector<HTMLElement>(
-        '[class*="messageContentFlex"]',
-      );
-      const meta = bubble.querySelector<HTMLElement>(
-        '[class*="messageMetaBottom"]',
-      );
+      const { bubble, content, meta } = structure;
       const mutated = decoration.edited || decoration.revoked;
 
       if (mutated && content?.parentElement) {
@@ -439,9 +490,7 @@ export default function WhatsAppMessageDecorations() {
           "span",
         );
 
-        if (host.parentElement !== meta) {
-          meta.appendChild(host);
-        } else if (!host.isConnected) {
+        if (host.parentElement !== meta || !host.isConnected) {
           meta.appendChild(host);
         }
 
