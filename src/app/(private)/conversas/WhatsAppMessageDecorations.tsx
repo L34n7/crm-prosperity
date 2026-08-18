@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -20,15 +19,25 @@ type ReactionMetadata = {
   timestamp?: unknown;
 };
 
+type EditHistoryMetadata = {
+  conteudo?: unknown;
+  tipo_mensagem?: unknown;
+  substituido_em?: unknown;
+  evento_id?: unknown;
+};
+
 type MessageMetadata = {
   reacoes_whatsapp?: unknown;
   mensagem_editada_whatsapp?: unknown;
   mensagem_revogada_whatsapp?: unknown;
+  historico_edicoes_whatsapp?: unknown;
+  conteudo_antes_revogacao?: unknown;
 };
 
 type MessageRow = {
   id?: string | null;
   conversa_id?: string | null;
+  conteudo?: string | null;
   origem?: string | null;
   remetente_tipo?: string | null;
   metadata_json?: MessageMetadata | null;
@@ -44,20 +53,29 @@ type MessageDecoration = {
   reactions: GroupedReaction[];
   edited: boolean;
   revoked: boolean;
+  previousContent: string | null;
+  currentContent: string;
+  deletedContent: string | null;
   outgoing: boolean;
 };
 
 type DecorationHosts = {
   messageId: string;
+  contentHost: HTMLElement | null;
   stateHost: HTMLElement | null;
   reactionHost: HTMLElement | null;
 };
 
 const HOST_ATTRIBUTE = "data-whatsapp-message-decoration-host";
 const MESSAGE_ATTRIBUTE = "data-whatsapp-message-decoration-id";
+const MUTATED_CONTENT_ATTRIBUTE = "data-whatsapp-message-mutated-content";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function parseReactions(value: unknown): GroupedReaction[] {
@@ -69,7 +87,7 @@ function parseReactions(value: unknown): GroupedReaction[] {
     if (!isObject(item)) continue;
 
     const reaction = item as ReactionMetadata;
-    const emoji = String(reaction.emoji || "").trim();
+    const emoji = stringValue(reaction.emoji);
     if (!emoji) continue;
 
     grouped.set(emoji, (grouped.get(emoji) || 0) + 1);
@@ -81,24 +99,51 @@ function parseReactions(value: unknown): GroupedReaction[] {
   }));
 }
 
+function getPreviousEditedContent(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const item = value[index];
+    if (!isObject(item)) continue;
+
+    const historyItem = item as EditHistoryMetadata;
+    const content = stringValue(historyItem.conteudo);
+    if (content) return content;
+  }
+
+  return null;
+}
+
 function parseDecoration(message: MessageRow): MessageDecoration | null {
-  const messageId = String(message.id || "").trim();
+  const messageId = stringValue(message.id);
   if (!messageId) return null;
 
   const metadata = isObject(message.metadata_json)
     ? (message.metadata_json as MessageMetadata)
     : {};
+
   const reactions = parseReactions(metadata.reacoes_whatsapp);
   const edited = metadata.mensagem_editada_whatsapp === true;
   const revoked = metadata.mensagem_revogada_whatsapp === true;
 
   if (!edited && !revoked && reactions.length === 0) return null;
 
+  const currentContent = stringValue(message.conteudo);
+  const previousContent = edited
+    ? getPreviousEditedContent(metadata.historico_edicoes_whatsapp)
+    : null;
+  const deletedContent = revoked
+    ? stringValue(metadata.conteudo_antes_revogacao) || currentContent || null
+    : null;
+
   return {
     messageId,
     reactions,
     edited,
     revoked,
+    previousContent,
+    currentContent,
+    deletedContent,
     outgoing: message.origem === "enviada",
   };
 }
@@ -108,7 +153,7 @@ function mergeDecoration(
   message: MessageRow,
 ) {
   const next = new Map(current);
-  const messageId = String(message.id || "").trim();
+  const messageId = stringValue(message.id);
 
   if (!messageId) return next;
 
@@ -119,19 +164,18 @@ function mergeDecoration(
   return next;
 }
 
-function removeAllHosts() {
-  document
-    .querySelectorAll<HTMLElement>(`[${HOST_ATTRIBUTE}="true"]`)
-    .forEach((host) => host.remove());
+function hostSelector(messageId: string, kind: string) {
+  return `[${HOST_ATTRIBUTE}="true"][${MESSAGE_ATTRIBUTE}="${messageId}"][data-whatsapp-decoration-kind="${kind}"]`;
 }
 
 function createHost(
   parent: HTMLElement,
   messageId: string,
-  kind: "state" | "reactions",
+  kind: "content" | "state" | "reactions",
 ) {
-  const selector = `[${HOST_ATTRIBUTE}="true"][${MESSAGE_ATTRIBUTE}="${messageId}"][data-whatsapp-decoration-kind="${kind}"]`;
-  const existing = parent.querySelector<HTMLElement>(selector);
+  const existing = parent.querySelector<HTMLElement>(
+    hostSelector(messageId, kind),
+  );
   if (existing) return existing;
 
   const host = document.createElement(kind === "state" ? "span" : "div");
@@ -142,9 +186,64 @@ function createHost(
   return host;
 }
 
+function removeHost(messageId: string, kind: string) {
+  document
+    .querySelectorAll<HTMLElement>(hostSelector(messageId, kind))
+    .forEach((host) => host.remove());
+}
+
+function removeAllHosts() {
+  document
+    .querySelectorAll<HTMLElement>(`[${HOST_ATTRIBUTE}="true"]`)
+    .forEach((host) => host.remove());
+
+  document
+    .querySelectorAll<HTMLElement>(`[${MUTATED_CONTENT_ATTRIBUTE}="true"]`)
+    .forEach((element) => {
+      element.removeAttribute(MUTATED_CONTENT_ATTRIBUTE);
+    });
+}
+
+function MutationContent({ decoration }: { decoration: MessageDecoration }) {
+  if (decoration.revoked) {
+    return (
+      <div className={styles.deletedContentCard}>
+        <p className={styles.deletedOriginalText}>
+          {decoration.deletedContent || "Conteúdo removido"}
+        </p>
+        <span className={styles.deletedBadge}>Apagada pelo contato</span>
+      </div>
+    );
+  }
+
+  if (!decoration.edited) return null;
+
+  return (
+    <div className={styles.editedContentCard}>
+      {decoration.previousContent ? (
+        <div className={styles.editVersionPrevious}>
+          <span className={styles.editVersionLabel}>Antes</span>
+          <p className={styles.editVersionText}>{decoration.previousContent}</p>
+        </div>
+      ) : null}
+
+      <div className={styles.editVersionCurrent}>
+        <span className={styles.editVersionLabel}>Agora</span>
+        <p className={styles.editVersionText}>
+          {decoration.currentContent || "Mensagem editada"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function WhatsAppMessageDecorations() {
   const searchParams = useSearchParams();
-  const conversaId = searchParams.get("id")?.trim() || "";
+  const conversaId =
+    searchParams.get("id")?.trim() ||
+    searchParams.get("conversaId")?.trim() ||
+    "";
+
   const [decorations, setDecorations] = useState<Map<string, MessageDecoration>>(
     () => new Map(),
   );
@@ -169,6 +268,18 @@ export default function WhatsAppMessageDecorations() {
         if (!activeIds.has(messageId)) host.remove();
       });
 
+    document
+      .querySelectorAll<HTMLElement>(`[${MUTATED_CONTENT_ATTRIBUTE}="true"]`)
+      .forEach((element) => {
+        const row = element.closest<HTMLElement>('[id^="mensagem-"]');
+        const messageId = row?.id.replace(/^mensagem-/, "") || "";
+        const decoration = decorationsRef.current.get(messageId);
+
+        if (!decoration?.edited && !decoration?.revoked) {
+          element.removeAttribute(MUTATED_CONTENT_ATTRIBUTE);
+        }
+      });
+
     const nextHosts: DecorationHosts[] = [];
 
     for (const decoration of decorationsRef.current.values()) {
@@ -178,12 +289,28 @@ export default function WhatsAppMessageDecorations() {
       const bubble = row.querySelector<HTMLElement>('[class*="messageBubble"]');
       if (!bubble) continue;
 
+      const contentFlex = bubble.querySelector<HTMLElement>(
+        '[class*="messageContentFlex"]',
+      );
       const metaBottom = bubble.querySelector<HTMLElement>(
         '[class*="messageMetaBottom"]',
       );
 
+      let contentHost: HTMLElement | null = null;
       let stateHost: HTMLElement | null = null;
       let reactionHost: HTMLElement | null = null;
+
+      if ((decoration.edited || decoration.revoked) && contentFlex) {
+        contentFlex.setAttribute(MUTATED_CONTENT_ATTRIBUTE, "true");
+        contentHost = createHost(
+          contentFlex,
+          decoration.messageId,
+          "content",
+        );
+      } else {
+        contentFlex?.removeAttribute(MUTATED_CONTENT_ATTRIBUTE);
+        removeHost(decoration.messageId, "content");
+      }
 
       if ((decoration.edited || decoration.revoked) && metaBottom) {
         stateHost = createHost(
@@ -191,6 +318,8 @@ export default function WhatsAppMessageDecorations() {
           decoration.messageId,
           "state",
         );
+      } else {
+        removeHost(decoration.messageId, "state");
       }
 
       if (decoration.reactions.length > 0) {
@@ -199,10 +328,13 @@ export default function WhatsAppMessageDecorations() {
           decoration.messageId,
           "reactions",
         );
+      } else {
+        removeHost(decoration.messageId, "reactions");
       }
 
       nextHosts.push({
         messageId: decoration.messageId,
+        contentHost,
         stateHost,
         reactionHost,
       });
@@ -211,9 +343,9 @@ export default function WhatsAppMessageDecorations() {
     const signature = nextHosts
       .map(
         (item) =>
-          `${item.messageId}:${item.stateHost ? "s" : ""}:${
-            item.reactionHost ? "r" : ""
-          }`,
+          `${item.messageId}:${item.contentHost ? "c" : ""}:${
+            item.stateHost ? "s" : ""
+          }:${item.reactionHost ? "r" : ""}`,
       )
       .sort()
       .join("|");
@@ -247,12 +379,13 @@ export default function WhatsAppMessageDecorations() {
 
     async function loadDecorations() {
       try {
-        const response = await fetch(
-          `/api/mensagens?conversa_id=${encodeURIComponent(
-            conversaId,
-          )}&exportar=true`,
-          { cache: "no-store" },
-        );
+        const params = new URLSearchParams({
+          conversa_id: conversaId,
+          limite: "100",
+        });
+        const response = await fetch(`/api/mensagens?${params.toString()}`, {
+          cache: "no-store",
+        });
         const data = await response.json().catch(() => null);
 
         if (cancelled || !response.ok || !Array.isArray(data?.mensagens)) {
@@ -262,7 +395,7 @@ export default function WhatsAppMessageDecorations() {
         const next = new Map<string, MessageDecoration>();
 
         for (const message of data.mensagens as MessageRow[]) {
-          if (String(message.conversa_id || "") !== conversaId) continue;
+          if (stringValue(message.conversa_id) !== conversaId) continue;
 
           const decoration = parseDecoration(message);
           if (decoration) next.set(decoration.messageId, decoration);
@@ -270,7 +403,7 @@ export default function WhatsAppMessageDecorations() {
 
         setDecorations(next);
       } catch {
-        // Os adornos são complementares e nunca devem bloquear o atendimento.
+        // Os adornos são complementares e não podem bloquear o atendimento.
       }
     }
 
@@ -316,7 +449,7 @@ export default function WhatsAppMessageDecorations() {
           filter: `conversa_id=eq.${conversaId}`,
         },
         (payload) => {
-          const messageId = String((payload.old as MessageRow)?.id || "").trim();
+          const messageId = stringValue((payload.old as MessageRow)?.id);
           if (!messageId) return;
 
           setDecorations((current) => {
@@ -359,6 +492,7 @@ export default function WhatsAppMessageDecorations() {
         syncFrameRef.current = null;
       }
       hostsSignatureRef.current = "";
+      setHosts([]);
       removeAllHosts();
     };
   }, [conversaId, scheduleSync]);
@@ -370,18 +504,20 @@ export default function WhatsAppMessageDecorations() {
         if (!decoration) return null;
 
         return (
-          <Fragment key={host.messageId}>
+          <span key={host.messageId}>
+            {host.contentHost
+              ? createPortal(
+                  <MutationContent decoration={decoration} />,
+                  host.contentHost,
+                )
+              : null}
+
             {host.stateHost
               ? createPortal(
                   <span
                     className={`${styles.stateLabel} ${
                       decoration.revoked ? styles.stateDeleted : ""
                     }`}
-                    title={
-                      decoration.revoked
-                        ? "Mensagem apagada no WhatsApp"
-                        : "Mensagem editada no WhatsApp"
-                    }
                   >
                     {decoration.revoked ? "apagada" : "editada"}
                   </span>,
@@ -401,11 +537,9 @@ export default function WhatsAppMessageDecorations() {
                       <span
                         key={reaction.emoji}
                         className={styles.reactionChip}
-                        title={
-                          reaction.count === 1
-                            ? `1 reação ${reaction.emoji}`
-                            : `${reaction.count} reações ${reaction.emoji}`
-                        }
+                        title={`${reaction.count} reação${
+                          reaction.count === 1 ? "" : "ões"
+                        } ${reaction.emoji}`}
                       >
                         <span className={styles.reactionEmoji}>
                           {reaction.emoji}
@@ -421,7 +555,7 @@ export default function WhatsAppMessageDecorations() {
                   host.reactionHost,
                 )
               : null}
-          </Fragment>
+          </span>
         );
       })}
     </>
