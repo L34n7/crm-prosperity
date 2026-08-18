@@ -17,6 +17,7 @@ import Header from "@/components/Header";
 import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import { solicitarAtualizacaoConversasNaoLidasHeader } from "@/lib/header-summary/events";
 import { createClient } from "@/lib/supabase/client";
+import { getWhatsAppMessageSpecialState } from "@/lib/whatsapp/message-special-state";
 import styles from "./conversas.module.css";
 import VirtualizedConversationRows from "./VirtualizedConversationRows";
 import { can } from "@/lib/permissoes/frontend";
@@ -9693,6 +9694,8 @@ const templateFooterTexto = useMemo(() => {
                                 const isSystem = msg.remetente_tipo === "sistema";
                                 const isMensagemDoSistema = mensagemFoiEnviadaPeloSistema(msg);
                                 const mensagemErroEnvio = getMensagemErroEnvio(msg);
+                                const eventoWhatsapp =
+                                  getWhatsAppMessageSpecialState(msg);
 
                                 if (isSystem) {
                                   return (
@@ -9753,7 +9756,52 @@ const templateFooterTexto = useMemo(() => {
 
                                         <div className={styles.messageContentRow}>
                                           <div className={styles.messageContentFlex}>
-                                            {renderizarConteudoMensagem(msg)}
+                                            {eventoWhatsapp.revoked ? (
+                                              <div className={styles.deletedContentCard}>
+                                                <p className={styles.deletedOriginalText}>
+                                                  <TextoComEmoji
+                                                    texto={
+                                                      eventoWhatsapp.deletedContent ||
+                                                      "Conteúdo removido"
+                                                    }
+                                                  />
+                                                </p>
+                                                <span className={styles.deletedBadge}>
+                                                  Apagada pelo contato
+                                                </span>
+                                              </div>
+                                            ) : eventoWhatsapp.edited ? (
+                                              <div className={styles.editedContentCard}>
+                                                <div className={styles.editVersionPrevious}>
+                                                  <span className={styles.editVersionLabel}>
+                                                    Antes
+                                                  </span>
+                                                  <p className={styles.editVersionText}>
+                                                    <TextoComEmoji
+                                                      texto={
+                                                        eventoWhatsapp.previousContent ||
+                                                        "Conteúdo anterior indisponível"
+                                                      }
+                                                    />
+                                                  </p>
+                                                </div>
+                                                <div className={styles.editVersionCurrent}>
+                                                  <span className={styles.editVersionLabel}>
+                                                    Agora
+                                                  </span>
+                                                  <p className={styles.editVersionText}>
+                                                    <TextoComEmoji
+                                                      texto={
+                                                        eventoWhatsapp.currentContent ||
+                                                        "Mensagem editada"
+                                                      }
+                                                    />
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              renderizarConteudoMensagem(msg)
+                                            )}
                                           </div>
 
                                           {(msg.remetente_tipo === "usuario" ||
@@ -9778,6 +9826,21 @@ const templateFooterTexto = useMemo(() => {
                                         <div className={styles.messageMetaBottom}>
                                           <span>{formatarHora(msg.created_at)}</span>
 
+                                          {(eventoWhatsapp.edited ||
+                                            eventoWhatsapp.revoked) && (
+                                            <span
+                                              className={`${styles.messageMutationState} ${
+                                                eventoWhatsapp.revoked
+                                                  ? styles.messageMutationStateDeleted
+                                                  : ""
+                                              }`}
+                                            >
+                                              {eventoWhatsapp.revoked
+                                                ? "apagada"
+                                                : "editada"}
+                                            </span>
+                                          )}
+
                                           {isMensagemDoSistema && (
                                             <span
                                               className={`${styles.statusIcon} ${
@@ -9793,6 +9856,38 @@ const templateFooterTexto = useMemo(() => {
                                             </span>
                                           )}
                                         </div>
+
+                                        {eventoWhatsapp.reactions.length > 0 && (
+                                          <div
+                                            className={`${styles.reactionList} ${
+                                              isOutgoing
+                                                ? styles.reactionListOutgoing
+                                                : ""
+                                            }`}
+                                            aria-label="Reações da mensagem"
+                                          >
+                                            {eventoWhatsapp.reactions.map(
+                                              (reaction) => (
+                                                <span
+                                                  key={reaction.emoji}
+                                                  className={styles.reactionChip}
+                                                  title={`${reaction.count} reação${
+                                                    reaction.count === 1 ? "" : "ões"
+                                                  } ${reaction.emoji}`}
+                                                >
+                                                  <span className={styles.reactionEmoji}>
+                                                    {reaction.emoji}
+                                                  </span>
+                                                  {reaction.count > 1 && (
+                                                    <span className={styles.reactionCount}>
+                                                      {reaction.count}
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              ),
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
 
