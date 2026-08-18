@@ -1,5 +1,10 @@
-:global([data-whatsapp-message-mutated-content="true"]) > :not([data-whatsapp-message-decoration-host="true"]) {
+:global([data-whatsapp-original-content-hidden="true"]) {
   display: none !important;
+}
+
+.mutationContentHost {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .stateLabel {
