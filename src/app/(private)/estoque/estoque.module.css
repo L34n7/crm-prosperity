@@ -42,21 +42,21 @@
 
 .hero h1 {
   color: var(--crm-text-strong);
-  font-size: clamp(20px, 2vw, 25px);
+  font-size: clamp(22px, 2vw, 27px);
   letter-spacing: -0.025em;
 }
 
 .hero p {
   margin-top: 4px;
   color: var(--crm-text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .eyebrow {
   display: block;
   margin-bottom: 4px;
   color: var(--crm-primary-text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -82,7 +82,7 @@
   justify-content: center;
   gap: 7px;
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
@@ -182,7 +182,7 @@
 .metricCard strong {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -190,7 +190,7 @@
 
 .metricCard span:last-child {
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -209,7 +209,7 @@
   gap: 9px;
   background: var(--crm-danger-bg);
   color: var(--crm-danger-text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -217,7 +217,7 @@
   min-height: 620px;
   border-radius: 18px;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   overflow: clip;
 }
 
@@ -256,12 +256,12 @@
 
 .sidebarBrand strong {
   color: var(--crm-text-strong);
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .sidebarBrand small {
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .sidebarNav {
@@ -280,7 +280,7 @@
 .navGroupLabel {
   padding: 2px 8px 3px;
   color: var(--crm-text-muted);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 900;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -298,9 +298,10 @@
   background: transparent;
   color: var(--crm-text-muted);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 750;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
   transition: 0.18s ease;
 }
@@ -345,7 +346,7 @@
   display: block;
   margin-bottom: 5px;
   color: var(--crm-primary-text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -358,14 +359,14 @@
 
 .contentHeader h2 {
   color: var(--crm-text-strong);
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: -0.02em;
 }
 
 .contentHeader p {
   margin-top: 5px;
   color: var(--crm-text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .toolbar {
@@ -405,7 +406,7 @@
   background: transparent;
   color: var(--crm-text-strong);
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .inventoryList {
@@ -430,7 +431,7 @@
   min-height: 34px;
   padding: 0 14px;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.055em;
   text-transform: uppercase;
@@ -512,7 +513,7 @@
   gap: 5px;
   border-radius: 999px;
   padding: 4px 7px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 850;
 }
 
@@ -539,7 +540,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 15px;
+  font-size: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -550,7 +551,7 @@
   margin: 3px 0 0;
   overflow: hidden;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -570,7 +571,7 @@
   border-radius: 6px;
   background: var(--crm-surface-soft);
   color: var(--crm-text-muted);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 800;
 }
 
@@ -590,13 +591,13 @@
 .valueCell strong {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .availableCell > strong {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .identificationCell small,
@@ -605,14 +606,14 @@
 .valueCell > span {
   overflow: hidden;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .valueCell strong small {
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -660,7 +661,7 @@
   background: var(--crm-surface);
   color: var(--crm-text-strong);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
@@ -701,7 +702,7 @@
 .catalogCard h3 {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 16px;
+  font-size: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -735,7 +736,7 @@
 
 .catalogHeading > strong {
   color: var(--crm-text-strong);
-  font-size: 16px;
+  font-size: 17px;
   white-space: nowrap;
 }
 
@@ -752,14 +753,14 @@
   padding: 5px 8px;
   background: var(--crm-surface-muted);
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .catalogActions .primaryButton {
   min-height: 39px;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .tableWrap {
@@ -770,7 +771,7 @@
   width: 100%;
   border-collapse: collapse;
   color: var(--crm-text);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .table th,
@@ -784,7 +785,7 @@
 .table th {
   background: var(--crm-surface-soft);
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.045em;
   text-transform: uppercase;
 }
@@ -887,7 +888,7 @@
   border-radius: 12px;
   background: var(--crm-surface-soft);
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .checkField input {
@@ -932,12 +933,12 @@
 
 .countRow strong {
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .countRow small {
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .countRow input {
@@ -958,7 +959,7 @@
   align-items: center;
   justify-content: center;
   color: var(--crm-text-muted);
-  font-size: 14px;
+  font-size: 15px;
   text-align: center;
 }
 
@@ -992,14 +993,14 @@
 
 .emptyState h3 {
   color: var(--crm-text-strong);
-  font-size: 17px;
+  font-size: 18px;
 }
 
 .emptyState p {
   max-width: 430px;
   margin: 7px 0 18px;
   color: var(--crm-text-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -1040,7 +1041,7 @@
 
 .modalHeader h2 {
   color: var(--crm-text-strong);
-  font-size: 21px;
+  font-size: 23px;
 }
 
 .modalBody {
@@ -1071,7 +1072,7 @@
 
 .field > span {
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -1090,7 +1091,7 @@
   background: var(--crm-surface-input);
   color: var(--crm-text-strong);
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .field textarea {
@@ -1120,7 +1121,7 @@
 
 .sectionHeading h3 {
   color: var(--crm-text-strong);
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .componentRow {
@@ -1138,7 +1139,7 @@
   padding: 13px;
   background: var(--crm-surface-soft);
   color: var(--crm-text-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -1169,12 +1170,12 @@
 
 .saleSummary strong {
   color: var(--crm-text-strong);
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .saleSummary div span {
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 @media (max-width: 1050px) {
@@ -1239,7 +1240,7 @@
 
   .mobileSectionPicker span {
     color: var(--crm-text-muted);
-    font-size: 10.5px;
+    font-size: 11.5px;
     font-weight: 850;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -1255,7 +1256,7 @@
     background: var(--crm-surface-input);
     color: var(--crm-text-strong);
     font: inherit;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 750;
   }
 
@@ -1340,7 +1341,7 @@
   }
 
   .contentHeader h2 {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .inventoryListHeader {
@@ -1375,7 +1376,7 @@
   .mobileCellLabel {
     display: block;
     color: var(--crm-text-muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 900;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -1466,11 +1467,11 @@
   }
 
   .metricCard strong {
-    font-size: 16px;
+    font-size: 18px;
   }
 
   .metricCard span:last-child {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .rowActions {

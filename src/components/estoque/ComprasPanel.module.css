@@ -4,22 +4,22 @@
 :global(html[data-theme="dark"]) .root{color-scheme:dark}:global(html[data-theme="dark"]) .root .switcher{background:#111827}:global(html[data-theme="dark"]) .root .switcher .active,:global(html[data-theme="dark"]) .root .card,:global(html[data-theme="dark"]) .root .order,:global(html[data-theme="dark"]) .root .modal,:global(html[data-theme="dark"]) .root .search,:global(html[data-theme="dark"]) .root .formGrid input,:global(html[data-theme="dark"]) .root .formGrid select,:global(html[data-theme="dark"]) .root .formGrid textarea,:global(html[data-theme="dark"]) .root .body>label>select,:global(html[data-theme="dark"]) .root .body>label>textarea,:global(html[data-theme="dark"]) .root .line input,:global(html[data-theme="dark"]) .root .line select,:global(html[data-theme="dark"]) .root .xmlLine select{color:#e2e8f0;background:#0f172a;border-color:#334155}:global(html[data-theme="dark"]) .root .cardMain h3,:global(html[data-theme="dark"]) .root .order h3,:global(html[data-theme="dark"]) .root .orderHead>strong,:global(html[data-theme="dark"]) .root .modal>header h2,:global(html[data-theme="dark"]) .root .linesHead h3,:global(html[data-theme="dark"]) .root .detailGrid h3,:global(html[data-theme="dark"]) .root .xmlSummary strong,:global(html[data-theme="dark"]) .root .xmlLine strong,:global(html[data-theme="dark"]) .root .receiveTitle,:global(html[data-theme="dark"]) .root .totalBox strong{color:#f8fafc}:global(html[data-theme="dark"]) .root .line,:global(html[data-theme="dark"]) .root .receiveLine,:global(html[data-theme="dark"]) .root .xmlLine,:global(html[data-theme="dark"]) .root .xmlSummary>div,:global(html[data-theme="dark"]) .root .detailRow,:global(html[data-theme="dark"]) .root .empty{background:#111827;border-color:#334155}:global(html[data-theme="dark"]) .root .modal>header{border-color:#334155}:global(html[data-theme="dark"]) .root .body footer{background:#0f172a;border-color:#334155}
 .xmlLine input{width:100%;min-width:0;min-height:41px;padding:9px 11px;color:#0f172a;font:inherit;font-size:.82rem;background:#fff;border:1px solid #cbd5e1;border-radius:9px;outline:none}.xmlLine input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 :global(html[data-theme="dark"]) .root .xmlLine input{color:#e2e8f0;background:#0f172a;border-color:#334155}
-.root{color-scheme:light;font-size:14px}
-.switcher button,.secondary,.primary,.cardButtons button,.orderActions button,.linesHead button,.close,.remove,.body footer button{font-size:13px}
-.search input{font:inherit;font-size:13px;color:#0f172a}
-.error,.success,.notice,.empty{font-size:13px}
-.cardMain h3,.order h3{font-size:16px}
-.cardMain p,.order p,.detailGrid p{font-size:13px;line-height:1.45}
-.cardMain small,.detailRow small,.xmlLine small,.xmlSummary small{font-size:12px;line-height:1.4}
-.badge,.status,.warning{font-size:11px}
-.orderHead>strong{font-size:18px}
-.orderMeta{font-size:12px}
-.modal>header span{font-size:11px}
-.modal>header h2{font-size:20px}
-.formGrid label span,.body>label>span,.line label span,.xmlLine label span{font-size:12px}
-.formGrid input,.formGrid select,.formGrid textarea,.body>label>select,.body>label>textarea,.line input,.line select,.xmlLine select,.xmlLine input{font-size:13px}
-.linesHead h3,.detailGrid h3{font-size:15px}
-.totalBox span,.receiveTitle span,.xmlSummary span{font-size:12px}
-.totalBox strong{font-size:16px}
-.xmlSummary strong,.xmlLine strong{font-size:13px}
-.detailRow{font-size:13px}
+.root{color-scheme:light;font-size:15px}
+.switcher button,.secondary,.primary,.cardButtons button,.orderActions button,.linesHead button,.close,.remove,.body footer button{font-size:14px}
+.search input{font:inherit;font-size:14px;color:#0f172a}
+.error,.success,.notice,.empty{font-size:14px}
+.cardMain h3,.order h3{font-size:17px}
+.cardMain p,.order p,.detailGrid p{font-size:14px;line-height:1.45}
+.cardMain small,.detailRow small,.xmlLine small,.xmlSummary small{font-size:13px;line-height:1.4}
+.badge,.status,.warning{font-size:12px}
+.orderHead>strong{font-size:19px}
+.orderMeta{font-size:13px}
+.modal>header span{font-size:12px}
+.modal>header h2{font-size:22px}
+.formGrid label span,.body>label>span,.line label span,.xmlLine label span{font-size:13px}
+.formGrid input,.formGrid select,.formGrid textarea,.body>label>select,.body>label>textarea,.line input,.line select,.xmlLine select,.xmlLine input{font-size:14px}
+.linesHead h3,.detailGrid h3{font-size:16px}
+.totalBox span,.receiveTitle span,.xmlSummary span{font-size:13px}
+.totalBox strong{font-size:17px}
+.xmlSummary strong,.xmlLine strong{font-size:14px}
+.detailRow{font-size:14px}
