@@ -13,18 +13,7 @@ export type CondicaoRotina = {
   valor_json: unknown;
 };
 
-export type ContextoEvento = {
-  mensagem: { id: string; texto: string; tipo: string | null };
-  conversa: {
-    id: string;
-    status: string | null;
-    setor_id: string | null;
-    responsavel_id: string | null;
-    aguardando_atendente: boolean;
-    bot_ativo: boolean;
-  };
-  contato: { id: string | null };
-};
+export type ContextoEvento = Record<string, unknown>;
 
 function normalizar(valor: unknown) {
   return String(valor ?? "")

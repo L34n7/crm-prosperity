@@ -1,0 +1,335 @@
+export type TipoCampoSistemaMapeado =
+  | "text"
+  | "number"
+  | "money"
+  | "boolean"
+  | "date"
+  | "datetime"
+  | "select"
+  | "phone"
+  | "email"
+  | "url"
+  | "id";
+
+export type OpcaoCampoSistemaMapeado = {
+  value: string;
+  label: string;
+};
+
+export type CampoSistemaMapeado = {
+  chave: string;
+  api_path: string;
+  nome: string;
+  descricao: string;
+  tipo: TipoCampoSistemaMapeado;
+  opcoes?: OpcaoCampoSistemaMapeado[];
+  disponivel_como_variavel?: boolean;
+};
+
+export type EventoSistemaMapeado = {
+  chave: string;
+  nome: string;
+  descricao: string;
+  tipo: "event" | "status_changed" | "relative_date";
+  campo_referencia?: string;
+  revalidar_antes_de_executar?: boolean;
+};
+
+export type RecursoSistemaMapeado = {
+  chave: string;
+  nome: string;
+  descricao: string;
+  endpoint: string;
+  identificador: string;
+  eventos: EventoSistemaMapeado[];
+  campos: CampoSistemaMapeado[];
+};
+
+export type SistemaIntegracaoMapeado = {
+  chave: string;
+  nome: string;
+  descricao: string;
+  tipo_integracao: string;
+  versao_mapeamento: number;
+  base_url_padrao?: string;
+  autenticacao: {
+    tipo: "bearer" | "basic" | "api_key" | "custom";
+    descricao: string;
+  };
+  recursos: RecursoSistemaMapeado[];
+};
+
+const opcoesPagamentoStatus: OpcaoCampoSistemaMapeado[] = [
+  { value: "waiting_payment", label: "Aguardando pagamento" },
+  { value: "paid", label: "Pago" },
+  { value: "cancelled", label: "Cancelado" },
+  { value: "refused", label: "Recusado" },
+  { value: "unpaid", label: "Não pago" },
+];
+
+const opcoesMetodoPagamento: OpcaoCampoSistemaMapeado[] = [
+  { value: "pix", label: "PIX" },
+  { value: "credit_card", label: "Cartão de crédito" },
+];
+
+const opcoesAssinaturaStatus: OpcaoCampoSistemaMapeado[] = [
+  { value: "ativa", label: "Ativa" },
+  { value: "vencida", label: "Vencida" },
+  { value: "bloqueada", label: "Bloqueada" },
+];
+
+const opcoesOnboardingStatus: OpcaoCampoSistemaMapeado[] = [
+  { value: "pendente", label: "Pendente" },
+  { value: "concluido", label: "Concluído" },
+  { value: "erro", label: "Com erro" },
+];
+
+export const CRM_PROSPERITY_SISTEMA_MAPEADO: SistemaIntegracaoMapeado = {
+  chave: "crm_prosperity",
+  nome: "CRM Prosperity",
+  descricao:
+    "Conector oficial do próprio CRM Prosperity para cobrança, checkout, assinaturas e onboarding.",
+  tipo_integracao: "crm_prosperity",
+  versao_mapeamento: 1,
+  base_url_padrao: "https://crmprosperity.com/api/integracoes/prosperity/v1",
+  autenticacao: {
+    tipo: "bearer",
+    descricao: "Token Bearer emitido especificamente para a integração.",
+  },
+  recursos: [
+    {
+      chave: "clientes",
+      nome: "Clientes e leads",
+      descricao: "Cadastros originados do checkout e da contratação do CRM Prosperity.",
+      endpoint: "/clientes",
+      identificador: "cliente.id",
+      eventos: [
+        {
+          chave: "prosperity.cliente.criado",
+          nome: "Cliente criado",
+          descricao: "Dispara quando um novo lead/cliente é cadastrado.",
+          tipo: "event",
+        },
+        {
+          chave: "prosperity.cliente.atualizado",
+          nome: "Cliente atualizado",
+          descricao: "Dispara quando dados relevantes do cliente são alterados.",
+          tipo: "event",
+        },
+      ],
+      campos: [
+        { chave: "cliente.id", api_path: "id", nome: "ID do cliente", descricao: "Identificador do cadastro do cliente.", tipo: "id" },
+        { chave: "cliente.nome", api_path: "nome", nome: "Nome do cliente", descricao: "Nome informado no cadastro ou checkout.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "cliente.email", api_path: "email", nome: "E-mail do cliente", descricao: "E-mail informado pelo cliente.", tipo: "email", disponivel_como_variavel: true },
+        { chave: "cliente.telefone", api_path: "telefone", nome: "Telefone do cliente", descricao: "Telefone/WhatsApp informado pelo cliente.", tipo: "phone", disponivel_como_variavel: true },
+        { chave: "cliente.empresa", api_path: "empresa", nome: "Empresa", descricao: "Nome da empresa informado no cadastro.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "cliente.plano", api_path: "plano_slug", nome: "Plano", descricao: "Plano selecionado no processo de contratação.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "cliente.status", api_path: "status", nome: "Status do cadastro", descricao: "Situação atual do lead de cadastro.", tipo: "text" },
+        { chave: "cliente.pago", api_path: "pago", nome: "Pagamento concluído", descricao: "Indica se o cliente já concluiu o pagamento.", tipo: "boolean" },
+        { chave: "cliente.pago_em", api_path: "pago_em", nome: "Pago em", descricao: "Data e hora em que o pagamento foi confirmado.", tipo: "datetime" },
+        { chave: "cliente.criado_em", api_path: "created_at", nome: "Criado em", descricao: "Data de criação do cadastro.", tipo: "datetime" },
+        { chave: "cliente.atualizado_em", api_path: "updated_at", nome: "Atualizado em", descricao: "Última alteração do cadastro.", tipo: "datetime" },
+      ],
+    },
+    {
+      chave: "pagamentos",
+      nome: "Pagamentos",
+      descricao: "Transações recebidas do gateway, incluindo PIX e cartão.",
+      endpoint: "/pagamentos",
+      identificador: "pagamento.id",
+      eventos: [
+        {
+          chave: "prosperity.pagamento.criado",
+          nome: "Pagamento criado",
+          descricao: "Dispara quando uma nova transação de pagamento é registrada.",
+          tipo: "event",
+          revalidar_antes_de_executar: true,
+        },
+        {
+          chave: "prosperity.pagamento.status_alterado",
+          nome: "Status do pagamento alterado",
+          descricao: "Dispara quando o status da transação muda.",
+          tipo: "status_changed",
+          revalidar_antes_de_executar: true,
+        },
+        {
+          chave: "prosperity.pagamento.pago",
+          nome: "Pagamento confirmado",
+          descricao: "Dispara quando uma transação passa para pago.",
+          tipo: "event",
+        },
+      ],
+      campos: [
+        { chave: "pagamento.id", api_path: "id", nome: "ID do pagamento", descricao: "Identificador interno da transação.", tipo: "id" },
+        { chave: "pagamento.transaction_id", api_path: "transaction_id", nome: "ID da transação", descricao: "Identificador da transação no gateway.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "pagamento.status", api_path: "status", nome: "Status do pagamento", descricao: "Situação atual da transação.", tipo: "select", opcoes: opcoesPagamentoStatus },
+        { chave: "pagamento.metodo", api_path: "metodo", nome: "Método de pagamento", descricao: "Forma utilizada no checkout.", tipo: "select", opcoes: opcoesMetodoPagamento },
+        { chave: "pagamento.valor_centavos", api_path: "valor_centavos", nome: "Valor", descricao: "Valor bruto da transação em centavos.", tipo: "money", disponivel_como_variavel: true },
+        { chave: "pagamento.pago_atualmente", api_path: "pago_atualmente", nome: "Pago atualmente", descricao: "Revalidação que considera pagamentos posteriores do mesmo cliente.", tipo: "boolean" },
+        { chave: "pagamento.pago_em", api_path: "pago_em", nome: "Pago em", descricao: "Data da confirmação do pagamento.", tipo: "datetime" },
+        { chave: "pagamento.checkout_url", api_path: "checkout_url", nome: "Link do checkout", descricao: "URL disponível para continuar ou refazer o pagamento.", tipo: "url", disponivel_como_variavel: true },
+        { chave: "cliente.nome", api_path: "cliente.nome", nome: "Nome do cliente", descricao: "Nome associado à transação.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "cliente.email", api_path: "cliente.email", nome: "E-mail do cliente", descricao: "E-mail associado à transação.", tipo: "email", disponivel_como_variavel: true },
+        { chave: "cliente.telefone", api_path: "cliente.telefone", nome: "Telefone do cliente", descricao: "Telefone/WhatsApp associado à transação.", tipo: "phone", disponivel_como_variavel: true },
+        { chave: "oferta.titulo", api_path: "oferta.titulo", nome: "Oferta", descricao: "Nome da oferta comprada.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "oferta.preco_centavos", api_path: "oferta.preco_centavos", nome: "Preço da oferta", descricao: "Preço configurado para a oferta em centavos.", tipo: "money", disponivel_como_variavel: true },
+        { chave: "pagamento.criado_em", api_path: "created_at", nome: "Criado em", descricao: "Data em que a transação foi registrada.", tipo: "datetime" },
+        { chave: "pagamento.atualizado_em", api_path: "updated_at", nome: "Atualizado em", descricao: "Última atualização da transação.", tipo: "datetime" },
+      ],
+    },
+    {
+      chave: "carrinhos_abandonados",
+      nome: "Carrinhos abandonados",
+      descricao: "Checkouts abandonados que podem ser trabalhados por recuperação automática.",
+      endpoint: "/carrinhos-abandonados",
+      identificador: "carrinho.id",
+      eventos: [
+        {
+          chave: "prosperity.carrinho.abandonado",
+          nome: "Carrinho abandonado",
+          descricao: "Dispara quando o gateway informa abandono do checkout.",
+          tipo: "event",
+          revalidar_antes_de_executar: true,
+        },
+      ],
+      campos: [
+        { chave: "carrinho.id", api_path: "id", nome: "ID do abandono", descricao: "Identificador interno do evento de abandono.", tipo: "id" },
+        { chave: "carrinho.abandoned_id", api_path: "abandoned_id", nome: "ID externo do abandono", descricao: "Identificador informado pelo gateway.", tipo: "text" },
+        { chave: "carrinho.checkout_url", api_path: "checkout_url", nome: "Link do checkout", descricao: "Link para o cliente retomar a contratação.", tipo: "url", disponivel_como_variavel: true },
+        { chave: "carrinho.pago_atualmente", api_path: "pago_atualmente", nome: "Pago atualmente", descricao: "Indica se o cliente já pagou depois de abandonar o checkout.", tipo: "boolean" },
+        { chave: "carrinho.valor_centavos", api_path: "valor_centavos", nome: "Valor", descricao: "Valor associado ao checkout abandonado.", tipo: "money", disponivel_como_variavel: true },
+        { chave: "cliente.nome", api_path: "cliente.nome", nome: "Nome do cliente", descricao: "Nome do cliente que abandonou o checkout.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "cliente.email", api_path: "cliente.email", nome: "E-mail do cliente", descricao: "E-mail do cliente que abandonou o checkout.", tipo: "email", disponivel_como_variavel: true },
+        { chave: "cliente.telefone", api_path: "cliente.telefone", nome: "Telefone do cliente", descricao: "Telefone/WhatsApp do cliente que abandonou o checkout.", tipo: "phone", disponivel_como_variavel: true },
+        { chave: "oferta.titulo", api_path: "oferta.titulo", nome: "Oferta", descricao: "Oferta que estava sendo contratada.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "carrinho.abandonado_em", api_path: "created_at", nome: "Abandonado em", descricao: "Data e hora do evento de abandono.", tipo: "datetime" },
+      ],
+    },
+    {
+      chave: "assinaturas",
+      nome: "Assinaturas",
+      descricao: "Situação financeira e ciclo da assinatura das empresas clientes.",
+      endpoint: "/assinaturas",
+      identificador: "empresa.id",
+      eventos: [
+        {
+          chave: "prosperity.assinatura.status_alterado",
+          nome: "Status da assinatura alterado",
+          descricao: "Dispara quando a assinatura muda entre ativa, vencida ou bloqueada.",
+          tipo: "status_changed",
+          revalidar_antes_de_executar: true,
+        },
+        {
+          chave: "prosperity.assinatura.renovada",
+          nome: "Assinatura renovada",
+          descricao: "Dispara quando a renovação da assinatura é registrada.",
+          tipo: "event",
+        },
+        {
+          chave: "prosperity.assinatura.vencimento_proximo",
+          nome: "Antes do vencimento da assinatura",
+          descricao: "Executa com antecedência configurável em relação ao vencimento.",
+          tipo: "relative_date",
+          campo_referencia: "assinatura.vencimento_em",
+          revalidar_antes_de_executar: true,
+        },
+        {
+          chave: "prosperity.assinatura.bloqueio_proximo",
+          nome: "Antes do bloqueio da assinatura",
+          descricao: "Executa com antecedência configurável em relação ao bloqueio.",
+          tipo: "relative_date",
+          campo_referencia: "assinatura.bloqueio_em",
+          revalidar_antes_de_executar: true,
+        },
+      ],
+      campos: [
+        { chave: "empresa.id", api_path: "empresa_id", nome: "ID da empresa", descricao: "Identificador da empresa cliente.", tipo: "id" },
+        { chave: "empresa.nome", api_path: "nome", nome: "Empresa", descricao: "Nome fantasia ou razão social da empresa.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "assinatura.status", api_path: "assinatura_status", nome: "Status da assinatura", descricao: "Situação atual da assinatura.", tipo: "select", opcoes: opcoesAssinaturaStatus },
+        { chave: "assinatura.inicio_em", api_path: "assinatura_inicio_em", nome: "Início da assinatura", descricao: "Data de início do ciclo atual.", tipo: "datetime" },
+        { chave: "assinatura.vencimento_em", api_path: "assinatura_vencimento_em", nome: "Vencimento", descricao: "Data e hora de vencimento da assinatura.", tipo: "datetime", disponivel_como_variavel: true },
+        { chave: "assinatura.bloqueio_em", api_path: "assinatura_bloqueio_em", nome: "Bloqueio", descricao: "Data prevista para bloqueio da conta.", tipo: "datetime", disponivel_como_variavel: true },
+        { chave: "assinatura.renovada_em", api_path: "assinatura_renovada_em", nome: "Renovada em", descricao: "Data da última renovação.", tipo: "datetime" },
+        { chave: "plano.nome", api_path: "plano.nome", nome: "Plano", descricao: "Nome do plano contratado.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "plano.slug", api_path: "plano.slug", nome: "Código do plano", descricao: "Identificador técnico do plano.", tipo: "text" },
+        { chave: "contato.nome", api_path: "contato.nome", nome: "Nome do responsável", descricao: "Nome do contato principal da empresa.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "contato.email", api_path: "contato.email", nome: "E-mail do responsável", descricao: "E-mail do contato principal da empresa.", tipo: "email", disponivel_como_variavel: true },
+        { chave: "contato.telefone", api_path: "contato.telefone", nome: "Telefone do responsável", descricao: "Telefone/WhatsApp do contato principal.", tipo: "phone", disponivel_como_variavel: true },
+      ],
+    },
+    {
+      chave: "onboardings",
+      nome: "Onboarding",
+      descricao: "Ativação e configuração das integrações WhatsApp dos clientes.",
+      endpoint: "/onboardings",
+      identificador: "onboarding.integracao_id",
+      eventos: [
+        {
+          chave: "prosperity.onboarding.iniciado",
+          nome: "Onboarding iniciado",
+          descricao: "Dispara quando uma integração inicia o processo de configuração.",
+          tipo: "event",
+        },
+        {
+          chave: "prosperity.onboarding.etapa_alterada",
+          nome: "Etapa do onboarding alterada",
+          descricao: "Dispara quando o cliente avança ou retorna de etapa.",
+          tipo: "status_changed",
+          revalidar_antes_de_executar: true,
+        },
+        {
+          chave: "prosperity.onboarding.erro",
+          nome: "Onboarding com erro",
+          descricao: "Dispara quando uma falha de onboarding é registrada.",
+          tipo: "event",
+          revalidar_antes_de_executar: true,
+        },
+        {
+          chave: "prosperity.onboarding.concluido",
+          nome: "Onboarding concluído",
+          descricao: "Dispara quando a configuração da integração é finalizada.",
+          tipo: "event",
+        },
+      ],
+      campos: [
+        { chave: "onboarding.integracao_id", api_path: "integracao_id", nome: "ID da integração", descricao: "Identificador da integração WhatsApp em configuração.", tipo: "id" },
+        { chave: "empresa.id", api_path: "empresa_id", nome: "ID da empresa", descricao: "Empresa proprietária da integração.", tipo: "id" },
+        { chave: "empresa.nome", api_path: "empresa.nome", nome: "Empresa", descricao: "Nome da empresa que está realizando o onboarding.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "onboarding.status", api_path: "onboarding_status", nome: "Status do onboarding", descricao: "Situação atual do processo de onboarding.", tipo: "select", opcoes: opcoesOnboardingStatus },
+        { chave: "onboarding.etapa", api_path: "onboarding_etapa", nome: "Etapa do onboarding", descricao: "Etapa atual da configuração.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "onboarding.erro", api_path: "onboarding_erro", nome: "Erro do onboarding", descricao: "Último erro registrado no processo.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "onboarding.concluido", api_path: "concluido", nome: "Onboarding concluído", descricao: "Indica se a configuração já foi finalizada.", tipo: "boolean" },
+        { chave: "onboarding.setup_completed_at", api_path: "setup_completed_at", nome: "Concluído em", descricao: "Data e hora da conclusão do onboarding.", tipo: "datetime" },
+        { chave: "onboarding.phone_registered", api_path: "phone_registered", nome: "Número registrado", descricao: "Indica se o número foi registrado na Cloud API.", tipo: "boolean" },
+        { chave: "onboarding.app_assigned", api_path: "app_assigned", nome: "App atribuído", descricao: "Indica se o app Meta foi atribuído ao número.", tipo: "boolean" },
+        { chave: "onboarding.webhook_verificado", api_path: "webhook_verificado", nome: "Webhook verificado", descricao: "Indica se o webhook da integração foi validado.", tipo: "boolean" },
+        { chave: "contato.nome", api_path: "contato.nome", nome: "Nome do responsável", descricao: "Contato principal da empresa durante o onboarding.", tipo: "text", disponivel_como_variavel: true },
+        { chave: "contato.email", api_path: "contato.email", nome: "E-mail do responsável", descricao: "E-mail do contato principal.", tipo: "email", disponivel_como_variavel: true },
+        { chave: "contato.telefone", api_path: "contato.telefone", nome: "Telefone do responsável", descricao: "Telefone/WhatsApp do contato principal.", tipo: "phone", disponivel_como_variavel: true },
+      ],
+    },
+  ],
+};
+
+export const SISTEMAS_INTEGRACAO_MAPEADOS: SistemaIntegracaoMapeado[] = [
+  CRM_PROSPERITY_SISTEMA_MAPEADO,
+];
+
+export function buscarSistemaMapeado(chave: string | null | undefined) {
+  const normalizada = String(chave || "").trim().toLowerCase();
+  return SISTEMAS_INTEGRACAO_MAPEADOS.find(
+    (sistema) =>
+      sistema.chave.toLowerCase() === normalizada ||
+      sistema.tipo_integracao.toLowerCase() === normalizada,
+  ) || null;
+}
+
+export function buscarRecursoSistemaMapeado(
+  sistemaChave: string,
+  recursoChave: string | null | undefined,
+) {
+  const sistema = buscarSistemaMapeado(sistemaChave);
+  if (!sistema) return null;
+  const normalizada = String(recursoChave || "").trim().toLowerCase();
+  return sistema.recursos.find((recurso) => recurso.chave.toLowerCase() === normalizada) || null;
+}

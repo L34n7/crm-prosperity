@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/agenda_automacoes?limit=50",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/rotinas_integracoes_eventos?limit=50",
+      "schedule": "* * * * *"
     }
   ]
 }

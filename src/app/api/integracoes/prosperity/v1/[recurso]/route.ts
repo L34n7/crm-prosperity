@@ -71,11 +71,7 @@ type EmpresaRow = {
   updated_at: string;
 };
 
-type PlanoRow = {
-  id: string;
-  nome: string | null;
-  slug: string | null;
-};
+type PlanoRow = { id: string; nome: string | null; slug: string | null };
 
 type OnboardingRow = {
   id: string;
@@ -126,14 +122,10 @@ async function buscarLeads(ids: string[]) {
   const unicos = Array.from(new Set(ids.filter(Boolean)));
   const mapa = new Map<string, LeadRow>();
   if (!unicos.length) return mapa;
-
   const { data, error } = await prosperityApiSupabase
     .from("leads_cadastro")
-    .select(
-      "id,nome,email,telefone,empresa,plano_slug,status,pago,pago_em,empresa_id,created_at,updated_at",
-    )
+    .select("id,nome,email,telefone,empresa,plano_slug,status,pago,pago_em,empresa_id,created_at,updated_at")
     .in("id", unicos);
-
   if (error) throw new Error(error.message);
   for (const item of (data || []) as LeadRow[]) mapa.set(item.id, item);
   return mapa;
@@ -143,15 +135,11 @@ async function buscarLeadMaisRecentePorEmpresa(empresaIds: string[]) {
   const unicos = Array.from(new Set(empresaIds.filter(Boolean)));
   const mapa = new Map<string, LeadRow>();
   if (!unicos.length) return mapa;
-
   const { data, error } = await prosperityApiSupabase
     .from("leads_cadastro")
-    .select(
-      "id,nome,email,telefone,empresa,plano_slug,status,pago,pago_em,empresa_id,created_at,updated_at",
-    )
+    .select("id,nome,email,telefone,empresa,plano_slug,status,pago,pago_em,empresa_id,created_at,updated_at")
     .in("empresa_id", unicos)
     .order("created_at", { ascending: false });
-
   if (error) throw new Error(error.message);
   for (const item of (data || []) as LeadRow[]) {
     if (item.empresa_id && !mapa.has(item.empresa_id)) mapa.set(item.empresa_id, item);
@@ -163,14 +151,10 @@ async function buscarEmpresas(ids: string[]) {
   const unicos = Array.from(new Set(ids.filter(Boolean)));
   const mapa = new Map<string, EmpresaRow>();
   if (!unicos.length) return mapa;
-
   const { data, error } = await prosperityApiSupabase
     .from("empresas")
-    .select(
-      "id,plano_id,nome_fantasia,razao_social,email,telefone,nome_responsavel,status,timezone,assinatura_status,assinatura_inicio_em,assinatura_vencimento_em,assinatura_bloqueio_em,assinatura_renovada_em,assinatura_gateway,assinatura_referencia,created_at,updated_at",
-    )
+    .select("id,plano_id,nome_fantasia,razao_social,email,telefone,nome_responsavel,status,timezone,assinatura_status,assinatura_inicio_em,assinatura_vencimento_em,assinatura_bloqueio_em,assinatura_renovada_em,assinatura_gateway,assinatura_referencia,created_at,updated_at")
     .in("id", unicos);
-
   if (error) throw new Error(error.message);
   for (const item of (data || []) as EmpresaRow[]) mapa.set(item.id, item);
   return mapa;
@@ -180,12 +164,10 @@ async function buscarPlanos(ids: string[]) {
   const unicos = Array.from(new Set(ids.filter(Boolean)));
   const mapa = new Map<string, PlanoRow>();
   if (!unicos.length) return mapa;
-
   const { data, error } = await prosperityApiSupabase
     .from("planos")
     .select("id,nome,slug")
     .in("id", unicos);
-
   if (error) throw new Error(error.message);
   for (const item of (data || []) as PlanoRow[]) mapa.set(item.id, item);
   return mapa;
@@ -195,31 +177,24 @@ async function buscarLeadsComPagamentoPago(leadIds: string[]) {
   const unicos = Array.from(new Set(leadIds.filter(Boolean)));
   const pagos = new Set<string>();
   if (!unicos.length) return pagos;
-
   const { data, error } = await prosperityApiSupabase
     .from("pagamentos")
     .select("lead_id")
     .in("lead_id", unicos)
     .eq("status", "paid");
-
   if (error) throw new Error(error.message);
-  for (const item of data || []) {
-    if (item.lead_id) pagos.add(String(item.lead_id));
-  }
+  for (const item of data || []) if (item.lead_id) pagos.add(String(item.lead_id));
   return pagos;
 }
 
 async function listarClientes(request: NextRequest) {
   const { limite, pagina, inicio, fim } = lerPaginacao(request);
   const params = request.nextUrl.searchParams;
-
   let query = prosperityApiSupabase
     .from("leads_cadastro")
-    .select(
-      "id,nome,email,telefone,empresa,plano_slug,status,pago,pago_em,empresa_id,created_at,updated_at",
-      { count: "exact" },
-    );
+    .select("id,nome,email,telefone,empresa,plano_slug,status,pago,pago_em,empresa_id,created_at,updated_at", { count: "exact" });
 
+  if (params.get("id")) query = query.eq("id", params.get("id")!);
   const pago = valorBooleano(params.get("pago"));
   if (pago != null) query = query.eq("pago", pago);
   if (params.get("status")) query = query.eq("status", params.get("status")!);
@@ -231,28 +206,18 @@ async function listarClientes(request: NextRequest) {
     .order("updated_at", { ascending: false })
     .range(inicio, fim);
   if (error) throw new Error(error.message);
-
-  return respostaLista(
-    "clientes",
-    (data || []) as LeadRow[],
-    pagina,
-    limite,
-    count,
-  );
+  return respostaLista("clientes", (data || []) as LeadRow[], pagina, limite, count);
 }
 
 async function listarPagamentos(request: NextRequest, somenteAbandonos = false) {
   const { limite, pagina, inicio, fim } = lerPaginacao(request);
   const params = request.nextUrl.searchParams;
-
   let query = prosperityApiSupabase
     .from("pagamentos")
-    .select(
-      "id,empresa_id,lead_id,gateway,evento,transaction_id,status,metodo,valor,valor_liquido,customer_id,customer_nome,customer_email,customer_telefone,offer_hash,offer_titulo,offer_preco,paid_at,refunded_at,payload,created_at,updated_at",
-      { count: "exact" },
-    );
+    .select("id,empresa_id,lead_id,gateway,evento,transaction_id,status,metodo,valor,valor_liquido,customer_id,customer_nome,customer_email,customer_telefone,offer_hash,offer_titulo,offer_preco,paid_at,refunded_at,payload,created_at,updated_at", { count: "exact" });
 
   if (somenteAbandonos) query = query.contains("payload", { event: "cart.abandoned" });
+  if (params.get("id")) query = query.eq("id", params.get("id")!);
   if (params.get("status")) query = query.eq("status", params.get("status")!);
   if (params.get("metodo")) query = query.eq("metodo", params.get("metodo")!);
   if (params.get("lead_id")) query = query.eq("lead_id", params.get("lead_id")!);
@@ -280,7 +245,6 @@ async function listarPagamentos(request: NextRequest, somenteAbandonos = false) 
         lead?.pago === true ||
         (item.lead_id && leadsComPagamentoPago.has(item.lead_id)),
     );
-
     return {
       id: item.id,
       empresa_id: item.empresa_id,
@@ -321,10 +285,7 @@ async function listarPagamentos(request: NextRequest, somenteAbandonos = false) 
     limite,
     count,
     somenteAbandonos
-      ? {
-          observacao:
-            "Use pago_atualmente = false antes de realizar recuperação de carrinho. O evento histórico pode pertencer a um cliente que pagou posteriormente.",
-        }
+      ? { observacao: "Use pago_atualmente = false antes de realizar recuperação de carrinho. O evento histórico pode pertencer a um cliente que pagou posteriormente." }
       : undefined,
   );
 }
@@ -332,13 +293,9 @@ async function listarPagamentos(request: NextRequest, somenteAbandonos = false) 
 async function listarAssinaturas(request: NextRequest) {
   const { limite, pagina, inicio, fim } = lerPaginacao(request);
   const params = request.nextUrl.searchParams;
-
   let query = prosperityApiSupabase
     .from("empresas")
-    .select(
-      "id,plano_id,nome_fantasia,razao_social,email,telefone,nome_responsavel,status,timezone,assinatura_status,assinatura_inicio_em,assinatura_vencimento_em,assinatura_bloqueio_em,assinatura_renovada_em,assinatura_gateway,assinatura_referencia,created_at,updated_at",
-      { count: "exact" },
-    );
+    .select("id,plano_id,nome_fantasia,razao_social,email,telefone,nome_responsavel,status,timezone,assinatura_status,assinatura_inicio_em,assinatura_vencimento_em,assinatura_bloqueio_em,assinatura_renovada_em,assinatura_gateway,assinatura_referencia,created_at,updated_at", { count: "exact" });
 
   if (params.get("status")) query = query.eq("assinatura_status", params.get("status")!);
   if (params.get("empresa_id")) query = query.eq("id", params.get("empresa_id")!);
@@ -360,7 +317,6 @@ async function listarAssinaturas(request: NextRequest) {
   const itens = empresas.map((empresa) => {
     const lead = leadsPorEmpresa.get(empresa.id) || null;
     const plano = empresa.plano_id ? planos.get(empresa.plano_id) || null : null;
-
     return {
       empresa_id: empresa.id,
       nome: empresa.nome_fantasia || empresa.razao_social,
@@ -378,26 +334,21 @@ async function listarAssinaturas(request: NextRequest) {
       updated_at: empresa.updated_at,
     };
   });
-
   return respostaLista("assinaturas", itens, pagina, limite, count);
 }
 
 async function listarOnboardings(request: NextRequest) {
   const { limite, pagina, inicio, fim } = lerPaginacao(request);
   const params = request.nextUrl.searchParams;
-
   let query = prosperityApiSupabase
     .from("integracoes_whatsapp")
-    .select(
-      "id,empresa_id,nome_conexao,numero,status,phone_number_status,onboarding_etapa,onboarding_status,onboarding_erro,setup_completed_at,payment_method_added,phone_registered,app_assigned,webhook_verificado,modo_integracao,coex_status,created_at,updated_at",
-      { count: "exact" },
-    );
+    .select("id,empresa_id,nome_conexao,numero,status,phone_number_status,onboarding_etapa,onboarding_status,onboarding_erro,setup_completed_at,payment_method_added,phone_registered,app_assigned,webhook_verificado,modo_integracao,coex_status,created_at,updated_at", { count: "exact" });
 
+  if (params.get("integracao_id")) query = query.eq("id", params.get("integracao_id")!);
   if (params.get("status")) query = query.eq("onboarding_status", params.get("status")!);
   if (params.get("etapa")) query = query.eq("onboarding_etapa", params.get("etapa")!);
   if (params.get("empresa_id")) query = query.eq("empresa_id", params.get("empresa_id")!);
   if (params.get("atualizado_desde")) query = query.gte("updated_at", params.get("atualizado_desde")!);
-
   const concluido = valorBooleano(params.get("concluido"));
   if (concluido === true) query = query.not("setup_completed_at", "is", null);
   if (concluido === false) query = query.is("setup_completed_at", null);
@@ -417,25 +368,15 @@ async function listarOnboardings(request: NextRequest) {
   const itens = onboardings.map((item) => {
     const empresa = empresas.get(item.empresa_id) || null;
     const lead = leadsPorEmpresa.get(item.empresa_id) || null;
-
     return {
       integracao_id: item.id,
       empresa_id: item.empresa_id,
       empresa: empresa
-        ? {
-            nome: empresa.nome_fantasia || empresa.razao_social,
-            status: empresa.status,
-            assinatura_status: empresa.assinatura_status,
-          }
+        ? { nome: empresa.nome_fantasia || empresa.razao_social, status: empresa.status, assinatura_status: empresa.assinatura_status }
         : null,
       contato: empresa
         ? contatoDoCliente(empresa, lead)
-        : {
-            nome: lead?.nome || null,
-            email: lead?.email || null,
-            telefone: lead?.telefone || null,
-            origem: lead ? "lead_cadastro" : null,
-          },
+        : { nome: lead?.nome || null, email: lead?.email || null, telefone: lead?.telefone || null, origem: lead ? "lead_cadastro" : null },
       nome_conexao: item.nome_conexao,
       numero: item.numero,
       status_integracao: item.status,
@@ -455,7 +396,6 @@ async function listarOnboardings(request: NextRequest) {
       updated_at: item.updated_at,
     };
   });
-
   return respostaLista("onboarding", itens, pagina, limite, count);
 }
 
@@ -465,14 +405,9 @@ export async function GET(
 ) {
   const { recurso } = await params;
   const scope = RECURSOS[recurso];
-
   if (!scope) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Recurso não encontrado.",
-        recursos_disponiveis: Object.keys(RECURSOS),
-      },
+      { ok: false, error: "Recurso não encontrado.", recursos_disponiveis: Object.keys(RECURSOS) },
       { status: 404 },
     );
   }
@@ -486,7 +421,6 @@ export async function GET(
     if (recurso === "carrinhos-abandonados") return await listarPagamentos(request, true);
     if (recurso === "assinaturas") return await listarAssinaturas(request);
     if (recurso === "onboardings") return await listarOnboardings(request);
-
     return NextResponse.json({ ok: false, error: "Recurso não suportado." }, { status: 404 });
   } catch (error) {
     return respostaProsperityErro(error);

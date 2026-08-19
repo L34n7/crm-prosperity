@@ -1,3 +1,5 @@
+import { CRM_PROSPERITY_SISTEMA_MAPEADO } from "@/lib/integracoes/sistemas-mapeados";
+
 export type Categoria =
   | "agenda"
   | "conversas"
@@ -149,12 +151,36 @@ export const opcoesVazias: Opcoes = {
   integracoes_api: [],
 };
 
+const gatilhosCrmProsperity = CRM_PROSPERITY_SISTEMA_MAPEADO.recursos.flatMap(
+  (recurso) =>
+    recurso.eventos
+      .filter((evento) => evento.tipo !== "relative_date")
+      .map((evento) => ({
+        evento: evento.chave,
+        nome: `CRM Prosperity · ${recurso.nome} · ${evento.nome}`,
+        tipo: "evento" as const,
+      })),
+);
+
+const camposCrmProsperity = Array.from(
+  new Map(
+    CRM_PROSPERITY_SISTEMA_MAPEADO.recursos
+      .flatMap((recurso) =>
+        recurso.campos.map((campo) => ({
+          value: campo.chave,
+          label: `${campo.nome} · ${recurso.nome}`,
+        })),
+      )
+      .map((campo) => [campo.value, campo]),
+  ).values(),
+);
+
 export const categorias: Array<{ id: Categoria; nome: string; descricao: string }> = [
   { id: "agenda", nome: "Agenda", descricao: "Agendamentos, confirmações e status." },
   { id: "conversas", nome: "Conversas", descricao: "Fila, responsável e atendimento." },
   { id: "contatos", nome: "Contatos", descricao: "Cadastro, campos e etiquetas." },
   { id: "imoveis", nome: "Imóveis", descricao: "Criação, atualização e disponibilidade." },
-  { id: "integracoes", nome: "Integrações", descricao: "Horários, webhooks e APIs externas." },
+  { id: "integracoes", nome: "Integrações", descricao: "Sistemas externos oficialmente mapeados e APIs." },
   { id: "sistema", nome: "Sistema", descricao: "Rotinas internas e execução manual." },
 ];
 
@@ -190,8 +216,9 @@ export const gatilhosPorCategoria: Record<
     { evento: "imovel.indisponivel", nome: "Imóvel ficou indisponível", tipo: "evento" },
   ],
   integracoes: [
+    ...gatilhosCrmProsperity,
     { evento: "integracao.agendamento", nome: "Horário programado", tipo: "agendamento" },
-    { evento: "integracao.webhook_recebido", nome: "Webhook recebido", tipo: "webhook" },
+    { evento: "integracao.webhook_recebido", nome: "Webhook genérico recebido", tipo: "webhook" },
   ],
   sistema: [{ evento: "sistema.manual", nome: "Execução manual", tipo: "manual" }],
 };
@@ -225,6 +252,7 @@ export const camposPorCategoria: Record<Categoria, Array<{ value: string; label:
     { value: "imovel.origem", label: "Origem" },
   ],
   integracoes: [
+    ...camposCrmProsperity,
     { value: "integracao.status", label: "Status da integração" },
     { value: "payload.evento", label: "Evento recebido" },
     { value: "payload.status", label: "Status do payload" },
