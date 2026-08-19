@@ -18,10 +18,12 @@ import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events
 import { solicitarAtualizacaoConversasNaoLidasHeader } from "@/lib/header-summary/events";
 import { createClient } from "@/lib/supabase/client";
 import { getWhatsAppMessageSpecialState } from "@/lib/whatsapp/message-special-state";
+import { getWhatsAppFlowResponsePresentation } from "@/lib/whatsapp/flow-response-presentation";
 import styles from "./conversas.module.css";
 import VirtualizedConversationRows from "./VirtualizedConversationRows";
 import { can } from "@/lib/permissoes/frontend";
 import {
+  FileText,
   MessageSquareText,
   Pencil,
   Plus,
@@ -3487,6 +3489,44 @@ function ConversasPageContent() {
 }
 
   function renderizarConteudoMensagem(msg: Mensagem) {
+    const flowResponse = getWhatsAppFlowResponsePresentation(msg.metadata_json);
+
+    if (flowResponse) {
+      return (
+        <div className={styles.flowResponseCard}>
+          <div className={styles.flowResponseHeader}>
+            <span className={styles.flowResponseIcon} aria-hidden="true">
+              <FileText size={20} strokeWidth={1.9} />
+            </span>
+            <span className={styles.flowResponseHeading}>
+              <strong className={styles.flowResponseTitle}>
+                {flowResponse.title}
+              </strong>
+              <span className={styles.flowResponseStatus}>
+                {flowResponse.status}
+              </span>
+            </span>
+          </div>
+
+          {flowResponse.fields.length > 0 ? (
+            <details className={styles.flowResponseDetails}>
+              <summary className={styles.flowResponseSummary}>
+                Mostrar resposta
+              </summary>
+              <dl className={styles.flowResponseFields}>
+                {flowResponse.fields.map((field) => (
+                  <div className={styles.flowResponseField} key={field.key}>
+                    <dt>{field.label}</dt>
+                    <dd>{field.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          ) : null}
+        </div>
+      );
+    }
+
     if (
       mensagemEhDisparo(msg) && !mensagemDisparoTemBotoes(msg)
     ) {

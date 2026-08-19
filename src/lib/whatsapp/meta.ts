@@ -1,3 +1,5 @@
+import { getWhatsAppFlowResponsePresentation } from "./flow-response-presentation.ts";
+
 export type WhatsAppWebhookBody = {
   object?: string;
   entry?: WhatsAppEntry[];
@@ -126,6 +128,11 @@ type WhatsAppInteractiveMessage = {
     title?: string;
     description?: string;
   };
+  nfm_reply?: {
+    body?: string;
+    name?: string;
+    response_json?: string | Record<string, unknown>;
+  };
 };
 
 type WhatsAppButtonMessage = {
@@ -151,6 +158,13 @@ export type WhatsAppReferral = {
   video_url?: string;
   thumbnail_url?: string;
   ctwa_clid?: string;
+  welcome_message?: {
+    text?: string;
+    button?: {
+      text?: string;
+      type?: string;
+    };
+  };
 };
 
 type WhatsAppHistoryContext = {
@@ -413,12 +427,15 @@ function buildConteudo(
   }
 
   if (tipoMensagem === "botao") {
+    const flowResponse = getWhatsAppFlowResponsePresentation(rawMessage);
+
     return (
       rawMessage.button?.text?.trim() ||
       rawMessage.interactive?.button_reply?.title?.trim() ||
       rawMessage.interactive?.button_reply?.id?.trim() ||
       rawMessage.interactive?.list_reply?.title?.trim() ||
       rawMessage.interactive?.list_reply?.id?.trim() ||
+      flowResponse?.title ||
       "🔘 Botão"
     );
   }

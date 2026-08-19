@@ -6425,6 +6425,102 @@
   gap: 6px;
 }
 
+.flowResponseCard {
+  min-width: min(290px, 68vw);
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--crm-ui-private-border-hex-16379136);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--crm-surface) 78%, transparent);
+}
+
+.flowResponseHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+}
+
+.flowResponseIcon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--crm-primary-strong) 14%, transparent);
+  color: var(--crm-primary-strong);
+}
+
+.flowResponseHeading {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.flowResponseTitle,
+.flowResponseStatus {
+  overflow-wrap: anywhere;
+}
+
+.flowResponseTitle {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.flowResponseStatus {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.flowResponseDetails {
+  border-top: 1px solid var(--crm-ui-private-border-hex-16379136);
+}
+
+.flowResponseSummary {
+  padding: 9px 11px;
+  color: var(--crm-primary-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.flowResponseSummary::-webkit-details-marker {
+  display: none;
+}
+
+.flowResponseFields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 11px 11px;
+}
+
+.flowResponseField {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) minmax(0, 1fr);
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.flowResponseField dt {
+  color: var(--crm-text-muted);
+  font-weight: 700;
+}
+
+.flowResponseField dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--crm-text-strong);
+  overflow-wrap: anywhere;
+}
+
 .buttonMessageOption {
   min-width: 160px;
   max-width: 100%;
