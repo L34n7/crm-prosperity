@@ -38,7 +38,7 @@ import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
 type Aba = "estoque" | "catalogo" | "compras" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
-type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | null;
+type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | "arquivamento" | null;
 
 type EstoqueItem = {
   id: string;
@@ -293,6 +293,7 @@ export default function EstoquePage() {
   const [inventarioContagens, setInventarioContagens] = useState<Record<string, string>>({});
   const [cadastroNome, setCadastroNome] = useState("");
   const [localizacaoForm, setLocalizacaoForm] = useState({ deposito_id: "", codigo: "", nome: "" });
+  const [arquivamento, setArquivamento] = useState<{ tipo: "item" | "catalogo"; id: string; nome: string } | null>(null);
 
   const podeGerenciar = permissoes.includes("estoque.gerenciar");
   const podeMovimentar = permissoes.includes("estoque.movimentar");
@@ -502,9 +503,10 @@ export default function EstoquePage() {
     }));
   }
 
-  async function arquivar(tipo: "item" | "catalogo", id: string, nome: string) {
-    if (!window.confirm(`Arquivar “${nome}”? O histórico será preservado.`)) return;
-    await enviar({ acao: tipo === "item" ? "arquivar_item" : "arquivar_catalogo", id });
+  function abrirArquivamento(tipo: "item" | "catalogo", id: string, nome: string) {
+    setArquivamento({ tipo, id, nome });
+    setErro("");
+    setModal("arquivamento");
   }
 
   const catalogoSelecionado = catalogo.find(
@@ -539,6 +541,7 @@ export default function EstoquePage() {
     : modal === "inventario" ? "Contagem física"
     : modal === "localizacao" ? "Estrutura do estoque"
     : modal === "categoria" || modal === "marca" ? "Organização do catálogo"
+    : modal === "arquivamento" ? "Confirmação de arquivamento"
     : "Movimentação";
   const modalTitulo = modal === "item" ? (itemForm.id ? "Editar item" : "Novo item")
     : modal === "catalogo" ? (catalogoForm.id ? "Editar produto ou serviço" : "Novo produto ou serviço")
@@ -547,6 +550,7 @@ export default function EstoquePage() {
     : modal === "localizacao" ? "Nova localização"
     : modal === "categoria" ? "Nova categoria"
     : modal === "marca" ? "Nova marca"
+    : modal === "arquivamento" ? `Arquivar ${arquivamento?.tipo === "catalogo" ? "produto ou serviço" : "item de estoque"}`
     : "Movimentar estoque";
 
   return (
@@ -764,7 +768,7 @@ export default function EstoquePage() {
                         {podeMovimentar ? <button className={styles.entryAction} aria-label={`Registrar entrada de ${item.nome}`} title="Registrar entrada" onClick={() => abrirMovimentacao(item, "entrada")}><ArrowDownToLine size={16} /><span>Entrada</span></button> : null}
                         {podeMovimentar ? <button className={styles.exitAction} aria-label={`Registrar saída de ${item.nome}`} title="Registrar saída" onClick={() => abrirMovimentacao(item, "saida")}><ArrowUpFromLine size={16} /><span>Saída</span></button> : null}
                         {podeGerenciar ? <button className={styles.iconButton} aria-label={`Editar ${item.nome}`} onClick={() => abrirEditarItem(item)}><Pencil size={16} /></button> : null}
-                        {podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => void arquivar("item", item.id, item.nome)}><Archive size={16} /></button> : null}
+                        {podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => abrirArquivamento("item", item.id, item.nome)}><Archive size={16} /></button> : null}
                       </div>
                     </article>
                   );
@@ -808,7 +812,7 @@ export default function EstoquePage() {
                       <div className={styles.catalogActions}>
                         {podeMovimentar ? <button className={styles.primaryButton} onClick={() => abrirBaixa(item)}>Registrar {item.tipo === "produto" ? "venda" : "execução"}<ChevronRight size={16} /></button> : null}
                         {podeGerenciar ? <button className={styles.iconButton} aria-label={`Editar ${item.nome}`} onClick={() => abrirEditarCatalogo(item)}><Pencil size={16} /></button> : null}
-                        {podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => void arquivar("catalogo", item.id, item.nome)}><Archive size={16} /></button> : null}
+                        {podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => abrirArquivamento("catalogo", item.id, item.nome)}><Archive size={16} /></button> : null}
                       </div>
                     </article>
                   );
@@ -990,6 +994,19 @@ export default function EstoquePage() {
               </div>
             ) : null}
 
+            {modal === "arquivamento" && arquivamento ? (
+              <div className={styles.modalBody}>
+                <div className={styles.archiveConfirmation}>
+                  <span><Archive size={24} /></span>
+                  <div>
+                    <strong>Arquivar “{arquivamento.nome}”?</strong>
+                    <p>O registro deixará de aparecer nas listas ativas, mas seu histórico e suas movimentações serão preservados.</p>
+                  </div>
+                </div>
+                <div className={styles.infoBox}>Esta ação não apaga dados fiscais, saldos históricos ou vínculos já registrados.</div>
+              </div>
+            ) : null}
+
             {erro ? <div className={`${styles.error} ${styles.modalError}`}><AlertTriangle size={17} />{erro}</div> : null}
 
             <footer className={styles.modalFooter}>
@@ -1002,6 +1019,7 @@ export default function EstoquePage() {
               {modal === "localizacao" ? <button className={styles.primaryButton} disabled={salvando || !localizacaoForm.deposito_id || !localizacaoForm.codigo.trim() || !localizacaoForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_localizacao", ...localizacaoForm })}>{salvando ? "Salvando..." : "Salvar localização"}</button> : null}
               {modal === "categoria" ? <button className={styles.primaryButton} disabled={salvando || !cadastroNome.trim()} onClick={() => void enviar({ acao: "salvar_categoria", nome: cadastroNome })}>{salvando ? "Salvando..." : "Salvar categoria"}</button> : null}
               {modal === "marca" ? <button className={styles.primaryButton} disabled={salvando || !cadastroNome.trim()} onClick={() => void enviar({ acao: "salvar_marca", nome: cadastroNome })}>{salvando ? "Salvando..." : "Salvar marca"}</button> : null}
+              {modal === "arquivamento" && arquivamento ? <button className={styles.dangerButton} disabled={salvando} onClick={() => void enviar({ acao: arquivamento.tipo === "item" ? "arquivar_item" : "arquivar_catalogo", id: arquivamento.id })}><Archive size={17} />{salvando ? "Arquivando..." : "Confirmar arquivamento"}</button> : null}
             </footer>
           </section>
         </div>

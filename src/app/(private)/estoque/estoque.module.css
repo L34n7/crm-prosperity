@@ -73,7 +73,8 @@
 
 .primaryButton,
 .secondaryButton,
-.iconButton {
+.iconButton,
+.dangerButton {
   min-height: 42px;
   border-radius: 13px;
   padding: 0 15px;
@@ -95,6 +96,12 @@
   color: var(--crm-text-inverse);
 }
 
+.dangerButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-text);
+  color: var(--crm-text-inverse);
+}
+
 .secondaryButton,
 .iconButton {
   border: 1px solid var(--crm-border-strong);
@@ -104,7 +111,8 @@
 
 .primaryButton:hover,
 .secondaryButton:hover,
-.iconButton:hover {
+.iconButton:hover,
+.dangerButton:hover {
   transform: translateY(-1px);
 }
 
@@ -117,7 +125,8 @@
 
 .primaryButton:disabled,
 .secondaryButton:disabled,
-.iconButton:disabled {
+.iconButton:disabled,
+.dangerButton:disabled {
   cursor: not-allowed;
   opacity: 0.58;
   transform: none;
@@ -1149,6 +1158,44 @@
 
 .infoBox {
   margin-top: 14px;
+}
+
+.archiveConfirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 15px;
+  background: var(--crm-danger-bg);
+}
+
+.archiveConfirmation > span {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-danger-text);
+}
+
+.archiveConfirmation div {
+  min-width: 0;
+}
+
+.archiveConfirmation strong {
+  color: var(--crm-text-strong);
+  font-size: 17px;
+}
+
+.archiveConfirmation p {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .saleSummary {
