@@ -38,7 +38,7 @@ import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
 type Aba = "estoque" | "catalogo" | "compras" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
-type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | null;
+type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | null;
 
 type EstoqueItem = {
   id: string;
@@ -291,6 +291,8 @@ export default function EstoquePage() {
   const [inventarioDepositoId, setInventarioDepositoId] = useState("");
   const [inventarioDescricao, setInventarioDescricao] = useState("");
   const [inventarioContagens, setInventarioContagens] = useState<Record<string, string>>({});
+  const [cadastroNome, setCadastroNome] = useState("");
+  const [localizacaoForm, setLocalizacaoForm] = useState({ deposito_id: "", codigo: "", nome: "" });
 
   const podeGerenciar = permissoes.includes("estoque.gerenciar");
   const podeMovimentar = permissoes.includes("estoque.movimentar");
@@ -519,18 +521,33 @@ export default function EstoquePage() {
   const saldoPosicao = Number(posicaoSelecionada?.saldo_fisico ?? 0);
   const reservadoPosicao = Number(posicaoSelecionada?.saldo_reservado ?? 0);
 
-  async function cadastrarRapido(acao: "salvar_categoria" | "salvar_marca") {
-    const nome = window.prompt(acao === "salvar_categoria" ? "Nome da categoria" : "Nome da marca");
-    if (nome?.trim()) await enviar({ acao, nome });
+  function abrirCadastroRapido(tipo: "categoria" | "marca") {
+    setCadastroNome("");
+    setErro("");
+    setModal(tipo);
   }
 
-  async function cadastrarLocalizacao() {
-    const depositoId = window.prompt("ID do depósito para a nova localização", depositos[0]?.id ?? "");
-    if (!depositoId) return;
-    const codigo = window.prompt("Código da localização (ex.: A-01)");
-    const nome = window.prompt("Nome da localização");
-    if (codigo?.trim() && nome?.trim()) await enviar({ acao: "salvar_localizacao", deposito_id: depositoId, codigo, nome });
+  function abrirLocalizacao() {
+    const principal = depositos.find((deposito) => deposito.principal) ?? depositos[0];
+    setLocalizacaoForm({ deposito_id: principal?.id ?? "", codigo: "", nome: "" });
+    setErro("");
+    setModal("localizacao");
   }
+
+  const modalContexto = modal === "item" ? "Cadastro de estoque"
+    : modal === "catalogo" ? "Catálogo integrado"
+    : modal === "inventario" ? "Contagem física"
+    : modal === "localizacao" ? "Estrutura do estoque"
+    : modal === "categoria" || modal === "marca" ? "Organização do catálogo"
+    : "Movimentação";
+  const modalTitulo = modal === "item" ? (itemForm.id ? "Editar item" : "Novo item")
+    : modal === "catalogo" ? (catalogoForm.id ? "Editar produto ou serviço" : "Novo produto ou serviço")
+    : modal === "baixa" ? `Registrar ${catalogoSelecionado?.tipo === "produto" ? "venda" : "execução"}`
+    : modal === "inventario" ? "Novo inventário"
+    : modal === "localizacao" ? "Nova localização"
+    : modal === "categoria" ? "Nova categoria"
+    : modal === "marca" ? "Nova marca"
+    : "Movimentar estoque";
 
   return (
     <>
@@ -654,13 +671,13 @@ export default function EstoquePage() {
             {aba === "catalogo" && podeGerenciar ? (
               <button className={styles.primaryButton} onClick={abrirNovoCatalogo}><Plus size={17} /> Novo produto ou serviço</button>
             ) : null}
-            {aba === "localizacoes" && podeGerenciar ? (
-              <button className={styles.primaryButton} onClick={() => void cadastrarLocalizacao()}><Plus size={17} /> Nova localização</button>
+            {aba === "localizacoes" && podeConfigurar ? (
+              <button className={styles.primaryButton} onClick={abrirLocalizacao}><Plus size={17} /> Nova localização</button>
             ) : null}
-            {aba === "cadastros" && podeGerenciar ? (
+            {aba === "cadastros" && podeConfigurar ? (
               <div className={styles.heroActions}>
-                <button className={styles.secondaryButton} onClick={() => void cadastrarRapido("salvar_categoria")}><Plus size={17} /> Categoria</button>
-                <button className={styles.primaryButton} onClick={() => void cadastrarRapido("salvar_marca")}><Plus size={17} /> Marca</button>
+                <button className={styles.secondaryButton} onClick={() => abrirCadastroRapido("categoria")}><Plus size={17} /> Categoria</button>
+                <button className={styles.primaryButton} onClick={() => abrirCadastroRapido("marca")}><Plus size={17} /> Marca</button>
               </div>
             ) : null}
             {aba === "inventarios" && podeGerenciar ? (
@@ -864,8 +881,8 @@ export default function EstoquePage() {
           <section className={styles.modal} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
             <header className={styles.modalHeader}>
               <div>
-                <span className={styles.eyebrow}>{modal === "item" ? "Cadastro de estoque" : modal === "catalogo" ? "Catálogo integrado" : modal === "inventario" ? "Contagem física" : "Movimentação"}</span>
-                <h2>{modal === "item" ? (itemForm.id ? "Editar item" : "Novo item") : modal === "catalogo" ? (catalogoForm.id ? "Editar produto ou serviço" : "Novo produto ou serviço") : modal === "baixa" ? `Registrar ${catalogoSelecionado?.tipo === "produto" ? "venda" : "execução"}` : modal === "inventario" ? "Novo inventário" : "Movimentar estoque"}</h2>
+                <span className={styles.eyebrow}>{modalContexto}</span>
+                <h2>{modalTitulo}</h2>
               </div>
               <button className={styles.iconButton} aria-label="Fechar" disabled={salvando} onClick={() => setModal(null)}><X size={19} /></button>
             </header>
@@ -953,6 +970,26 @@ export default function EstoquePage() {
               </div>
             ) : null}
 
+            {modal === "localizacao" ? (
+              <div className={styles.modalBody}>
+                <div className={styles.formGrid}>
+                  <label className={`${styles.field} ${styles.fullField}`}><span>Depósito *</span><select autoFocus value={localizacaoForm.deposito_id} onChange={(event) => setLocalizacaoForm((atual) => ({ ...atual, deposito_id: event.target.value }))}><option value="">Selecione o depósito</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}{deposito.principal ? " · Principal" : ""}</option>)}</select></label>
+                  <label className={styles.field}><span>Código *</span><input value={localizacaoForm.codigo} maxLength={30} onChange={(event) => setLocalizacaoForm((atual) => ({ ...atual, codigo: event.target.value.toUpperCase() }))} placeholder="Ex.: A-01" /></label>
+                  <label className={styles.field}><span>Nome *</span><input value={localizacaoForm.nome} maxLength={120} onChange={(event) => setLocalizacaoForm((atual) => ({ ...atual, nome: event.target.value }))} placeholder="Ex.: Prateleira A, nível 1" /></label>
+                </div>
+                <div className={styles.infoBox}>A localização será vinculada ao depósito selecionado e ficará disponível nas entradas, saídas, inventários e recebimentos de compras.</div>
+              </div>
+            ) : null}
+
+            {modal === "categoria" || modal === "marca" ? (
+              <div className={styles.modalBody}>
+                <div className={styles.formGrid}>
+                  <label className={`${styles.field} ${styles.fullField}`}><span>Nome da {modal} *</span><input autoFocus value={cadastroNome} maxLength={120} onChange={(event) => setCadastroNome(event.target.value)} placeholder={modal === "categoria" ? "Ex.: Materiais odontológicos" : "Ex.: Fabricante ou marca comercial"} /></label>
+                </div>
+                <div className={styles.infoBox}>A {modal} ficará disponível imediatamente no cadastro e na edição dos itens de estoque.</div>
+              </div>
+            ) : null}
+
             {erro ? <div className={`${styles.error} ${styles.modalError}`}><AlertTriangle size={17} />{erro}</div> : null}
 
             <footer className={styles.modalFooter}>
@@ -962,6 +999,9 @@ export default function EstoquePage() {
               {modal === "movimentacao" ? <button className={styles.primaryButton} disabled={salvando || !itemSelecionadoId || !depositoMovimentoId} onClick={() => void enviar({ acao: "movimentar_documento", estoque_item_id: itemSelecionadoId, tipo: movimentoTipo, quantidade: movimentoQuantidade, deposito_origem_id: depositoOrigemId, deposito_destino_id: depositoDestinoId, localizacao_origem_id: movimentoTipo === "entrada" ? null : localizacaoId, localizacao_destino_id: movimentoTipo === "entrada" ? localizacaoId : null, lote_id: loteId, numero_serie: numeroSerie, custo_unitario: itemSelecionado?.custo_unitario, observacao, idempotency_key: crypto.randomUUID() })}>{salvando ? "Registrando..." : "Registrar movimento"}</button> : null}
               {modal === "baixa" ? <button className={styles.primaryButton} disabled={salvando || !catalogoSelecionadoId || !depositoOrigemId} onClick={() => void enviar({ acao: "registrar_baixa", catalogo_servico_id: catalogoSelecionadoId, deposito_id: depositoOrigemId, quantidade: baixaQuantidade, origem_id: origemId, observacao, idempotency_key: crypto.randomUUID() })}>{salvando ? "Registrando..." : "Confirmar baixa"}</button> : null}
               {modal === "inventario" ? <button className={styles.primaryButton} disabled={salvando || !inventarioDepositoId || !inventarioDescricao.trim() || !Object.values(inventarioContagens).some((valor) => valor !== "")} onClick={() => void enviar({ acao: "salvar_inventario", deposito_id: inventarioDepositoId, descricao: inventarioDescricao, tipo_contagem: "aberta", itens: Object.entries(inventarioContagens).filter(([, valor]) => valor !== "").map(([estoque_item_id, primeira_contagem]) => ({ estoque_item_id, primeira_contagem })) })}>{salvando ? "Salvando..." : "Encerrar contagem"}</button> : null}
+              {modal === "localizacao" ? <button className={styles.primaryButton} disabled={salvando || !localizacaoForm.deposito_id || !localizacaoForm.codigo.trim() || !localizacaoForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_localizacao", ...localizacaoForm })}>{salvando ? "Salvando..." : "Salvar localização"}</button> : null}
+              {modal === "categoria" ? <button className={styles.primaryButton} disabled={salvando || !cadastroNome.trim()} onClick={() => void enviar({ acao: "salvar_categoria", nome: cadastroNome })}>{salvando ? "Salvando..." : "Salvar categoria"}</button> : null}
+              {modal === "marca" ? <button className={styles.primaryButton} disabled={salvando || !cadastroNome.trim()} onClick={() => void enviar({ acao: "salvar_marca", nome: cadastroNome })}>{salvando ? "Salvando..." : "Salvar marca"}</button> : null}
             </footer>
           </section>
         </div>
