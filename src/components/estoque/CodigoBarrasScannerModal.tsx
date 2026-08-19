@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, ScanBarcode, Usb, X } from "lucide-react";
+import type { IScannerControls } from "@zxing/browser";
 import styles from "./CodigoBarrasScannerModal.module.css";
 
 type ResultadoLeitura = { ok: boolean; message?: string } | void;
@@ -41,6 +42,7 @@ export default function CodigoBarrasScannerModal({
   const onDetectedRef = useRef(onDetected);
   const onCloseRef = useRef(onClose);
   const streamRef = useRef<MediaStream | null>(null);
+  const zxingControlsRef = useRef<IScannerControls | null>(null);
   const processandoRef = useRef(false);
   const ultimaCameraRef = useRef({ codigo: "", instante: 0 });
   const [codigoManual, setCodigoManual] = useState("");
@@ -56,8 +58,15 @@ export default function CodigoBarrasScannerModal({
   }, [onClose, onDetected]);
 
   const pararCamera = useCallback(() => {
+    zxingControlsRef.current?.stop();
+    zxingControlsRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    const video = videoRef.current;
+    if (video?.srcObject instanceof MediaStream) {
+      video.srcObject.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    }
     setCameraAtiva(false);
   }, []);
 
@@ -85,45 +94,83 @@ export default function CodigoBarrasScannerModal({
   }, [continuous]);
 
   useEffect(() => {
-    setCameraDisponivel(Boolean(navigator.mediaDevices && window.BarcodeDetector));
+    setCameraDisponivel(Boolean(navigator.mediaDevices?.getUserMedia));
   }, []);
 
   useEffect(() => {
-    if (!cameraAtiva || !window.BarcodeDetector) return;
+    if (!cameraAtiva) return;
 
+    const videoElement = videoRef.current;
     let cancelado = false;
     let intervalo: ReturnType<typeof setInterval> | null = null;
 
     async function iniciar() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        setErro("");
+        const video = videoElement;
+        if (!video) return;
+
+        const constraints: MediaStreamConstraints = {
           audio: false,
-          video: { facingMode: { ideal: "environment" } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        };
+
+        if (window.BarcodeDetector) {
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (cancelado) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
+
+          streamRef.current = stream;
+          video.srcObject = stream;
+          await video.play();
+          let detector: BarcodeDetectorInstance | null = null;
+          try {
+            detector = new window.BarcodeDetector({ formats: FORMATOS });
+          } catch {
+            stream.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+            video.srcObject = null;
+          }
+
+          if (detector) {
+            intervalo = setInterval(async () => {
+              if (processandoRef.current || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+              processandoRef.current = true;
+              try {
+                const [resultado] = await detector.detect(video);
+                if (resultado?.rawValue) registrarLeitura(resultado.rawValue, "camera");
+              } catch {
+                // Um quadro sem leitura não representa falha da câmera.
+              } finally {
+                processandoRef.current = false;
+              }
+            }, 260);
+            return;
+          }
+        }
+
+        const { BrowserMultiFormatReader } = await import("@zxing/browser");
+        const leitor = new BrowserMultiFormatReader(undefined, {
+          delayBetweenScanAttempts: 220,
+          delayBetweenScanSuccess: 900,
         });
+        const controls = await leitor.decodeFromConstraints(constraints, video, (resultado) => {
+          if (resultado) registrarLeitura(resultado.getText(), "camera");
+        });
+
         if (cancelado) {
-          stream.getTracks().forEach((track) => track.stop());
+          controls.stop();
           return;
         }
 
-        streamRef.current = stream;
-        const video = videoRef.current;
-        if (!video) return;
-        video.srcObject = stream;
-        await video.play();
-        const detector = new window.BarcodeDetector!({ formats: FORMATOS });
-
-        intervalo = setInterval(async () => {
-          if (processandoRef.current || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-          processandoRef.current = true;
-          try {
-            const [resultado] = await detector.detect(video);
-            if (resultado?.rawValue) registrarLeitura(resultado.rawValue, "camera");
-          } catch {
-            setErro("Não foi possível interpretar a imagem da câmera.");
-          } finally {
-            processandoRef.current = false;
-          }
-        }, 260);
+        zxingControlsRef.current = controls;
+        if (video.srcObject instanceof MediaStream) streamRef.current = video.srcObject;
       } catch {
         setErro("Não foi possível acessar a câmera. Verifique a permissão do navegador.");
         setCameraAtiva(false);
@@ -134,12 +181,22 @@ export default function CodigoBarrasScannerModal({
     return () => {
       cancelado = true;
       if (intervalo) clearInterval(intervalo);
+      zxingControlsRef.current?.stop();
+      zxingControlsRef.current = null;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      const video = videoElement;
+      if (video?.srcObject instanceof MediaStream) {
+        video.srcObject.getTracks().forEach((track) => track.stop());
+        video.srcObject = null;
+      }
     };
   }, [cameraAtiva, registrarLeitura]);
 
-  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+  useEffect(() => () => {
+    zxingControlsRef.current?.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
   function enviarCodigo(event: FormEvent) {
     event.preventDefault();
@@ -176,7 +233,7 @@ export default function CodigoBarrasScannerModal({
                 {cameraAtiva ? "Desligar câmera" : "Usar câmera"}
               </button>
             ) : cameraDisponivel === false ? (
-              <p className={styles.unavailable}>Este navegador não oferece leitura por câmera. Use um leitor físico ou digite o código abaixo.</p>
+              <p className={styles.unavailable}>A câmera não está disponível neste acesso. Abra o sistema por HTTPS e verifique a permissão do navegador; você também pode usar um leitor físico ou digitar o código abaixo.</p>
             ) : null}
           </section>
 
