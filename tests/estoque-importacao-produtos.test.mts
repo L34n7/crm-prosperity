@@ -1,0 +1,80 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import {
+  IMPORTACAO_PRODUTOS_CABECALHOS,
+  mapearLinhasImportacaoProdutos,
+} from "../src/lib/estoque/importacao-produtos.ts";
+
+test("normaliza uma linha completa do modelo de produtos", () => {
+  const [linha] = mapearLinhasImportacaoProdutos(
+    [...IMPORTACAO_PRODUTOS_CABECALHOS],
+    [[
+      "PROD-01", "Luva nitrílica", "Caixa", "INSUMO", "CX", "LUVA-P",
+      "7891234567890", "Descartáveis", "Marca A", "1.500,5", "R$ 29,90",
+      "49,90", "sim", "SIM", "não", "10", "PRINCIPAL", "A-01", "L1",
+      "01/08/2026", "01/08/2028", "",
+    ]],
+  );
+
+  assert.equal(linha.linha, 2);
+  assert.equal(linha.tipo, "insumo");
+  assert.equal(linha.unidade, "cx");
+  assert.equal(linha.estoque_minimo, 1500.5);
+  assert.equal(linha.custo_unitario, 29.9);
+  assert.equal(linha.controla_lote, true);
+  assert.equal(linha.controla_validade, true);
+  assert.equal(linha.controla_serie, false);
+  assert.equal(linha.fabricado_em, "2026-08-01");
+  assert.equal(linha.validade, "2028-08-01");
+  assert.deepEqual(linha.erros, []);
+});
+
+test("aceita cabeçalhos alternativos e preserva código de barras", () => {
+  const [linha] = mapearLinhasImportacaoProdutos(
+    ["Código Produto", "Produto", "EAN", "Preço de venda"],
+    [["ABC", "Produto teste", 7891234567890, 25]],
+  );
+
+  assert.equal(linha.codigo, "ABC");
+  assert.equal(linha.nome, "Produto teste");
+  assert.equal(linha.codigo_barras, "7891234567890");
+  assert.equal(linha.preco_venda, 25);
+});
+
+test("rejeita valores incompatíveis antes da importação", () => {
+  const [linha] = mapearLinhasImportacaoProdutos(
+    ["nome", "tipo", "unidade", "custo_unitario", "controla_lote", "validade"],
+    [["", "serviço", "peça", "-1", "talvez", "31/02/2026"]],
+  );
+
+  assert.ok(linha.erros.some((erro) => erro.includes("Nome")));
+  assert.ok(linha.erros.some((erro) => erro.includes("Tipo")));
+  assert.ok(linha.erros.some((erro) => erro.includes("Unidade")));
+  assert.ok(linha.erros.some((erro) => erro.includes("Custo")));
+  assert.ok(linha.erros.some((erro) => erro.includes("Sim ou Não")));
+  assert.ok(linha.erros.some((erro) => erro.includes("DD/MM/AAAA")));
+});
+
+test("exige a coluna nome", () => {
+  assert.throws(
+    () => mapearLinhasImportacaoProdutos(["codigo", "sku"], [["A", "B"]]),
+    /coluna "nome"/,
+  );
+});
+
+test("migration mantém saldo inicial dentro da arquitetura documental", async () => {
+  const sql = await readFile(
+    new URL("../supabase/migrations/20260819003000_importacao_produtos_estoque.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(sql, /create or replace function public\.estoque_importar_produtos/i);
+  assert.match(sql, /public\.estoque_registrar_documento\(/i);
+  assert.match(sql, /'saldo_inicial'/i);
+  assert.doesNotMatch(sql, /update\s+public\.estoque_itens\s+set\s+saldo\s*=/i);
+  assert.match(sql, /pg_advisory_xact_lock/i);
+  assert.match(sql, /idempotency_key/i);
+  assert.match(sql, /revoke execute[\s\S]*authenticated/i);
+  assert.match(sql, /grant execute[\s\S]*service_role/i);
+});

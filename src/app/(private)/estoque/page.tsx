@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   ClipboardCheck,
+  FileSpreadsheet,
   History,
   Layers3,
   MapPin,
@@ -32,6 +33,7 @@ import {
 import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import ComprasPanel from "@/components/estoque/ComprasPanel";
+import ImportacaoProdutosModal from "@/components/estoque/ImportacaoProdutosModal";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
@@ -234,6 +236,7 @@ export default function EstoquePage() {
   const { permissoes } = useHeaderUser();
   const [aba, setAba] = useState<Aba>("estoque");
   const [modal, setModal] = useState<Modal>(null);
+  const [importandoProdutos, setImportandoProdutos] = useState(false);
   const [itens, setItens] = useState<EstoqueItem[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
@@ -595,7 +598,10 @@ export default function EstoquePage() {
               <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por nome, código ou tipo" />
             </label>
             {aba === "estoque" && podeGerenciar ? (
-              <button className={styles.primaryButton} onClick={abrirNovoItem}><Plus size={17} /> Novo item</button>
+              <div className={styles.heroActions}>
+                <button className={styles.secondaryButton} onClick={() => setImportandoProdutos(true)}><FileSpreadsheet size={17} /> Importar planilha</button>
+                <button className={styles.primaryButton} onClick={abrirNovoItem}><Plus size={17} /> Novo item</button>
+              </div>
             ) : null}
             {aba === "catalogo" && podeGerenciar ? (
               <button className={styles.primaryButton} onClick={abrirNovoCatalogo}><Plus size={17} /> Novo produto ou serviço</button>
@@ -857,6 +863,16 @@ export default function EstoquePage() {
             </footer>
           </section>
         </div>
+      ) : null}
+
+      {importandoProdutos ? (
+        <ImportacaoProdutosModal
+          onClose={() => setImportandoProdutos(false)}
+          onImported={async (message) => {
+            setSucesso(message);
+            await carregar();
+          }}
+        />
       ) : null}
 
       {sucesso ? <FeedbackToast success={sucesso} onSuccessDismiss={() => setSucesso("")} /> : null}
