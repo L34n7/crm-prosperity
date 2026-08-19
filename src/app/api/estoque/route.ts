@@ -15,7 +15,12 @@ type AcaoEstoque =
   | "salvar_deposito"
   | "salvar_lote"
   | "salvar_configuracoes"
-  | "movimentar_documento";
+  | "movimentar_documento"
+  | "salvar_categoria"
+  | "salvar_marca"
+  | "salvar_localizacao"
+  | "salvar_inventario"
+  | "aprovar_inventario";
 
 type ComposicaoPayload = {
   estoque_item_id?: unknown;
@@ -89,7 +94,9 @@ export async function GET(request: Request) {
 
   const [itensResultado, catalogoResultado, composicaoResultado, movimentosResultado,
     depositosResultado, saldosResultado, lotesResultado, reservasResultado,
-    documentosResultado, configuracoesResultado] =
+    documentosResultado, configuracoesResultado, localizacoesResultado,
+    categoriasResultado, marcasResultado, inventariosResultado,
+    inventarioItensResultado, consumosClinicosResultado] =
     await Promise.all([
       supabase
         .from("estoque_itens")
@@ -121,6 +128,12 @@ export async function GET(request: Request) {
       supabase.from("estoque_reservas").select("*").eq("empresa_id", contexto.empresaId).eq("status", "ativa").order("created_at", { ascending: false }),
       supabase.from("estoque_documentos").select("id,numero,tipo,status,origem_tipo,origem_id,observacao,confirmado_em,created_at").eq("empresa_id", contexto.empresaId).order("created_at", { ascending: false }).limit(100),
       supabase.from("estoque_configuracoes").select("*").eq("empresa_id", contexto.empresaId).maybeSingle(),
+      supabase.from("estoque_localizacoes").select("*").eq("empresa_id", contexto.empresaId).eq("ativo", true).order("codigo"),
+      supabase.from("estoque_categorias").select("*").eq("empresa_id", contexto.empresaId).eq("ativo", true).order("nome"),
+      supabase.from("estoque_marcas").select("*").eq("empresa_id", contexto.empresaId).eq("ativo", true).order("nome"),
+      supabase.from("estoque_inventarios").select("*").eq("empresa_id", contexto.empresaId).order("created_at", { ascending: false }).limit(100),
+      supabase.from("estoque_inventario_itens").select("*").eq("empresa_id", contexto.empresaId),
+      supabase.from("estoque_consumos_clinicos").select("id,agendamento_id,estoque_item_id,lote_id,paciente_id,pessoa_id,profissional_id,dente,quantidade,status,consumido_em,estornado_em").eq("empresa_id", contexto.empresaId).order("consumido_em", { ascending: false }).limit(100),
     ]);
 
   const falha = [
@@ -134,13 +147,31 @@ export async function GET(request: Request) {
     reservasResultado.error,
     documentosResultado.error,
     configuracoesResultado.error,
+    localizacoesResultado.error,
+    categoriasResultado.error,
+    marcasResultado.error,
+    inventariosResultado.error,
+    inventarioItensResultado.error,
+    consumosClinicosResultado.error,
   ].find(Boolean);
 
   if (falha) {
     return erro(`Erro ao carregar o estoque: ${mensagemBanco(falha)}`, 500);
   }
 
-  const itens = itensResultado.data ?? [];
+  const saldos = saldosResultado.data ?? [];
+  const itens = (itensResultado.data ?? []).map((item) => {
+    const posicoes = saldos.filter((saldo) => saldo.estoque_item_id === item.id);
+    return {
+      ...item,
+      saldo: posicoes.reduce((total, saldo) => total + Number(saldo.saldo_fisico), 0),
+      saldo_reservado: posicoes.reduce((total, saldo) => total + Number(saldo.saldo_reservado), 0),
+      saldo_disponivel: posicoes.reduce(
+        (total, saldo) => total + Number(saldo.saldo_fisico) - Number(saldo.saldo_reservado),
+        0,
+      ),
+    };
+  });
   const catalogo = (catalogoResultado.data ?? []).map((item) => ({
     ...item,
     composicao: (composicaoResultado.data ?? []).filter(
@@ -159,12 +190,18 @@ export async function GET(request: Request) {
 
   const itensBaixos = itens.filter(
     (item) => {
-      const saldos = (saldosResultado.data ?? []).filter((saldo) => saldo.estoque_item_id === item.id);
-      const disponivel = saldos.reduce((total, saldo) => total + Number(saldo.saldo_fisico) - Number(saldo.saldo_reservado), 0);
+      const disponivel = Number(item.saldo_disponivel);
       return disponivel <= Number(item.estoque_minimo);
     },
   ).length;
-  const valorTotal = (saldosResultado.data ?? []).reduce((total, saldo) => total + Number(saldo.saldo_fisico) * Number(saldo.custo_medio), 0);
+  const valorTotal = saldos.reduce((total, saldo) => total + Number(saldo.saldo_fisico) * Number(saldo.custo_medio), 0);
+
+  const inventarios = (inventariosResultado.data ?? []).map((inventario) => ({
+    ...inventario,
+    itens: (inventarioItensResultado.data ?? []).filter(
+      (item) => item.inventario_id === inventario.id,
+    ),
+  }));
 
   return NextResponse.json({
     ok: true,
@@ -172,11 +209,16 @@ export async function GET(request: Request) {
     catalogo,
     movimentacoes,
     depositos: depositosResultado.data ?? [],
-    saldos: saldosResultado.data ?? [],
+    saldos,
     lotes: lotesResultado.data ?? [],
     reservas: reservasResultado.data ?? [],
     documentos: documentosResultado.data ?? [],
     configuracoes: configuracoesResultado.data ?? null,
+    localizacoes: localizacoesResultado.data ?? [],
+    categorias: categoriasResultado.data ?? [],
+    marcas: marcasResultado.data ?? [],
+    inventarios,
+    consumos_clinicos: consumosClinicosResultado.data ?? [],
     paginacao: { pagina, limite, tem_mais: (movimentosResultado.data ?? []).length === limite },
     resumo: {
       itens_ativos: itens.length,
@@ -208,8 +250,12 @@ export async function POST(request: Request) {
     "salvar_deposito",
     "salvar_lote",
     "salvar_configuracoes",
+    "salvar_categoria",
+    "salvar_marca",
+    "salvar_localizacao",
+    "salvar_inventario",
   ].includes(acao);
-  const exigeMovimentacao = ["movimentar", "registrar_baixa", "movimentar_documento"].includes(acao);
+  const exigeMovimentacao = ["registrar_baixa", "movimentar_documento", "aprovar_inventario"].includes(acao);
 
   if (exigeGerenciamento && !can(contexto.usuario.permissoes, "estoque.gerenciar")) {
     return erro("Sem permissão para gerenciar o estoque.", 403);
@@ -226,7 +272,7 @@ export async function POST(request: Request) {
       const nome = texto(body.nome);
       const codigo = texto(body.codigo).toUpperCase();
       if (!nome || !codigo) return erro("Informe o código e o nome do depósito.");
-      const payload = { empresa_id: contexto.empresaId, nome, codigo, descricao: texto(body.descricao) || null, principal: Boolean(body.principal), updated_at: new Date().toISOString() };
+      const payload = { empresa_id: contexto.empresaId, nome, codigo, descricao: texto(body.descricao) || null, principal: Boolean(body.principal), permite_saldo_negativo: Boolean(body.permite_saldo_negativo), updated_at: new Date().toISOString() };
       if (payload.principal) await supabase.from("estoque_depositos").update({ principal: false }).eq("empresa_id", contexto.empresaId);
       const query = id
         ? supabase.from("estoque_depositos").update(payload).eq("id", id).eq("empresa_id", contexto.empresaId)
@@ -234,6 +280,37 @@ export async function POST(request: Request) {
       const { error } = await query;
       if (error) return erro(mensagemBanco(error));
       return NextResponse.json({ ok: true, message: "Depósito salvo com sucesso." });
+    }
+
+    if (acao === "salvar_categoria" || acao === "salvar_marca") {
+      if (!can(contexto.usuario.permissoes, "estoque.configurar")) return erro("Sem permissão para configurar o estoque.", 403);
+      const nome = texto(body.nome);
+      if (!nome) return erro("Informe o nome.");
+      const tabela = acao === "salvar_categoria" ? "estoque_categorias" : "estoque_marcas";
+      const id = texto(body.id);
+      const payload = { empresa_id: contexto.empresaId, nome };
+      const query = id
+        ? supabase.from(tabela).update(payload).eq("empresa_id", contexto.empresaId).eq("id", id)
+        : supabase.from(tabela).insert(payload);
+      const { error } = await query;
+      if (error) return erro(mensagemBanco(error));
+      return NextResponse.json({ ok: true, message: acao === "salvar_categoria" ? "Categoria salva." : "Marca salva." });
+    }
+
+    if (acao === "salvar_localizacao") {
+      if (!can(contexto.usuario.permissoes, "estoque.configurar")) return erro("Sem permissão para configurar localizações.", 403);
+      const depositoId = texto(body.deposito_id);
+      const codigo = texto(body.codigo).toUpperCase();
+      const nome = texto(body.nome);
+      if (!depositoId || !codigo || !nome) return erro("Informe depósito, código e nome da localização.");
+      const { error } = await supabase.from("estoque_localizacoes").insert({
+        empresa_id: contexto.empresaId,
+        deposito_id: depositoId,
+        codigo,
+        nome,
+      });
+      if (error) return erro(mensagemBanco(error));
+      return NextResponse.json({ ok: true, message: "Localização salva." });
     }
 
     if (acao === "salvar_lote") {
@@ -260,16 +337,32 @@ export async function POST(request: Request) {
       const tipo = texto(body.tipo);
       const quantidadeMovimento = numero(body.quantidade, -1);
       const justificativa = texto(body.observacao);
-      if (!itemId || quantidadeMovimento <= 0 || !["entrada", "saida", "transferencia", "ajuste"].includes(tipo)) return erro("Dados da operação inválidos.");
+      if (!itemId || quantidadeMovimento < 0 || (tipo !== "ajuste" && quantidadeMovimento === 0) || !["entrada", "saida", "transferencia", "ajuste"].includes(tipo)) return erro("Dados da operação inválidos.");
       if ((tipo === "saida" || tipo === "ajuste") && !justificativa) return erro("A justificativa é obrigatória para esta operação.");
       const idempotencyKey = texto(body.idempotency_key) || crypto.randomUUID();
-      const { data: documento, error: documentoError } = await supabase.from("estoque_documentos").insert({ empresa_id: contexto.empresaId, tipo, idempotency_key: idempotencyKey, observacao: justificativa || null, created_by: contexto.usuario.id }).select("id").single();
-      if (documentoError) return erro(mensagemBanco(documentoError));
-      const { error: itemError } = await supabase.from("estoque_documento_itens").insert({ empresa_id: contexto.empresaId, documento_id: documento.id, estoque_item_id: itemId, deposito_origem_id: depositoOrigem, deposito_destino_id: depositoDestino, lote_id: texto(body.lote_id) || null, quantidade: quantidadeMovimento, custo_unitario: Math.max(0, numero(body.custo_unitario)) });
-      if (itemError) return erro(mensagemBanco(itemError));
-      const { error: confirmarError } = await supabase.rpc("estoque_confirmar_documento", { p_empresa_id: contexto.empresaId, p_documento_id: documento.id, p_usuario_id: contexto.usuario.id });
-      if (confirmarError) return erro(mensagemBanco(confirmarError));
-      return NextResponse.json({ ok: true, message: "Operação confirmada e auditada.", documento_id: documento.id });
+      const itemDocumento = {
+        estoque_item_id: itemId,
+        deposito_origem_id: depositoOrigem,
+        deposito_destino_id: depositoDestino,
+        localizacao_origem_id: texto(body.localizacao_origem_id) || null,
+        localizacao_destino_id: texto(body.localizacao_destino_id) || null,
+        lote_id: texto(body.lote_id) || null,
+        numero_serie: texto(body.numero_serie) || null,
+        quantidade: quantidadeMovimento,
+        custo_unitario: Math.max(0, numero(body.custo_unitario)),
+      };
+      const { data, error } = await supabase.rpc("estoque_registrar_documento", {
+        p_empresa_id: contexto.empresaId,
+        p_tipo: tipo,
+        p_itens: [itemDocumento],
+        p_usuario_id: contexto.usuario.id,
+        p_observacao: justificativa || null,
+        p_origem_tipo: "operacao_manual",
+        p_origem_id: null,
+        p_idempotency_key: idempotencyKey,
+      });
+      if (error) return erro(mensagemBanco(error));
+      return NextResponse.json({ ok: true, message: "Operação confirmada e auditada.", documento_id: data?.documento_id });
     }
 
     if (acao === "salvar_item") {
@@ -295,6 +388,13 @@ export async function POST(request: Request) {
         preco_venda: texto(body.preco_venda)
           ? Math.max(0, numero(body.preco_venda))
           : null,
+        sku: texto(body.sku) || null,
+        codigo_barras: texto(body.codigo_barras) || null,
+        categoria_id: texto(body.categoria_id) || null,
+        marca_id: texto(body.marca_id) || null,
+        controla_lote: Boolean(body.controla_lote),
+        controla_validade: Boolean(body.controla_validade),
+        controla_serie: Boolean(body.controla_serie),
         updated_by: contexto.usuario.id,
       };
 
@@ -310,12 +410,15 @@ export async function POST(request: Request) {
         if (error) return erro(mensagemBanco(error));
         if (!data) return erro("Item não encontrado.", 404);
       } else {
-        const { error } = await supabase.from("estoque_itens").insert({
-          ...payload,
-          saldo: Math.max(0, numero(body.saldo_inicial)),
-          created_by: contexto.usuario.id,
+        const { error } = await supabase.rpc("estoque_criar_item_com_saldo_inicial", {
+          p_empresa_id: contexto.empresaId,
+          p_dados: {
+            ...payload,
+          },
+          p_saldo_inicial: Math.max(0, numero(body.saldo_inicial)),
+          p_deposito_id: texto(body.deposito_inicial_id) || null,
+          p_usuario_id: contexto.usuario.id,
         });
-
         if (error) return erro(mensagemBanco(error));
       }
 
@@ -337,28 +440,6 @@ export async function POST(request: Request) {
       if (error) return erro(mensagemBanco(error));
       if (!data) return erro("Item não encontrado.", 404);
       return NextResponse.json({ ok: true, message: "Item arquivado." });
-    }
-
-    if (acao === "movimentar") {
-      const itemId = texto(body.estoque_item_id);
-      const tipo = texto(body.tipo);
-      const quantidade = numero(body.quantidade, -1);
-
-      if (!itemId || !["entrada", "saida", "ajuste"].includes(tipo)) {
-        return erro("Dados da movimentação inválidos.");
-      }
-
-      const { error } = await supabase.rpc("estoque_movimentar", {
-        p_empresa_id: contexto.empresaId,
-        p_estoque_item_id: itemId,
-        p_tipo: tipo,
-        p_quantidade: quantidade,
-        p_usuario_id: contexto.usuario.id,
-        p_observacao: texto(body.observacao) || null,
-      });
-
-      if (error) return erro(mensagemBanco(error));
-      return NextResponse.json({ ok: true, message: "Movimentação registrada." });
     }
 
     if (acao === "salvar_catalogo") {
@@ -487,24 +568,59 @@ export async function POST(request: Request) {
     if (acao === "registrar_baixa") {
       const catalogoId = texto(body.catalogo_servico_id);
       const quantidade = numero(body.quantidade, -1);
-      if (!catalogoId || quantidade <= 0) {
-        return erro("Informe o item e uma quantidade maior que zero.");
+      const depositoId = texto(body.deposito_id);
+      if (!catalogoId || !depositoId || quantidade <= 0) {
+        return erro("Informe o item, o depósito e uma quantidade maior que zero.");
       }
 
-      const { error } = await supabase.rpc("estoque_registrar_baixa_catalogo", {
+      const { data, error } = await supabase.rpc("estoque_registrar_baixa_catalogo_documento", {
         p_empresa_id: contexto.empresaId,
         p_catalogo_servico_id: catalogoId,
+        p_deposito_id: depositoId,
         p_quantidade: quantidade,
         p_usuario_id: contexto.usuario.id,
-        p_origem_id: texto(body.origem_id) || null,
+        p_origem_referencia: texto(body.origem_id) || null,
         p_observacao: texto(body.observacao) || null,
+        p_idempotency_key: texto(body.idempotency_key) || crypto.randomUUID(),
       });
 
       if (error) return erro(mensagemBanco(error));
       return NextResponse.json({
         ok: true,
-        message: "Baixa automática registrada com sucesso.",
+        message: "Baixa registrada em documento de consumo.",
+        documento_id: data?.documento_id,
       });
+    }
+
+    if (acao === "salvar_inventario") {
+      const depositoId = texto(body.deposito_id);
+      const itens = Array.isArray(body.itens) ? body.itens : [];
+      if (!depositoId || !texto(body.descricao) || itens.length === 0) {
+        return erro("Informe depósito, descrição e ao menos um item contado.");
+      }
+      const { data, error } = await supabase.rpc("estoque_salvar_inventario", {
+        p_empresa_id: contexto.empresaId,
+        p_inventario_id: texto(body.id) || null,
+        p_deposito_id: depositoId,
+        p_descricao: texto(body.descricao),
+        p_tipo_contagem: texto(body.tipo_contagem) === "cega" ? "cega" : "aberta",
+        p_itens: itens,
+        p_usuario_id: contexto.usuario.id,
+      });
+      if (error) return erro(mensagemBanco(error));
+      return NextResponse.json({ ok: true, message: "Inventário enviado para aprovação.", inventario_id: data });
+    }
+
+    if (acao === "aprovar_inventario") {
+      const inventarioId = texto(body.id);
+      if (!inventarioId) return erro("Inventário não informado.");
+      const { data, error } = await supabase.rpc("estoque_aprovar_inventario", {
+        p_empresa_id: contexto.empresaId,
+        p_inventario_id: inventarioId,
+        p_usuario_id: contexto.usuario.id,
+      });
+      if (error) return erro(mensagemBanco(error));
+      return NextResponse.json({ ok: true, message: "Inventário aprovado e ajuste documentado.", documento_id: data?.documento_id });
     }
 
     return erro("Ação de estoque inválida.");
