@@ -94,3 +94,19 @@ test("arquivados podem ser restaurados e exclusão definitiva é protegida", asy
   assert.match(pagina, /Arquivados/);
   assert.match(pagina, /Excluir definitivamente/);
 });
+
+test("estoque respeita o nicho e restringe recursos clínicos", async () => {
+  const [rota, pagina, contexto] = await Promise.all([
+    readFile(new URL("../src/app/api/estoque/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/(private)/estoque/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/header-user-context.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(rota, /buscarNichoEmpresa/);
+  assert.match(rota, /ehSaude\s*\?/);
+  assert.match(rota, /nicho\.grupo !== "saude"/);
+  assert.match(rota, /nicho\.codigo !== "imobiliaria"/);
+  assert.match(pagina, /ehSaude \? <button[\s\S]*Consumo clínico/);
+  assert.match(pagina, /ehImobiliaria \? "Ex\.: Avaliação imobiliária"/);
+  assert.match(contexto, /nichoCodigo: NichoCodigo/);
+});

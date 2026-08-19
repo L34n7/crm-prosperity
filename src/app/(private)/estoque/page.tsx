@@ -252,7 +252,7 @@ function dataHora(valor: string) {
 }
 
 export default function EstoquePage() {
-  const { permissoes } = useHeaderUser();
+  const { permissoes, nichoCodigo } = useHeaderUser();
   const [aba, setAba] = useState<Aba>("estoque");
   const [modal, setModal] = useState<Modal>(null);
   const [importandoProdutos, setImportandoProdutos] = useState(false);
@@ -306,6 +306,20 @@ export default function EstoquePage() {
   const podeGerenciar = permissoes.includes("estoque.gerenciar");
   const podeMovimentar = permissoes.includes("estoque.movimentar");
   const podeConfigurar = permissoes.includes("estoque.configurar");
+  const ehSaude = ["medicina", "odontologia", "podologia"].includes(nichoCodigo);
+  const ehImobiliaria = nichoCodigo === "imobiliaria";
+
+  const subtituloPagina = ehSaude
+    ? "Controle produtos, insumos e consumos vinculados aos atendimentos."
+    : ehImobiliaria
+      ? "Controle materiais, itens e suprimentos utilizados na operação imobiliária."
+      : "Controle produtos, materiais e insumos vinculados à operação da empresa.";
+  const descricaoHero = ehSaude
+    ? "Controle compras, saldos e consumo clínico em um fluxo simples e rastreável."
+    : "Controle compras, saldos e movimentações em um fluxo simples e rastreável.";
+  const abaInfo = aba === "catalogo" && ehImobiliaria
+    ? { titulo: "Produtos e serviços", descricao: "Materiais, serviços e itens vinculados à operação imobiliária." }
+    : ABA_INFO[aba];
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -591,7 +605,7 @@ export default function EstoquePage() {
     <>
       <Header
         title="Estoque"
-        subtitle="Controle produtos e insumos vinculados às vendas, serviços e procedimentos."
+        subtitle={subtituloPagina}
       />
 
       <main className={styles.page}>
@@ -600,7 +614,7 @@ export default function EstoquePage() {
             <span className={styles.eyebrow}>Operação integrada</span>
             <h1>Gestão de estoque</h1>
             <p>
-              Controle compras, saldos e consumo em um fluxo simples e rastreável.
+              {descricaoHero}
             </p>
           </div>
 
@@ -648,7 +662,7 @@ export default function EstoquePage() {
                 <button className={aba === "movimentacoes" ? styles.navActive : ""} onClick={() => setAba("movimentacoes")}><History size={17} /><span>Movimentações</span></button>
                 <button className={aba === "reservas" ? styles.navActive : ""} onClick={() => setAba("reservas")}><ShieldCheck size={17} /><span>Reservas</span></button>
                 <button className={aba === "inventarios" ? styles.navActive : ""} onClick={() => setAba("inventarios")}><ClipboardCheck size={17} /><span>Inventários</span></button>
-                <button className={aba === "clinico" ? styles.navActive : ""} onClick={() => setAba("clinico")}><Stethoscope size={17} /><span>Consumo clínico</span></button>
+                {ehSaude ? <button className={aba === "clinico" ? styles.navActive : ""} onClick={() => setAba("clinico")}><Stethoscope size={17} /><span>Consumo clínico</span></button> : null}
               </div>
 
               {permissoes.includes("compras.visualizar") ? <div className={styles.navGroup}>
@@ -677,7 +691,7 @@ export default function EstoquePage() {
               <span>Área do estoque</span>
               <select value={aba} onChange={(event) => setAba(event.target.value as Aba)}>
                 <optgroup label="Operação">
-                  <option value="estoque">Itens em estoque</option><option value="movimentacoes">Movimentações</option><option value="reservas">Reservas</option><option value="inventarios">Inventários</option><option value="clinico">Consumo clínico</option>
+                  <option value="estoque">Itens em estoque</option><option value="movimentacoes">Movimentações</option><option value="reservas">Reservas</option><option value="inventarios">Inventários</option>{ehSaude ? <option value="clinico">Consumo clínico</option> : null}
                 </optgroup>
                 {permissoes.includes("compras.visualizar") ? <optgroup label="Compras"><option value="compras">Compras e fornecedores</option></optgroup> : null}
                 <optgroup label="Estrutura">
@@ -689,9 +703,9 @@ export default function EstoquePage() {
 
             <header className={styles.contentHeader}>
               <div>
-                <span className={styles.contentEyebrow}>Estoque / {ABA_INFO[aba].titulo}</span>
-                <h2>{ABA_INFO[aba].titulo}</h2>
-                <p>{ABA_INFO[aba].descricao}</p>
+                <span className={styles.contentEyebrow}>Estoque / {abaInfo.titulo}</span>
+                <h2>{abaInfo.titulo}</h2>
+                <p>{abaInfo.descricao}</p>
               </div>
             </header>
 
@@ -910,7 +924,7 @@ export default function EstoquePage() {
             inventarios.length ? <div className={styles.catalogList}>{inventarios.map((inventario) => <article className={styles.catalogCard} key={inventario.id}><div className={styles.catalogIcon}><ClipboardCheck size={22} /></div><div className={styles.catalogMain}><div className={styles.catalogHeading}><div><span className={styles.typeBadge}>Inventário #{inventario.numero}</span><h3>{inventario.descricao}</h3><p>{depositos.find((deposito) => deposito.id === inventario.deposito_id)?.nome || "Depósito"} · {inventario.itens.length} itens · {dataHora(inventario.created_at)}</p></div><strong>{inventario.status.replaceAll("_", " ")}</strong></div></div>{inventario.status === "aguardando_aprovacao" && podeMovimentar ? <button className={styles.primaryButton} onClick={() => void enviar({ acao: "aprovar_inventario", id: inventario.id })}>Aprovar e ajustar</button> : null}</article>)}</div> : <div className={styles.empty}>Nenhum inventário registrado.</div>
           ) : null}
 
-          {!carregando && aba === "clinico" ? (
+          {!carregando && ehSaude && aba === "clinico" ? (
             consumosClinicos.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Data</th><th>Item</th><th>Lote</th><th>Quantidade</th><th>Referência clínica</th><th>Status</th></tr></thead><tbody>{consumosClinicos.map((consumo) => <tr key={consumo.id}><td>{dataHora(consumo.consumido_em)}</td><td><strong>{itens.find((item) => item.id === consumo.estoque_item_id)?.nome || "Item arquivado"}</strong></td><td>{lotes.find((lote) => lote.id === consumo.lote_id)?.codigo || "—"}</td><td>{quantidade(consumo.quantidade)}</td><td>{consumo.dente ? `Dente ${consumo.dente}` : `Agenda ${consumo.agendamento_id.slice(0, 8)}`}</td><td><span className={consumo.status === "estornado" ? styles.lowBadge : styles.typeBadge}>{consumo.status}</span></td></tr>)}</tbody></table></div> : <div className={styles.empty}>Nenhum consumo clínico registrado.</div>
           ) : null}
 
@@ -961,9 +975,9 @@ export default function EstoquePage() {
             {modal === "catalogo" ? (
               <div className={styles.modalBody}>
                 <div className={styles.formGrid}>
-                  <label className={`${styles.field} ${styles.fullField}`}><span>Nome *</span><input value={catalogoForm.nome} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, nome: event.target.value }))} placeholder="Ex.: Limpeza periodontal" /></label>
+                  <label className={`${styles.field} ${styles.fullField}`}><span>Nome *</span><input value={catalogoForm.nome} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, nome: event.target.value }))} placeholder={ehSaude ? "Ex.: Limpeza periodontal" : ehImobiliaria ? "Ex.: Avaliação imobiliária" : "Ex.: Serviço de instalação"} /></label>
                   <label className={styles.field}><span>Código</span><input value={catalogoForm.codigo} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, codigo: event.target.value }))} /></label>
-                  <label className={styles.field}><span>Tipo</span><select value={catalogoForm.tipo} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, tipo: event.target.value as CatalogoItem["tipo"], estoque_item_id: "" }))}><option value="produto">Produto</option><option value="servico">Serviço</option><option value="procedimento">Procedimento</option><option value="imovel">Imóvel</option></select></label>
+                  <label className={styles.field}><span>Tipo</span><select value={catalogoForm.tipo} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, tipo: event.target.value as CatalogoItem["tipo"], estoque_item_id: "" }))}><option value="produto">Produto</option><option value="servico">Serviço</option>{ehSaude ? <option value="procedimento">Procedimento</option> : null}{ehImobiliaria ? <option value="imovel">Imóvel</option> : null}</select></label>
                   <label className={styles.field}><span>Preço</span><input type="number" min="0" step="0.01" value={catalogoForm.preco} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, preco: event.target.value }))} /></label>
                   {catalogoForm.tipo === "produto" ? <label className={styles.field}><span>Item que terá baixa *</span><select value={catalogoForm.estoque_item_id} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, estoque_item_id: event.target.value }))}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · {quantidade(item.saldo, item.unidade)}</option>)}</select></label> : null}
                   <label className={`${styles.field} ${styles.fullField}`}><span>Descrição</span><textarea value={catalogoForm.descricao} onChange={(event) => setCatalogoForm((atual) => ({ ...atual, descricao: event.target.value }))} /></label>
@@ -1034,7 +1048,7 @@ export default function EstoquePage() {
             {modal === "categoria" || modal === "marca" ? (
               <div className={styles.modalBody}>
                 <div className={styles.formGrid}>
-                  <label className={`${styles.field} ${styles.fullField}`}><span>Nome da {modal} *</span><input autoFocus value={cadastroNome} maxLength={120} onChange={(event) => setCadastroNome(event.target.value)} placeholder={modal === "categoria" ? "Ex.: Materiais odontológicos" : "Ex.: Fabricante ou marca comercial"} /></label>
+                  <label className={`${styles.field} ${styles.fullField}`}><span>Nome da {modal} *</span><input autoFocus value={cadastroNome} maxLength={120} onChange={(event) => setCadastroNome(event.target.value)} placeholder={modal === "categoria" ? (ehSaude ? "Ex.: Materiais clínicos" : ehImobiliaria ? "Ex.: Materiais de sinalização" : "Ex.: Materiais e suprimentos") : "Ex.: Fabricante ou marca comercial"} /></label>
                 </div>
                 <div className={styles.infoBox}>A {modal} ficará disponível imediatamente no cadastro e na edição dos itens de estoque.</div>
               </div>

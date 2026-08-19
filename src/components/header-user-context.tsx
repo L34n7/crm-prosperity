@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from "react";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
+import type { NichoCodigo } from "@/lib/nichos/config";
 
 export type HeaderUser = {
   profileName: string;
@@ -9,6 +10,7 @@ export type HeaderUser = {
   permissoes: string[];
   assinatura: AssinaturaEmpresa | null;
   isAdmin: boolean;
+  nichoCodigo: NichoCodigo;
 };
 
 const HeaderUserContext = createContext<HeaderUser>({
@@ -17,6 +19,7 @@ const HeaderUserContext = createContext<HeaderUser>({
   permissoes: [],
   assinatura: null,
   isAdmin: false,
+  nichoCodigo: "comercio",
 });
 
 export function HeaderUserProvider({

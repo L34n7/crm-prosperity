@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 
 const supabase = getSupabaseAdmin();
 
@@ -109,6 +110,9 @@ export async function GET(request: Request) {
     return erro("Sem permissão para visualizar o estoque.", 403);
   }
 
+  const nicho = await buscarNichoEmpresa(contexto.empresaId);
+  const ehSaude = nicho.grupo === "saude";
+
   const url = new URL(request.url);
   const pagina = Math.max(1, numero(url.searchParams.get("pagina"), 1));
   const limite = Math.min(100, Math.max(10, numero(url.searchParams.get("limite"), 50)));
@@ -153,7 +157,9 @@ export async function GET(request: Request) {
       supabase.from("estoque_marcas").select("*").eq("empresa_id", contexto.empresaId).eq("ativo", true).order("nome"),
       supabase.from("estoque_inventarios").select("*").eq("empresa_id", contexto.empresaId).order("created_at", { ascending: false }).limit(100),
       supabase.from("estoque_inventario_itens").select("*").eq("empresa_id", contexto.empresaId),
-      supabase.from("estoque_consumos_clinicos").select("id,agendamento_id,estoque_item_id,lote_id,paciente_id,pessoa_id,profissional_id,dente,quantidade,status,consumido_em,estornado_em").eq("empresa_id", contexto.empresaId).order("consumido_em", { ascending: false }).limit(100),
+      ehSaude
+        ? supabase.from("estoque_consumos_clinicos").select("id,agendamento_id,estoque_item_id,lote_id,paciente_id,pessoa_id,profissional_id,dente,quantidade,status,consumido_em,estornado_em").eq("empresa_id", contexto.empresaId).order("consumido_em", { ascending: false }).limit(100)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
   const falha = [
@@ -245,6 +251,7 @@ export async function GET(request: Request) {
     marcas: marcasResultado.data ?? [],
     inventarios,
     consumos_clinicos: consumosClinicosResultado.data ?? [],
+    nicho: { codigo: nicho.codigo, nome: nicho.nome, grupo: nicho.grupo },
     paginacao: { pagina, limite, tem_mais: (movimentosResultado.data ?? []).length === limite },
     resumo: {
       itens_ativos: itens.length,
@@ -553,6 +560,13 @@ export async function POST(request: Request) {
       if (!nome) return erro("Informe o nome do produto ou serviço.");
       if (!["produto", "servico", "procedimento", "imovel"].includes(tipo)) {
         return erro("Tipo de catálogo inválido.");
+      }
+      const nicho = await buscarNichoEmpresa(contexto.empresaId);
+      if (tipo === "procedimento" && nicho.grupo !== "saude") {
+        return erro("Procedimentos estão disponíveis apenas para empresas do segmento de saúde.");
+      }
+      if (tipo === "imovel" && nicho.codigo !== "imobiliaria") {
+        return erro("Imóveis estão disponíveis apenas para empresas do segmento imobiliário.");
       }
       if (tipo === "produto" && !estoqueItemId) {
         return erro("Vincule o produto ao item que terá baixa no estoque.");

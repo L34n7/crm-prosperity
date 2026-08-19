@@ -34,7 +34,7 @@ export default function CrmShell({
 }: CrmShellProps) {
   return (
     <HeaderUserProvider
-      value={{ profileName, avatarUrl, permissoes, assinatura, isAdmin }}
+      value={{ profileName, avatarUrl, permissoes, assinatura, isAdmin, nichoCodigo }}
     >
       <HeaderSummaryProvider>
         <div className={styles.shell}>
