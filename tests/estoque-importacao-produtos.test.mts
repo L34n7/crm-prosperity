@@ -110,3 +110,21 @@ test("estoque respeita o nicho e restringe recursos clínicos", async () => {
   assert.match(pagina, /ehImobiliaria \? "Ex\.: Avaliação imobiliária"/);
   assert.match(contexto, /nichoCodigo: NichoCodigo/);
 });
+
+test("leitor de código de barras integra cadastro, busca, movimentação e inventário", async () => {
+  const [scanner, pagina, rota, migration] = await Promise.all([
+    readFile(new URL("../src/components/estoque/CodigoBarrasScannerModal.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/(private)/estoque/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/api/estoque/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260819180000_estoque_codigo_barras_unico.sql", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(scanner, /navigator\.mediaDevices\.getUserMedia/);
+  assert.match(scanner, /window\.BarcodeDetector/);
+  assert.match(scanner, /Leitor USB\/Bluetooth/);
+  assert.match(pagina, /ScannerContexto = "busca" \| "cadastro" \| "movimentacao" \| "inventario"/);
+  assert.match(pagina, /setInventarioContagens/);
+  assert.match(pagina, /codigo_barras/);
+  assert.match(rota, /consultaDuplicidade/);
+  assert.match(migration, /create unique index[\s\S]*estoque_itens_empresa_codigo_barras_uk/i);
+});

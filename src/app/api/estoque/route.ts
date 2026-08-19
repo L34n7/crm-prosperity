@@ -59,6 +59,10 @@ function mensagemBanco(error: { message?: string } | null | undefined) {
     return "Já existe um item ativo com este código.";
   }
 
+  if (message.includes("estoque_itens_empresa_codigo_barras_uk")) {
+    return "Este código de barras já está vinculado a outro item.";
+  }
+
   if (message.includes("catalogo_servicos_empresa_codigo_uk")) {
     return "Já existe um item ativo do catálogo com este código.";
   }
@@ -411,10 +415,25 @@ export async function POST(request: Request) {
       const nome = texto(body.nome);
       const tipo = texto(body.tipo) || "produto";
       const unidade = texto(body.unidade) || "un";
+      const codigoBarras = texto(body.codigo_barras) || null;
 
       if (!nome) return erro("Informe o nome do item.");
       if (!["produto", "material", "insumo"].includes(tipo)) {
         return erro("Tipo de item inválido.");
+      }
+
+      if (codigoBarras) {
+        let consultaDuplicidade = supabase
+          .from("estoque_itens")
+          .select("id, nome, ativo")
+          .eq("empresa_id", contexto.empresaId)
+          .eq("codigo_barras", codigoBarras);
+        if (id) consultaDuplicidade = consultaDuplicidade.neq("id", id);
+        const { data: duplicado, error: duplicidadeError } = await consultaDuplicidade.limit(1).maybeSingle();
+        if (duplicidadeError) return erro(mensagemBanco(duplicidadeError));
+        if (duplicado) {
+          return erro(`Este código de barras já pertence a “${duplicado.nome}”${duplicado.ativo ? "" : " (arquivado)"}.`, 409);
+        }
       }
 
       const payload = {
@@ -430,7 +449,7 @@ export async function POST(request: Request) {
           ? Math.max(0, numero(body.preco_venda))
           : null,
         sku: texto(body.sku) || null,
-        codigo_barras: texto(body.codigo_barras) || null,
+        codigo_barras: codigoBarras,
         categoria_id: texto(body.categoria_id) || null,
         marca_id: texto(body.marca_id) || null,
         controla_lote: Boolean(body.controla_lote),

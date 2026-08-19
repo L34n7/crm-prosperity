@@ -19,6 +19,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  ScanBarcode,
   Search,
   Settings,
   Warehouse,
@@ -35,12 +36,14 @@ import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import ComprasPanel from "@/components/estoque/ComprasPanel";
 import ImportacaoProdutosModal from "@/components/estoque/ImportacaoProdutosModal";
+import CodigoBarrasScannerModal from "@/components/estoque/CodigoBarrasScannerModal";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
 type Aba = "estoque" | "catalogo" | "compras" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
 type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | "arquivamento" | "restauracao" | "exclusao" | null;
 type FiltroStatus = "ativos" | "arquivados" | "todos";
+type ScannerContexto = "busca" | "cadastro" | "movimentacao" | "inventario" | null;
 
 type EstoqueItem = {
   id: string;
@@ -256,6 +259,7 @@ export default function EstoquePage() {
   const [aba, setAba] = useState<Aba>("estoque");
   const [modal, setModal] = useState<Modal>(null);
   const [importandoProdutos, setImportandoProdutos] = useState(false);
+  const [scannerContexto, setScannerContexto] = useState<ScannerContexto>(null);
   const [itens, setItens] = useState<EstoqueItem[]>([]);
   const [itensArquivados, setItensArquivados] = useState<EstoqueItem[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
@@ -369,7 +373,7 @@ export default function EstoquePage() {
   const itensFiltrados = useMemo(
     () =>
       itensVisiveis.filter((item) =>
-        [item.nome, item.codigo, item.descricao, TIPO_ITEM_LABEL[item.tipo]]
+        [item.nome, item.codigo, item.sku, item.codigo_barras, item.descricao, TIPO_ITEM_LABEL[item.tipo]]
           .filter(Boolean)
           .some((valor) => String(valor).toLocaleLowerCase("pt-BR").includes(termo)),
       ),
@@ -580,6 +584,63 @@ export default function EstoquePage() {
     setModal("localizacao");
   }
 
+  function localizarItemPorCodigo(codigo: string, incluirArquivados = false) {
+    const normalizado = codigo.trim().toLocaleLowerCase("pt-BR");
+    const origem = incluirArquivados ? [...itens, ...itensArquivados] : itens;
+    return origem.find((item) => item.codigo_barras?.trim().toLocaleLowerCase("pt-BR") === normalizado);
+  }
+
+  function processarCodigoBarras(codigo: string) {
+    if (scannerContexto === "cadastro") {
+      const duplicado = localizarItemPorCodigo(codigo, true);
+      if (duplicado && duplicado.id !== itemForm.id) {
+        return { ok: false, message: `Este código já pertence a “${duplicado.nome}”${duplicado.ativo ? "" : " (arquivado)"}.` };
+      }
+      setItemForm((atual) => ({ ...atual, codigo_barras: codigo }));
+      return { ok: true };
+    }
+
+    if (scannerContexto === "busca") {
+      const item = localizarItemPorCodigo(codigo, true);
+      if (!item) return { ok: false, message: "Nenhum produto foi encontrado com este código de barras." };
+      setAba("estoque");
+      setFiltroStatus(item.ativo ? "ativos" : "arquivados");
+      setBusca(codigo);
+      setSucesso(`${item.nome} localizado pelo código de barras.`);
+      return { ok: true };
+    }
+
+    if (scannerContexto === "movimentacao") {
+      const item = localizarItemPorCodigo(codigo);
+      if (!item) return { ok: false, message: "Código não encontrado entre os itens ativos do estoque." };
+      if (itemSelecionadoId === item.id) {
+        setMovimentoQuantidade((quantidadeAtual) => String((Number(quantidadeAtual) || 0) + 1));
+      } else {
+        setMovimentoQuantidade("1");
+      }
+      setItemSelecionadoId(item.id);
+      return { ok: true };
+    }
+
+    if (scannerContexto === "inventario") {
+      const item = localizarItemPorCodigo(codigo);
+      if (!item) return { ok: false, message: "Código não encontrado entre os itens ativos do estoque." };
+      setInventarioContagens((atual) => ({
+        ...atual,
+        [item.id]: String((Number(atual[item.id]) || 0) + 1),
+      }));
+      return { ok: true };
+    }
+
+    return { ok: false, message: "Leitura indisponível neste contexto." };
+  }
+
+  function abrirScannerMovimentacao() {
+    if (movimentoTipo === "ajuste") return;
+    setMovimentoQuantidade("0");
+    setScannerContexto("movimentacao");
+  }
+
   const modalContexto = modal === "item" ? "Cadastro de estoque"
     : modal === "catalogo" ? "Catálogo integrado"
     : modal === "inventario" ? "Contagem física"
@@ -600,6 +661,15 @@ export default function EstoquePage() {
     : modal === "restauracao" ? "Restaurar registro"
     : modal === "exclusao" ? "Excluir definitivamente"
     : "Movimentar estoque";
+  const scannerContinuo = scannerContexto === "movimentacao" || scannerContexto === "inventario";
+  const scannerTitulo = scannerContexto === "cadastro" ? "Capturar código do produto"
+    : scannerContexto === "movimentacao" ? `Ler itens para ${movimentoTipo === "entrada" ? "entrada" : "saída"}`
+    : scannerContexto === "inventario" ? "Contagem por código de barras"
+    : "Localizar produto";
+  const scannerDescricao = scannerContexto === "cadastro" ? "O código lido será preenchido no cadastro atual."
+    : scannerContexto === "movimentacao" ? "Cada leitura do mesmo produto acrescenta uma unidade à quantidade."
+    : scannerContexto === "inventario" ? "Cada leitura acrescenta uma unidade à contagem física do produto."
+    : "Leia o código para abrir o produto correspondente no estoque.";
 
   return (
     <>
@@ -721,10 +791,11 @@ export default function EstoquePage() {
                 <button className={filtroStatus === "todos" ? styles.statusFilterActive : ""} onClick={() => setFiltroStatus("todos")}>Todos</button>
               </div>
             ) : null}
-            {aba === "estoque" && podeGerenciar ? (
+            {aba === "estoque" ? (
               <div className={styles.heroActions}>
-                <button className={styles.secondaryButton} onClick={() => setImportandoProdutos(true)}><FileSpreadsheet size={17} /> Importar planilha</button>
-                <button className={styles.primaryButton} onClick={abrirNovoItem}><Plus size={17} /> Novo item</button>
+                <button className={styles.secondaryButton} onClick={() => setScannerContexto("busca")}><ScanBarcode size={18} /> Ler código</button>
+                {podeGerenciar ? <button className={styles.secondaryButton} onClick={() => setImportandoProdutos(true)}><FileSpreadsheet size={17} /> Importar planilha</button> : null}
+                {podeGerenciar ? <button className={styles.primaryButton} onClick={abrirNovoItem}><Plus size={17} /> Novo item</button> : null}
               </div>
             ) : null}
             {aba === "catalogo" && podeGerenciar ? (
@@ -957,7 +1028,7 @@ export default function EstoquePage() {
                   <label className={`${styles.field} ${styles.fullField}`}><span>Nome *</span><input value={itemForm.nome} onChange={(event) => setItemForm((atual) => ({ ...atual, nome: event.target.value }))} placeholder="Ex.: Luva nitrílica" /></label>
                   <label className={styles.field}><span>Código</span><input value={itemForm.codigo} onChange={(event) => setItemForm((atual) => ({ ...atual, codigo: event.target.value }))} placeholder="SKU-001" /></label>
                   <label className={styles.field}><span>SKU</span><input value={itemForm.sku} onChange={(event) => setItemForm((atual) => ({ ...atual, sku: event.target.value }))} /></label>
-                  <label className={styles.field}><span>Código de barras</span><input value={itemForm.codigo_barras} onChange={(event) => setItemForm((atual) => ({ ...atual, codigo_barras: event.target.value }))} /></label>
+                  <div className={styles.field}><span>Código de barras</span><div className={styles.barcodeInputGroup}><input inputMode="numeric" value={itemForm.codigo_barras} onChange={(event) => setItemForm((atual) => ({ ...atual, codigo_barras: event.target.value }))} /><button type="button" aria-label="Ler código de barras" title="Ler código de barras" onClick={() => setScannerContexto("cadastro")}><ScanBarcode size={19} /></button></div></div>
                   <label className={styles.field}><span>Tipo</span><select value={itemForm.tipo} onChange={(event) => setItemForm((atual) => ({ ...atual, tipo: event.target.value as EstoqueItem["tipo"] }))}><option value="produto">Produto</option><option value="material">Material</option><option value="insumo">Insumo</option></select></label>
                   <label className={styles.field}><span>Unidade</span><select value={itemForm.unidade} onChange={(event) => setItemForm((atual) => ({ ...atual, unidade: event.target.value }))}>{[["un", "Unidade"], ["cx", "Caixa"], ["pct", "Pacote"], ["kg", "Quilograma"], ["g", "Grama"], ["l", "Litro"], ["ml", "Mililitro"], ["m", "Metro"], ["cm", "Centímetro"]].map(([valor, label]) => <option key={valor} value={valor}>{label}</option>)}</select></label>
                   <label className={styles.field}><span>Categoria</span><select value={itemForm.categoria_id} onChange={(event) => setItemForm((atual) => ({ ...atual, categoria_id: event.target.value }))}><option value="">Sem categoria</option>{categorias.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}</select></label>
@@ -1000,7 +1071,7 @@ export default function EstoquePage() {
             {modal === "movimentacao" ? (
               <div className={styles.modalBody}>
                 <div className={styles.formGrid}>
-                  <label className={`${styles.field} ${styles.fullField}`}><span>Item *</span><select value={itemSelecionadoId} onChange={(event) => setItemSelecionadoId(event.target.value)}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · saldo {quantidade(item.saldo, item.unidade)}</option>)}</select></label>
+                  <div className={`${styles.field} ${styles.fullField}`}><span>Item *</span><div className={styles.barcodeInputGroup}><select value={itemSelecionadoId} onChange={(event) => setItemSelecionadoId(event.target.value)}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · saldo {quantidade(item.saldo, item.unidade)}</option>)}</select>{movimentoTipo !== "ajuste" ? <button type="button" aria-label="Ler itens por código de barras" title="Ler itens por código de barras" onClick={abrirScannerMovimentacao}><ScanBarcode size={19} /></button> : null}</div></div>
                   <label className={styles.field}><span>Movimento</span><select value={movimentoTipo} onChange={(event) => setMovimentoTipo(event.target.value as "entrada" | "saida" | "ajuste")}><option value="entrada">Entrada</option><option value="saida">Saída manual</option><option value="ajuste">Ajuste de inventário</option></select></label>
                   {movimentoTipo !== "entrada" ? <label className={styles.field}><span>Depósito de origem</span><select value={depositoOrigemId} onChange={(event) => setDepositoOrigemId(event.target.value)}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label> : null}
                   {movimentoTipo === "entrada" ? <label className={styles.field}><span>Depósito de destino</span><select value={depositoDestinoId} onChange={(event) => setDepositoDestinoId(event.target.value)}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label> : null}
@@ -1030,6 +1101,7 @@ export default function EstoquePage() {
             {modal === "inventario" ? (
               <div className={styles.modalBody}>
                 <div className={styles.formGrid}><label className={styles.field}><span>Depósito *</span><select value={inventarioDepositoId} onChange={(event) => setInventarioDepositoId(event.target.value)}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label><label className={styles.field}><span>Descrição *</span><input value={inventarioDescricao} onChange={(event) => setInventarioDescricao(event.target.value)} placeholder="Ex.: Contagem mensal" /></label></div>
+                <div className={styles.inventoryScannerBar}><div><strong>Contagem com leitor</strong><span>Leia os produtos em sequência para somar as unidades automaticamente.</span></div><button className={styles.secondaryButton} type="button" onClick={() => setScannerContexto("inventario")}><ScanBarcode size={18} /> Ler produtos</button></div>
                 <div className={styles.inventoryCountList}>{itens.map((item) => <label className={styles.countRow} key={item.id}><span><strong>{item.nome}</strong><small>Saldo esperado no depósito: {quantidade(saldos.filter((saldo) => saldo.estoque_item_id === item.id && saldo.deposito_id === inventarioDepositoId).reduce((total, saldo) => total + Number(saldo.saldo_fisico), 0), item.unidade)}</small></span><input type="number" min="0" step="0.001" placeholder="Contagem" value={inventarioContagens[item.id] ?? ""} onChange={(event) => setInventarioContagens((atual) => ({ ...atual, [item.id]: event.target.value }))} /></label>)}</div>
               </div>
             ) : null}
@@ -1113,6 +1185,16 @@ export default function EstoquePage() {
             setSucesso(message);
             await carregar();
           }}
+        />
+      ) : null}
+
+      {scannerContexto ? (
+        <CodigoBarrasScannerModal
+          title={scannerTitulo}
+          description={scannerDescricao}
+          continuous={scannerContinuo}
+          onDetected={processarCodigoBarras}
+          onClose={() => setScannerContexto(null)}
         />
       ) : null}
 

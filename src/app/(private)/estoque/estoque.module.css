@@ -383,6 +383,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 14px;
   background: var(--crm-surface-soft);
   border-bottom: 1px solid var(--crm-border);
@@ -390,6 +391,7 @@
 
 .searchBox {
   width: min(520px, 100%);
+  flex: 1 1 320px;
   height: 40px;
   padding: 0 13px;
   display: flex;
@@ -995,6 +997,35 @@
   gap: 8px;
 }
 
+.inventoryScannerBar {
+  margin-top: 16px;
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 14px;
+  background: var(--crm-primary-soft);
+}
+
+.inventoryScannerBar > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.inventoryScannerBar strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.inventoryScannerBar span {
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
 .countRow {
   padding: 11px 12px;
   display: grid;
@@ -1188,6 +1219,31 @@
 .componentRow select:focus {
   border-color: var(--crm-primary);
   box-shadow: var(--crm-focus-ring);
+  background: var(--crm-surface);
+}
+
+.barcodeInputGroup {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 7px;
+}
+
+.barcodeInputGroup > button {
+  min-height: 44px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease;
+}
+
+.barcodeInputGroup > button:hover {
+  transform: translateY(-1px);
   background: var(--crm-surface);
 }
 
@@ -1445,6 +1501,15 @@
   .sectionHeading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .inventoryScannerBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inventoryScannerBar button {
+    width: 100%;
   }
 
   .hero {

@@ -1,0 +1,92 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--crm-overlay) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.modal {
+  width: min(820px, 100%);
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 22px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.header {
+  padding: 20px 22px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--crm-border);
+  background: linear-gradient(135deg, var(--crm-surface), var(--crm-primary-soft));
+}
+
+.header > div { min-width: 0; }
+.header span { color: var(--crm-primary-text); font-size: 12px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.header h2 { margin: 4px 0 0; color: var(--crm-text-strong); font-size: 23px; }
+.header p { margin: 6px 0 0; color: var(--crm-text-muted); font-size: 14px; line-height: 1.45; }
+.header > button { width: 42px; height: 42px; flex: 0 0 42px; border: 1px solid var(--crm-border-strong); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--crm-surface); color: var(--crm-text-strong); cursor: pointer; }
+
+.body { padding: 20px 22px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(280px, .95fr); gap: 18px; }
+.cameraPanel, .readerPanel { min-width: 0; }
+.videoFrame, .cameraEmpty { min-height: 280px; border: 1px solid var(--crm-border); border-radius: 17px; overflow: hidden; background: var(--crm-surface-soft); }
+.videoFrame { position: relative; }
+.videoFrame video { width: 100%; height: 280px; display: block; object-fit: cover; }
+.cameraEmpty { padding: 28px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: var(--crm-primary-text); text-align: center; }
+.cameraEmpty strong { margin-top: 13px; color: var(--crm-text-strong); font-size: 16px; }
+.cameraEmpty p { max-width: 300px; margin: 6px 0 0; color: var(--crm-text-muted); font-size: 14px; line-height: 1.45; }
+.scanLine { position: absolute; left: 12%; right: 12%; top: 50%; height: 2px; border-radius: 999px; background: var(--crm-primary); box-shadow: 0 0 16px var(--crm-primary); animation: scan 1.8s ease-in-out infinite alternate; }
+.target { position: absolute; inset: 20% 11%; }
+.target span { position: absolute; width: 34px; height: 34px; border-color: var(--crm-text-inverse); filter: drop-shadow(0 2px 5px rgb(0 0 0 / .5)); }
+.target span:nth-child(1) { left: 0; top: 0; border-left: 3px solid; border-top: 3px solid; }
+.target span:nth-child(2) { right: 0; top: 0; border-right: 3px solid; border-top: 3px solid; }
+.target span:nth-child(3) { left: 0; bottom: 0; border-left: 3px solid; border-bottom: 3px solid; }
+.target span:nth-child(4) { right: 0; bottom: 0; border-right: 3px solid; border-bottom: 3px solid; }
+
+.cameraButton, .inputRow button, .footer button { min-height: 42px; border: 1px solid transparent; border-radius: 12px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--crm-primary-strong); color: var(--crm-text-inverse); font: inherit; font-size: 14px; font-weight: 850; cursor: pointer; }
+.cameraButton { width: 100%; margin-top: 10px; }
+.unavailable { margin: 10px 0 0; padding: 11px 12px; border: 1px solid var(--crm-warning-border); border-radius: 12px; background: var(--crm-warning-bg); color: var(--crm-warning-text); font-size: 13px; line-height: 1.45; }
+
+.readerPanel { padding: 16px; border: 1px solid var(--crm-border); border-radius: 17px; background: var(--crm-surface-soft); }
+.readerTitle { display: flex; align-items: flex-start; gap: 10px; }
+.readerTitle > span { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; background: var(--crm-primary-soft); color: var(--crm-primary-text); }
+.readerTitle strong { color: var(--crm-text-strong); font-size: 15px; }
+.readerTitle p { margin: 4px 0 0; color: var(--crm-text-muted); font-size: 13px; line-height: 1.45; }
+.readerPanel form { margin-top: 18px; }
+.readerPanel label { display: block; margin-bottom: 6px; color: var(--crm-text-muted); font-size: 13px; font-weight: 800; }
+.inputRow { display: flex; gap: 7px; }
+.inputRow input { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--crm-border-strong); border-radius: 12px; padding: 0 12px; background: var(--crm-surface-input); color: var(--crm-text-strong); font: inherit; font-size: 15px; outline: 0; }
+.inputRow input:focus { border-color: var(--crm-primary); box-shadow: var(--crm-focus-ring); }
+.inputRow button:disabled { cursor: not-allowed; opacity: .55; }
+.error, .success { margin-top: 13px; border-radius: 12px; padding: 11px 12px; font-size: 13px; }
+.error { border: 1px solid var(--crm-danger-border); background: var(--crm-danger-bg); color: var(--crm-danger-text); }
+.success { border: 1px solid var(--crm-success-border); display: flex; flex-direction: column; gap: 3px; background: var(--crm-success-bg); color: var(--crm-success-text); }
+.success span, .success small { font-size: 12px; }
+.success strong { font-size: 15px; }
+
+.footer { padding: 15px 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--crm-border); }
+.footer p { margin: 0; color: var(--crm-text-muted); font-size: 13px; }
+.footer button { border-color: var(--crm-border-strong); background: var(--crm-surface); color: var(--crm-text-strong); }
+
+@keyframes scan { from { transform: translateY(-72px); } to { transform: translateY(72px); } }
+
+@media (max-width: 720px) {
+  .overlay { padding: 10px; align-items: flex-end; }
+  .modal { max-height: calc(100dvh - 12px); border-radius: 20px 20px 14px 14px; }
+  .header { padding: 17px; }
+  .header h2 { font-size: 20px; }
+  .body { padding: 14px 17px; grid-template-columns: 1fr; }
+  .videoFrame, .cameraEmpty { min-height: 230px; }
+  .videoFrame video { height: 230px; }
+  .footer { padding: 14px 17px; align-items: stretch; flex-direction: column; }
+  .footer button { width: 100%; }
+}
