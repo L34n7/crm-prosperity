@@ -27,6 +27,7 @@ import {
   WHATSAPP_META_MANAGER_URL,
 } from "@/lib/whatsapp/meta-block";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { buildRecentMessagePage } from "@/lib/conversas/message-pagination";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -554,6 +555,37 @@ export async function GET(request: Request) {
 
     if (dataFimFiltro) {
       queryMensagens = queryMensagens.lte("created_at", dataFimFiltro);
+    }
+
+    if (!dataInicioFiltro && !dataFimFiltro) {
+      const { data: ultimasMensagens, error: ultimasMensagensError } =
+        await queryMensagens
+          .order("created_at", { ascending: false })
+          .limit(limite + 1);
+
+      if (ultimasMensagensError) {
+        return NextResponse.json(
+          { error: ultimasMensagensError.message },
+          { status: 500 }
+        );
+      }
+
+      const paginaRecente = buildRecentMessagePage(
+        (ultimasMensagens ?? []) as MensagemRow[],
+        limite
+      );
+      const mensagensComFavorita = await anexarFavoritasNasMensagens(
+        paginaRecente.messages,
+        conversa.empresa_id
+      );
+
+      return NextResponse.json({
+        ok: true,
+        mensagens: mensagensComFavorita,
+        temMaisHistorico: paginaRecente.hasMoreHistory,
+        janela_24h: janela24h,
+        modo: "ultimas",
+      });
     }
 
     const { data, error } = await queryMensagens.order("created_at", {

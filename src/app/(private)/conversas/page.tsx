@@ -2280,6 +2280,10 @@ function ConversasPageContent() {
   );
   const realtimeConversasTimerRef = useRef<number | null>(null);
   const realtimeMensagensTimerRef = useRef<number | null>(null);
+  const cargaInicialMensagensConversaRef = useRef<string | null>(null);
+  const atualizacoesMensagensPendentesRef = useRef<Set<string>>(new Set());
+  const versaoCargaMensagensRef = useRef(0);
+  const requisicoesMensagensRef = useRef<Set<AbortController>>(new Set());
   const marcarLidaAposRealtimeRef = useRef(false);
   const marcarLidaAoFinalTimerRef = useRef<number | null>(null);
   const marcandoConversasComoLidasRef = useRef<Set<string>>(new Set());
@@ -2892,11 +2896,14 @@ function ConversasPageContent() {
 
   function cargaMensagensAindaAtual(
     conversaId: string,
-    conversaProtocoloId?: string | null
+    conversaProtocoloId?: string | null,
+    versaoCarga?: number
   ) {
     return (
       conversaEstaSelecionada(conversaId) &&
-      protocoloSelecionadoIdRef.current === (conversaProtocoloId ?? null)
+      protocoloSelecionadoIdRef.current === (conversaProtocoloId ?? null) &&
+      (versaoCarga === undefined ||
+        versaoCargaMensagensRef.current === versaoCarga)
     );
   }
 
@@ -2916,6 +2923,20 @@ function ConversasPageContent() {
     conversaSelecionadaIdRef.current = proximaConversaId;
 
     if (mudouConversa) {
+      versaoCargaMensagensRef.current += 1;
+      requisicoesMensagensRef.current.forEach((controller) => {
+        controller.abort();
+      });
+      requisicoesMensagensRef.current.clear();
+      cargaInicialMensagensConversaRef.current = proximaConversaId;
+      atualizacoesMensagensPendentesRef.current.clear();
+      marcarLidaAposRealtimeRef.current = false;
+
+      if (realtimeMensagensTimerRef.current) {
+        window.clearTimeout(realtimeMensagensTimerRef.current);
+        realtimeMensagensTimerRef.current = null;
+      }
+
       protocoloSelecionadoIdRef.current = null;
       setProtocoloSelecionadoId(null);
       setProtocoloSelecionadoNumero(null);
@@ -4897,6 +4918,11 @@ function ConversasPageContent() {
       marcarLidaAposRealtimeRef.current = true;
     }
 
+    if (cargaInicialMensagensConversaRef.current === conversaId) {
+      atualizacoesMensagensPendentesRef.current.add(conversaId);
+      return;
+    }
+
     if (realtimeMensagensTimerRef.current) {
       window.clearTimeout(realtimeMensagensTimerRef.current);
     }
@@ -4908,6 +4934,11 @@ function ConversasPageContent() {
       if (!conversaEstaSelecionada(conversaId)) return;
       if (enviandoRef.current) return;
       if (editandoCampoRef.current) return;
+
+      if (cargaInicialMensagensConversaRef.current === conversaId) {
+        atualizacoesMensagensPendentesRef.current.add(conversaId);
+        return;
+      }
 
       const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
 
@@ -4990,10 +5021,14 @@ function ConversasPageContent() {
     }
   ) {
     const protocoloAlvoId = conversaProtocoloId ?? null;
+    const versaoCarga = versaoCargaMensagensRef.current;
 
-    if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+    if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
       return;
     }
+
+    const controller = new AbortController();
+    requisicoesMensagensRef.current.add(controller);
 
     try {
       usuarioEstavaNoFinalRef.current = verificarSeUsuarioEstaNoFinal();
@@ -5029,11 +5064,12 @@ function ConversasPageContent() {
 
       const res = await fetch(url, {
         cache: "no-store",
+        signal: controller.signal,
       });
 
       const data = await res.json();
 
-      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
         return;
       }
 
@@ -5056,7 +5092,13 @@ function ConversasPageContent() {
 
       if (opcoes?.modoAppendHistorico) {
         setMensagens((atuais) => {
-          if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+          if (
+            !cargaMensagensAindaAtual(
+              conversaId,
+              protocoloAlvoId,
+              versaoCarga
+            )
+          ) {
             return atuais;
           }
 
@@ -5079,7 +5121,13 @@ function ConversasPageContent() {
         });
       } else if (opcoes?.modoMergeNovas) {
         setMensagens((atuais) => {
-          if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+          if (
+            !cargaMensagensAindaAtual(
+              conversaId,
+              protocoloAlvoId,
+              versaoCarga
+            )
+          ) {
             return atuais;
           }
 
@@ -5114,7 +5162,7 @@ function ConversasPageContent() {
         setInicioJanelaHistorico(maisAntiga);
       }
 
-      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
         return;
       }
 
@@ -5127,12 +5175,21 @@ function ConversasPageContent() {
       if (fimJanela) {
         setFimJanelaHistorico(fimJanela);
       }
-    } catch {
-      if (cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      if (cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
         setErro("Erro ao carregar mensagens");
       }
     } finally {
-      if (!silencioso && cargaMensagensAindaAtual(conversaId, protocoloAlvoId)) {
+      requisicoesMensagensRef.current.delete(controller);
+
+      if (
+        !silencioso &&
+        cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)
+      ) {
         setLoadingMensagens(false);
       }
     }
@@ -8207,6 +8264,8 @@ const templateFooterTexto = useMemo(() => {
   }, [conversaSelecionada?.id]);
 
   useEffect(() => {
+    const requisicoesMensagens = requisicoesMensagensRef.current;
+
     return () => {
       if (realtimeConversasTimerRef.current) {
         window.clearTimeout(realtimeConversasTimerRef.current);
@@ -8219,6 +8278,11 @@ const templateFooterTexto = useMemo(() => {
       if (marcarLidaAoFinalTimerRef.current) {
         window.clearTimeout(marcarLidaAoFinalTimerRef.current);
       }
+
+      requisicoesMensagens.forEach((controller) => {
+        controller.abort();
+      });
+      requisicoesMensagens.clear();
     };
   }, []);
 
@@ -8341,6 +8405,12 @@ const templateFooterTexto = useMemo(() => {
 
       if (!conversaEstaSelecionada(conversaId)) return;
 
+      cargaInicialMensagensConversaRef.current = null;
+
+      if (atualizacoesMensagensPendentesRef.current.delete(conversaId)) {
+        agendarAtualizacaoMensagensRealtime(conversaId);
+      }
+
       if (conversaLidaRef.current !== conversaId) {
         await marcarConversaComoLida(conversaId);
 
@@ -8367,6 +8437,10 @@ const templateFooterTexto = useMemo(() => {
       if (editandoCampo) return;
 
     const interval = window.setInterval(async () => {
+      if (cargaInicialMensagensConversaRef.current === conversaSelecionada.id) {
+        return;
+      }
+
       const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
 
     if (estavaNoFinal) {
