@@ -418,6 +418,40 @@
   font-size: 15px;
 }
 
+.statusFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface);
+}
+
+.statusFilter button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--crm-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.statusFilter button span {
+  margin-left: 4px;
+  color: inherit;
+  opacity: 0.8;
+}
+
+.statusFilter .statusFilterActive {
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
 .inventoryList {
   padding: 12px 14px 18px;
 }
@@ -536,6 +570,28 @@
   border: 1px solid var(--crm-warning-border);
   background: var(--crm-warning-bg);
   color: var(--crm-warning-text);
+}
+
+.archivedBadge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 999px;
+  padding: 4px 7px;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.archivedRow {
+  border-style: dashed;
+  background: var(--crm-surface-soft);
+}
+
+.archivedRow > :not(.rowActions):not(.catalogActions) {
+  opacity: 0.78;
 }
 
 .mutedBadge {
@@ -697,6 +753,23 @@
 
 .exitAction {
   color: var(--crm-text-strong) !important;
+}
+
+.restoreButton {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .cardTop,
@@ -1160,7 +1233,9 @@
   margin-top: 14px;
 }
 
-.archiveConfirmation {
+.archiveConfirmation,
+.restoreConfirmation,
+.deleteConfirmation {
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -1170,7 +1245,9 @@
   background: var(--crm-danger-bg);
 }
 
-.archiveConfirmation > span {
+.archiveConfirmation > span,
+.restoreConfirmation > span,
+.deleteConfirmation > span {
   width: 44px;
   height: 44px;
   flex: 0 0 44px;
@@ -1182,16 +1259,40 @@
   color: var(--crm-danger-text);
 }
 
-.archiveConfirmation div {
+.restoreConfirmation {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.restoreConfirmation > span {
+  color: var(--crm-primary-text);
+}
+
+.deleteConfirmation {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.deleteConfirmation > span {
+  color: var(--crm-danger-text);
+}
+
+.archiveConfirmation div,
+.restoreConfirmation div,
+.deleteConfirmation div {
   min-width: 0;
 }
 
-.archiveConfirmation strong {
+.archiveConfirmation strong,
+.restoreConfirmation strong,
+.deleteConfirmation strong {
   color: var(--crm-text-strong);
   font-size: 17px;
 }
 
-.archiveConfirmation p {
+.archiveConfirmation p,
+.restoreConfirmation p,
+.deleteConfirmation p {
   margin: 5px 0 0;
   color: var(--crm-text-muted);
   font-size: 14px;
@@ -1375,6 +1476,14 @@
 
   .searchBox {
     width: 100%;
+  }
+
+  .statusFilter {
+    width: 100%;
+  }
+
+  .statusFilter button {
+    flex: 1;
   }
 
   .inventoryList,

@@ -78,3 +78,19 @@ test("migration mantém saldo inicial dentro da arquitetura documental", async (
   assert.match(sql, /revoke execute[\s\S]*authenticated/i);
   assert.match(sql, /grant execute[\s\S]*service_role/i);
 });
+
+test("arquivados podem ser restaurados e exclusão definitiva é protegida", async () => {
+  const [rota, pagina] = await Promise.all([
+    readFile(new URL("../src/app/api/estoque/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/(private)/estoque/page.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(rota, /itens_arquivados/);
+  assert.match(rota, /catalogo_arquivado/);
+  assert.match(rota, /acao === "restaurar_item"/);
+  assert.match(rota, /acao === "excluir_item"/);
+  assert.match(rota, /localizarVinculos/);
+  assert.match(rota, /estoque\.configurar/);
+  assert.match(pagina, /Arquivados/);
+  assert.match(pagina, /Excluir definitivamente/);
+});

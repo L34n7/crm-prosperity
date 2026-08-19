@@ -18,6 +18,7 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   Settings,
   Warehouse,
@@ -38,7 +39,8 @@ import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
 type Aba = "estoque" | "catalogo" | "compras" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
-type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | "arquivamento" | null;
+type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | "arquivamento" | "restauracao" | "exclusao" | null;
+type FiltroStatus = "ativos" | "arquivados" | "todos";
 
 type EstoqueItem = {
   id: string;
@@ -60,6 +62,7 @@ type EstoqueItem = {
   controla_lote: boolean;
   controla_validade: boolean;
   controla_serie: boolean;
+  ativo: boolean;
 };
 
 type Componente = {
@@ -78,6 +81,7 @@ type CatalogoItem = {
   estoque_item_id: string | null;
   imovel_id: string | null;
   composicao: Componente[];
+  ativo: boolean;
 };
 
 type Movimentacao = {
@@ -253,7 +257,10 @@ export default function EstoquePage() {
   const [modal, setModal] = useState<Modal>(null);
   const [importandoProdutos, setImportandoProdutos] = useState(false);
   const [itens, setItens] = useState<EstoqueItem[]>([]);
+  const [itensArquivados, setItensArquivados] = useState<EstoqueItem[]>([]);
   const [catalogo, setCatalogo] = useState<CatalogoItem[]>([]);
+  const [catalogoArquivado, setCatalogoArquivado] = useState<CatalogoItem[]>([]);
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("ativos");
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
   const [resumo, setResumo] = useState<Resumo>(RESUMO_INICIAL);
   const [depositos, setDepositos] = useState<Deposito[]>([]);
@@ -294,6 +301,7 @@ export default function EstoquePage() {
   const [cadastroNome, setCadastroNome] = useState("");
   const [localizacaoForm, setLocalizacaoForm] = useState({ deposito_id: "", codigo: "", nome: "" });
   const [arquivamento, setArquivamento] = useState<{ tipo: "item" | "catalogo"; id: string; nome: string } | null>(null);
+  const [registroPendente, setRegistroPendente] = useState<{ tipo: "item" | "catalogo"; id: string; nome: string } | null>(null);
 
   const podeGerenciar = permissoes.includes("estoque.gerenciar");
   const podeMovimentar = permissoes.includes("estoque.movimentar");
@@ -309,7 +317,9 @@ export default function EstoquePage() {
       if (!response.ok) throw new Error(data?.error || "Erro ao carregar estoque.");
 
       setItens(data.itens ?? []);
+      setItensArquivados(data.itens_arquivados ?? []);
       setCatalogo(data.catalogo ?? []);
+      setCatalogoArquivado(data.catalogo_arquivado ?? []);
       setMovimentacoes(data.movimentacoes ?? []);
       setResumo(data.resumo ?? RESUMO_INICIAL);
       setDepositos(data.depositos ?? []);
@@ -334,23 +344,31 @@ export default function EstoquePage() {
   }, [carregar]);
 
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
+  const itensVisiveis = useMemo(
+    () => filtroStatus === "ativos" ? itens : filtroStatus === "arquivados" ? itensArquivados : [...itens, ...itensArquivados],
+    [filtroStatus, itens, itensArquivados],
+  );
+  const catalogoVisivel = useMemo(
+    () => filtroStatus === "ativos" ? catalogo : filtroStatus === "arquivados" ? catalogoArquivado : [...catalogo, ...catalogoArquivado],
+    [catalogo, catalogoArquivado, filtroStatus],
+  );
   const itensFiltrados = useMemo(
     () =>
-      itens.filter((item) =>
+      itensVisiveis.filter((item) =>
         [item.nome, item.codigo, item.descricao, TIPO_ITEM_LABEL[item.tipo]]
           .filter(Boolean)
           .some((valor) => String(valor).toLocaleLowerCase("pt-BR").includes(termo)),
       ),
-    [itens, termo],
+    [itensVisiveis, termo],
   );
   const catalogoFiltrado = useMemo(
     () =>
-      catalogo.filter((item) =>
+      catalogoVisivel.filter((item) =>
         [item.nome, item.codigo, item.descricao, TIPO_CATALOGO_LABEL[item.tipo]]
           .filter(Boolean)
           .some((valor) => String(valor).toLocaleLowerCase("pt-BR").includes(termo)),
       ),
-    [catalogo, termo],
+    [catalogoVisivel, termo],
   );
   const movimentosFiltrados = useMemo(
     () =>
@@ -509,6 +527,18 @@ export default function EstoquePage() {
     setModal("arquivamento");
   }
 
+  function abrirRestauracao(tipo: "item" | "catalogo", id: string, nome: string) {
+    setRegistroPendente({ tipo, id, nome });
+    setErro("");
+    setModal("restauracao");
+  }
+
+  function abrirExclusao(tipo: "item" | "catalogo", id: string, nome: string) {
+    setRegistroPendente({ tipo, id, nome });
+    setErro("");
+    setModal("exclusao");
+  }
+
   const catalogoSelecionado = catalogo.find(
     (item) => item.id === catalogoSelecionadoId,
   );
@@ -542,6 +572,8 @@ export default function EstoquePage() {
     : modal === "localizacao" ? "Estrutura do estoque"
     : modal === "categoria" || modal === "marca" ? "Organização do catálogo"
     : modal === "arquivamento" ? "Confirmação de arquivamento"
+    : modal === "restauracao" ? "Recuperação de registro"
+    : modal === "exclusao" ? "Exclusão permanente"
     : "Movimentação";
   const modalTitulo = modal === "item" ? (itemForm.id ? "Editar item" : "Novo item")
     : modal === "catalogo" ? (catalogoForm.id ? "Editar produto ou serviço" : "Novo produto ou serviço")
@@ -551,6 +583,8 @@ export default function EstoquePage() {
     : modal === "categoria" ? "Nova categoria"
     : modal === "marca" ? "Nova marca"
     : modal === "arquivamento" ? `Arquivar ${arquivamento?.tipo === "catalogo" ? "produto ou serviço" : "item de estoque"}`
+    : modal === "restauracao" ? "Restaurar registro"
+    : modal === "exclusao" ? "Excluir definitivamente"
     : "Movimentar estoque";
 
   return (
@@ -666,6 +700,13 @@ export default function EstoquePage() {
               <Search size={18} />
               <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por nome, código ou tipo" />
             </label>
+            {aba === "estoque" || aba === "catalogo" ? (
+              <div className={styles.statusFilter} aria-label="Filtrar por situação">
+                <button className={filtroStatus === "ativos" ? styles.statusFilterActive : ""} onClick={() => setFiltroStatus("ativos")}>Ativos <span>{aba === "estoque" ? itens.length : catalogo.length}</span></button>
+                <button className={filtroStatus === "arquivados" ? styles.statusFilterActive : ""} onClick={() => setFiltroStatus("arquivados")}>Arquivados <span>{aba === "estoque" ? itensArquivados.length : catalogoArquivado.length}</span></button>
+                <button className={filtroStatus === "todos" ? styles.statusFilterActive : ""} onClick={() => setFiltroStatus("todos")}>Todos</button>
+              </div>
+            ) : null}
             {aba === "estoque" && podeGerenciar ? (
               <div className={styles.heroActions}>
                 <button className={styles.secondaryButton} onClick={() => setImportandoProdutos(true)}><FileSpreadsheet size={17} /> Importar planilha</button>
@@ -711,7 +752,7 @@ export default function EstoquePage() {
                   <span>Ações</span>
                 </div>
                 {itensFiltrados.map((item) => {
-                  const baixo = Number(item.saldo_disponivel) <= Number(item.estoque_minimo);
+                  const baixo = item.ativo && Number(item.saldo_disponivel) <= Number(item.estoque_minimo);
                   const categoria = categorias.find((registro) => registro.id === item.categoria_id)?.nome;
                   const marca = marcas.find((registro) => registro.id === item.marca_id)?.nome;
                   const saldoFisico = Number(item.saldo);
@@ -719,12 +760,13 @@ export default function EstoquePage() {
                   const referencia = Math.max(saldoFisico, Number(item.estoque_minimo), 1);
                   const percentualDisponivel = Math.max(0, Math.min(100, (saldoDisponivel / referencia) * 100));
                   return (
-                    <article className={`${styles.inventoryRow} ${baixo ? styles.lowCard : ""}`} key={item.id}>
+                    <article className={`${styles.inventoryRow} ${baixo ? styles.lowCard : ""} ${!item.ativo ? styles.archivedRow : ""}`} key={item.id}>
                       <div className={styles.productCell}>
                         <div className={styles.productIcon}><Boxes size={20} /></div>
                         <div className={styles.productMain}>
                           <div className={styles.productBadges}>
                             <span className={styles.typeBadge}>{TIPO_ITEM_LABEL[item.tipo]}</span>
+                            {!item.ativo ? <span className={styles.archivedBadge}>Arquivado</span> : null}
                             {baixo ? <span className={styles.lowBadge}><AlertTriangle size={12} /> Estoque baixo</span> : null}
                           </div>
                           <h3>{item.nome}</h3>
@@ -765,10 +807,12 @@ export default function EstoquePage() {
                       </div>
 
                       <div className={styles.rowActions}>
-                        {podeMovimentar ? <button className={styles.entryAction} aria-label={`Registrar entrada de ${item.nome}`} title="Registrar entrada" onClick={() => abrirMovimentacao(item, "entrada")}><ArrowDownToLine size={16} /><span>Entrada</span></button> : null}
-                        {podeMovimentar ? <button className={styles.exitAction} aria-label={`Registrar saída de ${item.nome}`} title="Registrar saída" onClick={() => abrirMovimentacao(item, "saida")}><ArrowUpFromLine size={16} /><span>Saída</span></button> : null}
-                        {podeGerenciar ? <button className={styles.iconButton} aria-label={`Editar ${item.nome}`} onClick={() => abrirEditarItem(item)}><Pencil size={16} /></button> : null}
-                        {podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => abrirArquivamento("item", item.id, item.nome)}><Archive size={16} /></button> : null}
+                        {item.ativo && podeMovimentar ? <button className={styles.entryAction} aria-label={`Registrar entrada de ${item.nome}`} title="Registrar entrada" onClick={() => abrirMovimentacao(item, "entrada")}><ArrowDownToLine size={16} /><span>Entrada</span></button> : null}
+                        {item.ativo && podeMovimentar ? <button className={styles.exitAction} aria-label={`Registrar saída de ${item.nome}`} title="Registrar saída" onClick={() => abrirMovimentacao(item, "saida")}><ArrowUpFromLine size={16} /><span>Saída</span></button> : null}
+                        {item.ativo && podeGerenciar ? <button className={styles.iconButton} aria-label={`Editar ${item.nome}`} onClick={() => abrirEditarItem(item)}><Pencil size={16} /></button> : null}
+                        {item.ativo && podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => abrirArquivamento("item", item.id, item.nome)}><Archive size={16} /></button> : null}
+                        {!item.ativo && podeGerenciar ? <button className={styles.restoreButton} onClick={() => abrirRestauracao("item", item.id, item.nome)}><RotateCcw size={16} /> Restaurar</button> : null}
+                        {!item.ativo && podeGerenciar && podeConfigurar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Excluir permanentemente ${item.nome}`} onClick={() => abrirExclusao("item", item.id, item.nome)}><Trash2 size={16} /></button> : null}
                       </div>
                     </article>
                   );
@@ -791,11 +835,11 @@ export default function EstoquePage() {
                 {catalogoFiltrado.map((item) => {
                   const itemEstoque = itens.find((estoqueItem) => estoqueItem.id === item.estoque_item_id);
                   return (
-                    <article className={styles.catalogCard} key={item.id}>
+                    <article className={`${styles.catalogCard} ${!item.ativo ? styles.archivedRow : ""}`} key={item.id}>
                       <div className={styles.catalogIcon}>{item.tipo === "produto" ? <ShoppingBag size={22} /> : <Wrench size={22} />}</div>
                       <div className={styles.catalogMain}>
                         <div className={styles.catalogHeading}>
-                          <div><span className={styles.typeBadge}>{TIPO_CATALOGO_LABEL[item.tipo]}</span><h3>{item.nome}</h3><p>{item.descricao || item.codigo || "Sem descrição"}</p></div>
+                          <div><span className={styles.typeBadge}>{TIPO_CATALOGO_LABEL[item.tipo]}</span>{!item.ativo ? <span className={styles.archivedBadge}>Arquivado</span> : null}<h3>{item.nome}</h3><p>{item.descricao || item.codigo || "Sem descrição"}</p></div>
                           <strong>{moeda(item.preco)}</strong>
                         </div>
                         <div className={styles.compositionLine}>
@@ -810,9 +854,11 @@ export default function EstoquePage() {
                         </div>
                       </div>
                       <div className={styles.catalogActions}>
-                        {podeMovimentar ? <button className={styles.primaryButton} onClick={() => abrirBaixa(item)}>Registrar {item.tipo === "produto" ? "venda" : "execução"}<ChevronRight size={16} /></button> : null}
-                        {podeGerenciar ? <button className={styles.iconButton} aria-label={`Editar ${item.nome}`} onClick={() => abrirEditarCatalogo(item)}><Pencil size={16} /></button> : null}
-                        {podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => abrirArquivamento("catalogo", item.id, item.nome)}><Archive size={16} /></button> : null}
+                        {item.ativo && podeMovimentar ? <button className={styles.primaryButton} onClick={() => abrirBaixa(item)}>Registrar {item.tipo === "produto" ? "venda" : "execução"}<ChevronRight size={16} /></button> : null}
+                        {item.ativo && podeGerenciar ? <button className={styles.iconButton} aria-label={`Editar ${item.nome}`} onClick={() => abrirEditarCatalogo(item)}><Pencil size={16} /></button> : null}
+                        {item.ativo && podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => abrirArquivamento("catalogo", item.id, item.nome)}><Archive size={16} /></button> : null}
+                        {!item.ativo && podeGerenciar ? <button className={styles.restoreButton} onClick={() => abrirRestauracao("catalogo", item.id, item.nome)}><RotateCcw size={16} /> Restaurar</button> : null}
+                        {!item.ativo && podeGerenciar && podeConfigurar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Excluir permanentemente ${item.nome}`} onClick={() => abrirExclusao("catalogo", item.id, item.nome)}><Trash2 size={16} /></button> : null}
                       </div>
                     </article>
                   );
@@ -1007,6 +1053,25 @@ export default function EstoquePage() {
               </div>
             ) : null}
 
+            {modal === "restauracao" && registroPendente ? (
+              <div className={styles.modalBody}>
+                <div className={styles.restoreConfirmation}>
+                  <span><RotateCcw size={24} /></span>
+                  <div><strong>Restaurar “{registroPendente.nome}”?</strong><p>O registro voltará imediatamente às listas ativas e poderá ser utilizado novamente.</p></div>
+                </div>
+              </div>
+            ) : null}
+
+            {modal === "exclusao" && registroPendente ? (
+              <div className={styles.modalBody}>
+                <div className={styles.deleteConfirmation}>
+                  <span><Trash2 size={24} /></span>
+                  <div><strong>Excluir “{registroPendente.nome}” definitivamente?</strong><p>Esta ação é irreversível e só será concluída se o registro não tiver histórico, saldo ou vínculo com outra funcionalidade.</p></div>
+                </div>
+                <div className={styles.infoBox}>Se qualquer dependência for encontrada, o sistema bloqueará a exclusão e preservará o registro.</div>
+              </div>
+            ) : null}
+
             {erro ? <div className={`${styles.error} ${styles.modalError}`}><AlertTriangle size={17} />{erro}</div> : null}
 
             <footer className={styles.modalFooter}>
@@ -1020,6 +1085,8 @@ export default function EstoquePage() {
               {modal === "categoria" ? <button className={styles.primaryButton} disabled={salvando || !cadastroNome.trim()} onClick={() => void enviar({ acao: "salvar_categoria", nome: cadastroNome })}>{salvando ? "Salvando..." : "Salvar categoria"}</button> : null}
               {modal === "marca" ? <button className={styles.primaryButton} disabled={salvando || !cadastroNome.trim()} onClick={() => void enviar({ acao: "salvar_marca", nome: cadastroNome })}>{salvando ? "Salvando..." : "Salvar marca"}</button> : null}
               {modal === "arquivamento" && arquivamento ? <button className={styles.dangerButton} disabled={salvando} onClick={() => void enviar({ acao: arquivamento.tipo === "item" ? "arquivar_item" : "arquivar_catalogo", id: arquivamento.id })}><Archive size={17} />{salvando ? "Arquivando..." : "Confirmar arquivamento"}</button> : null}
+              {modal === "restauracao" && registroPendente ? <button className={styles.primaryButton} disabled={salvando} onClick={() => void enviar({ acao: registroPendente.tipo === "item" ? "restaurar_item" : "restaurar_catalogo", id: registroPendente.id })}><RotateCcw size={17} />{salvando ? "Restaurando..." : "Restaurar"}</button> : null}
+              {modal === "exclusao" && registroPendente ? <button className={styles.dangerButton} disabled={salvando} onClick={() => void enviar({ acao: registroPendente.tipo === "item" ? "excluir_item" : "excluir_catalogo", id: registroPendente.id })}><Trash2 size={17} />{salvando ? "Excluindo..." : "Excluir definitivamente"}</button> : null}
             </footer>
           </section>
         </div>

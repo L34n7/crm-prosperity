@@ -8,9 +8,13 @@ const supabase = getSupabaseAdmin();
 type AcaoEstoque =
   | "salvar_item"
   | "arquivar_item"
+  | "restaurar_item"
+  | "excluir_item"
   | "movimentar"
   | "salvar_catalogo"
   | "arquivar_catalogo"
+  | "restaurar_catalogo"
+  | "excluir_catalogo"
   | "registrar_baixa"
   | "salvar_deposito"
   | "salvar_lote"
@@ -61,6 +65,24 @@ function mensagemBanco(error: { message?: string } | null | undefined) {
   return message;
 }
 
+async function localizarVinculos(
+  empresaId: string,
+  id: string,
+  referencias: Array<{ tabela: string; coluna: string; rotulo: string }>,
+) {
+  const resultados = await Promise.all(referencias.map(async (referencia) => {
+    const { count, error } = await supabase
+      .from(referencia.tabela)
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq(referencia.coluna, id);
+    if (error) throw error;
+    return { ...referencia, quantidade: count ?? 0 };
+  }));
+
+  return resultados.filter((resultado) => resultado.quantidade > 0);
+}
+
 async function contextoComEmpresa() {
   const resultado = await getUsuarioContexto();
 
@@ -102,13 +124,11 @@ export async function GET(request: Request) {
         .from("estoque_itens")
         .select("*")
         .eq("empresa_id", contexto.empresaId)
-        .eq("ativo", true)
         .order("nome", { ascending: true }),
       supabase
         .from("catalogo_servicos")
         .select("*")
         .eq("empresa_id", contexto.empresaId)
-        .eq("ativo", true)
         .order("nome", { ascending: true }),
       supabase
         .from("catalogo_servico_insumos")
@@ -160,7 +180,7 @@ export async function GET(request: Request) {
   }
 
   const saldos = saldosResultado.data ?? [];
-  const itens = (itensResultado.data ?? []).map((item) => {
+  const todosItens = (itensResultado.data ?? []).map((item) => {
     const posicoes = saldos.filter((saldo) => saldo.estoque_item_id === item.id);
     return {
       ...item,
@@ -172,14 +192,18 @@ export async function GET(request: Request) {
       ),
     };
   });
-  const catalogo = (catalogoResultado.data ?? []).map((item) => ({
+  const todoCatalogo = (catalogoResultado.data ?? []).map((item) => ({
     ...item,
     composicao: (composicaoResultado.data ?? []).filter(
       (componente) => componente.catalogo_servico_id === item.id,
     ),
   }));
-  const itensPorId = new Map(itens.map((item) => [item.id, item]));
-  const catalogoPorId = new Map(catalogo.map((item) => [item.id, item]));
+  const itens = todosItens.filter((item) => item.ativo);
+  const itensArquivados = todosItens.filter((item) => !item.ativo);
+  const catalogo = todoCatalogo.filter((item) => item.ativo);
+  const catalogoArquivado = todoCatalogo.filter((item) => !item.ativo);
+  const itensPorId = new Map(todosItens.map((item) => [item.id, item]));
+  const catalogoPorId = new Map(todoCatalogo.map((item) => [item.id, item]));
   const movimentacoes = (movimentosResultado.data ?? []).map((movimento) => ({
     ...movimento,
     item: itensPorId.get(movimento.estoque_item_id) ?? null,
@@ -206,7 +230,9 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     itens,
+    itens_arquivados: itensArquivados,
     catalogo,
+    catalogo_arquivado: catalogoArquivado,
     movimentacoes,
     depositos: depositosResultado.data ?? [],
     saldos,
@@ -245,8 +271,12 @@ export async function POST(request: Request) {
   const exigeGerenciamento = [
     "salvar_item",
     "arquivar_item",
+    "restaurar_item",
+    "excluir_item",
     "salvar_catalogo",
     "arquivar_catalogo",
+    "restaurar_catalogo",
+    "excluir_catalogo",
     "salvar_deposito",
     "salvar_lote",
     "salvar_configuracoes",
@@ -259,6 +289,10 @@ export async function POST(request: Request) {
 
   if (exigeGerenciamento && !can(contexto.usuario.permissoes, "estoque.gerenciar")) {
     return erro("Sem permissão para gerenciar o estoque.", 403);
+  }
+
+  if (["excluir_item", "excluir_catalogo"].includes(acao) && !can(contexto.usuario.permissoes, "estoque.configurar")) {
+    return erro("Sem permissão para excluir registros permanentemente.", 403);
   }
 
   if (exigeMovimentacao && !can(contexto.usuario.permissoes, "estoque.movimentar")) {
@@ -442,6 +476,71 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, message: "Item arquivado." });
     }
 
+    if (acao === "restaurar_item") {
+      const id = texto(body.id);
+      if (!id) return erro("Item não informado.");
+
+      const { data, error } = await supabase
+        .from("estoque_itens")
+        .update({ ativo: true, updated_by: contexto.usuario.id })
+        .eq("id", id)
+        .eq("empresa_id", contexto.empresaId)
+        .eq("ativo", false)
+        .select("id")
+        .maybeSingle();
+
+      if (error) return erro(mensagemBanco(error));
+      if (!data) return erro("Item arquivado não encontrado.", 404);
+      return NextResponse.json({ ok: true, message: "Item restaurado com sucesso." });
+    }
+
+    if (acao === "excluir_item") {
+      const id = texto(body.id);
+      if (!id) return erro("Item não informado.");
+
+      const { data: item, error: itemError } = await supabase
+        .from("estoque_itens")
+        .select("id, ativo, saldo")
+        .eq("id", id)
+        .eq("empresa_id", contexto.empresaId)
+        .maybeSingle();
+      if (itemError) return erro(mensagemBanco(itemError));
+      if (!item) return erro("Item não encontrado.", 404);
+      if (item.ativo) return erro("Arquive o item antes de excluí-lo permanentemente.", 409);
+      if (Number(item.saldo ?? 0) !== 0) return erro("Não é possível excluir um item com saldo registrado.", 409);
+
+      const vinculos = await localizarVinculos(contexto.empresaId, id, [
+        { tabela: "catalogo_servicos", coluna: "estoque_item_id", rotulo: "catálogo" },
+        { tabela: "catalogo_servico_insumos", coluna: "estoque_item_id", rotulo: "composição de serviços" },
+        { tabela: "estoque_movimentacoes", coluna: "estoque_item_id", rotulo: "movimentações" },
+        { tabela: "estoque_lotes", coluna: "estoque_item_id", rotulo: "lotes" },
+        { tabela: "estoque_saldos", coluna: "estoque_item_id", rotulo: "posições de saldo" },
+        { tabela: "estoque_documento_itens", coluna: "estoque_item_id", rotulo: "documentos de estoque" },
+        { tabela: "estoque_reservas", coluna: "estoque_item_id", rotulo: "reservas" },
+        { tabela: "estoque_custos_historico", coluna: "estoque_item_id", rotulo: "histórico de custos" },
+        { tabela: "estoque_consumos_clinicos", coluna: "estoque_item_id", rotulo: "consumos clínicos" },
+        { tabela: "estoque_inventario_itens", coluna: "estoque_item_id", rotulo: "inventários" },
+        { tabela: "comercial_documento_itens", coluna: "estoque_item_id", rotulo: "documentos comerciais" },
+        { tabela: "comercial_fornecedor_itens", coluna: "estoque_item_id", rotulo: "fornecedores" },
+        { tabela: "comercial_recebimento_compra_itens", coluna: "estoque_item_id", rotulo: "recebimentos de compra" },
+      ]);
+      if (vinculos.length) {
+        return erro(`Este item possui vínculos com ${vinculos.map((vinculo) => vinculo.rotulo).join(", ")} e não pode ser excluído.`, 409);
+      }
+
+      const { data, error } = await supabase
+        .from("estoque_itens")
+        .delete()
+        .eq("id", id)
+        .eq("empresa_id", contexto.empresaId)
+        .eq("ativo", false)
+        .select("id")
+        .maybeSingle();
+      if (error) return erro("O item ganhou um vínculo durante a exclusão e foi preservado.", 409);
+      if (!data) return erro("Item arquivado não encontrado.", 404);
+      return NextResponse.json({ ok: true, message: "Item excluído permanentemente." });
+    }
+
     if (acao === "salvar_catalogo") {
       const id = texto(body.id);
       const nome = texto(body.nome);
@@ -563,6 +662,59 @@ export async function POST(request: Request) {
       if (error) return erro(mensagemBanco(error));
       if (!data) return erro("Item do catálogo não encontrado.", 404);
       return NextResponse.json({ ok: true, message: "Item do catálogo arquivado." });
+    }
+
+    if (acao === "restaurar_catalogo") {
+      const id = texto(body.id);
+      if (!id) return erro("Item do catálogo não informado.");
+
+      const { data, error } = await supabase
+        .from("catalogo_servicos")
+        .update({ ativo: true, updated_by: contexto.usuario.id })
+        .eq("id", id)
+        .eq("empresa_id", contexto.empresaId)
+        .eq("ativo", false)
+        .select("id")
+        .maybeSingle();
+      if (error) return erro(mensagemBanco(error));
+      if (!data) return erro("Item arquivado do catálogo não encontrado.", 404);
+      return NextResponse.json({ ok: true, message: "Item do catálogo restaurado com sucesso." });
+    }
+
+    if (acao === "excluir_catalogo") {
+      const id = texto(body.id);
+      if (!id) return erro("Item do catálogo não informado.");
+
+      const { data: item, error: itemError } = await supabase
+        .from("catalogo_servicos")
+        .select("id, ativo")
+        .eq("id", id)
+        .eq("empresa_id", contexto.empresaId)
+        .maybeSingle();
+      if (itemError) return erro(mensagemBanco(itemError));
+      if (!item) return erro("Item do catálogo não encontrado.", 404);
+      if (item.ativo) return erro("Arquive o item do catálogo antes de excluí-lo permanentemente.", 409);
+
+      const vinculos = await localizarVinculos(contexto.empresaId, id, [
+        { tabela: "agenda_catalogo_itens", coluna: "catalogo_servico_id", rotulo: "agendamentos" },
+        { tabela: "comercial_documento_itens", coluna: "catalogo_servico_id", rotulo: "documentos comerciais" },
+        { tabela: "estoque_movimentacoes", coluna: "catalogo_servico_id", rotulo: "movimentações" },
+      ]);
+      if (vinculos.length) {
+        return erro(`Este item possui vínculos com ${vinculos.map((vinculo) => vinculo.rotulo).join(", ")} e não pode ser excluído.`, 409);
+      }
+
+      const { data, error } = await supabase
+        .from("catalogo_servicos")
+        .delete()
+        .eq("id", id)
+        .eq("empresa_id", contexto.empresaId)
+        .eq("ativo", false)
+        .select("id")
+        .maybeSingle();
+      if (error) return erro("O item ganhou um vínculo durante a exclusão e foi preservado.", 409);
+      if (!data) return erro("Item arquivado do catálogo não encontrado.", 404);
+      return NextResponse.json({ ok: true, message: "Item do catálogo excluído permanentemente." });
     }
 
     if (acao === "registrar_baixa") {
