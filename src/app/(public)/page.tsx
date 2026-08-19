@@ -237,7 +237,7 @@ const PLANS = [
       "Para começar com atendimento automatizado, organização profissional e IA integrada.",
     features: [
       "2 usuários inclusos",
-      "1 milhão de tokens de IA",
+      "150 mil tokens de IA",
       "API Oficial do WhatsApp inclusa",
       "Atendimento automatizado com IA",
       "Disparos e relatórios operacionais",
@@ -253,7 +253,7 @@ const PLANS = [
       "Para equipes que precisam de mais capacidade, automação e Inteligência Artificial.",
     features: [
       "6 usuários inclusos",
-      "5 milhões de tokens de IA",
+      "400 mil tokens de IA",
       "API Oficial do WhatsApp inclusa",
       "IA treinável e automações avançadas",
       "Segmentação e relatórios completos",
