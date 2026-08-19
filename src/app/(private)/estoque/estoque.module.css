@@ -1,10 +1,10 @@
 .page {
-  width: min(1320px, calc(100% - 40px));
+  width: min(1440px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 20px 0 48px;
+  padding: 16px 0 48px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .hero,
@@ -19,8 +19,8 @@
 }
 
 .hero {
-  border-radius: 24px;
-  padding: 24px;
+  border-radius: 20px;
+  padding: 20px 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -41,7 +41,7 @@
 
 .hero h1 {
   color: var(--crm-text-strong);
-  font-size: clamp(22px, 3vw, 30px);
+  font-size: clamp(21px, 2.3vw, 27px);
   letter-spacing: -0.025em;
 }
 
@@ -145,13 +145,13 @@
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .metricCard {
-  border-radius: 19px;
-  min-height: 104px;
-  padding: 18px;
+  border-radius: 16px;
+  min-height: 82px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -169,9 +169,9 @@
 }
 
 .metricIcon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
 }
 
 .metricCard div {
@@ -184,7 +184,7 @@
 .metricCard strong {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 21px;
+  font-size: 18px;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -216,43 +216,160 @@
 }
 
 .workspace {
-  border-radius: 24px;
-  overflow: hidden;
+  min-height: 560px;
+  border-radius: 22px;
+  display: grid;
+  grid-template-columns: 238px minmax(0, 1fr);
+  overflow: clip;
 }
 
-.tabs {
-  padding: 10px 18px 0;
+.moduleSidebar {
+  padding: 18px 14px;
+  border-right: 1px solid var(--crm-border);
+  background: linear-gradient(180deg, var(--crm-surface-soft), var(--crm-surface));
+}
+
+.sidebarBrand {
+  min-height: 56px;
+  padding: 0 8px 15px;
   display: flex;
-  gap: 5px;
+  align-items: center;
+  gap: 11px;
   border-bottom: 1px solid var(--crm-border);
-  overflow-x: auto;
-  scrollbar-width: thin;
 }
 
-.tabs button {
-  min-height: 48px;
-  padding: 0 15px;
-  border: 0;
-  border-bottom: 2px solid transparent;
+.sidebarBrand > span {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.sidebarBrand div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebarBrand strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.sidebarBrand small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.sidebarNav {
+  padding-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+}
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.navGroupLabel {
+  padding: 0 10px 6px;
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.navGroup button {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   background: transparent;
   color: var(--crm-text-muted);
   font: inherit;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 750;
+  text-align: left;
   cursor: pointer;
+  transition: 0.18s ease;
 }
 
-.tabs button:hover,
-.tabs .tabActive {
-  border-bottom-color: var(--crm-primary);
+.navGroup button svg {
+  flex: 0 0 auto;
+}
+
+.navGroup button:hover {
+  background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
 }
 
+.navGroup .navActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  box-shadow: inset 3px 0 0 var(--crm-primary);
+}
+
+.workspaceMain {
+  min-width: 0;
+  background: var(--crm-surface);
+}
+
+.mobileSectionPicker {
+  display: none;
+}
+
+.contentHeader {
+  min-height: 96px;
+  padding: 20px 22px 17px;
+  border-bottom: 1px solid var(--crm-border);
+  background:
+    radial-gradient(circle at 92% 0%, var(--crm-primary-soft), transparent 27%),
+    var(--crm-surface);
+}
+
+.contentEyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--crm-primary-text);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.contentHeader h2,
+.contentHeader p {
+  margin: 0;
+}
+
+.contentHeader h2 {
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.contentHeader p {
+  margin-top: 5px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
 .toolbar {
-  padding: 17px 18px;
+  padding: 13px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -294,17 +411,18 @@
 .inventoryGrid {
   padding: 18px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
 .inventoryCard {
   min-width: 0;
-  border-radius: 19px;
-  padding: 17px;
+  border-radius: 18px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .inventoryCard:hover,
@@ -312,11 +430,17 @@
   border-color: var(--crm-primary-border);
 }
 
+.inventoryCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--crm-shadow-sm);
+}
+
 .lowCard {
   border-color: var(--crm-warning-border);
 }
 
 .cardTop,
+.productHeading,
 .catalogHeading,
 .sectionHeading {
   display: flex;
@@ -359,8 +483,50 @@
 
 .itemTitle {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
+  min-width: 0;
+}
+
+.productHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.productBadges {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.productCode {
+  max-width: 125px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.productCode span {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.productCode strong {
+  max-width: 125px;
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .productIcon,
@@ -384,6 +550,10 @@
   white-space: nowrap;
 }
 
+.inventoryCard h3 {
+  font-size: 16px;
+}
+
 .itemTitle p,
 .catalogHeading p,
 .sectionHeading p {
@@ -392,45 +562,128 @@
   font-size: 12px;
 }
 
-.stockLine {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.itemTitle p {
+  overflow: hidden;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.stockLine div,
-.costLine {
+.stockPanel {
+  padding: 14px;
   border: 1px solid var(--crm-border);
-  border-radius: 12px;
-  padding: 10px;
-  background: var(--crm-surface-soft);
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(170px, 0.75fr);
+  gap: 14px;
+  background: linear-gradient(135deg, var(--crm-surface-soft), var(--crm-surface));
 }
 
-.stockLine div {
+.availableStock {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
-.stockLine span,
-.costLine span {
+.availableStock > span,
+.stockBreakdown span,
+.productMeta span {
   color: var(--crm-text-muted);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
-.stockLine strong,
-.costLine strong {
+.availableStock > strong {
   color: var(--crm-text-strong);
-  font-size: 14px;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
 }
 
-.costLine {
+.availableStock small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.stockBreakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.stockBreakdown div {
+  padding: 9px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--crm-surface);
+}
+
+.stockBreakdown strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.stockProgress {
+  height: 4px;
+  border-radius: 999px;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  background: var(--crm-surface-muted);
+}
+
+.stockProgress span {
+  height: 100%;
+  min-width: 3px;
+  border-radius: inherit;
+  display: block;
+  background: var(--crm-primary);
+}
+
+.lowCard .stockProgress span {
+  background: var(--crm-warning-text);
+}
+
+.productMeta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.productMeta div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.productMeta strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controlTags {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.controlTags span {
+  padding: 4px 7px;
+  border: 1px solid var(--crm-border);
+  border-radius: 7px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  font-weight: 800;
 }
 
 .cardActions {
@@ -709,6 +962,47 @@
   text-align: center;
 }
 
+.emptyState {
+  min-height: 340px;
+  padding: 48px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 58px;
+  height: 58px;
+  margin-bottom: 16px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.emptyState h3,
+.emptyState p {
+  margin: 0;
+}
+
+.emptyState h3 {
+  color: var(--crm-text-strong);
+  font-size: 17px;
+}
+
+.emptyState p {
+  max-width: 430px;
+  margin: 7px 0 18px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .modalOverlay {
   position: fixed;
   inset: 0;
@@ -901,6 +1195,52 @@
   }
 }
 
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .moduleSidebar {
+    display: none;
+  }
+
+  .mobileSectionPicker {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-bottom: 1px solid var(--crm-border);
+    background: var(--crm-surface-soft);
+  }
+
+  .mobileSectionPicker span {
+    color: var(--crm-text-muted);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .mobileSectionPicker select {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--crm-border-strong);
+    border-radius: 12px;
+    padding: 0 12px;
+    outline: none;
+    background: var(--crm-surface-input);
+    color: var(--crm-text-strong);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .mobileSectionPicker select:focus {
+    border-color: var(--crm-primary);
+    box-shadow: var(--crm-focus-ring);
+  }
+}
+
 @media (max-width: 720px) {
   .page {
     width: min(100% - 22px, 1320px);
@@ -925,7 +1265,6 @@
     width: 100%;
   }
 
-  .metrics,
   .inventoryGrid,
   .formGrid,
   .managementGrid,
@@ -934,16 +1273,7 @@
   }
 
   .metricCard {
-    min-height: 88px;
-  }
-
-  .tabs {
-    padding: 7px 10px 0;
-    overflow-x: auto;
-  }
-
-  .tabs button {
-    padding: 0 10px;
+    min-height: 76px;
   }
 
   .toolbar {
@@ -958,6 +1288,37 @@
   .inventoryGrid,
   .catalogList {
     padding: 12px;
+  }
+
+  .contentHeader {
+    min-height: auto;
+    padding: 17px 16px;
+  }
+
+  .contentHeader h2 {
+    font-size: 18px;
+  }
+
+  .productHeading {
+    flex-direction: column;
+  }
+
+  .productCode {
+    max-width: none;
+    padding-left: 55px;
+    align-items: flex-start;
+  }
+
+  .stockPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .stockProgress {
+    grid-column: auto;
+  }
+
+  .productMeta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .catalogCard {
@@ -1016,7 +1377,26 @@
 
 @media (max-width: 440px) {
   .metrics {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metricCard {
+    padding: 12px;
+    gap: 9px;
+  }
+
+  .metricIcon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .metricCard strong {
+    font-size: 15px;
+  }
+
+  .metricCard span:last-child {
+    font-size: 10px;
   }
 
   .cardActions {

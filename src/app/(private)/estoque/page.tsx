@@ -210,6 +210,21 @@ const TIPO_MOVIMENTO_LABEL: Record<Movimentacao["tipo"], string> = {
   execucao: "Execução",
 };
 
+const ABA_INFO: Record<Aba, { titulo: string; descricao: string }> = {
+  estoque: { titulo: "Itens em estoque", descricao: "Saldos, disponibilidade e custos dos produtos e insumos." },
+  catalogo: { titulo: "Produtos e serviços", descricao: "Itens comerciais e regras de baixa automática no estoque." },
+  compras: { titulo: "Compras e fornecedores", descricao: "Pedidos, documentos fiscais, recebimentos e parceiros." },
+  movimentacoes: { titulo: "Histórico de movimentações", descricao: "Rastreabilidade completa de entradas, saídas e ajustes." },
+  depositos: { titulo: "Depósitos", descricao: "Estrutura física e regras de saldo por unidade de armazenagem." },
+  localizacoes: { titulo: "Localizações", descricao: "Endereçamento interno dos produtos dentro dos depósitos." },
+  lotes: { titulo: "Lotes e validade", descricao: "Controle de rastreabilidade, fabricação e vencimentos." },
+  reservas: { titulo: "Reservas", descricao: "Quantidades comprometidas antes do consumo ou da venda." },
+  inventarios: { titulo: "Inventários", descricao: "Contagens físicas, divergências e ajustes aprovados." },
+  clinico: { titulo: "Histórico clínico", descricao: "Consumos vinculados a atendimentos e procedimentos." },
+  cadastros: { titulo: "Categorias e marcas", descricao: "Classificações que mantêm o catálogo organizado." },
+  configuracoes: { titulo: "Configurações", descricao: "Políticas de custo, validade, ajustes e estoque negativo." },
+};
+
 function moeda(valor: number | string | null | undefined) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -528,20 +543,15 @@ export default function EstoquePage() {
         <section className={styles.hero}>
           <div>
             <span className={styles.eyebrow}>Operação integrada</span>
-            <h1>Visão geral do estoque</h1>
+            <h1>Gestão de estoque</h1>
             <p>
-              Acompanhe saldos, custos e baixas automáticas em uma única operação.
+              Controle compras, saldos e consumo em um fluxo simples e rastreável.
             </p>
           </div>
           <div className={styles.heroActions}>
             {podeMovimentar ? (
               <button className={styles.secondaryButton} onClick={() => abrirMovimentacao()}>
                 <ArrowDownToLine size={17} /> Movimentar
-              </button>
-            ) : null}
-            {podeGerenciar ? (
-              <button className={styles.primaryButton} onClick={abrirNovoItem}>
-                <PackagePlus size={17} /> Novo item
               </button>
             ) : null}
           </div>
@@ -569,28 +579,65 @@ export default function EstoquePage() {
         {erro ? <div className={styles.error}><AlertTriangle size={18} />{erro}</div> : null}
 
         <section className={styles.workspace}>
-          <div className={styles.tabs} role="tablist" aria-label="Áreas do estoque">
-            <button className={aba === "estoque" ? styles.tabActive : ""} onClick={() => setAba("estoque")}>
-              <Boxes size={17} /> Estoque
-            </button>
-            <button className={aba === "catalogo" ? styles.tabActive : ""} onClick={() => setAba("catalogo")}>
-              <ShoppingBag size={17} /> Produtos e serviços
-            </button>
-            {permissoes.includes("compras.visualizar") ? <button className={aba === "compras" ? styles.tabActive : ""} onClick={() => setAba("compras")}>
-              <ShoppingCart size={17} /> Compras e fornecedores
-            </button> : null}
-            <button className={aba === "movimentacoes" ? styles.tabActive : ""} onClick={() => setAba("movimentacoes")}>
-              <History size={17} /> Histórico
-            </button>
-            <button className={aba === "depositos" ? styles.tabActive : ""} onClick={() => setAba("depositos")}><Warehouse size={17} /> Depósitos</button>
-            <button className={aba === "localizacoes" ? styles.tabActive : ""} onClick={() => setAba("localizacoes")}><MapPin size={17} /> Localizações</button>
-            <button className={aba === "lotes" ? styles.tabActive : ""} onClick={() => setAba("lotes")}><Tags size={17} /> Lotes e validade</button>
-            <button className={aba === "reservas" ? styles.tabActive : ""} onClick={() => setAba("reservas")}><ShieldCheck size={17} /> Reservas</button>
-            <button className={aba === "inventarios" ? styles.tabActive : ""} onClick={() => setAba("inventarios")}><ClipboardCheck size={17} /> Inventários</button>
-            <button className={aba === "clinico" ? styles.tabActive : ""} onClick={() => setAba("clinico")}><Stethoscope size={17} /> Histórico clínico</button>
-            <button className={aba === "cadastros" ? styles.tabActive : ""} onClick={() => setAba("cadastros")}><Layers3 size={17} /> Categorias e marcas</button>
-            <button className={aba === "configuracoes" ? styles.tabActive : ""} onClick={() => setAba("configuracoes")}><Settings size={17} /> Configurações</button>
-          </div>
+          <aside className={styles.moduleSidebar} aria-label="Navegação do estoque">
+            <div className={styles.sidebarBrand}>
+              <span><PackagePlus size={18} /></span>
+              <div><strong>Estoque</strong><small>Central de operação</small></div>
+            </div>
+
+            <nav className={styles.sidebarNav}>
+              <div className={styles.navGroup}>
+                <span className={styles.navGroupLabel}>Operação</span>
+                <button className={aba === "estoque" ? styles.navActive : ""} onClick={() => setAba("estoque")}><Boxes size={17} /><span>Itens em estoque</span></button>
+                <button className={aba === "movimentacoes" ? styles.navActive : ""} onClick={() => setAba("movimentacoes")}><History size={17} /><span>Movimentações</span></button>
+                <button className={aba === "reservas" ? styles.navActive : ""} onClick={() => setAba("reservas")}><ShieldCheck size={17} /><span>Reservas</span></button>
+                <button className={aba === "inventarios" ? styles.navActive : ""} onClick={() => setAba("inventarios")}><ClipboardCheck size={17} /><span>Inventários</span></button>
+                <button className={aba === "clinico" ? styles.navActive : ""} onClick={() => setAba("clinico")}><Stethoscope size={17} /><span>Consumo clínico</span></button>
+              </div>
+
+              {permissoes.includes("compras.visualizar") ? <div className={styles.navGroup}>
+                <span className={styles.navGroupLabel}>Compras</span>
+                <button className={aba === "compras" ? styles.navActive : ""} onClick={() => setAba("compras")}><ShoppingCart size={17} /><span>Compras e fornecedores</span></button>
+              </div> : null}
+
+              <div className={styles.navGroup}>
+                <span className={styles.navGroupLabel}>Estrutura</span>
+                <button className={aba === "catalogo" ? styles.navActive : ""} onClick={() => setAba("catalogo")}><ShoppingBag size={17} /><span>Produtos e serviços</span></button>
+                <button className={aba === "depositos" ? styles.navActive : ""} onClick={() => setAba("depositos")}><Warehouse size={17} /><span>Depósitos</span></button>
+                <button className={aba === "localizacoes" ? styles.navActive : ""} onClick={() => setAba("localizacoes")}><MapPin size={17} /><span>Localizações</span></button>
+                <button className={aba === "lotes" ? styles.navActive : ""} onClick={() => setAba("lotes")}><Tags size={17} /><span>Lotes e validade</span></button>
+              </div>
+
+              <div className={styles.navGroup}>
+                <span className={styles.navGroupLabel}>Administração</span>
+                <button className={aba === "cadastros" ? styles.navActive : ""} onClick={() => setAba("cadastros")}><Layers3 size={17} /><span>Categorias e marcas</span></button>
+                <button className={aba === "configuracoes" ? styles.navActive : ""} onClick={() => setAba("configuracoes")}><Settings size={17} /><span>Configurações</span></button>
+              </div>
+            </nav>
+          </aside>
+
+          <div className={styles.workspaceMain}>
+            <label className={styles.mobileSectionPicker}>
+              <span>Área do estoque</span>
+              <select value={aba} onChange={(event) => setAba(event.target.value as Aba)}>
+                <optgroup label="Operação">
+                  <option value="estoque">Itens em estoque</option><option value="movimentacoes">Movimentações</option><option value="reservas">Reservas</option><option value="inventarios">Inventários</option><option value="clinico">Consumo clínico</option>
+                </optgroup>
+                {permissoes.includes("compras.visualizar") ? <optgroup label="Compras"><option value="compras">Compras e fornecedores</option></optgroup> : null}
+                <optgroup label="Estrutura">
+                  <option value="catalogo">Produtos e serviços</option><option value="depositos">Depósitos</option><option value="localizacoes">Localizações</option><option value="lotes">Lotes e validade</option>
+                </optgroup>
+                <optgroup label="Administração"><option value="cadastros">Categorias e marcas</option><option value="configuracoes">Configurações</option></optgroup>
+              </select>
+            </label>
+
+            <header className={styles.contentHeader}>
+              <div>
+                <span className={styles.contentEyebrow}>Estoque / {ABA_INFO[aba].titulo}</span>
+                <h2>{ABA_INFO[aba].titulo}</h2>
+                <p>{ABA_INFO[aba].descricao}</p>
+              </div>
+            </header>
 
           {aba !== "compras" ? <div className={styles.toolbar}>
             <label className={styles.searchBox}>
@@ -635,21 +682,56 @@ export default function EstoquePage() {
               <div className={styles.inventoryGrid}>
                 {itensFiltrados.map((item) => {
                   const baixo = Number(item.saldo_disponivel) <= Number(item.estoque_minimo);
+                  const categoria = categorias.find((registro) => registro.id === item.categoria_id)?.nome;
+                  const marca = marcas.find((registro) => registro.id === item.marca_id)?.nome;
+                  const saldoFisico = Number(item.saldo);
+                  const saldoDisponivel = Number(item.saldo_disponivel);
+                  const referencia = Math.max(saldoFisico, Number(item.estoque_minimo), 1);
+                  const percentualDisponivel = Math.max(0, Math.min(100, (saldoDisponivel / referencia) * 100));
                   return (
                     <article className={`${styles.inventoryCard} ${baixo ? styles.lowCard : ""}`} key={item.id}>
-                      <div className={styles.cardTop}>
-                        <span className={styles.typeBadge}>{TIPO_ITEM_LABEL[item.tipo]}</span>
-                        {baixo ? <span className={styles.lowBadge}><AlertTriangle size={13} /> Estoque baixo</span> : null}
+                      <div className={styles.productHeading}>
+                        <div className={styles.itemTitle}>
+                          <div className={styles.productIcon}><Boxes size={22} /></div>
+                          <div>
+                            <div className={styles.productBadges}>
+                              <span className={styles.typeBadge}>{TIPO_ITEM_LABEL[item.tipo]}</span>
+                              {baixo ? <span className={styles.lowBadge}><AlertTriangle size={13} /> Estoque baixo</span> : null}
+                            </div>
+                            <h3>{item.nome}</h3>
+                            <p>{item.descricao || [marca, categoria].filter(Boolean).join(" · ") || "Sem descrição informada"}</p>
+                          </div>
+                        </div>
+                        <div className={styles.productCode}><span>Código</span><strong>{item.codigo || item.sku || "—"}</strong></div>
                       </div>
-                      <div className={styles.itemTitle}>
-                        <div className={styles.productIcon}><Boxes size={22} /></div>
-                        <div><h3>{item.nome}</h3><p>{item.codigo || "Sem código"}</p></div>
+
+                      <div className={styles.stockPanel}>
+                        <div className={styles.availableStock}>
+                          <span>Saldo disponível</span>
+                          <strong>{quantidade(item.saldo_disponivel, item.unidade)}</strong>
+                          <small>Mínimo recomendado: {quantidade(item.estoque_minimo, item.unidade)}</small>
+                        </div>
+                        <div className={styles.stockBreakdown}>
+                          <div><span>Físico</span><strong>{quantidade(item.saldo, item.unidade)}</strong></div>
+                          <div><span>Reservado</span><strong>{quantidade(item.saldo_reservado, item.unidade)}</strong></div>
+                        </div>
+                        <div className={styles.stockProgress} aria-label={`${Math.round(percentualDisponivel)}% da referência disponível`}>
+                          <span style={{ width: `${percentualDisponivel}%` }} />
+                        </div>
                       </div>
-                      <div className={styles.stockLine}>
-                        <div><span>Disponível</span><strong>{quantidade(item.saldo_disponivel, item.unidade)}</strong></div>
-                        <div><span>Físico / reservado</span><strong>{quantidade(item.saldo)} / {quantidade(item.saldo_reservado)}</strong></div>
+
+                      <div className={styles.productMeta}>
+                        <div><span>Custo unitário</span><strong>{moeda(item.custo_unitario)}</strong></div>
+                        <div><span>Preço de venda</span><strong>{item.preco_venda == null ? "Não informado" : moeda(item.preco_venda)}</strong></div>
+                        <div><span>Identificação</span><strong>{item.codigo_barras || item.sku || "Não informada"}</strong></div>
                       </div>
-                      <div className={styles.costLine}><span>Custo unitário</span><strong>{moeda(item.custo_unitario)}</strong></div>
+
+                      {item.controla_lote || item.controla_validade || item.controla_serie ? <div className={styles.controlTags}>
+                        {item.controla_lote ? <span>Lote</span> : null}
+                        {item.controla_validade ? <span>Validade</span> : null}
+                        {item.controla_serie ? <span>Número de série</span> : null}
+                      </div> : null}
+
                       <div className={styles.cardActions}>
                         {podeMovimentar ? <button onClick={() => abrirMovimentacao(item, "entrada")}><ArrowDownToLine size={15} /> Entrada</button> : null}
                         {podeMovimentar ? <button onClick={() => abrirMovimentacao(item, "saida")}><ArrowUpFromLine size={15} /> Saída</button> : null}
@@ -660,7 +742,15 @@ export default function EstoquePage() {
                   );
                 })}
               </div>
-            ) : <div className={styles.empty}>Nenhum item encontrado.</div>
+            ) : <div className={styles.emptyState}>
+              <span className={styles.emptyIcon}><Boxes size={26} /></span>
+              <h3>{busca ? "Nenhum item corresponde à busca" : "Seu estoque está pronto para começar"}</h3>
+              <p>{busca ? "Revise o termo pesquisado ou limpe a busca para visualizar todos os itens." : "Cadastre o primeiro produto ou importe sua planilha para montar o catálogo rapidamente."}</p>
+              {!busca && podeGerenciar ? <div className={styles.heroActions}>
+                <button className={styles.secondaryButton} onClick={() => setImportandoProdutos(true)}><FileSpreadsheet size={17} /> Importar planilha</button>
+                <button className={styles.primaryButton} onClick={abrirNovoItem}><Plus size={17} /> Novo item</button>
+              </div> : null}
+            </div>
           ) : null}
 
           {!carregando && aba === "catalogo" ? (
@@ -754,6 +844,7 @@ export default function EstoquePage() {
           ) : null}
 
           {!carregando && aba === "configuracoes" ? <div className={styles.settingsPanel}><div className={styles.sectionHeading}><div><h3>Regras da operação</h3><p>O saldo negativo continua bloqueado por padrão.</p></div></div><div className={styles.formGrid}><label className={styles.field}><span>Modo</span><select value={configuracoes.modo} onChange={(event) => setConfiguracoes((atual) => ({ ...atual, modo: event.target.value as Configuracoes["modo"] }))}><option value="simples">Simples</option><option value="avancado">Avançado</option></select></label><label className={styles.field}><span>Método de custo</span><select value={configuracoes.metodo_custo} onChange={(event) => setConfiguracoes((atual) => ({ ...atual, metodo_custo: event.target.value as Configuracoes["metodo_custo"] }))}><option value="medio">Custo médio</option><option value="fifo">FIFO</option></select></label><label className={`${styles.checkField} ${styles.fullField}`}><input type="checkbox" checked={configuracoes.bloquear_negativo} onChange={(event) => setConfiguracoes((atual) => ({ ...atual, bloquear_negativo: event.target.checked }))} /><span><strong>Bloquear estoque negativo</strong><small>Quando desativado, ainda será necessário liberar individualmente cada depósito.</small></span></label><label className={styles.field}><span>Dias para alerta de validade</span><input type="number" min="0" value={configuracoes.dias_alerta_validade} onChange={(event) => setConfiguracoes((atual) => ({ ...atual, dias_alerta_validade: Number(event.target.value) }))} /></label></div>{podeConfigurar ? <button className={styles.primaryButton} onClick={() => void enviar({ acao: "salvar_configuracoes", ...configuracoes })}>Salvar configurações</button> : null}</div> : null}
+          </div>
         </section>
       </main>
 
