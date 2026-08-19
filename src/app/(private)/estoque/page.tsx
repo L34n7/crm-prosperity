@@ -541,13 +541,33 @@ export default function EstoquePage() {
 
       <main className={styles.page}>
         <section className={styles.hero}>
-          <div>
+          <div className={styles.heroIntro}>
             <span className={styles.eyebrow}>Operação integrada</span>
             <h1>Gestão de estoque</h1>
             <p>
               Controle compras, saldos e consumo em um fluxo simples e rastreável.
             </p>
           </div>
+
+          <section className={styles.metrics} aria-label="Resumo do estoque">
+            <article className={styles.metricCard}>
+              <span className={styles.metricIcon}><Boxes size={18} /></span>
+              <div><strong>{resumo.itens_ativos}</strong><span>Itens ativos</span></div>
+            </article>
+            <article className={`${styles.metricCard} ${resumo.itens_estoque_baixo ? styles.metricWarning : ""}`}>
+              <span className={styles.metricIcon}><AlertTriangle size={18} /></span>
+              <div><strong>{resumo.itens_estoque_baixo}</strong><span>Estoque baixo</span></div>
+            </article>
+            <article className={styles.metricCard}>
+              <span className={styles.metricIcon}><CircleDollarSign size={18} /></span>
+              <div><strong>{moeda(resumo.valor_total)}</strong><span>Valor em estoque</span></div>
+            </article>
+            <article className={styles.metricCard}>
+              <span className={styles.metricIcon}><ClipboardList size={18} /></span>
+              <div><strong>{resumo.catalogo_ativo}</strong><span>No catálogo</span></div>
+            </article>
+          </section>
+
           <div className={styles.heroActions}>
             {podeMovimentar ? (
               <button className={styles.secondaryButton} onClick={() => abrirMovimentacao()}>
@@ -555,25 +575,6 @@ export default function EstoquePage() {
               </button>
             ) : null}
           </div>
-        </section>
-
-        <section className={styles.metrics}>
-          <article className={styles.metricCard}>
-            <span className={styles.metricIcon}><Boxes size={20} /></span>
-            <div><strong>{resumo.itens_ativos}</strong><span>Itens ativos</span></div>
-          </article>
-          <article className={`${styles.metricCard} ${resumo.itens_estoque_baixo ? styles.metricWarning : ""}`}>
-            <span className={styles.metricIcon}><AlertTriangle size={20} /></span>
-            <div><strong>{resumo.itens_estoque_baixo}</strong><span>Estoque baixo</span></div>
-          </article>
-          <article className={styles.metricCard}>
-            <span className={styles.metricIcon}><CircleDollarSign size={20} /></span>
-            <div><strong>{moeda(resumo.valor_total)}</strong><span>Valor em estoque</span></div>
-          </article>
-          <article className={styles.metricCard}>
-            <span className={styles.metricIcon}><ClipboardList size={20} /></span>
-            <div><strong>{resumo.catalogo_ativo}</strong><span>Itens no catálogo</span></div>
-          </article>
         </section>
 
         {erro ? <div className={styles.error}><AlertTriangle size={18} />{erro}</div> : null}
@@ -679,7 +680,15 @@ export default function EstoquePage() {
 
           {!carregando && aba === "estoque" ? (
             itensFiltrados.length ? (
-              <div className={styles.inventoryGrid}>
+              <div className={styles.inventoryList}>
+                <div className={styles.inventoryListHeader} aria-hidden="true">
+                  <span>Produto</span>
+                  <span>Identificação</span>
+                  <span>Disponível</span>
+                  <span>Físico / reservado</span>
+                  <span>Valores</span>
+                  <span>Ações</span>
+                </div>
                 {itensFiltrados.map((item) => {
                   const baixo = Number(item.saldo_disponivel) <= Number(item.estoque_minimo);
                   const categoria = categorias.find((registro) => registro.id === item.categoria_id)?.nome;
@@ -689,52 +698,54 @@ export default function EstoquePage() {
                   const referencia = Math.max(saldoFisico, Number(item.estoque_minimo), 1);
                   const percentualDisponivel = Math.max(0, Math.min(100, (saldoDisponivel / referencia) * 100));
                   return (
-                    <article className={`${styles.inventoryCard} ${baixo ? styles.lowCard : ""}`} key={item.id}>
-                      <div className={styles.productHeading}>
-                        <div className={styles.itemTitle}>
-                          <div className={styles.productIcon}><Boxes size={22} /></div>
-                          <div>
-                            <div className={styles.productBadges}>
-                              <span className={styles.typeBadge}>{TIPO_ITEM_LABEL[item.tipo]}</span>
-                              {baixo ? <span className={styles.lowBadge}><AlertTriangle size={13} /> Estoque baixo</span> : null}
-                            </div>
-                            <h3>{item.nome}</h3>
-                            <p>{item.descricao || [marca, categoria].filter(Boolean).join(" · ") || "Sem descrição informada"}</p>
+                    <article className={`${styles.inventoryRow} ${baixo ? styles.lowCard : ""}`} key={item.id}>
+                      <div className={styles.productCell}>
+                        <div className={styles.productIcon}><Boxes size={20} /></div>
+                        <div className={styles.productMain}>
+                          <div className={styles.productBadges}>
+                            <span className={styles.typeBadge}>{TIPO_ITEM_LABEL[item.tipo]}</span>
+                            {baixo ? <span className={styles.lowBadge}><AlertTriangle size={12} /> Estoque baixo</span> : null}
                           </div>
+                          <h3>{item.nome}</h3>
+                          <p>{item.descricao || [marca, categoria].filter(Boolean).join(" · ") || "Sem descrição informada"}</p>
+                          {item.controla_lote || item.controla_validade || item.controla_serie ? <div className={styles.controlTags}>
+                            {item.controla_lote ? <span>Lote</span> : null}
+                            {item.controla_validade ? <span>Validade</span> : null}
+                            {item.controla_serie ? <span>Série</span> : null}
+                          </div> : null}
                         </div>
-                        <div className={styles.productCode}><span>Código</span><strong>{item.codigo || item.sku || "—"}</strong></div>
                       </div>
 
-                      <div className={styles.stockPanel}>
-                        <div className={styles.availableStock}>
-                          <span>Saldo disponível</span>
-                          <strong>{quantidade(item.saldo_disponivel, item.unidade)}</strong>
-                          <small>Mínimo recomendado: {quantidade(item.estoque_minimo, item.unidade)}</small>
-                        </div>
-                        <div className={styles.stockBreakdown}>
-                          <div><span>Físico</span><strong>{quantidade(item.saldo, item.unidade)}</strong></div>
-                          <div><span>Reservado</span><strong>{quantidade(item.saldo_reservado, item.unidade)}</strong></div>
-                        </div>
+                      <div className={styles.identificationCell}>
+                        <span className={styles.mobileCellLabel}>Identificação</span>
+                        <strong>{item.codigo || item.sku || "Sem código"}</strong>
+                        <small>{item.codigo_barras || (item.codigo && item.sku ? `SKU ${item.sku}` : "Sem código de barras")}</small>
+                      </div>
+
+                      <div className={styles.availableCell}>
+                        <span className={styles.mobileCellLabel}>Disponível</span>
+                        <strong>{quantidade(item.saldo_disponivel, item.unidade)}</strong>
+                        <small>Mínimo {quantidade(item.estoque_minimo, item.unidade)}</small>
                         <div className={styles.stockProgress} aria-label={`${Math.round(percentualDisponivel)}% da referência disponível`}>
                           <span style={{ width: `${percentualDisponivel}%` }} />
                         </div>
                       </div>
 
-                      <div className={styles.productMeta}>
-                        <div><span>Custo unitário</span><strong>{moeda(item.custo_unitario)}</strong></div>
-                        <div><span>Preço de venda</span><strong>{item.preco_venda == null ? "Não informado" : moeda(item.preco_venda)}</strong></div>
-                        <div><span>Identificação</span><strong>{item.codigo_barras || item.sku || "Não informada"}</strong></div>
+                      <div className={styles.balanceCell}>
+                        <span className={styles.mobileCellLabel}>Físico / reservado</span>
+                        <strong>{quantidade(item.saldo, item.unidade)}</strong>
+                        <small>{quantidade(item.saldo_reservado, item.unidade)} reservado</small>
                       </div>
 
-                      {item.controla_lote || item.controla_validade || item.controla_serie ? <div className={styles.controlTags}>
-                        {item.controla_lote ? <span>Lote</span> : null}
-                        {item.controla_validade ? <span>Validade</span> : null}
-                        {item.controla_serie ? <span>Número de série</span> : null}
-                      </div> : null}
+                      <div className={styles.valueCell}>
+                        <span className={styles.mobileCellLabel}>Valores</span>
+                        <strong>{moeda(item.custo_unitario)} <small>custo</small></strong>
+                        <span>{item.preco_venda == null ? "Venda não informada" : `${moeda(item.preco_venda)} venda`}</span>
+                      </div>
 
-                      <div className={styles.cardActions}>
-                        {podeMovimentar ? <button onClick={() => abrirMovimentacao(item, "entrada")}><ArrowDownToLine size={15} /> Entrada</button> : null}
-                        {podeMovimentar ? <button onClick={() => abrirMovimentacao(item, "saida")}><ArrowUpFromLine size={15} /> Saída</button> : null}
+                      <div className={styles.rowActions}>
+                        {podeMovimentar ? <button className={styles.entryAction} aria-label={`Registrar entrada de ${item.nome}`} title="Registrar entrada" onClick={() => abrirMovimentacao(item, "entrada")}><ArrowDownToLine size={16} /><span>Entrada</span></button> : null}
+                        {podeMovimentar ? <button className={styles.exitAction} aria-label={`Registrar saída de ${item.nome}`} title="Registrar saída" onClick={() => abrirMovimentacao(item, "saida")}><ArrowUpFromLine size={16} /><span>Saída</span></button> : null}
                         {podeGerenciar ? <button className={styles.iconButton} aria-label={`Editar ${item.nome}`} onClick={() => abrirEditarItem(item)}><Pencil size={16} /></button> : null}
                         {podeGerenciar ? <button className={`${styles.iconButton} ${styles.dangerIcon}`} aria-label={`Arquivar ${item.nome}`} onClick={() => void arquivar("item", item.id, item.nome)}><Archive size={16} /></button> : null}
                       </div>
