@@ -48,18 +48,19 @@ export async function GET() {
   if (!contexto.ok) return contexto.response;
   if (!can(contexto.usuario.permissoes, "compras.visualizar")) return erro("Sem permissão para visualizar compras.", 403);
 
-  const [fornecedores, documentos, fornecedorItens] = await Promise.all([
+  const [fornecedores, documentos, fornecedorItens, embalagens] = await Promise.all([
     supabase.from("comercial_parceiros").select("*").eq("empresa_id", contexto.empresaId).in("tipo", ["fornecedor", "ambos"]).eq("ativo", true).order("nome"),
     supabase.from("comercial_documentos").select("*").eq("empresa_id", contexto.empresaId).eq("tipo", "pedido_compra").order("created_at", { ascending: false }).limit(200),
     supabase.from("comercial_fornecedor_itens").select("*").eq("empresa_id", contexto.empresaId).eq("ativo", true),
+    supabase.from("estoque_embalagens").select("*").eq("empresa_id", contexto.empresaId).eq("ativo", true).order("nome"),
   ]);
-  const falhaInicial = [fornecedores.error, documentos.error, fornecedorItens.error].find(Boolean);
+  const falhaInicial = [fornecedores.error, documentos.error, fornecedorItens.error, embalagens.error].find(Boolean);
   if (falhaInicial) return erro(`Erro ao carregar compras: ${mensagemBanco(falhaInicial)}`, 500);
 
   const documentosData = documentos.data ?? [];
   const documentosIds = documentosData.map((documento) => documento.id);
   if (!documentosIds.length) {
-    return NextResponse.json({ ok: true, fornecedores: fornecedores.data ?? [], fornecedor_itens: fornecedorItens.data ?? [], pedidos: [] });
+    return NextResponse.json({ ok: true, fornecedores: fornecedores.data ?? [], fornecedor_itens: fornecedorItens.data ?? [], embalagens: embalagens.data ?? [], pedidos: [] });
   }
 
   const [itensDocumento, pagamentos, recebimentos] = await Promise.all([
@@ -84,6 +85,7 @@ export async function GET() {
     ok: true,
     fornecedores: fornecedores.data ?? [],
     fornecedor_itens: fornecedorItens.data ?? [],
+    embalagens: embalagens.data ?? [],
     pedidos: documentosData.map((documento) => ({
       ...documento,
       itens: itens.filter((item) => item.documento_id === documento.id),
@@ -202,6 +204,7 @@ export async function POST(request: Request) {
       if (!parceiroId || !depositoId || !itens.length) return erro("Informe fornecedor, depósito e ao menos um item.");
       const itensNormalizados = itens.map((item) => ({
         estoque_item_id: texto(item.estoque_item_id),
+        embalagem_id: texto(item.embalagem_id) || null,
         descricao: texto(item.descricao),
         unidade: texto(item.unidade) || "un",
         quantidade: numero(item.quantidade),
@@ -264,12 +267,20 @@ export async function POST(request: Request) {
       if (itensEntrada.length !== nfe.itens.length) return erro("Todos os itens da NF-e precisam ser conferidos.");
       const itens = itensEntrada.map((item, indice) => {
         const origem = nfe.itens[indice];
+        const fatorConversao = Math.max(1, numero(item.fator_conversao, 1));
         const criarItem = item.criar_item === true;
         const novoItemEntrada = item.novo_item && typeof item.novo_item === "object"
           ? item.novo_item as Record<string, unknown>
           : {};
         return {
           ...origem,
+          quantidade: origem.quantidade * fatorConversao,
+          custo_unitario: origem.custo_unitario / fatorConversao,
+          embalagem_id: texto(item.embalagem_id) || null,
+          quantidade_comercial: origem.quantidade,
+          unidade_comercial: origem.unidade,
+          fator_conversao: fatorConversao,
+          valor_unitario_comercial: origem.custo_unitario,
           estoque_item_id: criarItem ? "" : texto(item.estoque_item_id),
           criar_item: criarItem,
           novo_item: criarItem ? {
@@ -278,6 +289,7 @@ export async function POST(request: Request) {
             sku: origem.codigo_fornecedor || null,
             codigo_barras: origem.ean || null,
             descricao: origem.ncm ? `NCM ${origem.ncm}` : null,
+            ncm: origem.ncm || null,
             tipo: "produto",
             unidade: origem.unidade || "un",
             estoque_minimo: 0,

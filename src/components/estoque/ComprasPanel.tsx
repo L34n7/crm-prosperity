@@ -33,6 +33,7 @@ type ItemEstoque = {
 type Deposito = { id: string; nome: string; codigo: string };
 type Localizacao = { id: string; deposito_id: string; codigo: string; nome: string };
 type Classificacao = { id: string; nome: string };
+type Embalagem = { id: string; estoque_item_id: string; nome: string; sigla: string; fator_conversao: number | string; permite_compra: boolean };
 type Fornecedor = {
   id: string; nome: string; nome_fantasia: string | null; tipo_pessoa: "fisica" | "juridica";
   documento: string | null; inscricao_estadual: string | null; email: string | null;
@@ -44,6 +45,7 @@ type PedidoItem = {
   id: string; estoque_item_id: string; descricao: string; unidade: string;
   quantidade: number | string; quantidade_atendida: number | string;
   valor_unitario: number | string; desconto: number | string;
+  embalagem_id?: string | null; quantidade_comercial?: number | string | null; valor_unitario_comercial?: number | string | null;
 };
 type Pagamento = {
   id: string; status: string; forma: string; valor: number | string; vencimento_em: string | null;
@@ -59,7 +61,7 @@ type Pedido = {
   acrescimo: number | string; frete: number | string; total: number | string; valor_pago: number | string;
   observacao: string | null; itens: PedidoItem[]; pagamentos: Pagamento[]; recebimentos: Recebimento[];
 };
-type LinhaPedidoForm = { estoque_item_id: string; quantidade: string; valor_unitario: string; desconto: string };
+type LinhaPedidoForm = { estoque_item_id: string; embalagem_id: string; quantidade: string; valor_unitario: string; desconto: string };
 type LinhaRecebimento = {
   pedido_item_id: string; quantidade: string; custo_unitario: string; localizacao_id: string;
   lote_codigo: string; fabricado_em: string; validade: string; numero_serie: string;
@@ -71,6 +73,7 @@ type XmlItem = {
   criar_item: boolean; categoria_id: string; categoria_nome: string; categoria_nova: boolean;
   marca_id: string; marca_nome: string; marca_nova: boolean;
   novo_nome: string; controla_lote: boolean; controla_validade: boolean;
+  embalagem_id: string; fator_conversao: number;
 };
 type Nfe = {
   chave: string; numero: string; serie: string; emissao: string; frete: number; total: number;
@@ -83,7 +86,7 @@ const FORNECEDOR_INICIAL = {
   inscricao_estadual: "", email: "", telefone: "", cep: "", endereco: "", numero: "",
   complemento: "", bairro: "", cidade: "", estado: "", prazo_entrega_dias: "0", observacao: "",
 };
-const LINHA_PEDIDO_INICIAL: LinhaPedidoForm = { estoque_item_id: "", quantidade: "1", valor_unitario: "0", desconto: "0" };
+const LINHA_PEDIDO_INICIAL: LinhaPedidoForm = { estoque_item_id: "", embalagem_id: "", quantidade: "1", valor_unitario: "0", desconto: "0" };
 
 function moeda(valor: unknown) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(valor ?? 0));
@@ -116,6 +119,7 @@ export default function ComprasPanel({
   const [secao, setSecao] = useState<"pedidos" | "fornecedores">("pedidos");
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [embalagens, setEmbalagens] = useState<Embalagem[]>([]);
   const [busca, setBusca] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -147,6 +151,7 @@ export default function ComprasPanel({
       if (!resposta.ok) throw new Error(dados.error || "Erro ao carregar compras.");
       setFornecedores(dados.fornecedores ?? []);
       setPedidos(dados.pedidos ?? []);
+      setEmbalagens(dados.embalagens ?? []);
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao carregar compras.");
     } finally { setCarregando(false); }
@@ -193,7 +198,7 @@ export default function ComprasPanel({
       id: pedido.id, parceiro_id: pedido.parceiro_id, deposito_id: pedido.deposito_id,
       data_emissao: pedido.data_emissao, previsao_em: pedido.previsao_em || "", desconto: String(pedido.desconto),
       acrescimo: String(pedido.acrescimo), frete: String(pedido.frete), observacao: pedido.observacao || "",
-      itens: pedido.itens.map((item) => ({ estoque_item_id: item.estoque_item_id, quantidade: String(item.quantidade), valor_unitario: String(item.valor_unitario), desconto: String(item.desconto) })),
+      itens: pedido.itens.map((item) => ({ estoque_item_id: item.estoque_item_id, embalagem_id: item.embalagem_id || "", quantidade: String(item.quantidade_comercial ?? item.quantidade), valor_unitario: String(item.valor_unitario_comercial ?? item.valor_unitario), desconto: String(item.desconto) })),
     } : { id: "", parceiro_id: "", deposito_id: depositos[0]?.id || "", data_emissao: hoje(), previsao_em: "", desconto: "0", acrescimo: "0", frete: "0", observacao: "", itens: [{ ...LINHA_PEDIDO_INICIAL }] });
     setModal("pedido");
   }
@@ -232,6 +237,8 @@ export default function ComprasPanel({
           novo_nome: item.descricao,
           controla_lote: Boolean(item.lote_codigo || item.validade),
           controla_validade: Boolean(item.validade),
+          embalagem_id: "",
+          fator_conversao: 1,
         })),
       }); setXmlDepositoId(depositos[0]?.id || ""); setXmlLocalizacoes({}); setModal("xml");
     } catch (error) { setErro(error instanceof Error ? error.message : "Erro ao analisar XML."); }
@@ -323,7 +330,7 @@ export default function ComprasPanel({
 
       {modal === "pedido" ? <form className={styles.body} onSubmit={(event) => { event.preventDefault(); void enviar({ acao: "salvar_pedido", ...pedidoForm, itens: pedidoForm.itens.map((linha) => ({ ...linha, descricao: itens.find((item) => item.id === linha.estoque_item_id)?.nome, unidade: itens.find((item) => item.id === linha.estoque_item_id)?.unidade })) }, "Pedido salvo.").then((ok) => ok && setModal(null)); }}>
         <div className={styles.formGrid}><label><span>Fornecedor *</span><select required value={pedidoForm.parceiro_id} onChange={(e) => setPedidoForm((a) => ({ ...a, parceiro_id: e.target.value }))}><option value="">Selecione</option>{fornecedores.filter((f) => f.ativo).map((f) => <option key={f.id} value={f.id}>{f.nome_fantasia || f.nome}</option>)}</select></label><label><span>Depósito *</span><select required value={pedidoForm.deposito_id} onChange={(e) => setPedidoForm((a) => ({ ...a, deposito_id: e.target.value }))}><option value="">Selecione</option>{depositos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}</select></label><label><span>Emissão</span><input type="date" value={pedidoForm.data_emissao} onChange={(e) => setPedidoForm((a) => ({ ...a, data_emissao: e.target.value }))} /></label><label><span>Previsão</span><input type="date" value={pedidoForm.previsao_em} onChange={(e) => setPedidoForm((a) => ({ ...a, previsao_em: e.target.value }))} /></label></div>
-        <div className={styles.lines}><div className={styles.linesHead}><h3>Itens do pedido</h3><button type="button" onClick={() => setPedidoForm((a) => ({ ...a, itens: [...a.itens, { ...LINHA_PEDIDO_INICIAL }] }))}><Plus size={15} /> Item</button></div>{pedidoForm.itens.map((linha, indice) => <div className={styles.line} key={indice}><label><span>Item</span><select required value={linha.estoque_item_id} onChange={(e) => atualizarLinhaPedido(indice, "estoque_item_id", e.target.value)}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · {item.codigo || item.sku || "sem código"}</option>)}</select></label><label><span>Quantidade</span><input required type="number" min="0.001" step="0.001" value={linha.quantidade} onChange={(e) => atualizarLinhaPedido(indice, "quantidade", e.target.value)} /></label><label><span>Custo unitário</span><input required type="number" min="0" step="0.01" value={linha.valor_unitario} onChange={(e) => atualizarLinhaPedido(indice, "valor_unitario", e.target.value)} /></label><label><span>Desconto</span><input type="number" min="0" step="0.01" value={linha.desconto} onChange={(e) => atualizarLinhaPedido(indice, "desconto", e.target.value)} /></label><button className={styles.remove} type="button" disabled={pedidoForm.itens.length === 1} onClick={() => setPedidoForm((a) => ({ ...a, itens: a.itens.filter((_, posicao) => posicao !== indice) }))}><X size={16} /></button></div>)}</div>
+        <div className={styles.lines}><div className={styles.linesHead}><h3>Itens do pedido</h3><button type="button" onClick={() => setPedidoForm((a) => ({ ...a, itens: [...a.itens, { ...LINHA_PEDIDO_INICIAL }] }))}><Plus size={15} /> Item</button></div>{pedidoForm.itens.map((linha, indice) => <div className={styles.line} key={indice}><label><span>Item</span><select required value={linha.estoque_item_id} onChange={(e) => { atualizarLinhaPedido(indice, "estoque_item_id", e.target.value); atualizarLinhaPedido(indice, "embalagem_id", ""); }}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · {item.codigo || item.sku || "sem código"}</option>)}</select></label><label><span>Embalagem de compra</span><select value={linha.embalagem_id} onChange={(e) => atualizarLinhaPedido(indice, "embalagem_id", e.target.value)}><option value="">Unidade-base</option>{embalagens.filter((embalagem) => embalagem.estoque_item_id === linha.estoque_item_id && embalagem.permite_compra).map((embalagem) => <option key={embalagem.id} value={embalagem.id}>{embalagem.nome} = {quantidade(embalagem.fator_conversao)} base</option>)}</select></label><label><span>Quantidade</span><input required type="number" min="0.001" step="0.001" value={linha.quantidade} onChange={(e) => atualizarLinhaPedido(indice, "quantidade", e.target.value)} /></label><label><span>Custo por embalagem</span><input required type="number" min="0" step="0.01" value={linha.valor_unitario} onChange={(e) => atualizarLinhaPedido(indice, "valor_unitario", e.target.value)} /></label><label><span>Desconto</span><input type="number" min="0" step="0.01" value={linha.desconto} onChange={(e) => atualizarLinhaPedido(indice, "desconto", e.target.value)} /></label><button className={styles.remove} type="button" disabled={pedidoForm.itens.length === 1} onClick={() => setPedidoForm((a) => ({ ...a, itens: a.itens.filter((_, posicao) => posicao !== indice) }))}><X size={16} /></button></div>)}</div>
         <div className={styles.formGrid}><label><span>Desconto geral</span><input type="number" min="0" step="0.01" value={pedidoForm.desconto} onChange={(e) => setPedidoForm((a) => ({ ...a, desconto: e.target.value }))} /></label><label><span>Acréscimo</span><input type="number" min="0" step="0.01" value={pedidoForm.acrescimo} onChange={(e) => setPedidoForm((a) => ({ ...a, acrescimo: e.target.value }))} /></label><label><span>Frete</span><input type="number" min="0" step="0.01" value={pedidoForm.frete} onChange={(e) => setPedidoForm((a) => ({ ...a, frete: e.target.value }))} /></label><div className={styles.totalBox}><span>Total estimado</span><strong>{moeda(totalPedidoForm)}</strong></div><label className={styles.full}><span>Observações</span><textarea value={pedidoForm.observacao} onChange={(e) => setPedidoForm((a) => ({ ...a, observacao: e.target.value }))} /></label></div>
         <footer><button type="button" onClick={() => setModal(null)}>Cancelar</button><button className={styles.primary} disabled={salvando}>{salvando ? "Salvando..." : "Salvar pedido"}</button></footer>
       </form> : null}
@@ -354,6 +361,8 @@ export default function ComprasPanel({
               controla_lote: item.controla_lote,
               controla_validade: item.controla_validade,
             } : null,
+            embalagem_id: item.criar_item ? "" : item.embalagem_id,
+            fator_conversao: item.criar_item ? 1 : item.fator_conversao,
             localizacao_id: xmlLocalizacoes[item.numero_item] || "",
             lote_codigo: item.lote_codigo,
             fabricado_em: item.fabricado_em,
@@ -387,6 +396,7 @@ export default function ComprasPanel({
             </div>
             <label><span>Tratamento do produto *</span><select value={item.criar_item ? "__criar__" : item.estoque_item_id} onChange={(e) => atualizarItemNfe(indice, { criar_item: e.target.value === "__criar__", estoque_item_id: e.target.value === "__criar__" ? "" : e.target.value, correspondencia: e.target.value === "__criar__" ? "pendente" : "automatica" })}><option value="">Selecione um item existente</option>{itens.map((estoqueItem) => <option key={estoqueItem.id} value={estoqueItem.id}>{estoqueItem.nome} · {estoqueItem.codigo || estoqueItem.sku || "sem código"}</option>)}<option value="__criar__">+ Criar produto com os dados da NF-e</option></select></label>
             <label><span>Localização</span><select value={xmlLocalizacoes[item.numero_item] || ""} onChange={(e) => setXmlLocalizacoes((a) => ({ ...a, [item.numero_item]: e.target.value }))}><option value="">Sem localização</option>{localizacoes.filter((l) => l.deposito_id === xmlDepositoId).map((l) => <option key={l.id} value={l.id}>{l.codigo} · {l.nome}</option>)}</select></label>
+            {!item.criar_item && item.estoque_item_id ? <label><span>Conversão da unidade da NF-e</span><select value={item.embalagem_id} onChange={(e) => { const embalagem = embalagens.find((registro) => registro.id === e.target.value); atualizarItemNfe(indice, { embalagem_id: e.target.value, fator_conversao: Number(embalagem?.fator_conversao || 1) }); }}><option value="">Sem conversão (1 {item.unidade} = 1 base)</option>{embalagens.filter((embalagem) => embalagem.estoque_item_id === item.estoque_item_id && embalagem.permite_compra).map((embalagem) => <option key={embalagem.id} value={embalagem.id}>1 {item.unidade} = {quantidade(embalagem.fator_conversao)} unidades-base ({embalagem.nome})</option>)}</select></label> : null}
 
             {item.criar_item ? <div className={styles.xmlNewProduct}>
               <div className={styles.xmlNewProductTitle}><PackageCheck size={18} /><div><strong>Cadastro do novo produto</strong><small>Os dados fiscais vieram do XML. Complete a classificação antes de receber.</small></div></div>

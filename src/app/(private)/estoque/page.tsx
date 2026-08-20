@@ -37,10 +37,11 @@ import FeedbackToast from "@/components/FeedbackToast";
 import ComprasPanel from "@/components/estoque/ComprasPanel";
 import ImportacaoProdutosModal from "@/components/estoque/ImportacaoProdutosModal";
 import CodigoBarrasScannerModal from "@/components/estoque/CodigoBarrasScannerModal";
+import ErpOperacaoPanel from "@/components/estoque/ErpOperacaoPanel";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
-type Aba = "estoque" | "catalogo" | "compras" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
+type Aba = "estoque" | "catalogo" | "compras" | "pdv" | "financeiro" | "embalagens" | "fiscal" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
 type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | "arquivamento" | "restauracao" | "exclusao" | null;
 type FiltroStatus = "ativos" | "arquivados" | "todos";
 type ScannerContexto = "busca" | "cadastro" | "movimentacao" | "inventario" | null;
@@ -229,6 +230,10 @@ const ABA_INFO: Record<Aba, { titulo: string; descricao: string }> = {
   estoque: { titulo: "Itens em estoque", descricao: "Saldos, disponibilidade e custos dos produtos e insumos." },
   catalogo: { titulo: "Produtos e serviços", descricao: "Itens comerciais e regras de baixa automática no estoque." },
   compras: { titulo: "Compras e fornecedores", descricao: "Pedidos, documentos fiscais, recebimentos e parceiros." },
+  pdv: { titulo: "Vendas e PDV", descricao: "Venda balcão com leitura de código, pagamento e baixa imediata do estoque." },
+  financeiro: { titulo: "Contas a pagar", descricao: "Obrigações de compras e despesas com vencimentos e baixas rastreáveis." },
+  embalagens: { titulo: "Conversão de embalagens", descricao: "Compre e venda em caixas, fardos ou pacotes mantendo o saldo na unidade-base." },
+  fiscal: { titulo: "NFC-e e configuração fiscal", descricao: "Homologação, tributação dos produtos e acompanhamento das emissões." },
   movimentacoes: { titulo: "Histórico de movimentações", descricao: "Rastreabilidade completa de entradas, saídas e ajustes." },
   depositos: { titulo: "Depósitos", descricao: "Estrutura física e regras de saldo por unidade de armazenagem." },
   localizacoes: { titulo: "Localizações", descricao: "Endereçamento interno dos produtos dentro dos depósitos." },
@@ -740,6 +745,7 @@ export default function EstoquePage() {
             <nav className={styles.sidebarNav}>
               <div className={styles.navGroup}>
                 <span className={styles.navGroupLabel}>Operação</span>
+                {permissoes.includes("pdv.visualizar") ? <button className={aba === "pdv" ? styles.navActive : ""} onClick={() => setAba("pdv")}><ShoppingCart size={17} /><span>Vendas e PDV</span></button> : null}
                 <button className={aba === "estoque" ? styles.navActive : ""} onClick={() => setAba("estoque")}><Boxes size={17} /><span>Itens em estoque</span></button>
                 <button className={aba === "movimentacoes" ? styles.navActive : ""} onClick={() => setAba("movimentacoes")}><History size={17} /><span>Movimentações</span></button>
                 <button className={aba === "reservas" ? styles.navActive : ""} onClick={() => setAba("reservas")}><ShieldCheck size={17} /><span>Reservas</span></button>
@@ -750,6 +756,7 @@ export default function EstoquePage() {
               {permissoes.includes("compras.visualizar") ? <div className={styles.navGroup}>
                 <span className={styles.navGroupLabel}>Compras</span>
                 <button className={aba === "compras" ? styles.navActive : ""} onClick={() => setAba("compras")}><ShoppingCart size={17} /><span>Compras e fornecedores</span></button>
+                {permissoes.includes("financeiro.contas_pagar") ? <button className={aba === "financeiro" ? styles.navActive : ""} onClick={() => setAba("financeiro")}><CircleDollarSign size={17} /><span>Contas a pagar</span></button> : null}
               </div> : null}
 
               <div className={styles.navGroup}>
@@ -758,12 +765,14 @@ export default function EstoquePage() {
                 <button className={aba === "depositos" ? styles.navActive : ""} onClick={() => setAba("depositos")}><Warehouse size={17} /><span>Depósitos</span></button>
                 <button className={aba === "localizacoes" ? styles.navActive : ""} onClick={() => setAba("localizacoes")}><MapPin size={17} /><span>Localizações</span></button>
                 <button className={aba === "lotes" ? styles.navActive : ""} onClick={() => setAba("lotes")}><Tags size={17} /><span>Lotes e validade</span></button>
+                {permissoes.includes("estoque.embalagens") ? <button className={aba === "embalagens" ? styles.navActive : ""} onClick={() => setAba("embalagens")}><Boxes size={17} /><span>Conversão de embalagens</span></button> : null}
               </div>
 
               <div className={styles.navGroup}>
                 <span className={styles.navGroupLabel}>Administração</span>
                 <button className={aba === "cadastros" ? styles.navActive : ""} onClick={() => setAba("cadastros")}><Layers3 size={17} /><span>Categorias e marcas</span></button>
                 <button className={aba === "configuracoes" ? styles.navActive : ""} onClick={() => setAba("configuracoes")}><Settings size={17} /><span>Configurações</span></button>
+                {permissoes.includes("fiscal.configurar") ? <button className={aba === "fiscal" ? styles.navActive : ""} onClick={() => setAba("fiscal")}><ClipboardList size={17} /><span>NFC-e e fiscal</span></button> : null}
               </div>
             </nav>
           </aside>
@@ -773,13 +782,13 @@ export default function EstoquePage() {
               <span>Área do estoque</span>
               <select value={aba} onChange={(event) => setAba(event.target.value as Aba)}>
                 <optgroup label="Operação">
-                  <option value="estoque">Itens em estoque</option><option value="movimentacoes">Movimentações</option><option value="reservas">Reservas</option><option value="inventarios">Inventários</option>{ehSaude ? <option value="clinico">Consumo clínico</option> : null}
+                  {permissoes.includes("pdv.visualizar") ? <option value="pdv">Vendas e PDV</option> : null}<option value="estoque">Itens em estoque</option><option value="movimentacoes">Movimentações</option><option value="reservas">Reservas</option><option value="inventarios">Inventários</option>{ehSaude ? <option value="clinico">Consumo clínico</option> : null}
                 </optgroup>
-                {permissoes.includes("compras.visualizar") ? <optgroup label="Compras"><option value="compras">Compras e fornecedores</option></optgroup> : null}
+                {permissoes.includes("compras.visualizar") ? <optgroup label="Compras"><option value="compras">Compras e fornecedores</option>{permissoes.includes("financeiro.contas_pagar") ? <option value="financeiro">Contas a pagar</option> : null}</optgroup> : null}
                 <optgroup label="Estrutura">
-                  <option value="catalogo">Produtos e serviços</option><option value="depositos">Depósitos</option><option value="localizacoes">Localizações</option><option value="lotes">Lotes e validade</option>
+                  <option value="catalogo">Produtos e serviços</option><option value="depositos">Depósitos</option><option value="localizacoes">Localizações</option><option value="lotes">Lotes e validade</option>{permissoes.includes("estoque.embalagens") ? <option value="embalagens">Conversão de embalagens</option> : null}
                 </optgroup>
-                <optgroup label="Administração"><option value="cadastros">Categorias e marcas</option><option value="configuracoes">Configurações</option></optgroup>
+                <optgroup label="Administração"><option value="cadastros">Categorias e marcas</option><option value="configuracoes">Configurações</option>{permissoes.includes("fiscal.configurar") ? <option value="fiscal">NFC-e e fiscal</option> : null}</optgroup>
               </select>
             </label>
 
@@ -791,7 +800,7 @@ export default function EstoquePage() {
               </div>
             </header>
 
-          {aba !== "compras" ? <div className={styles.toolbar}>
+          {!(["compras", "pdv", "financeiro", "embalagens", "fiscal"] as Aba[]).includes(aba) ? <div className={styles.toolbar}>
             <label className={styles.searchBox}>
               <Search size={18} />
               <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por nome, código ou tipo" />
@@ -833,6 +842,12 @@ export default function EstoquePage() {
             localizacoes={localizacoes}
             categorias={categorias}
             marcas={marcas}
+            permissoes={permissoes}
+            onAtualizarEstoque={() => void carregar()}
+          /> : null}
+
+          {(["pdv", "financeiro", "embalagens", "fiscal"] as Aba[]).includes(aba) ? <ErpOperacaoPanel
+            modo={aba as "pdv" | "financeiro" | "embalagens" | "fiscal"}
             permissoes={permissoes}
             onAtualizarEstoque={() => void carregar()}
           /> : null}
