@@ -128,13 +128,48 @@ button:disabled { cursor: not-allowed !important; opacity: .5; }
 @media (max-width: 640px) {
   .panelHeader { align-items: stretch; flex-direction: column; }
   .panelHeader button { width: 100%; }
-  .depositGrid,
-  .expirySummary { padding: 12px; grid-template-columns: 1fr; }
+  .depositGrid { padding: 12px; grid-template-columns: 1fr; }
+  .expirySummary { padding: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .depositMetrics { grid-template-columns: 1fr; }
   .depositMetrics span + span { border-left: 0; border-top: 1px solid var(--crm-border); }
+  .depositCard footer { display: grid; grid-template-columns: 1fr; }
+  .depositCard footer button { width: 100%; }
+  .tableWrap > .table { display: block; padding: 12px; }
+  .tableWrap > .table thead { display: none; }
+  .tableWrap > .table tbody { display: grid; gap: 10px; }
+  .tableWrap > .table tr { padding: 13px; border: 1px solid var(--crm-border); border-radius: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; background: var(--crm-surface); }
+  .tableWrap > .table td { min-width: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 3px; white-space: normal; }
+  .tableWrap > .table td::before { color: var(--crm-text-muted); font-size: 10px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+  .tableWrap > .table td:nth-child(1),
+  .tableWrap > .table td:nth-child(6) { grid-column: 1 / -1; }
+  .tableWrap > .table td:nth-child(1)::before { content: "Lote e produto"; }
+  .tableWrap > .table td:nth-child(2)::before { content: "Fabricação"; }
+  .tableWrap > .table td:nth-child(3)::before { content: "Validade"; }
+  .tableWrap > .table td:nth-child(4)::before { content: "Saldo"; }
+  .tableWrap > .table td:nth-child(5)::before { content: "Situação"; }
+  .tableWrap > .table td:nth-child(6)::before { content: "Ações"; }
+  .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .actions button { min-width: 0; width: 100%; }
+  .actions button span { display: inline; }
+  .positionsBody .tableWrap { overflow-x: auto; }
+  .positionsBody .tableWrap > .table { min-width: 900px; padding: 0; display: table; }
+  .positionsBody .tableWrap > .table thead { display: table-header-group; }
+  .positionsBody .tableWrap > .table tbody { display: table-row-group; }
+  .positionsBody .tableWrap > .table tr { padding: 0; border: 0; border-radius: 0; display: table-row; background: transparent; }
+  .positionsBody .tableWrap > .table td { padding: 13px 14px; border-bottom: 1px solid var(--crm-border); display: table-cell; white-space: nowrap; }
+  .positionsBody .tableWrap > .table td::before { content: none; }
   .modalOverlay { padding: 8px; align-items: flex-end; }
   .modal { max-height: calc(100vh - 16px); border-radius: 20px 20px 0 0; }
   .formGrid { grid-template-columns: 1fr; }
   .fullField { grid-column: auto; }
-  .actions button span { display: none; }
+  .modalHeader,
+  .modalFooter { padding: 15px; }
+  .modalBody { padding: 15px; }
+  .modalFooter { display: grid; grid-template-columns: 1fr 1fr; }
+  .modalFooter button { min-width: 0; width: 100%; }
+}
+
+@media (max-width: 390px) {
+  .expirySummary { grid-template-columns: 1fr; }
+  .actions { grid-template-columns: 1fr; }
 }

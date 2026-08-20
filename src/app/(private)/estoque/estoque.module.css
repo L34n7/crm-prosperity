@@ -1556,18 +1556,49 @@
   .toolbar {
     display: flex;
     padding: 13px;
+    gap: 10px;
+    min-width: 0;
   }
 
   .searchBox {
     width: 100%;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    flex: 0 0 44px;
+    box-sizing: border-box;
+  }
+
+  .searchBox input {
+    font-size: 16px;
   }
 
   .statusFilter {
     width: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    overflow: hidden;
   }
 
   .statusFilter button {
+    min-width: 0;
+    padding-inline: 7px;
     flex: 1;
+  }
+
+  .toolbar .heroActions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .toolbar .heroActions button,
+  .toolbar > button {
+    min-width: 0;
+    max-width: 100%;
+    flex: 0 0 auto;
   }
 
   .inventoryList,
@@ -1582,6 +1613,10 @@
 
   .contentHeader h2 {
     font-size: 20px;
+  }
+
+  .contentHeader p {
+    line-height: 1.45;
   }
 
   .inventoryListHeader {
@@ -1691,6 +1726,43 @@
 }
 
 @media (max-width: 440px) {
+  .page {
+    width: calc(100% - 14px);
+    padding-top: 8px;
+  }
+
+  .workspace {
+    border-radius: 15px;
+  }
+
+  .mobileSectionPicker {
+    padding: 12px;
+  }
+
+  .mobileSectionPicker select {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .contentHeader {
+    padding: 15px 14px;
+  }
+
+  .contentEyebrow {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .toolbar {
+    padding: 11px;
+  }
+
+  .statusFilter button {
+    min-height: 36px;
+    padding-inline: 5px;
+    font-size: 12px;
+  }
+
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
