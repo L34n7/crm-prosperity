@@ -38,6 +38,7 @@ import ComprasPanel from "@/components/estoque/ComprasPanel";
 import ImportacaoProdutosModal from "@/components/estoque/ImportacaoProdutosModal";
 import CodigoBarrasScannerModal from "@/components/estoque/CodigoBarrasScannerModal";
 import ErpOperacaoPanel from "@/components/estoque/ErpOperacaoPanel";
+import EstruturaEstoquePanel from "@/components/estoque/EstruturaEstoquePanel";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
@@ -110,7 +111,7 @@ type Resumo = {
 
 type Deposito = { id: string; codigo: string; nome: string; descricao: string | null; principal: boolean; permite_saldo_negativo: boolean };
 type Saldo = { id: string; estoque_item_id: string; deposito_id: string; localizacao_id: string | null; lote_id: string | null; numero_serie: string | null; saldo_fisico: number | string; saldo_reservado: number | string; saldo_transito: number | string; custo_medio: number | string };
-type Lote = { id: string; estoque_item_id: string; codigo: string; validade: string | null; fabricante: string | null; bloqueado: boolean };
+type Lote = { id: string; estoque_item_id: string; codigo: string; fabricado_em: string | null; validade: string | null; fabricante: string | null; bloqueado: boolean };
 type Reserva = { id: string; estoque_item_id: string; deposito_id: string; quantidade: number | string; consumida: number | string; origem_tipo: string; origem_id: string; expira_em: string | null };
 type Localizacao = { id: string; deposito_id: string; codigo: string; nome: string };
 type Categoria = { id: string; nome: string; categoria_pai_id: string | null };
@@ -293,6 +294,7 @@ export default function EstoquePage() {
   const [depositoOrigemId, setDepositoOrigemId] = useState("");
   const [depositoDestinoId, setDepositoDestinoId] = useState("");
   const [localizacaoId, setLocalizacaoId] = useState("");
+  const [localizacaoDestinoId, setLocalizacaoDestinoId] = useState("");
   const [loteId, setLoteId] = useState("");
   const [numeroSerie, setNumeroSerie] = useState("");
   const [busca, setBusca] = useState("");
@@ -305,7 +307,7 @@ export default function EstoquePage() {
     useState<CatalogoForm>(CATALOGO_INICIAL);
   const [itemSelecionadoId, setItemSelecionadoId] = useState("");
   const [catalogoSelecionadoId, setCatalogoSelecionadoId] = useState("");
-  const [movimentoTipo, setMovimentoTipo] = useState<"entrada" | "saida" | "ajuste">(
+  const [movimentoTipo, setMovimentoTipo] = useState<"entrada" | "saida" | "ajuste" | "transferencia">(
     "entrada",
   );
   const [movimentoQuantidade, setMovimentoQuantidade] = useState("1");
@@ -478,18 +480,23 @@ export default function EstoquePage() {
     setModal("item");
   }
 
-  function abrirMovimentacao(item?: EstoqueItem, tipo: "entrada" | "saida" | "ajuste" = "entrada") {
+  function abrirMovimentacao(
+    item?: EstoqueItem,
+    tipo: "entrada" | "saida" | "ajuste" | "transferencia" = "entrada",
+    padrao?: { depositoOrigemId?: string; depositoDestinoId?: string; localizacaoOrigemId?: string; loteId?: string },
+  ) {
     setItemSelecionadoId(item?.id ?? itens[0]?.id ?? "");
     setMovimentoTipo(tipo);
     setObservacao("");
-    setLocalizacaoId("");
-    setLoteId("");
+    setLocalizacaoId(padrao?.localizacaoOrigemId ?? "");
+    setLocalizacaoDestinoId("");
+    setLoteId(padrao?.loteId ?? "");
     setNumeroSerie("");
     const principal = depositos.find((deposito) => deposito.principal) ?? depositos[0];
     const posicaoPadrao = saldos.find((saldo) => saldo.estoque_item_id === item?.id && saldo.deposito_id === principal?.id && !saldo.localizacao_id && !saldo.lote_id && !saldo.numero_serie);
     setMovimentoQuantidade(tipo === "ajuste" ? String(posicaoPadrao?.saldo_fisico ?? 0) : "1");
-    setDepositoOrigemId(tipo === "entrada" ? "" : principal?.id ?? "");
-    setDepositoDestinoId(tipo === "entrada" ? principal?.id ?? "" : "");
+    setDepositoOrigemId(tipo === "entrada" ? "" : padrao?.depositoOrigemId ?? principal?.id ?? "");
+    setDepositoDestinoId(tipo === "entrada" ? padrao?.depositoDestinoId ?? principal?.id ?? "" : padrao?.depositoDestinoId ?? "");
     setErro("");
     setModal("movimentacao");
   }
@@ -634,6 +641,10 @@ export default function EstoquePage() {
         setMovimentoQuantidade((quantidadeAtual) => String((Number(quantidadeAtual) || 0) + 1));
       } else {
         setMovimentoQuantidade("1");
+        setLoteId("");
+        setNumeroSerie("");
+        setLocalizacaoId("");
+        setLocalizacaoDestinoId("");
       }
       setItemSelecionadoId(item.id);
       return { ok: true };
@@ -680,7 +691,7 @@ export default function EstoquePage() {
     : "Movimentar estoque";
   const scannerContinuo = scannerContexto === "movimentacao" || scannerContexto === "inventario";
   const scannerTitulo = scannerContexto === "cadastro" ? "Capturar código do produto"
-    : scannerContexto === "movimentacao" ? `Ler itens para ${movimentoTipo === "entrada" ? "entrada" : "saída"}`
+    : scannerContexto === "movimentacao" ? `Ler itens para ${movimentoTipo === "entrada" ? "entrada" : movimentoTipo === "transferencia" ? "transferência" : "saída"}`
     : scannerContexto === "inventario" ? "Contagem por código de barras"
     : "Localizar produto";
   const scannerDescricao = scannerContexto === "cadastro" ? "O código lido será preenchido no cadastro atual."
@@ -1002,10 +1013,25 @@ export default function EstoquePage() {
           ) : null}
 
           {!carregando && aba === "depositos" ? (
-            <div className={styles.catalogList}>{depositos.map((deposito) => {
-              const saldosDeposito = saldos.filter((saldo) => saldo.deposito_id === deposito.id);
-              return <article className={styles.catalogCard} key={deposito.id}><div className={styles.catalogIcon}><Warehouse size={22} /></div><div className={styles.catalogMain}><div className={styles.catalogHeading}><div><span className={styles.typeBadge}>{deposito.principal ? "Principal" : deposito.codigo}</span><h3>{deposito.nome}</h3><p>{deposito.descricao || `${saldosDeposito.length} posições com saldo`} · {deposito.permite_saldo_negativo ? "Negativo liberado" : "Negativo bloqueado"}</p></div><strong>{quantidade(saldosDeposito.reduce((total, saldo) => total + Number(saldo.saldo_fisico), 0))}</strong></div></div>{podeConfigurar && !configuracoes.bloquear_negativo ? <button className={styles.secondaryButton} onClick={() => void enviar({ acao: "salvar_deposito", id: deposito.id, codigo: deposito.codigo, nome: deposito.nome, descricao: deposito.descricao, principal: deposito.principal, permite_saldo_negativo: !deposito.permite_saldo_negativo })}>{deposito.permite_saldo_negativo ? "Bloquear negativo" : "Permitir negativo"}</button> : null}</article>;
-            })}</div>
+            <EstruturaEstoquePanel
+              modo="depositos"
+              itens={itens}
+              depositos={depositos}
+              localizacoes={localizacoes}
+              lotes={lotes}
+              saldos={saldos}
+              busca={busca}
+              diasAlertaValidade={configuracoes.dias_alerta_validade}
+              bloquearNegativo={configuracoes.bloquear_negativo}
+              podeConfigurar={podeConfigurar}
+              podeMovimentar={podeMovimentar}
+              onAtualizar={carregar}
+              onMovimentar={(dados) => abrirMovimentacao(
+                dados.itemId ? itens.find((item) => item.id === dados.itemId) : undefined,
+                dados.tipo,
+                dados,
+              )}
+            />
           ) : null}
 
           {!carregando && aba === "localizacoes" ? (
@@ -1013,7 +1039,25 @@ export default function EstoquePage() {
           ) : null}
 
           {!carregando && aba === "lotes" ? (
-            lotes.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Lote</th><th>Item</th><th>Fabricante</th><th>Validade</th><th>Situação</th></tr></thead><tbody>{lotes.map((lote) => <tr key={lote.id}><td><strong>{lote.codigo}</strong></td><td>{itens.find((item) => item.id === lote.estoque_item_id)?.nome || "Item arquivado"}</td><td>{lote.fabricante || "—"}</td><td>{lote.validade ? new Date(`${lote.validade}T12:00:00`).toLocaleDateString("pt-BR") : "Sem validade"}</td><td><span className={lote.bloqueado ? styles.lowBadge : styles.typeBadge}>{lote.bloqueado ? "Bloqueado" : "Disponível"}</span></td></tr>)}</tbody></table></div> : <div className={styles.empty}>Nenhum lote cadastrado.</div>
+            <EstruturaEstoquePanel
+              modo="lotes"
+              itens={itens}
+              depositos={depositos}
+              localizacoes={localizacoes}
+              lotes={lotes}
+              saldos={saldos}
+              busca={busca}
+              diasAlertaValidade={configuracoes.dias_alerta_validade}
+              bloquearNegativo={configuracoes.bloquear_negativo}
+              podeConfigurar={podeConfigurar}
+              podeMovimentar={podeMovimentar}
+              onAtualizar={carregar}
+              onMovimentar={(dados) => abrirMovimentacao(
+                dados.itemId ? itens.find((item) => item.id === dados.itemId) : undefined,
+                dados.tipo,
+                dados,
+              )}
+            />
           ) : null}
 
           {!carregando && aba === "reservas" ? (
@@ -1100,11 +1144,20 @@ export default function EstoquePage() {
             {modal === "movimentacao" ? (
               <div className={styles.modalBody}>
                 <div className={styles.formGrid}>
-                  <div className={`${styles.field} ${styles.fullField}`}><span>Item *</span><div className={styles.barcodeInputGroup}><select value={itemSelecionadoId} onChange={(event) => setItemSelecionadoId(event.target.value)}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · saldo {quantidade(item.saldo, item.unidade)}</option>)}</select>{movimentoTipo !== "ajuste" ? <button type="button" aria-label="Ler itens por código de barras" title="Ler itens por código de barras" onClick={abrirScannerMovimentacao}><ScanBarcode size={19} /></button> : null}</div></div>
-                  <label className={styles.field}><span>Movimento</span><select value={movimentoTipo} onChange={(event) => setMovimentoTipo(event.target.value as "entrada" | "saida" | "ajuste")}><option value="entrada">Entrada</option><option value="saida">Saída manual</option><option value="ajuste">Ajuste de inventário</option></select></label>
+                  <div className={`${styles.field} ${styles.fullField}`}><span>Item *</span><div className={styles.barcodeInputGroup}><select value={itemSelecionadoId} onChange={(event) => { setItemSelecionadoId(event.target.value); setLoteId(""); setNumeroSerie(""); setLocalizacaoId(""); setLocalizacaoDestinoId(""); }}><option value="">Selecione</option>{itens.map((item) => <option key={item.id} value={item.id}>{item.nome} · saldo {quantidade(item.saldo, item.unidade)}</option>)}</select>{movimentoTipo !== "ajuste" ? <button type="button" aria-label="Ler itens por código de barras" title="Ler itens por código de barras" onClick={abrirScannerMovimentacao}><ScanBarcode size={19} /></button> : null}</div></div>
+                  <label className={styles.field}><span>Movimento</span><select value={movimentoTipo} onChange={(event) => {
+                    const tipo = event.target.value as "entrada" | "saida" | "ajuste" | "transferencia";
+                    const principal = depositos.find((deposito) => deposito.principal) ?? depositos[0];
+                    setMovimentoTipo(tipo);
+                    setDepositoOrigemId(tipo === "entrada" ? "" : principal?.id ?? "");
+                    setDepositoDestinoId(tipo === "entrada" ? principal?.id ?? "" : "");
+                    setLocalizacaoId("");
+                    setLocalizacaoDestinoId("");
+                  }}><option value="entrada">Entrada</option><option value="saida">Saída manual</option><option value="transferencia">Transferência</option><option value="ajuste">Ajuste de inventário</option></select></label>
                   {movimentoTipo !== "entrada" ? <label className={styles.field}><span>Depósito de origem</span><select value={depositoOrigemId} onChange={(event) => setDepositoOrigemId(event.target.value)}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label> : null}
-                  {movimentoTipo === "entrada" ? <label className={styles.field}><span>Depósito de destino</span><select value={depositoDestinoId} onChange={(event) => setDepositoDestinoId(event.target.value)}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label> : null}
-                  <label className={styles.field}><span>Localização</span><select value={localizacaoId} onChange={(event) => setLocalizacaoId(event.target.value)}><option value="">Sem localização</option>{localizacoes.filter((localizacao) => localizacao.deposito_id === depositoMovimentoId).map((localizacao) => <option key={localizacao.id} value={localizacao.id}>{localizacao.codigo} · {localizacao.nome}</option>)}</select></label>
+                  {movimentoTipo === "entrada" || movimentoTipo === "transferencia" ? <label className={styles.field}><span>Depósito de destino</span><select value={depositoDestinoId} onChange={(event) => { setDepositoDestinoId(event.target.value); setLocalizacaoDestinoId(""); }}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label> : null}
+                  <label className={styles.field}><span>{movimentoTipo === "transferencia" ? "Localização de origem" : "Localização"}</span><select value={localizacaoId} onChange={(event) => setLocalizacaoId(event.target.value)}><option value="">Sem localização</option>{localizacoes.filter((localizacao) => localizacao.deposito_id === depositoMovimentoId).map((localizacao) => <option key={localizacao.id} value={localizacao.id}>{localizacao.codigo} · {localizacao.nome}</option>)}</select></label>
+                  {movimentoTipo === "transferencia" ? <label className={styles.field}><span>Localização de destino</span><select value={localizacaoDestinoId} onChange={(event) => setLocalizacaoDestinoId(event.target.value)}><option value="">Sem localização</option>{localizacoes.filter((localizacao) => localizacao.deposito_id === depositoDestinoId).map((localizacao) => <option key={localizacao.id} value={localizacao.id}>{localizacao.codigo} · {localizacao.nome}</option>)}</select></label> : null}
                   <label className={styles.field}><span>Lote</span><select value={loteId} onChange={(event) => setLoteId(event.target.value)}><option value="">Sem lote</option>{lotes.filter((lote) => lote.estoque_item_id === itemSelecionadoId && !lote.bloqueado).map((lote) => <option key={lote.id} value={lote.id}>{lote.codigo}{lote.validade ? ` · ${new Date(`${lote.validade}T12:00:00`).toLocaleDateString("pt-BR")}` : ""}</option>)}</select></label>
                   {itemSelecionado?.controla_serie ? <label className={styles.field}><span>Número de série</span><input value={numeroSerie} onChange={(event) => setNumeroSerie(event.target.value)} /></label> : null}
                   <label className={styles.field}><span>{movimentoTipo === "ajuste" ? "Novo saldo" : "Quantidade"}</span><input type="number" min="0" step="0.001" value={movimentoQuantidade} onChange={(event) => setMovimentoQuantidade(event.target.value)} /></label>
@@ -1193,7 +1246,7 @@ export default function EstoquePage() {
               <button className={styles.secondaryButton} disabled={salvando} onClick={() => setModal(null)}>Cancelar</button>
               {modal === "item" ? <button className={styles.primaryButton} disabled={salvando || !itemForm.nome.trim() || (itemForm.categoria_nova && !itemForm.categoria_nome.trim()) || (itemForm.marca_nova && !itemForm.marca_nome.trim())} onClick={() => void enviar({ acao: "salvar_item", ...itemForm })}>{salvando ? "Salvando..." : "Salvar item"}</button> : null}
               {modal === "catalogo" ? <button className={styles.primaryButton} disabled={salvando || !catalogoForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_catalogo", ...catalogoForm })}>{salvando ? "Salvando..." : "Salvar catálogo"}</button> : null}
-              {modal === "movimentacao" ? <button className={styles.primaryButton} disabled={salvando || !itemSelecionadoId || !depositoMovimentoId} onClick={() => void enviar({ acao: "movimentar_documento", estoque_item_id: itemSelecionadoId, tipo: movimentoTipo, quantidade: movimentoQuantidade, deposito_origem_id: depositoOrigemId, deposito_destino_id: depositoDestinoId, localizacao_origem_id: movimentoTipo === "entrada" ? null : localizacaoId, localizacao_destino_id: movimentoTipo === "entrada" ? localizacaoId : null, lote_id: loteId, numero_serie: numeroSerie, custo_unitario: itemSelecionado?.custo_unitario, observacao, idempotency_key: crypto.randomUUID() })}>{salvando ? "Registrando..." : "Registrar movimento"}</button> : null}
+              {modal === "movimentacao" ? <button className={styles.primaryButton} disabled={salvando || !itemSelecionadoId || !depositoMovimentoId || ((movimentoTipo === "entrada" || movimentoTipo === "transferencia") && !depositoDestinoId) || ((itemSelecionado?.controla_lote || itemSelecionado?.controla_validade) && !loteId) || (itemSelecionado?.controla_serie && !numeroSerie.trim())} onClick={() => void enviar({ acao: "movimentar_documento", estoque_item_id: itemSelecionadoId, tipo: movimentoTipo, quantidade: movimentoQuantidade, deposito_origem_id: depositoOrigemId, deposito_destino_id: depositoDestinoId, localizacao_origem_id: movimentoTipo === "entrada" ? null : localizacaoId, localizacao_destino_id: movimentoTipo === "entrada" ? localizacaoId : movimentoTipo === "transferencia" ? localizacaoDestinoId : null, lote_id: loteId, numero_serie: numeroSerie, custo_unitario: itemSelecionado?.custo_unitario, observacao, idempotency_key: crypto.randomUUID() })}>{salvando ? "Registrando..." : movimentoTipo === "transferencia" ? "Confirmar transferência" : "Registrar movimento"}</button> : null}
               {modal === "baixa" ? <button className={styles.primaryButton} disabled={salvando || !catalogoSelecionadoId || !depositoOrigemId} onClick={() => void enviar({ acao: "registrar_baixa", catalogo_servico_id: catalogoSelecionadoId, deposito_id: depositoOrigemId, quantidade: baixaQuantidade, origem_id: origemId, observacao, idempotency_key: crypto.randomUUID() })}>{salvando ? "Registrando..." : "Confirmar baixa"}</button> : null}
               {modal === "inventario" ? <button className={styles.primaryButton} disabled={salvando || !inventarioDepositoId || !inventarioDescricao.trim() || !Object.values(inventarioContagens).some((valor) => valor !== "")} onClick={() => void enviar({ acao: "salvar_inventario", deposito_id: inventarioDepositoId, descricao: inventarioDescricao, tipo_contagem: "aberta", itens: Object.entries(inventarioContagens).filter(([, valor]) => valor !== "").map(([estoque_item_id, primeira_contagem]) => ({ estoque_item_id, primeira_contagem })) })}>{salvando ? "Salvando..." : "Encerrar contagem"}</button> : null}
               {modal === "localizacao" ? <button className={styles.primaryButton} disabled={salvando || !localizacaoForm.deposito_id || !localizacaoForm.codigo.trim() || !localizacaoForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_localizacao", ...localizacaoForm })}>{salvando ? "Salvando..." : "Salvar localização"}</button> : null}

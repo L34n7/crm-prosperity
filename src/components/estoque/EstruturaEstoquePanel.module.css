@@ -1,0 +1,140 @@
+.panelHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--crm-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--crm-surface-soft);
+}
+
+.panelHeader > div { display: flex; flex-direction: column; gap: 3px; }
+.panelHeader strong { color: var(--crm-text-strong); font-size: 17px; }
+.panelHeader span { color: var(--crm-text-muted); font-size: 14px; }
+
+.primaryButton,
+.panelHeader button,
+.depositCard footer button,
+.actions button,
+.modalFooter button,
+.modalHeader button {
+  min-height: 40px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 12px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primaryButton { border-color: transparent !important; background: var(--crm-primary-strong) !important; color: var(--crm-text-inverse) !important; }
+button:disabled { cursor: not-allowed !important; opacity: .5; }
+
+.depositGrid { padding: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.depositCard { border: 1px solid var(--crm-border); border-radius: 18px; padding: 17px; background: var(--crm-surface); box-shadow: var(--crm-shadow-xs); }
+.depositCard header { display: flex; gap: 12px; align-items: flex-start; }
+.depositCard header > div { min-width: 0; }
+.icon,
+.summaryIcon { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--crm-primary-border); background: var(--crm-primary-soft); color: var(--crm-primary-text); }
+.icon { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 13px; }
+.depositCard h3 { margin: 6px 0 2px; color: var(--crm-text-strong); font-size: 18px; }
+.depositCard p { margin: 0; color: var(--crm-text-muted); font-size: 14px; }
+.badges { display: flex; align-items: center; gap: 6px; }
+.badges span,
+.badges strong { border: 1px solid var(--crm-primary-border); border-radius: 999px; padding: 3px 7px; background: var(--crm-primary-soft); color: var(--crm-primary-text); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.badges strong { background: var(--crm-primary-strong); color: var(--crm-text-inverse); }
+.depositMetrics { margin-top: 15px; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--crm-border); border-radius: 13px; overflow: hidden; }
+.depositMetrics span { padding: 10px; display: flex; flex-direction: column; gap: 3px; background: var(--crm-surface-soft); }
+.depositMetrics span + span { border-left: 1px solid var(--crm-border); }
+.depositMetrics small { color: var(--crm-text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.depositMetrics strong { color: var(--crm-text-strong); font-size: 16px; }
+.policy { margin: 11px 0; display: flex; align-items: center; gap: 7px; color: var(--crm-text-muted); font-size: 13px; font-weight: 700; }
+.depositCard footer { display: flex; gap: 7px; flex-wrap: wrap; }
+.depositCard footer button { min-height: 36px; padding: 0 10px; font-size: 13px; }
+
+.expirySummary { padding: 14px 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; border-bottom: 1px solid var(--crm-border); }
+.expirySummary article { min-height: 68px; padding: 10px; border: 1px solid var(--crm-border); border-radius: 14px; display: flex; align-items: center; gap: 10px; background: var(--crm-surface); }
+.summaryIcon { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 11px; }
+.expirySummary article div { display: flex; flex-direction: column; gap: 3px; }
+.expirySummary strong { color: var(--crm-text-strong); font-size: 19px; }
+.expirySummary small { color: var(--crm-text-muted); font-size: 12px; font-weight: 700; }
+.dangerSummary { border-color: var(--crm-danger-border) !important; background: var(--crm-danger-bg) !important; }
+.dangerSummary .summaryIcon { border-color: var(--crm-danger-border); background: var(--crm-surface); color: var(--crm-danger-text); }
+.warningSummary { border-color: var(--crm-warning-border) !important; background: var(--crm-warning-bg) !important; }
+.warningSummary .summaryIcon { border-color: var(--crm-warning-border); background: var(--crm-surface); color: var(--crm-warning-text); }
+
+.tableWrap { width: 100%; overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; color: var(--crm-text); font-size: 14px; }
+.table th,
+.table td { padding: 13px 14px; border-bottom: 1px solid var(--crm-border); text-align: left; white-space: nowrap; }
+.table th { background: var(--crm-surface-soft); color: var(--crm-text-muted); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+.table td strong,
+.table td small { display: block; }
+.table td strong { color: var(--crm-text-strong); }
+.table td small { margin-top: 3px; color: var(--crm-text-muted); }
+.expiredRow { background: var(--crm-danger-bg); }
+.warningRow { background: var(--crm-warning-bg); }
+.statusBadge { display: inline-flex; border: 1px solid var(--crm-primary-border); border-radius: 999px; padding: 5px 8px; background: var(--crm-primary-soft); color: var(--crm-primary-text); font-size: 12px; font-weight: 850; }
+.statusDanger { border-color: var(--crm-danger-border); background: var(--crm-danger-bg); color: var(--crm-danger-text); }
+.statusWarning { border-color: var(--crm-warning-border); background: var(--crm-warning-bg); color: var(--crm-warning-text); }
+.actions { display: flex; gap: 6px; }
+.actions button { min-height: 34px; padding: 0 9px; font-size: 12px; }
+
+.empty { min-height: 220px; padding: 30px; display: flex; align-items: center; justify-content: center; color: var(--crm-text-muted); font-size: 15px; }
+.modalOverlay { position: fixed; inset: 0; z-index: 1100; padding: 22px; display: flex; align-items: center; justify-content: center; background: var(--crm-overlay); backdrop-filter: blur(7px); }
+.modal { width: min(720px, 100%); max-height: calc(100vh - 44px); border: 1px solid var(--crm-border); border-radius: 22px; overflow: hidden; display: flex; flex-direction: column; background: var(--crm-surface); box-shadow: var(--crm-shadow-lg); }
+.positionsModal { width: min(1180px, 100%); }
+.modalHeader,
+.modalFooter { padding: 17px 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; background: var(--crm-surface); }
+.modalHeader { border-bottom: 1px solid var(--crm-border); align-items: flex-start; }
+.modalHeader > div { display: flex; flex-direction: column; gap: 4px; }
+.modalHeader span { color: var(--crm-primary-text); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.modalHeader h2 { margin: 0; color: var(--crm-text-strong); font-size: 23px; }
+.modalHeader button { width: 42px; padding: 0; }
+.modalBody { padding: 20px; overflow-y: auto; }
+.positionsBody { min-height: 200px; overflow: auto; }
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.formGrid label { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.formGrid label > span { color: var(--crm-text-strong); font-size: 14px; font-weight: 800; }
+.formGrid input,
+.formGrid select,
+.formGrid textarea { width: 100%; min-height: 44px; border: 1px solid var(--crm-border-strong); border-radius: 12px; outline: 0; padding: 10px 12px; background: var(--crm-surface-input); color: var(--crm-text-strong); font: inherit; font-size: 15px; }
+.formGrid textarea { min-height: 84px; resize: vertical; }
+.formGrid input:focus,
+.formGrid select:focus,
+.formGrid textarea:focus { border-color: var(--crm-primary); box-shadow: var(--crm-focus-ring); }
+.fullField { grid-column: 1 / -1; }
+.checkField { min-height: 72px; padding: 12px; border: 1px solid var(--crm-border); border-radius: 13px; display: grid !important; grid-template-columns: auto 1fr; align-items: flex-start; background: var(--crm-surface-soft); }
+.checkField input { width: 18px; min-height: 18px; margin-top: 2px; }
+.checkField > span { display: flex; flex-direction: column; gap: 4px; }
+.checkField small { color: var(--crm-text-muted); font-size: 12px; font-weight: 600; }
+.notice { margin-top: 14px; padding: 13px; border: 1px dashed var(--crm-primary-border); border-radius: 13px; display: flex; align-items: flex-start; gap: 9px; background: var(--crm-primary-soft); color: var(--crm-text-muted); font-size: 14px; line-height: 1.5; }
+.notice svg { flex: 0 0 auto; color: var(--crm-primary-text); }
+.error { margin: 0 20px 15px; padding: 12px; border: 1px solid var(--crm-danger-border); border-radius: 13px; display: flex; align-items: center; gap: 8px; background: var(--crm-danger-bg); color: var(--crm-danger-text); font-size: 14px; font-weight: 750; }
+.modalFooter { border-top: 1px solid var(--crm-border); justify-content: flex-end; }
+
+@media (max-width: 960px) {
+  .depositGrid { grid-template-columns: 1fr; }
+  .expirySummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .panelHeader { align-items: stretch; flex-direction: column; }
+  .panelHeader button { width: 100%; }
+  .depositGrid,
+  .expirySummary { padding: 12px; grid-template-columns: 1fr; }
+  .depositMetrics { grid-template-columns: 1fr; }
+  .depositMetrics span + span { border-left: 0; border-top: 1px solid var(--crm-border); }
+  .modalOverlay { padding: 8px; align-items: flex-end; }
+  .modal { max-height: calc(100vh - 16px); border-radius: 20px 20px 0 0; }
+  .formGrid { grid-template-columns: 1fr; }
+  .fullField { grid-column: auto; }
+  .actions button span { display: none; }
+}

@@ -71,6 +71,18 @@ function mensagemBanco(error: { message?: string } | null | undefined) {
     return "Já existe uma categoria com este nome.";
   }
 
+  if (message.includes("estoque_depositos_empresa_id_codigo_key")) {
+    return "Já existe um depósito com este código.";
+  }
+
+  if (message.includes("estoque_localizacoes_empresa_id_deposito_id_codigo_key")) {
+    return "Já existe uma localização com este código no depósito selecionado.";
+  }
+
+  if (message.includes("estoque_lotes_empresa_id_estoque_item_id_codigo_key")) {
+    return "Já existe este lote para o produto selecionado.";
+  }
+
   if (message.includes("catalogo_servicos_empresa_codigo_uk")) {
     return "Já existe um item ativo do catálogo com este código.";
   }
@@ -325,13 +337,45 @@ export async function POST(request: Request) {
       const nome = texto(body.nome);
       const codigo = texto(body.codigo).toUpperCase();
       if (!nome || !codigo) return erro("Informe o código e o nome do depósito.");
-      const payload = { empresa_id: contexto.empresaId, nome, codigo, descricao: texto(body.descricao) || null, principal: Boolean(body.principal), permite_saldo_negativo: Boolean(body.permite_saldo_negativo), updated_at: new Date().toISOString() };
-      if (payload.principal) await supabase.from("estoque_depositos").update({ principal: false }).eq("empresa_id", contexto.empresaId);
+
+      const [{ data: depositoAtual, error: depositoError }, { count: totalDepositos, error: totalError }, { data: configuracao, error: configuracaoError }] = await Promise.all([
+        id
+          ? supabase.from("estoque_depositos").select("id,principal").eq("empresa_id", contexto.empresaId).eq("id", id).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+        supabase.from("estoque_depositos").select("id", { count: "exact", head: true }).eq("empresa_id", contexto.empresaId).eq("ativo", true),
+        supabase.from("estoque_configuracoes").select("bloquear_negativo").eq("empresa_id", contexto.empresaId).maybeSingle(),
+      ]);
+      const consultaError = depositoError ?? totalError ?? configuracaoError;
+      if (consultaError) return erro(mensagemBanco(consultaError));
+      if (id && !depositoAtual) return erro("Depósito não encontrado.", 404);
+
+      const principal = (totalDepositos ?? 0) === 0 || Boolean(body.principal) || Boolean(depositoAtual?.principal);
+      const permiteSaldoNegativo = configuracao?.bloquear_negativo === false && Boolean(body.permite_saldo_negativo);
+      const payload = { empresa_id: contexto.empresaId, nome, codigo, descricao: texto(body.descricao) || null, principal, permite_saldo_negativo: permiteSaldoNegativo, updated_at: new Date().toISOString() };
+      let principalAnterior: string | null = null;
+      if (payload.principal) {
+        const { data: anterior, error: anteriorError } = await supabase
+          .from("estoque_depositos")
+          .select("id")
+          .eq("empresa_id", contexto.empresaId)
+          .eq("principal", true)
+          .neq("id", id || "00000000-0000-0000-0000-000000000000")
+          .maybeSingle();
+        if (anteriorError) return erro(mensagemBanco(anteriorError));
+        principalAnterior = anterior?.id ?? null;
+        if (principalAnterior) {
+          const { error: liberarError } = await supabase.from("estoque_depositos").update({ principal: false }).eq("empresa_id", contexto.empresaId).eq("id", principalAnterior);
+          if (liberarError) return erro(mensagemBanco(liberarError));
+        }
+      }
       const query = id
         ? supabase.from("estoque_depositos").update(payload).eq("id", id).eq("empresa_id", contexto.empresaId)
         : supabase.from("estoque_depositos").insert({ ...payload, created_by: contexto.usuario.id });
       const { error } = await query;
-      if (error) return erro(mensagemBanco(error));
+      if (error) {
+        if (principalAnterior) await supabase.from("estoque_depositos").update({ principal: true }).eq("empresa_id", contexto.empresaId).eq("id", principalAnterior);
+        return erro(mensagemBanco(error));
+      }
       return NextResponse.json({ ok: true, message: "Depósito salvo com sucesso." });
     }
 
@@ -378,12 +422,41 @@ export async function POST(request: Request) {
     }
 
     if (acao === "salvar_lote") {
+      const id = texto(body.id);
       const itemId = texto(body.estoque_item_id);
-      const codigo = texto(body.codigo);
+      const codigo = texto(body.codigo).toUpperCase();
+      const fabricadoEm = texto(body.fabricado_em) || null;
+      const validade = texto(body.validade) || null;
       if (!itemId || !codigo) return erro("Informe o item e o código do lote.");
-      const { error } = await supabase.from("estoque_lotes").insert({ empresa_id: contexto.empresaId, estoque_item_id: itemId, codigo, fabricado_em: texto(body.fabricado_em) || null, validade: texto(body.validade) || null, fabricante: texto(body.fabricante) || null });
+      if (fabricadoEm && validade && validade < fabricadoEm) return erro("A validade não pode ser anterior à data de fabricação.");
+
+      const [{ data: item, error: itemError }, { data: loteAtual, error: loteError }] = await Promise.all([
+        supabase.from("estoque_itens").select("id,controla_lote,controla_validade,ativo").eq("empresa_id", contexto.empresaId).eq("id", itemId).maybeSingle(),
+        id
+          ? supabase.from("estoque_lotes").select("id,estoque_item_id").eq("empresa_id", contexto.empresaId).eq("id", id).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+      const consultaError = itemError ?? loteError;
+      if (consultaError) return erro(mensagemBanco(consultaError));
+      if (!item?.ativo) return erro("Produto não encontrado ou arquivado.", 404);
+      if (!item.controla_lote && !item.controla_validade) return erro("Ative o controle de lote ou validade no cadastro do produto antes de criar o lote.");
+      if (id && !loteAtual) return erro("Lote não encontrado.", 404);
+      if (loteAtual && loteAtual.estoque_item_id !== itemId) return erro("Não é possível trocar o produto de um lote já cadastrado.");
+
+      const payload = {
+        empresa_id: contexto.empresaId,
+        estoque_item_id: itemId,
+        codigo,
+        fabricado_em: fabricadoEm,
+        validade,
+        fabricante: texto(body.fabricante) || null,
+      };
+      const query = id
+        ? supabase.from("estoque_lotes").update(payload).eq("empresa_id", contexto.empresaId).eq("id", id)
+        : supabase.from("estoque_lotes").insert(payload);
+      const { error } = await query;
       if (error) return erro(mensagemBanco(error));
-      return NextResponse.json({ ok: true, message: "Lote cadastrado." });
+      return NextResponse.json({ ok: true, message: id ? "Lote atualizado sem alterar o saldo." : "Lote cadastrado sem alterar o saldo." });
     }
 
     if (acao === "salvar_configuracoes") {
@@ -403,6 +476,22 @@ export async function POST(request: Request) {
       const justificativa = texto(body.observacao);
       if (!itemId || quantidadeMovimento < 0 || (tipo !== "ajuste" && quantidadeMovimento === 0) || !["entrada", "saida", "transferencia", "ajuste"].includes(tipo)) return erro("Dados da operação inválidos.");
       if ((tipo === "saida" || tipo === "ajuste") && !justificativa) return erro("A justificativa é obrigatória para esta operação.");
+      if (tipo === "entrada" && !depositoDestino) return erro("Informe o depósito de destino da entrada.");
+      if ((tipo === "saida" || tipo === "ajuste") && !depositoOrigem) return erro("Informe o depósito da posição movimentada.");
+      if (tipo === "transferencia" && (!depositoOrigem || !depositoDestino)) return erro("Informe os depósitos de origem e destino da transferência.");
+      if (tipo === "transferencia" && depositoOrigem === depositoDestino && texto(body.localizacao_origem_id) === texto(body.localizacao_destino_id)) return erro("A posição de destino deve ser diferente da posição de origem.");
+
+      const { data: itemMovimentado, error: itemMovimentadoError } = await supabase
+        .from("estoque_itens")
+        .select("id,controla_lote,controla_validade,controla_serie")
+        .eq("empresa_id", contexto.empresaId)
+        .eq("id", itemId)
+        .eq("ativo", true)
+        .maybeSingle();
+      if (itemMovimentadoError) return erro(mensagemBanco(itemMovimentadoError));
+      if (!itemMovimentado) return erro("Produto não encontrado ou arquivado.", 404);
+      if ((itemMovimentado.controla_lote || itemMovimentado.controla_validade) && !texto(body.lote_id)) return erro("Selecione o lote desta movimentação.");
+      if (itemMovimentado.controla_serie && !texto(body.numero_serie)) return erro("Informe o número de série desta movimentação.");
       const idempotencyKey = texto(body.idempotency_key) || crypto.randomUUID();
       const itemDocumento = {
         estoque_item_id: itemId,
