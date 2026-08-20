@@ -23,3 +23,17 @@
 .totalBox strong{font-size:17px}
 .xmlSummary strong,.xmlLine strong{font-size:14px}
 .detailRow{font-size:14px}
+.xmlLineCreating{background:#f0fdfa;border-color:#99f6e4}
+.xmlProductInfo{align-self:center}
+.xmlNewProduct{grid-column:1/-1;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px!important;padding:14px;background:#fff;border:1px solid #a7f3d0;border-radius:11px}
+.xmlNewProductTitle{grid-column:1/-1;display:flex!important;align-items:center;gap:9px!important;color:#0f766e}
+.xmlNewProductTitle>div{display:grid;gap:2px}
+.xmlNewProductTitle strong{font-size:15px}
+.xmlNewProductTitle small{margin:0}
+.xmlCheck{align-self:end;display:flex!important;align-items:center!important;min-height:41px;padding:9px 11px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:9px}
+.xmlCheck input{width:17px!important;min-height:17px!important;margin:0}
+.xmlCheck span{font-size:14px!important;color:#0f766e!important}
+:global(html[data-theme="dark"]) .root .xmlLineCreating{background:#102522;border-color:#185c53}
+:global(html[data-theme="dark"]) .root .xmlNewProduct{background:#0f172a;border-color:#185c53}
+@media(max-width:900px){.xmlNewProduct{grid-template-columns:1fr 1fr}.xmlLine>.xmlProductInfo{grid-column:1/-1}}
+@media(max-width:640px){.xmlNewProduct{grid-template-columns:1fr}.xmlNewProduct,.xmlNewProductTitle{grid-column:1/-1}.xmlLine>.xmlProductInfo{grid-column:auto}}

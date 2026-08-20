@@ -32,6 +32,7 @@ type ItemEstoque = {
 };
 type Deposito = { id: string; nome: string; codigo: string };
 type Localizacao = { id: string; deposito_id: string; codigo: string; nome: string };
+type Classificacao = { id: string; nome: string };
 type Fornecedor = {
   id: string; nome: string; nome_fantasia: string | null; tipo_pessoa: "fisica" | "juridica";
   documento: string | null; inscricao_estadual: string | null; email: string | null;
@@ -67,6 +68,9 @@ type XmlItem = {
   numero_item: number; codigo_fornecedor: string; ean: string; descricao: string; unidade: string;
   quantidade: number; custo_unitario: number; lote_codigo: string; fabricado_em: string; validade: string;
   numero_serie: string; estoque_item_id: string; correspondencia: "automatica" | "pendente";
+  criar_item: boolean; categoria_id: string; categoria_nome: string; categoria_nova: boolean;
+  marca_id: string; marca_nome: string; marca_nova: boolean;
+  novo_nome: string; controla_lote: boolean; controla_validade: boolean;
 };
 type Nfe = {
   chave: string; numero: string; serie: string; emissao: string; frete: number; total: number;
@@ -96,12 +100,16 @@ export default function ComprasPanel({
   itens,
   depositos,
   localizacoes,
+  categorias,
+  marcas,
   permissoes,
   onAtualizarEstoque,
 }: {
   itens: ItemEstoque[];
   depositos: Deposito[];
   localizacoes: Localizacao[];
+  categorias: Classificacao[];
+  marcas: Classificacao[];
   permissoes: string[];
   onAtualizarEstoque: () => void;
 }) {
@@ -210,7 +218,22 @@ export default function ComprasPanel({
       const resposta = await fetch("/api/compras", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "analisar_xml", xml: conteudo }) });
       const dados = await resposta.json();
       if (!resposta.ok) throw new Error(dados.error || "XML inválido.");
-      setNfe(dados.nfe); setXmlDepositoId(depositos[0]?.id || ""); setXmlLocalizacoes({}); setModal("xml");
+      setNfe({
+        ...dados.nfe,
+        itens: (dados.nfe.itens ?? []).map((item: XmlItem) => ({
+          ...item,
+          criar_item: false,
+          categoria_id: "",
+          categoria_nome: "",
+          categoria_nova: false,
+          marca_id: "",
+          marca_nome: "",
+          marca_nova: false,
+          novo_nome: item.descricao,
+          controla_lote: Boolean(item.lote_codigo || item.validade),
+          controla_validade: Boolean(item.validade),
+        })),
+      }); setXmlDepositoId(depositos[0]?.id || ""); setXmlLocalizacoes({}); setModal("xml");
     } catch (error) { setErro(error instanceof Error ? error.message : "Erro ao analisar XML."); }
     finally { setSalvando(false); if (arquivoRef.current) arquivoRef.current.value = ""; }
   }
@@ -220,6 +243,12 @@ export default function ComprasPanel({
   }
   function atualizarRecebimento(indice: number, campo: keyof LinhaRecebimento, valor: string) {
     setRecebimentoItens((atual) => atual.map((linha, posicao) => posicao === indice ? { ...linha, [campo]: valor } : linha));
+  }
+  function atualizarItemNfe(indice: number, alteracoes: Partial<XmlItem>) {
+    setNfe((atual) => atual ? ({
+      ...atual,
+      itens: atual.itens.map((linha, posicao) => posicao === indice ? { ...linha, ...alteracoes } : linha),
+    }) : atual);
   }
 
   const totalPedidoForm = pedidoForm.itens.reduce((total, linha) => total + Math.max(0, Number(linha.quantidade)) * Math.max(0, Number(linha.valor_unitario)) - Math.max(0, Number(linha.desconto)), 0) - Math.max(0, Number(pedidoForm.desconto)) + Math.max(0, Number(pedidoForm.acrescimo)) + Math.max(0, Number(pedidoForm.frete));
@@ -301,7 +330,86 @@ export default function ComprasPanel({
 
       {modal === "recebimento" && pedidoSelecionado ? <form className={styles.body} onSubmit={(event) => { event.preventDefault(); const itensRecebidos = recebimentoItens.filter((item) => Number(item.quantidade) > 0); if (!itensRecebidos.length) { setErro("Informe uma quantidade recebida em ao menos um item."); return; } void enviar({ acao: "receber_pedido", id: pedidoSelecionado.id, deposito_id: pedidoSelecionado.deposito_id, itens: itensRecebidos, observacao: observacaoRecebimento, idempotency_key: crypto.randomUUID() }, "Compra recebida.").then((ok) => { if (ok) { setModal(null); onAtualizarEstoque(); } }); }}><div className={styles.notice}><Truck size={18} /><span>O recebimento criará uma entrada confirmada no depósito <strong>{depositos.find((d) => d.id === pedidoSelecionado.deposito_id)?.nome}</strong>. Use quantidade zero para deixar um item pendente.</span></div><div className={styles.lines}>{recebimentoItens.map((linha, indice) => { const pedidoItem = pedidoSelecionado.itens.find((item) => item.id === linha.pedido_item_id)!; const item = itens.find((registro) => registro.id === pedidoItem.estoque_item_id); const vaiReceber = Number(linha.quantidade) > 0; return <div className={styles.receiveLine} key={linha.pedido_item_id}><div className={styles.receiveTitle}><strong>{item?.nome}</strong><span>Pendente: {quantidade(Number(pedidoItem.quantidade) - Number(pedidoItem.quantidade_atendida))} {item?.unidade}</span></div><div className={styles.formGrid}><label><span>Receber</span><input required type="number" min="0" max={Number(pedidoItem.quantidade) - Number(pedidoItem.quantidade_atendida)} step="0.001" value={linha.quantidade} onChange={(e) => atualizarRecebimento(indice, "quantidade", e.target.value)} /></label><label><span>Custo unitário</span><input required={vaiReceber} type="number" min="0" step="0.01" value={linha.custo_unitario} onChange={(e) => atualizarRecebimento(indice, "custo_unitario", e.target.value)} /></label><label><span>Localização</span><select disabled={!vaiReceber} value={linha.localizacao_id} onChange={(e) => atualizarRecebimento(indice, "localizacao_id", e.target.value)}><option value="">Sem localização</option>{localizacoes.filter((l) => l.deposito_id === pedidoSelecionado.deposito_id).map((l) => <option key={l.id} value={l.id}>{l.codigo} · {l.nome}</option>)}</select></label>{vaiReceber && (item?.controla_lote || item?.controla_validade) ? <><label><span>Lote *</span><input required value={linha.lote_codigo} onChange={(e) => atualizarRecebimento(indice, "lote_codigo", e.target.value)} /></label><label><span>Fabricação</span><input type="date" value={linha.fabricado_em} onChange={(e) => atualizarRecebimento(indice, "fabricado_em", e.target.value)} /></label><label><span>Validade {item.controla_validade ? "*" : ""}</span><input required={item.controla_validade} type="date" value={linha.validade} onChange={(e) => atualizarRecebimento(indice, "validade", e.target.value)} /></label></> : null}{vaiReceber && item?.controla_serie ? <label><span>Número de série *</span><input required value={linha.numero_serie} onChange={(e) => atualizarRecebimento(indice, "numero_serie", e.target.value)} /></label> : null}</div></div>; })}</div><label className={styles.full}><span>Observações do recebimento</span><textarea value={observacaoRecebimento} onChange={(e) => setObservacaoRecebimento(e.target.value)} /></label><footer><button type="button" onClick={() => setModal(null)}>Cancelar</button><button className={styles.primary} disabled={salvando}>{salvando ? "Confirmando..." : "Confirmar recebimento"}</button></footer></form> : null}
 
-      {modal === "xml" && nfe ? <form className={styles.body} onSubmit={(event) => { event.preventDefault(); void enviar({ acao: "receber_xml", xml, fornecedor_id: nfe.fornecedor.id, deposito_id: xmlDepositoId, itens: nfe.itens.map((item) => ({ estoque_item_id: item.estoque_item_id, localizacao_id: xmlLocalizacoes[item.numero_item] || "", lote_codigo: item.lote_codigo, fabricado_em: item.fabricado_em, validade: item.validade, numero_serie: item.numero_serie || "" })) }, "NF-e importada.").then((ok) => { if (ok) { setModal(null); setNfe(null); setXml(""); onAtualizarEstoque(); } }); }}><div className={styles.xmlSummary}><div><span>Fornecedor</span><strong>{nfe.fornecedor.nome_fantasia || nfe.fornecedor.nome}</strong><small>{nfe.fornecedor.documento}</small></div><div><span>Chave</span><strong>NF-e {nfe.numero} / Série {nfe.serie}</strong><small>{nfe.chave}</small></div><div><span>Total</span><strong>{moeda(nfe.total)}</strong><small>{nfe.itens.length} produtos</small></div></div><label><span>Depósito de entrada *</span><select required value={xmlDepositoId} onChange={(e) => { setXmlDepositoId(e.target.value); setXmlLocalizacoes({}); }}><option value="">Selecione</option>{depositos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}</select></label><div className={styles.lines}>{nfe.itens.map((item, indice) => { const itemVinculado = itens.find((estoqueItem) => estoqueItem.id === item.estoque_item_id); const atualizarItemXml = (campo: "lote_codigo" | "fabricado_em" | "validade" | "numero_serie", valor: string) => setNfe((atual) => atual ? ({ ...atual, itens: atual.itens.map((linha, posicao) => posicao === indice ? { ...linha, [campo]: valor } : linha) }) : atual); return <div className={styles.xmlLine} key={item.numero_item}><div><span className={item.correspondencia === "automatica" ? styles.badge : styles.warning}>#{item.numero_item} {item.correspondencia === "automatica" ? "Correspondência automática" : "Vínculo obrigatório"}</span><strong>{item.descricao}</strong><small>{item.codigo_fornecedor} · EAN {item.ean || "não informado"} · {quantidade(item.quantidade)} {item.unidade} · {moeda(item.custo_unitario)}</small></div><label><span>Item do estoque *</span><select required value={item.estoque_item_id} onChange={(e) => setNfe((atual) => atual ? ({ ...atual, itens: atual.itens.map((linha, posicao) => posicao === indice ? { ...linha, estoque_item_id: e.target.value, correspondencia: "automatica" } : linha) }) : atual)}><option value="">Selecione o item correspondente</option>{itens.map((estoqueItem) => <option key={estoqueItem.id} value={estoqueItem.id}>{estoqueItem.nome} · {estoqueItem.codigo || estoqueItem.sku || "sem código"}</option>)}</select></label><label><span>Localização</span><select value={xmlLocalizacoes[item.numero_item] || ""} onChange={(e) => setXmlLocalizacoes((a) => ({ ...a, [item.numero_item]: e.target.value }))}><option value="">Sem localização</option>{localizacoes.filter((l) => l.deposito_id === xmlDepositoId).map((l) => <option key={l.id} value={l.id}>{l.codigo} · {l.nome}</option>)}</select></label>{itemVinculado?.controla_lote || itemVinculado?.controla_validade ? <><label><span>Lote *</span><input required value={item.lote_codigo || ""} onChange={(e) => atualizarItemXml("lote_codigo", e.target.value)} /></label><label><span>Fabricação</span><input type="date" value={item.fabricado_em || ""} onChange={(e) => atualizarItemXml("fabricado_em", e.target.value)} /></label><label><span>Validade {itemVinculado.controla_validade ? "*" : ""}</span><input required={itemVinculado.controla_validade} type="date" value={item.validade || ""} onChange={(e) => atualizarItemXml("validade", e.target.value)} /></label></> : null}{itemVinculado?.controla_serie ? <label><span>Número de série *</span><input required value={item.numero_serie || ""} onChange={(e) => atualizarItemXml("numero_serie", e.target.value)} /></label> : null}</div>; })}</div><div className={styles.notice}><FileUp size={18} /><span>Ao confirmar, fornecedor, pedido, recebimento, vínculo de produtos e entrada no estoque serão gravados em uma única transação. O XML original ficará ligado ao recebimento.</span></div><footer><button type="button" onClick={() => setModal(null)}>Cancelar</button><button className={styles.primary} disabled={salvando}>{salvando ? "Importando..." : "Importar e receber NF-e"}</button></footer></form> : null}
+      {modal === "xml" && nfe ? <form className={styles.body} onSubmit={(event) => {
+        event.preventDefault();
+        void enviar({
+          acao: "receber_xml",
+          xml,
+          fornecedor_id: nfe.fornecedor.id,
+          deposito_id: xmlDepositoId,
+          itens: nfe.itens.map((item) => ({
+            estoque_item_id: item.criar_item ? "" : item.estoque_item_id,
+            criar_item: item.criar_item,
+            novo_item: item.criar_item ? {
+              nome: item.novo_nome,
+              codigo: item.codigo_fornecedor,
+              sku: item.codigo_fornecedor,
+              codigo_barras: item.ean,
+              unidade: item.unidade,
+              custo_unitario: item.custo_unitario,
+              categoria_id: item.categoria_nova ? "" : item.categoria_id,
+              categoria_nome: item.categoria_nova ? item.categoria_nome : "",
+              marca_id: item.marca_nova ? "" : item.marca_id,
+              marca_nome: item.marca_nova ? item.marca_nome : "",
+              controla_lote: item.controla_lote,
+              controla_validade: item.controla_validade,
+            } : null,
+            localizacao_id: xmlLocalizacoes[item.numero_item] || "",
+            lote_codigo: item.lote_codigo,
+            fabricado_em: item.fabricado_em,
+            validade: item.validade,
+            numero_serie: item.numero_serie || "",
+          })),
+        }, "NF-e importada.").then((ok) => {
+          if (ok) {
+            setModal(null);
+            setNfe(null);
+            setXml("");
+            onAtualizarEstoque();
+          }
+        });
+      }}>
+        <div className={styles.xmlSummary}>
+          <div><span>Fornecedor</span><strong>{nfe.fornecedor.nome_fantasia || nfe.fornecedor.nome}</strong><small>{nfe.fornecedor.documento}</small></div>
+          <div><span>Chave</span><strong>NF-e {nfe.numero} / Série {nfe.serie}</strong><small>{nfe.chave}</small></div>
+          <div><span>Total</span><strong>{moeda(nfe.total)}</strong><small>{nfe.itens.length} produtos</small></div>
+        </div>
+        <label><span>Depósito de entrada *</span><select required value={xmlDepositoId} onChange={(e) => { setXmlDepositoId(e.target.value); setXmlLocalizacoes({}); }}><option value="">Selecione</option>{depositos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}</select></label>
+        <div className={styles.lines}>{nfe.itens.map((item, indice) => {
+          const itemVinculado = itens.find((estoqueItem) => estoqueItem.id === item.estoque_item_id);
+          const controlaLote = item.criar_item ? item.controla_lote : Boolean(itemVinculado?.controla_lote);
+          const controlaValidade = item.criar_item ? item.controla_validade : Boolean(itemVinculado?.controla_validade);
+          return <div className={`${styles.xmlLine} ${item.criar_item ? styles.xmlLineCreating : ""}`} key={item.numero_item}>
+            <div className={styles.xmlProductInfo}>
+              <span className={item.criar_item || item.correspondencia !== "automatica" ? styles.warning : styles.badge}>#{item.numero_item} {item.criar_item ? "Novo produto" : item.correspondencia === "automatica" ? "Correspondência automática" : "Vínculo obrigatório"}</span>
+              <strong>{item.descricao}</strong>
+              <small>{item.codigo_fornecedor || "Sem código do fornecedor"} · EAN {item.ean || "não informado"} · {quantidade(item.quantidade)} {item.unidade} · {moeda(item.custo_unitario)}</small>
+            </div>
+            <label><span>Tratamento do produto *</span><select value={item.criar_item ? "__criar__" : item.estoque_item_id} onChange={(e) => atualizarItemNfe(indice, { criar_item: e.target.value === "__criar__", estoque_item_id: e.target.value === "__criar__" ? "" : e.target.value, correspondencia: e.target.value === "__criar__" ? "pendente" : "automatica" })}><option value="">Selecione um item existente</option>{itens.map((estoqueItem) => <option key={estoqueItem.id} value={estoqueItem.id}>{estoqueItem.nome} · {estoqueItem.codigo || estoqueItem.sku || "sem código"}</option>)}<option value="__criar__">+ Criar produto com os dados da NF-e</option></select></label>
+            <label><span>Localização</span><select value={xmlLocalizacoes[item.numero_item] || ""} onChange={(e) => setXmlLocalizacoes((a) => ({ ...a, [item.numero_item]: e.target.value }))}><option value="">Sem localização</option>{localizacoes.filter((l) => l.deposito_id === xmlDepositoId).map((l) => <option key={l.id} value={l.id}>{l.codigo} · {l.nome}</option>)}</select></label>
+
+            {item.criar_item ? <div className={styles.xmlNewProduct}>
+              <div className={styles.xmlNewProductTitle}><PackageCheck size={18} /><div><strong>Cadastro do novo produto</strong><small>Os dados fiscais vieram do XML. Complete a classificação antes de receber.</small></div></div>
+              <label><span>Nome do produto *</span><input required value={item.novo_nome} onChange={(e) => atualizarItemNfe(indice, { novo_nome: e.target.value })} /></label>
+              <label><span>Categoria</span><select value={item.categoria_nova ? "__nova__" : item.categoria_id} onChange={(e) => atualizarItemNfe(indice, { categoria_nova: e.target.value === "__nova__", categoria_id: e.target.value === "__nova__" ? "" : e.target.value, categoria_nome: "" })}><option value="">Sem categoria</option>{categorias.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}<option value="__nova__">+ Nova categoria</option></select></label>
+              {item.categoria_nova ? <label><span>Nome da nova categoria *</span><input required value={item.categoria_nome} onChange={(e) => atualizarItemNfe(indice, { categoria_nome: e.target.value })} placeholder="Se já existir, será reutilizada" /></label> : null}
+              <label><span>Marca</span><select value={item.marca_nova ? "__nova__" : item.marca_id} onChange={(e) => atualizarItemNfe(indice, { marca_nova: e.target.value === "__nova__", marca_id: e.target.value === "__nova__" ? "" : e.target.value, marca_nome: "" })}><option value="">Sem marca</option>{marcas.map((marca) => <option key={marca.id} value={marca.id}>{marca.nome}</option>)}<option value="__nova__">+ Nova marca</option></select></label>
+              {item.marca_nova ? <label><span>Nome da nova marca *</span><input required value={item.marca_nome} onChange={(e) => atualizarItemNfe(indice, { marca_nome: e.target.value })} placeholder="Se já existir, será reutilizada" /></label> : null}
+              <label className={styles.xmlCheck}><input type="checkbox" checked={item.controla_lote} onChange={(e) => atualizarItemNfe(indice, { controla_lote: e.target.checked, controla_validade: e.target.checked ? item.controla_validade : false })} /><span>Controlar lote</span></label>
+              <label className={styles.xmlCheck}><input type="checkbox" checked={item.controla_validade} onChange={(e) => atualizarItemNfe(indice, { controla_validade: e.target.checked, controla_lote: e.target.checked || item.controla_lote })} /><span>Controlar validade</span></label>
+            </div> : null}
+
+            {controlaLote || controlaValidade ? <>
+              <label><span>Lote *</span><input required value={item.lote_codigo || ""} onChange={(e) => atualizarItemNfe(indice, { lote_codigo: e.target.value })} /></label>
+              <label><span>Fabricação</span><input type="date" value={item.fabricado_em || ""} onChange={(e) => atualizarItemNfe(indice, { fabricado_em: e.target.value })} /></label>
+              <label><span>Validade {controlaValidade ? "*" : ""}</span><input required={controlaValidade} type="date" value={item.validade || ""} onChange={(e) => atualizarItemNfe(indice, { validade: e.target.value })} /></label>
+            </> : null}
+            {!item.criar_item && itemVinculado?.controla_serie ? <label><span>Número de série *</span><input required value={item.numero_serie || ""} onChange={(e) => atualizarItemNfe(indice, { numero_serie: e.target.value })} /></label> : null}
+          </div>;
+        })}</div>
+        <div className={styles.notice}><FileUp size={18} /><span>Produtos novos, categorias, marcas, fornecedor, pedido, recebimento e entrada no estoque serão gravados juntos. Se alguma etapa falhar, nada será recebido parcialmente.</span></div>
+        <footer><button type="button" onClick={() => setModal(null)}>Cancelar</button><button className={styles.primary} disabled={salvando}>{salvando ? "Importando..." : "Importar e receber NF-e"}</button></footer>
+      </form> : null}
 
       {modal === "pagamento" && pedidoSelecionado ? <form className={styles.body} onSubmit={(event) => { event.preventDefault(); void enviar({ acao: "registrar_pagamento", id: pedidoSelecionado.id, ...pagamentoForm, confirmar: true, idempotency_key: crypto.randomUUID() }, "Pagamento registrado.").then((ok) => ok && setModal(null)); }}><div className={styles.notice}><Banknote size={18} /><span>Saldo do pedido: <strong>{moeda(Math.max(0, Number(pedidoSelecionado.total) - Number(pedidoSelecionado.valor_pago)))}</strong></span></div><div className={styles.formGrid}><label><span>Valor *</span><input required type="number" min="0.01" max={Math.max(0, Number(pedidoSelecionado.total) - Number(pedidoSelecionado.valor_pago))} step="0.01" value={pagamentoForm.valor} onChange={(e) => setPagamentoForm((a) => ({ ...a, valor: e.target.value }))} /></label><label><span>Forma</span><select value={pagamentoForm.forma} onChange={(e) => setPagamentoForm((a) => ({ ...a, forma: e.target.value }))}>{[["pix","Pix"],["dinheiro","Dinheiro"],["boleto","Boleto"],["transferencia","Transferência"],["cartao_credito","Cartão de crédito"],["cartao_debito","Cartão de débito"],["outro","Outro"]].map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></label><label><span>Data</span><input type="date" value={pagamentoForm.vencimento_em} onChange={(e) => setPagamentoForm((a) => ({ ...a, vencimento_em: e.target.value }))} /></label><label><span>Referência</span><input value={pagamentoForm.referencia} onChange={(e) => setPagamentoForm((a) => ({ ...a, referencia: e.target.value }))} placeholder="NSU, autenticação ou identificação" /></label><label className={styles.full}><span>Observações</span><textarea value={pagamentoForm.observacao} onChange={(e) => setPagamentoForm((a) => ({ ...a, observacao: e.target.value }))} /></label></div><footer><button type="button" onClick={() => setModal(null)}>Cancelar</button><button className={styles.primary} disabled={salvando}>{salvando ? "Registrando..." : "Confirmar pagamento"}</button></footer></form> : null}
 

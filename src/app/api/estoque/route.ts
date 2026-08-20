@@ -63,6 +63,14 @@ function mensagemBanco(error: { message?: string } | null | undefined) {
     return "Este código de barras já está vinculado a outro item.";
   }
 
+  if (message.includes("estoque_marcas_empresa_nome_normalizado_uk") || message.includes("estoque_marcas_empresa_id_nome_key")) {
+    return "Já existe uma marca com este nome.";
+  }
+
+  if (message.includes("estoque_categorias_empresa_nome_normalizado_uk") || message.includes("estoque_categorias_empresa_id_nome_key")) {
+    return "Já existe uma categoria com este nome.";
+  }
+
   if (message.includes("catalogo_servicos_empresa_codigo_uk")) {
     return "Já existe um item ativo do catálogo com este código.";
   }
@@ -333,6 +341,17 @@ export async function POST(request: Request) {
       if (!nome) return erro("Informe o nome.");
       const tabela = acao === "salvar_categoria" ? "estoque_categorias" : "estoque_marcas";
       const id = texto(body.id);
+      let consultaDuplicidade = supabase
+        .from(tabela)
+        .select("id,nome")
+        .eq("empresa_id", contexto.empresaId)
+        .ilike("nome", nome);
+      if (id) consultaDuplicidade = consultaDuplicidade.neq("id", id);
+      const { data: duplicado, error: duplicidadeError } = await consultaDuplicidade.limit(1).maybeSingle();
+      if (duplicidadeError) return erro(mensagemBanco(duplicidadeError));
+      if (duplicado) {
+        return erro(`Já existe ${acao === "salvar_categoria" ? "uma categoria" : "uma marca"} com o nome “${duplicado.nome}”.`, 409);
+      }
       const payload = { empresa_id: contexto.empresaId, nome };
       const query = id
         ? supabase.from(tabela).update(payload).eq("empresa_id", contexto.empresaId).eq("id", id)
@@ -458,29 +477,19 @@ export async function POST(request: Request) {
         updated_by: contexto.usuario.id,
       };
 
-      if (id) {
-        const { data, error } = await supabase
-          .from("estoque_itens")
-          .update(payload)
-          .eq("id", id)
-          .eq("empresa_id", contexto.empresaId)
-          .select("id")
-          .maybeSingle();
-
-        if (error) return erro(mensagemBanco(error));
-        if (!data) return erro("Item não encontrado.", 404);
-      } else {
-        const { error } = await supabase.rpc("estoque_criar_item_com_saldo_inicial", {
-          p_empresa_id: contexto.empresaId,
-          p_dados: {
-            ...payload,
-          },
-          p_saldo_inicial: Math.max(0, numero(body.saldo_inicial)),
-          p_deposito_id: texto(body.deposito_inicial_id) || null,
-          p_usuario_id: contexto.usuario.id,
-        });
-        if (error) return erro(mensagemBanco(error));
-      }
+      const { error } = await supabase.rpc("estoque_salvar_item_com_classificacoes", {
+        p_empresa_id: contexto.empresaId,
+        p_dados: {
+          ...payload,
+          id: id || null,
+          categoria_nome: texto(body.categoria_nome) || null,
+          marca_nome: texto(body.marca_nome) || null,
+        },
+        p_saldo_inicial: id ? 0 : Math.max(0, numero(body.saldo_inicial)),
+        p_deposito_id: id ? null : texto(body.deposito_inicial_id) || null,
+        p_usuario_id: contexto.usuario.id,
+      });
+      if (error) return erro(mensagemBanco(error));
 
       return NextResponse.json({ ok: true, message: "Item salvo com sucesso." });
     }

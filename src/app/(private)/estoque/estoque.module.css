@@ -1247,6 +1247,25 @@
   background: var(--crm-surface);
 }
 
+.inlineClassification {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.inlineClassification > button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .fullField {
   grid-column: 1 / -1;
 }

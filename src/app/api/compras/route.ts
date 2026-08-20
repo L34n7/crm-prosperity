@@ -30,6 +30,9 @@ function mensagemBanco(error: { message?: string } | null | undefined) {
   if (message.includes("comercial_parceiros_documento_uk")) return "Já existe um fornecedor ativo com este documento.";
   if (message.includes("comercial_recebimentos_nfe_chave_uk")) return "Esta NF-e já foi recebida.";
   if (message.includes("comercial_documentos_empresa_id_idempotency_key_key")) return "Esta operação já foi processada.";
+  if (message.includes("estoque_marcas_empresa_nome_normalizado_uk") || message.includes("estoque_marcas_empresa_id_nome_key")) return "Já existe uma marca com este nome.";
+  if (message.includes("estoque_categorias_empresa_nome_normalizado_uk") || message.includes("estoque_categorias_empresa_id_nome_key")) return "Já existe uma categoria com este nome.";
+  if (message.includes("estoque_itens_empresa_codigo_barras_uk")) return "Este código de barras já pertence a outro produto.";
   return message;
 }
 
@@ -259,17 +262,46 @@ export async function POST(request: Request) {
       const nfe = analisarXmlNfe(xml);
       const itensEntrada = Array.isArray(body.itens) ? body.itens as Array<Record<string, unknown>> : [];
       if (itensEntrada.length !== nfe.itens.length) return erro("Todos os itens da NF-e precisam ser conferidos.");
-      const itens = itensEntrada.map((item, indice) => ({
-        ...nfe.itens[indice],
-        estoque_item_id: texto(item.estoque_item_id),
-        localizacao_id: texto(item.localizacao_id) || null,
-        lote_codigo: texto(item.lote_codigo || nfe.itens[indice].lote_codigo) || null,
-        fabricado_em: texto(item.fabricado_em || nfe.itens[indice].fabricado_em) || null,
-        validade: texto(item.validade || nfe.itens[indice].validade) || null,
-        numero_serie: texto(item.numero_serie) || null,
-      }));
-      if (itens.some((item) => !item.estoque_item_id)) return erro("Vincule todos os produtos da NF-e aos itens do estoque.");
-      const { data, error } = await supabase.rpc("comercial_importar_receber_xml", {
+      const itens = itensEntrada.map((item, indice) => {
+        const origem = nfe.itens[indice];
+        const criarItem = item.criar_item === true;
+        const novoItemEntrada = item.novo_item && typeof item.novo_item === "object"
+          ? item.novo_item as Record<string, unknown>
+          : {};
+        return {
+          ...origem,
+          estoque_item_id: criarItem ? "" : texto(item.estoque_item_id),
+          criar_item: criarItem,
+          novo_item: criarItem ? {
+            nome: texto(novoItemEntrada.nome) || origem.descricao,
+            codigo: origem.codigo_fornecedor || null,
+            sku: origem.codigo_fornecedor || null,
+            codigo_barras: origem.ean || null,
+            descricao: origem.ncm ? `NCM ${origem.ncm}` : null,
+            tipo: "produto",
+            unidade: origem.unidade || "un",
+            estoque_minimo: 0,
+            custo_unitario: Math.max(0, origem.custo_unitario),
+            preco_venda: null,
+            categoria_id: texto(novoItemEntrada.categoria_id) || null,
+            categoria_nome: texto(novoItemEntrada.categoria_nome) || null,
+            marca_id: texto(novoItemEntrada.marca_id) || null,
+            marca_nome: texto(novoItemEntrada.marca_nome) || null,
+            controla_lote: novoItemEntrada.controla_lote === true,
+            controla_validade: novoItemEntrada.controla_validade === true,
+            controla_serie: false,
+          } : null,
+          localizacao_id: texto(item.localizacao_id) || null,
+          lote_codigo: texto(item.lote_codigo || origem.lote_codigo) || null,
+          fabricado_em: texto(item.fabricado_em || origem.fabricado_em) || null,
+          validade: texto(item.validade || origem.validade) || null,
+          numero_serie: texto(item.numero_serie) || null,
+        };
+      });
+      if (itens.some((item) => !item.estoque_item_id && (!item.criar_item || !texto(item.novo_item?.nome)))) {
+        return erro("Vincule ou cadastre todos os produtos da NF-e.");
+      }
+      const { data, error } = await supabase.rpc("comercial_importar_receber_xml_com_itens", {
         p_empresa_id: contexto.empresaId,
         p_fornecedor: { ...nfe.fornecedor, id: texto(body.fornecedor_id) || null },
         p_deposito_id: texto(body.deposito_id),

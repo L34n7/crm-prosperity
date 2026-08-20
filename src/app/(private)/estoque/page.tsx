@@ -133,7 +133,11 @@ type ItemForm = {
   sku: string;
   codigo_barras: string;
   categoria_id: string;
+  categoria_nome: string;
+  categoria_nova: boolean;
   marca_id: string;
+  marca_nome: string;
+  marca_nova: boolean;
   deposito_inicial_id: string;
   controla_lote: boolean;
   controla_validade: boolean;
@@ -165,7 +169,11 @@ const ITEM_INICIAL: ItemForm = {
   sku: "",
   codigo_barras: "",
   categoria_id: "",
+  categoria_nome: "",
+  categoria_nova: false,
   marca_id: "",
+  marca_nome: "",
+  marca_nova: false,
   deposito_inicial_id: "",
   controla_lote: false,
   controla_validade: false,
@@ -451,7 +459,11 @@ export default function EstoquePage() {
       sku: item.sku ?? "",
       codigo_barras: item.codigo_barras ?? "",
       categoria_id: item.categoria_id ?? "",
+      categoria_nome: "",
+      categoria_nova: false,
       marca_id: item.marca_id ?? "",
+      marca_nome: "",
+      marca_nova: false,
       deposito_inicial_id: "",
       controla_lote: item.controla_lote,
       controla_validade: item.controla_validade,
@@ -819,6 +831,8 @@ export default function EstoquePage() {
             itens={itens}
             depositos={depositos}
             localizacoes={localizacoes}
+            categorias={categorias}
+            marcas={marcas}
             permissoes={permissoes}
             onAtualizarEstoque={() => void carregar()}
           /> : null}
@@ -1031,8 +1045,8 @@ export default function EstoquePage() {
                   <div className={styles.field}><span>Código de barras</span><div className={styles.barcodeInputGroup}><input inputMode="numeric" value={itemForm.codigo_barras} onChange={(event) => setItemForm((atual) => ({ ...atual, codigo_barras: event.target.value }))} /><button type="button" aria-label="Ler código de barras" title="Ler código de barras" onClick={() => setScannerContexto("cadastro")}><ScanBarcode size={19} /></button></div></div>
                   <label className={styles.field}><span>Tipo</span><select value={itemForm.tipo} onChange={(event) => setItemForm((atual) => ({ ...atual, tipo: event.target.value as EstoqueItem["tipo"] }))}><option value="produto">Produto</option><option value="material">Material</option><option value="insumo">Insumo</option></select></label>
                   <label className={styles.field}><span>Unidade</span><select value={itemForm.unidade} onChange={(event) => setItemForm((atual) => ({ ...atual, unidade: event.target.value }))}>{[["un", "Unidade"], ["cx", "Caixa"], ["pct", "Pacote"], ["kg", "Quilograma"], ["g", "Grama"], ["l", "Litro"], ["ml", "Mililitro"], ["m", "Metro"], ["cm", "Centímetro"]].map(([valor, label]) => <option key={valor} value={valor}>{label}</option>)}</select></label>
-                  <label className={styles.field}><span>Categoria</span><select value={itemForm.categoria_id} onChange={(event) => setItemForm((atual) => ({ ...atual, categoria_id: event.target.value }))}><option value="">Sem categoria</option>{categorias.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}</select></label>
-                  <label className={styles.field}><span>Marca</span><select value={itemForm.marca_id} onChange={(event) => setItemForm((atual) => ({ ...atual, marca_id: event.target.value }))}><option value="">Sem marca</option>{marcas.map((marca) => <option key={marca.id} value={marca.id}>{marca.nome}</option>)}</select></label>
+                  <div className={styles.field}><span>Categoria</span><select value={itemForm.categoria_nova ? "__nova__" : itemForm.categoria_id} onChange={(event) => setItemForm((atual) => ({ ...atual, categoria_id: event.target.value === "__nova__" ? "" : event.target.value, categoria_nome: "", categoria_nova: event.target.value === "__nova__" }))}><option value="">Sem categoria</option>{categorias.map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}<option value="__nova__">+ Cadastrar nova categoria</option></select>{itemForm.categoria_nova ? <div className={styles.inlineClassification}><input autoFocus value={itemForm.categoria_nome} maxLength={120} onChange={(event) => setItemForm((atual) => ({ ...atual, categoria_nome: event.target.value }))} placeholder="Nome da nova categoria" /><button type="button" onClick={() => setItemForm((atual) => ({ ...atual, categoria_nome: "", categoria_nova: false }))}>Cancelar</button></div> : null}</div>
+                  <div className={styles.field}><span>Marca</span><select value={itemForm.marca_nova ? "__nova__" : itemForm.marca_id} onChange={(event) => setItemForm((atual) => ({ ...atual, marca_id: event.target.value === "__nova__" ? "" : event.target.value, marca_nome: "", marca_nova: event.target.value === "__nova__" }))}><option value="">Sem marca</option>{marcas.map((marca) => <option key={marca.id} value={marca.id}>{marca.nome}</option>)}<option value="__nova__">+ Cadastrar nova marca</option></select>{itemForm.marca_nova ? <div className={styles.inlineClassification}><input autoFocus value={itemForm.marca_nome} maxLength={120} onChange={(event) => setItemForm((atual) => ({ ...atual, marca_nome: event.target.value }))} placeholder="Nome da nova marca" /><button type="button" onClick={() => setItemForm((atual) => ({ ...atual, marca_nome: "", marca_nova: false }))}>Cancelar</button></div> : null}</div>
                   {!itemForm.id ? <><label className={styles.field}><span>Saldo inicial</span><input type="number" min="0" step="0.001" value={itemForm.saldo_inicial} onChange={(event) => setItemForm((atual) => ({ ...atual, saldo_inicial: event.target.value }))} /></label><label className={styles.field}><span>Depósito do saldo inicial</span><select value={itemForm.deposito_inicial_id} onChange={(event) => setItemForm((atual) => ({ ...atual, deposito_inicial_id: event.target.value }))}><option value="">Selecione</option>{depositos.map((deposito) => <option key={deposito.id} value={deposito.id}>{deposito.nome}</option>)}</select></label></> : null}
                   <label className={styles.field}><span>Estoque mínimo</span><input type="number" min="0" step="0.001" value={itemForm.estoque_minimo} onChange={(event) => setItemForm((atual) => ({ ...atual, estoque_minimo: event.target.value }))} /></label>
                   <label className={styles.field}><span>Custo unitário</span><input type="number" min="0" step="0.01" value={itemForm.custo_unitario} onChange={(event) => setItemForm((atual) => ({ ...atual, custo_unitario: event.target.value }))} /></label>
@@ -1162,7 +1176,7 @@ export default function EstoquePage() {
 
             <footer className={styles.modalFooter}>
               <button className={styles.secondaryButton} disabled={salvando} onClick={() => setModal(null)}>Cancelar</button>
-              {modal === "item" ? <button className={styles.primaryButton} disabled={salvando || !itemForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_item", ...itemForm })}>{salvando ? "Salvando..." : "Salvar item"}</button> : null}
+              {modal === "item" ? <button className={styles.primaryButton} disabled={salvando || !itemForm.nome.trim() || (itemForm.categoria_nova && !itemForm.categoria_nome.trim()) || (itemForm.marca_nova && !itemForm.marca_nome.trim())} onClick={() => void enviar({ acao: "salvar_item", ...itemForm })}>{salvando ? "Salvando..." : "Salvar item"}</button> : null}
               {modal === "catalogo" ? <button className={styles.primaryButton} disabled={salvando || !catalogoForm.nome.trim()} onClick={() => void enviar({ acao: "salvar_catalogo", ...catalogoForm })}>{salvando ? "Salvando..." : "Salvar catálogo"}</button> : null}
               {modal === "movimentacao" ? <button className={styles.primaryButton} disabled={salvando || !itemSelecionadoId || !depositoMovimentoId} onClick={() => void enviar({ acao: "movimentar_documento", estoque_item_id: itemSelecionadoId, tipo: movimentoTipo, quantidade: movimentoQuantidade, deposito_origem_id: depositoOrigemId, deposito_destino_id: depositoDestinoId, localizacao_origem_id: movimentoTipo === "entrada" ? null : localizacaoId, localizacao_destino_id: movimentoTipo === "entrada" ? localizacaoId : null, lote_id: loteId, numero_serie: numeroSerie, custo_unitario: itemSelecionado?.custo_unitario, observacao, idempotency_key: crypto.randomUUID() })}>{salvando ? "Registrando..." : "Registrar movimento"}</button> : null}
               {modal === "baixa" ? <button className={styles.primaryButton} disabled={salvando || !catalogoSelecionadoId || !depositoOrigemId} onClick={() => void enviar({ acao: "registrar_baixa", catalogo_servico_id: catalogoSelecionadoId, deposito_id: depositoOrigemId, quantidade: baixaQuantidade, origem_id: origemId, observacao, idempotency_key: crypto.randomUUID() })}>{salvando ? "Registrando..." : "Confirmar baixa"}</button> : null}
