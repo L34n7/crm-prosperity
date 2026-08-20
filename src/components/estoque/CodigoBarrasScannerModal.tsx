@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, ScanBarcode, Usb, X } from "lucide-react";
+import { Camera, CameraOff, ScanBarcode, Usb, X, ZoomIn } from "lucide-react";
 import type { IScannerControls } from "@zxing/browser";
 import styles from "./CodigoBarrasScannerModal.module.css";
 
@@ -18,6 +18,13 @@ type CodigoBarrasScannerModalProps = {
 type BarcodeDetectorResult = { rawValue?: string };
 type BarcodeDetectorInstance = { detect: (source: ImageBitmapSource) => Promise<BarcodeDetectorResult[]> };
 type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => BarcodeDetectorInstance;
+type CameraCapabilities = MediaTrackCapabilities & {
+  focusMode?: string[];
+  zoom?: { min: number; max: number; step: number };
+};
+type CameraSettings = MediaTrackSettings & { zoom?: number };
+type CameraConstraintSet = MediaTrackConstraintSet & { focusMode?: string; zoom?: number };
+type ZoomCamera = { min: number; max: number; step: number; value: number };
 
 declare global {
   interface Window {
@@ -42,6 +49,7 @@ export default function CodigoBarrasScannerModal({
   const onDetectedRef = useRef(onDetected);
   const onCloseRef = useRef(onClose);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const zxingControlsRef = useRef<IScannerControls | null>(null);
   const processandoRef = useRef(false);
   const ultimaCameraRef = useRef({ codigo: "", instante: 0 });
@@ -51,6 +59,8 @@ export default function CodigoBarrasScannerModal({
   const [erro, setErro] = useState("");
   const [ultimaLeitura, setUltimaLeitura] = useState("");
   const [totalLeituras, setTotalLeituras] = useState(0);
+  const [zoomCamera, setZoomCamera] = useState<ZoomCamera | null>(null);
+  const [resolucaoCamera, setResolucaoCamera] = useState("");
 
   useEffect(() => {
     onDetectedRef.current = onDetected;
@@ -60,6 +70,7 @@ export default function CodigoBarrasScannerModal({
   const pararCamera = useCallback(() => {
     zxingControlsRef.current?.stop();
     zxingControlsRef.current = null;
+    cameraTrackRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     const video = videoRef.current;
@@ -67,8 +78,59 @@ export default function CodigoBarrasScannerModal({
       video.srcObject.getTracks().forEach((track) => track.stop());
       video.srcObject = null;
     }
+    setZoomCamera(null);
+    setResolucaoCamera("");
     setCameraAtiva(false);
   }, []);
+
+  const prepararCamera = useCallback(async (stream: MediaStream) => {
+    const [track] = stream.getVideoTracks();
+    if (!track) return;
+
+    cameraTrackRef.current = track;
+    const capabilities = typeof track.getCapabilities === "function"
+      ? track.getCapabilities() as CameraCapabilities
+      : null;
+
+    if (capabilities?.focusMode?.includes("continuous")) {
+      try {
+        await track.applyConstraints({
+          advanced: [{ focusMode: "continuous" } as CameraConstraintSet],
+        });
+      } catch {
+        // Alguns navegadores anunciam o foco, mas não aceitam alterá-lo por código.
+      }
+    }
+
+    const settings = track.getSettings() as CameraSettings;
+    if (settings.width && settings.height) setResolucaoCamera(`${settings.width} × ${settings.height}`);
+
+    const zoom = capabilities?.zoom;
+    if (zoom && Number.isFinite(zoom.min) && Number.isFinite(zoom.max) && zoom.max > zoom.min) {
+      const value = Math.min(zoom.max, Math.max(zoom.min, settings.zoom ?? zoom.min));
+      setZoomCamera({
+        min: zoom.min,
+        max: zoom.max,
+        step: zoom.step > 0 ? zoom.step : 0.1,
+        value,
+      });
+    } else {
+      setZoomCamera(null);
+    }
+  }, []);
+
+  async function alterarZoom(valor: number) {
+    const track = cameraTrackRef.current;
+    if (!track || !zoomCamera) return;
+
+    const value = Math.min(zoomCamera.max, Math.max(zoomCamera.min, valor));
+    setZoomCamera((atual) => atual ? { ...atual, value } : atual);
+    try {
+      await track.applyConstraints({ advanced: [{ zoom: value } as CameraConstraintSet] });
+    } catch {
+      setErro("Não foi possível aplicar o zoom nesta câmera.");
+    }
+  }
 
   const registrarLeitura = useCallback((entrada: string, origem: "camera" | "leitor") => {
     const codigo = normalizarCodigo(entrada);
@@ -114,36 +176,37 @@ export default function CodigoBarrasScannerModal({
           audio: false,
           video: {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30, max: 30 },
           },
         };
 
         if (window.BarcodeDetector) {
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);
-          if (cancelado) {
-            stream.getTracks().forEach((track) => track.stop());
-            return;
-          }
-
-          streamRef.current = stream;
-          video.srcObject = stream;
-          await video.play();
           let detector: BarcodeDetectorInstance | null = null;
           try {
             detector = new window.BarcodeDetector({ formats: FORMATOS });
           } catch {
-            stream.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-            video.srcObject = null;
+            detector = null;
           }
 
           if (detector) {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            if (cancelado) {
+              stream.getTracks().forEach((track) => track.stop());
+              return;
+            }
+
+            streamRef.current = stream;
+            video.srcObject = stream;
+            await prepararCamera(stream);
+            await video.play();
+            const detectorAtivo = detector;
             intervalo = setInterval(async () => {
               if (processandoRef.current || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
               processandoRef.current = true;
               try {
-                const [resultado] = await detector.detect(video);
+                const [resultado] = await detectorAtivo.detect(video);
                 if (resultado?.rawValue) registrarLeitura(resultado.rawValue, "camera");
               } catch {
                 // Um quadro sem leitura não representa falha da câmera.
@@ -155,8 +218,24 @@ export default function CodigoBarrasScannerModal({
           }
         }
 
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        const leitor = new BrowserMultiFormatReader(undefined, {
+        const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
+          import("@zxing/browser"),
+          import("@zxing/library"),
+        ]);
+        const formatosZxing = [
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+          BarcodeFormat.ITF,
+          BarcodeFormat.CODABAR,
+        ];
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, formatosZxing);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const leitor = new BrowserMultiFormatReader(hints, {
           delayBetweenScanAttempts: 220,
           delayBetweenScanSuccess: 900,
         });
@@ -170,7 +249,10 @@ export default function CodigoBarrasScannerModal({
         }
 
         zxingControlsRef.current = controls;
-        if (video.srcObject instanceof MediaStream) streamRef.current = video.srcObject;
+        if (video.srcObject instanceof MediaStream) {
+          streamRef.current = video.srcObject;
+          await prepararCamera(video.srcObject);
+        }
       } catch {
         setErro("Não foi possível acessar a câmera. Verifique a permissão do navegador.");
         setCameraAtiva(false);
@@ -183,6 +265,7 @@ export default function CodigoBarrasScannerModal({
       if (intervalo) clearInterval(intervalo);
       zxingControlsRef.current?.stop();
       zxingControlsRef.current = null;
+      cameraTrackRef.current = null;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       const video = videoElement;
@@ -191,10 +274,11 @@ export default function CodigoBarrasScannerModal({
         video.srcObject = null;
       }
     };
-  }, [cameraAtiva, registrarLeitura]);
+  }, [cameraAtiva, prepararCamera, registrarLeitura]);
 
   useEffect(() => () => {
     zxingControlsRef.current?.stop();
+    cameraTrackRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
@@ -218,6 +302,7 @@ export default function CodigoBarrasScannerModal({
                 <video ref={videoRef} muted playsInline aria-label="Imagem da câmera para leitura do código" />
                 <span className={styles.scanLine} />
                 <div className={styles.target}><span /><span /><span /><span /></div>
+                <div className={styles.frameHint}>Centralize somente o código nesta faixa</div>
               </div>
             ) : (
               <div className={styles.cameraEmpty}>
@@ -226,6 +311,29 @@ export default function CodigoBarrasScannerModal({
                 <p>Enquadre o código inteiro e mantenha o aparelho estável.</p>
               </div>
             )}
+
+            {cameraAtiva ? (
+              <div className={styles.cameraAssist}>
+                <div className={styles.cameraQuality}>
+                  <span>Leitura detalhada</span>
+                  <strong>{resolucaoCamera || "Preparando alta resolução…"}</strong>
+                </div>
+                {zoomCamera ? (
+                  <label className={styles.zoomControl} htmlFor="barcode-camera-zoom">
+                    <span><ZoomIn size={17} /> Zoom <strong>{zoomCamera.value.toFixed(1)}×</strong></span>
+                    <input
+                      id="barcode-camera-zoom"
+                      type="range"
+                      min={zoomCamera.min}
+                      max={zoomCamera.max}
+                      step={zoomCamera.step}
+                      value={zoomCamera.value}
+                      onChange={(event) => void alterarZoom(Number(event.target.value))}
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
 
             {cameraDisponivel ? (
               <button className={styles.cameraButton} type="button" onClick={() => cameraAtiva ? pararCamera() : setCameraAtiva(true)}>

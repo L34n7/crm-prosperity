@@ -44,13 +44,22 @@
 .cameraEmpty { padding: 28px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: var(--crm-primary-text); text-align: center; }
 .cameraEmpty strong { margin-top: 13px; color: var(--crm-text-strong); font-size: 16px; }
 .cameraEmpty p { max-width: 300px; margin: 6px 0 0; color: var(--crm-text-muted); font-size: 14px; line-height: 1.45; }
-.scanLine { position: absolute; left: 12%; right: 12%; top: 50%; height: 2px; border-radius: 999px; background: var(--crm-primary); box-shadow: 0 0 16px var(--crm-primary); animation: scan 1.8s ease-in-out infinite alternate; }
-.target { position: absolute; inset: 20% 11%; }
+.scanLine { position: absolute; left: 9%; right: 9%; top: 50%; height: 2px; border-radius: 999px; background: var(--crm-primary); box-shadow: 0 0 16px var(--crm-primary); animation: scan 1.6s ease-in-out infinite alternate; }
+.target { position: absolute; inset: 31% 8%; }
 .target span { position: absolute; width: 34px; height: 34px; border-color: var(--crm-text-inverse); filter: drop-shadow(0 2px 5px rgb(0 0 0 / .5)); }
 .target span:nth-child(1) { left: 0; top: 0; border-left: 3px solid; border-top: 3px solid; }
 .target span:nth-child(2) { right: 0; top: 0; border-right: 3px solid; border-top: 3px solid; }
 .target span:nth-child(3) { left: 0; bottom: 0; border-left: 3px solid; border-bottom: 3px solid; }
 .target span:nth-child(4) { right: 0; bottom: 0; border-right: 3px solid; border-bottom: 3px solid; }
+.frameHint { position: absolute; left: 50%; bottom: 14px; max-width: calc(100% - 30px); transform: translateX(-50%); border-radius: 999px; padding: 6px 11px; background: rgb(5 25 38 / .78); color: #fff; font-size: 11px; font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; backdrop-filter: blur(7px); }
+
+.cameraAssist { margin-top: 10px; padding: 11px 12px; display: grid; gap: 10px; border: 1px solid var(--crm-primary-border); border-radius: 13px; background: var(--crm-primary-soft); }
+.cameraQuality { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--crm-text-muted); font-size: 12px; }
+.cameraQuality strong { color: var(--crm-text-strong); font-size: 12px; }
+.zoomControl { display: grid; grid-template-columns: auto minmax(110px, 1fr); align-items: center; gap: 11px; color: var(--crm-text-strong); font-size: 13px; font-weight: 750; }
+.zoomControl > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.zoomControl > span strong { color: var(--crm-primary-text); }
+.zoomControl input { width: 100%; accent-color: var(--crm-primary); cursor: pointer; }
 
 .cameraButton, .inputRow button, .footer button { min-height: 42px; border: 1px solid transparent; border-radius: 12px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--crm-primary-strong); color: var(--crm-text-inverse); font: inherit; font-size: 14px; font-weight: 850; cursor: pointer; }
 .cameraButton { width: 100%; margin-top: 10px; }
@@ -77,7 +86,7 @@
 .footer p { margin: 0; color: var(--crm-text-muted); font-size: 13px; }
 .footer button { border-color: var(--crm-border-strong); background: var(--crm-surface); color: var(--crm-text-strong); }
 
-@keyframes scan { from { transform: translateY(-72px); } to { transform: translateY(72px); } }
+@keyframes scan { from { transform: translateY(-42px); } to { transform: translateY(42px); } }
 
 @media (max-width: 720px) {
   .overlay { padding: 10px; align-items: flex-end; }
@@ -87,6 +96,8 @@
   .body { padding: 14px 17px; grid-template-columns: 1fr; }
   .videoFrame, .cameraEmpty { min-height: 230px; }
   .videoFrame video { height: 230px; }
+  .frameHint { bottom: 10px; font-size: 10px; }
+  .zoomControl { grid-template-columns: 1fr; gap: 7px; }
   .footer { padding: 14px 17px; align-items: stretch; flex-direction: column; }
   .footer button { width: 100%; }
 }
