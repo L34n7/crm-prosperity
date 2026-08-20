@@ -52,6 +52,7 @@ export default function CodigoBarrasScannerModal({
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const zxingControlsRef = useRef<IScannerControls | null>(null);
   const processandoRef = useRef(false);
+  const fecharAposLeituraRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ultimaCameraRef = useRef({ codigo: "", instante: 0 });
   const [codigoManual, setCodigoManual] = useState("");
   const [cameraAtiva, setCameraAtiva] = useState(false);
@@ -61,6 +62,7 @@ export default function CodigoBarrasScannerModal({
   const [totalLeituras, setTotalLeituras] = useState(0);
   const [zoomCamera, setZoomCamera] = useState<ZoomCamera | null>(null);
   const [resolucaoCamera, setResolucaoCamera] = useState("");
+  const [leituraDemorada, setLeituraDemorada] = useState(false);
 
   useEffect(() => {
     onDetectedRef.current = onDetected;
@@ -68,6 +70,8 @@ export default function CodigoBarrasScannerModal({
   }, [onClose, onDetected]);
 
   const pararCamera = useCallback(() => {
+    if (fecharAposLeituraRef.current) clearTimeout(fecharAposLeituraRef.current);
+    fecharAposLeituraRef.current = null;
     zxingControlsRef.current?.stop();
     zxingControlsRef.current = null;
     cameraTrackRef.current = null;
@@ -80,6 +84,7 @@ export default function CodigoBarrasScannerModal({
     }
     setZoomCamera(null);
     setResolucaoCamera("");
+    setLeituraDemorada(false);
     setCameraAtiva(false);
   }, []);
 
@@ -145,14 +150,22 @@ export default function CodigoBarrasScannerModal({
     const resultado = onDetectedRef.current(codigo);
     if (resultado && !resultado.ok) {
       setErro(resultado.message || "Código não encontrado.");
+      setLeituraDemorada(false);
       return;
     }
 
     setErro("");
+    setLeituraDemorada(false);
     setUltimaLeitura(codigo);
     setTotalLeituras((total) => total + 1);
     setCodigoManual("");
-    if (!continuous) onCloseRef.current();
+    if (!continuous) {
+      if (origem === "camera") {
+        fecharAposLeituraRef.current = setTimeout(() => onCloseRef.current(), 850);
+      } else {
+        onCloseRef.current();
+      }
+    }
   }, [continuous]);
 
   useEffect(() => {
@@ -165,10 +178,13 @@ export default function CodigoBarrasScannerModal({
     const videoElement = videoRef.current;
     let cancelado = false;
     let intervalo: ReturnType<typeof setInterval> | null = null;
+    let avisoDemora: ReturnType<typeof setTimeout> | null = null;
 
     async function iniciar() {
       try {
         setErro("");
+        setUltimaLeitura("");
+        setLeituraDemorada(false);
         const video = videoElement;
         if (!video) return;
 
@@ -182,46 +198,16 @@ export default function CodigoBarrasScannerModal({
           },
         };
 
-        if (window.BarcodeDetector) {
-          let detector: BarcodeDetectorInstance | null = null;
-          try {
-            detector = new window.BarcodeDetector({ formats: FORMATOS });
-          } catch {
-            detector = null;
-          }
-
-          if (detector) {
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            if (cancelado) {
-              stream.getTracks().forEach((track) => track.stop());
-              return;
-            }
-
-            streamRef.current = stream;
-            video.srcObject = stream;
-            await prepararCamera(stream);
-            await video.play();
-            const detectorAtivo = detector;
-            intervalo = setInterval(async () => {
-              if (processandoRef.current || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-              processandoRef.current = true;
-              try {
-                const [resultado] = await detectorAtivo.detect(video);
-                if (resultado?.rawValue) registrarLeitura(resultado.rawValue, "camera");
-              } catch {
-                // Um quadro sem leitura não representa falha da câmera.
-              } finally {
-                processandoRef.current = false;
-              }
-            }, 260);
-            return;
-          }
+        const [stream, modulosLeitura] = await Promise.all([
+          navigator.mediaDevices.getUserMedia(constraints),
+          Promise.all([import("@zxing/browser"), import("@zxing/library")]),
+        ]);
+        if (cancelado) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
         }
 
-        const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
-          import("@zxing/browser"),
-          import("@zxing/library"),
-        ]);
+        const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = modulosLeitura;
         const formatosZxing = [
           BarcodeFormat.EAN_13,
           BarcodeFormat.EAN_8,
@@ -236,10 +222,15 @@ export default function CodigoBarrasScannerModal({
         hints.set(DecodeHintType.POSSIBLE_FORMATS, formatosZxing);
         hints.set(DecodeHintType.TRY_HARDER, true);
         const leitor = new BrowserMultiFormatReader(hints, {
-          delayBetweenScanAttempts: 220,
-          delayBetweenScanSuccess: 900,
+          delayBetweenScanAttempts: 120,
+          delayBetweenScanSuccess: 700,
         });
-        const controls = await leitor.decodeFromConstraints(constraints, video, (resultado) => {
+
+        streamRef.current = stream;
+        video.srcObject = stream;
+        await prepararCamera(stream);
+        await video.play();
+        const controls = await leitor.decodeFromStream(stream, video, (resultado) => {
           if (resultado) registrarLeitura(resultado.getText(), "camera");
         });
 
@@ -249,12 +240,34 @@ export default function CodigoBarrasScannerModal({
         }
 
         zxingControlsRef.current = controls;
-        if (video.srcObject instanceof MediaStream) {
-          streamRef.current = video.srcObject;
-          await prepararCamera(video.srcObject);
+        avisoDemora = setTimeout(() => setLeituraDemorada(true), 4500);
+
+        if (window.BarcodeDetector) {
+          let detector: BarcodeDetectorInstance | null = null;
+          try {
+            detector = new window.BarcodeDetector({ formats: FORMATOS });
+          } catch {
+            detector = null;
+          }
+
+          if (detector) {
+            const detectorAtivo = detector;
+            intervalo = setInterval(async () => {
+              if (processandoRef.current || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+              processandoRef.current = true;
+              try {
+                const [resultado] = await detectorAtivo.detect(video);
+                if (resultado?.rawValue) registrarLeitura(resultado.rawValue, "camera");
+              } catch {
+                // O ZXing continua analisando o mesmo vídeo quando a API nativa falha.
+              } finally {
+                processandoRef.current = false;
+              }
+            }, 260);
+          }
         }
       } catch {
-        setErro("Não foi possível acessar a câmera. Verifique a permissão do navegador.");
+        setErro("Não foi possível iniciar a leitura. Verifique a permissão da câmera e tente novamente.");
         setCameraAtiva(false);
       }
     }
@@ -263,6 +276,7 @@ export default function CodigoBarrasScannerModal({
     return () => {
       cancelado = true;
       if (intervalo) clearInterval(intervalo);
+      if (avisoDemora) clearTimeout(avisoDemora);
       zxingControlsRef.current?.stop();
       zxingControlsRef.current = null;
       cameraTrackRef.current = null;
@@ -277,6 +291,7 @@ export default function CodigoBarrasScannerModal({
   }, [cameraAtiva, prepararCamera, registrarLeitura]);
 
   useEffect(() => () => {
+    if (fecharAposLeituraRef.current) clearTimeout(fecharAposLeituraRef.current);
     zxingControlsRef.current?.stop();
     cameraTrackRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -302,7 +317,19 @@ export default function CodigoBarrasScannerModal({
                 <video ref={videoRef} muted playsInline aria-label="Imagem da câmera para leitura do código" />
                 <span className={styles.scanLine} />
                 <div className={styles.target}><span /><span /><span /><span /></div>
-                <div className={styles.frameHint}>Centralize somente o código nesta faixa</div>
+                <div
+                  className={`${styles.cameraFeedback} ${ultimaLeitura ? styles.cameraFeedbackSuccess : erro ? styles.cameraFeedbackError : leituraDemorada ? styles.cameraFeedbackWarning : ""}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {ultimaLeitura
+                    ? `Código lido: ${ultimaLeitura}`
+                    : erro
+                      ? erro
+                      : leituraDemorada
+                        ? "Ainda não foi possível ler. Mantenha o código inteiro e estável dentro da faixa."
+                        : "Procurando código…"}
+                </div>
               </div>
             ) : (
               <div className={styles.cameraEmpty}>

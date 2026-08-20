@@ -124,8 +124,12 @@ test("leitor de código de barras integra cadastro, busca, movimentação e inve
   assert.match(scanner, /BrowserMultiFormatReader/);
   assert.match(scanner, /import\("@zxing\/browser"\)/);
   assert.match(scanner, /DecodeHintType\.TRY_HARDER/);
+  assert.match(scanner, /decodeFromStream\(stream/);
+  assert.match(scanner, /decodeFromStream\(stream[\s\S]*if \(window\.BarcodeDetector\)/);
   assert.match(scanner, /focusMode: "continuous"/);
   assert.match(scanner, /zoom: value/);
+  assert.match(scanner, /Código lido:/);
+  assert.match(scanner, /Ainda não foi possível ler/);
   assert.match(scanner, /Leitor USB\/Bluetooth/);
   assert.match(pagina, /ScannerContexto = "busca" \| "cadastro" \| "movimentacao" \| "inventario"/);
   assert.match(pagina, /setInventarioContagens/);
