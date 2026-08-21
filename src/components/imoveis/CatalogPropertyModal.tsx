@@ -59,6 +59,11 @@ type CatalogoImovel = {
   updated_at: string;
   pertence_empresa_atual: boolean;
   total_leads_portal: number;
+  proprietario?: {
+    nome: string | null;
+    email: string | null;
+    telefone: string | null;
+  } | null;
 };
 type Props = { catalogoId: string; onClose: () => void };
 function formatarMoeda(valor: number | string | null) {
@@ -551,6 +556,31 @@ export default function CatalogPropertyModal({ catalogoId, onClose }: Props) {
                       </div>
                     </dl>
                   </section>
+                  {imovel.proprietario ? (
+                    <section className={styles.catalogDetailSection}>
+                      <h3>Proprietário</h3>
+                      <dl className={styles.catalogValueList}>
+                        {imovel.proprietario.nome ? (
+                          <div>
+                            <dt>Nome</dt>
+                            <dd>{imovel.proprietario.nome}</dd>
+                          </div>
+                        ) : null}
+                        {imovel.proprietario.email ? (
+                          <div>
+                            <dt>E-mail</dt>
+                            <dd>{imovel.proprietario.email}</dd>
+                          </div>
+                        ) : null}
+                        {imovel.proprietario.telefone ? (
+                          <div>
+                            <dt>Telefone</dt>
+                            <dd>{imovel.proprietario.telefone}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </section>
+                  ) : null}
                   {caracteristicas.length > 0 ? (
                     <section className={styles.catalogDetailSection}>
                       <h3>Características e comodidades</h3>

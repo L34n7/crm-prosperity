@@ -54,12 +54,25 @@ type DetalhesCrmRow = {
 
 type DetalhesExternoRow = {
   id: string;
+  integracao_id: string | null;
+  external_id: string | null;
   cep: string | null;
   logradouro: string | null;
   numero: string | null;
   complemento: string | null;
   caracteristicas: Record<string, unknown> | null;
   imagem_urls: unknown[] | null;
+  payload: Record<string, unknown> | null;
+};
+
+type ProprietarioResumo = {
+  nome: string | null;
+  email: string | null;
+  telefone: string | null;
+};
+
+type EventoWebhookRow = {
+  payload: Record<string, unknown> | null;
 };
 
 type LeadResumoRow = {
@@ -90,6 +103,64 @@ function numeroFiltro(valor: string | null) {
   if (!valor) return null;
   const numero = Number(valor);
   return Number.isFinite(numero) && numero >= 0 ? numero : null;
+}
+
+function objetoJson(valor: unknown): Record<string, unknown> | null {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return null;
+  return valor as Record<string, unknown>;
+}
+
+function textoOpcional(valor: unknown, limite = 500) {
+  if (
+    typeof valor !== "string" &&
+    typeof valor !== "number" &&
+    typeof valor !== "boolean"
+  ) {
+    return null;
+  }
+
+  const texto = String(valor).trim();
+  return texto ? texto.slice(0, limite) : null;
+}
+
+function extrairProprietario(payload: unknown): ProprietarioResumo | null {
+  const envelope = objetoJson(payload);
+  if (!envelope) return null;
+
+  const data = objetoJson(envelope.data);
+  const imovel =
+    objetoJson(envelope.property) ??
+    objetoJson(envelope.imovel) ??
+    objetoJson(envelope.listing) ??
+    objetoJson(envelope.anuncio) ??
+    objetoJson(data?.property) ??
+    objetoJson(data?.imovel) ??
+    objetoJson(data?.listing) ??
+    objetoJson(data?.anuncio) ??
+    data ??
+    envelope;
+  const proprietario =
+    objetoJson(imovel.proprietario) ?? objetoJson(imovel.owner);
+
+  if (!proprietario) return null;
+
+  const nome = textoOpcional(
+    proprietario.nome ?? proprietario.name ?? proprietario.full_name,
+  );
+  const email = textoOpcional(
+    proprietario.email ?? proprietario.e_mail,
+  )?.toLowerCase() ?? null;
+  const telefone = textoOpcional(
+    proprietario.celular ??
+      proprietario.mobile ??
+      proprietario.telefone ??
+      proprietario.teleofne ??
+      proprietario.phone ??
+      proprietario.whatsapp,
+    100,
+  );
+
+  return nome || email || telefone ? { nome, email, telefone } : null;
 }
 
 function normalizarImagens(valor: unknown, capa?: unknown) {
@@ -239,7 +310,9 @@ export async function GET(request: Request) {
       idsExternos.length > 0
         ? supabase
             .from("imoveis_externos")
-            .select("id,cep,logradouro,numero,complemento,caracteristicas,imagem_urls")
+            .select(
+              "id,integracao_id,external_id,cep,logradouro,numero,complemento,caracteristicas,imagem_urls,payload",
+            )
             .eq("empresa_id", empresaId)
             .in("id", idsExternos)
         : Promise.resolve({ data: [], error: null }),
@@ -285,11 +358,51 @@ export async function GET(request: Request) {
         item,
       ]),
     );
+    const detalhesExternosLista = (detalhesExternosResultado.data ?? []) as DetalhesExternoRow[];
     const detalhesExternos = new Map(
-      ((detalhesExternosResultado.data ?? []) as DetalhesExternoRow[]).map(
-        (item) => [item.id, item],
-      ),
+      detalhesExternosLista.map((item) => [item.id, item]),
     );
+    const proprietariosExternos = new Map<string, ProprietarioResumo>();
+
+    if (imovelId) {
+      for (const detalhe of detalhesExternosLista) {
+        const proprietarioPayload = extrairProprietario(detalhe.payload);
+        if (proprietarioPayload) {
+          proprietariosExternos.set(detalhe.id, proprietarioPayload);
+          continue;
+        }
+
+        if (!detalhe.integracao_id || !detalhe.external_id) continue;
+
+        const eventosResultado = await supabase
+          .from("imobiliario_webhook_eventos")
+          .select("payload")
+          .eq("empresa_id", empresaId)
+          .eq("integracao_id", detalhe.integracao_id)
+          .eq("external_id", detalhe.external_id)
+          .like("event_type", "property.%")
+          .order("recebido_em", { ascending: false })
+          .limit(25);
+
+        if (eventosResultado.error) {
+          return NextResponse.json(
+            { ok: false, error: eventosResultado.error.message },
+            { status: 500 },
+          );
+        }
+
+        const proprietarioEvento = (
+          (eventosResultado.data ?? []) as EventoWebhookRow[]
+        )
+          .map((evento) => extrairProprietario(evento.payload))
+          .find((proprietario): proprietario is ProprietarioResumo => Boolean(proprietario));
+
+        if (proprietarioEvento) {
+          proprietariosExternos.set(detalhe.id, proprietarioEvento);
+        }
+      }
+    }
+
     const leadsCrm = new Map(
       ((leadsCrmResultado.data ?? []) as LeadResumoRow[])
         .filter((item) => Boolean(item.imovel_id))
@@ -333,6 +446,12 @@ export async function GET(request: Request) {
         pertence_empresa_atual:
           imovel.origem_tipo === "crm" && imovel.empresa_id === empresaId,
         total_leads_portal: totalLeadsPortal,
+        ...(imovelId && imovel.origem_tipo === "externo"
+          ? {
+              proprietario:
+                proprietariosExternos.get(imovel.origem_id) ?? null,
+            }
+          : {}),
       };
     });
 
