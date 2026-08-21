@@ -37,15 +37,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: false, error: "Sem permissão para emitir comprovantes." }, { status: 403 });
   }
   const { id } = await params;
-  const { data: pagamento, error } = await supabase.from("comercial_pagamentos").select("*").eq("empresa_id", contexto.usuario.empresa_id).eq("id", id).eq("tipo", "pagar").maybeSingle();
-  if (error || !pagamento) return NextResponse.json({ ok: false, error: error?.message || "Pagamento não encontrado." }, { status: 404 });
+  const empresaId = contexto.usuario.empresa_id;
+  const { data: baixa, error } = await supabase.from("financeiro_contas_pagar_baixas").select("*").eq("empresa_id", empresaId).eq("id", id).maybeSingle();
+  if (error || !baixa) return NextResponse.json({ ok: false, error: error?.message || "Pagamento não encontrado." }, { status: 404 });
+  const { data: conta, error: contaError } = await supabase.from("financeiro_contas_pagar").select("id,documento_id").eq("empresa_id", empresaId).eq("id", baixa.conta_id).maybeSingle();
+  if (contaError || !conta?.documento_id) return NextResponse.json({ ok: false, error: contaError?.message || "Conta a pagar relacionada não encontrada." }, { status: 404 });
 
   const [{ data: pedido }, { data: empresa }] = await Promise.all([
-    supabase.from("comercial_documentos").select("id,numero,parceiro_id,total,data_emissao").eq("empresa_id", contexto.usuario.empresa_id).eq("id", pagamento.documento_id).maybeSingle(),
-    supabase.from("empresas").select("nome_fantasia,razao_social,documento,email,telefone,endereco,cidade,estado").eq("id", contexto.usuario.empresa_id).maybeSingle(),
+    supabase.from("comercial_documentos").select("id,numero,parceiro_id,total,data_emissao").eq("empresa_id", empresaId).eq("id", conta.documento_id).eq("tipo", "pedido_compra").maybeSingle(),
+    supabase.from("empresas").select("nome_fantasia,razao_social,documento,email,telefone,endereco,cidade,estado").eq("id", empresaId).maybeSingle(),
   ]);
   if (!pedido) return NextResponse.json({ ok: false, error: "Pedido relacionado não encontrado." }, { status: 404 });
-  const { data: fornecedor } = await supabase.from("comercial_parceiros").select("nome,nome_fantasia,documento,email").eq("empresa_id", contexto.usuario.empresa_id).eq("id", pedido.parceiro_id).maybeSingle();
+  const { data: fornecedor } = await supabase.from("comercial_parceiros").select("nome,nome_fantasia,documento,email").eq("empresa_id", empresaId).eq("id", pedido.parceiro_id).maybeSingle();
 
   const pdf = await PDFDocument.create();
   const pagina = pdf.addPage([595.28, 841.89]);
@@ -67,18 +70,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   escrever("COMPROVANTE DE PAGAMENTO", { tamanho: 16, bold: true, cor: azul });
   escrever("DOCUMENTO NÃO FISCAL", { tamanho: 9, bold: true, cor: rgb(0.72, 0.22, 0.16) });
   y -= 12;
-  escrever(`Comprovante: ${pagamento.id}`);
+  escrever(`Comprovante: ${baixa.id}`);
   escrever(`Pedido de compra: #${pedido.numero}`);
   escrever(`Fornecedor: ${fornecedor?.nome_fantasia || fornecedor?.nome || "Não informado"}`, { bold: true });
   escrever(`CPF/CNPJ do fornecedor: ${fornecedor?.documento || "Não informado"}`);
-  escrever(`Valor pago: ${moeda(pagamento.valor)}`, { tamanho: 15, bold: true, cor: azul });
-  escrever(`Forma: ${String(pagamento.forma).replaceAll("_", " ")}`);
-  escrever(`Status: ${pagamento.status}`);
-  escrever(`Registrado em: ${data(pagamento.confirmado_em || pagamento.created_at)}`);
-  escrever(`Referência: ${pagamento.referencia || "Não informada"}`);
+  escrever(`Valor pago: ${moeda(baixa.valor)}`, { tamanho: 15, bold: true, cor: azul });
+  escrever(`Forma: ${String(baixa.forma).replaceAll("_", " ")}`);
+  escrever("Status: confirmado");
+  escrever(`Registrado em: ${data(baixa.pago_em || baixa.created_at)}`);
+  escrever(`Referência: ${baixa.referencia || "Não informada"}`);
   y -= 10;
   escrever("Observações", { bold: true });
-  for (const linha of linhas(pagamento.observacao || "Sem observações.")) escrever(linha);
+  for (const linha of linhas(baixa.observacao || "Sem observações.")) escrever(linha);
   y -= 24;
   pagina.drawLine({ start: { x: 120, y }, end: { x: 475, y }, thickness: 0.8, color: rgb(0.35, 0.39, 0.45) });
   y -= 20;
@@ -91,7 +94,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return new Response(Buffer.from(bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="comprovante-pagamento-${pagamento.id.slice(0, 8)}.pdf"`,
+      "Content-Disposition": `inline; filename="comprovante-pagamento-${baixa.id.slice(0, 8)}.pdf"`,
       "Cache-Control": "private, no-store",
     },
   });

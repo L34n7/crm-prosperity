@@ -38,6 +38,7 @@ import ComprasPanel from "@/components/estoque/ComprasPanel";
 import ImportacaoProdutosModal from "@/components/estoque/ImportacaoProdutosModal";
 import CodigoBarrasScannerModal from "@/components/estoque/CodigoBarrasScannerModal";
 import ErpOperacaoPanel from "@/components/estoque/ErpOperacaoPanel";
+import InventarioReviewButton from "@/components/estoque/InventarioReviewButton";
 import EstruturaEstoquePanel from "@/components/estoque/EstruturaEstoquePanel";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
@@ -1065,7 +1066,7 @@ export default function EstoquePage() {
           ) : null}
 
           {!carregando && aba === "inventarios" ? (
-            inventarios.length ? <div className={styles.catalogList}>{inventarios.map((inventario) => <article className={styles.catalogCard} key={inventario.id}><div className={styles.catalogIcon}><ClipboardCheck size={22} /></div><div className={styles.catalogMain}><div className={styles.catalogHeading}><div><span className={styles.typeBadge}>Inventário #{inventario.numero}</span><h3>{inventario.descricao}</h3><p>{depositos.find((deposito) => deposito.id === inventario.deposito_id)?.nome || "Depósito"} · {inventario.itens.length} itens · {dataHora(inventario.created_at)}</p></div><strong>{inventario.status.replaceAll("_", " ")}</strong></div></div>{inventario.status === "aguardando_aprovacao" && podeMovimentar ? <button className={styles.primaryButton} onClick={() => void enviar({ acao: "aprovar_inventario", id: inventario.id })}>Aprovar e ajustar</button> : null}</article>)}</div> : <div className={styles.empty}>Nenhum inventário registrado.</div>
+            inventarios.length ? <div className={styles.catalogList}>{inventarios.map((inventario) => <article className={styles.catalogCard} key={inventario.id}><div className={styles.catalogIcon}><ClipboardCheck size={22} /></div><div className={styles.catalogMain}><div className={styles.catalogHeading}><div><span className={styles.typeBadge}>Inventário #{inventario.numero}</span><h3>{inventario.descricao}</h3><p>{depositos.find((deposito) => deposito.id === inventario.deposito_id)?.nome || "Depósito"} · {inventario.itens.length} itens · {dataHora(inventario.created_at)}</p></div><strong>{inventario.status.replaceAll("_", " ")}</strong></div></div>{inventario.status === "aguardando_aprovacao" && podeMovimentar ? <InventarioReviewButton inventario={inventario} itens={itens} onApproved={async (message) => { setSucesso(message); await carregar(); }} /> : null}</article>)}</div> : <div className={styles.empty}>Nenhum inventário registrado.</div>
           ) : null}
 
           {!carregando && ehSaude && aba === "clinico" ? (

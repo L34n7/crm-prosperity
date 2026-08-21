@@ -63,40 +63,58 @@ export async function GET() {
     return NextResponse.json({ ok: true, fornecedores: fornecedores.data ?? [], fornecedor_itens: fornecedorItens.data ?? [], embalagens: embalagens.data ?? [], pedidos: [] });
   }
 
-  const [itensDocumento, pagamentos, recebimentos] = await Promise.all([
+  const [itensDocumento, contasPagar, recebimentos] = await Promise.all([
     supabase.from("comercial_documento_itens").select("*").eq("empresa_id", contexto.empresaId).in("documento_id", documentosIds),
-    supabase.from("comercial_pagamentos").select("*").eq("empresa_id", contexto.empresaId).eq("tipo", "pagar").in("documento_id", documentosIds).order("created_at", { ascending: false }),
+    supabase.from("financeiro_contas_pagar").select("id,documento_id,parceiro_id,descricao,numero_documento,vencimento_em,valor_original,valor_pago,status").eq("empresa_id", contexto.empresaId).in("documento_id", documentosIds).neq("status", "cancelada"),
     supabase.from("comercial_recebimentos_compra").select("id,numero,pedido_compra_id,parceiro_id,deposito_id,estoque_documento_id,status,origem,nfe_chave,nfe_numero,nfe_serie,nfe_emissao,subtotal,frete,total,observacao,recebido_por,recebido_em").eq("empresa_id", contexto.empresaId).in("pedido_compra_id", documentosIds).order("recebido_em", { ascending: false }),
   ]);
-  const falha = [itensDocumento.error, pagamentos.error, recebimentos.error].find(Boolean);
+  const falha = [itensDocumento.error, contasPagar.error, recebimentos.error].find(Boolean);
   if (falha) return erro(`Erro ao carregar compras: ${mensagemBanco(falha)}`, 500);
 
+  const contasData = contasPagar.data ?? [];
+  const contasIds = contasData.map((conta) => conta.id);
   const recebimentosData = recebimentos.data ?? [];
   const recebimentosIds = recebimentosData.map((recebimento) => recebimento.id);
-  const recebimentoItens = recebimentosIds.length
-    ? await supabase.from("comercial_recebimento_compra_itens").select("*").eq("empresa_id", contexto.empresaId).in("recebimento_id", recebimentosIds)
-    : { data: [], error: null };
-  if (recebimentoItens.error) return erro(`Erro ao carregar compras: ${mensagemBanco(recebimentoItens.error)}`, 500);
+  const [recebimentoItens, baixas] = await Promise.all([
+    recebimentosIds.length
+      ? supabase.from("comercial_recebimento_compra_itens").select("*").eq("empresa_id", contexto.empresaId).in("recebimento_id", recebimentosIds)
+      : Promise.resolve({ data: [], error: null }),
+    contasIds.length
+      ? supabase.from("financeiro_contas_pagar_baixas").select("id,conta_id,valor,forma,pago_em,referencia,observacao,created_at").eq("empresa_id", contexto.empresaId).in("conta_id", contasIds).order("pago_em", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (recebimentoItens.error || baixas.error) return erro(`Erro ao carregar compras: ${mensagemBanco(recebimentoItens.error || baixas.error)}`, 500);
 
   const itens = itensDocumento.data ?? [];
-  const pagamentosData = pagamentos.data ?? [];
+  const baixasData = baixas.data ?? [];
   const recebimentoItensData = recebimentoItens.data ?? [];
   return NextResponse.json({
     ok: true,
     fornecedores: fornecedores.data ?? [],
     fornecedor_itens: fornecedorItens.data ?? [],
     embalagens: embalagens.data ?? [],
-    pedidos: documentosData.map((documento) => ({
-      ...documento,
-      itens: itens.filter((item) => item.documento_id === documento.id),
-      pagamentos: pagamentosData.filter((pagamento) => pagamento.documento_id === documento.id),
-      recebimentos: recebimentosData
-        .filter((recebimento) => recebimento.pedido_compra_id === documento.id)
-        .map((recebimento) => ({
-          ...recebimento,
-          itens: recebimentoItensData.filter((item) => item.recebimento_id === recebimento.id),
-        })),
-    })),
+    pedidos: documentosData.map((documento) => {
+      const conta = contasData.find((registro) => registro.documento_id === documento.id);
+      return {
+        ...documento,
+        conta_pagar_id: conta?.id ?? null,
+        conta_pagar_status: conta?.status ?? null,
+        valor_pago: conta?.valor_pago ?? documento.valor_pago,
+        itens: itens.filter((item) => item.documento_id === documento.id),
+        pagamentos: conta ? baixasData.filter((baixa) => baixa.conta_id === conta.id).map((baixa) => ({
+          ...baixa,
+          status: "confirmado",
+          vencimento_em: conta.vencimento_em,
+          confirmado_em: baixa.pago_em,
+        })) : [],
+        recebimentos: recebimentosData
+          .filter((recebimento) => recebimento.pedido_compra_id === documento.id)
+          .map((recebimento) => ({
+            ...recebimento,
+            itens: recebimentoItensData.filter((item) => item.recebimento_id === recebimento.id),
+          })),
+      };
+    }),
   });
 }
 
@@ -329,20 +347,34 @@ export async function POST(request: Request) {
 
     if (acao === "registrar_pagamento") {
       if (!podeFinanceiro) return erro("Sem permissão para registrar pagamentos.", 403);
-      const { data, error } = await supabase.rpc("comercial_registrar_pagamento_compra", {
+      if (body.confirmar === false) return erro("Pagamentos de compras devem ser baixados pela conta a pagar vinculada.");
+      const documentoId = texto(body.id);
+      const { data: conta, error: contaError } = await supabase
+        .from("financeiro_contas_pagar")
+        .select("id,valor_original,valor_pago,status")
+        .eq("empresa_id", contexto.empresaId)
+        .eq("documento_id", documentoId)
+        .neq("status", "cancelada")
+        .maybeSingle();
+      if (contaError) return erro(mensagemBanco(contaError), 500);
+      if (!conta) return erro("O pedido não possui uma conta a pagar vinculada. Aprove o pedido e atualize a tela antes de registrar o pagamento.", 409);
+      const valor = numero(body.valor);
+      const saldo = Number(conta.valor_original) - Number(conta.valor_pago);
+      if (valor <= 0 || valor > saldo) return erro("O valor do pagamento deve ser maior que zero e não pode exceder o saldo da conta a pagar.");
+      const dataPagamento = texto(body.vencimento_em);
+      const { data, error } = await supabase.rpc("financeiro_baixar_conta_pagar", {
         p_empresa_id: contexto.empresaId,
-        p_documento_id: texto(body.id),
-        p_valor: numero(body.valor),
+        p_conta_id: conta.id,
+        p_valor: valor,
         p_forma: texto(body.forma) || "outro",
-        p_vencimento: texto(body.vencimento_em) || null,
-        p_confirmar: body.confirmar !== false,
+        p_pago_em: dataPagamento ? `${dataPagamento}T12:00:00Z` : new Date().toISOString(),
         p_referencia: texto(body.referencia) || null,
         p_observacao: texto(body.observacao) || null,
         p_idempotency_key: texto(body.idempotency_key) || crypto.randomUUID(),
         p_usuario_id: contexto.usuario.id,
       });
       if (error) return erro(mensagemBanco(error));
-      return NextResponse.json({ ok: true, message: "Pagamento registrado.", pagamento_id: data });
+      return NextResponse.json({ ok: true, message: "Pagamento baixado na conta a pagar vinculada.", pagamento_id: data, conta_pagar_id: conta.id });
     }
 
     return erro("Ação de compras inválida.");
