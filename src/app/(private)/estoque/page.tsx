@@ -37,6 +37,7 @@ import FeedbackToast from "@/components/FeedbackToast";
 import ComprasPanel from "@/components/estoque/ComprasPanel";
 import ImportacaoProdutosModal from "@/components/estoque/ImportacaoProdutosModal";
 import CodigoBarrasScannerModal from "@/components/estoque/CodigoBarrasScannerModal";
+import CadastroProdutoInteligente from "@/components/estoque/CadastroProdutoInteligente";
 import ErpOperacaoPanel from "@/components/estoque/ErpOperacaoPanel";
 import InventarioReviewButton from "@/components/estoque/InventarioReviewButton";
 import EstruturaEstoquePanel from "@/components/estoque/EstruturaEstoquePanel";
@@ -445,13 +446,6 @@ export default function EstoquePage() {
     }
   }
 
-  function abrirNovoItem() {
-    const principal = depositos.find((deposito) => deposito.principal) ?? depositos[0];
-    setItemForm({ ...ITEM_INICIAL, deposito_inicial_id: principal?.id ?? "" });
-    setErro("");
-    setModal("item");
-  }
-
   function abrirEditarItem(item: EstoqueItem) {
     setItemForm({
       id: item.id,
@@ -828,7 +822,7 @@ export default function EstoquePage() {
               <div className={styles.heroActions}>
                 <button className={styles.secondaryButton} onClick={() => setScannerContexto("busca")}><ScanBarcode size={18} /> Ler código</button>
                 {podeGerenciar ? <button className={styles.secondaryButton} onClick={() => setImportandoProdutos(true)}><FileSpreadsheet size={17} /> Importar planilha</button> : null}
-                {podeGerenciar ? <button className={styles.primaryButton} onClick={abrirNovoItem}><Plus size={17} /> Novo item</button> : null}
+                {podeGerenciar ? <CadastroProdutoInteligente className={styles.primaryButton} depositos={depositos} localizacoes={localizacoes} categorias={categorias} marcas={marcas} podeEmbalagens={permissoes.includes("estoque.embalagens")} onCreated={async (message) => { setSucesso(message); await carregar(); }} /> : null}
               </div>
             ) : null}
             {aba === "catalogo" && podeGerenciar ? (
@@ -950,7 +944,7 @@ export default function EstoquePage() {
               <p>{busca ? "Revise o termo pesquisado ou limpe a busca para visualizar todos os itens." : "Cadastre o primeiro produto ou importe sua planilha para montar o catálogo rapidamente."}</p>
               {!busca && podeGerenciar ? <div className={styles.heroActions}>
                 <button className={styles.secondaryButton} onClick={() => setImportandoProdutos(true)}><FileSpreadsheet size={17} /> Importar planilha</button>
-                <button className={styles.primaryButton} onClick={abrirNovoItem}><Plus size={17} /> Novo item</button>
+                <CadastroProdutoInteligente className={styles.primaryButton} depositos={depositos} localizacoes={localizacoes} categorias={categorias} marcas={marcas} podeEmbalagens={permissoes.includes("estoque.embalagens")} onCreated={async (message) => { setSucesso(message); await carregar(); }} />
               </div> : null}
             </div>
           ) : null}
