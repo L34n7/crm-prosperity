@@ -141,6 +141,11 @@ function caracteristicasDoImovel(imovel: CatalogoImovel) {
   if (!imovel.caracteristicas) return [];
   return Object.entries(imovel.caracteristicas).flatMap(([chave, valor]) => {
     if (
+      imovel.origem_tipo === "externo" &&
+      chave.toLocaleLowerCase("pt-BR") === "andar"
+    )
+      return [];
+    if (
       valor === false ||
       valor === null ||
       valor === undefined ||
