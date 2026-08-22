@@ -1,5 +1,6 @@
 name: Aplicar Consultar estoque agora
 
+# Segunda gravação intencional: dispara o workflow já existente na main.
 on:
   push:
     branches: [main]
