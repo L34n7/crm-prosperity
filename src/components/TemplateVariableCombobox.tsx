@@ -14,7 +14,7 @@ import styles from "./TemplateVariableCombobox.module.css";
 export type TemplateVariableOption = {
   key: string;
   description: string;
-  category: "Fixa" | "Personalizada" | "Fluxo" | "Agendamento";
+  category: "Fixa" | "Personalizada" | "Fluxo" | "Agendamento" | "Estoque";
 };
 
 type TemplateVariableComboboxProps = {
