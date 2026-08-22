@@ -1,6 +1,7 @@
 name: Aplicar Consultar estoque agora
 
 # Segunda gravação intencional: dispara o workflow já existente na main.
+# Disparo final solicitado em 22/08/2026.
 on:
   push:
     branches: [main]
