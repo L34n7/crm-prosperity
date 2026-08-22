@@ -32,6 +32,9 @@ export async function GET(request: NextRequest) {
   }
 
   const q = String(request.nextUrl.searchParams.get("q") || "").trim();
+  const produtoId = String(
+    request.nextUrl.searchParams.get("produto_id") || ""
+  ).trim();
   const termo = normalizarTermoConsultaEstoque(q);
 
   const depositosPromise = supabaseAdmin
@@ -57,10 +60,22 @@ export async function GET(request: NextRequest) {
         .order("nome", { ascending: true })
         .limit(20);
 
-  const [depositosResultado, produtosResultado] = await Promise.all([
-    depositosPromise,
-    produtosPromise,
-  ]);
+  const produtoSelecionadoPromise = produtoId
+    ? supabaseAdmin
+        .from("estoque_itens")
+        .select("id,codigo,sku,codigo_barras,nome,unidade,preco_venda")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("id", produtoId)
+        .eq("ativo", true)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
+
+  const [depositosResultado, produtosResultado, produtoSelecionadoResultado] =
+    await Promise.all([
+      depositosPromise,
+      produtosPromise,
+      produtoSelecionadoPromise,
+    ]);
 
   if (depositosResultado.error) {
     return NextResponse.json(
@@ -82,7 +97,33 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const produtos = (produtosResultado.data || []).map((produto: any) => ({
+  if (produtoSelecionadoResultado.error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Erro ao carregar produto selecionado: ${produtoSelecionadoResultado.error.message}`,
+      },
+      { status: 500 }
+    );
+  }
+
+  const produtosBase = Array.isArray(produtosResultado.data)
+    ? [...produtosResultado.data]
+    : [];
+  const produtoSelecionado = produtoSelecionadoResultado.data as
+    | Record<string, unknown>
+    | null;
+
+  if (
+    produtoSelecionado &&
+    !produtosBase.some(
+      (produto: any) => String(produto.id) === String(produtoSelecionado.id)
+    )
+  ) {
+    produtosBase.unshift(produtoSelecionado as any);
+  }
+
+  const produtos = produtosBase.map((produto: any) => ({
     id: String(produto.id),
     codigo: String(produto.codigo || ""),
     sku: String(produto.sku || ""),
