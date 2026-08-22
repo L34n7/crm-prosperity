@@ -1,0 +1,223 @@
+name: Integrar Consultar estoque no editor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/stock-editor-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-editor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Aplicar patch no page.tsx
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/page.tsx';
+          let s = fs.readFileSync(path, 'utf8');
+
+          function replaceOnce(oldText, newText, label) {
+            const first = s.indexOf(oldText);
+            const last = s.lastIndexOf(oldText);
+            if (first < 0 || first !== last) {
+              throw new Error(`${label}: esperado exatamente 1 trecho, first=${first}, last=${last}`);
+            }
+            s = s.slice(0, first) + newText + s.slice(first + oldText.length);
+            console.log('OK', label);
+          }
+
+          function replaceAfter(anchor, oldText, newText, label) {
+            const anchorIndex = s.indexOf(anchor);
+            if (anchorIndex < 0) throw new Error(`${label}: ancora nao encontrada`);
+            const index = s.indexOf(oldText, anchorIndex);
+            if (index < 0) throw new Error(`${label}: trecho nao encontrado apos ancora`);
+            s = s.slice(0, index) + newText + s.slice(index + oldText.length);
+            console.log('OK', label);
+          }
+
+          replaceOnce(
+            `import TemplateVariableCombobox, {\n  type TemplateVariableOption,\n} from "@/components/TemplateVariableCombobox";`,
+            `import TemplateVariableCombobox, {\n  type TemplateVariableOption,\n} from "@/components/TemplateVariableCombobox";\nimport ConsultarEstoqueConfig, {\n  CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO,\n  normalizarConfiguracaoConsultarEstoque,\n} from "@/components/automacoes/ConsultarEstoqueConfig";`,
+            'import componente estoque'
+          );
+
+          replaceOnce(
+            `const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";`,
+            `const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";\nconst TIPO_NO_CONSULTAR_ESTOQUE = "consultar_estoque";\nconst SAIDAS_CONSULTA_ESTOQUE = [\n  { valor: "disponivel", titulo: "Disponível" },\n  { valor: "sem_estoque", titulo: "Sem estoque" },\n  { valor: "nao_encontrado", titulo: "Não encontrado" },\n  { valor: "multiplos_resultados", titulo: "Vários encontrados" },\n] as const;\nconst VARIAVEIS_SAIDA_ESTOQUE: TemplateVariableOption[] = [\n  ["estoque_resultado", "Resultado da consulta de estoque."],\n  ["estoque_produto_id", "ID do produto localizado."],\n  ["estoque_produto_codigo", "Código do produto localizado."],\n  ["estoque_produto_sku", "SKU do produto localizado."],\n  ["estoque_produto_codigo_barras", "Código de barras do produto localizado."],\n  ["estoque_produto_nome", "Nome do produto localizado."],\n  ["estoque_preco", "Preço numérico do produto."],\n  ["estoque_preco_formatado", "Preço formatado em reais."],\n  ["estoque_quantidade", "Quantidade disponível para venda."],\n  ["estoque_quantidade_fisica", "Quantidade física no escopo consultado."],\n  ["estoque_quantidade_reservada", "Quantidade reservada no escopo consultado."],\n  ["estoque_unidade", "Unidade base do produto."],\n  ["estoque_deposito_id", "ID do depósito quando o escopo possui um único depósito."],\n  ["estoque_deposito_nome", "Nome do depósito ou depósitos consultados."],\n  ["estoque_depositos_json", "Detalhamento dos depósitos consultados em JSON."],\n  ["estoque_embalagem_id", "ID da embalagem padrão de venda."],\n  ["estoque_embalagem_nome", "Nome da embalagem padrão de venda."],\n  ["estoque_embalagem_sigla", "Sigla da embalagem padrão de venda."],\n  ["estoque_embalagem_fator", "Fator de conversão da embalagem."],\n  ["estoque_embalagem_preco", "Preço numérico da embalagem."],\n  ["estoque_embalagem_preco_formatado", "Preço formatado da embalagem."],\n  ["estoque_embalagem_quantidade_disponivel", "Quantidade de embalagens completas disponíveis."],\n  ["estoque_candidatos_quantidade", "Quantidade de candidatos encontrados."],\n  ["estoque_candidatos_texto", "Lista pronta dos candidatos encontrados."],\n  ["estoque_candidatos_json", "Candidatos encontrados em JSON."],\n].map(([key, description]) => ({\n  key,\n  description,\n  category: "Estoque" as const,\n}));`,
+            'constantes estoque'
+          );
+
+          replaceOnce(
+            `  if (tipo === "agendar_disparo") return "Agendar disparo";\n  if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";`,
+            `  if (tipo === "agendar_disparo") return "Agendar disparo";\n  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";\n  if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";`,
+            'label estoque'
+          );
+
+          replaceOnce(
+            `  if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;\n  if (tipo === "agenda_buscar_agendamento") return styles.nodeAgendaBuscar;`,
+            `  if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;\n  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return styles.nodePadrao;\n  if (tipo === "agenda_buscar_agendamento") return styles.nodeAgendaBuscar;`,
+            'cor estoque'
+          );
+
+          replaceOnce(
+            `  if (tipo === "agendar_disparo") return "Agendar disparo";\n  if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";`,
+            `  if (tipo === "agendar_disparo") return "Agendar disparo";\n  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";\n  if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";`,
+            'titulo estoque'
+          );
+
+          replaceOnce(
+            `function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {\n  if (tipoNo === "capturar_resposta") return "sempre";`,
+            `function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {\n  if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) return "resposta_igual";\n  if (tipoNo === "capturar_resposta") return "sempre";`,
+            'condicao padrao estoque'
+          );
+
+          replaceAfter(
+            'function opcoesRespostaDoNo(node?: Node | null): OpcaoRespostaConexao[] {',
+            `  if (tipoNo === "pergunta_opcoes") {`,
+            `  if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) {\n    return SAIDAS_CONSULTA_ESTOQUE.map((saida) => ({\n      valor: saida.valor,\n      titulo: saida.titulo,\n    }));\n  }\n\n  if (tipoNo === "pergunta_opcoes") {`,
+            'opcoes conexao estoque'
+          );
+
+          replaceAfter(
+            'function NodeCustom({ data, dragging }: any) {',
+            `          <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>`,
+            `          <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>\n\n          {data.tipo_no === TIPO_NO_CONSULTAR_ESTOQUE && (\n            <span\n              title="Disponível · Sem estoque · Não encontrado · Vários encontrados"\n              style={{ fontSize: 9, opacity: 0.72, whiteSpace: "nowrap" }}\n            >\n              4 saídas\n            </span>\n          )}`,
+            'badge estoque no card'
+          );
+
+          replaceAfter(
+            'function NodeCustom({ data, dragging }: any) {',
+            `      <Handle\n        type="source"\n        position={Position.Right}\n        className={styles.nodeHandle}\n        isConnectable={true}\n        onClick={(event) => event.stopPropagation()}\n        onPointerDown={(event) => event.stopPropagation()}\n      />`,
+            `      {data.tipo_no === TIPO_NO_CONSULTAR_ESTOQUE ? (\n        <>\n          {SAIDAS_CONSULTA_ESTOQUE.map((saida, index) => (\n            <Handle\n              key={saida.valor}\n              id={saida.valor}\n              type="source"\n              position={Position.Right}\n              className={styles.nodeHandle}\n              isConnectable={true}\n              title={saida.titulo}\n              style={{ top: \`${22 + index * 19}%\` }}\n              onClick={(event) => event.stopPropagation()}\n              onPointerDown={(event) => event.stopPropagation()}\n            />\n          ))}\n        </>\n      ) : (\n        <Handle\n          type="source"\n          position={Position.Right}\n          className={styles.nodeHandle}\n          isConnectable={true}\n          onClick={(event) => event.stopPropagation()}\n          onPointerDown={(event) => event.stopPropagation()}\n        />\n      )}`,
+            'handles estoque'
+          );
+
+          replaceAfter(
+            'function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {',
+            `      source: conexao.no_origem_id,\n      target: conexao.no_destino_id,\n      type: "default",`,
+            `      source: conexao.no_origem_id,\n      target: conexao.no_destino_id,\n      sourceHandle: SAIDAS_CONSULTA_ESTOQUE.some(\n        (saida) => saida.valor === String(conexao.condicao_json?.valor || "")\n      )\n        ? String(conexao.condicao_json?.valor || "")\n        : undefined,\n      type: "default",`,
+            'rehidratar handle estoque'
+          );
+
+          replaceAfter(
+            'const onConnect = useCallback(',
+            `      const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");\n      const usarIaPadrao = tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;\n      const opcaoRespostaPadrao = proximaOpcaoRespostaDisponivel(\n        nodeOrigem,\n        edges\n      );`,
+            `      const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");\n      const origemConsultaEstoque = tipoOrigem === TIPO_NO_CONSULTAR_ESTOQUE;\n      const saidaEstoque = origemConsultaEstoque\n        ? SAIDAS_CONSULTA_ESTOQUE.find(\n            (saida) => saida.valor === String(connection.sourceHandle || "")\n          ) || null\n        : null;\n\n      if (origemConsultaEstoque && !saidaEstoque) {\n        setErro("Escolha uma das quatro saídas do bloco Consultar estoque.");\n        return;\n      }\n\n      if (\n        saidaEstoque &&\n        edges.some(\n          (edge) =>\n            edge.source === connection.source &&\n            String(\n              (edge.data as EdgeDataConexao | undefined)?.condicao_json?.valor ||\n                ""\n            ) === saidaEstoque.valor\n        )\n      ) {\n        setErro(\`A saída "\${saidaEstoque.titulo}" já está conectada.\`);\n        return;\n      }\n\n      const usarIaPadrao =\n        !origemConsultaEstoque && tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;\n      const opcaoRespostaPadrao =\n        saidaEstoque || proximaOpcaoRespostaDisponivel(nodeOrigem, edges);`,
+            'onConnect estoque'
+          );
+
+          replaceAfter(
+            'const opcoesVariaveisFluxo = useMemo<TemplateVariableOption[]>(() => {',
+            `    return opcoes;\n  }, [nodes, opcoesVariaveisTemplate]);`,
+            `    if (nodes.some((node) => String(node.data?.tipo_no || "") === TIPO_NO_CONSULTAR_ESTOQUE)) {\n      for (const variavel of VARIAVEIS_SAIDA_ESTOQUE) {\n        if (chavesAdicionadas.has(variavel.key)) continue;\n        chavesAdicionadas.add(variavel.key);\n        opcoes.push(variavel);\n      }\n    }\n\n    return opcoes;\n  }, [nodes, opcoesVariaveisTemplate]);`,
+            'variaveis estoque no picker'
+          );
+
+          replaceAfter(
+            'function adicionarNo(tipoNo: string) {',
+            `          : tipoNo === "agendar_disparo"\n          ? {`,
+            `          : tipoNo === TIPO_NO_CONSULTAR_ESTOQUE\n          ? { ...CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO }\n          : tipoNo === "agendar_disparo"\n          ? {`,
+            'config padrao novo no estoque'
+          );
+
+          replaceAfter(
+            'async function aplicarEdicaoNo()',
+            `    if (\n      tipoNodeEdicao === "capturar_resposta" &&`,
+            `    if (tipoNodeEdicao === TIPO_NO_CONSULTAR_ESTOQUE && nodeEditado) {\n      const configEstoque = normalizarConfiguracaoConsultarEstoque(\n        (nodeEditado.data?.configuracao_json || {}) as Record<string, unknown>\n      );\n\n      if (\n        configEstoque.origem_produto === "produto_especifico" &&\n        !configEstoque.produto_id\n      ) {\n        setErro("Selecione o produto que será consultado.");\n        return;\n      }\n\n      if (\n        configEstoque.origem_produto === "variavel" &&\n        !configEstoque.variavel_produto\n      ) {\n        setErro("Informe a variável que contém o produto a consultar.");\n        return;\n      }\n\n      if (\n        configEstoque.deposito_modo === "especifico" &&\n        !configEstoque.deposito_id\n      ) {\n        setErro("Selecione o depósito que será consultado.");\n        return;\n      }\n\n      if (\n        configEstoque.deposito_modo === "selecionados" &&\n        configEstoque.deposito_ids.length === 0\n      ) {\n        setErro("Selecione pelo menos um depósito para a consulta.");\n        return;\n      }\n    }\n\n    if (\n      tipoNodeEdicao === "capturar_resposta" &&`,
+            'validar configuracao estoque ao salvar bloco'
+          );
+
+          replaceAfter(
+            'async function aplicarEdicaoNo()',
+            `      const configuracao_json: Record<string, any> = {};`,
+            `      const configuracao_json: Record<string, any> =\n        tipoFinal === TIPO_NO_CONSULTAR_ESTOQUE\n          ? normalizarConfiguracaoConsultarEstoque(\n              (node.data?.configuracao_json || {}) as Record<string, unknown>\n            )\n          : {};`,
+            'preservar configuracao estoque'
+          );
+
+          replaceAfter(
+            'async function aplicarEdicaoNo()',
+            `          tipoFinal === "inicio"\n            ? null\n            : normalizarDelaySegundos(delayNode),`,
+            `          tipoFinal === "inicio" || tipoFinal === TIPO_NO_CONSULTAR_ESTOQUE\n            ? null\n            : normalizarDelaySegundos(delayNode),`,
+            'delay nulo estoque'
+          );
+
+          replaceOnce(
+            `                      <button\n                        type="button"\n                        className={styles.headerDropdownItem}\n                        onClick={() => {\n                          setMenuHeaderAberto(false);\n                          adicionarNo("agendar_disparo");\n                        }}\n                      >\n                        + Agendar disparo\n                      </button>`,
+            `                      <button\n                        type="button"\n                        className={styles.headerDropdownItem}\n                        onClick={() => {\n                          setMenuHeaderAberto(false);\n                          adicionarNo(TIPO_NO_CONSULTAR_ESTOQUE);\n                        }}\n                      >\n                        + Consultar estoque\n                      </button>\n\n                      <button\n                        type="button"\n                        className={styles.headerDropdownItem}\n                        onClick={() => {\n                          setMenuHeaderAberto(false);\n                          adicionarNo("agendar_disparo");\n                        }}\n                      >\n                        + Agendar disparo\n                      </button>`,
+            'botao paleta estoque'
+          );
+
+          replaceOnce(
+            `                        <option value="agendar_disparo">Agendar disparo</option>`,
+            `                        <option value={TIPO_NO_CONSULTAR_ESTOQUE}>Consultar estoque</option>\n                        <option value="agendar_disparo">Agendar disparo</option>`,
+            'tipo estoque no select'
+          );
+
+          replaceAfter(
+            '<span className={styles.help}>\n                      Esse título é interno e não aparece na conversa.\n                    </span>',
+            `                  </label>\n\n                  {[`,
+            `                  </label>\n\n                  {tipoNodeEdicao === TIPO_NO_CONSULTAR_ESTOQUE && nodeEditado && (\n                    <ConsultarEstoqueConfig\n                      configuracao={\n                        (nodeEditado.data?.configuracao_json || {}) as Record<\n                          string,\n                          unknown\n                        >\n                      }\n                      variaveis={opcoesVariaveisFluxo}\n                      onChange={(configuracao) => {\n                        if (!editandoNodeId) return;\n\n                        setNodes((atuais) =>\n                          atuais.map((node) =>\n                            node.id === editandoNodeId\n                              ? {\n                                  ...node,\n                                  data: {\n                                    ...node.data,\n                                    configuracao_json: configuracao,\n                                  },\n                                }\n                              : node\n                          )\n                        );\n                      }}\n                    />\n                  )}\n\n                  {[`,
+            'form estoque no painel'
+          );
+
+          replaceOnce(
+            `{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (`,
+            `{tipoNodeEdicao !== "inicio" &&\n                    tipoNodeEdicao !== "agendar_disparo" &&\n                    tipoNodeEdicao !== TIPO_NO_CONSULTAR_ESTOQUE && (`,
+            'ocultar delay estoque'
+          );
+
+          replaceAfter(
+            'function validarFluxoAntesDeAtivar(params?: {',
+            `    const config = (node.data?.configuracao_json || {}) as Record<string, any>;\n\n`,
+            `    const config = (node.data?.configuracao_json || {}) as Record<string, any>;\n\n    if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) {\n      const configEstoque = normalizarConfiguracaoConsultarEstoque(config);\n\n      if (\n        configEstoque.origem_produto === "produto_especifico" &&\n        !configEstoque.produto_id\n      ) {\n        return \`O bloco "\${node.data?.titulo}" precisa ter um produto selecionado.\`;\n      }\n\n      if (\n        configEstoque.origem_produto === "variavel" &&\n        !configEstoque.variavel_produto\n      ) {\n        return \`O bloco "\${node.data?.titulo}" precisa ter uma variável de produto.\`;\n      }\n\n      if (\n        configEstoque.deposito_modo === "especifico" &&\n        !configEstoque.deposito_id\n      ) {\n        return \`O bloco "\${node.data?.titulo}" precisa ter um depósito selecionado.\`;\n      }\n\n      if (\n        configEstoque.deposito_modo === "selecionados" &&\n        configEstoque.deposito_ids.length === 0\n      ) {\n        return \`O bloco "\${node.data?.titulo}" precisa ter pelo menos um depósito selecionado.\`;\n      }\n\n      const valoresSaida = edgesValidacao\n        .filter((edge) => edge.source === node.id)\n        .map((edge) =>\n          String(\n            (edge.data as EdgeDataConexao | undefined)?.condicao_json?.valor ||\n              ""\n          )\n        )\n        .filter(Boolean);\n\n      for (const saida of SAIDAS_CONSULTA_ESTOQUE) {\n        const quantidade = valoresSaida.filter(\n          (valor) => valor === saida.valor\n        ).length;\n\n        if (quantidade !== 1) {\n          return \`O bloco "\${node.data?.titulo}" precisa ter exatamente uma conexão na saída "\${saida.titulo}".\`;\n        }\n      }\n    }\n\n`,
+            'validacao ativacao estoque'
+          );
+
+          if (!s.includes('TIPO_NO_CONSULTAR_ESTOQUE')) {
+            throw new Error('sanidade: tipo consultar estoque ausente apos patch');
+          }
+          if (!s.includes('<ConsultarEstoqueConfig')) {
+            throw new Error('sanidade: componente consultar estoque ausente apos patch');
+          }
+          if (!s.includes('id={saida.valor}')) {
+            throw new Error('sanidade: handles consultar estoque ausentes apos patch');
+          }
+
+          fs.writeFileSync(path, s);
+          NODE
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Validar ESLint alteracoes
+        run: npx eslint 'src/app/(private)/fluxos/page.tsx' 'src/components/automacoes/ConsultarEstoqueConfig.tsx' 'src/app/api/automacoes/estoque/opcoes/route.ts'
+
+      - name: Validar TypeScript
+        run: npx tsc --noEmit
+
+      - name: Validar build Next.js
+        run: npm run build
+
+      - name: Publicar page.tsx validado e remover workflow temporario
+        shell: bash
+        run: |
+          rm .github/workflows/stock-editor-patch.yml
+          git config user.name "L34n7"
+          git config user.email "86571901+L34n7@users.noreply.github.com"
+          git add 'src/app/(private)/fluxos/page.tsx' .github/workflows/stock-editor-patch.yml
+          git commit -m 'feat: adicionar no consultar estoque ao construtor'
+          git push origin HEAD:main
