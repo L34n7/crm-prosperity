@@ -29,6 +29,20 @@ jobs:
         run: |
           awk '/node <<'"'"'NODE'"'"'/{captura=1; next} /^          NODE$/{captura=0} captura{sub(/^          /, ""); print}' .github/workflows/stock-editor-patch.yml > /tmp/stock-editor-patch.js
           test -s /tmp/stock-editor-patch.js
+          node <<'FIX'
+          const fs = require('fs');
+          const arquivo = '/tmp/stock-editor-patch.js';
+          let patch = fs.readFileSync(arquivo, 'utf8');
+          patch = patch.replaceAll(
+            'async function aplicarEdicaoNo()',
+            'async function aplicarEdicaoNoInterno()'
+          );
+          patch = patch.replace(
+            '${22 + index * 19}',
+            '\\${22 + index * 19}'
+          );
+          fs.writeFileSync(arquivo, patch);
+          FIX
           node /tmp/stock-editor-patch.js
 
       - name: Instalar dependencias
