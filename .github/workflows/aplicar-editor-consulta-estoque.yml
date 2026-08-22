@@ -1,6 +1,7 @@
 name: Aplicar editor Consultar estoque
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -11,12 +12,11 @@ permissions:
 
 jobs:
   aplicar:
-    if: ${{ !contains(github.event.head_commit.message, '[skip stock-editor-patch]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
       - uses: actions/setup-node@v4
         with:
@@ -26,216 +26,13 @@ jobs:
       - name: Aplicar alteracoes no editor de fluxos
         shell: bash
         run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import re
-
-          path = Path('src/app/(private)/fluxos/page.tsx')
-          s = path.read_text()
-
-          def replace_once(old, new, label):
-              global s
-              count = s.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: esperado 1 trecho, encontrado {count}')
-              s = s.replace(old, new, 1)
-              print('OK', label)
-
-          # Tipos do editor e configuracao padrao do bloco.
-          replace_once(
-              'type EscopoFilaNode = "setor" | "geral";\n',
-              '''type EscopoFilaNode = "setor" | "geral";\n\ntype EstoqueProdutoEditorOpcao = {\n  id: string;\n  codigo: string;\n  sku: string;\n  codigo_barras: string;\n  nome: string;\n  unidade: string;\n  preco_venda: number | null;\n};\n\ntype EstoqueDepositoEditorOpcao = {\n  id: string;\n  codigo?: string | null;\n  nome: string;\n  principal?: boolean | null;\n};\n\ntype EstoqueConfigEditor = {\n  origem_produto: "resposta_cliente" | "variavel" | "produto_especifico";\n  produto_id: string;\n  variavel_produto: string;\n  variavel_resposta: string;\n  pesquisar_por: "automatico" | "nome" | "codigo_sku" | "codigo_barras";\n  deposito_modo: "todos" | "especifico" | "selecionados";\n  deposito_id: string;\n  deposito_ids: string[];\n  usar_embalagem_venda: boolean;\n  limite_candidatos: number;\n};\n\nconst ESTOQUE_CONFIG_PADRAO: EstoqueConfigEditor = {\n  origem_produto: "resposta_cliente",\n  produto_id: "",\n  variavel_produto: "",\n  variavel_resposta: "",\n  pesquisar_por: "automatico",\n  deposito_modo: "todos",\n  deposito_id: "",\n  deposito_ids: [],\n  usar_embalagem_venda: true,\n  limite_candidatos: 5,\n};\n''',
-              'tipos estoque'
-          )
-
-          replace_once(
-              'const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";\n',
-              '''const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";\nconst TIPO_NO_CONSULTAR_ESTOQUE = "consultar_estoque";\nconst SAIDAS_CONSULTA_ESTOQUE = [\n  { valor: "disponivel", titulo: "Disponível" },\n  { valor: "sem_estoque", titulo: "Sem estoque" },\n  { valor: "nao_encontrado", titulo: "Não encontrado" },\n  { valor: "multiplos_resultados", titulo: "Vários encontrados" },\n] as const;\nconst VARIAVEIS_SAIDA_ESTOQUE: TemplateVariableOption[] = [\n  ["estoque_resultado", "Resultado da consulta de estoque."],\n  ["estoque_produto_id", "ID do produto localizado."],\n  ["estoque_produto_codigo", "Código do produto localizado."],\n  ["estoque_produto_sku", "SKU do produto localizado."],\n  ["estoque_produto_codigo_barras", "Código de barras do produto localizado."],\n  ["estoque_produto_nome", "Nome do produto localizado."],\n  ["estoque_preco", "Preço numérico do produto."],\n  ["estoque_preco_formatado", "Preço formatado em reais."],\n  ["estoque_quantidade", "Quantidade disponível para venda."],\n  ["estoque_quantidade_fisica", "Quantidade física em estoque."],\n  ["estoque_quantidade_reservada", "Quantidade reservada."],\n  ["estoque_unidade", "Unidade base do produto."],\n  ["estoque_deposito_id", "ID do depósito quando a consulta usa um único depósito."],\n  ["estoque_deposito_nome", "Nome do depósito consultado."],\n  ["estoque_depositos_json", "Detalhamento dos depósitos em JSON."],\n  ["estoque_embalagem_id", "ID da embalagem de venda."],\n  ["estoque_embalagem_nome", "Nome da embalagem de venda."],\n  ["estoque_embalagem_sigla", "Sigla da embalagem de venda."],\n  ["estoque_embalagem_fator", "Fator de conversão da embalagem."],\n  ["estoque_embalagem_preco", "Preço numérico da embalagem."],\n  ["estoque_embalagem_preco_formatado", "Preço formatado da embalagem."],\n  ["estoque_embalagem_quantidade_disponivel", "Quantidade disponível em embalagens."],\n  ["estoque_candidatos_quantidade", "Quantidade de produtos candidatos encontrados."],\n  ["estoque_candidatos_texto", "Lista pronta dos produtos candidatos."],\n  ["estoque_candidatos_json", "Lista dos candidatos em JSON."],\n].map(([key, description]) => ({ key, description, category: "Estoque" as const }));\n''',
-              'constantes estoque'
-          )
-
-          # Rotulos e comportamento basico do tipo de no.
-          replace_once(
-              '  if (tipo === "agendar_disparo") return "Agendar disparo";\n',
-              '  if (tipo === "agendar_disparo") return "Agendar disparo";\n  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";\n',
-              'label tipo estoque'
-          )
-          replace_once(
-              '  if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;\n',
-              '  if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;\n  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return styles.nodePadrao;\n',
-              'cor tipo estoque'
-          )
-          replace_once(
-              '  if (tipo === "agendar_disparo") return "Agendar disparo";\n  if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";\n',
-              '  if (tipo === "agendar_disparo") return "Agendar disparo";\n  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";\n  if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";\n',
-              'titulo estoque'
-          )
-          replace_once(
-              'function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {\n  if (tipoNo === "capturar_resposta") return "sempre";\n',
-              'function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {\n  if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) return "resposta_igual";\n  if (tipoNo === "capturar_resposta") return "sempre";\n',
-              'condicao padrao estoque'
-          )
-
-          # O seletor de resposta da conexao passa a conhecer as quatro saidas.
-          needle = '  if (tipoNo === "pergunta_opcoes") {\n'
-          idx = s.find(needle, s.find('function opcoesRespostaDoNo'))
-          if idx < 0:
-              raise SystemExit('opcoes resposta estoque: ponto de insercao nao encontrado')
-          bloco = '''  if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) {\n    return SAIDAS_CONSULTA_ESTOQUE.map((saida) => ({\n      valor: saida.valor,\n      titulo: saida.titulo,\n    }));\n  }\n\n'''
-          s = s[:idx] + bloco + s[idx:]
-          print('OK opcoes resposta estoque')
-
-          # Variaveis produzidas pelo no ficam disponiveis nos blocos seguintes.
-          replace_once(
-              '''      opcoes.push({\n        key: chave,\n        description: `Resposta armazenada pelo bloco "${titulo}".`,\n        category: "Fluxo",\n      });\n    }\n\n    return opcoes;\n  }, [nodes, opcoesVariaveisTemplate]);\n''',
-              '''      opcoes.push({\n        key: chave,\n        description: `Resposta armazenada pelo bloco "${titulo}".`,\n        category: "Fluxo",\n      });\n    }\n\n    for (const variavel of VARIAVEIS_SAIDA_ESTOQUE) {\n      if (chavesAdicionadas.has(variavel.key)) continue;\n      chavesAdicionadas.add(variavel.key);\n      opcoes.push(variavel);\n    }\n\n    return opcoes;\n  }, [nodes, opcoesVariaveisTemplate]);\n''',
-              'variaveis saida estoque'
-          )
-
-          # Quatro handles nativos no card do React Flow.
-          replace_once(
-              '''      <Handle\n        type="source"\n        position={Position.Right}\n        className={styles.nodeHandle}\n        isConnectable={true}\n        onClick={(event) => event.stopPropagation()}\n        onPointerDown={(event) => event.stopPropagation()}\n      />\n''',
-              '''      {data.tipo_no === TIPO_NO_CONSULTAR_ESTOQUE ? (\n        <>\n          {SAIDAS_CONSULTA_ESTOQUE.map((saida, index) => (\n            <Handle\n              key={saida.valor}\n              id={saida.valor}\n              type="source"\n              position={Position.Right}\n              className={styles.nodeHandle}\n              isConnectable={true}\n              title={saida.titulo}\n              style={{ top: `${23 + index * 18}%` }}\n              onClick={(event) => event.stopPropagation()}\n              onPointerDown={(event) => event.stopPropagation()}\n            />\n          ))}\n        </>\n      ) : (\n        <Handle\n          type="source"\n          position={Position.Right}\n          className={styles.nodeHandle}\n          isConnectable={true}\n          onClick={(event) => event.stopPropagation()}\n          onPointerDown={(event) => event.stopPropagation()}\n        />\n      )}\n''',
-              'handles estoque'
-          )
-
-          replace_once(
-              '          <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>\n',
-              '''          <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>\n\n          {data.tipo_no === TIPO_NO_CONSULTAR_ESTOQUE && (\n            <span title="Disponível · Sem estoque · Não encontrado · Vários encontrados" style={{ fontSize: 9, opacity: 0.68 }}>\n              4 saídas\n            </span>\n          )}\n''',
-              'badge quatro saidas'
-          )
-
-          # Ao recarregar o fluxo, o handle e reconstruido pela condicao persistida.
-          replace_once(
-              '      target: conexao.no_destino_id,\n      type: "default",\n',
-              '''      target: conexao.no_destino_id,\n      sourceHandle: SAIDAS_CONSULTA_ESTOQUE.some(\n        (saida) => saida.valor === String(conexao.condicao_json?.valor || "")\n      )\n        ? String(conexao.condicao_json?.valor || "")\n        : undefined,\n      type: "default",\n''',
-              'rehidratar source handle'
-          )
-
-          # Conectar arrastando um dos quatro handles grava o resultado na condicao_json.
-          replace_once(
-              '''      const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");\n      const usarIaPadrao = tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;\n      const opcaoRespostaPadrao = proximaOpcaoRespostaDisponivel(\n        nodeOrigem,\n        edges\n      );\n\n      const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);\n''',
-              '''      const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");\n      const origemConsultaEstoque = tipoOrigem === TIPO_NO_CONSULTAR_ESTOQUE;\n      const saidaEstoque = origemConsultaEstoque\n        ? SAIDAS_CONSULTA_ESTOQUE.find(\n            (saida) => saida.valor === String(connection.sourceHandle || "")\n          ) || null\n        : null;\n\n      if (origemConsultaEstoque && !saidaEstoque) {\n        setErro("Escolha uma das quatro saídas do bloco Consultar estoque.");\n        return;\n      }\n\n      if (\n        saidaEstoque &&\n        edges.some(\n          (edge) =>\n            edge.source === connection.source &&\n            String((edge.data as EdgeDataConexao | undefined)?.condicao_json?.valor || "") ===\n              saidaEstoque.valor\n        )\n      ) {\n        setErro(`A saída "${saidaEstoque.titulo}" já está conectada.`);\n        return;\n      }\n\n      const usarIaPadrao =\n        !origemConsultaEstoque && tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;\n      const opcaoRespostaPadrao =\n        saidaEstoque || proximaOpcaoRespostaDisponivel(nodeOrigem, edges);\n\n      const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);\n''',
-              'onConnect estoque'
-          )
-
-          # Estado local e carregamento de produtos/depositos do proprio estoque.
-          replace_once(
-              '  const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");\n',
-              '''  const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");\n  const [estoqueConfigNode, setEstoqueConfigNode] =\n    useState<EstoqueConfigEditor>({ ...ESTOQUE_CONFIG_PADRAO });\n  const [estoqueProdutosOpcoes, setEstoqueProdutosOpcoes] =\n    useState<EstoqueProdutoEditorOpcao[]>([]);\n  const [estoqueDepositosOpcoes, setEstoqueDepositosOpcoes] =\n    useState<EstoqueDepositoEditorOpcao[]>([]);\n  const [estoqueBuscaProdutoNode, setEstoqueBuscaProdutoNode] = useState("");\n  const [carregandoOpcoesEstoque, setCarregandoOpcoesEstoque] = useState(false);\n''',
-              'estado estoque'
-          )
-
-          insert_before = '  const nodeEditado = useMemo(() => {\n'
-          idx = s.find(insert_before)
-          if idx < 0:
-              raise SystemExit('loader estoque: ponto de insercao nao encontrado')
-          loader = '''  const carregarOpcoesEstoque = useCallback(async (busca = "") => {\n    try {\n      setCarregandoOpcoesEstoque(true);\n      const res = await fetch(\n        `/api/automacoes/estoque/opcoes?q=${encodeURIComponent(busca)}`\n      );\n      const json = await lerRespostaApi(\n        res,\n        "Não foi possível carregar produtos e depósitos do estoque."\n      );\n\n      if (!res.ok || !json.ok) {\n        throw new Error(json.error || "Erro ao carregar opções do estoque.");\n      }\n\n      setEstoqueProdutosOpcoes(Array.isArray(json.produtos) ? json.produtos : []);\n      setEstoqueDepositosOpcoes(Array.isArray(json.depositos) ? json.depositos : []);\n    } catch (error: any) {\n      setErro(error?.message || "Erro ao carregar opções do estoque.");\n    } finally {\n      setCarregandoOpcoesEstoque(false);\n    }\n  }, []);\n\n  useEffect(() => {\n    if (tipoNodeEdicao !== TIPO_NO_CONSULTAR_ESTOQUE) return;\n    void carregarOpcoesEstoque();\n  }, [tipoNodeEdicao, carregarOpcoesEstoque]);\n\n'''
-          s = s[:idx] + loader + s[idx:]
-          print('OK loader estoque')
-
-          # Preencher estado ao abrir um bloco existente.
-          replace_once(
-              '''    setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));\n    setCapturaTipoNode(String(configuracaoJson?.tipo_captura || "nome"));\n''',
-              '''    setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));\n    setCapturaTipoNode(String(configuracaoJson?.tipo_captura || "nome"));\n    setEstoqueConfigNode({\n      ...ESTOQUE_CONFIG_PADRAO,\n      ...(configuracaoJson || {}),\n      deposito_ids: Array.isArray(configuracaoJson?.deposito_ids)\n        ? configuracaoJson.deposito_ids.map((id: unknown) => String(id || "")).filter(Boolean)\n        : [],\n      usar_embalagem_venda: configuracaoJson?.usar_embalagem_venda !== false,\n      limite_candidatos: Math.max(1, Math.min(10, Number(configuracaoJson?.limite_candidatos || 5))),\n    });\n    setEstoqueBuscaProdutoNode("");\n''',
-              'abrir edicao estoque'
-          )
-
-          # Configuracao inicial ao adicionar o bloco.
-          replace_once(
-              '''          : tipoNo === "agendar_disparo"\n          ? {\n              template_id: "",\n''',
-              '''          : tipoNo === TIPO_NO_CONSULTAR_ESTOQUE\n          ? { ...ESTOQUE_CONFIG_PADRAO }\n          : tipoNo === "agendar_disparo"\n          ? {\n              template_id: "",\n''',
-              'config inicial estoque'
-          )
-
-          # Validacao antes de aplicar configuracao no painel.
-          marker = '''    if (\n      tipoNodeEdicao === "capturar_resposta" &&\n      VARIAVEIS_FIXAS_CONTATO_RESERVADAS.includes(\n'''
-          idx = s.find(marker)
-          if idx < 0:
-              raise SystemExit('validacao painel estoque: ponto de insercao nao encontrado')
-          validacao = '''    if (tipoNodeEdicao === TIPO_NO_CONSULTAR_ESTOQUE) {\n      if (\n        estoqueConfigNode.origem_produto === "produto_especifico" &&\n        !String(estoqueConfigNode.produto_id || "").trim()\n      ) {\n        setErro("Selecione o produto que será consultado.");\n        return;\n      }\n\n      if (\n        estoqueConfigNode.origem_produto === "variavel" &&\n        !String(estoqueConfigNode.variavel_produto || "").trim()\n      ) {\n        setErro("Selecione a variável que contém o produto a consultar.");\n        return;\n      }\n\n      if (\n        estoqueConfigNode.deposito_modo === "especifico" &&\n        !String(estoqueConfigNode.deposito_id || "").trim()\n      ) {\n        setErro("Selecione o depósito que será consultado.");\n        return;\n      }\n\n      if (\n        estoqueConfigNode.deposito_modo === "selecionados" &&\n        estoqueConfigNode.deposito_ids.length === 0\n      ) {\n        setErro("Selecione pelo menos um depósito para a consulta.");\n        return;\n      }\n    }\n\n'''
-          s = s[:idx] + validacao + s[idx:]
-          print('OK validacao painel estoque')
-
-          # Persistir a configuracao do novo tipo no builder principal.
-          replace_once(
-              '''      if (tipoFinal === "capturar_resposta") {\n        configuracao_json.variavel =\n          capturaVariavelNode.trim().toLowerCase() || "resposta";\n''',
-              '''      if (tipoFinal === TIPO_NO_CONSULTAR_ESTOQUE) {\n        Object.assign(configuracao_json, estoqueConfigNode);\n      }\n\n      if (tipoFinal === "capturar_resposta") {\n        configuracao_json.variavel =\n          capturaVariavelNode.trim().toLowerCase() || "resposta";\n''',
-              'salvar config estoque'
-          )
-
-          # Persistir tambem na previa local usada antes de salvar o fluxo.
-          replace_once(
-              '''    if (tipoFinal === "capturar_resposta") {\n      configuracao.variavel = capturaVariavelNode.trim().toLowerCase() || "resposta";\n      configuracao.tipo_captura = capturaTipoNode || "texto";\n    }\n\n    if (tipoFinal === "agendar_disparo") {\n''',
-              '''    if (tipoFinal === "capturar_resposta") {\n      configuracao.variavel = capturaVariavelNode.trim().toLowerCase() || "resposta";\n      configuracao.tipo_captura = capturaTipoNode || "texto";\n    }\n\n    if (tipoFinal === TIPO_NO_CONSULTAR_ESTOQUE) {\n      Object.assign(configuracao, estoqueConfigNode);\n    }\n\n    if (tipoFinal === "agendar_disparo") {\n''',
-              'preview config estoque'
-          )
-
-          # Dependencia da previa.
-          replace_once(
-              '''  capturaVariavelNode,\n  capturaTipoNode,\n  agendarDisparoTemplateIdNode,\n''',
-              '''  capturaVariavelNode,\n  capturaTipoNode,\n  estoqueConfigNode,\n  agendarDisparoTemplateIdNode,\n''',
-              'dependencia preview estoque'
-          )
-
-          # Botao na paleta de blocos.
-          replace_once(
-              '''                      <button\n                        type="button"\n                        className={styles.headerDropdownItem}\n                        onClick={() => {\n                          setMenuHeaderAberto(false);\n                          adicionarNo("agendar_disparo");\n                        }}\n                      >\n                        + Agendar disparo\n                      </button>\n''',
-              '''                      <button\n                        type="button"\n                        className={styles.headerDropdownItem}\n                        onClick={() => {\n                          setMenuHeaderAberto(false);\n                          adicionarNo(TIPO_NO_CONSULTAR_ESTOQUE);\n                        }}\n                      >\n                        + Consultar estoque\n                      </button>\n\n                      <button\n                        type="button"\n                        className={styles.headerDropdownItem}\n                        onClick={() => {\n                          setMenuHeaderAberto(false);\n                          adicionarNo("agendar_disparo");\n                        }}\n                      >\n                        + Agendar disparo\n                      </button>\n''',
-              'paleta estoque'
-          )
-
-          # Tipo selecionavel no painel.
-          replace_once(
-              '                        <option value="agendar_disparo">Agendar disparo</option>\n',
-              '                        <option value={TIPO_NO_CONSULTAR_ESTOQUE}>Consultar estoque</option>\n                        <option value="agendar_disparo">Agendar disparo</option>\n',
-              'option tipo estoque'
-          )
-
-          # Painel completo de configuracao.
-          marker = '                  {tipoNodeEdicao === "agendar_disparo" && (\n'
-          idx = s.find(marker)
-          if idx < 0:
-              raise SystemExit('form estoque: ponto de insercao nao encontrado')
-          form = '''                  {tipoNodeEdicao === TIPO_NO_CONSULTAR_ESTOQUE && (\n                    <div className={styles.optionsBox}>\n                      <label className={styles.field}>\n                        <span className={styles.label}>Produto vem de</span>\n                        <select\n                          className={styles.input}\n                          value={estoqueConfigNode.origem_produto}\n                          onChange={(e) =>\n                            setEstoqueConfigNode((atual) => ({\n                              ...atual,\n                              origem_produto: e.target.value as EstoqueConfigEditor["origem_produto"],\n                            }))\n                          }\n                        >\n                          <option value="resposta_cliente">Resposta atual do cliente</option>\n                          <option value="variavel">Variável do fluxo</option>\n                          <option value="produto_especifico">Produto fixo</option>\n                        </select>\n                        <p className={styles.help}>\n                          A busca é conservadora: código, SKU e código de barras têm prioridade.\n                          Busca textual ambígua segue pela saída Vários encontrados.\n                        </p>\n                      </label>\n\n                      {estoqueConfigNode.origem_produto === "produto_especifico" && (\n                        <>\n                          <label className={styles.field}>\n                            <span className={styles.label}>Localizar produto</span>\n                            <div style={{ display: "flex", gap: 8 }}>\n                              <input\n                                className={styles.input}\n                                value={estoqueBuscaProdutoNode}\n                                onChange={(e) => setEstoqueBuscaProdutoNode(e.target.value)}\n                                placeholder="Nome, código, SKU ou código de barras"\n                              />\n                              <button\n                                type="button"\n                                className={styles.secondaryButton}\n                                disabled={carregandoOpcoesEstoque}\n                                onClick={() => void carregarOpcoesEstoque(estoqueBuscaProdutoNode)}\n                              >\n                                Buscar\n                              </button>\n                            </div>\n                          </label>\n\n                          <label className={styles.field}>\n                            <span className={styles.label}>Produto</span>\n                            <select\n                              className={styles.input}\n                              value={estoqueConfigNode.produto_id}\n                              disabled={carregandoOpcoesEstoque}\n                              onChange={(e) =>\n                                setEstoqueConfigNode((atual) => ({\n                                  ...atual,\n                                  produto_id: e.target.value,\n                                }))\n                              }\n                            >\n                              <option value="">Selecione...</option>\n                              {estoqueProdutosOpcoes.map((produto) => (\n                                <option key={produto.id} value={produto.id}>\n                                  {produto.nome}\n                                  {produto.sku ? ` · SKU ${produto.sku}` : ""}\n                                  {produto.codigo ? ` · ${produto.codigo}` : ""}\n                                </option>\n                              ))}\n                            </select>\n                          </label>\n                        </>\n                      )}\n\n                      {estoqueConfigNode.origem_produto === "variavel" && (\n                        <TemplateVariableCombobox\n                          label="Variável com produto"\n                          value={estoqueConfigNode.variavel_produto}\n                          onChange={(valor) =>\n                            setEstoqueConfigNode((atual) => ({\n                              ...atual,\n                              variavel_produto: valor,\n                            }))\n                          }\n                          options={opcoesVariaveisFluxo}\n                          loading={loadingVariaveis}\n                        />\n                      )}\n\n                      {estoqueConfigNode.origem_produto === "resposta_cliente" && (\n                        <label className={styles.field}>\n                          <span className={styles.label}>Variável da resposta (opcional)</span>\n                          <input\n                            className={styles.input}\n                            value={estoqueConfigNode.variavel_resposta}\n                            onChange={(e) =>\n                              setEstoqueConfigNode((atual) => ({\n                                ...atual,\n                                variavel_resposta: e.target.value\n                                  .replace(/[{}]/g, "")\n                                  .trim()\n                                  .toLowerCase(),\n                              }))\n                            }\n                            placeholder="Ex: produto_pedido"\n                          />\n                          <p className={styles.help}>\n                            Se ficar vazio, o nó usa a mensagem que levou a execução até este bloco.\n                          </p>\n                        </label>\n                      )}\n\n                      <label className={styles.field}>\n                        <span className={styles.label}>Pesquisar por</span>\n                        <select\n                          className={styles.input}\n                          value={estoqueConfigNode.pesquisar_por}\n                          onChange={(e) =>\n                            setEstoqueConfigNode((atual) => ({\n                              ...atual,\n                              pesquisar_por: e.target.value as EstoqueConfigEditor["pesquisar_por"],\n                            }))\n                          }\n                        >\n                          <option value="automatico">Automático (recomendado)</option>\n                          <option value="nome">Nome</option>\n                          <option value="codigo_sku">Código / SKU</option>\n                          <option value="codigo_barras">Código de barras</option>\n                        </select>\n                      </label>\n\n                      <label className={styles.field}>\n                        <span className={styles.label}>Depósitos</span>\n                        <select\n                          className={styles.input}\n                          value={estoqueConfigNode.deposito_modo}\n                          onChange={(e) =>\n                            setEstoqueConfigNode((atual) => ({\n                              ...atual,\n                              deposito_modo: e.target.value as EstoqueConfigEditor["deposito_modo"],\n                            }))\n                          }\n                        >\n                          <option value="todos">Todos os depósitos ativos</option>\n                          <option value="especifico">Um depósito específico</option>\n                          <option value="selecionados">Depósitos selecionados</option>\n                        </select>\n                      </label>\n\n                      {estoqueConfigNode.deposito_modo === "especifico" && (\n                        <label className={styles.field}>\n                          <span className={styles.label}>Depósito</span>\n                          <select\n                            className={styles.input}\n                            value={estoqueConfigNode.deposito_id}\n                            onChange={(e) =>\n                              setEstoqueConfigNode((atual) => ({\n                                ...atual,\n                                deposito_id: e.target.value,\n                              }))\n                            }\n                          >\n                            <option value="">Selecione...</option>\n                            {estoqueDepositosOpcoes.map((deposito) => (\n                              <option key={deposito.id} value={deposito.id}>\n                                {deposito.nome}{deposito.principal ? " · principal" : ""}\n                              </option>\n                            ))}\n                          </select>\n                        </label>\n                      )}\n\n                      {estoqueConfigNode.deposito_modo === "selecionados" && (\n                        <div className={styles.field}>\n                          <span className={styles.label}>Depósitos considerados</span>\n                          <div style={{ display: "grid", gap: 8 }}>\n                            {estoqueDepositosOpcoes.map((deposito) => {\n                              const selecionado = estoqueConfigNode.deposito_ids.includes(deposito.id);\n                              return (\n                                <label key={deposito.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>\n                                  <input\n                                    type="checkbox"\n                                    checked={selecionado}\n                                    onChange={(e) =>\n                                      setEstoqueConfigNode((atual) => ({\n                                        ...atual,\n                                        deposito_ids: e.target.checked\n                                          ? Array.from(new Set([...atual.deposito_ids, deposito.id]))\n                                          : atual.deposito_ids.filter((id) => id !== deposito.id),\n                                      }))\n                                    }\n                                  />\n                                  <span>{deposito.nome}</span>\n                                </label>\n                              );\n                            })}\n                          </div>\n                        </div>\n                      )}\n\n                      <label style={{ display: "flex", gap: 10, alignItems: "center" }}>\n                        <input\n                          type="checkbox"\n                          checked={estoqueConfigNode.usar_embalagem_venda}\n                          onChange={(e) =>\n                            setEstoqueConfigNode((atual) => ({\n                              ...atual,\n                              usar_embalagem_venda: e.target.checked,\n                            }))\n                          }\n                        />\n                        <span>Considerar embalagem padrão de venda</span>\n                      </label>\n\n                      <label className={styles.field}>\n                        <span className={styles.label}>Máximo de candidatos</span>\n                        <select\n                          className={styles.input}\n                          value={String(estoqueConfigNode.limite_candidatos)}\n                          onChange={(e) =>\n                            setEstoqueConfigNode((atual) => ({\n                              ...atual,\n                              limite_candidatos: Number(e.target.value),\n                            }))\n                          }\n                        >\n                          <option value="3">3</option>\n                          <option value="5">5</option>\n                          <option value="10">10</option>\n                        </select>\n                      </label>\n\n                      <p className={styles.help}>\n                        O saldo disponível usa estoque físico menos reservado e ignora lotes bloqueados ou vencidos.\n                        Conecte as quatro saídas: Disponível, Sem estoque, Não encontrado e Vários encontrados.\n                      </p>\n                    </div>\n                  )}\n\n'''
-          s = s[:idx] + form + s[idx:]
-          print('OK form estoque')
-
-          # Consulta e imediata; nao deve herdar o delay visual de mensagens.
-          replace_once(
-              '{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (\n',
-              '{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && tipoNodeEdicao !== TIPO_NO_CONSULTAR_ESTOQUE && (\n',
-              'ocultar delay estoque'
-          )
-
-          # As quatro rotas sao obrigatorias antes da ativacao.
-          marker = '''    const tipoNo = String(node.data?.tipo_no || "");\n    const config = (node.data?.configuracao_json || {}) as Record<string, any>;\n\n'''
-          idx = s.find(marker, s.find('function validarFluxoAntesDeAtivar'))
-          if idx < 0:
-              raise SystemExit('validacao ativacao estoque: ponto nao encontrado')
-          idx += len(marker)
-          ativacao = '''    if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) {\n      const origem = String(config.origem_produto || "resposta_cliente");\n      if (origem === "produto_especifico" && !String(config.produto_id || "").trim()) {\n        return `O bloco "${node.data?.titulo}" precisa ter um produto selecionado.`;\n      }\n      if (origem === "variavel" && !String(config.variavel_produto || "").trim()) {\n        return `O bloco "${node.data?.titulo}" precisa ter uma variável de produto.`;\n      }\n\n      const conexoesDoNo = edgesValidacao.filter((edge) => edge.source === node.id);\n      const resultadosConectados = conexoesDoNo\n        .map((edge) =>\n          String((edge.data as EdgeDataConexao | undefined)?.condicao_json?.valor || "")\n        )\n        .filter(Boolean);\n\n      for (const saida of SAIDAS_CONSULTA_ESTOQUE) {\n        const quantidade = resultadosConectados.filter((valor) => valor === saida.valor).length;\n        if (quantidade !== 1) {\n          return `O bloco "${node.data?.titulo}" precisa ter exatamente uma conexão na saída "${saida.titulo}".`;\n        }\n      }\n    }\n\n'''
-          s = s[:idx] + ativacao + s[idx:]
-          print('OK validacao ativacao estoque')
-
-          # Ao editar uma conexao do estoque, a semantica fica travada no resultado do handle.
-          replace_once(
-              '''  setUsarIaConexao(Boolean(data?.usar_ia) || usarIaPadrao);\n  setTipoCondicaoConexao(tipoCondicaoAtual);\n}\n''',
-              '''  setUsarIaConexao(\n    tipoOrigem === TIPO_NO_CONSULTAR_ESTOQUE\n      ? false\n      : Boolean(data?.usar_ia) || usarIaPadrao\n  );\n  setTipoCondicaoConexao(\n    tipoOrigem === TIPO_NO_CONSULTAR_ESTOQUE ? "resposta_igual" : tipoCondicaoAtual\n  );\n}\n''',
-              'abrir conexao estoque'
-          )
-
-          marker = '''async function aplicarEdicaoConexao() {\n  if (!editandoEdgeId) return;\n\n'''
-          idx = s.find(marker)
-          if idx < 0:
-              raise SystemExit('salvar conexao estoque: ponto nao encontrado')
-          idx += len(marker)
-          especial = '''  if (String(nodeOrigemEdgeEditada?.data?.tipo_no || "") === TIPO_NO_CONSULTAR_ESTOQUE) {\n    const saida = SAIDAS_CONSULTA_ESTOQUE.find(\n      (item) => item.valor === String(valorCondicao || "").trim()\n    );\n\n    if (!saida) {\n      setErro("Selecione uma saída válida da consulta de estoque.");\n      return;\n    }\n\n    const duplicada = edges.some(\n      (edge) =>\n        edge.id !== editandoEdgeId &&\n        edge.source === edgeEditada?.source &&\n        String((edge.data as EdgeDataConexao | undefined)?.condicao_json?.valor || "") === saida.valor\n    );\n\n    if (duplicada) {\n      setErro(`A saída "${saida.titulo}" já possui uma conexão.`);\n      return;\n    }\n\n    setEdges((atuais) =>\n      atuais.map((edge) => {\n        if (edge.id !== editandoEdgeId) return edge;\n        return {\n          ...edge,\n          sourceHandle: saida.valor,\n          label: saida.titulo,\n          data: {\n            ...(edge.data || {}),\n            rotulo: saida.titulo,\n            condicao_json: { tipo: "resposta_igual", valor: saida.valor },\n            usar_ia: false,\n            descricao_ia: "",\n          },\n        };\n      })\n    );\n\n    fecharPainelEdicao();\n    return;\n  }\n\n'''
-          s = s[:idx] + especial + s[idx:]
-          print('OK salvar conexao estoque')
-
-          path.write_text(s)
-          PY
+          git show HEAD^:.github/workflows/aplicar-editor-consulta-estoque.yml > /tmp/estoque-editor-anterior.yml
+          awk '
+            /python3 <<'\''PY'\''/ { capturar=1; next }
+            capturar && /^          PY$/ { exit }
+            capturar { sub(/^          /, ""); print }
+          ' /tmp/estoque-editor-anterior.yml > /tmp/aplicar-editor.py
+          python3 /tmp/aplicar-editor.py
 
       - name: Validar build
         run: |
@@ -249,5 +46,5 @@ jobs:
           git config user.name "L34n7"
           git config user.email "86571901+L34n7@users.noreply.github.com"
           git add 'src/app/(private)/fluxos/page.tsx' .github/workflows/aplicar-editor-consulta-estoque.yml
-          git commit -m "feat: adicionar no consultar estoque ao construtor [skip stock-editor-patch]"
+          git commit -m "feat: adicionar no consultar estoque ao construtor"
           git push origin HEAD:main
