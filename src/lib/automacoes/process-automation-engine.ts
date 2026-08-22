@@ -4,7 +4,10 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   executarNo as executarNoCore,
   processAutomationEngine as processAutomationEngineAgenda,
+  processarFilaProcessamentoAutoPorId as processarFilaProcessamentoAutoPorIdBase,
+  processarTimeoutSemRespostaAgendado as processarTimeoutSemRespostaAgendadoBase,
 } from "./process-automation-engine-agenda";
+import { continuarConsultasEstoqueAutomacao } from "./process-automation-engine-estoque-runtime";
 
 export * from "./process-automation-engine-agenda";
 
@@ -14,6 +17,9 @@ const TOLERANCIA_ORDEM_MENSAGEM_MS = 5_000;
 const ATRASO_MAXIMO_MENSAGEM_AUTOMACAO_PADRAO_SEGUNDOS = 5 * 60;
 
 type AutomationEngineInput = Parameters<typeof processAutomationEngineAgenda>[0];
+type TimeoutSemRespostaParams = Parameters<
+  typeof processarTimeoutSemRespostaAgendadoBase
+>[0];
 
 function normalizarAtrasoMaximoMensagemAutomacaoMs() {
   const configurado = Number(
@@ -239,6 +245,22 @@ async function tentarPriorizarPreferenciaHorario(input: AutomationEngineInput) {
   };
 }
 
+async function continuarEstoqueDepoisDoMotor(params: {
+  empresaId: string;
+  conversaId: string;
+  numeroDestino?: string | null;
+  mensagemTexto?: string;
+  execucaoId?: string | null;
+}) {
+  return continuarConsultasEstoqueAutomacao({
+    empresaId: params.empresaId,
+    conversaId: params.conversaId,
+    numeroDestino: String(params.numeroDestino || ""),
+    mensagemTexto: params.mensagemTexto,
+    execucaoId: params.execucaoId,
+  });
+}
+
 export async function processAutomationEngine(input: AutomationEngineInput) {
   const resultadoTemporal = await ignorarMensagemTemporalmenteInvalida(input);
 
@@ -269,8 +291,131 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(input);
 
   if (resultadoPreferencia) {
+    await continuarEstoqueDepoisDoMotor({
+      empresaId: input.empresaId,
+      conversaId: input.conversaId,
+      numeroDestino: input.numeroDestino,
+      mensagemTexto: input.mensagemTexto,
+      execucaoId: resultadoPreferencia.execucaoId,
+    });
+
     return resultadoPreferencia;
   }
 
-  return processAutomationEngineAgenda(input);
+  const resultado = await processAutomationEngineAgenda(input);
+
+  await continuarEstoqueDepoisDoMotor({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    numeroDestino: input.numeroDestino,
+    mensagemTexto: input.mensagemTexto,
+    execucaoId:
+      resultado && typeof resultado === "object" && "execucaoId" in resultado
+        ? String(resultado.execucaoId || "") || null
+        : null,
+  });
+
+  return resultado;
+}
+
+export async function processarFilaProcessamentoAutoPorId(jobId: string) {
+  const resultado = await processarFilaProcessamentoAutoPorIdBase(jobId);
+
+  const { data: job } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .select("empresa_id, conversa_id, execucao_id, payload_json")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (job) {
+    const payload = job.payload_json || {};
+
+    await continuarEstoqueDepoisDoMotor({
+      empresaId: job.empresa_id,
+      conversaId: job.conversa_id,
+      numeroDestino: payload.numero_destino,
+      execucaoId: job.execucao_id,
+    });
+  }
+
+  return resultado;
+}
+
+export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
+  const { data: jobs, error } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .select("id")
+    .eq("status", "pendente")
+    .lte("executar_em", new Date().toISOString())
+    .order("executar_em", { ascending: true })
+    .limit(limite);
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar fila de processamento da automação: ${error.message}`
+    );
+  }
+
+  let processados = 0;
+  let erros = 0;
+  let ignorados = 0;
+
+  for (const job of jobs || []) {
+    try {
+      const resultado = await processarFilaProcessamentoAutoPorId(job.id);
+      const resumo = resultado as {
+        processado?: unknown;
+        ignorado?: unknown;
+        cancelado?: unknown;
+      };
+
+      if (resumo?.processado) {
+        processados += 1;
+      } else if (resumo?.ignorado || resumo?.cancelado) {
+        ignorados += 1;
+      }
+    } catch (errorJob) {
+      erros += 1;
+      console.error("[FILA AUTO] Erro no cron fallback:", {
+        jobId: job.id,
+        erro: errorJob,
+      });
+    }
+  }
+
+  return {
+    encontrados: jobs?.length || 0,
+    processados,
+    ignorados,
+    erros,
+  };
+}
+
+export async function processarTimeoutSemRespostaAgendado(
+  params: TimeoutSemRespostaParams
+) {
+  const resultado = await processarTimeoutSemRespostaAgendadoBase(params);
+
+  const { data: agendamento } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .select("execucao_id, payload_json")
+    .eq("id", params.agendamentoId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (agendamento) {
+    const payload = agendamento.payload_json || {};
+    const conversaId = String(payload.conversa_id || "").trim();
+
+    if (conversaId) {
+      await continuarEstoqueDepoisDoMotor({
+        empresaId: params.empresaId,
+        conversaId,
+        numeroDestino: payload.numero_destino,
+        execucaoId: agendamento.execucao_id,
+      });
+    }
+  }
+
+  return resultado;
 }
