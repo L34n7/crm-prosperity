@@ -25,6 +25,7 @@ import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import FluxoCanvas from "./components/FluxoCanvas";
 import FluxoEditorHeader from "./components/FluxoEditorHeader";
+import FluxosSidebar from "./components/FluxosSidebar";
 import WhatsappFlowPreview from "./components/WhatsappFlowPreview";
 import {
   montarPreviaWhatsappFluxo,
@@ -1039,12 +1040,6 @@ function FluxosPageContent() {
   const podeGerenciarMidias = headerUser.permissoes.includes(
     "fluxos.gerenciar_midias"
   );
-  const possuiAcaoFluxo =
-    podeCriarFluxos ||
-    podeEditarFluxos ||
-    podeAtivarFluxos ||
-    podeArquivarFluxos ||
-    podeExcluirFluxos;
   const [fluxos, setFluxos] = useState<Fluxo[]>([]);
   const [fluxoSelecionado, setFluxoSelecionado] = useState<Fluxo | null>(null);
   const [abrirCriacao, setAbrirCriacao] = useState(false);
@@ -1274,15 +1269,6 @@ function FluxosPageContent() {
 
     return estrategia;
   }
-
-  const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);
-  const [menuFluxo, setMenuFluxo] = useState<{
-    fluxo: Fluxo | null;
-    x: number;
-    y: number;
-    buttonTop: number;
-    buttonBottom: number;
-  } | null>(null);
 
   const [gatilhosFluxo, setGatilhosFluxo] = useState<GatilhoFluxo[]>([]);
   const [novoGatilhoValor, setNovoGatilhoValor] = useState("");
@@ -6218,14 +6204,7 @@ async function alterarStatusFluxo(
   }
 }
 
-  function badgeClass(status: string) {
-    if (status === "ativo") return `${styles.badge} ${styles.badgeGreen}`;
-    if (status === "pausado") return `${styles.badge} ${styles.badgeYellow}`;
-    if (status === "arquivado") return `${styles.badge} ${styles.badgeRed}`;
-    return `${styles.badge} ${styles.badgeGray}`;
-  }
-
-function removerNode(nodeId: string) {
+  function removerNode(nodeId: string) {
   const node = nodes.find((n) => n.id === nodeId);
 
   if (!node) {
@@ -6364,14 +6343,6 @@ function fecharPainelEdicao() {
     }))
   );
 }
-
-useEffect(() => {
-  function handleClick() {
-    setMenuFluxo(null);
-  }
-  window.addEventListener("click", handleClick);
-  return () => window.removeEventListener("click", handleClick);
-}, []);
 
 useEffect(() => {
   const deveCalcularCustoDisparo =
@@ -6774,226 +6745,53 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
         mobileDetailActive ? styles.mobileDetailActive : ""
       }`}
     >
-      <aside className={styles.sidebarFluxos}>
-        <div className={styles.sidebarHeader}>
-          <p className={styles.eyebrow}>Automações</p>
-          <h1 className={styles.sidebarTitle}>Fluxos</h1>
-          <p className={styles.sidebarSubtitle}>
-            Selecione um fluxo ou crie um novo.
-          </p>
-        </div>
-
-        <div className={styles.sidebarFilters}>
-          <input
-            className={styles.input}
-            placeholder="Buscar fluxo..."
-            value={buscaFluxo}
-            onChange={(e) => setBuscaFluxo(e.target.value)}
-          />
-
-          <div className={styles.filterRow}>
-            <select
-              className={styles.input}
-              value={filtroStatusFluxo}
-              onChange={(e) =>
-                setFiltroStatusFluxo(
-                  e.target.value as
-                    | "todos"
-                    | "sistema"
-                    | "rascunho"
-                    | "ativo"
-                    | "pausado"
-                    | "arquivado"
-                )
-              }
-            >
-              <option value="todos">Todos</option>
-              <option value="sistema">Fluxos do sistema</option>
-              <option value="ativo">Ativos</option>
-              <option value="rascunho">Rascunhos</option>
-              <option value="pausado">Pausados</option>
-              <option value="arquivado">Arquivados</option>
-            </select>
-
-            {podeCriarFluxos && <button
-              type="button"
-              className={styles.newFlowButton}
-              title="Criar fluxo"
-              onClick={() => {
-                setErroCriacaoFluxo("");
-                setNovoFluxoNome("");
-                setDescricaoNovoFluxo("");
-                setNovoFluxoPadrao(false);
-                setGatilhosNovoFluxo([]);
-                setNovoGatilhoValor("");
-                setNovoGatilhoCondicao("contem");
-                resetarEncerramentoInatividadePadrao();
-                setAbrirCriacao(true);
-              }}
-            >
-              +
-            </button>}
-
-            {podeCriarFluxos && <button
-              type="button"
-              className={styles.importFlowButton}
-              title="Importar por codigo"
-              onClick={() => {
-                setErroImportacao("");
-                setCodigoImportacao("");
-                setModalImportarAberto(true);
-              }}
-            >
-              <CopyPlus size={18} strokeWidth={2.4} />
-            </button>}
-          </div>
-        </div>
-
-        <div className={styles.flowList}>
-          {carregandoFluxos ? (
-            <div className={styles.emptyMini}>Carregando...</div>
-          ) : fluxos.length === 0 ? (
-            <div className={styles.emptyMini}>Nenhum fluxo cadastrado.</div>
-          ) : (
-            fluxos
-              .filter((f) =>
-                f.nome.toLowerCase().includes(buscaFluxo.toLowerCase())
-              )
-              .filter((f) => {
-                // CRM_SYSTEM_FLOW_FILTER_ORDER_V1
-                if (filtroStatusFluxo === "todos") return true;
-                if (filtroStatusFluxo === "sistema") {
-                  return fluxoEhSistemaCalendario(f);
-                }
-                return f.status === filtroStatusFluxo;
-              })
-              .sort((a, b) => {
-                const ordemStatus = {
-                  rascunho: 1,
-                  ativo: 2,
-                  pausado: 3,
-                  arquivado: 4,
-                };
-
-                const statusDiff =
-                  ordemStatus[a.status] - ordemStatus[b.status];
-
-                if (statusDiff !== 0) return statusDiff;
-
-                if (a.status === "ativo" && b.status === "ativo") {
-                  const sistemaDiff =
-                    Number(fluxoEhSistemaCalendario(a)) -
-                    Number(fluxoEhSistemaCalendario(b));
-
-                  if (sistemaDiff !== 0) return sistemaDiff;
-                }
-
-                // 🔥 Ordenação por data (mais recente primeiro)
-                return (
-                  new Date(b.created_at || 0).getTime() -
-                  new Date(a.created_at || 0).getTime()
-                );
-              })
-              .map((fluxo) => (
-              <div
-                key={fluxo.id}
-                role="button"
-                tabIndex={0}
-                className={
-                  fluxoSelecionado?.id === fluxo.id
-                    ? styles.flowItemActive
-                    : styles.flowItem
-                }
-                onClick={() => abrirFluxo(fluxo)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    abrirFluxo(fluxo);
-                  }
-                }}
-              >
-                <div className={styles.flowItemTop}>
-                  <div className={styles.flowItemInfo}>
-                    <span className={styles.flowItemTitle}>{fluxo.nome}</span>
-
-                    <div className={styles.flowBadges}>
-                      {fluxoEhSistemaCalendario(fluxo) && (
-                        <span
-                          className={`${styles.badge} ${styles.systemFlowBadge}`}
-                          data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
-                        >
-                          FLUXO FIXO
-                        </span>
-                      )}
-
-                      {fluxo.fluxo_padrao && (
-                        <span className={`${styles.badge} ${styles.badgeBlue}`}>
-                          padrão
-                        </span>
-                      )}
-
-                      <span className={badgeClass(fluxo.status)}>
-                        {fluxo.status}
-                      </span>
-
-                      {Number(
-                        fluxo.alertas_configuracao
-                          ?.interpretar_arquivo_ia_sem_conexao_erro || 0
-                      ) > 0 && (
-                        <span
-                          className={`${styles.infoAlertIcon} ${styles.infoAlertIconFlow}`}
-                          aria-label={AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA}
-                          role="img"
-                          tabIndex={0}
-                          onMouseEnter={(event) =>
-                            abrirTooltipAlertaFluxo(event.currentTarget)
-                          }
-                          onMouseLeave={() => setTooltipAlertaFluxo(null)}
-                          onFocus={(event) =>
-                            abrirTooltipAlertaFluxo(event.currentTarget)
-                          }
-                          onBlur={() => setTooltipAlertaFluxo(null)}
-                        >
-                          i
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {possuiAcaoFluxo && <div className={styles.flowMenuWrapper}>
-                    <button
-                      type="button"
-                      className={styles.flowMenuButton}
-                      onClick={(e) => {
-                        e.stopPropagation();
-
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-
-                        setMenuFluxo((menuAtual) => {
-                          if (menuAtual?.fluxo?.id === fluxo.id) {
-                            return null;
-                          }
-
-                          return {
-                            fluxo,
-                            x: rect.right,
-                            y: rect.bottom,
-                            buttonTop: rect.top,
-                            buttonBottom: rect.bottom,
-                          };
-                        });
-                      }}
-                    >
-                      ⋮
-                    </button>
-                  </div>}
-                </div>
-
-              </div>
-            ))
-          )}
-        </div>
-      </aside>
+      <FluxosSidebar
+        fluxos={fluxos}
+        fluxoSelecionadoId={fluxoSelecionado?.id}
+        carregandoFluxos={carregandoFluxos}
+        buscaFluxo={buscaFluxo}
+        filtroStatusFluxo={filtroStatusFluxo}
+        podeCriarFluxos={podeCriarFluxos}
+        podeEditarFluxos={podeEditarFluxos}
+        podeAtivarFluxos={podeAtivarFluxos}
+        podeArquivarFluxos={podeArquivarFluxos}
+        podeExcluirFluxos={podeExcluirFluxos}
+        isFluxoSistema={fluxoEhSistemaCalendario}
+        onBuscaFluxoChange={setBuscaFluxo}
+        onFiltroStatusChange={setFiltroStatusFluxo}
+        onAbrirFluxo={abrirFluxo}
+        onNovoFluxo={() => {
+          setErroCriacaoFluxo("");
+          setNovoFluxoNome("");
+          setDescricaoNovoFluxo("");
+          setNovoFluxoPadrao(false);
+          setGatilhosNovoFluxo([]);
+          setNovoGatilhoValor("");
+          setNovoGatilhoCondicao("contem");
+          resetarEncerramentoInatividadePadrao();
+          setAbrirCriacao(true);
+        }}
+        onImportarFluxo={() => {
+          setErroImportacao("");
+          setCodigoImportacao("");
+          setModalImportarAberto(true);
+        }}
+        onRestaurarFluxo={(fluxoAlvo) => {
+          void restaurarFluxo(fluxoAlvo);
+        }}
+        onApagarDefinitivo={abrirModalApagarDefinitivo}
+        onAlterarStatus={(fluxoAlvo, status) => {
+          void alterarStatusFluxo(fluxoAlvo, status);
+        }}
+        onEditarFluxo={abrirEdicaoFluxo}
+        onDuplicarFluxo={(fluxoAlvo) => {
+          void duplicarFluxo(fluxoAlvo);
+        }}
+        onCompartilharFluxo={abrirCompartilhamentoFluxo}
+        onArquivarFluxo={abrirModalArquivarFluxo}
+        onAbrirTooltipAlertaFluxo={abrirTooltipAlertaFluxo}
+        onFecharTooltipAlertaFluxo={() => setTooltipAlertaFluxo(null)}
+      />
 
       <section className={styles.editorPanel}>
         <FluxoEditorHeader
@@ -11467,116 +11265,6 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           </div>
         )}
 
-
-        {menuFluxo && menuFluxo.fluxo && (
-          <div
-            className={styles.flowDropdownPortal}
-            style={{
-              top:
-                window.innerHeight - menuFluxo.buttonBottom < 170
-                  ? menuFluxo.buttonTop - 8
-                  : menuFluxo.buttonBottom + 6,
-              left: menuFluxo.x - 180,
-              transform:
-                window.innerHeight - menuFluxo.buttonBottom < 170
-                  ? "translateY(-100%)"
-                  : "none",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {menuFluxo.fluxo.status === "arquivado" ? (
-              <>
-                {podeAtivarFluxos && <button
-                  className={styles.flowDropdownItem}
-                  onClick={() => {
-                    restaurarFluxo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Restaurar
-                </button>}
-
-                {podeExcluirFluxos && <button
-                  className={`${styles.flowDropdownItem} ${styles.flowDropdownDanger}`}
-                  onClick={() => {
-                    abrirModalApagarDefinitivo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Apagar definitivo
-                </button>}
-              </>
-            ) : (
-              <>
-                {podeAtivarFluxos && <button
-                  className={styles.flowDropdownItem}
-                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
-                  title={
-                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
-                      ? "Fluxos fixos do sistema não podem ser pausados."
-                      : undefined
-                  }
-                  onClick={() => {
-                    alterarStatusFluxo(
-                      menuFluxo.fluxo!,
-                      menuFluxo.fluxo!.status === "ativo" ? "pausado" : "ativo"
-                    );
-                    setMenuFluxo(null);
-                  }}
-                >
-                  {menuFluxo.fluxo.status === "ativo" ? "Pausar" : "Ativar"}
-                </button>}
-
-                {podeEditarFluxos && <button
-                  type="button"
-                  className={styles.flowDropdownItem}
-                  onClick={() => {
-                    abrirEdicaoFluxo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Editar fluxo
-                </button>}
-
-                {podeCriarFluxos && <button
-                  className={styles.flowDropdownItem}
-                  onClick={() => {
-                    duplicarFluxo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Clonar
-                </button>}
-
-                {podeEditarFluxos && <button
-                  className={styles.flowDropdownItem}
-                  onClick={() => {
-                    abrirCompartilhamentoFluxo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Compartilhar
-                </button>}
-
-                {podeArquivarFluxos && <button
-                  className={`${styles.flowDropdownItem} ${styles.flowDropdownDanger}`}
-                  disabled={fluxoEhSistemaCalendario(menuFluxo.fluxo)}
-                  title={
-                    fluxoEhSistemaCalendario(menuFluxo.fluxo)
-                      ? "Fluxos fixos do sistema não podem ser arquivados."
-                      : undefined
-                  }
-                  onClick={() => {
-                    abrirModalArquivarFluxo(menuFluxo.fluxo!);
-                    setMenuFluxo(null);
-                  }}
-                >
-                  Apagar
-                </button>}
-              </>
-            )}
-          </div>
-        )}
 
         {previaGeracaoDescricaoIa && (
           <div className={styles.modalOverlay}>
