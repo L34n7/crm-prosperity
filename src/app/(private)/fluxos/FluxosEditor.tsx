@@ -32,6 +32,7 @@ import RedirectConfig from "./components/node-config/RedirectConfig";
 import TransferenciaConfig from "./components/node-config/TransferenciaConfig";
 import InterpretarArquivoIaConfig from "./components/node-config/InterpretarArquivoIaConfig";
 import NodeConfigPanel from "./components/node-config/NodeConfigPanel";
+import MidiaConfig from "./components/node-config/MidiaConfig";
 import PerguntaOpcoesConfig from "./components/node-config/PerguntaOpcoesConfig";
 import BotoesConfig from "./components/node-config/BotoesConfig";
 import FluxoCanvas from "./components/FluxoCanvas";
@@ -7168,265 +7169,92 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   )}
 
                   {[
-                    "enviar_imagem",
-                    "enviar_video",
-                    "enviar_audio",
-                    "enviar_arquivo",
-                  ].includes(tipoNodeEdicao) && (
-                    <div className={styles.field}>
-                      <span className={styles.label}>
-                        {tipoNodeEdicao === "enviar_imagem"
-                          ? "Imagem"
-                          : tipoNodeEdicao === "enviar_video"
-                          ? "Vídeo"
-                          : tipoNodeEdicao === "enviar_audio"
-                          ? "Áudio"
-                          : "Arquivo"}
-                      </span>
+          "enviar_imagem",
+          "enviar_video",
+          "enviar_audio",
+          "enviar_arquivo",
+        ].includes(tipoNodeEdicao) && (
+          <MidiaConfig
+            tipoNode={tipoNodeEdicao}
+            midiaUrl={midiaUrlNode}
+            midiaNome={midiaNomeNode}
+            midias={midias}
+            carregando={carregandoMidias}
+            enviando={enviandoMidia}
+            podeGerenciar={podeGerenciarMidias}
+            limiteStorageAtingido={limiteStorageMidiasAtingido}
+            storageUsadoBytes={resumoMidias.tamanhoTotal}
+            storageClassName={classeUsoStorageMidias(
+              resumoMidias.tamanhoTotal,
+              LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
+            )}
+            onSelecionar={(url, nome) => {
+              setMidiaUrlNode(url);
+              setMidiaNomeNode(nome);
+            }}
+            onRemover={() => {
+              setMidiaUrlNode("");
+              setMidiaNomeNode("");
+            }}
+            onArquivoSelecionado={(arquivo) => {
+              setErro("");
+              setSucesso("");
 
-                      {midiaUrlNode ? (
-                        <div className={styles.midiaSelecionadaBox}>
-                          <div className={styles.midiaSelecionadaInfo}>
-                            <div className={styles.midiaSelecionadaIcone}>
-                              {tipoNodeEdicao === "enviar_imagem"
-                                ? "🖼️"
-                                : tipoNodeEdicao === "enviar_video"
-                                ? "🎬"
-                                : tipoNodeEdicao === "enviar_audio"
-                                ? "🎧"
-                                : "📄"}
-                            </div>
+              if (arquivo.type.startsWith("image/")) {
+                if (arquivo.size > LIMITE_IMAGEM_BYTES) {
+                  setErro("A imagem deve ter no máximo 5MB.");
+                  return;
+                }
+              }
 
-                            <div>
-                              <strong className={styles.midiaSelecionadaTitulo}>
-                                {tipoNodeEdicao === "enviar_imagem"
-                                  ? "Imagem selecionada"
-                                  : tipoNodeEdicao === "enviar_video"
-                                  ? "Vídeo selecionado"
-                                  : tipoNodeEdicao === "enviar_audio"
-                                  ? "Áudio selecionado"
-                                  : "Arquivo selecionado"}
-                              </strong>
+              if (tipoNodeEdicao === "enviar_video") {
+                const nomeMinusculo = arquivo.name.toLowerCase();
+                const ehMp4 =
+                  arquivo.type === "video/mp4" ||
+                  nomeMinusculo.endsWith(".mp4");
 
-                              <p className={styles.midiaSelecionadaNome}>
-                                {midiaNomeNode || "Mídia selecionada"}
-                              </p>
-                            </div>
-                          </div>
+                if (!ehMp4) {
+                  setErro(
+                    "Formato de vídeo não permitido. Envie somente um arquivo MP4 com vídeo H.264/AVC e áudio AAC."
+                  );
+                  return;
+                }
 
-                          <button
-                            type="button"
-                            className={styles.dangerSmallButton}
-                            onClick={() => {
-                              setMidiaUrlNode("");
-                              setMidiaNomeNode("");
-                            }}
-                          >
-                            Remover
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div
-                            className={`${styles.optionsBox} ${
-                              tipoNodeEdicao === "enviar_imagem"
-                                ? styles.mediaOptionsBoxImagem
-                                : tipoNodeEdicao === "enviar_video"
-                                ? styles.mediaOptionsBoxVideo
-                                : tipoNodeEdicao === "enviar_audio"
-                                ? styles.mediaOptionsBoxAudio
-                                : styles.mediaOptionsBoxArquivo
-                            }`}
-                          >
-                              <select
-                                className={styles.input}
-                                value={midiaUrlNode}
-                                onChange={(e) => {
-                                  const urlSelecionada = e.target.value;
-                                  const midiaSelecionada = midias.find(
-                                    (m) => m.url === urlSelecionada
-                                  );
+                if (arquivo.size > LIMITE_VIDEO_BYTES) {
+                  setErro(
+                    "O vídeo deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
+                  );
+                  return;
+                }
+              }
 
-                                  setMidiaUrlNode(urlSelecionada);
-                                  setMidiaNomeNode(midiaSelecionada?.nome || "");
-                                }}
-                                disabled={carregandoMidias || enviandoMidia}
-                              >
-                                <option value="">
-                                  {carregandoMidias ? "Carregando mídias..." : "Selecione uma mídia"}
-                                </option>
+              if (arquivo.type.startsWith("audio/")) {
+                if (arquivo.size > LIMITE_AUDIO_BYTES) {
+                  setErro(
+                    "O áudio deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
+                  );
+                  return;
+                }
+              }
 
-                                {midias
-                                  .filter((midia) =>
-                                    tipoNodeEdicao === "enviar_imagem"
-                                      ? midia.tipo === "imagem"
-                                      : tipoNodeEdicao === "enviar_video"
-                                      ? midia.tipo === "video"
-                                      : tipoNodeEdicao === "enviar_audio"
-                                      ? midia.tipo === "audio"
-                                      : midia.tipo === "arquivo"
-                                  )
-                                  .map((midia) => (
-                                    <option key={midia.id} value={midia.url}>
-                                      {midia.nome}
-                                    </option>
-                                  ))}
-                              </select>
+              if (
+                tipoNodeEdicao === "enviar_arquivo" &&
+                arquivo.size > LIMITE_ARQUIVO_BYTES
+              ) {
+                setErro("O arquivo deve ter no máximo 50MB.");
+                return;
+              }
 
-                              {podeGerenciarMidias && <label
-                                className={`${styles.secondaryButton} ${
-                                  limiteStorageMidiasAtingido ? styles.disabledButton : ""
-                                }`}
-                              >
-                                {enviandoMidia ? "Enviando..." : "Subir nova mídia"}
+              void enviarNovaMidia(arquivo);
+            }}
+            onAbrirGerenciador={(tipo) => {
+              setAbaMidias(tipo);
+              setModalMidiasAberto(true);
+            }}
+          />
+        )}
 
-                                <input
-                                  type="file"
-                                  accept={
-                                    tipoNodeEdicao === "enviar_imagem"
-                                      ? "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-                                      : tipoNodeEdicao === "enviar_video"
-                                      ? "video/mp4,.mp4"
-                                      : tipoNodeEdicao === "enviar_audio"
-                                      ? "audio/*"
-                                      : ACCEPT_ARQUIVOS
-                                  }
-                                  style={{ display: "none" }}
-                                  disabled={enviandoMidia || limiteStorageMidiasAtingido}
-                                  onChange={(e) => {
-                                    const arquivo = e.target.files?.[0];
-
-                                    if (!arquivo) return;
-
-                                    setErro("");
-                                    setSucesso("");
-
-                                    if (arquivo.type.startsWith("image/")) {
-                                      if (arquivo.size > LIMITE_IMAGEM_BYTES) {
-                                        setErro("A imagem deve ter no máximo 5MB.");
-                                        return;
-                                      }
-                                    }
-
-                                    if (tipoNodeEdicao === "enviar_video") {
-                                      const nomeMinusculo = arquivo.name.toLowerCase();
-
-                                      const ehMp4 =
-                                        arquivo.type === "video/mp4" ||
-                                        nomeMinusculo.endsWith(".mp4");
-
-                                      if (!ehMp4) {
-                                        setErro(
-                                          "Formato de vídeo não permitido. Envie somente um arquivo MP4 com vídeo H.264/AVC e áudio AAC."
-                                        );
-                                        e.target.value = "";
-                                        return;
-                                      }
-
-                                      if (arquivo.size > LIMITE_VIDEO_BYTES) {
-                                        setErro(
-                                          "O vídeo deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
-                                        );
-                                        e.target.value = "";
-                                        return;
-                                      }
-                                    }
-
-                                    if (arquivo.type.startsWith("audio/")) {
-                                      if (arquivo.size > LIMITE_AUDIO_BYTES) {
-                                        setErro(
-                                          "O áudio deve ter no máximo 16MB. Reduza o tamanho antes de enviar."
-                                        );
-                                        return;
-                                      }
-                                    }
-
-                                    if (
-                                      tipoNodeEdicao === "enviar_arquivo" &&
-                                      arquivo.size > LIMITE_ARQUIVO_BYTES
-                                    ) {
-                                      setErro("O arquivo deve ter no máximo 50MB.");
-                                      e.target.value = "";
-                                      return;
-                                    }
-
-                                    enviarNovaMidia(arquivo);
-
-                                    e.target.value = "";
-                                  }}
-                                />
-                              </label>}
-
-                              <span className={styles.help}>
-                                {tipoNodeEdicao === "enviar_imagem"
-                                  ? "São aceitas imagens de até 5MB nos formatos JPG, JPEG, PNG ou WEBP."
-                                  : tipoNodeEdicao === "enviar_video"
-                                  ? "São aceitos vídeos de até 16MB no formato MP4, com vídeo H.264/AVC e áudio AAC. Arquivos incompatíveis serão recusados."
-                                  : tipoNodeEdicao === "enviar_audio"
-                                  ? "São aceitos arquivos de áudio de até 16MB."
-                                  : "São aceitos PDF, TXT, CSV, Word, Excel e PowerPoint, respeitando o espaço disponível da cota de 50MB."}
-                              </span>
-
-                              <div className={styles.mediaLimitPremiumRow}>
-                                <button
-                                  type="button"
-                                  className={styles.mediaManagePremiumCard}
-                                  onClick={() => {
-                                    setAbaMidias(
-                                      tipoNodeEdicao === "enviar_imagem"
-                                        ? "imagem"
-                                        : tipoNodeEdicao === "enviar_video"
-                                        ? "video"
-                                        : tipoNodeEdicao === "enviar_audio"
-                                        ? "audio"
-                                        : "arquivo"
-                                    );
-                                    setModalMidiasAberto(true);
-                                  }}
-                                >
-                                  <span className={styles.mediaManagePremiumIcon}>
-                                    {tipoNodeEdicao === "enviar_imagem"
-                                      ? "🖼️"
-                                      : tipoNodeEdicao === "enviar_video"
-                                      ? "🎬"
-                                      : tipoNodeEdicao === "enviar_audio"
-                                      ? "🎧"
-                                      : "📄"}
-                                  </span>
-
-                                  <span className={styles.mediaManagePremiumContent}>
-                                    <strong>Gerenciar mídias</strong>
-                                    <small>Abrir biblioteca</small>
-                                  </span>
-                                </button>
-
-                                <div
-                                  className={`${styles.mediaLimitPremiumCard} ${classeUsoStorageMidias(
-                                    resumoMidias.tamanhoTotal,
-                                    LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
-                                  )}`}
-                                >
-                                  <div className={styles.mediaLimitPremiumNumbers}>
-                                    <strong>{formatarStorageMidiasMb(resumoMidias.tamanhoTotal)} /</strong>
-                                    <span>50 MB</span>
-                                  </div>
-
-                                  <small>Limite usado</small>
-                                </div>
-                              </div>
-
-                              {limiteStorageMidiasAtingido && (
-                                <span className={styles.help}>
-                                   Limite de 50 MB atingido. Exclua uma mídia no gerenciador antes de subir outra.
-                                </span>
-                              )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                                    {tipoNodeEdicao === "pergunta_opcoes" && (
+        {tipoNodeEdicao === "pergunta_opcoes" && (
                     <PerguntaOpcoesConfig
                               opcoes={opcoesNode}
                               onAdicionar={adicionarOpcaoPergunta}
