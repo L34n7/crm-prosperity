@@ -1,0 +1,101 @@
+name: Refatorar configs de resposta dos fluxos
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+    paths:
+      - .github/workflows/refactor-fluxos-response-node-configs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Conectar configs de resposta
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/FluxosEditor.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const importNeedle = 'import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";';
+          const imports = [
+            'import BotoesConfig from "./components/node-config/BotoesConfig";',
+            'import PerguntaOpcoesConfig from "./components/node-config/PerguntaOpcoesConfig";',
+            'import RedirectConfig from "./components/node-config/RedirectConfig";',
+          ];
+          if (!source.includes(importNeedle)) throw new Error('AvaliacaoConfig nao encontrado');
+          for (const line of imports) {
+            if (!source.includes(line)) {
+              source = source.replace(importNeedle, `${importNeedle}\n${line}`);
+            }
+          }
+
+          const panelIndex = source.indexOf('<PropertiesPanel');
+          if (panelIndex < 0) throw new Error('Painel de propriedades nao encontrado');
+
+          function replaceSection(startMarker, nextMarker, replacement) {
+            const start = source.indexOf(startMarker, panelIndex);
+            const next = source.indexOf(nextMarker, start + startMarker.length);
+            if (start < 0 || next < 0) throw new Error(`Secao nao encontrada: ${startMarker}`);
+            source = source.slice(0, start) + replacement + '\n\n                  ' + source.slice(next);
+          }
+
+          replaceSection(
+            '{tipoNodeEdicao === "pergunta_opcoes" && (',
+            '{tipoNodeEdicao === "enviar_botoes" && (',
+            `<PerguntaOpcoesConfig
+                    opcoes={opcoesNode}
+                    onAdicionar={adicionarOpcaoPergunta}
+                    onAtualizar={atualizarOpcaoPergunta}
+                    onRemover={removerOpcaoPergunta}
+                  />`
+          );
+
+          replaceSection(
+            '{tipoNodeEdicao === "enviar_botoes" && (',
+            '{tipoNodeEdicao === "botao_redirect" && (',
+            `<BotoesConfig
+                    botoes={botoesNode}
+                    onAdicionar={adicionarBotaoResposta}
+                    onAtualizar={atualizarBotaoResposta}
+                    onRemover={removerBotaoResposta}
+                  />`
+          );
+
+          replaceSection(
+            '{tipoNodeEdicao === "botao_redirect" && (',
+            '{tipoNodeEdicao === "agendar_disparo" && (',
+            `<RedirectConfig
+                    textoBotao={redirectBotaoTextoNode}
+                    url={redirectUrlNode}
+                    onTextoBotaoChange={setRedirectBotaoTextoNode}
+                    onUrlChange={setRedirectUrlNode}
+                  />`
+          );
+
+          for (const component of ['<PerguntaOpcoesConfig', '<BotoesConfig', '<RedirectConfig']) {
+            if (!source.includes(component)) throw new Error(`${component} nao conectado`);
+          }
+
+          fs.writeFileSync(path, source);
+          NODE
+
+      - name: Registrar refatoracao e remover workflow temporario
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/refactor-fluxos-response-node-configs.yml
+          git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
+          git commit -m 'refactor: conectar configs de resposta dos blocos'
+          git push origin HEAD:refactor/fluxos-editor-estrutura
