@@ -5,7 +5,6 @@ import styles from "../../fluxos.module.css";
 type NodeActionsProps = {
   podeExcluir: boolean;
   confirmandoExclusao: boolean;
-  salvando?: boolean;
   onPedirExclusao: () => void;
   onConfirmarExclusao: () => void;
   onCancelar: () => void;
@@ -15,7 +14,6 @@ type NodeActionsProps = {
 export default function NodeActions({
   podeExcluir,
   confirmandoExclusao,
-  salvando = false,
   onPedirExclusao,
   onConfirmarExclusao,
   onCancelar,
@@ -30,7 +28,6 @@ export default function NodeActions({
               type="button"
               className={styles.deleteNodeConfirmButton}
               onClick={onConfirmarExclusao}
-              disabled={salvando}
             >
               Excluir
             </button>
@@ -40,7 +37,6 @@ export default function NodeActions({
               className={styles.deleteNodeIconButton}
               onClick={onPedirExclusao}
               title="Excluir bloco"
-              disabled={salvando}
             >
               🗑
             </button>
@@ -50,7 +46,6 @@ export default function NodeActions({
           type="button"
           className={styles.secondaryButton}
           onClick={onCancelar}
-          disabled={salvando}
         >
           Cancelar
         </button>
@@ -59,7 +54,6 @@ export default function NodeActions({
           type="button"
           className={styles.primaryButton}
           onClick={onAplicar}
-          disabled={salvando}
         >
           Aplicar no bloco
         </button>
