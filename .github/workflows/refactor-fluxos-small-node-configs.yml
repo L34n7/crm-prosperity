@@ -1,0 +1,165 @@
+name: Refatorar configs simples dos fluxos
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+    paths:
+      - .github/workflows/refactor-fluxos-small-node-configs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Conectar configs simples
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/FluxosEditor.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const importNeedle = 'import PropertiesPanel from "./components/PropertiesPanel";';
+          const imports = [
+            'import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";',
+            'import CapturarRespostaConfig from "./components/node-config/CapturarRespostaConfig";',
+            'import EncerrarConfig from "./components/node-config/EncerrarConfig";',
+          ];
+          if (!source.includes(importNeedle)) throw new Error('PropertiesPanel nao encontrado');
+          for (const line of imports) {
+            if (!source.includes(line)) {
+              source = source.replace(importNeedle, `${importNeedle}\n${line}`);
+            }
+          }
+
+          const panelIndex = source.indexOf('<PropertiesPanel');
+          if (panelIndex < 0) throw new Error('Painel de propriedades nao conectado');
+
+          function replaceSection(startMarker, nextMarker, replacement) {
+            const start = source.indexOf(startMarker, panelIndex);
+            const next = source.indexOf(nextMarker, start + startMarker.length);
+            if (start < 0 || next < 0) {
+              throw new Error(`Secao nao encontrada: ${startMarker}`);
+            }
+            source = source.slice(0, start) + replacement + '\n\n                  ' + source.slice(next);
+          }
+
+          replaceSection(
+            '{tipoNodeEdicao === "encerrar" && (',
+            '{tipoNodeEdicao === "capturar_resposta" && (',
+            `<EncerrarConfig
+                    resultado={encerrarResultadoNode}
+                    tipoValor={encerrarValorTipoNode}
+                    valorFixo={encerrarValorFixoNode}
+                    valorVariavel={encerrarValorVariavelNode}
+                    onResultadoChange={(resultado) => {
+                      setEncerrarResultadoNode(
+                        resultadoEncerramentoValido(resultado)
+                          ? resultado
+                          : "positivo"
+                      );
+
+                      if (resultado !== "positivo") {
+                        setEncerrarValorTipoNode("sem_valor");
+                        setEncerrarValorFixoNode("");
+                        setEncerrarValorVariavelNode("");
+                      }
+                    }}
+                    onTipoValorChange={(tipoValor) => {
+                      setEncerrarValorTipoNode(
+                        tipoValorConversaoValido(tipoValor)
+                          ? tipoValor
+                          : "sem_valor"
+                      );
+
+                      if (tipoValor !== "valor_fixo") {
+                        setEncerrarValorFixoNode("");
+                      }
+
+                      if (tipoValor !== "variavel") {
+                        setEncerrarValorVariavelNode("");
+                      }
+                    }}
+                    onValorFixoChange={setEncerrarValorFixoNode}
+                    onValorVariavelChange={setEncerrarValorVariavelNode}
+                  />`
+          );
+
+          replaceSection(
+            '{tipoNodeEdicao === "capturar_resposta" && (',
+            '{tipoNodeEdicao === "avaliacao" && (',
+            `<CapturarRespostaConfig
+                    tipoCaptura={capturaTipoNode}
+                    variavel={capturaVariavelNode}
+                    mensagemErro={capturaMensagemErroNode}
+                    onTipoCapturaChange={(novoTipo) => {
+                      const variavelAtual = capturaVariavelNode
+                        .trim()
+                        .toLowerCase();
+
+                      setCapturaTipoNode(novoTipo);
+
+                      const variaveisPadrao = [
+                        "resposta",
+                        "texto",
+                        "nome",
+                        "cpf",
+                        "cnpj",
+                        "email",
+                        "telefone",
+                        "numero",
+                        "data",
+                        "cep",
+                      ];
+
+                      if (
+                        !variavelAtual ||
+                        variaveisPadrao.includes(variavelAtual)
+                      ) {
+                        setCapturaVariavelNode(novoTipo);
+                      }
+                    }}
+                    onVariavelChange={setCapturaVariavelNode}
+                    onMensagemErroChange={setCapturaMensagemErroNode}
+                  />`
+          );
+
+          replaceSection(
+            '{tipoNodeEdicao === "avaliacao" && (',
+            '{[\n                    "enviar_imagem",',
+            `<AvaliacaoConfig
+                    notaMinima={notaMinimaNode}
+                    notaMaxima={notaMaximaNode}
+                    solicitarComentario={solicitarComentarioNode}
+                    mensagemComentario={mensagemComentarioNode}
+                    onNotaMinimaChange={setNotaMinimaNode}
+                    onNotaMaximaChange={setNotaMaximaNode}
+                    onSolicitarComentarioChange={setSolicitarComentarioNode}
+                    onMensagemComentarioChange={setMensagemComentarioNode}
+                  />`
+          );
+
+          for (const component of ['<EncerrarConfig', '<CapturarRespostaConfig', '<AvaliacaoConfig']) {
+            if (!source.includes(component)) throw new Error(`${component} nao conectado`);
+          }
+
+          fs.writeFileSync(path, source);
+          NODE
+
+      - name: Registrar refatoracao e remover workflow temporario
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/refactor-fluxos-small-node-configs.yml
+          git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
+          git commit -m 'refactor: conectar configs simples de blocos'
+          git push origin HEAD:refactor/fluxos-editor-estrutura
