@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - refactor/fluxos-editor-estrutura
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
