@@ -28,6 +28,7 @@ import PropertiesPanel from "./components/PropertiesPanel";
 import EncerrarConfig from "./components/node-config/EncerrarConfig";
 import CapturarRespostaConfig from "./components/node-config/CapturarRespostaConfig";
 import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";
+import AgendarDisparoConfig from "./components/node-config/AgendarDisparoConfig";
 import RedirectConfig from "./components/node-config/RedirectConfig";
 import TransferenciaConfig from "./components/node-config/TransferenciaConfig";
 import InterpretarArquivoIaConfig from "./components/node-config/InterpretarArquivoIaConfig";
@@ -7282,287 +7283,50 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   )}
 
                   {tipoNodeEdicao === "agendar_disparo" && (
-                    <div className={styles.optionsBox}>
-                      <div className={styles.agendarDisparoCostAlert}>
-                        <div className={styles.agendarDisparoCostAlertIcon}>⚠</div>
+          <AgendarDisparoConfig
+            usaTemplatesPorIntegracao={agendarDisparoUsaTemplatesPorIntegracao}
+            templateId={agendarDisparoTemplateIdNode}
+            templatesPorIntegracao={agendarDisparoTemplatesPorIntegracaoNode}
+            quantidade={agendarDisparoQuantidadeNode}
+            unidade={agendarDisparoUnidadeNode}
+            variaveis={agendarDisparoVariaveisNode}
+            indicesVariaveis={indicesVariaveisTemplateAgendarDisparo}
+            templates={templatesWhatsapp}
+            integracoes={integracoesEscopoFluxoSelecionado}
+            carregandoTemplates={carregandoTemplatesWhatsapp}
+            opcoesVariaveis={opcoesVariaveisFluxo}
+            loadingVariaveis={loadingVariaveis}
+            templatePreviewSelecionado={templateAgendarDisparoSelecionado}
+            preview={previewTemplateAgendarDisparo}
+            loadingCusto={loadingPreviewCustoAgendarDisparo}
+            custo={previewCustoAgendarDisparo}
+            rotuloIntegracao={rotuloIntegracaoWhatsapp}
+            templatesCompativeis={(integracao) =>
+              templatesWhatsapp.filter((template) =>
+                templateCompativelComIntegracao(template, integracao)
+              )
+            }
+            onTemplateIdChange={setAgendarDisparoTemplateIdNode}
+            onTemplateIntegracaoChange={(integracaoId, templateId) =>
+              setAgendarDisparoTemplatesPorIntegracaoNode((atual) => ({
+                ...atual,
+                [integracaoId]: templateId,
+              }))
+            }
+            onQuantidadeChange={setAgendarDisparoQuantidadeNode}
+            onUnidadeChange={setAgendarDisparoUnidadeNode}
+            onVariavelChange={(index, chave) =>
+              setAgendarDisparoVariaveisNode((atual) =>
+                atualizarLinhaVariavelTemplate(atual, index, chave)
+              )
+            }
+            onGerenciarVariaveis={() =>
+              abrirModalGerenciarVariaveis("agendar_disparo")
+            }
+          />
+        )}
 
-                        <div className={styles.agendarDisparoCostAlertContent}>
-                          <strong>Este disparo gera custos</strong>
-
-                          <p>
-                            O envio será feito usando template oficial do WhatsApp e poderá gerar
-                            cobrança da Meta quando o disparo ocorrer.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className={styles.label}>Configuração do disparo</span>
-                        <p className={styles.help}>
-                          Este bloco não envia mensagem comum. Ele agenda um template WhatsApp para ser enviado depois.
-                        </p>
-                      </div>
-
-                      <label
-                        className={`${styles.field} ${
-                          agendarDisparoUsaTemplatesPorIntegracao
-                            ? styles.hiddenField
-                            : ""
-                        }`}
-                      >
-                        <span className={styles.label}>Template WhatsApp</span>
-
-                        <select
-                          className={styles.input}
-                          value={agendarDisparoTemplateIdNode}
-                          onChange={(e) => setAgendarDisparoTemplateIdNode(e.target.value)}
-                          disabled={carregandoTemplatesWhatsapp}
-                        >
-                          <option value="">
-                            {carregandoTemplatesWhatsapp
-                              ? "Carregando templates..."
-                              : "Selecione um template aprovado"}
-                          </option>
-
-                          {templatesWhatsapp.map((template) => (
-                            <option key={template.id} value={template.id}>
-                              {template.nome} - {template.idioma}
-                            </option>
-                          ))}
-                        </select>
-
-                        <span className={styles.help}>
-                          Apenas templates aprovados devem ser usados para disparos após 24h.
-                        </span>
-                      </label>
-
-                      {agendarDisparoUsaTemplatesPorIntegracao && (
-                        <div className={styles.field}>
-                          <span className={styles.label}>
-                            Templates por numero
-                          </span>
-                          <span className={styles.help}>
-                            Este fluxo atende numeros de WABAs diferentes.
-                            Selecione um template aprovado para cada numero.
-                          </span>
-
-                          <div className={styles.integrationTemplateList}>
-                            {integracoesEscopoFluxoSelecionado.map((integracao) => {
-                              const templatesCompativeis = templatesWhatsapp.filter(
-                                (template) =>
-                                  templateCompativelComIntegracao(
-                                    template,
-                                    integracao
-                                  )
-                              );
-
-                              return (
-                                <label
-                                  key={integracao.id}
-                                  className={styles.integrationTemplateItem}
-                                >
-                                  <span>
-                                    <strong>
-                                      {rotuloIntegracaoWhatsapp(integracao)}
-                                    </strong>
-                                    <small>
-                                      WABA {integracao.waba_id || "nao informada"}
-                                    </small>
-                                  </span>
-
-                                  <select
-                                    className={styles.input}
-                                    value={
-                                      agendarDisparoTemplatesPorIntegracaoNode[
-                                        integracao.id
-                                      ] || ""
-                                    }
-                                    onChange={(e) =>
-                                      setAgendarDisparoTemplatesPorIntegracaoNode(
-                                        (atual) => ({
-                                          ...atual,
-                                          [integracao.id]: e.target.value,
-                                        })
-                                      )
-                                    }
-                                    disabled={carregandoTemplatesWhatsapp}
-                                  >
-                                    <option value="">
-                                      {carregandoTemplatesWhatsapp
-                                        ? "Carregando templates..."
-                                        : "Selecione um template"}
-                                    </option>
-
-                                    {templatesCompativeis.map((template) => (
-                                      <option key={template.id} value={template.id}>
-                                        {template.nome} - {template.idioma}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className={styles.optionRow}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Enviar após</span>
-
-                          <input
-                            type="number"
-                            min={1}
-                            className={styles.input}
-                            value={agendarDisparoQuantidadeNode}
-                            onChange={(e) => setAgendarDisparoQuantidadeNode(e.target.value)}
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Unidade</span>
-
-                          <select
-                            className={styles.input}
-                            value={agendarDisparoUnidadeNode}
-                            onChange={(e) =>
-                              setAgendarDisparoUnidadeNode(e.target.value as "horas" | "dias")
-                            }
-                          >
-                            <option value="horas">Horas</option>
-                            <option value="dias">Dias</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <div className={styles.field}>
-                        {indicesVariaveisTemplateAgendarDisparo.length > 0 ? (
-                          <>
-                            <span className={styles.label}>Variáveis do template</span>
-
-                            <div className={styles.templateVariableGrid}>
-                              {indicesVariaveisTemplateAgendarDisparo.map((index) => (
-                                <TemplateVariableCombobox
-                                  key={index}
-                                  label={`Variável ${index + 1}`}
-                                  value={
-                                    obterLinhasVariaveisTemplate(
-                                      agendarDisparoVariaveisNode
-                                    )[index]
-                                  }
-                                  onChange={(chave) =>
-                                    setAgendarDisparoVariaveisNode((atual) =>
-                                      atualizarLinhaVariavelTemplate(
-                                        atual,
-                                        index,
-                                        chave
-                                      )
-                                    )
-                                  }
-                                  options={opcoesVariaveisFluxo}
-                                  loading={loadingVariaveis}
-                                />
-                              ))}
-                            </div>
-
-                            <span className={styles.help}>
-                              Variável 1 substitui {"{{1}}"}, Variável 2 substitui {"{{2}}"} e Variável 3 substitui {"{{3}}"}.
-                            </span>
-                            <button
-                              type="button"
-                              className={styles.inlineVariablesButton}
-                              onClick={() =>
-                                abrirModalGerenciarVariaveis("agendar_disparo")
-                              }
-                            >
-                              Gerenciar variáveis
-                            </button>
-                          </>
-                        ) : null}
-
-                        <div className={styles.templatePreviewCard}>
-                          <div className={styles.templatePreviewTop}>
-                            <strong>Prévia WhatsApp</strong>
-                            <span>{templateAgendarDisparoSelecionado?.nome || "Template"}</span>
-                          </div>
-
-                          {previewTemplateAgendarDisparo ? (
-                            <div className={styles.whatsappPreviewArea}>
-                              <div className={styles.whatsappBubble}>
-                                <strong className={styles.whatsappPreviewTitle}>
-                                  {previewTemplateAgendarDisparo.titulo}
-                                </strong>
-
-                                <p className={styles.whatsappPreviewText}>
-                                  {previewTemplateAgendarDisparo.corpo}
-                                </p>
-
-                                <div className={styles.whatsappPreviewMeta}>
-                                  <span className={styles.whatsappPreviewFooter}>
-                                    {previewTemplateAgendarDisparo.rodape}
-                                  </span>
-                                  <span className={styles.whatsappPreviewTime}>
-                                    {new Date().toLocaleTimeString("pt-BR", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                </div>
-
-                                {previewTemplateAgendarDisparo.botoes.map((texto, index) => (
-                                  <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
-                                    ↩ {texto}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className={styles.previewEmptyState}>
-                              Selecione um template aprovado para visualizar a mensagem.
-                            </div>
-                          )}
-                        </div>
-
-                        <div className={styles.agendarDisparoCostPreviewCard}>
-                          <div className={styles.costPreviewTop}>
-                            <span className={styles.costPreviewLabel}>Estimativa de custo Meta</span>
-
-                            <span className={styles.costPreviewCategory}>
-                              {templateAgendarDisparoSelecionado?.categoria || "Categoria"}
-                            </span>
-                          </div>
-
-                          {loadingPreviewCustoAgendarDisparo ? (
-                            <p className={styles.costPreviewMuted}>Calculando estimativa...</p>
-                          ) : previewCustoAgendarDisparo ? (
-                            <>
-                              <strong className={styles.costPreviewValue}>
-                                R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
-                                {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
-                              </strong>
-
-                              <p className={styles.costPreviewMeta}>
-                                USD: US$ {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)} ·
-                                Cobrado: {previewCustoAgendarDisparo.totalCobrados} contato
-                              </p>
-
-                              <p className={styles.costPreviewHelp}>
-                                Esta é uma estimativa para 1 contato. A cobrança real pode variar
-                                conforme categoria do template, país do contato, cotação, impostos e
-                                regras da Meta.
-                              </p>
-                            </>
-                          ) : (
-                            <p className={styles.costPreviewMuted}>
-                              Selecione um template aprovado para visualizar a estimativa.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao.startsWith("agenda_") && (
+        {tipoNodeEdicao.startsWith("agenda_") && (
                     <div className={styles.optionsBox}>
                       <div>
                         <span className={styles.label}>Bloco de agenda</span>
