@@ -1,0 +1,73 @@
+name: Refatorar painel de propriedades dos fluxos
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+    paths:
+      - .github/workflows/refactor-fluxos-properties-panel.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Conectar PropertiesPanel
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/FluxosEditor.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const importNeedle = 'import ConnectionEditor from "./components/ConnectionEditor";';
+          const importLine = 'import PropertiesPanel from "./components/PropertiesPanel";';
+          if (!source.includes(importLine)) {
+            if (!source.includes(importNeedle)) throw new Error('Import de ConnectionEditor nao encontrado');
+            source = source.replace(importNeedle, `${importNeedle}\n${importLine}`);
+          }
+
+          const panelStart = '          {(nodeEditado || edgeEditada) && (\n            <aside className={styles.propertiesPanel}>';
+          const nodeFormMarker = '                ) : nodeEditado ? (\n                <div className={styles.propertiesForm}>';
+          const startIndex = source.indexOf(panelStart);
+          const formIndex = source.indexOf(nodeFormMarker, startIndex);
+          if (startIndex < 0 || formIndex < 0) throw new Error('Inicio do painel antigo nao encontrado');
+
+          const replacementStart = `          <PropertiesPanel\n            nodeEditado={nodeEditado}\n            edgeEditada={edgeEditada}\n            salvando={salvando}\n            onDuplicarNode={(nodeId) => {\n              void duplicarNode(nodeId);\n            }}\n            onFechar={fecharPainelEdicao}\n          >\n            {nodeEditado ? (\n                <div className={styles.propertiesForm}>`;
+
+          source =
+            source.slice(0, startIndex) +
+            replacementStart +
+            source.slice(formIndex + nodeFormMarker.length);
+
+          const panelEnd = '                  />\n                )}\n            </aside>\n            )}\n';
+          const replacementEnd = '                  />\n                ) : null}\n          </PropertiesPanel>\n';
+          const endIndex = source.indexOf(panelEnd, source.indexOf('<ConnectionEditor'));
+          if (endIndex < 0) throw new Error('Fim do painel antigo nao encontrado');
+          source = source.replace(panelEnd, replacementEnd);
+
+          if (source.includes('<aside className={styles.propertiesPanel}>')) {
+            throw new Error('Painel antigo ainda presente');
+          }
+          if (!source.includes('<PropertiesPanel')) throw new Error('PropertiesPanel nao conectado');
+          if (!source.includes('<ConnectionEditor')) throw new Error('ConnectionEditor foi perdido');
+
+          fs.writeFileSync(path, source);
+          NODE
+
+      - name: Registrar refatoracao e remover workflow temporario
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/refactor-fluxos-properties-panel.yml
+          git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
+          git commit -m 'refactor: conectar painel de propriedades extraido'
+          git push origin HEAD:refactor/fluxos-editor-estrutura
