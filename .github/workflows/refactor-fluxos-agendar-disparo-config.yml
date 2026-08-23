@@ -1,0 +1,112 @@
+name: Integrar AgendarDisparoConfig dos fluxos
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+    paths:
+      - .github/workflows/refactor-fluxos-agendar-disparo-config.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Conectar AgendarDisparoConfig
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/FluxosEditor.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const importNeedle = 'import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";';
+          const importLine = 'import AgendarDisparoConfig from "./components/node-config/AgendarDisparoConfig";';
+          if (!source.includes(importLine)) {
+            if (!source.includes(importNeedle)) throw new Error('AvaliacaoConfig nao encontrado');
+            source = source.replace(importNeedle, `${importNeedle}\n${importLine}`);
+          }
+
+          const panelIndex = source.indexOf('<NodeConfigPanel');
+          const conditionText = 'tipoNodeEdicao === "agendar_disparo" && (';
+          const conditionIndex = source.indexOf(conditionText, panelIndex);
+          const start = source.lastIndexOf('{', conditionIndex);
+          const nextText = 'tipoNodeEdicao.startsWith("agenda_") && (';
+          const nextIndex = source.indexOf(nextText, conditionIndex);
+          const end = source.lastIndexOf('{', nextIndex);
+          if (panelIndex < 0 || conditionIndex < 0 || start < 0 || nextIndex < 0 || end < 0) {
+            throw new Error('Bloco agendar disparo nao encontrado');
+          }
+
+          const replacement = `{tipoNodeEdicao === "agendar_disparo" && (
+                    <AgendarDisparoConfig
+                      usaTemplatesPorIntegracao={agendarDisparoUsaTemplatesPorIntegracao}
+                      templateId={agendarDisparoTemplateIdNode}
+                      templatesPorIntegracao={agendarDisparoTemplatesPorIntegracaoNode}
+                      quantidade={agendarDisparoQuantidadeNode}
+                      unidade={agendarDisparoUnidadeNode}
+                      variaveis={agendarDisparoVariaveisNode}
+                      indicesVariaveis={indicesVariaveisTemplateAgendarDisparo}
+                      templates={templatesWhatsapp}
+                      integracoes={integracoesEscopoFluxoSelecionado}
+                      carregandoTemplates={carregandoTemplatesWhatsapp}
+                      opcoesVariaveis={opcoesVariaveisFluxo}
+                      loadingVariaveis={loadingVariaveis}
+                      templatePreviewSelecionado={templateAgendarDisparoSelecionado}
+                      preview={previewTemplateAgendarDisparo}
+                      loadingCusto={loadingPreviewCustoAgendarDisparo}
+                      custo={previewCustoAgendarDisparo}
+                      rotuloIntegracao={rotuloIntegracaoWhatsapp}
+                      templatesCompativeis={(integracao) =>
+                        templatesWhatsapp.filter((template) =>
+                          templateCompativelComIntegracao(template, integracao)
+                        )
+                      }
+                      onTemplateIdChange={setAgendarDisparoTemplateIdNode}
+                      onTemplateIntegracaoChange={(integracaoId, templateId) =>
+                        setAgendarDisparoTemplatesPorIntegracaoNode((atual) => ({
+                          ...atual,
+                          [integracaoId]: templateId,
+                        }))
+                      }
+                      onQuantidadeChange={setAgendarDisparoQuantidadeNode}
+                      onUnidadeChange={setAgendarDisparoUnidadeNode}
+                      onVariavelChange={(index, chave) =>
+                        setAgendarDisparoVariaveisNode((atual) =>
+                          atualizarLinhaVariavelTemplate(atual, index, chave)
+                        )
+                      }
+                      onGerenciarVariaveis={() =>
+                        abrirModalGerenciarVariaveis("agendar_disparo")
+                      }
+                    />
+                  )}
+
+                  `;
+
+          source = source.slice(0, start) + replacement + source.slice(end);
+          if (!source.includes('<AgendarDisparoConfig')) throw new Error('AgendarDisparoConfig nao conectado');
+          if (source.indexOf('className={styles.agendarDisparoCostAlert}', panelIndex) >= 0 &&
+              source.indexOf('className={styles.agendarDisparoCostAlert}', panelIndex) < source.indexOf(nextText, panelIndex)) {
+            throw new Error('Bloco antigo de agendar disparo ainda presente');
+          }
+
+          fs.writeFileSync(path, source);
+          NODE
+
+      - name: Registrar refatoracao e remover workflow temporario
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/refactor-fluxos-agendar-disparo-config.yml
+          git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
+          git commit -m 'refactor: conectar configuracao de agendar disparo'
+          git push origin HEAD:refactor/fluxos-editor-estrutura
