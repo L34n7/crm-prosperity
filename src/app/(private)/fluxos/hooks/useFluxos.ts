@@ -52,11 +52,11 @@ export default function useFluxos({
         ? listaFluxos.find((item) => item.id === fluxoParam)
         : null;
 
-      if (fluxoDaUrl) {
-        setFluxoSelecionado(fluxoDaUrl);
-      } else if (!fluxoSelecionado && listaFluxos.length > 0) {
-        setFluxoSelecionado(listaFluxos[0]);
-      }
+      setFluxoSelecionado((atual) => {
+        if (fluxoDaUrl) return fluxoDaUrl;
+        if (!atual && listaFluxos.length > 0) return listaFluxos[0];
+        return atual;
+      });
     } catch (error: unknown) {
       onError(
         error instanceof Error ? error.message : "Erro ao carregar fluxos."
@@ -64,7 +64,7 @@ export default function useFluxos({
     } finally {
       setCarregandoFluxos(false);
     }
-  }, [fluxoParam, fluxoSelecionado, onClearError, onError]);
+  }, [fluxoParam, onClearError, onError]);
 
   return {
     fluxos,
