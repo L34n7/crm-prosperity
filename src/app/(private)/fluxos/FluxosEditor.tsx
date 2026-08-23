@@ -31,6 +31,7 @@ import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";
 import RedirectConfig from "./components/node-config/RedirectConfig";
 import TransferenciaConfig from "./components/node-config/TransferenciaConfig";
 import InterpretarArquivoIaConfig from "./components/node-config/InterpretarArquivoIaConfig";
+import NodeConfigPanel from "./components/node-config/NodeConfigPanel";
 import PerguntaOpcoesConfig from "./components/node-config/PerguntaOpcoesConfig";
 import BotoesConfig from "./components/node-config/BotoesConfig";
 import FluxoCanvas from "./components/FluxoCanvas";
@@ -6911,297 +6912,173 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             onFechar={fecharPainelEdicao}
           >
             {nodeEditado ? (
-                <div className={styles.propertiesForm}>
-                  {tipoNodeEdicao !== "inicio" && (
-                    <label className={styles.field}>
-                      <span className={styles.label}>Tipo do bloco</span>
+                <NodeConfigPanel
+        tipoNode={tipoNodeEdicao}
+        titulo={tituloNode}
+        mensagem={mensagemNode}
+        onTipoChange={(novoTipo) => {
+          const tipoAnterior = tipoNodeEdicao;
 
-                      <select
-                        className={styles.input}
-                        value={tipoNodeEdicao}
-                        onChange={(e) => {
-                          const novoTipo = e.target.value;
-                          const tipoAnterior = tipoNodeEdicao;
+          setTipoNodeEdicao(novoTipo);
 
-                          setTipoNodeEdicao(novoTipo);
+          if (tituloEhPadraoDoSistema(tituloNode, tipoAnterior)) {
+            setTituloNode(tituloPadraoTipoNo(novoTipo));
+          }
 
-                          if (tituloEhPadraoDoSistema(tituloNode, tipoAnterior)) {
-                            setTituloNode(tituloPadraoTipoNo(novoTipo));
-                          }
+          if (novoTipo === "encerrar") {
+            setMensagemNode("");
+            setSetorDestino("");
+            setOpcoesNode([]);
+            setEncerrarResultadoNode("positivo");
+            setEncerrarValorTipoNode("sem_valor");
+            setEncerrarValorFixoNode("");
+            setEncerrarValorVariavelNode("");
+          }
 
-                          if (novoTipo === "encerrar") {
-                            setMensagemNode("");
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setEncerrarResultadoNode("positivo");
-                            setEncerrarValorTipoNode("sem_valor");
-                            setEncerrarValorFixoNode("");
-                            setEncerrarValorVariavelNode("");
-                          }
+          if (novoTipo === "transferir_setor") {
+            setSetorDestino("");
+            setOpcoesNode([]);
+          }
 
-                          if (novoTipo === "transferir_setor") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                          }
+          if (novoTipo === "enviar_texto") {
+            setSetorDestino("");
+            setOpcoesNode([]);
+            setBotoesNode([]);
+          }
 
-                          if (novoTipo === "enviar_texto") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                          }
-                          
-                          if (novoTipo === "pergunta_opcoes") {
-                            setSetorDestino("");
-                            setBotoesNode([]);
-                          }
+          if (novoTipo === "pergunta_opcoes") {
+            setSetorDestino("");
+            setBotoesNode([]);
+          }
 
-                          if (novoTipo === TIPO_NO_PERGUNTA_LIVRE_IA) {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
+          if (novoTipo === TIPO_NO_PERGUNTA_LIVRE_IA) {
+            setSetorDestino("");
+            setOpcoesNode([]);
+            setBotoesNode([]);
 
-                            if (!mensagemNode.trim()) {
-                              setMensagemNode("Como posso te ajudar?");
-                            }
-                          }
+            if (!mensagemNode.trim()) {
+              setMensagemNode("Como posso te ajudar?");
+            }
+          }
 
-                          if (novoTipo === "enviar_botoes") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
+          if (novoTipo === "enviar_botoes") {
+            setSetorDestino("");
+            setOpcoesNode([]);
 
-                            if (botoesNode.length === 0) {
-                              setBotoesNode([
-                                { id: "sim", titulo: "Sim" },
-                                { id: "nao", titulo: "Não" },
-                              ]);
-                            }
-                          }
+            if (botoesNode.length === 0) {
+              setBotoesNode([
+                { id: "sim", titulo: "Sim" },
+                { id: "nao", titulo: "Não" },
+              ]);
+            }
+          }
 
-                          if (novoTipo === "botao_redirect") {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                            setMidiaUrlNode("");
+          if (novoTipo === "botao_redirect") {
+            setSetorDestino("");
+            setOpcoesNode([]);
+            setBotoesNode([]);
+            setMidiaUrlNode("");
 
-                            if (!redirectBotaoTextoNode.trim()) {
-                              setRedirectBotaoTextoNode("Acessar");
-                            }
+            if (!redirectBotaoTextoNode.trim()) {
+              setRedirectBotaoTextoNode("Acessar");
+            }
 
-                            if (!redirectUrlNode.trim()) {
-                              setRedirectUrlNode("https://");
-                            }
-                          }
+            if (!redirectUrlNode.trim()) {
+              setRedirectUrlNode("https://");
+            }
+          }
 
-                          if (
-                            novoTipo === "enviar_imagem" ||
-                            novoTipo === "enviar_video" ||
-                            novoTipo === "enviar_audio" ||
-                            novoTipo === "enviar_arquivo"
-                          ) {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                          }
+          if (
+            novoTipo === "enviar_imagem" ||
+            novoTipo === "enviar_video" ||
+            novoTipo === "enviar_audio" ||
+            novoTipo === "enviar_arquivo"
+          ) {
+            setSetorDestino("");
+            setOpcoesNode([]);
+          }
 
-                          if (
-                            novoTipo !== "enviar_imagem" &&
-                            novoTipo !== "enviar_video" &&
-                            novoTipo !== "enviar_audio" &&
-                            novoTipo !== "enviar_arquivo"
-                          ) {
-                            setMidiaUrlNode("");
-                          }
-                          if (novoTipo === "agendar_disparo") {
-                            setMensagemNode("");
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                            setMidiaUrlNode("");
-                          }
+          if (
+            novoTipo !== "enviar_imagem" &&
+            novoTipo !== "enviar_video" &&
+            novoTipo !== "enviar_audio" &&
+            novoTipo !== "enviar_arquivo"
+          ) {
+            setMidiaUrlNode("");
+          }
 
-                          if (novoTipo.startsWith("agenda_")) {
-                            setSetorDestino("");
-                            setOpcoesNode([]);
-                            setBotoesNode([]);
-                            setMidiaUrlNode("");
-                            setAgendaUsarContextoNode(false);
+          if (novoTipo === "agendar_disparo") {
+            setMensagemNode("");
+            setSetorDestino("");
+            setOpcoesNode([]);
+            setBotoesNode([]);
+            setMidiaUrlNode("");
+          }
 
-                            if (novoTipo === "agenda_buscar_agendamento") {
-                              setAgendaListarAgendamentosNode(true);
-                              setAgendaQuantidadeOpcoesNode("6");
-                              setAgendaMensagemListarAgendamentosNode(
-                                "Encontrei estes agendamentos. Responda com o número do agendamento que deseja cancelar ou remarcar:"
-                              );
-                            }
+          if (novoTipo.startsWith("agenda_")) {
+            setSetorDestino("");
+            setOpcoesNode([]);
+            setBotoesNode([]);
+            setMidiaUrlNode("");
+            setAgendaUsarContextoNode(false);
 
-                            if (novoTipo === "agenda_escolher_horario") {
-                              setMensagemNode(
-                                "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
-                              );
-                              setAgendaMensagemListarHorariosNode(
-                                "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:"
-                              );
-                              setAgendaMensagemPreferenciaIndisponivelNode(
-                                "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:"
-                              );
-                              setAgendaMensagemDataInvalidaNode(
-                                "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano."
-                              );
-                              setAgendaMensagemSemExpedienteNode(
-                                "Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos."
-                              );
-                            }
+            if (novoTipo === "agenda_buscar_agendamento") {
+              setAgendaListarAgendamentosNode(true);
+              setAgendaQuantidadeOpcoesNode("6");
+              setAgendaMensagemListarAgendamentosNode(
+                "Encontrei estes agendamentos. Responda com o número do agendamento que deseja cancelar ou remarcar:"
+              );
+            }
 
-                            if (novoTipo === "agenda_criar_agendamento") {
-                              setMensagemNode(
-                                "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato."
-                              );
-                              setAgendaEnviarEmailNode(true);
-                              setAgendaEmailOrigemNode("contato");
-                              setAgendaEmailVariavelNode("email");
-                            }
+            if (novoTipo === "agenda_escolher_horario") {
+              setMensagemNode(
+                "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
+              );
+              setAgendaMensagemListarHorariosNode(
+                "Para {{agenda_data_nova}}, estes horários estão disponíveis.\n\nResponda com o número da opção desejada ou informe outra data:"
+              );
+              setAgendaMensagemPreferenciaIndisponivelNode(
+                "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\n\nEstas são as opções mais próximas:"
+              );
+              setAgendaMensagemDataInvalidaNode(
+                "Essa data não é válida ou já passou. Informe uma data futura.\n\nQuando necessário, inclua também o ano."
+              );
+              setAgendaMensagemSemExpedienteNode(
+                "Não há atendimento disponível em {{agenda_data_nova}}.\n\nInforme outra data para continuarmos."
+              );
+            }
 
-                            if (novoTipo === "agenda_remarcar_agendamento") {
-                              setMensagemNode(
-                                "Remarcado! Seu horário agora ficou para {{agenda_data}} às {{agenda_hora}}."
-                              );
-                            }
+            if (novoTipo === "agenda_criar_agendamento") {
+              setMensagemNode(
+                "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato."
+              );
+              setAgendaEnviarEmailNode(true);
+              setAgendaEmailOrigemNode("contato");
+              setAgendaEmailVariavelNode("email");
+            }
 
-                            if (novoTipo === "agenda_cancelar_agendamento") {
-                              setMensagemNode(
-                                "Pronto, seu horário de {{agenda_data}} às {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
-                              );
-                              setAgendaStatusAgendamentoNode("cancelado");
-                              setAgendaEnviarEmailNode(true);
-                              setAgendaEmailOrigemNode("contato");
-                              setAgendaEmailVariavelNode("email");
-                            }
-                          }
-                        }}
-                      >
-                        <option value="enviar_texto">Mensagem</option>
-                        <option value="pergunta_opcoes">Pergunta</option>
-                        <option value={TIPO_NO_PERGUNTA_LIVRE_IA}>Pergunta aberta IA</option>
-                        <option value="capturar_resposta">Capturar resposta</option>
-                        <option value="transferir_setor">Transferir</option>
-                        <option value="encerrar">Encerrar</option>
-                        <option value="enviar_imagem">Imagem</option>
-                        <option value="enviar_video">Vídeo</option>
-                        <option value="enviar_audio">Áudio</option>
-                        <option value="enviar_arquivo">Arquivo</option>
-                        <option value="enviar_botoes">Pergunta com Botões</option>
-                        <option value="botao_redirect">Botão redirect</option>
-                        <option value="agendar_disparo">Agendar disparo</option>
-                        <option value="agenda_buscar_agendamento">Agenda: Buscar agendamento</option>
-                        <option value="agenda_escolher_horario">Agenda: Escolher horário</option>
-                        <option value="agenda_criar_agendamento">Agenda: Criar agendamento</option>
-                        <option value="agenda_remarcar_agendamento">Agenda: Remarcar agendamento</option>
-                        <option value="agenda_cancelar_agendamento">Agenda: Cancelar agendamento</option>
-                        <option value="avaliacao">Avaliação</option>
-                        <option value="interpretar_arquivo_ia">Interpretar arquivo IA</option>
-                      </select>
-                    </label>
-                  )}
+            if (novoTipo === "agenda_remarcar_agendamento") {
+              setMensagemNode(
+                "Remarcado! Seu horário agora ficou para {{agenda_data}} às {{agenda_hora}}."
+              );
+            }
 
-                  <label className={styles.field}>
-                    <span className={styles.label}>
-                      Título
-                    </span>
-
-                    <span className={styles.help}>
-                      Esse título é interno e não aparece na conversa.
-                    </span>
-
-                    <input
-                      className={styles.input}
-                      value={tituloNode}
-                      onChange={(e) => setTituloNode(e.target.value)}
-                    />
-                  </label>
-
-                  {[
-                    "enviar_texto",
-                    "pergunta_opcoes",
-                    TIPO_NO_PERGUNTA_LIVRE_IA,
-                    "enviar_botoes",
-                    "botao_redirect",
-                    "enviar_imagem",
-                    "enviar_video",
-                    "enviar_audio",
-                    "enviar_arquivo",
-                    "transferir_setor",
-                    "encerrar",
-                    "avaliacao",
-                    "capturar_resposta",
-                    "agenda_buscar_agendamento",
-                    "agenda_escolher_horario",
-                    "agenda_criar_agendamento",
-                    "agenda_remarcar_agendamento",
-                    "agenda_cancelar_agendamento",
-                    "interpretar_arquivo_ia",
-                  ].includes(tipoNodeEdicao) && (
-                    <div className={styles.field}>
-                      <span className={styles.label}>
-                        {tipoNodeEdicao === "pergunta_opcoes"
-                          ? "Pergunta"
-                          : tipoNodeEdicao === TIPO_NO_PERGUNTA_LIVRE_IA
-                          ? "Pergunta aberta"
-                          : tipoNodeEdicao === "enviar_botoes"
-                          ? "Pergunta dos botões"
-                          : tipoNodeEdicao === "botao_redirect"
-                          ? "Mensagem do botão"
-                          : tipoNodeEdicao === "enviar_imagem"
-                          ? "Legenda da imagem"
-                          : tipoNodeEdicao === "enviar_video"
-                          ? "Legenda do vídeo"
-                          : tipoNodeEdicao === "enviar_audio"
-                          ? "Legenda do áudio"
-                          : tipoNodeEdicao === "enviar_arquivo"
-                          ? "Legenda do arquivo"
-                          : tipoNodeEdicao === "transferir_setor"
-                          ? "Mensagem antes de transferir"
-                          : tipoNodeEdicao === "encerrar"
-                          ? "Mensagem de encerramento (opcional)"
-                          : tipoNodeEdicao === "avaliacao"
-                          ? "Pergunta de avaliação"
-                          : tipoNodeEdicao === "agenda_buscar_agendamento"
-                          ? "Mensagem para 1 agendamento" // CRM_APPOINTMENT_MESSAGE_LABELS_V1
-                          : tipoNodeEdicao === "agenda_escolher_horario"
-                          ? "Mensagem para pedir o dia"
-                          : tipoNodeEdicao === "agenda_criar_agendamento"
-                          ? "Mensagem depois de criar"
-                          : tipoNodeEdicao === "agenda_remarcar_agendamento"
-                          ? "Mensagem após remarcar com sucesso"
-                          : tipoNodeEdicao === "agenda_cancelar_agendamento"
-                          ? "Mensagem depois de cancelar"
-                          : tipoNodeEdicao === "interpretar_arquivo_ia"
-                          ? "Mensagem solicitando o arquivo"
-                          : "Mensagem"}
-                      </span>
-
-                      <textarea
-                        className={styles.textarea}
-                        value={mensagemNode}
-                        onChange={(e) => setMensagemNode(e.target.value)}
-                        placeholder="Digite o conteúdo"
-                      />
-                      <p className={styles.help}>
-                        Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
-                      </p>
-                      <p className={styles.help}>
-                        {VARIAVEIS_FIXAS_CONTATO_HELP}
-                      </p>
-                      <button
-                        type="button"
-                        className={styles.inlineVariablesButton}
-                        onClick={() => abrirModalGerenciarVariaveis("mensagem")}
-                      >
-                        Gerenciar variáveis
-                      </button>
-                    </div>
-
-                  )}
-
-                                    {tipoNodeEdicao === "encerrar" && (
+            if (novoTipo === "agenda_cancelar_agendamento") {
+              setMensagemNode(
+                "Pronto, seu horário de {{agenda_data}} às {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
+              );
+              setAgendaStatusAgendamentoNode("cancelado");
+              setAgendaEnviarEmailNode(true);
+              setAgendaEmailOrigemNode("contato");
+              setAgendaEmailVariavelNode("email");
+            }
+          }
+        }}
+        onTituloChange={setTituloNode}
+        onMensagemChange={setMensagemNode}
+        onGerenciarVariaveis={() => abrirModalGerenciarVariaveis("mensagem")}
+      >
+                  {tipoNodeEdicao === "encerrar" && (
                     <EncerrarConfig
                               resultado={encerrarResultadoNode}
                               tipoValor={encerrarValorTipoNode}
@@ -9155,7 +9032,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   </p>
 
 
-                </div>
+                </NodeConfigPanel>
                 ) : (
                   <ConnectionEditor
                     rotuloConexao={rotuloConexao}
