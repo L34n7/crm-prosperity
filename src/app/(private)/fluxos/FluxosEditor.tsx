@@ -30,6 +30,9 @@ import CapturarRespostaConfig from "./components/node-config/CapturarRespostaCon
 import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";
 import AgendarDisparoConfig from "./components/node-config/AgendarDisparoConfig";
 import AgendaConfig from "./components/node-config/AgendaConfig";
+import TentativasConfig from "./components/node-config/TentativasConfig";
+import NotificacaoConfig from "./components/node-config/NotificacaoConfig";
+import DelayConfig from "./components/node-config/DelayConfig";
 import RedirectConfig from "./components/node-config/RedirectConfig";
 import TransferenciaConfig from "./components/node-config/TransferenciaConfig";
 import InterpretarArquivoIaConfig from "./components/node-config/InterpretarArquivoIaConfig";
@@ -7499,381 +7502,125 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                   )}
 
                   {tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (
-                    <label className={styles.delayField}>
-                      <div className={styles.delayTopRow}>
-                        <span className={styles.label}>Delay antes de enviar:</span>
+          <DelayConfig
+            valor={delayNode}
+            onChange={(valor) => {
+              if (valor === "") {
+                setDelayNode("");
+                return;
+              }
+              const somenteNumeros = valor.replace(/\D/g, "");
+              if (!somenteNumeros) {
+                setDelayNode("");
+                return;
+              }
+              const numero = Number(somenteNumeros);
+              if (!Number.isFinite(numero)) {
+                setDelayNode("");
+                return;
+              }
+              if (numero > LIMITE_DELAY_SEGUNDOS) {
+                setDelayNode(String(LIMITE_DELAY_SEGUNDOS));
+                return;
+              }
+              setDelayNode(String(Math.floor(numero)));
+            }}
+          />
+        )}
+        {tipoNodeEdicao !== "inicio" && (
+          <NotificacaoConfig
+            ativo={notificarAoChegarNode}
+            titulo={notificacaoTituloNode}
+            mensagem={notificacaoMensagemNode}
+            enviarEmail={notificarEmailNode}
+            onAtivoChange={setNotificarAoChegarNode}
+            onTituloChange={setNotificacaoTituloNode}
+            onMensagemChange={setNotificacaoMensagemNode}
+            onEnviarEmailChange={setNotificarEmailNode}
+          />
+        )}
+        {[
+          "pergunta_opcoes",
+          TIPO_NO_PERGUNTA_LIVRE_IA,
+          "enviar_botoes",
+          "capturar_resposta",
+          "agenda_buscar_agendamento",
+          "agenda_escolher_horario",
+          "avaliacao",
+          "interpretar_arquivo_ia",
+        ].includes(tipoNodeEdicao) && (
+          <TentativasConfig
+            maxInvalidas={maxTentativasInvalidasNode}
+            maxSemResposta={maxTentativasSemRespostaNode}
+            acao={acaoExcessoTentativasNode}
+            escopoFila={escopoFilaExcessoTentativasNode}
+            setor={setorExcessoTentativasNode}
+            incluirAdministradores={incluirAdministradoresExcessoTentativasNode}
+            estrategia={estrategiaDistribuicaoDisponivel(
+              estrategiaExcessoTentativasNode,
+              setorExcessoTentativasNode,
+              incluirAdministradoresExcessoTentativasNode
+            )}
+            atendente={atendenteExcessoTentativasNode}
+            mensagem={mensagemExcessoTentativasNode}
+            notificarSistema={notificarExcessoTentativasNode}
+            notificarEmail={notificarEmailExcessoTentativasNode}
+            carregandoSetores={carregandoSetores}
+            possuiAdministradorAtivo={possuiAdministradorAtivo}
+            distribuicaoAutomaticaPermitida={permiteDistribuicaoAutomaticaNoSetor(
+              setorExcessoTentativasNode,
+              incluirAdministradoresExcessoTentativasNode
+            )}
+            setores={setores}
+            atendentesElegiveis={atendentes.filter(
+              (atendente) =>
+                atendente.is_administrador === true ||
+                atendente.setor_ids.includes(setorExcessoTentativasNode)
+            )}
+            onMaxInvalidasChange={setMaxTentativasInvalidasNode}
+            onMaxSemRespostaChange={setMaxTentativasSemRespostaNode}
+            onAcaoChange={setAcaoExcessoTentativasNode}
+            onEscopoFilaChange={(escopo) => {
+              setEscopoFilaExcessoTentativasNode(escopo);
+              if (escopo === "geral") {
+                setSetorExcessoTentativasNode("");
+                setAtendenteExcessoTentativasNode("");
+                setEstrategiaExcessoTentativasNode("fila_setor");
+                setIncluirAdministradoresExcessoTentativasNode(false);
+              }
+            }}
+            onSetorChange={(setorId) => {
+              setSetorExcessoTentativasNode(setorId);
+              setAtendenteExcessoTentativasNode("");
+              setEstrategiaExcessoTentativasNode("fila_setor");
+            }}
+            onIncluirAdministradoresChange={(incluir) => {
+              setIncluirAdministradoresExcessoTentativasNode(incluir);
+              if (
+                !permiteDistribuicaoAutomaticaNoSetor(
+                  setorExcessoTentativasNode,
+                  incluir
+                ) &&
+                (estrategiaExcessoTentativasNode === "rodizio_aleatorio" ||
+                  estrategiaExcessoTentativasNode === "menos_conversas")
+              ) {
+                setEstrategiaExcessoTentativasNode("fila_setor");
+              }
+            }}
+            onEstrategiaChange={(estrategia) => {
+              setEstrategiaExcessoTentativasNode(estrategia);
+              if (estrategia !== "atendente_especifico") {
+                setAtendenteExcessoTentativasNode("");
+              }
+            }}
+            onAtendenteChange={setAtendenteExcessoTentativasNode}
+            onMensagemChange={setMensagemExcessoTentativasNode}
+            onNotificarSistemaChange={setNotificarExcessoTentativasNode}
+            onNotificarEmailChange={setNotificarEmailExcessoTentativasNode}
+          />
+        )}
 
-                        <span className={styles.helpS}>Segundos:</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={LIMITE_DELAY_SEGUNDOS}
-                            className={styles.delayInput}
-                            value={delayNode}
-                            onChange={(e) => {
-                              const valor = e.target.value;
-
-                              if (valor === "") {
-                                setDelayNode("");
-                                return;
-                              }
-
-                              const somenteNumeros = valor.replace(/\D/g, "");
-
-                              if (!somenteNumeros) {
-                                setDelayNode("");
-                                return;
-                              }
-
-                              const numero = Number(somenteNumeros);
-
-                              if (!Number.isFinite(numero)) {
-                                setDelayNode("");
-                                return;
-                              }
-
-                              if (numero > LIMITE_DELAY_SEGUNDOS) {
-                                setDelayNode(String(LIMITE_DELAY_SEGUNDOS));
-                                return;
-                              }
-
-                              setDelayNode(String(Math.floor(numero)));
-                            }}
-                          />
-
-                      </div>
-
-                      <span className={styles.help}>
-                        Delay adicional antes do envio deste bloco, é somado ao tempo minimo do sistema, entre 2 a 3 segundos. Deixe vazio para envio imediato.
-                      </span>
-                      <span className={styles.help}>
-                        Máximo: 82.800 segundos, equivalente a 23 horas.
-                      </span>
-                    </label>
-                  )}
-                  
-                  {tipoNodeEdicao !== "inicio" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={notificarAoChegarNode}
-                          onChange={(e) => setNotificarAoChegarNode(e.target.checked)}
-                        />
-
-                        <div>
-                          <strong>Notificar quando chegar neste bloco</strong>
-                          <p>
-                            Cria uma notificação no sistema quando a automação alcançar este bloco.
-                          </p>
-                        </div>
-                      </label>
-
-                      {notificarAoChegarNode && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Título da notificação</span>
-                            <input
-                              className={styles.input}
-                              value={notificacaoTituloNode}
-                              onChange={(e) => setNotificacaoTituloNode(e.target.value)}
-                              placeholder="Ex: Lead chegou na escolha de plano"
-                            />
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem da notificação</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={notificacaoMensagemNode}
-                              onChange={(e) => setNotificacaoMensagemNode(e.target.value)}
-                              placeholder="Ex: O contato chegou no bloco de escolha de plano."
-                            />
-                          </label>
-
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={notificarEmailNode}
-                              onChange={(e) => setNotificarEmailNode(e.target.checked)}
-                            />
-
-                            <div>
-                              <strong>Enviar email também</strong>
-                              <p>
-                                Além da notificação no sistema, envia um email para os responsáveis.
-                              </p>
-                            </div>
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {[
-                    "pergunta_opcoes",
-                    TIPO_NO_PERGUNTA_LIVRE_IA,
-                    "enviar_botoes",
-                    "capturar_resposta",
-                    "agenda_buscar_agendamento",
-                    "agenda_escolher_horario",
-                    "avaliacao",
-                    "interpretar_arquivo_ia",
-                  ].includes(tipoNodeEdicao) && (
-                    <div className={styles.tentativasBox}>
-                      <div>
-                        <span className={styles.label}>Controle de tentativas</span>
-
-                        <p className={styles.help}>
-                          Evita que o fluxo fique repetindo este bloco em loop.
-                        </p>
-                      </div>
-
-                      <div className={styles.optionRow}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            Respostas inválidas
-                          </span>
-
-                          <input
-                            type="number"
-                            min={1}
-                            className={styles.input}
-                            value={maxTentativasInvalidasNode}
-                            onChange={(e) =>
-                              setMaxTentativasInvalidasNode(e.target.value)
-                            }
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            Sem resposta
-                          </span>
-
-                          <input
-                            type="number"
-                            min={1}
-                            className={styles.input}
-                            value={maxTentativasSemRespostaNode}
-                            onChange={(e) =>
-                              setMaxTentativasSemRespostaNode(e.target.value)
-                            }
-                          />
-                        </label>
-                      </div>
-
-                            <div className={styles.field}>
-                        <span className={styles.label}>Quando exceder</span>
-
-                        <select
-                          className={styles.input}
-                          value={acaoExcessoTentativasNode}
-                          onChange={(e) =>
-                            setAcaoExcessoTentativasNode(e.target.value)
-                          }
-                        >
-                          <option value="transferir_atendimento">
-                            Transferir para atendimento
-                          </option>
-                          <option value="encerrar_fluxo">Encerrar fluxo</option>
-                          <option value="reiniciar_fluxo">Reiniciar fluxo</option>
-                        </select>
-                      </div>
-
-                      {acaoExcessoTentativasNode === "transferir_atendimento" && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Escopo da fila</span>
-                            <select
-                              className={styles.input}
-                              value={escopoFilaExcessoTentativasNode}
-                              onChange={(e) => {
-                                const escopo = e.target.value === "geral" ? "geral" : "setor";
-                                setEscopoFilaExcessoTentativasNode(escopo);
-                                if (escopo === "geral") {
-                                  setSetorExcessoTentativasNode("");
-                                  setAtendenteExcessoTentativasNode("");
-                                  setEstrategiaExcessoTentativasNode("fila_setor");
-                                  setIncluirAdministradoresExcessoTentativasNode(false);
-                                }
-                              }}
-                            >
-                              <option value="geral">Fila geral — todos os setores</option>
-                              <option value="setor">Fila de um setor específico</option>
-                            </select>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Setor do atendimento</span>
-                            <select
-                              className={styles.input}
-                              value={setorExcessoTentativasNode}
-                              onChange={(e) => {
-                                setSetorExcessoTentativasNode(e.target.value);
-                                setAtendenteExcessoTentativasNode("");
-                                setEstrategiaExcessoTentativasNode("fila_setor");
-                              }}
-                              disabled={escopoFilaExcessoTentativasNode === "geral" || carregandoSetores}
-                            >
-                              <option value="">Selecione um setor</option>
-                              {setores.map((setor) => (
-                                <option key={setor.id} value={setor.id}>
-                                  {setor.nome}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={incluirAdministradoresExcessoTentativasNode}
-                              disabled={!setorExcessoTentativasNode || !possuiAdministradorAtivo}
-                              onChange={(e) => {
-                                const incluir = e.target.checked;
-                                setIncluirAdministradoresExcessoTentativasNode(incluir);
-                                if (
-                                  !permiteDistribuicaoAutomaticaNoSetor(
-                                    setorExcessoTentativasNode,
-                                    incluir
-                                  ) &&
-                                  (estrategiaExcessoTentativasNode === "rodizio_aleatorio" ||
-                                    estrategiaExcessoTentativasNode === "menos_conversas")
-                                ) {
-                                  setEstrategiaExcessoTentativasNode("fila_setor");
-                                }
-                              }}
-                            />
-                            <div>
-                              <strong>Incluir administradores na distribuição</strong>
-                              <p>
-                                Quando marcado, administradores participam do rodízio e da distribuição por menor carga mesmo sem vínculo com o setor.
-                              </p>
-                            </div>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Distribuição do atendimento</span>
-                            <select
-                              className={styles.input}
-                              value={estrategiaDistribuicaoDisponivel(
-                                estrategiaExcessoTentativasNode,
-                                setorExcessoTentativasNode,
-                                incluirAdministradoresExcessoTentativasNode
-                              )}
-                              onChange={(e) => {
-                                const estrategia = e.target.value as EstrategiaTransferenciaNode;
-                                setEstrategiaExcessoTentativasNode(estrategia);
-                                if (estrategia !== "atendente_especifico") {
-                                  setAtendenteExcessoTentativasNode("");
-                                }
-                              }}
-                              disabled={escopoFilaExcessoTentativasNode === "geral" || !setorExcessoTentativasNode}
-                            >
-                              <option value="fila_setor">Somente fila do setor</option>
-                              <option value="atendente_especifico">Atendente específico</option>
-                              {permiteDistribuicaoAutomaticaNoSetor(
-                                setorExcessoTentativasNode,
-                                incluirAdministradoresExcessoTentativasNode
-                              ) && (
-                                <>
-                                  <option value="rodizio_aleatorio">Rodízio aleatório</option>
-                                  <option value="menos_conversas">Atendente com menos conversas</option>
-                                </>
-                              )}
-                            </select>
-                            {setorExcessoTentativasNode &&
-                              !permiteDistribuicaoAutomaticaNoSetor(
-                                setorExcessoTentativasNode,
-                                incluirAdministradoresExcessoTentativasNode
-                              ) && (
-                                <span className={styles.help}>
-                                  O setor não possui usuário comum ativo para distribuição automática. Marque “Incluir administradores” para liberar rodízio e menor carga quando houver administrador ativo.
-                                </span>
-                              )}
-                          </label>
-
-                          {estrategiaExcessoTentativasNode === "atendente_especifico" && (
-                            <label className={styles.field}>
-                              <span className={styles.label}>Atendente destino</span>
-                              <select
-                                className={styles.input}
-                                value={atendenteExcessoTentativasNode}
-                                onChange={(e) => setAtendenteExcessoTentativasNode(e.target.value)}
-                                disabled={!setorExcessoTentativasNode || carregandoSetores}
-                              >
-                                <option value="">Selecione um atendente</option>
-                                {atendentes
-                                  .filter(
-                                    (atendente) =>
-                                      atendente.is_administrador === true ||
-                                      atendente.setor_ids.includes(setorExcessoTentativasNode)
-                                  )
-                                  .map((atendente) => (
-                                    <option key={atendente.id} value={atendente.id}>
-                                      {atendente.nome}
-                                      {atendente.is_administrador ? " — Administrador" : ""}
-                                      {atendente.email ? ` — ${atendente.email}` : ""}
-                                    </option>
-                                  ))}
-                              </select>
-                            </label>
-                          )}
-                        </>
-                      )}
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>
-                          Mensagem ao exceder
-                        </span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={mensagemExcessoTentativasNode}
-                          onChange={(e) =>
-                            setMensagemExcessoTentativasNode(e.target.value)
-                          }
-                        />
-                      </label>
-
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={notificarExcessoTentativasNode}
-                          onChange={(e) =>
-                            setNotificarExcessoTentativasNode(e.target.checked)
-                          }
-                        />
-
-                        <div>
-                          <strong>Notificar no sistema</strong>
-                          <p>
-                            Cria uma notificação quando este bloco exceder o limite de tentativas.
-                          </p>
-                        </div>
-                      </label>
-
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={notificarEmailExcessoTentativasNode}
-                          onChange={(e) =>
-                            setNotificarEmailExcessoTentativasNode(e.target.checked)
-                          }
-                        />
-
-                        <div>
-                          <strong>Enviar email</strong>
-                          <p>
-                            Envia um alerta por email quando o limite de tentativas for excedido.
-                          </p>
-                        </div>
-                      </label>
-                    </div>
-                  )}
-
-                    <div className={styles.actionButtonsRow}>
+        <div className={styles.actionButtonsRow}>
                       {nodeEditado.data?.tipo_no !== "inicio" && (
                         <>
                           {confirmandoExclusaoNo ? (
