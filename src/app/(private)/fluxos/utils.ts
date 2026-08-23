@@ -1,7 +1,13 @@
+import type { Node } from "@xyflow/react";
 import {
   LIMITE_DELAY_SEGUNDOS,
   TIPO_NO_PERGUNTA_LIVRE_IA,
 } from "./constants";
+
+export type OpcaoRespostaConexao = {
+  valor: string;
+  titulo: string;
+};
 
 export function labelTipoNo(tipo: string) {
   if (tipo === "inicio") return "Início";
@@ -118,4 +124,38 @@ export function normalizarDelaySegundos(
   }
 
   return Math.max(0, Math.min(LIMITE_DELAY_SEGUNDOS, Math.floor(numero)));
+}
+
+export function opcoesRespostaDoNo(
+  node?: Node | null
+): OpcaoRespostaConexao[] {
+  const tipoNo = String(node?.data?.tipo_no || "");
+  const configuracao = (node?.data?.configuracao_json || {}) as {
+    opcoes?: Array<Record<string, unknown>>;
+    botoes?: Array<Record<string, unknown>>;
+  };
+
+  if (tipoNo === "pergunta_opcoes") {
+    return Array.isArray(configuracao.opcoes)
+      ? configuracao.opcoes
+          .map((opcao) => ({
+            valor: String(opcao.valor || "").trim(),
+            titulo: String(opcao.titulo || "").trim(),
+          }))
+          .filter((opcao) => Boolean(opcao.valor))
+      : [];
+  }
+
+  if (tipoNo === "enviar_botoes") {
+    return Array.isArray(configuracao.botoes)
+      ? configuracao.botoes
+          .map((botao) => ({
+            valor: String(botao.id || "").trim(),
+            titulo: String(botao.titulo || "").trim(),
+          }))
+          .filter((botao) => Boolean(botao.valor))
+      : [];
+  }
+
+  return [];
 }
