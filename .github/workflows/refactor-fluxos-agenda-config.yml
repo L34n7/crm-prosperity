@@ -1,0 +1,141 @@
+name: Integrar AgendaConfig dos fluxos
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+    paths:
+      - .github/workflows/refactor-fluxos-agenda-config.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Conectar AgendaConfig
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/FluxosEditor.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const importNeedle = 'import AgendarDisparoConfig from "./components/node-config/AgendarDisparoConfig";';
+          const importLine = 'import AgendaConfig from "./components/node-config/AgendaConfig";';
+          if (!source.includes(importLine)) {
+            if (!source.includes(importNeedle)) throw new Error('AgendarDisparoConfig nao encontrado');
+            source = source.replace(importNeedle, `${importNeedle}\n${importLine}`);
+          }
+
+          const panelIndex = source.indexOf('<NodeConfigPanel');
+          const conditionText = 'tipoNodeEdicao.startsWith("agenda_") && (';
+          const conditionIndex = source.indexOf(conditionText, panelIndex);
+          const start = source.lastIndexOf('{', conditionIndex);
+          const nextText = 'tipoNodeEdicao === "interpretar_arquivo_ia" && (';
+          const nextIndex = source.indexOf(nextText, conditionIndex);
+          const end = source.lastIndexOf('{', nextIndex);
+          if (panelIndex < 0 || conditionIndex < 0 || start < 0 || nextIndex < 0 || end < 0) {
+            throw new Error('Bloco de agenda nao encontrado');
+          }
+
+          const replacement = `{tipoNodeEdicao.startsWith("agenda_") && (
+                    <AgendaConfig
+                      tipoNode={tipoNodeEdicao}
+                      fluxoSistemaCalendario={fluxoSistemaCalendario}
+                      fluxoTemBuscaQualquerCalendario={fluxoTemBuscaQualquerCalendario}
+                      agendas={agendasOpcoes}
+                      carregandoAgendas={carregandoAgendasOpcoes}
+                      agendaId={agendaIdNode}
+                      usarContexto={agendaUsarContextoNode}
+                      listarAgendamentos={agendaListarAgendamentosNode}
+                      quantidadeOpcoes={agendaQuantidadeOpcoesNode}
+                      janelaDias={agendaJanelaDiasNode}
+                      mensagemSemHorarios={agendaMensagemSemHorariosNode}
+                      mensagemSemExpediente={agendaMensagemSemExpedienteNode}
+                      mensagemDataInvalida={agendaMensagemDataInvalidaNode}
+                      mensagemListarAgendamentos={agendaMensagemListarAgendamentosNode}
+                      mensagemListarHorarios={agendaMensagemListarHorariosNode}
+                      mensagemPreferenciaIndisponivel={agendaMensagemPreferenciaIndisponivelNode}
+                      mensagemConflito={agendaMensagemConflitoNode}
+                      statusAgendamento={agendaStatusAgendamentoNode}
+                      enviarEmail={agendaEnviarEmailNode}
+                      emailOrigem={agendaEmailOrigemNode}
+                      emailVariavel={agendaEmailVariavelNode}
+                      lembreteAtivo={agendaLembreteAtivoNode}
+                      lembreteQuantidade={agendaLembreteQuantidadeNode}
+                      lembreteUnidade={agendaLembreteUnidadeNode}
+                      lembreteWhatsapp={agendaLembreteWhatsappNode}
+                      lembreteEmail={agendaLembreteEmailNode}
+                      lembreteTemplateId={agendaLembreteTemplateIdNode}
+                      lembreteVariaveis={agendaLembreteVariaveisNode}
+                      motivoCancelamento={agendaMotivoCancelamentoNode}
+                      templates={templatesWhatsapp}
+                      carregandoTemplates={carregandoTemplatesWhatsapp}
+                      templateLembreteSelecionado={templateAgendaLembreteSelecionado}
+                      indicesVariaveisLembrete={indicesVariaveisTemplateAgendaLembrete}
+                      opcoesVariaveisFluxo={opcoesVariaveisFluxo}
+                      opcoesVariaveisAgendamento={opcoesVariaveisAgendamento}
+                      loadingVariaveis={loadingVariaveis}
+                      previewLembrete={previewTemplateAgendaLembrete}
+                      loadingCusto={loadingPreviewCustoAgendarDisparo}
+                      custo={previewCustoAgendarDisparo}
+                      onAgendaIdChange={setAgendaIdNode}
+                      onUsarContextoChange={setAgendaUsarContextoNode}
+                      onListarAgendamentosChange={setAgendaListarAgendamentosNode}
+                      onQuantidadeOpcoesChange={setAgendaQuantidadeOpcoesNode}
+                      onJanelaDiasChange={setAgendaJanelaDiasNode}
+                      onMensagemSemHorariosChange={setAgendaMensagemSemHorariosNode}
+                      onMensagemSemExpedienteChange={setAgendaMensagemSemExpedienteNode}
+                      onMensagemDataInvalidaChange={setAgendaMensagemDataInvalidaNode}
+                      onMensagemListarAgendamentosChange={setAgendaMensagemListarAgendamentosNode}
+                      onMensagemListarHorariosChange={setAgendaMensagemListarHorariosNode}
+                      onMensagemPreferenciaIndisponivelChange={setAgendaMensagemPreferenciaIndisponivelNode}
+                      onMensagemConflitoChange={setAgendaMensagemConflitoNode}
+                      onStatusAgendamentoChange={setAgendaStatusAgendamentoNode}
+                      onEnviarEmailChange={setAgendaEnviarEmailNode}
+                      onEmailOrigemChange={setAgendaEmailOrigemNode}
+                      onEmailVariavelChange={setAgendaEmailVariavelNode}
+                      onLembreteAtivoChange={setAgendaLembreteAtivoNode}
+                      onLembreteQuantidadeChange={setAgendaLembreteQuantidadeNode}
+                      onLembreteUnidadeChange={setAgendaLembreteUnidadeNode}
+                      onLembreteWhatsappChange={setAgendaLembreteWhatsappNode}
+                      onLembreteEmailChange={setAgendaLembreteEmailNode}
+                      onLembreteTemplateIdChange={setAgendaLembreteTemplateIdNode}
+                      onLembreteVariavelChange={(index, chave) =>
+                        setAgendaLembreteVariaveisNode((atual) =>
+                          atualizarLinhaVariavelTemplate(atual, index, chave)
+                        )
+                      }
+                      onMotivoCancelamentoChange={setAgendaMotivoCancelamentoNode}
+                      onGerenciarVariaveisLembrete={() =>
+                        abrirModalGerenciarVariaveis("agenda_lembrete")
+                      }
+                    />
+                  )}
+
+                  `;
+
+          source = source.slice(0, start) + replacement + source.slice(end);
+          if (!source.includes('<AgendaConfig')) throw new Error('AgendaConfig nao conectado');
+          const agendaOld = source.indexOf('Bloco de agenda', source.indexOf('<NodeConfigPanel'));
+          if (agendaOld >= 0) throw new Error('Bloco antigo de agenda ainda presente');
+
+          fs.writeFileSync(path, source);
+          NODE
+
+      - name: Registrar refatoracao e remover workflow temporario
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/refactor-fluxos-agenda-config.yml
+          git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
+          git commit -m 'refactor: conectar configuracao dos blocos de agenda'
+          git push origin HEAD:refactor/fluxos-editor-estrutura
