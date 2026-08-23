@@ -1,0 +1,223 @@
+name: Extrair handler de tipo de bloco
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+    paths:
+      - .github/workflows/refactor-fluxos-node-type-handler.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Extrair handler do JSX
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/FluxosEditor.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const functionMarker = 'function abrirTooltipAlertaFluxo(elemento: HTMLElement) {';
+          const markerIndex = source.indexOf(functionMarker);
+          if (markerIndex < 0) throw new Error('Marcador de insercao nao encontrado');
+
+          const handler = `function alterarTipoNodeEdicao(novoTipo: string) {
+  const tipoAnterior = tipoNodeEdicao;
+
+  setTipoNodeEdicao(novoTipo);
+
+  if (tituloEhPadraoDoSistema(tituloNode, tipoAnterior)) {
+    setTituloNode(tituloPadraoTipoNo(novoTipo));
+  }
+
+  if (novoTipo === "encerrar") {
+    setMensagemNode("");
+    setSetorDestino("");
+    setOpcoesNode([]);
+    setEncerrarResultadoNode("positivo");
+    setEncerrarValorTipoNode("sem_valor");
+    setEncerrarValorFixoNode("");
+    setEncerrarValorVariavelNode("");
+  }
+
+  if (novoTipo === "transferir_setor") {
+    setSetorDestino("");
+    setOpcoesNode([]);
+  }
+
+  if (novoTipo === "enviar_texto") {
+    setSetorDestino("");
+    setOpcoesNode([]);
+    setBotoesNode([]);
+  }
+
+  if (novoTipo === "pergunta_opcoes") {
+    setSetorDestino("");
+    setBotoesNode([]);
+  }
+
+  if (novoTipo === TIPO_NO_PERGUNTA_LIVRE_IA) {
+    setSetorDestino("");
+    setOpcoesNode([]);
+    setBotoesNode([]);
+
+    if (!mensagemNode.trim()) {
+      setMensagemNode("Como posso te ajudar?");
+    }
+  }
+
+  if (novoTipo === "enviar_botoes") {
+    setSetorDestino("");
+    setOpcoesNode([]);
+
+    if (botoesNode.length === 0) {
+      setBotoesNode([
+        { id: "sim", titulo: "Sim" },
+        { id: "nao", titulo: "Não" },
+      ]);
+    }
+  }
+
+  if (novoTipo === "botao_redirect") {
+    setSetorDestino("");
+    setOpcoesNode([]);
+    setBotoesNode([]);
+    setMidiaUrlNode("");
+
+    if (!redirectBotaoTextoNode.trim()) {
+      setRedirectBotaoTextoNode("Acessar");
+    }
+
+    if (!redirectUrlNode.trim()) {
+      setRedirectUrlNode("https://");
+    }
+  }
+
+  if (
+    novoTipo === "enviar_imagem" ||
+    novoTipo === "enviar_video" ||
+    novoTipo === "enviar_audio" ||
+    novoTipo === "enviar_arquivo"
+  ) {
+    setSetorDestino("");
+    setOpcoesNode([]);
+  }
+
+  if (
+    novoTipo !== "enviar_imagem" &&
+    novoTipo !== "enviar_video" &&
+    novoTipo !== "enviar_audio" &&
+    novoTipo !== "enviar_arquivo"
+  ) {
+    setMidiaUrlNode("");
+  }
+
+  if (novoTipo === "agendar_disparo") {
+    setMensagemNode("");
+    setSetorDestino("");
+    setOpcoesNode([]);
+    setBotoesNode([]);
+    setMidiaUrlNode("");
+  }
+
+  if (novoTipo.startsWith("agenda_")) {
+    setSetorDestino("");
+    setOpcoesNode([]);
+    setBotoesNode([]);
+    setMidiaUrlNode("");
+    setAgendaUsarContextoNode(false);
+
+    if (novoTipo === "agenda_buscar_agendamento") {
+      setAgendaListarAgendamentosNode(true);
+      setAgendaQuantidadeOpcoesNode("6");
+      setAgendaMensagemListarAgendamentosNode(
+        "Encontrei estes agendamentos. Responda com o número do agendamento que deseja cancelar ou remarcar:"
+      );
+    }
+
+    if (novoTipo === "agenda_escolher_horario") {
+      setMensagemNode(
+        "Qual dia voce quer marcar? Pode responder: hoje, amanha, dia 22, 22/05 ou sexta-feira."
+      );
+      setAgendaMensagemListarHorariosNode(
+        "Para {{agenda_data_nova}}, estes horários estão disponíveis.\\n\\nResponda com o número da opção desejada ou informe outra data:"
+      );
+      setAgendaMensagemPreferenciaIndisponivelNode(
+        "O horário {{agenda_preferencia_solicitada}} não está disponível em {{agenda_data_nova}}.\\n\\nEstas são as opções mais próximas:"
+      );
+      setAgendaMensagemDataInvalidaNode(
+        "Essa data não é válida ou já passou. Informe uma data futura.\\n\\nQuando necessário, inclua também o ano."
+      );
+      setAgendaMensagemSemExpedienteNode(
+        "Não há atendimento disponível em {{agenda_data_nova}}.\\n\\nInforme outra data para continuarmos."
+      );
+    }
+
+    if (novoTipo === "agenda_criar_agendamento") {
+      setMensagemNode(
+        "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato."
+      );
+      setAgendaEnviarEmailNode(true);
+      setAgendaEmailOrigemNode("contato");
+      setAgendaEmailVariavelNode("email");
+    }
+
+    if (novoTipo === "agenda_remarcar_agendamento") {
+      setMensagemNode(
+        "Remarcado! Seu horário agora ficou para {{agenda_data}} às {{agenda_hora}}."
+      );
+    }
+
+    if (novoTipo === "agenda_cancelar_agendamento") {
+      setMensagemNode(
+        "Pronto, seu horário de {{agenda_data}} às {{agenda_hora}} foi cancelado. Quando quiser marcar novamente, e so me chamar."
+      );
+      setAgendaStatusAgendamentoNode("cancelado");
+      setAgendaEnviarEmailNode(true);
+      setAgendaEmailOrigemNode("contato");
+      setAgendaEmailVariavelNode("email");
+    }
+  }
+}
+
+`;
+
+          if (!source.includes('function alterarTipoNodeEdicao(')) {
+            source = source.slice(0, markerIndex) + handler + source.slice(markerIndex);
+          }
+
+          const selectStartMarker = '<select\n                        className={styles.input}\n                        value={tipoNodeEdicao}\n                        onChange={(e) => {';
+          const selectStart = source.indexOf(selectStartMarker, source.indexOf('<PropertiesPanel'));
+          const optionsMarker = '>\n                        <option value="enviar_texto">Mensagem</option>';
+          const optionsStart = source.indexOf(optionsMarker, selectStart);
+          if (selectStart < 0 || optionsStart < 0) throw new Error('Select de tipo nao encontrado');
+
+          const replacement = '<select\n                        className={styles.input}\n                        value={tipoNodeEdicao}\n                        onChange={(e) => alterarTipoNodeEdicao(e.target.value)}\n                      ';
+          source = source.slice(0, selectStart) + replacement + source.slice(optionsStart);
+
+          if (!source.includes('onChange={(e) => alterarTipoNodeEdicao(e.target.value)}')) {
+            throw new Error('Handler nao conectado');
+          }
+
+          fs.writeFileSync(path, source);
+          NODE
+
+      - name: Registrar refatoracao e remover workflow temporario
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/refactor-fluxos-node-type-handler.yml
+          git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
+          git commit -m 'refactor: extrair handler de troca de tipo do bloco'
+          git push origin HEAD:refactor/fluxos-editor-estrutura
