@@ -3,6 +3,12 @@
 import { useCallback, useState } from "react";
 import { useEdgesState, type Edge } from "@xyflow/react";
 
+const ESTILO_CONEXAO_PADRAO = {
+  stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
+  strokeWidth: 2,
+  strokeDasharray: "6 6",
+};
+
 export default function useFluxoConnections() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
@@ -23,6 +29,40 @@ export default function useFluxoConnections() {
   const [descricaoIaConexao, setDescricaoIaConexao] = useState("");
   const [gerandoDescricaoIaConexao, setGerandoDescricaoIaConexao] =
     useState(false);
+
+  const limparSelecaoVisualConexoes = useCallback(() => {
+    setEdges((atuais) =>
+      atuais.map((edge) => ({
+        ...edge,
+        selected: false,
+        style: {
+          ...(edge.style || {}),
+          ...ESTILO_CONEXAO_PADRAO,
+        },
+      }))
+    );
+  }, [setEdges]);
+
+  const marcarConexaoSelecionada = useCallback(
+    (edgeId: string) => {
+      setEdges((atuais) =>
+        atuais.map((edge) => ({
+          ...edge,
+          selected: edge.id === edgeId,
+          style: {
+            ...(edge.style || {}),
+            stroke:
+              edge.id === edgeId
+                ? "var(--crm-ui-private-border-hex-0098bab6)"
+                : "var(--crm-ui-private-border-hex-cbd5e1)",
+            strokeWidth: edge.id === edgeId ? 3 : 2,
+            strokeDasharray: "6 6",
+          },
+        }))
+      );
+    },
+    [setEdges]
+  );
 
   const resetarFormularioConexao = useCallback(() => {
     setRotuloConexao("");
@@ -61,6 +101,8 @@ export default function useFluxoConnections() {
     setDescricaoIaConexao,
     gerandoDescricaoIaConexao,
     setGerandoDescricaoIaConexao,
+    limparSelecaoVisualConexoes,
+    marcarConexaoSelecionada,
     resetarFormularioConexao,
   };
 }
