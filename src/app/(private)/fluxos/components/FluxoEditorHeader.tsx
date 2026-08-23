@@ -148,8 +148,7 @@ export default function FluxoEditorHeader({
 
               {podeAtivarFluxos &&
                 fluxoSelecionado &&
-                fluxoSelecionado.status !== "ativo" &&
-                fluxoSelecionado.status !== "arquivado" && (
+                fluxoSelecionado.status !== "ativo" && (
                   <button
                     type="button"
                     className={styles.primaryButtonActv}
