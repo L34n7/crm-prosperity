@@ -9517,7 +9517,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       void aplicarEdicaoConexao();
                     }}
                   />
-                ) : null}
+                )}
           </PropertiesPanel>
         </div>
       </section>
