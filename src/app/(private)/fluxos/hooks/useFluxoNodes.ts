@@ -16,8 +16,8 @@ export default function useFluxoNodes() {
             ...node,
             selected: selecionado,
             data: {
-              ...node.data,
-              selected: selecionado,
+              ...(node.data || {}),
+              isSelecionado: selecionado,
             },
           };
         })
