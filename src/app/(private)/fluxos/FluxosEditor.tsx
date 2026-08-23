@@ -29,6 +29,8 @@ import EncerrarConfig from "./components/node-config/EncerrarConfig";
 import CapturarRespostaConfig from "./components/node-config/CapturarRespostaConfig";
 import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";
 import RedirectConfig from "./components/node-config/RedirectConfig";
+import TransferenciaConfig from "./components/node-config/TransferenciaConfig";
+import InterpretarArquivoIaConfig from "./components/node-config/InterpretarArquivoIaConfig";
 import PerguntaOpcoesConfig from "./components/node-config/PerguntaOpcoesConfig";
 import BotoesConfig from "./components/node-config/BotoesConfig";
 import FluxoCanvas from "./components/FluxoCanvas";
@@ -8624,85 +8626,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                  {tipoNodeEdicao === "interpretar_arquivo_ia" && (
-                    <div className={styles.arquivoIABox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Instrução para IA</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={arquivoInstrucaoIaNode}
-                          onChange={(e) => setArquivoInstrucaoIaNode(e.target.value)}
-                          placeholder="Ex: Interprete se este arquivo é um comprovante de pagamento no valor mínimo de R$ 150,00."
-                        />
-
-                        <span className={styles.help}>
-                          Explique o que a IA deve verificar no arquivo enviado pelo cliente.
-                        </span>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Campos para extrair</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={arquivoCamposExtracaoNode}
-                          onChange={(e) => setArquivoCamposExtracaoNode(e.target.value)}
-                          placeholder="valor, banco, pagador, data, id_transacao"
-                        />
-
-                        <span className={styles.help}>
-                          Informe as variáveis separadas por vírgula, palavras sem acentos. A IA só poderá retornar esses campos.
-                          Exemplo: valor, banco, pagador. Depois você poderá usar como
-                          {" "}{"{{analise_arquivo_valor}}"}.
-                        </span>
-                        <span className={styles.help}>
-                          Váriaveis fixas: {"{{analise_arquivo}}"} {"{{analise_arquivo_motivo}}"}
-                        </span>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem quando inválido</span>
-
-                        <textarea
-                          className={styles.textarea}
-                          value={arquivoMensagemErroNode}
-                          onChange={(e) => setArquivoMensagemErroNode(e.target.value)}
-                        />
-                      </label>
-                      <div className={styles.warningBox}>
-                        <div className={styles.errorConnectionNotice}>
-                          <strong>Crie uma conexão de Erro para este bloco</strong>
-                          <p>
-                            Se os tokens de IA acabarem, o fluxo vai seguir pela
-                            conexão com resposta esperada <strong>erro</strong>.
-                            Configure essa rota para enviar uma mensagem, transferir
-                            o atendimento ou executar a tratativa que desejar.
-                          </p>
-                        </div>
-
-                        <strong>Como usar as conexões deste bloco</strong>
-
-                        <p>
-                          Após interpretar o arquivo, a IA retorna um status para o fluxo seguir.
-                          Crie conexões saindo deste bloco.
-                        </p>
-
-                        <ul className={styles.warningList}>
-                          <li>
-                            <strong>aprovado</strong> — quando o arquivo atende à instrução.
-                          </li>
-                          <li>
-                            <strong>reprovado</strong> — quando o arquivo não atende à instrução.
-                          </li>
-                          <li>
-                            <strong>erro</strong> — quando o arquivo está ilegível,
-                            não pôde ser analisado ou os tokens de IA acabaram.
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  )}
+                  <InterpretarArquivoIaConfig
+          instrucao={arquivoInstrucaoIaNode}
+          camposExtracao={arquivoCamposExtracaoNode}
+          mensagemErro={arquivoMensagemErroNode}
+          onInstrucaoChange={setArquivoInstrucaoIaNode}
+          onCamposExtracaoChange={setArquivoCamposExtracaoNode}
+          onMensagemErroChange={setArquivoMensagemErroNode}
+        />
 
                   {nodeEditadoPermiteGerarDescricoesIa && (
                     <div className={styles.IABox}>
@@ -8732,157 +8663,61 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                        {tipoNodeEdicao === "transferir_setor" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Escopo da fila</span>
-                        <select
-                          className={styles.input}
-                          value={escopoFilaTransferenciaNode}
-                          onChange={(e) => {
-                            const escopo = e.target.value === "geral" ? "geral" : "setor";
-                            setEscopoFilaTransferenciaNode(escopo);
-                            if (escopo === "geral") {
-                              setSetorDestino("");
-                              setAtendenteDestinoNode("");
-                              setEstrategiaTransferenciaNode("fila_setor");
-                              setIncluirAdministradoresTransferenciaNode(false);
-                            }
-                          }}
-                        >
-                          <option value="geral">Fila geral — todos os setores</option>
-                          <option value="setor">Fila de um setor específico</option>
-                        </select>
-                        <span className={styles.help}>
-                          Na fila geral, qualquer equipe com acesso aos atendimentos pode assumir a conversa.
-                        </span>
-                      </label>
+                        <TransferenciaConfig
+          escopoFila={escopoFilaTransferenciaNode}
+          setorDestino={setorDestino}
+          incluirAdministradores={incluirAdministradoresTransferenciaNode}
+          estrategia={estrategiaDistribuicaoDisponivel(
+            estrategiaTransferenciaNode,
+            setorDestino,
+            incluirAdministradoresTransferenciaNode
+          )}
+          atendenteDestino={atendenteDestinoNode}
+          carregandoSetores={carregandoSetores}
+          possuiAdministradorAtivo={possuiAdministradorAtivo}
+          distribuicaoAutomaticaPermitida={permiteDistribuicaoAutomaticaNoSetor(
+            setorDestino,
+            incluirAdministradoresTransferenciaNode
+          )}
+          setores={setores}
+          atendentesElegiveis={atendentes.filter(
+            (atendente) =>
+              atendente.is_administrador === true ||
+              atendente.setor_ids.includes(setorDestino)
+          )}
+          onEscopoFilaChange={(escopo) => {
+            setEscopoFilaTransferenciaNode(escopo);
+            if (escopo === "geral") {
+              setSetorDestino("");
+              setAtendenteDestinoNode("");
+              setEstrategiaTransferenciaNode("fila_setor");
+              setIncluirAdministradoresTransferenciaNode(false);
+            }
+          }}
+          onSetorDestinoChange={(setorId) => {
+            setSetorDestino(setorId);
+            setAtendenteDestinoNode("");
+            setEstrategiaTransferenciaNode("fila_setor");
+          }}
+          onIncluirAdministradoresChange={(incluir) => {
+            setIncluirAdministradoresTransferenciaNode(incluir);
+            if (
+              !permiteDistribuicaoAutomaticaNoSetor(setorDestino, incluir) &&
+              (estrategiaTransferenciaNode === "rodizio_aleatorio" ||
+                estrategiaTransferenciaNode === "menos_conversas")
+            ) {
+              setEstrategiaTransferenciaNode("fila_setor");
+            }
+          }}
+          onEstrategiaChange={(estrategia) => {
+            setEstrategiaTransferenciaNode(estrategia);
+            if (estrategia !== "atendente_especifico") {
+              setAtendenteDestinoNode("");
+            }
+          }}
+          onAtendenteDestinoChange={setAtendenteDestinoNode}
+        />
 
-                      <label className={styles.field}>
-                        <span className={styles.label}>Setor destino</span>
-                        <select
-                          className={styles.input}
-                          value={setorDestino}
-                          onChange={(e) => {
-                            setSetorDestino(e.target.value);
-                            setAtendenteDestinoNode("");
-                            setEstrategiaTransferenciaNode("fila_setor");
-                          }}
-                          disabled={
-                            escopoFilaTransferenciaNode === "geral" ||
-                            carregandoSetores
-                          }
-                        >
-                          <option value="">
-                            {carregandoSetores ? "Carregando setores..." : "Selecione um setor"}
-                          </option>
-                          {setores.map((setor) => (
-                            <option key={setor.id} value={setor.id}>
-                              {setor.nome}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={incluirAdministradoresTransferenciaNode}
-                          disabled={!setorDestino || !possuiAdministradorAtivo}
-                          onChange={(e) => {
-                            const incluir = e.target.checked;
-                            setIncluirAdministradoresTransferenciaNode(incluir);
-                            if (
-                              !permiteDistribuicaoAutomaticaNoSetor(setorDestino, incluir) &&
-                              (estrategiaTransferenciaNode === "rodizio_aleatorio" ||
-                                estrategiaTransferenciaNode === "menos_conversas")
-                            ) {
-                              setEstrategiaTransferenciaNode("fila_setor");
-                            }
-                          }}
-                        />
-                        <div>
-                          <strong>Incluir administradores na distribuição</strong>
-                          <p>
-                            Quando marcado, administradores participam do rodízio e da distribuição por menor carga mesmo sem vínculo com o setor.
-                          </p>
-                        </div>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Distribuição do atendimento</span>
-                        <select
-                          className={styles.input}
-                          value={estrategiaDistribuicaoDisponivel(
-                            estrategiaTransferenciaNode,
-                            setorDestino,
-                            incluirAdministradoresTransferenciaNode
-                          )}
-                          onChange={(e) => {
-                            const estrategia = e.target.value as EstrategiaTransferenciaNode;
-                            setEstrategiaTransferenciaNode(estrategia);
-                            if (estrategia !== "atendente_especifico") {
-                              setAtendenteDestinoNode("");
-                            }
-                          }}
-                          disabled={escopoFilaTransferenciaNode === "geral" || !setorDestino}
-                        >
-                          <option value="fila_setor">Somente fila do setor</option>
-                          <option value="atendente_especifico">Atendente específico</option>
-                          {permiteDistribuicaoAutomaticaNoSetor(
-                            setorDestino,
-                            incluirAdministradoresTransferenciaNode
-                          ) && (
-                            <>
-                              <option value="rodizio_aleatorio">Rodízio aleatório</option>
-                              <option value="menos_conversas">Atendente com menos conversas</option>
-                            </>
-                          )}
-                        </select>
-                        {setorDestino &&
-                          !permiteDistribuicaoAutomaticaNoSetor(
-                            setorDestino,
-                            incluirAdministradoresTransferenciaNode
-                          ) && (
-                            <span className={styles.help}>
-                              O setor não possui usuário comum ativo para distribuição automática. Marque “Incluir administradores” para liberar rodízio e menor carga quando houver administrador ativo.
-                            </span>
-                          )}
-                      </label>
-
-                      {estrategiaTransferenciaNode === "atendente_especifico" && (
-                        <label className={styles.field}>
-                          <span className={styles.label}>Atendente destino</span>
-                          <select
-                            className={styles.input}
-                            value={atendenteDestinoNode}
-                            onChange={(e) => setAtendenteDestinoNode(e.target.value)}
-                            disabled={!setorDestino || carregandoSetores}
-                          >
-                            <option value="">Selecione um atendente</option>
-                            {atendentes
-                              .filter(
-                                (atendente) =>
-                                  atendente.is_administrador === true ||
-                                  atendente.setor_ids.includes(setorDestino)
-                              )
-                              .map((atendente) => (
-                                <option key={atendente.id} value={atendente.id}>
-                                  {atendente.nome}
-                                  {atendente.is_administrador ? " — Administrador" : ""}
-                                  {atendente.email ? ` — ${atendente.email}` : ""}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                      )}
-
-                      <p className={styles.help}>
-                        No rodízio aleatório o sistema escolhe entre os usuários elegíveis. Em menos conversas, considera os atendimentos ainda abertos atribuídos a cada usuário. Administradores só entram na distribuição automática quando a opção acima estiver marcada.
-                      </p>
-                    </div>
-                  )}
-                  
                   {tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (
                     <label className={styles.delayField}>
                       <div className={styles.delayTopRow}>
