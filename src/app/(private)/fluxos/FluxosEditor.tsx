@@ -29,6 +29,7 @@ import EncerrarConfig from "./components/node-config/EncerrarConfig";
 import CapturarRespostaConfig from "./components/node-config/CapturarRespostaConfig";
 import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";
 import AgendarDisparoConfig from "./components/node-config/AgendarDisparoConfig";
+import AgendaConfig from "./components/node-config/AgendaConfig";
 import RedirectConfig from "./components/node-config/RedirectConfig";
 import TransferenciaConfig from "./components/node-config/TransferenciaConfig";
 import InterpretarArquivoIaConfig from "./components/node-config/InterpretarArquivoIaConfig";
@@ -7327,787 +7328,81 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
         )}
 
         {tipoNodeEdicao.startsWith("agenda_") && (
-                    <div className={styles.optionsBox}>
-                      <div>
-                        <span className={styles.label}>Bloco de agenda</span>
-                        <p className={styles.help}>
-                          Use junto com Pergunta, Condições e Mensagens para montar agendamento, remarcacao ou cancelamento.
-                        </p>
-                      </div>
-
-                      {[
-                        "agenda_buscar_agendamento",
-                        "agenda_escolher_horario",
-                        "agenda_criar_agendamento",
-                      ].includes(tipoNodeEdicao) && (
-                        fluxoSistemaCalendario &&
-                        [
-                          "agenda_buscar_agendamento",
-                          "agenda_escolher_horario",
-                        ].includes(tipoNodeEdicao) ? (
-                          <div className={styles.field}>
-                            <span className={styles.label}>
-                              {tipoNodeEdicao === "agenda_buscar_agendamento"
-                                ? "Origem dos agendamentos"
-                                : "Calendário"}
-                            </span>
-
-                            <select
-                              className={styles.input}
-                              value="automatico_contexto"
-                              disabled
-                              aria-label="Configuração automática do calendário"
-                            >
-                              <option value="automatico_contexto">
-                                {tipoNodeEdicao === "agenda_buscar_agendamento"
-                                  ? "Automático — botão ou todos os calendários"
-                                  : "Automático — calendário do agendamento atual"}
-                              </option>
-                            </select>
-
-                            <span className={styles.help}>
-                              {tipoNodeEdicao === "agenda_buscar_agendamento"
-                                ? "Quando iniciado por um botão, utiliza somente o agendamento correspondente. Quando iniciado por mensagem, pesquisa os compromissos futuros do contato em todos os calendários."
-                                : "Os horários são consultados no mesmo calendário do agendamento recebido pelo botão ou selecionado durante o fluxo."}
-                            </span>
-                          </div>
-                        ) : (
-                          <label className={styles.field}>
-                            <span className={styles.label}>
-                              {tipoNodeEdicao === "agenda_criar_agendamento"
-                                ? "Selecione o calendário"
-                                : "Calendário"}
-                            </span>
-
-                            <select
-                              className={styles.input}
-                              value={
-                                tipoNodeEdicao === "agenda_escolher_horario" &&
-                                agendaUsarContextoNode
-                                  ? "__calendario_contexto__"
-                                  : agendaIdNode
-                              }
-                              onChange={(e) => {
-                                const valor = e.target.value;
-
-                                if (
-                                  tipoNodeEdicao === "agenda_escolher_horario" &&
-                                  valor === "__calendario_contexto__"
-                                ) {
-                                  setAgendaIdNode("");
-                                  setAgendaUsarContextoNode(true);
-                                  return;
-                                }
-
-                                setAgendaUsarContextoNode(false);
-                                setAgendaIdNode(valor);
-                              }}
-                              disabled={carregandoAgendasOpcoes}
-                            >
-                              <option value="">
-                                {tipoNodeEdicao === "agenda_buscar_agendamento"
-                                  ? "Qualquer calendário"
-                                  : carregandoAgendasOpcoes
-                                  ? "Carregando calendários..."
-                                  : "Selecione um calendário ativo"}
-                              </option>
-
-                              {tipoNodeEdicao === "agenda_escolher_horario" &&
-                                fluxoTemBuscaQualquerCalendario && (
-                                  <option value="__calendario_contexto__">
-                                    Calendário do contexto
-                                  </option>
-                                )}
-
-                              {agendasOpcoes.map((agenda) => (
-                                <option key={agenda.id} value={agenda.id}>
-                                  {agenda.nome} - {agenda.duracao_minutos}min
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )
-                      )}
-
-                      {tipoNodeEdicao === "agenda_escolher_horario" && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem ao listar horários</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemListarHorariosNode}
-                              onChange={(e) =>
-                                setAgendaMensagemListarHorariosNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Variaveis: {"{{agenda_data_nova}}"} e {"{{calendario_nome_novo}}"}.
-                            </span>
-                          </label>
-
-                          <div className={styles.optionRow}>
-                            <label className={styles.field}>
-                              <span className={styles.label}>Opcoes enviadas</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={10}
-                                className={styles.input}
-                                value={agendaQuantidadeOpcoesNode}
-                                onChange={(e) =>
-                                  setAgendaQuantidadeOpcoesNode(e.target.value)
-                                }
-                              />
-                            </label>
-
-                            <label className={styles.field}>
-                              <span className={styles.label}>Buscar por dias</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={60}
-                                className={styles.input}
-                                value={agendaJanelaDiasNode}
-                                onChange={(e) => setAgendaJanelaDiasNode(e.target.value)}
-                              />
-                            </label>
-                          </div>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem se o horário pedido estiver ocupado</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemPreferenciaIndisponivelNode}
-                              onChange={(e) =>
-                                setAgendaMensagemPreferenciaIndisponivelNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Variaveis: {"{{agenda_data_nova}}"},{" "}
-                              {"{{agenda_hora_solicitada}}"} e{" "}
-                              {"{{agenda_preferencia_solicitada}}"}.
-                            </span>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem para data passada</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemDataInvalidaNode}
-                              onChange={(e) =>
-                                setAgendaMensagemDataInvalidaNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Variaveis: {"{{agenda_data_informada}}"} e{" "}
-                              {"{{agenda_data_sugestao_ano}}"}.
-                            </span>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem horários</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemSemHorariosNode}
-                              onChange={(e) =>
-                                setAgendaMensagemSemHorariosNode(e.target.value)
-                              }
-                            />
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem sem expediente</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemSemExpedienteNode}
-                              onChange={(e) =>
-                                setAgendaMensagemSemExpedienteNode(e.target.value)
-                              }
-                            />
-                            <span className={styles.help}>
-                              Use quando o dia pedido nao tem horario configurado na agenda.
-                              Variavel: {"{{agenda_data_nova}}"}.
-                            </span>
-                          </label>
-                        </>
-                      )}
-
-                      {tipoNodeEdicao === "agenda_buscar_agendamento" && (
-                        <>
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaListarAgendamentosNode}
-                              onChange={(e) =>
-                                setAgendaListarAgendamentosNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Listar quando houver vários agendamentos</strong>
-                              <p>
-                                Quando houver mais de um agendamento futuro, envia as opções e aguarda o contato responder o número.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaListarAgendamentosNode && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Mensagem para vários agendamentos</span>
-                                <textarea
-                                  className={styles.textarea}
-                                  value={agendaMensagemListarAgendamentosNode}
-                                  onChange={(e) =>
-                                    setAgendaMensagemListarAgendamentosNode(e.target.value)
-                                  }
-                                />
-                              </label>
-
-                              <label className={styles.field}>
-                                <span className={styles.label}>Agendamentos enviados</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={10}
-                                  className={styles.input}
-                                  value={agendaQuantidadeOpcoesNode}
-                                  onChange={(e) =>
-                                    setAgendaQuantidadeOpcoesNode(e.target.value)
-                                  }
-                                />
-                              </label>
-                            </>
-                          )}
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Mensagem quando não encontrar</span>
-                          <textarea
-                            className={styles.textarea}
-                            value={agendaMensagemSemHorariosNode}
-                            onChange={(e) =>
-                              setAgendaMensagemSemHorariosNode(e.target.value)
-                            }
-                          />
-                        </label>
-
-                        <p className={styles.help}>
-                          Este bloco escolhe a proxima conexao usando respostas internas.
-                          Crie conexoes do tipo Exata com os valores: encontrado,
-                          nao_encontrado e, se quiser tratar falhas, erro. Exemplo:
-                          encontrado continua o fluxo; nao_encontrado vai para Transferir.
-                        </p>
-                        </>
-                      )}
-
-                      {["agenda_criar_agendamento", "agenda_remarcar_agendamento"].includes(
-                        tipoNodeEdicao
-                      ) && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Status do agendamento</span>
-                            <select
-                              className={styles.input}
-                              value={agendaStatusAgendamentoNode}
-                              onChange={(e) =>
-                                setAgendaStatusAgendamentoNode(e.target.value)
-                              }
-                            >
-                              <option value="agendado">Agendado</option>
-                              <option value="confirmado">Confirmado</option>
-                            </select>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Mensagem se o horário ficar indisponível</span>
-                            <textarea
-                              className={styles.textarea}
-                              value={agendaMensagemConflitoNode}
-                              onChange={(e) =>
-                                setAgendaMensagemConflitoNode(e.target.value)
-                              }
-                            />
-                          </label>
-                        </>
-                      )}
-                      <span className={styles.help}>
-                        Variaveis principais: {"{{agenda_data}}"}, {"{{agenda_hora}}"},{" "}
-                        {"{{agenda_data_nova}}"}, {"{{agenda_hora_nova}}"} e{" "}
-                        {"{{agenda_agendamento_id}}"}.
-                      </span>
-
-                      {tipoNodeEdicao === "agenda_remarcar_agendamento" && (
-                        <>
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaEnviarEmailNode}
-                              onChange={(e) =>
-                                setAgendaEnviarEmailNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar email de confirmacao</strong>
-                              <p>
-                                O email sera enviado assim que o agendamento for remarcado, usando o mesmo formato do bloco Criar agendamento.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaEnviarEmailNode && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Origem do email</span>
-                                <select
-                                  className={styles.input}
-                                  value={agendaEmailOrigemNode}
-                                  onChange={(e) =>
-                                    setAgendaEmailOrigemNode(
-                                      e.target.value === "variavel"
-                                        ? "variavel"
-                                        : "contato"
-                                    )
-                                  }
-                                >
-                                  <option value="contato">Email cadastrado no contato</option>
-                                  <option value="variavel">Email salvo em uma variável</option>
-                                </select>
-                                <span className={styles.help}>
-                                  Informe qual email o sistema vai usar, email do Contato ou uma variavel do bloco Capturar resposta.
-                                </span>
-                              </label>
-
-                              {agendaEmailOrigemNode === "variavel" && (
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Variavel do email</span>
-                                  <input
-                                    className={styles.input}
-                                    value={agendaEmailVariavelNode}
-                                    onChange={(e) =>
-                                      setAgendaEmailVariavelNode(e.target.value)
-                                    }
-                                    placeholder="email"
-                                  />
-                                  <span className={styles.help}>
-                                    Use o nome da variavel criada em Capturar resposta. Exemplo: email.
-                                  </span>
-                                </label>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-
-                      {tipoNodeEdicao === "agenda_criar_agendamento" && (
-                        <>
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaEnviarEmailNode}
-                              onChange={(e) =>
-                                setAgendaEnviarEmailNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar email de confirmacao</strong>
-                              <p>
-                                O email será enviado para o contato que está agendando. Selecione a origem do email abaixo.
-                              </p>
-                            </div>
-                          </label>
-
-                          {(agendaEnviarEmailNode ||
-                            (agendaLembreteAtivoNode &&
-                              agendaLembreteEmailNode)) && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Origem do email</span>
-                                <select
-                                  className={styles.input}
-                                  value={agendaEmailOrigemNode}
-                                  onChange={(e) =>
-                                    setAgendaEmailOrigemNode(
-                                      e.target.value === "variavel"
-                                        ? "variavel"
-                                        : "contato"
-                                    )
-                                  }
-                                >
-                                  <option value="contato">Email cadastrado no contato</option>
-                                  <option value="variavel">Email salvo em uma variavel</option>
-                                </select>
-                                <span className={styles.help}>
-                                  Informe qual email o sistema vai usar, email do Contato ou uma variável do bloco Capturar resposta.
-                                </span>
-
-                              </label>
-
-                              {agendaEmailOrigemNode === "variavel" && (
-                                <TemplateVariableCombobox
-                                  label="Variável do email"
-                                  value={agendaEmailVariavelNode}
-                                  onChange={setAgendaEmailVariavelNode}
-                                  options={opcoesVariaveisFluxo}
-                                  loading={loadingVariaveis}
-                                />
-                              )}
-                            </>
-                          )}
-
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaLembreteAtivoNode}
-                              onChange={(e) =>
-                                setAgendaLembreteAtivoNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar lembrete antes do agendamento</strong>
-                              <p>
-                                Agenda um template WhatsApp, email ou ambos antes do horario marcado.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaLembreteAtivoNode && (
-                            <>
-                              <div className={styles.optionRow}>
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Enviar antes</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    className={styles.input}
-                                    value={agendaLembreteQuantidadeNode}
-                                    onChange={(e) =>
-                                      setAgendaLembreteQuantidadeNode(e.target.value)
-                                    }
-                                  />
-                                </label>
-
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Unidade</span>
-                                  <select
-                                    className={styles.input}
-                                    value={agendaLembreteUnidadeNode}
-                                    onChange={(e) =>
-                                      setAgendaLembreteUnidadeNode(
-                                        e.target.value === "minutos"
-                                          ? "minutos"
-                                          : e.target.value === "dias"
-                                          ? "dias"
-                                          : "horas"
-                                      )
-                                    }
-                                  >
-                                    <option value="minutos">Minutos</option>
-                                    <option value="horas">Horas</option>
-                                    <option value="dias">Dias</option>
-                                  </select>
-                                </label>
-                              </div>
-
-                              <label className={styles.switchField}>
-                                <input
-                                  type="checkbox"
-                                  checked={agendaLembreteWhatsappNode}
-                                  onChange={(e) =>
-                                    setAgendaLembreteWhatsappNode(e.target.checked)
-                                  }
-                                />
-
-                                <div>
-                                  <strong>Lembrete por WhatsApp</strong>
-                                  <p>
-                                    Usa um template aprovado. Templates com botoes podem capturar confirmar, remarcar ou cancelar.
-                                  </p>
-                                </div>
-                              </label>
-
-                              {agendaLembreteWhatsappNode && (
-                                <>
-                                  <div className={styles.agendarDisparoCostAlert}>
-                                    <div className={styles.agendarDisparoCostAlertIcon}>⚠</div>
-
-                                    <div className={styles.agendarDisparoCostAlertContent}>
-                                      <strong>Este lembrete gera um disparo oficial do WhatsApp</strong>
-
-                                      <p>
-                                        O envio usara template aprovado e podera gerar cobranca da Meta quando o lembrete ocorrer.
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  <label className={styles.field}>
-                                    <span className={styles.label}>Template WhatsApp</span>
-                                    <select
-                                      className={styles.input}
-                                      value={agendaLembreteTemplateIdNode}
-                                      onChange={(e) =>
-                                        setAgendaLembreteTemplateIdNode(e.target.value)
-                                      }
-                                      disabled={carregandoTemplatesWhatsapp}
-                                    >
-                                      <option value="">
-                                        {carregandoTemplatesWhatsapp
-                                          ? "Carregando templates..."
-                                          : "Selecione um template aprovado"}
-                                      </option>
-
-                                      {templatesWhatsapp.map((template) => (
-                                        <option key={template.id} value={template.id}>
-                                          {template.nome} - {template.idioma}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-
-                                  <div className={styles.field}>
-                                    {indicesVariaveisTemplateAgendaLembrete.length > 0 ? (
-                                      <>
-                                        <span className={styles.label}>Variaveis do template</span>
-
-                                        <div className={`${styles.templateVariableGrid} ${styles.templateVariableStack}`}>
-                                          {indicesVariaveisTemplateAgendaLembrete.map((index) => (
-                                            <TemplateVariableCombobox
-                                              key={index}
-                                              label={`Variável ${index + 1}`}
-                                              value={
-                                                obterLinhasVariaveisTemplate(
-                                                  agendaLembreteVariaveisNode
-                                                )[index]
-                                              }
-                                              onChange={(chave) =>
-                                                setAgendaLembreteVariaveisNode(
-                                                  (atual) =>
-                                                    atualizarLinhaVariavelTemplate(
-                                                      atual,
-                                                      index,
-                                                      chave
-                                                    )
-                                                )
-                                              }
-                                              options={opcoesVariaveisAgendamento}
-                                              loading={loadingVariaveis}
-                                            />
-                                          ))}
-                                        </div>
-
-                                        <span className={styles.help}>
-                                          Variavel 1 substitui {"{{1}}"}, Variavel 2 substitui {"{{2}}"} e Variavel 3 substitui {"{{3}}"}.
-                                        </span>
-                                        <button
-                                          type="button"
-                                          className={styles.inlineVariablesButton}
-                                          onClick={() =>
-                                            abrirModalGerenciarVariaveis("agenda_lembrete")
-                                          }
-                                        >
-                                          Gerenciar variáveis
-                                        </button>
-                                      </>
-                                    ) : null}
-
-                                    <div className={styles.templatePreviewCard}>
-                                      <div className={styles.templatePreviewTop}>
-                                        <strong>Previa WhatsApp</strong>
-                                        <span>{templateAgendaLembreteSelecionado?.nome || "Template"}</span>
-                                      </div>
-
-                                      {previewTemplateAgendaLembrete ? (
-                                        <div className={styles.whatsappPreviewArea}>
-                                          <div className={styles.whatsappBubble}>
-                                            <strong className={styles.whatsappPreviewTitle}>
-                                              {previewTemplateAgendaLembrete.titulo}
-                                            </strong>
-
-                                            <p className={styles.whatsappPreviewText}>
-                                              {previewTemplateAgendaLembrete.corpo}
-                                            </p>
-
-                                            <div className={styles.whatsappPreviewMeta}>
-                                              <span className={styles.whatsappPreviewFooter}>
-                                                {previewTemplateAgendaLembrete.rodape}
-                                              </span>
-                                              <span className={styles.whatsappPreviewTime}>
-                                                {new Date().toLocaleTimeString("pt-BR", {
-                                                  hour: "2-digit",
-                                                  minute: "2-digit",
-                                                })}
-                                              </span>
-                                            </div>
-
-                                            {previewTemplateAgendaLembrete.botoes.map((texto, index) => (
-                                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
-                                                ↩ {texto}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div className={styles.previewEmptyState}>
-                                          Selecione um template aprovado para visualizar a mensagem.
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className={styles.agendarDisparoCostPreviewCard}>
-                                      <div className={styles.costPreviewTop}>
-                                        <span className={styles.costPreviewLabel}>Estimativa de custo Meta</span>
-
-                                        <span className={styles.costPreviewCategory}>
-                                          {templateAgendaLembreteSelecionado?.categoria || "Categoria"}
-                                        </span>
-                                      </div>
-
-                                      {loadingPreviewCustoAgendarDisparo ? (
-                                        <p className={styles.costPreviewMuted}>Calculando estimativa...</p>
-                                      ) : previewCustoAgendarDisparo ? (
-                                        <>
-                                          <strong className={styles.costPreviewValue}>
-                                            R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
-                                            {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
-                                          </strong>
-
-                                          <p className={styles.costPreviewMeta}>
-                                            USD: US$ {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)} ·
-                                            Cobrado: {previewCustoAgendarDisparo.totalCobrados} contato
-                                          </p>
-
-                                          <p className={styles.costPreviewHelp}>
-                                            Esta é uma estimativa para 1 contato. A cobrança real pode variar
-                                            conforme categoria do template, país do contato, cotação, impostos e
-                                            regras da Meta.
-                                          </p>
-                                        </>
-                                      ) : (
-                                        <p className={styles.costPreviewMuted}>
-                                          Selecione um template aprovado para visualizar a estimativa.
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-
-                              <label className={styles.switchField}>
-                                <input
-                                  type="checkbox"
-                                  checked={agendaLembreteEmailNode}
-                                  onChange={(e) =>
-                                    setAgendaLembreteEmailNode(e.target.checked)
-                                  }
-                                />
-
-                                <div>
-                                  <strong>Lembrete por email</strong>
-                                  <p>
-                                    Envia um email simples de lembrete usando a mesma origem de email configurada acima.
-                                  </p>
-                                </div>
-                              </label>
-                            </>
-                          )}
-                        </>
-                      )}
-
-                      {tipoNodeEdicao === "agenda_cancelar_agendamento" && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Status final</span>
-                            <select
-                              className={styles.input}
-                              value={agendaStatusAgendamentoNode}
-                              onChange={(e) =>
-                                setAgendaStatusAgendamentoNode(e.target.value)
-                              }
-                            >
-                              <option value="cancelado">Cancelado</option>
-                              <option value="faltou">Faltou</option>
-                            </select>
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Motivo</span>
-                            <input
-                              className={styles.input}
-                              value={agendaMotivoCancelamentoNode}
-                              onChange={(e) =>
-                                setAgendaMotivoCancelamentoNode(e.target.value)
-                              }
-                            />
-                          </label>
-
-                          <label className={styles.switchField}>
-                            <input
-                              type="checkbox"
-                              checked={agendaEnviarEmailNode}
-                              onChange={(e) =>
-                                setAgendaEnviarEmailNode(e.target.checked)
-                              }
-                            />
-
-                            <div>
-                              <strong>Enviar email de cancelamento</strong>
-                              <p>
-                                O email sera enviado assim que o agendamento for cancelado, usando o mesmo formato dos emails de agendamento.
-                              </p>
-                            </div>
-                          </label>
-
-                          {agendaEnviarEmailNode && (
-                            <>
-                              <label className={styles.field}>
-                                <span className={styles.label}>Origem do email</span>
-                                <select
-                                  className={styles.input}
-                                  value={agendaEmailOrigemNode}
-                                  onChange={(e) =>
-                                    setAgendaEmailOrigemNode(
-                                      e.target.value === "variavel"
-                                        ? "variavel"
-                                        : "contato"
-                                    )
-                                  }
-                                >
-                                  <option value="contato">Email cadastrado no contato</option>
-                                  <option value="variavel">Email salvo em uma variavel</option>
-                                </select>
-                                <span className={styles.help}>
-                                  Informe qual email o sistema vai usar, email do Contato ou uma variavel do bloco Capturar resposta.
-                                </span>
-                              </label>
-
-                              {agendaEmailOrigemNode === "variavel" && (
-                                <label className={styles.field}>
-                                  <span className={styles.label}>Variavel do email</span>
-                                  <input
-                                    className={styles.input}
-                                    value={agendaEmailVariavelNode}
-                                    onChange={(e) =>
-                                      setAgendaEmailVariavelNode(e.target.value)
-                                    }
-                                    placeholder="email"
-                                  />
-                                  <span className={styles.help}>
-                                    Use o nome da variavel criada em Capturar resposta. Exemplo: email.
-                                  </span>
-                                </label>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-
-
-                    </div>
-                  )}
-
-                                    {tipoNodeEdicao === "interpretar_arquivo_ia" && (
+          <AgendaConfig
+            tipoNode={tipoNodeEdicao}
+            fluxoSistemaCalendario={fluxoSistemaCalendario}
+            fluxoTemBuscaQualquerCalendario={fluxoTemBuscaQualquerCalendario}
+            agendas={agendasOpcoes}
+            carregandoAgendas={carregandoAgendasOpcoes}
+            agendaId={agendaIdNode}
+            usarContexto={agendaUsarContextoNode}
+            listarAgendamentos={agendaListarAgendamentosNode}
+            quantidadeOpcoes={agendaQuantidadeOpcoesNode}
+            janelaDias={agendaJanelaDiasNode}
+            mensagemSemHorarios={agendaMensagemSemHorariosNode}
+            mensagemSemExpediente={agendaMensagemSemExpedienteNode}
+            mensagemDataInvalida={agendaMensagemDataInvalidaNode}
+            mensagemListarAgendamentos={agendaMensagemListarAgendamentosNode}
+            mensagemListarHorarios={agendaMensagemListarHorariosNode}
+            mensagemPreferenciaIndisponivel={agendaMensagemPreferenciaIndisponivelNode}
+            mensagemConflito={agendaMensagemConflitoNode}
+            statusAgendamento={agendaStatusAgendamentoNode}
+            enviarEmail={agendaEnviarEmailNode}
+            emailOrigem={agendaEmailOrigemNode}
+            emailVariavel={agendaEmailVariavelNode}
+            lembreteAtivo={agendaLembreteAtivoNode}
+            lembreteQuantidade={agendaLembreteQuantidadeNode}
+            lembreteUnidade={agendaLembreteUnidadeNode}
+            lembreteWhatsapp={agendaLembreteWhatsappNode}
+            lembreteEmail={agendaLembreteEmailNode}
+            lembreteTemplateId={agendaLembreteTemplateIdNode}
+            lembreteVariaveis={agendaLembreteVariaveisNode}
+            motivoCancelamento={agendaMotivoCancelamentoNode}
+            templates={templatesWhatsapp}
+            carregandoTemplates={carregandoTemplatesWhatsapp}
+            templateLembreteSelecionado={templateAgendaLembreteSelecionado}
+            indicesVariaveisLembrete={indicesVariaveisTemplateAgendaLembrete}
+            opcoesVariaveisFluxo={opcoesVariaveisFluxo}
+            opcoesVariaveisAgendamento={opcoesVariaveisAgendamento}
+            loadingVariaveis={loadingVariaveis}
+            previewLembrete={previewTemplateAgendaLembrete}
+            loadingCusto={loadingPreviewCustoAgendarDisparo}
+            custo={previewCustoAgendarDisparo}
+            onAgendaIdChange={setAgendaIdNode}
+            onUsarContextoChange={setAgendaUsarContextoNode}
+            onListarAgendamentosChange={setAgendaListarAgendamentosNode}
+            onQuantidadeOpcoesChange={setAgendaQuantidadeOpcoesNode}
+            onJanelaDiasChange={setAgendaJanelaDiasNode}
+            onMensagemSemHorariosChange={setAgendaMensagemSemHorariosNode}
+            onMensagemSemExpedienteChange={setAgendaMensagemSemExpedienteNode}
+            onMensagemDataInvalidaChange={setAgendaMensagemDataInvalidaNode}
+            onMensagemListarAgendamentosChange={setAgendaMensagemListarAgendamentosNode}
+            onMensagemListarHorariosChange={setAgendaMensagemListarHorariosNode}
+            onMensagemPreferenciaIndisponivelChange={setAgendaMensagemPreferenciaIndisponivelNode}
+            onMensagemConflitoChange={setAgendaMensagemConflitoNode}
+            onStatusAgendamentoChange={setAgendaStatusAgendamentoNode}
+            onEnviarEmailChange={setAgendaEnviarEmailNode}
+            onEmailOrigemChange={setAgendaEmailOrigemNode}
+            onEmailVariavelChange={setAgendaEmailVariavelNode}
+            onLembreteAtivoChange={setAgendaLembreteAtivoNode}
+            onLembreteQuantidadeChange={setAgendaLembreteQuantidadeNode}
+            onLembreteUnidadeChange={setAgendaLembreteUnidadeNode}
+            onLembreteWhatsappChange={setAgendaLembreteWhatsappNode}
+            onLembreteEmailChange={setAgendaLembreteEmailNode}
+            onLembreteTemplateIdChange={setAgendaLembreteTemplateIdNode}
+            onLembreteVariavelChange={(index, chave) =>
+              setAgendaLembreteVariaveisNode((atual) =>
+                atualizarLinhaVariavelTemplate(atual, index, chave)
+              )
+            }
+            onMotivoCancelamentoChange={setAgendaMotivoCancelamentoNode}
+            onGerenciarVariaveisLembrete={() =>
+              abrirModalGerenciarVariaveis("agenda_lembrete")
+            }
+          />
+        )}
+
+        {tipoNodeEdicao === "interpretar_arquivo_ia" && (
                     <InterpretarArquivoIaConfig
                               instrucao={arquivoInstrucaoIaNode}
                               camposExtracao={arquivoCamposExtracaoNode}
