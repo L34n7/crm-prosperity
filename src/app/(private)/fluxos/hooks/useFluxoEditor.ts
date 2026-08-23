@@ -32,13 +32,11 @@ export default function useFluxoEditor({
     setEditandoNodeId(nodeId);
     setEditandoEdgeId(null);
     setConfirmandoExclusaoNo(false);
-    setConfirmandoExclusaoConexao(false);
   }, []);
 
   const editarConexao = useCallback((edgeId: string | null) => {
     setEditandoEdgeId(edgeId);
     setEditandoNodeId(null);
-    setConfirmandoExclusaoNo(false);
     setConfirmandoExclusaoConexao(false);
   }, []);
 
