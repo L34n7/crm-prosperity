@@ -41,7 +41,6 @@ jobs:
           const panelIndex = source.indexOf('<NodeConfigPanel');
           if (panelIndex < 0) throw new Error('NodeConfigPanel nao encontrado');
 
-          // Delay
           const delayConditionText = 'tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (';
           const delayCondition = source.indexOf(delayConditionText, panelIndex);
           const delayStart = source.lastIndexOf('{', delayCondition);
@@ -60,35 +59,27 @@ jobs:
                           setDelayNode("");
                           return;
                         }
-
                         const somenteNumeros = valor.replace(/\\D/g, "");
-
                         if (!somenteNumeros) {
                           setDelayNode("");
                           return;
                         }
-
                         const numero = Number(somenteNumeros);
-
                         if (!Number.isFinite(numero)) {
                           setDelayNode("");
                           return;
                         }
-
                         if (numero > LIMITE_DELAY_SEGUNDOS) {
                           setDelayNode(String(LIMITE_DELAY_SEGUNDOS));
                           return;
                         }
-
                         setDelayNode(String(Math.floor(numero)));
                       }}
                     />
                   )}
                   `;
-
           source = source.slice(0, delayStart) + delayReplacement + source.slice(notifStart);
 
-          // Notificacao - refind after first replacement
           const notifCondition2 = source.indexOf(notifConditionText, source.indexOf('<DelayConfig'));
           const notifStart2 = source.lastIndexOf('{', notifCondition2);
           const attemptsListText = '[\n                    "pergunta_opcoes",';
@@ -111,10 +102,8 @@ jobs:
                     />
                   )}
                   `;
-
           source = source.slice(0, notifStart2) + notifReplacement + source.slice(attemptsStart);
 
-          // Tentativas - refind after notification replacement
           const attemptsListIndex2 = source.indexOf(attemptsListText, source.indexOf('<NotificacaoConfig'));
           const attemptsStart2 = source.lastIndexOf('{', attemptsListIndex2);
           const actionsMarker = '<div className={styles.actionButtonsRow}>';
@@ -122,7 +111,6 @@ jobs:
           if (attemptsListIndex2 < 0 || attemptsStart2 < 0 || actionsIndex < 0) {
             throw new Error('Bloco de tentativas/acoes nao encontrado');
           }
-          const attemptsEnd = source.lastIndexOf('\n', actionsIndex);
 
           const attemptsReplacement = `{[
                     "pergunta_opcoes",
@@ -206,21 +194,14 @@ jobs:
                   )}
 
                   `;
-
           source = source.slice(0, attemptsStart2) + attemptsReplacement + source.slice(actionsIndex);
 
           for (const component of ['<DelayConfig', '<NotificacaoConfig', '<TentativasConfig']) {
             if (!source.includes(component)) throw new Error(`${component} nao conectado`);
           }
-          if (!source.includes('{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (\n                    <DelayConfig')) {
-            throw new Error('Guard do DelayConfig nao preservado');
-          }
-          if (!source.includes('{tipoNodeEdicao !== "inicio" && (\n                    <NotificacaoConfig')) {
-            throw new Error('Guard do NotificacaoConfig nao preservado');
-          }
-          if (!source.includes('].includes(tipoNodeEdicao) && (\n                    <TentativasConfig')) {
-            throw new Error('Guard do TentativasConfig nao preservado');
-          }
+          if (!source.includes('{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (\n                    <DelayConfig')) throw new Error('Guard do DelayConfig nao preservado');
+          if (!source.includes('{tipoNodeEdicao !== "inicio" && (\n                    <NotificacaoConfig')) throw new Error('Guard do NotificacaoConfig nao preservado');
+          if (!source.includes('].includes(tipoNodeEdicao) && (\n                    <TentativasConfig')) throw new Error('Guard do TentativasConfig nao preservado');
 
           fs.writeFileSync(path, source);
           NODE
@@ -234,3 +215,5 @@ jobs:
           git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
           git commit -m 'refactor: conectar controles comuns dos blocos'
           git push origin HEAD:refactor/fluxos-editor-estrutura
+
+# retrigger
