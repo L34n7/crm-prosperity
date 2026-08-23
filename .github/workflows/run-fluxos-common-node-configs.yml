@@ -1,0 +1,213 @@
+name: Integrar controles comuns dos blocos
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Conectar controles comuns
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/FluxosEditor.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const importNeedle = 'import AgendaConfig from "./components/node-config/AgendaConfig";';
+          const imports = [
+            'import DelayConfig from "./components/node-config/DelayConfig";',
+            'import NotificacaoConfig from "./components/node-config/NotificacaoConfig";',
+            'import TentativasConfig from "./components/node-config/TentativasConfig";',
+          ];
+          if (!source.includes(importNeedle)) throw new Error('AgendaConfig nao encontrado');
+          for (const line of imports) {
+            if (!source.includes(line)) source = source.replace(importNeedle, `${importNeedle}\n${line}`);
+          }
+
+          const panelIndex = source.indexOf('<NodeConfigPanel');
+          if (panelIndex < 0) throw new Error('NodeConfigPanel nao encontrado');
+
+          function findStart(conditionText, from) {
+            const conditionIndex = source.indexOf(conditionText, from);
+            if (conditionIndex < 0) throw new Error(`Condicao nao encontrada: ${conditionText}`);
+            const start = source.lastIndexOf('{', conditionIndex);
+            if (start < 0) throw new Error(`Inicio nao encontrado: ${conditionText}`);
+            return { conditionIndex, start };
+          }
+
+          const delayConditionText = 'tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (';
+          const notifConditionText = 'tipoNodeEdicao !== "inicio" && (';
+          const delay = findStart(delayConditionText, panelIndex);
+          const notif = findStart(notifConditionText, delay.conditionIndex + delayConditionText.length);
+
+          const delayReplacement = `{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (
+                    <DelayConfig
+                      valor={delayNode}
+                      onChange={(valor) => {
+                        if (valor === "") {
+                          setDelayNode("");
+                          return;
+                        }
+                        const somenteNumeros = valor.replace(/\\D/g, "");
+                        if (!somenteNumeros) {
+                          setDelayNode("");
+                          return;
+                        }
+                        const numero = Number(somenteNumeros);
+                        if (!Number.isFinite(numero)) {
+                          setDelayNode("");
+                          return;
+                        }
+                        if (numero > LIMITE_DELAY_SEGUNDOS) {
+                          setDelayNode(String(LIMITE_DELAY_SEGUNDOS));
+                          return;
+                        }
+                        setDelayNode(String(Math.floor(numero)));
+                      }}
+                    />
+                  )}
+                  `;
+          source = source.slice(0, delay.start) + delayReplacement + source.slice(notif.start);
+
+          const notif2 = findStart(notifConditionText, source.indexOf('<DelayConfig'));
+          const attemptsListText = '[\n                    "pergunta_opcoes",';
+          const attemptsListIndex = source.indexOf(attemptsListText, notif2.conditionIndex);
+          if (attemptsListIndex < 0) throw new Error('Lista de tentativas nao encontrada');
+          const attemptsStart = source.lastIndexOf('{', attemptsListIndex);
+
+          const notifReplacement = `{tipoNodeEdicao !== "inicio" && (
+                    <NotificacaoConfig
+                      ativo={notificarAoChegarNode}
+                      titulo={notificacaoTituloNode}
+                      mensagem={notificacaoMensagemNode}
+                      enviarEmail={notificarEmailNode}
+                      onAtivoChange={setNotificarAoChegarNode}
+                      onTituloChange={setNotificacaoTituloNode}
+                      onMensagemChange={setNotificacaoMensagemNode}
+                      onEnviarEmailChange={setNotificarEmailNode}
+                    />
+                  )}
+                  `;
+          source = source.slice(0, notif2.start) + notifReplacement + source.slice(attemptsStart);
+
+          const attemptsListIndex2 = source.indexOf(attemptsListText, source.indexOf('<NotificacaoConfig'));
+          if (attemptsListIndex2 < 0) throw new Error('Lista de tentativas nao reencontrada');
+          const attemptsStart2 = source.lastIndexOf('{', attemptsListIndex2);
+          const actionsIndex = source.indexOf('<div className={styles.actionButtonsRow}>', attemptsListIndex2);
+          if (actionsIndex < 0) throw new Error('Acoes do bloco nao encontradas');
+
+          const attemptsReplacement = `{[
+                    "pergunta_opcoes",
+                    TIPO_NO_PERGUNTA_LIVRE_IA,
+                    "enviar_botoes",
+                    "capturar_resposta",
+                    "agenda_buscar_agendamento",
+                    "agenda_escolher_horario",
+                    "avaliacao",
+                    "interpretar_arquivo_ia",
+                  ].includes(tipoNodeEdicao) && (
+                    <TentativasConfig
+                      maxInvalidas={maxTentativasInvalidasNode}
+                      maxSemResposta={maxTentativasSemRespostaNode}
+                      acao={acaoExcessoTentativasNode}
+                      escopoFila={escopoFilaExcessoTentativasNode}
+                      setor={setorExcessoTentativasNode}
+                      incluirAdministradores={incluirAdministradoresExcessoTentativasNode}
+                      estrategia={estrategiaDistribuicaoDisponivel(
+                        estrategiaExcessoTentativasNode,
+                        setorExcessoTentativasNode,
+                        incluirAdministradoresExcessoTentativasNode
+                      )}
+                      atendente={atendenteExcessoTentativasNode}
+                      mensagem={mensagemExcessoTentativasNode}
+                      notificarSistema={notificarExcessoTentativasNode}
+                      notificarEmail={notificarEmailExcessoTentativasNode}
+                      carregandoSetores={carregandoSetores}
+                      possuiAdministradorAtivo={possuiAdministradorAtivo}
+                      distribuicaoAutomaticaPermitida={permiteDistribuicaoAutomaticaNoSetor(
+                        setorExcessoTentativasNode,
+                        incluirAdministradoresExcessoTentativasNode
+                      )}
+                      setores={setores}
+                      atendentesElegiveis={atendentes.filter(
+                        (atendente) =>
+                          atendente.is_administrador === true ||
+                          atendente.setor_ids.includes(setorExcessoTentativasNode)
+                      )}
+                      onMaxInvalidasChange={setMaxTentativasInvalidasNode}
+                      onMaxSemRespostaChange={setMaxTentativasSemRespostaNode}
+                      onAcaoChange={setAcaoExcessoTentativasNode}
+                      onEscopoFilaChange={(escopo) => {
+                        setEscopoFilaExcessoTentativasNode(escopo);
+                        if (escopo === "geral") {
+                          setSetorExcessoTentativasNode("");
+                          setAtendenteExcessoTentativasNode("");
+                          setEstrategiaExcessoTentativasNode("fila_setor");
+                          setIncluirAdministradoresExcessoTentativasNode(false);
+                        }
+                      }}
+                      onSetorChange={(setorId) => {
+                        setSetorExcessoTentativasNode(setorId);
+                        setAtendenteExcessoTentativasNode("");
+                        setEstrategiaExcessoTentativasNode("fila_setor");
+                      }}
+                      onIncluirAdministradoresChange={(incluir) => {
+                        setIncluirAdministradoresExcessoTentativasNode(incluir);
+                        if (
+                          !permiteDistribuicaoAutomaticaNoSetor(
+                            setorExcessoTentativasNode,
+                            incluir
+                          ) &&
+                          (estrategiaExcessoTentativasNode === "rodizio_aleatorio" ||
+                            estrategiaExcessoTentativasNode === "menos_conversas")
+                        ) {
+                          setEstrategiaExcessoTentativasNode("fila_setor");
+                        }
+                      }}
+                      onEstrategiaChange={(estrategia) => {
+                        setEstrategiaExcessoTentativasNode(estrategia);
+                        if (estrategia !== "atendente_especifico") {
+                          setAtendenteExcessoTentativasNode("");
+                        }
+                      }}
+                      onAtendenteChange={setAtendenteExcessoTentativasNode}
+                      onMensagemChange={setMensagemExcessoTentativasNode}
+                      onNotificarSistemaChange={setNotificarExcessoTentativasNode}
+                      onNotificarEmailChange={setNotificarEmailExcessoTentativasNode}
+                    />
+                  )}
+
+                  `;
+          source = source.slice(0, attemptsStart2) + attemptsReplacement + source.slice(actionsIndex);
+
+          if (!source.includes('<DelayConfig')) throw new Error('DelayConfig nao conectado');
+          if (!source.includes('<NotificacaoConfig')) throw new Error('NotificacaoConfig nao conectado');
+          if (!source.includes('<TentativasConfig')) throw new Error('TentativasConfig nao conectado');
+          if (!source.includes('{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (\n                    <DelayConfig')) throw new Error('Guard do DelayConfig nao preservado');
+          if (!source.includes('{tipoNodeEdicao !== "inicio" && (\n                    <NotificacaoConfig')) throw new Error('Guard do NotificacaoConfig nao preservado');
+          if (!source.includes('].includes(tipoNodeEdicao) && (\n                    <TentativasConfig')) throw new Error('Guard do TentativasConfig nao preservado');
+
+          fs.writeFileSync(path, source);
+          NODE
+
+      - name: Registrar mudanca e remover workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/run-fluxos-common-node-configs.yml
+          git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
+          git commit -m 'refactor: conectar controles comuns dos blocos'
+          git push origin HEAD:refactor/fluxos-editor-estrutura
