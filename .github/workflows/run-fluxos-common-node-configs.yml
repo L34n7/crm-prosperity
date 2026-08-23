@@ -198,9 +198,9 @@ jobs:
           if (!source.includes('<DelayConfig')) throw new Error('DelayConfig nao conectado');
           if (!source.includes('<NotificacaoConfig')) throw new Error('NotificacaoConfig nao conectado');
           if (!source.includes('<TentativasConfig')) throw new Error('TentativasConfig nao conectado');
-          if (!source.includes('{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (\n                    <DelayConfig')) throw new Error('Guard do DelayConfig nao preservado');
-          if (!source.includes('{tipoNodeEdicao !== "inicio" && (\n                    <NotificacaoConfig')) throw new Error('Guard do NotificacaoConfig nao preservado');
-          if (!source.includes('].includes(tipoNodeEdicao) && (\n                    <TentativasConfig')) throw new Error('Guard do TentativasConfig nao preservado');
+          if (!/\{tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && \(\s*<DelayConfig/.test(source)) throw new Error('Guard do DelayConfig nao preservado');
+          if (!/\{tipoNodeEdicao !== "inicio" && \(\s*<NotificacaoConfig/.test(source)) throw new Error('Guard do NotificacaoConfig nao preservado');
+          if (!/\]\.includes\(tipoNodeEdicao\) && \(\s*<TentativasConfig/.test(source)) throw new Error('Guard do TentativasConfig nao preservado');
 
           fs.writeFileSync(path, source);
           NODE
