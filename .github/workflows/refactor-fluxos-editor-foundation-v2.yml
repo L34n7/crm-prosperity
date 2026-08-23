@@ -1,0 +1,200 @@
+name: Refactor fluxos editor foundation v2
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+
+permissions:
+  contents: write
+
+jobs:
+  foundation:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Use extracted types constants and utils
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          editor_path = Path("src/app/(private)/fluxos/FluxosEditor.tsx")
+          constants_path = Path("src/app/(private)/fluxos/constants.ts")
+          text = editor_path.read_text(encoding="utf-8")
+
+          def remove_statement(source: str, prefix: str) -> str:
+              matches = source.count(prefix)
+              if matches != 1:
+                  raise RuntimeError(f"Expected one occurrence of {prefix!r}, found {matches}")
+              start = source.index(prefix)
+              i = start + len(prefix)
+              braces = brackets = parens = 0
+              quote = None
+              escaped = False
+              while i < len(source):
+                  ch = source[i]
+                  if quote is not None:
+                      if escaped:
+                          escaped = False
+                      elif ch == "\\":
+                          escaped = True
+                      elif ch == quote:
+                          quote = None
+                      i += 1
+                      continue
+                  if ch in ('"', "'", '`'):
+                      quote = ch
+                      i += 1
+                      continue
+                  if ch == '{': braces += 1
+                  elif ch == '}': braces -= 1
+                  elif ch == '[': brackets += 1
+                  elif ch == ']': brackets -= 1
+                  elif ch == '(': parens += 1
+                  elif ch == ')': parens -= 1
+                  elif ch == ';' and braces == 0 and brackets == 0 and parens == 0:
+                      end = i + 1
+                      while end < len(source) and source[end] == '\n':
+                          end += 1
+                      return source[:start] + source[end:]
+                  i += 1
+              raise RuntimeError(f"Could not find end of statement {prefix!r}")
+
+          def remove_function(source: str, name: str) -> str:
+              prefix = f"function {name}("
+              matches = source.count(prefix)
+              if matches != 1:
+                  raise RuntimeError(f"Expected one function {name}, found {matches}")
+              start = source.index(prefix)
+              brace = source.index('{', start)
+              depth = 0
+              quote = None
+              escaped = False
+              i = brace
+              while i < len(source):
+                  ch = source[i]
+                  if quote is not None:
+                      if escaped:
+                          escaped = False
+                      elif ch == "\\":
+                          escaped = True
+                      elif ch == quote:
+                          quote = None
+                      i += 1
+                      continue
+                  if ch in ('"', "'", '`'):
+                      quote = ch
+                      i += 1
+                      continue
+                  if ch == '{':
+                      depth += 1
+                  elif ch == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          while end < len(source) and source[end] == '\n':
+                              end += 1
+                          return source[:start] + source[end:]
+                  i += 1
+              raise RuntimeError(f"Could not find end of function {name}")
+
+          type_names = [
+              "Fluxo", "AutomacaoNo", "AutomacaoConexao",
+              "PreviaGeracaoDescricaoIa", "GatilhoFluxo", "SetorOpcao",
+              "EstrategiaTransferenciaNode", "EscopoFilaNode", "AtendenteOpcao",
+              "MidiaOpcao", "ImpactoExclusaoMidia", "TemplateWhatsappOpcao",
+              "IntegracaoWhatsappOpcao", "EscopoIntegracoesModo",
+              "EscopoIntegracoesFluxo", "PreviewTemplateWhatsapp",
+              "VariavelPersonalizada", "AlvoVariavelFluxo", "AgendaOpcao",
+              "ResultadoEncerramentoFluxo", "TipoValorConversao",
+              "OpcaoRespostaConexao",
+          ]
+          for name in type_names:
+              text = remove_statement(text, f"type {name} =")
+
+          constant_names = [
+              "RESULTADOS_ENCERRAMENTO", "TIPOS_VALOR_CONVERSAO",
+              "LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES", "LIMITE_VIDEO_BYTES",
+              "LIMITE_IMAGEM_BYTES", "LIMITE_AUDIO_BYTES", "LIMITE_ARQUIVO_BYTES",
+              "ACCEPT_ARQUIVOS", "LIMITE_DELAY_SEGUNDOS",
+              "VARIAVEIS_FIXAS_CONTATO_HELP", "VARIAVEIS_FIXAS_SISTEMA",
+              "VARIAVEIS_FIXAS_CONTATO_RESERVADAS", "TIPO_NO_PERGUNTA_LIVRE_IA",
+              "TIPOS_NO_MIDIA", "CHAVES_REFERENCIA_MIDIA_NODE",
+              "TOKENS_SAIDA_MAX_DESCRICAO_IA",
+              "TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS",
+              "AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA",
+              "AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA",
+              "AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO",
+              "NODE_CARD_WIDTH", "NODE_CARD_HEIGHT", "NODE_GAP_X", "NODE_GAP_Y",
+          ]
+          typed_constants = {"RESULTADOS_ENCERRAMENTO", "TIPOS_VALOR_CONVERSAO"}
+          for name in constant_names:
+              prefix = f"const {name}:" if name in typed_constants else f"const {name} ="
+              text = remove_statement(text, prefix)
+
+          function_names = [
+              "labelTipoNo", "tituloPadraoTipoNo", "tituloEhPadraoDoSistema",
+              "cortarTextoCard", "tituloVisivelCard", "normalizarDelaySegundos",
+              "opcoesRespostaDoNo",
+          ]
+          for name in function_names:
+              text = remove_function(text, name)
+
+          anchor = '} from "./whatsapp-preview";\n'
+          imports = '''import type {\n  AgendaOpcao,\n  AlvoVariavelFluxo,\n  AtendenteOpcao,\n  AutomacaoConexao,\n  AutomacaoNo,\n  EscopoFilaNode,\n  EscopoIntegracoesFluxo,\n  EscopoIntegracoesModo,\n  EstrategiaTransferenciaNode,\n  Fluxo,\n  GatilhoFluxo,\n  ImpactoExclusaoMidia,\n  IntegracaoWhatsappOpcao,\n  MidiaOpcao,\n  PreviaGeracaoDescricaoIa,\n  PreviewTemplateWhatsapp,\n  ResultadoEncerramentoFluxo,\n  SetorOpcao,\n  TemplateWhatsappOpcao,\n  TipoValorConversao,\n  VariavelPersonalizada,\n} from "./types";\nimport {\n  ACCEPT_ARQUIVOS,\n  AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA,\n  CHAVES_REFERENCIA_MIDIA_NODE,\n  LIMITE_ARQUIVO_BYTES,\n  LIMITE_AUDIO_BYTES,\n  LIMITE_DELAY_SEGUNDOS,\n  LIMITE_IMAGEM_BYTES,\n  LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES,\n  LIMITE_VIDEO_BYTES,\n  NODE_CARD_HEIGHT,\n  NODE_CARD_WIDTH,\n  NODE_GAP_X,\n  NODE_GAP_Y,\n  RESULTADOS_ENCERRAMENTO,\n  TIPOS_NO_MIDIA,\n  TIPOS_VALOR_CONVERSAO,\n  TIPO_NO_PERGUNTA_LIVRE_IA,\n  TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS,\n  TOKENS_SAIDA_MAX_DESCRICAO_IA,\n  VARIAVEIS_FIXAS_CONTATO_HELP,\n  VARIAVEIS_FIXAS_CONTATO_RESERVADAS,\n  VARIAVEIS_FIXAS_SISTEMA,\n} from "./constants";\nimport {\n  labelTipoNo,\n  normalizarDelaySegundos,\n  opcoesRespostaDoNo,\n  tituloEhPadraoDoSistema,\n  tituloPadraoTipoNo,\n  tituloVisivelCard,\n} from "./utils";\n'''
+          if anchor not in text:
+              raise RuntimeError("whatsapp-preview import anchor not found")
+          if 'from "./types";' not in text:
+              text = text.replace(anchor, anchor + imports, 1)
+
+          constants_text = constants_path.read_text(encoding="utf-8")
+          reserved_start = constants_text.index(
+              "export const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = ["
+          )
+          reserved_end = constants_text.index("] as const;", reserved_start)
+          constants_text = (
+              constants_text[:reserved_end] + "];" +
+              constants_text[reserved_end + len("] as const;"):]
+          )
+          constants_path.write_text(constants_text, encoding="utf-8")
+
+          for name in type_names:
+              if f"type {name} =" in text:
+                  raise RuntimeError(f"Local type still present: {name}")
+          for name in constant_names:
+              if f"const {name}" in text:
+                  raise RuntimeError(f"Local constant still present: {name}")
+          for name in function_names:
+              if f"function {name}(" in text:
+                  raise RuntimeError(f"Local helper still present: {name}")
+
+          for marker in [
+              'from "./types";', 'from "./constants";', 'from "./utils";',
+              'labelTipoNo(', 'tituloPadraoTipoNo(', 'normalizarDelaySegundos(',
+          ]:
+              if marker not in text:
+                  raise RuntimeError(f"Expected marker missing: {marker}")
+
+          editor_path.write_text(text, encoding="utf-8")
+          for temp in [
+              ".github/workflows/refactor-fluxos-editor-foundation.yml",
+              ".github/workflows/refactor-fluxos-editor-foundation-v2.yml",
+              ".github/refactor-fluxos-trigger.tmp",
+          ]:
+              temp_path = Path(temp)
+              if temp_path.exists():
+                  temp_path.unlink()
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git commit -m "refactor: usar tipos constantes e utilitarios extraidos"
+          git push origin HEAD:refactor/fluxos-editor-estrutura
