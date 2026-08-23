@@ -24,6 +24,7 @@ import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import ConnectionEditor from "./components/ConnectionEditor";
+import PropertiesPanel from "./components/PropertiesPanel";
 import FluxoCanvas from "./components/FluxoCanvas";
 import FluxoEditorHeader from "./components/FluxoEditorHeader";
 import FluxosSidebar from "./components/FluxosSidebar";
@@ -6892,40 +6893,16 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           )}
 
 
-          {(nodeEditado || edgeEditada) && (
-            <aside className={styles.propertiesPanel}>
-                <div className={styles.propertiesHeader}>
-                  <h3 className={styles.propertiesTitle}>Editar bloco</h3>
-
-                  <div className={styles.propertiesHeaderActions}>
-                    {nodeEditado && nodeEditado.data?.tipo_no !== "inicio" && (
-                      <button
-                        type="button"
-                        className={styles.duplicateNodeHeaderButton}
-                        onClick={() => duplicarNode(nodeEditado.id)}
-                        title="Duplicar bloco"
-                        disabled={salvando}
-                      >
-                        <CopyPlus size={17} />
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      className={styles.closePanelButton}
-                      onClick={fecharPainelEdicao}
-                      title="Fechar"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-
-                {!nodeEditado && !edgeEditada ? (
-                <p className={styles.propertiesEmpty}>
-                    Clique em um bloco ou em uma conexão para editar.
-                </p>
-                ) : nodeEditado ? (
+          <PropertiesPanel
+            nodeEditado={nodeEditado}
+            edgeEditada={edgeEditada}
+            salvando={salvando}
+            onDuplicarNode={(nodeId) => {
+              void duplicarNode(nodeId);
+            }}
+            onFechar={fecharPainelEdicao}
+          >
+            {nodeEditado ? (
                 <div className={styles.propertiesForm}>
                   {tipoNodeEdicao !== "inicio" && (
                     <label className={styles.field}>
@@ -9692,9 +9669,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                       void aplicarEdicaoConexao();
                     }}
                   />
-                )}
-            </aside>
-            )}
+                ) : null}
+          </PropertiesPanel>
         </div>
       </section>
 
