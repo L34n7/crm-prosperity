@@ -7201,88 +7201,94 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                   )}
 
-                  <EncerrarConfig
-          resultado={encerrarResultadoNode}
-          tipoValor={encerrarValorTipoNode}
-          valorFixo={encerrarValorFixoNode}
-          valorVariavel={encerrarValorVariavelNode}
-          onResultadoChange={(resultado) => {
-            setEncerrarResultadoNode(
-              resultadoEncerramentoValido(resultado)
-                ? resultado
-                : "positivo"
-            );
+                                    {tipoNodeEdicao === "encerrar" && (
+                    <EncerrarConfig
+                              resultado={encerrarResultadoNode}
+                              tipoValor={encerrarValorTipoNode}
+                              valorFixo={encerrarValorFixoNode}
+                              valorVariavel={encerrarValorVariavelNode}
+                              onResultadoChange={(resultado) => {
+                                setEncerrarResultadoNode(
+                                  resultadoEncerramentoValido(resultado)
+                                    ? resultado
+                                    : "positivo"
+                                );
+                    
+                                if (resultado !== "positivo") {
+                                  setEncerrarValorTipoNode("sem_valor");
+                                  setEncerrarValorFixoNode("");
+                                  setEncerrarValorVariavelNode("");
+                                }
+                              }}
+                              onTipoValorChange={(tipoValor) => {
+                                setEncerrarValorTipoNode(
+                                  tipoValorConversaoValido(tipoValor)
+                                    ? tipoValor
+                                    : "sem_valor"
+                                );
+                    
+                                if (tipoValor !== "valor_fixo") {
+                                  setEncerrarValorFixoNode("");
+                                }
+                    
+                                if (tipoValor !== "variavel") {
+                                  setEncerrarValorVariavelNode("");
+                                }
+                              }}
+                              onValorFixoChange={setEncerrarValorFixoNode}
+                              onValorVariavelChange={setEncerrarValorVariavelNode}
+                            />
+                  )}
 
-            if (resultado !== "positivo") {
-              setEncerrarValorTipoNode("sem_valor");
-              setEncerrarValorFixoNode("");
-              setEncerrarValorVariavelNode("");
-            }
-          }}
-          onTipoValorChange={(tipoValor) => {
-            setEncerrarValorTipoNode(
-              tipoValorConversaoValido(tipoValor)
-                ? tipoValor
-                : "sem_valor"
-            );
+                                    {tipoNodeEdicao === "capturar_resposta" && (
+                    <CapturarRespostaConfig
+                              tipoCaptura={capturaTipoNode}
+                              variavel={capturaVariavelNode}
+                              mensagemErro={capturaMensagemErroNode}
+                              onTipoCapturaChange={(novoTipo) => {
+                                const variavelAtual = capturaVariavelNode
+                                  .trim()
+                                  .toLowerCase();
+                    
+                                setCapturaTipoNode(novoTipo);
+                    
+                                const variaveisPadrao = [
+                                  "resposta",
+                                  "texto",
+                                  "nome",
+                                  "cpf",
+                                  "cnpj",
+                                  "email",
+                                  "telefone",
+                                  "numero",
+                                  "data",
+                                  "cep",
+                                ];
+                    
+                                if (
+                                  !variavelAtual ||
+                                  variaveisPadrao.includes(variavelAtual)
+                                ) {
+                                  setCapturaVariavelNode(novoTipo);
+                                }
+                              }}
+                              onVariavelChange={setCapturaVariavelNode}
+                              onMensagemErroChange={setCapturaMensagemErroNode}
+                            />
+                  )}
 
-            if (tipoValor !== "valor_fixo") {
-              setEncerrarValorFixoNode("");
-            }
-
-            if (tipoValor !== "variavel") {
-              setEncerrarValorVariavelNode("");
-            }
-          }}
-          onValorFixoChange={setEncerrarValorFixoNode}
-          onValorVariavelChange={setEncerrarValorVariavelNode}
-        />
-
-                  <CapturarRespostaConfig
-          tipoCaptura={capturaTipoNode}
-          variavel={capturaVariavelNode}
-          mensagemErro={capturaMensagemErroNode}
-          onTipoCapturaChange={(novoTipo) => {
-            const variavelAtual = capturaVariavelNode
-              .trim()
-              .toLowerCase();
-
-            setCapturaTipoNode(novoTipo);
-
-            const variaveisPadrao = [
-              "resposta",
-              "texto",
-              "nome",
-              "cpf",
-              "cnpj",
-              "email",
-              "telefone",
-              "numero",
-              "data",
-              "cep",
-            ];
-
-            if (
-              !variavelAtual ||
-              variaveisPadrao.includes(variavelAtual)
-            ) {
-              setCapturaVariavelNode(novoTipo);
-            }
-          }}
-          onVariavelChange={setCapturaVariavelNode}
-          onMensagemErroChange={setCapturaMensagemErroNode}
-        />
-
-                  <AvaliacaoConfig
-          notaMinima={notaMinimaNode}
-          notaMaxima={notaMaximaNode}
-          solicitarComentario={solicitarComentarioNode}
-          mensagemComentario={mensagemComentarioNode}
-          onNotaMinimaChange={setNotaMinimaNode}
-          onNotaMaximaChange={setNotaMaximaNode}
-          onSolicitarComentarioChange={setSolicitarComentarioNode}
-          onMensagemComentarioChange={setMensagemComentarioNode}
-        />
+                                    {tipoNodeEdicao === "avaliacao" && (
+                    <AvaliacaoConfig
+                              notaMinima={notaMinimaNode}
+                              notaMaxima={notaMaximaNode}
+                              solicitarComentario={solicitarComentarioNode}
+                              mensagemComentario={mensagemComentarioNode}
+                              onNotaMinimaChange={setNotaMinimaNode}
+                              onNotaMaximaChange={setNotaMaximaNode}
+                              onSolicitarComentarioChange={setSolicitarComentarioNode}
+                              onMensagemComentarioChange={setMensagemComentarioNode}
+                            />
+                  )}
 
                   {[
                     "enviar_imagem",
@@ -7543,26 +7549,32 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                  <PerguntaOpcoesConfig
-          opcoes={opcoesNode}
-          onAdicionar={adicionarOpcaoPergunta}
-          onAtualizar={atualizarOpcaoPergunta}
-          onRemover={removerOpcaoPergunta}
-        />
+                                    {tipoNodeEdicao === "pergunta_opcoes" && (
+                    <PerguntaOpcoesConfig
+                              opcoes={opcoesNode}
+                              onAdicionar={adicionarOpcaoPergunta}
+                              onAtualizar={atualizarOpcaoPergunta}
+                              onRemover={removerOpcaoPergunta}
+                            />
+                  )}
 
-                  <BotoesConfig
-          botoes={botoesNode}
-          onAdicionar={adicionarBotaoResposta}
-          onAtualizar={atualizarBotaoResposta}
-          onRemover={removerBotaoResposta}
-        />
+                                    {tipoNodeEdicao === "enviar_botoes" && (
+                    <BotoesConfig
+                              botoes={botoesNode}
+                              onAdicionar={adicionarBotaoResposta}
+                              onAtualizar={atualizarBotaoResposta}
+                              onRemover={removerBotaoResposta}
+                            />
+                  )}
 
-                  <RedirectConfig
-          textoBotao={redirectBotaoTextoNode}
-          url={redirectUrlNode}
-          onTextoBotaoChange={setRedirectBotaoTextoNode}
-          onUrlChange={setRedirectUrlNode}
-        />
+                                    {tipoNodeEdicao === "botao_redirect" && (
+                    <RedirectConfig
+                              textoBotao={redirectBotaoTextoNode}
+                              url={redirectUrlNode}
+                              onTextoBotaoChange={setRedirectBotaoTextoNode}
+                              onUrlChange={setRedirectUrlNode}
+                            />
+                  )}
 
                   {tipoNodeEdicao === "agendar_disparo" && (
                     <div className={styles.optionsBox}>
@@ -8626,14 +8638,16 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                  <InterpretarArquivoIaConfig
-          instrucao={arquivoInstrucaoIaNode}
-          camposExtracao={arquivoCamposExtracaoNode}
-          mensagemErro={arquivoMensagemErroNode}
-          onInstrucaoChange={setArquivoInstrucaoIaNode}
-          onCamposExtracaoChange={setArquivoCamposExtracaoNode}
-          onMensagemErroChange={setArquivoMensagemErroNode}
-        />
+                                    {tipoNodeEdicao === "interpretar_arquivo_ia" && (
+                    <InterpretarArquivoIaConfig
+                              instrucao={arquivoInstrucaoIaNode}
+                              camposExtracao={arquivoCamposExtracaoNode}
+                              mensagemErro={arquivoMensagemErroNode}
+                              onInstrucaoChange={setArquivoInstrucaoIaNode}
+                              onCamposExtracaoChange={setArquivoCamposExtracaoNode}
+                              onMensagemErroChange={setArquivoMensagemErroNode}
+                            />
+                  )}
 
                   {nodeEditadoPermiteGerarDescricoesIa && (
                     <div className={styles.IABox}>
@@ -8663,60 +8677,62 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                        <TransferenciaConfig
-          escopoFila={escopoFilaTransferenciaNode}
-          setorDestino={setorDestino}
-          incluirAdministradores={incluirAdministradoresTransferenciaNode}
-          estrategia={estrategiaDistribuicaoDisponivel(
-            estrategiaTransferenciaNode,
-            setorDestino,
-            incluirAdministradoresTransferenciaNode
-          )}
-          atendenteDestino={atendenteDestinoNode}
-          carregandoSetores={carregandoSetores}
-          possuiAdministradorAtivo={possuiAdministradorAtivo}
-          distribuicaoAutomaticaPermitida={permiteDistribuicaoAutomaticaNoSetor(
-            setorDestino,
-            incluirAdministradoresTransferenciaNode
-          )}
-          setores={setores}
-          atendentesElegiveis={atendentes.filter(
-            (atendente) =>
-              atendente.is_administrador === true ||
-              atendente.setor_ids.includes(setorDestino)
-          )}
-          onEscopoFilaChange={(escopo) => {
-            setEscopoFilaTransferenciaNode(escopo);
-            if (escopo === "geral") {
-              setSetorDestino("");
-              setAtendenteDestinoNode("");
-              setEstrategiaTransferenciaNode("fila_setor");
-              setIncluirAdministradoresTransferenciaNode(false);
-            }
-          }}
-          onSetorDestinoChange={(setorId) => {
-            setSetorDestino(setorId);
-            setAtendenteDestinoNode("");
-            setEstrategiaTransferenciaNode("fila_setor");
-          }}
-          onIncluirAdministradoresChange={(incluir) => {
-            setIncluirAdministradoresTransferenciaNode(incluir);
-            if (
-              !permiteDistribuicaoAutomaticaNoSetor(setorDestino, incluir) &&
-              (estrategiaTransferenciaNode === "rodizio_aleatorio" ||
-                estrategiaTransferenciaNode === "menos_conversas")
-            ) {
-              setEstrategiaTransferenciaNode("fila_setor");
-            }
-          }}
-          onEstrategiaChange={(estrategia) => {
-            setEstrategiaTransferenciaNode(estrategia);
-            if (estrategia !== "atendente_especifico") {
-              setAtendenteDestinoNode("");
-            }
-          }}
-          onAtendenteDestinoChange={setAtendenteDestinoNode}
-        />
+                                          {tipoNodeEdicao === "transferir_setor" && (
+                    <TransferenciaConfig
+                              escopoFila={escopoFilaTransferenciaNode}
+                              setorDestino={setorDestino}
+                              incluirAdministradores={incluirAdministradoresTransferenciaNode}
+                              estrategia={estrategiaDistribuicaoDisponivel(
+                                estrategiaTransferenciaNode,
+                                setorDestino,
+                                incluirAdministradoresTransferenciaNode
+                              )}
+                              atendenteDestino={atendenteDestinoNode}
+                              carregandoSetores={carregandoSetores}
+                              possuiAdministradorAtivo={possuiAdministradorAtivo}
+                              distribuicaoAutomaticaPermitida={permiteDistribuicaoAutomaticaNoSetor(
+                                setorDestino,
+                                incluirAdministradoresTransferenciaNode
+                              )}
+                              setores={setores}
+                              atendentesElegiveis={atendentes.filter(
+                                (atendente) =>
+                                  atendente.is_administrador === true ||
+                                  atendente.setor_ids.includes(setorDestino)
+                              )}
+                              onEscopoFilaChange={(escopo) => {
+                                setEscopoFilaTransferenciaNode(escopo);
+                                if (escopo === "geral") {
+                                  setSetorDestino("");
+                                  setAtendenteDestinoNode("");
+                                  setEstrategiaTransferenciaNode("fila_setor");
+                                  setIncluirAdministradoresTransferenciaNode(false);
+                                }
+                              }}
+                              onSetorDestinoChange={(setorId) => {
+                                setSetorDestino(setorId);
+                                setAtendenteDestinoNode("");
+                                setEstrategiaTransferenciaNode("fila_setor");
+                              }}
+                              onIncluirAdministradoresChange={(incluir) => {
+                                setIncluirAdministradoresTransferenciaNode(incluir);
+                                if (
+                                  !permiteDistribuicaoAutomaticaNoSetor(setorDestino, incluir) &&
+                                  (estrategiaTransferenciaNode === "rodizio_aleatorio" ||
+                                    estrategiaTransferenciaNode === "menos_conversas")
+                                ) {
+                                  setEstrategiaTransferenciaNode("fila_setor");
+                                }
+                              }}
+                              onEstrategiaChange={(estrategia) => {
+                                setEstrategiaTransferenciaNode(estrategia);
+                                if (estrategia !== "atendente_especifico") {
+                                  setAtendenteDestinoNode("");
+                                }
+                              }}
+                              onAtendenteDestinoChange={setAtendenteDestinoNode}
+                            />
+                  )}
 
                   {tipoNodeEdicao !== "inicio" && tipoNodeEdicao !== "agendar_disparo" && (
                     <label className={styles.delayField}>
