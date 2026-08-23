@@ -28,6 +28,9 @@ import PropertiesPanel from "./components/PropertiesPanel";
 import EncerrarConfig from "./components/node-config/EncerrarConfig";
 import CapturarRespostaConfig from "./components/node-config/CapturarRespostaConfig";
 import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";
+import RedirectConfig from "./components/node-config/RedirectConfig";
+import PerguntaOpcoesConfig from "./components/node-config/PerguntaOpcoesConfig";
+import BotoesConfig from "./components/node-config/BotoesConfig";
 import FluxoCanvas from "./components/FluxoCanvas";
 import FluxoEditorHeader from "./components/FluxoEditorHeader";
 import FluxosSidebar from "./components/FluxosSidebar";
@@ -7538,157 +7541,26 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                     </div>
                   )}
 
-                  {tipoNodeEdicao === "pergunta_opcoes" && (
-                    <div className={styles.optionsBox}>
-                      <div className={styles.optionsHeader}>
-                        <span className={styles.label}>Opções da pergunta</span>
-                        <button
-                          type="button"
-                          className={styles.smallButton}
-                          onClick={adicionarOpcaoPergunta}
-                        >
-                          + Opção
-                        </button>
-                      </div>
+                  <PerguntaOpcoesConfig
+          opcoes={opcoesNode}
+          onAdicionar={adicionarOpcaoPergunta}
+          onAtualizar={atualizarOpcaoPergunta}
+          onRemover={removerOpcaoPergunta}
+        />
 
-                      {opcoesNode.length === 0 ? (
-                        <p className={styles.help}>Nenhuma opção cadastrada.</p>
-                      ) : (
-                        opcoesNode.map((opcao, index) => (
-                          <div key={index} className={styles.optionRow}>
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>ID da resposta</span>
-                              <input
-                                className={styles.optionValueInput}
-                                value={opcao.valor}
-                                onChange={(e) =>
-                                  atualizarOpcaoPergunta(index, "valor", e.target.value)
-                                }
-                                placeholder="1"
-                              />
-                            </label>
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>Texto do botão</span>
-                              <input
-                                className={styles.input}
-                                value={opcao.titulo}
-                                onChange={(e) =>
-                                  atualizarOpcaoPergunta(index, "titulo", e.target.value)
-                                }
-                                placeholder="Comercial"
-                              />
-                            </label>
+                  <BotoesConfig
+          botoes={botoesNode}
+          onAdicionar={adicionarBotaoResposta}
+          onAtualizar={atualizarBotaoResposta}
+          onRemover={removerBotaoResposta}
+        />
 
-                            <button
-                              type="button"
-                              className={styles.dangerSmallButton}
-                              onClick={() => removerOpcaoPergunta(index)}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "enviar_botoes" && (
-                    <div className={styles.optionsBox}>
-                      <div className={styles.optionsHeader}>
-                        <span className={styles.label}>Botões de resposta</span>
-
-                        <button
-                          type="button"
-                          className={styles.smallButton}
-                          onClick={adicionarBotaoResposta}
-                          disabled={botoesNode.length >= 3}
-                        >
-                          + Botão
-                        </button>
-                      </div>
-
-                      {botoesNode.length === 0 ? (
-                        <p className={styles.help}>Nenhum botão cadastrado.</p>
-                      ) : (
-                        botoesNode.map((botao, index) => (
-                          <div key={index} className={styles.botaoRespostaRow}>
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>ID da resposta</span>
-                              <input
-                                className={styles.optionValueInput}
-                                value={botao.id}
-                                onChange={(e) =>
-                                  atualizarBotaoResposta(index, "id", e.target.value)
-                                }
-                                placeholder="sim"
-                              />
-                            </label>
-
-                            <label className={styles.botaoRespostaCampo}>
-                              <span className={styles.botaoRespostaLabel}>Texto do botão</span>
-                              <input
-                                className={styles.input}
-                                value={botao.titulo}
-                                onChange={(e) =>
-                                  atualizarBotaoResposta(index, "titulo", e.target.value)
-                                }
-                                placeholder="Sim"
-                                maxLength={20}
-                              />
-                            </label>
-
-                            <button
-                              type="button"
-                              className={styles.dangerSmallButton}
-                              onClick={() => removerBotaoResposta(index)}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))
-                      )}
-
-                      <p className={styles.help}>
-                        O cliente vê o texto do botão. A conexão do fluxo deve usar o ID da resposta.
-                        Exemplo: ID “não” conecta com resposta esperada “não”.
-                      </p>
-                        <p className={styles.help}> O WhatsApp permite até 20 caracteres no botão.</p>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "botao_redirect" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Texto do botão</span>
-                        <input
-                          className={styles.input}
-                          value={redirectBotaoTextoNode}
-                          onChange={(e) =>
-                            setRedirectBotaoTextoNode(e.target.value)
-                          }
-                          placeholder="Acessar"
-                          maxLength={20}
-                        />
-                        <span className={styles.help}>
-                          O WhatsApp permite ate 20 caracteres no botão CTA.
-                        </span>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>URL de destino</span>
-                        <input
-                          className={styles.input}
-                          value={redirectUrlNode}
-                          onChange={(e) => setRedirectUrlNode(e.target.value)}
-                          placeholder="https://chat.whatsapp.com/..."
-                        />
-                        <span className={styles.help}>
-                          Use um link https, incluindo convites de grupo do
-                          WhatsApp ou links externos.
-                        </span>
-                      </label>
-                    </div>
-                  )}
+                  <RedirectConfig
+          textoBotao={redirectBotaoTextoNode}
+          url={redirectUrlNode}
+          onTextoBotaoChange={setRedirectBotaoTextoNode}
+          onUrlChange={setRedirectUrlNode}
+        />
 
                   {tipoNodeEdicao === "agendar_disparo" && (
                     <div className={styles.optionsBox}>
