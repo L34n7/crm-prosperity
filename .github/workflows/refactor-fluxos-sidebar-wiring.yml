@@ -1,0 +1,158 @@
+name: Refactor fluxos sidebar wiring
+
+on:
+  push:
+    branches:
+      - refactor/fluxos-editor-estrutura
+
+permissions:
+  contents: write
+
+jobs:
+  wire-sidebar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/fluxos-editor-estrutura
+          fetch-depth: 0
+
+      - name: Wire extracted sidebar
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/(private)/fluxos/FluxosEditor.tsx")
+          text = path.read_text(encoding="utf-8")
+
+          def replace_between(source: str, start_marker: str, end_marker: str, replacement: str) -> str:
+              if source.count(start_marker) != 1:
+                  raise RuntimeError(f"Expected one start marker: {start_marker!r}")
+              start = source.index(start_marker)
+              end = source.index(end_marker, start)
+              return source[:start] + replacement + source[end:]
+
+          def remove_function(source: str, name: str) -> str:
+              prefix = f"function {name}("
+              if source.count(prefix) != 1:
+                  raise RuntimeError(f"Expected one function {name}")
+              start = source.index(prefix)
+              brace = source.index('{', start)
+              depth = 0
+              quote = None
+              escaped = False
+              i = brace
+              while i < len(source):
+                  ch = source[i]
+                  if quote is not None:
+                      if escaped:
+                          escaped = False
+                      elif ch == "\\":
+                          escaped = True
+                      elif ch == quote:
+                          quote = None
+                      i += 1
+                      continue
+                  if ch in ('"', "'", '`'):
+                      quote = ch
+                      i += 1
+                      continue
+                  if ch == '{':
+                      depth += 1
+                  elif ch == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          while end < len(source) and source[end] == '\n':
+                              end += 1
+                          return source[:start] + source[end:]
+                  i += 1
+              raise RuntimeError(f"Could not find end of function {name}")
+
+          import_anchor = 'import FluxoEditorHeader from "./components/FluxoEditorHeader";\n'
+          sidebar_import = 'import FluxosSidebar from "./components/FluxosSidebar";\n'
+          if text.count(import_anchor) != 1:
+              raise RuntimeError("Header import anchor not found exactly once")
+          if sidebar_import not in text:
+              text = text.replace(import_anchor, import_anchor + sidebar_import, 1)
+
+          possui_acao = '''  const possuiAcaoFluxo =\n    podeCriarFluxos ||\n    podeEditarFluxos ||\n    podeAtivarFluxos ||\n    podeArquivarFluxos ||\n    podeExcluirFluxos;\n'''
+          if text.count(possui_acao) != 1:
+              raise RuntimeError("possuiAcaoFluxo block not found exactly once")
+          text = text.replace(possui_acao, '', 1)
+
+          menu_state_start = '  const [menuFluxo, setMenuFluxo] = useState<{\n'
+          menu_state_end = '  const [gatilhosFluxo, setGatilhosFluxo] = useState<GatilhoFluxo[]>([]);\n'
+          if menu_state_start not in text:
+              raise RuntimeError("menuFluxo state not found")
+          start = text.index(menu_state_start)
+          end = text.index(menu_state_end, start)
+          state_block = text[start:end]
+          if 'buttonTop: number;' not in state_block or 'buttonBottom: number;' not in state_block:
+              raise RuntimeError("Unexpected menuFluxo state shape")
+          # Preserve menuHeaderAberto only if it appears before menuFluxo and is still referenced elsewhere.
+          text = text[:start] + text[end:]
+
+          # menuHeaderAberto became local state of FluxoEditorHeader after extraction.
+          menu_header_line = '  const [menuHeaderAberto, setMenuHeaderAberto] = useState(false);\n'
+          if menu_header_line in text:
+              if text.count('menuHeaderAberto') == 1 and text.count('setMenuHeaderAberto') == 1:
+                  text = text.replace(menu_header_line, '', 1)
+
+          text = remove_function(text, 'badgeClass')
+
+          click_effect = '''useEffect(() => {\n  function handleClick() {\n    setMenuFluxo(null);\n  }\n  window.addEventListener("click", handleClick);\n  return () => window.removeEventListener("click", handleClick);\n}, []);\n\n'''
+          if text.count(click_effect) != 1:
+              raise RuntimeError("menuFluxo click effect not found exactly once")
+          text = text.replace(click_effect, '', 1)
+
+          sidebar = '''      <FluxosSidebar\n        fluxos={fluxos}\n        fluxoSelecionadoId={fluxoSelecionado?.id}\n        carregandoFluxos={carregandoFluxos}\n        buscaFluxo={buscaFluxo}\n        filtroStatusFluxo={filtroStatusFluxo}\n        podeCriarFluxos={podeCriarFluxos}\n        podeEditarFluxos={podeEditarFluxos}\n        podeAtivarFluxos={podeAtivarFluxos}\n        podeArquivarFluxos={podeArquivarFluxos}\n        podeExcluirFluxos={podeExcluirFluxos}\n        isFluxoSistema={fluxoEhSistemaCalendario}\n        onBuscaFluxoChange={setBuscaFluxo}\n        onFiltroStatusChange={setFiltroStatusFluxo}\n        onAbrirFluxo={abrirFluxo}\n        onNovoFluxo={() => {\n          setErroCriacaoFluxo("");\n          setNovoFluxoNome("");\n          setDescricaoNovoFluxo("");\n          setNovoFluxoPadrao(false);\n          setGatilhosNovoFluxo([]);\n          setNovoGatilhoValor("");\n          setNovoGatilhoCondicao("contem");\n          resetarEncerramentoInatividadePadrao();\n          setAbrirCriacao(true);\n        }}\n        onImportarFluxo={() => {\n          setErroImportacao("");\n          setCodigoImportacao("");\n          setModalImportarAberto(true);\n        }}\n        onRestaurarFluxo={(fluxoAlvo) => {\n          void restaurarFluxo(fluxoAlvo);\n        }}\n        onApagarDefinitivo={abrirModalApagarDefinitivo}\n        onAlterarStatus={(fluxoAlvo, status) => {\n          void alterarStatusFluxo(fluxoAlvo, status);\n        }}\n        onEditarFluxo={abrirEdicaoFluxo}\n        onDuplicarFluxo={(fluxoAlvo) => {\n          void duplicarFluxo(fluxoAlvo);\n        }}\n        onCompartilharFluxo={abrirCompartilhamentoFluxo}\n        onArquivarFluxo={abrirModalArquivarFluxo}\n        onAbrirTooltipAlertaFluxo={abrirTooltipAlertaFluxo}\n        onFecharTooltipAlertaFluxo={() => setTooltipAlertaFluxo(null)}\n      />\n\n'''
+          text = replace_between(
+              text,
+              '      <aside className={styles.sidebarFluxos}>',
+              '      <section className={styles.editorPanel}>',
+              sidebar,
+          )
+
+          text = replace_between(
+              text,
+              '        {menuFluxo && menuFluxo.fluxo && (',
+              '        {previaGeracaoDescricaoIa && (',
+              '',
+          )
+
+          forbidden = [
+              'className={styles.sidebarFluxos}',
+              'menuFluxo && menuFluxo.fluxo',
+              'function badgeClass(',
+              'const possuiAcaoFluxo =',
+              'const [menuFluxo, setMenuFluxo]',
+              'setMenuFluxo(null)',
+          ]
+          for marker in forbidden:
+              if marker in text:
+                  raise RuntimeError(f"Old sidebar marker still present: {marker}")
+
+          required = [
+              'import FluxosSidebar from "./components/FluxosSidebar";',
+              '<FluxosSidebar',
+              'onAbrirTooltipAlertaFluxo={abrirTooltipAlertaFluxo}',
+              '<section className={styles.editorPanel}>',
+              '{previaGeracaoDescricaoIa && (',
+          ]
+          for marker in required:
+              if marker not in text:
+                  raise RuntimeError(f"Expected new marker missing: {marker}")
+
+          path.write_text(text, encoding="utf-8")
+          Path(".github/workflows/refactor-fluxos-sidebar-wiring.yml").unlink()
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git commit -m "refactor: conectar sidebar extraida ao editor de fluxos"
+          git push origin HEAD:refactor/fluxos-editor-estrutura
