@@ -137,7 +137,7 @@ export const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
   "status_lead",
   "protocolo_atual",
   "ultimo_protocolo",
-] as const;
+];
 
 export const TIPOS_NO_MIDIA = new Set([
   "enviar_imagem",

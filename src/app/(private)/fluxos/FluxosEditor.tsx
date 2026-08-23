@@ -30,6 +30,61 @@ import {
   montarPreviaWhatsappFluxo,
   type EncerramentoInatividadePreviaWhatsapp,
 } from "./whatsapp-preview";
+import type {
+  AgendaOpcao,
+  AlvoVariavelFluxo,
+  AtendenteOpcao,
+  AutomacaoConexao,
+  AutomacaoNo,
+  EscopoFilaNode,
+  EscopoIntegracoesFluxo,
+  EscopoIntegracoesModo,
+  EstrategiaTransferenciaNode,
+  Fluxo,
+  GatilhoFluxo,
+  ImpactoExclusaoMidia,
+  IntegracaoWhatsappOpcao,
+  MidiaOpcao,
+  PreviaGeracaoDescricaoIa,
+  PreviewTemplateWhatsapp,
+  ResultadoEncerramentoFluxo,
+  SetorOpcao,
+  TemplateWhatsappOpcao,
+  TipoValorConversao,
+  VariavelPersonalizada,
+} from "./types";
+import {
+  ACCEPT_ARQUIVOS,
+  AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA,
+  CHAVES_REFERENCIA_MIDIA_NODE,
+  LIMITE_ARQUIVO_BYTES,
+  LIMITE_AUDIO_BYTES,
+  LIMITE_DELAY_SEGUNDOS,
+  LIMITE_IMAGEM_BYTES,
+  LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES,
+  LIMITE_VIDEO_BYTES,
+  NODE_CARD_HEIGHT,
+  NODE_CARD_WIDTH,
+  NODE_GAP_X,
+  NODE_GAP_Y,
+  RESULTADOS_ENCERRAMENTO,
+  TIPOS_NO_MIDIA,
+  TIPOS_VALOR_CONVERSAO,
+  TIPO_NO_PERGUNTA_LIVRE_IA,
+  TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS,
+  TOKENS_SAIDA_MAX_DESCRICAO_IA,
+  VARIAVEIS_FIXAS_CONTATO_HELP,
+  VARIAVEIS_FIXAS_CONTATO_RESERVADAS,
+  VARIAVEIS_FIXAS_SISTEMA,
+} from "./constants";
+import {
+  labelTipoNo,
+  normalizarDelaySegundos,
+  opcoesRespostaDoNo,
+  tituloEhPadraoDoSistema,
+  tituloPadraoTipoNo,
+  tituloVisivelCard,
+} from "./utils";
 import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import { gerarSugestaoDescricaoIAComContexto } from "@/lib/ia/sugestoes-descricao-ia";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -40,75 +95,6 @@ import {
   Share2,
   Sparkles,
 } from "lucide-react";
-
-type Fluxo = {
-  id: string;
-  nome: string;
-  descricao: string | null;
-  status: "rascunho" | "ativo" | "pausado" | "arquivado";
-  canal: string;
-  fluxo_padrao?: boolean;
-  created_at?: string;
-  configuracao_json?: Record<string, any>;
-  alertas_configuracao?: {
-    interpretar_arquivo_ia_sem_conexao_erro?: number;
-  };
-};
-
-type AutomacaoNo = {
-  id: string;
-  tipo_no: string;
-  titulo: string;
-  descricao: string | null;
-  posicao_x: number;
-  posicao_y: number;
-  configuracao_json: Record<string, any>;
-  delay_segundos: number | null;
-};
-
-type AutomacaoConexao = {
-  id: string;
-  no_origem_id: string;
-  no_destino_id: string;
-  rotulo: string | null;
-  ordem: number;
-  condicao_json: Record<string, any>;
-  usar_ia?: boolean;
-  descricao_ia?: string | null;
-};
-
-type PreviaGeracaoDescricaoIa = {
-  modo: "conexao" | "bloco";
-  titulo: string;
-  conexoes: Array<{
-    edgeId: string;
-    nome: string;
-    tokensEstimados: number;
-  }>;
-  tokensMin: number;
-  tokensMax: number;
-};
-
-type GatilhoFluxo = {
-  id: string;
-  tipo_gatilho: string;
-  valor: string;
-  condicao: "contem" | "exata" | "inicia_com" | "regex";
-  ativo: boolean;
-};
-
-type SetorOpcao = {
-  id: string;
-  nome: string;
-};
-
-type EstrategiaTransferenciaNode =
-  | "fila_setor"
-  | "atendente_especifico"
-  | "rodizio_aleatorio"
-  | "menos_conversas";
-
-type EscopoFilaNode = "setor" | "geral";
 
 // CRM_QUEUE_SCOPE_EDITOR_V1
 function normalizarEscopoFilaNode(
@@ -129,14 +115,6 @@ function fluxoEhSistemaCalendario(fluxo?: Fluxo | null) {
   );
 }
 
-type AtendenteOpcao = {
-  id: string;
-  nome: string;
-  email?: string | null;
-  setor_ids: string[];
-  is_administrador?: boolean;
-};
-
 function normalizarEstrategiaTransferenciaNode(
   valor: unknown,
   atendenteId?: unknown
@@ -155,74 +133,6 @@ function normalizarEstrategiaTransferenciaNode(
     ? "atendente_especifico"
     : "fila_setor";
 }
-
-type MidiaOpcao = {
-  id: string;
-  nome: string;
-  tipo: "imagem" | "video" | "audio" | "arquivo";
-  url: string;
-  mime_type: string | null;
-  tamanho_bytes: number | null;
-  created_at?: string;
-};
-
-type ImpactoExclusaoMidia = {
-  total_blocos_afetados?: number;
-  total_fluxos_afetados?: number;
-  total_fluxos_pausados?: number;
-  fluxos_afetados?: Array<{
-    id: string;
-    nome?: string | null;
-    status_anterior?: string | null;
-    status_atual?: string | null;
-    pausado?: boolean;
-  }>;
-};
-
-type TemplateWhatsappOpcao = {
-  id: string;
-  nome: string;
-  idioma: string;
-  status: string;
-  categoria?: string | null;
-  integracao_whatsapp_id: string;
-  waba_id?: string | null;
-  payload?: any;
-};
-
-type IntegracaoWhatsappOpcao = {
-  id: string;
-  nome_conexao?: string | null;
-  numero?: string | null;
-  status?: string | null;
-  posicao?: number | null;
-  waba_id?: string | null;
-};
-
-type EscopoIntegracoesModo = "todas" | "selecionadas";
-
-type EscopoIntegracoesFluxo = {
-  modo: EscopoIntegracoesModo;
-  ids: string[];
-};
-
-type PreviewTemplateWhatsapp = {
-  titulo: string;
-  corpo: string;
-  rodape: string;
-  botoes: string[];
-};
-
-type VariavelPersonalizada = {
-  id: string;
-  chave: string;
-  valor: string;
-  descricao: string | null;
-  escopo: "global" | "disparos" | "fluxos";
-  ativo: boolean;
-};
-
-type AlvoVariavelFluxo = "mensagem" | "agendar_disparo" | "agenda_lembrete";
 
 function templateWhatsappAprovado(template?: TemplateWhatsappOpcao | null) {
   return String(template?.status || "").trim().toUpperCase() === "APPROVED";
@@ -500,39 +410,7 @@ function montarPreviewTemplateWhatsapp(
   };
 }
 
-type AgendaOpcao = {
-  id: string;
-  nome: string;
-  timezone: string;
-  duracao_minutos: number;
-  intervalo_minutos: number;
-  janela_dias: number;
-  status: string;
-};
-
-type ResultadoEncerramentoFluxo = "positivo" | "negativo" | "neutro";
-type TipoValorConversao = "sem_valor" | "valor_fixo" | "variavel";
-
-const RESULTADOS_ENCERRAMENTO: ResultadoEncerramentoFluxo[] = [
-  "positivo",
-  "negativo",
-  "neutro",
-];
-
-const TIPOS_VALOR_CONVERSAO: TipoValorConversao[] = [
-  "sem_valor",
-  "valor_fixo",
-  "variavel",
-];
-
-const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
-const LIMITE_VIDEO_BYTES = 16 * 1024 * 1024;
-const LIMITE_IMAGEM_BYTES = 5 * 1024 * 1024;
-const LIMITE_AUDIO_BYTES = 16 * 1024 * 1024;
-const LIMITE_ARQUIVO_BYTES = 50 * 1024 * 1024;
-const ACCEPT_ARQUIVOS =
-  ".pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
-
+ // 50 MB
 function mimeTypeParaUpload(arquivo: File) {
   const extensao = arquivo.name.split(".").pop()?.toLowerCase() || "";
   const mimePorExtensao: Record<string, string> = {
@@ -553,122 +431,7 @@ function mimeTypeParaUpload(arquivo: File) {
     "application/octet-stream"
   );
 }
-const LIMITE_DELAY_SEGUNDOS = 23 * 60 * 60; 
-const VARIAVEIS_FIXAS_CONTATO_HELP =
-    "Variáveis do sistema: {{nome_empresa}}, {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{calendario_nome}}, {{agendamento_titulo}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
-const VARIAVEIS_FIXAS_SISTEMA = [
-  // CRM_SYSTEM_CANONICAL_VARIABLES_EDITOR_V1
-  {
-    chave: "nome_empresa",
-    exemplo: "{{nome_empresa}}",
-    descricao: "Nome da empresa salvo em Configurações Gerais.",
-  },
-  {
-    chave: "calendario_nome",
-    exemplo: "{{calendario_nome}}",
-    descricao: "Nome do calendário vinculado ao agendamento atual.",
-  },
-  {
-    chave: "calendario_nome_novo",
-    exemplo: "{{calendario_nome_novo}}",
-    descricao: "Nome do calendário usado no novo horário selecionado.",
-  },
-  {
-    chave: "agendamento_titulo",
-    exemplo: "{{agendamento_titulo}}",
-    descricao: "Título salvo no agendamento atual.",
-  },
-  {
-    chave: "nome_contato",
-    exemplo: "{{nome_contato}}",
-    descricao: "Nome salvo no cadastro do contato.",
-  },
-  {
-    chave: "nome",
-    exemplo: "{{nome}}",
-    descricao: "Nome do contato.",
-  },
-  {
-    chave: "nome_whatsapp",
-    exemplo: "{{nome_whatsapp}}",
-    descricao:
-      "Nome do perfil do WhatsApp quando existir; se não existir, usa o nome salvo no contato.",
-  },
-  {
-    chave: "email_contato",
-    exemplo: "{{email_contato}}",
-    descricao: "E-mail salvo no cadastro do contato.",
-  },
-  {
-    chave: "numero_contato",
-    exemplo: "{{numero_contato}}",
-    descricao: "Número/telefone salvo no cadastro do contato.",
-  },
-  {
-    chave: "campanha",
-    exemplo: "{{campanha}}",
-    descricao: "Campanha vinculada ao contato.",
-  },
-  {
-    chave: "origem",
-    exemplo: "{{origem}}",
-    descricao: "Origem do contato.",
-  },
-  {
-    chave: "status_lead",
-    exemplo: "{{status_lead}}",
-    descricao: "Classificacao atual do lead.",
-  },
-  {
-    chave: "classificacao_lead",
-    exemplo: "{{classificacao_lead}}",
-    descricao: "Classificacao global do lead.",
-  },
-  {
-    chave: "protocolo_atual",
-    exemplo: "{{protocolo_atual}}",
-    descricao: "Protocolo ativo da conversa atual do contato.",
-  },
-  {
-    chave: "ultimo_protocolo",
-    exemplo: "{{ultimo_protocolo}}",
-    descricao: "Último protocolo encerrado/inativo do contato.",
-  },
-];
-const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
-  "nome_empresa",
-  "empresa_nome",
-  "calendario_nome",
-  "calendario_nome_novo",
-  "agendamento_titulo",
-  "nome",
-  "nome_contato",
-  "contato_nome",
-  "nome_whatsapp",
-  "whatsapp_nome",
-  "nome_perfil_whatsapp",
-  "perfil_whatsapp_nome",
-
-  "email",
-  "email_contato",
-  "contato_email",
-
-  "telefone",
-  "numero",
-  "numero_contato",
-  "contato_numero",
-  "telefone_contato",
-  "contato_telefone",
-
-  "campanha",
-  "origem",
-  "status",
-  "status_lead",
-
-  "protocolo_atual",
-  "ultimo_protocolo",
-];
-
+ 
 async function lerRespostaApi(res: Response, mensagemPadrao: string) {
   const contentType = res.headers.get("content-type") || "";
   const text = await res.text();
@@ -701,137 +464,12 @@ async function lerRespostaApi(res: Response, mensagemPadrao: string) {
   }
 }
 
-const TIPO_NO_PERGUNTA_LIVRE_IA = "pergunta_livre_ia";
-const TIPOS_NO_MIDIA = new Set([
-  "enviar_imagem",
-  "enviar_video",
-  "enviar_audio",
-  "enviar_arquivo",
-]);
-const CHAVES_REFERENCIA_MIDIA_NODE = [
-  "midia_url",
-  "midia_nome",
-  "midia_id",
-  "media_url",
-  "media_nome",
-  "media_id",
-  "arquivo_url",
-  "arquivo_nome",
-  "arquivo_id",
-  "storage_path",
-  "storagePath",
-];
-const TOKENS_SAIDA_MAX_DESCRICAO_IA = 180;
-const TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS = 190;
-
-
 function criarIdTemporario(prefixo: string) {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
 
   return `${prefixo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function labelTipoNo(tipo: string) {
-  if (tipo === "inicio") return "Início";
-  if (tipo === "enviar_texto") return "Mensagem";
-  if (tipo === "pergunta_opcoes") return "Pergunta";
-  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return "Pergunta IA";
-  if (tipo === "transferir_setor") return "Transferir";
-  if (tipo === "encerrar") return "Encerrar";
-  if (tipo === "enviar_imagem") return "Imagem";
-  if (tipo === "enviar_video") return "Vídeo";
-  if (tipo === "enviar_audio") return "Áudio";
-  if (tipo === "enviar_arquivo") return "Arquivo";
-  if (tipo === "enviar_botoes") return "Botões";
-  if (tipo === "botao_redirect") return "Botão redirect";
-  if (tipo === "avaliacao") return "Avaliação";
-  if (tipo === "capturar_resposta") return "Captura";
-  if (tipo === "agendar_disparo") return "Agendar disparo";
-  if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";
-  if (tipo === "agenda_escolher_horario") return "Escolher horário";
-  if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
-  if (tipo === "agenda_remarcar_agendamento") return "Remarcar";
-  if (tipo === "agenda_cancelar_agendamento") return "Cancelar agenda";
-  if (tipo === "interpretar_arquivo_ia") return "Interp. arquivo IA";
-  return tipo;
-}
-
-function tituloPadraoTipoNo(tipo: string) {
-  if (tipo === "inicio") return "Início";
-  if (tipo === "enviar_texto") return "Nova mensagem";
-  if (tipo === "pergunta_opcoes") return "Nova pergunta";
-  if (tipo === TIPO_NO_PERGUNTA_LIVRE_IA) return "Pergunta aberta IA";
-  if (tipo === "enviar_botoes") return "Pergunta botões";
-  if (tipo === "botao_redirect") return "Botão redirect";
-  if (tipo === "transferir_setor") return "Transferir setor";
-  if (tipo === "encerrar") return "Encerrar";
-  if (tipo === "enviar_imagem") return "Nova imagem";
-  if (tipo === "enviar_video") return "Novo vídeo";
-  if (tipo === "enviar_audio") return "Novo áudio";
-  if (tipo === "enviar_arquivo") return "Novo arquivo";
-  if (tipo === "avaliacao") return "Avaliação";
-  if (tipo === "capturar_resposta") return "Capturar resposta";
-  if (tipo === "agendar_disparo") return "Agendar disparo";
-  if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";
-  if (tipo === "agenda_escolher_horario") return "Escolher horário";
-  if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
-  if (tipo === "agenda_remarcar_agendamento") return "Remarcar agendamento";
-  if (tipo === "agenda_cancelar_agendamento") return "Cancelar agendamento";
-  if (tipo === "interpretar_arquivo_ia") return "Interpretar arquivo IA";
-  return "Novo bloco";
-}
-
-function tituloEhPadraoDoSistema(titulo: string, tipoNoAtual: string) {
-  const tituloLimpo = String(titulo || "").trim();
-
-  if (!tituloLimpo) return true;
-
-  return (
-    tituloLimpo === tituloPadraoTipoNo(tipoNoAtual) ||
-    tituloLimpo === labelTipoNo(tipoNoAtual)
-  );
-}
-
-function cortarTextoCard(texto: string, limite = 34) {
-  const textoLimpo = String(texto || "").replace(/\s+/g, " ").trim();
-
-  if (!textoLimpo) return "";
-
-  return textoLimpo.length > limite
-    ? `${textoLimpo.slice(0, limite)}...`
-    : textoLimpo;
-}
-
-function tituloVisivelCard(data: any) {
-  const tipoNo = String(data?.tipo_no || "");
-  const titulo = String(data?.titulo || "").trim();
-  const tituloPadrao = tituloPadraoTipoNo(tipoNo);
-  const labelPadrao = labelTipoNo(tipoNo);
-
-  const mensagensPadrao = [
-    "Digite a mensagem aqui.",
-    "Escolha uma opção:",
-    "Como posso te ajudar?",
-    "",
-  ];
-
-  const mensagem = String(data?.configuracao_json?.mensagem || "").trim();
-  const mensagemEhPadrao = mensagensPadrao.includes(mensagem);
-
-  const tituloEhPadrao =
-    !titulo || titulo === tituloPadrao || titulo === labelPadrao;
-
-  if (!tituloEhPadrao) {
-    return titulo;
-  }
-
-  if (mensagem && !mensagemEhPadrao) {
-    return cortarTextoCard(mensagem);
-  }
-
-  return tituloPadrao;
 }
 
 function tipoNoEsperaResposta(tipoNo: string) {
@@ -997,20 +635,6 @@ function normalizarVariavelFluxo(valor: string) {
     .replace(/^_|_$/g, "");
 }
 
-function normalizarDelaySegundos(valor: string | number | null | undefined) {
-  if (valor === null || valor === undefined || valor === "") {
-    return null;
-  }
-
-  const numero = Number(valor);
-
-  if (!Number.isFinite(numero)) {
-    return null;
-  }
-
-  return Math.max(0, Math.min(LIMITE_DELAY_SEGUNDOS, Math.floor(numero)));
-}
-
 function formatarTamanhoArquivo(bytes?: number | null) {
   const valor = Number(bytes || 0);
 
@@ -1126,46 +750,9 @@ function rotuloPadraoPorTipoNo(tipoNo: string) {
   return tipoNoEsperaResposta(tipoNo) ? "Nova condição" : "Sempre seguir";
 }
 
-type OpcaoRespostaConexao = {
-  valor: string;
-  titulo: string;
-};
-
 type EdgeDataConexao = {
   condicao_json?: Record<string, unknown>;
 };
-
-function opcoesRespostaDoNo(node?: Node | null): OpcaoRespostaConexao[] {
-  const tipoNo = String(node?.data?.tipo_no || "");
-  const configuracao = (node?.data?.configuracao_json || {}) as {
-    opcoes?: Array<Record<string, unknown>>;
-    botoes?: Array<Record<string, unknown>>;
-  };
-
-  if (tipoNo === "pergunta_opcoes") {
-    return Array.isArray(configuracao.opcoes)
-      ? configuracao.opcoes
-          .map((opcao) => ({
-            valor: String(opcao.valor || "").trim(),
-            titulo: String(opcao.titulo || "").trim(),
-          }))
-          .filter((opcao) => Boolean(opcao.valor))
-      : [];
-  }
-
-  if (tipoNo === "enviar_botoes") {
-    return Array.isArray(configuracao.botoes)
-      ? configuracao.botoes
-          .map((botao) => ({
-            valor: String(botao.id || "").trim(),
-            titulo: String(botao.titulo || "").trim(),
-          }))
-          .filter((botao) => Boolean(botao.valor))
-      : [];
-  }
-
-  return [];
-}
 
 function proximaOpcaoRespostaDisponivel(
   nodeOrigem: Node | undefined,
@@ -1229,15 +816,6 @@ function rotuloConexaoIaPorDestino(nodeDestino?: Node | null) {
     "Intencao IA"
   );
 }
-
-const AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA =
-  "Este fluxo possui um ou mais blocos Interp. arquivo IA sem a saída erro. Revise os blocos sinalizados no canvas.";
-
-const AVISO_BLOCO_CONEXAO_ERRO_ARQUIVO_IA =
-  "Este bloco precisa de uma CONEXÃO com palavra 'ERRO' em RESPOSTA ESPERADA para tratar falhas de IA e tokens esgotados.";
-
-const AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO =
-  "Este fluxo atende WABAs diferentes. Selecione um template aprovado para cada número neste bloco.";
 
 function normalizarTextoComparacao(valor: unknown) {
   return String(valor || "").trim().toLowerCase();
@@ -1311,11 +889,6 @@ function nodeAgendarDisparoPrecisaTemplatePorWaba(
     );
   });
 }
-
-const NODE_CARD_WIDTH = 160;
-const NODE_CARD_HEIGHT = 95;
-const NODE_GAP_X = 70;
-const NODE_GAP_Y = 40;
 
 function posicoesSobrepostas(
   a: { x: number; y: number },
