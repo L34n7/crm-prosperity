@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CopyPlus } from "lucide-react";
 import type { Fluxo } from "../types";
+import { AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA } from "../constants";
 import styles from "../fluxos.module.css";
 
 export type FiltroStatusFluxo =
@@ -44,6 +45,8 @@ type FluxosSidebarProps = {
   onDuplicarFluxo: (fluxo: Fluxo) => void;
   onCompartilharFluxo: (fluxo: Fluxo) => void;
   onArquivarFluxo: (fluxo: Fluxo) => void;
+  onAbrirTooltipAlertaFluxo: (elemento: HTMLElement) => void;
+  onFecharTooltipAlertaFluxo: () => void;
 };
 
 function badgeClass(status: string) {
@@ -77,6 +80,8 @@ export default function FluxosSidebar({
   onDuplicarFluxo,
   onCompartilharFluxo,
   onArquivarFluxo,
+  onAbrirTooltipAlertaFluxo,
+  onFecharTooltipAlertaFluxo,
 }: FluxosSidebarProps) {
   const [menuFluxo, setMenuFluxo] = useState<MenuFluxo | null>(null);
   const possuiAcaoFluxo =
@@ -234,6 +239,28 @@ export default function FluxosSidebar({
                       <span className={badgeClass(fluxo.status)}>
                         {fluxo.status}
                       </span>
+
+                      {Number(
+                        fluxo.alertas_configuracao
+                          ?.interpretar_arquivo_ia_sem_conexao_erro || 0
+                      ) > 0 && (
+                        <span
+                          className={`${styles.infoAlertIcon} ${styles.infoAlertIconFlow}`}
+                          aria-label={AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA}
+                          role="img"
+                          tabIndex={0}
+                          onMouseEnter={(event) =>
+                            onAbrirTooltipAlertaFluxo(event.currentTarget)
+                          }
+                          onMouseLeave={onFecharTooltipAlertaFluxo}
+                          onFocus={(event) =>
+                            onAbrirTooltipAlertaFluxo(event.currentTarget)
+                          }
+                          onBlur={onFecharTooltipAlertaFluxo}
+                        >
+                          i
+                        </span>
+                      )}
                     </div>
                   </div>
 
