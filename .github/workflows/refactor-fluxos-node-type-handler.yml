@@ -221,3 +221,5 @@ jobs:
           git add 'src/app/(private)/fluxos/FluxosEditor.tsx'
           git commit -m 'refactor: extrair handler de troca de tipo do bloco'
           git push origin HEAD:refactor/fluxos-editor-estrutura
+
+# retrigger
