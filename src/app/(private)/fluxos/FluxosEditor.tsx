@@ -23,6 +23,7 @@ import TemplateVariableCombobox, {
 import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
+import ConnectionEditor from "./components/ConnectionEditor";
 import FluxoCanvas from "./components/FluxoCanvas";
 import FluxoEditorHeader from "./components/FluxoEditorHeader";
 import FluxosSidebar from "./components/FluxosSidebar";
@@ -9608,275 +9609,89 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                 </div>
                 ) : (
-                <div className={styles.propertiesForm}>
-                    <label className={styles.field}>
-                      <span className={styles.label}>Nome da conexão</span>
-                      <input
-                        className={styles.input}
-                        value={tipoCondicaoConexao === "sempre" ? "Sempre seguir" : rotuloConexao}
-                        onChange={(e) => {
-                          setNomeConexaoEditadoManual(true);
-                          setRotuloConexao(e.target.value);
-                        }}
-                        placeholder="Ex: Opção 1, Sim, Comercial"
-                        disabled={tipoCondicaoConexao === "sempre"}
-                      />
-                    </label>
+                  <ConnectionEditor
+                    rotuloConexao={rotuloConexao}
+                    tipoCondicaoConexao={tipoCondicaoConexao}
+                    timeoutQuantidade={timeoutQuantidade}
+                    timeoutUnidade={timeoutUnidade}
+                    statusEnvioTimeout={statusEnvioTimeout}
+                    origemPerguntaLivreIa={edgeEditadaOrigemPerguntaLivreIa}
+                    usarIaConexao={usarIaConexao}
+                    descricaoIaConexao={descricaoIaConexao}
+                    valorCondicao={valorCondicao}
+                    gerandoDescricaoIaConexao={gerandoDescricaoIaConexao}
+                    salvando={salvando}
+                    confirmandoExclusaoConexao={confirmandoExclusaoConexao}
+                    onNomeConexaoChange={(valor) => {
+                      setNomeConexaoEditadoManual(true);
+                      setRotuloConexao(valor);
+                    }}
+                    onTipoCondicaoChange={(novoTipo) => {
+                      setTipoCondicaoConexao(novoTipo);
 
-                    <label className={styles.field}>
-                      <span className={styles.label}>Tipo da condição</span>
-                      <select
-                          className={styles.input}
-                          value={tipoCondicaoConexao}
-                          onChange={(e) => {
-                            const novoTipo = e.target.value;
+                      if (novoTipo === "sempre") {
+                        setValorCondicao("");
+                        setRotuloConexao("Sempre seguir");
+                        setUsarIaConexao(false);
+                      }
 
-                            setTipoCondicaoConexao(novoTipo);
+                      if (novoTipo === "timeout_sem_resposta") {
+                        setUsarIaConexao(false);
+                      }
+                    }}
+                    onTimeoutQuantidadeChange={setTimeoutQuantidade}
+                    onTimeoutUnidadeChange={setTimeoutUnidade}
+                    onStatusEnvioTimeoutChange={setStatusEnvioTimeout}
+                    onUsarIaChange={(ativo) => {
+                      setUsarIaConexao(ativo);
 
-                            if (novoTipo === "sempre") {
-                              setValorCondicao("");
-                              setRotuloConexao("Sempre seguir");
-                              setUsarIaConexao(false);
-                            }
+                      if (!ativo) {
+                        setDescricaoIaConexao("");
+                        return;
+                      }
 
-                            if (novoTipo === "timeout_sem_resposta") {
-                              setUsarIaConexao(false);
-                            }
-                          }}
-                        >
-                          <option value="resposta_igual">Exata</option>
-                          <option value="resposta_contem">Contém</option>
-                          <option value="resposta_inicia_com">Inicia com</option>
-                          <option value="resposta_regex">Regex</option>
-                          <option value="sempre">Sempre seguir</option>
-                          <option value="timeout_sem_resposta">Sem resposta após tempo</option>
-                      </select>
-                    </label>
+                      setDescricaoIaConexao(
+                        gerarSugestaoDescricaoIaConexao({
+                          edge: edgeEditada,
+                          rotulo: rotuloConexao,
+                          valor: valorCondicao,
+                        })
+                      );
+                    }}
+                    onDescricaoIaChange={setDescricaoIaConexao}
+                    onGerarDescricaoIa={gerarDescricaoConexaoComIa}
+                    onValorCondicaoChange={(novoValor) => {
+                      setValorCondicao(novoValor);
 
-                    {tipoCondicaoConexao === "timeout_sem_resposta" && (
-                      <div className={styles.optionsBox}>
-                        <div className={styles.timeoutGrid}>
-                          <label className={styles.field}>
-                            <span className={styles.label}>Tempo mínimo</span>
+                      if (!nomeConexaoEditadoManual) {
+                        setRotuloConexao(novoValor);
+                      }
 
-                            <input
-                              type="number"
-                              min={5}
-                              max={timeoutUnidade === "horas" ? 22 : 1320}
-                              className={styles.input}
-                              value={timeoutQuantidade}
-                              onChange={(e) => setTimeoutQuantidade(e.target.value)}
-                            />
-                          </label>
-
-                          <label className={styles.field}>
-                            <span className={styles.label}>Unidade</span>
-
-                            <select
-                              className={styles.input}
-                              value={timeoutUnidade}
-                              onChange={(e) =>
-                                setTimeoutUnidade(e.target.value as "minutos" | "horas")
-                              }
-                            >
-                              <option value="minutos">Minutos</option>
-                              <option value="horas">Horas</option>
-                            </select>
-                          </label>
-                        </div>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Status da mensagem</span>
-
-                          <select
-                            className={styles.input}
-                            value={statusEnvioTimeout}
-                            onChange={(e) =>
-                              setStatusEnvioTimeout(
-                                e.target.value as "qualquer" | "entregue" | "lida"
-                              )
-                            }
-                          >
-                            <option value="qualquer">Qualquer status</option>
-                            <option value="entregue">Apenas entregue</option>
-                            <option value="lida">Apenas lida</option>
-                          </select>
-                        </label>
-
-                        <p className={styles.help}>
-                          Para mensagens comuns do WhatsApp, o tempo precisa ser menor que 22 horas.
-                          Para 22h ou mais será necessário usar template aprovado.
-                        </p>
-                      </div>
-                    )}
-
-                    <div className={styles.IABox}>
-                      {edgeEditadaOrigemPerguntaLivreIa &&
-                        tipoCondicaoConexao !== "sempre" &&
-                        tipoCondicaoConexao !== "timeout_sem_resposta" && (
-                          <p className={styles.help}>
-                            Nesta origem, cada conexão com IA representa uma
-                            intenção possível para a resposta livre do cliente.
-                          </p>
-                        )}
-
-                      <label className={styles.IAField}>
-                        <input
-                          type="checkbox"
-                          checked={
-                            usarIaConexao &&
-                            tipoCondicaoConexao !== "sempre" &&
-                            tipoCondicaoConexao !== "timeout_sem_resposta"
-                          }
-                          disabled={
-                            tipoCondicaoConexao === "sempre" ||
-                            tipoCondicaoConexao === "timeout_sem_resposta"
-                          }
-                          onChange={(e) => {
-                            const ativo = e.target.checked;
-
-                            setUsarIaConexao(ativo);
-
-                            if (!ativo) {
-                              setDescricaoIaConexao("");
-                              return;
-                            }
-
-                            setDescricaoIaConexao(
-                              gerarSugestaoDescricaoIaConexao({
-                                edge: edgeEditada,
-                                rotulo: rotuloConexao,
-                                valor: valorCondicao,
-                              })
-                            );
-                          }}
-                        />
-
-                        <div>
-                          <strong>Usar IA para interpretar esta conexão</strong>
-                          <p>
-                            A IA vai analisar a resposta do cliente e escolher esta conexão quando a intenção combinar com a descrição abaixo.
-                          </p>
-                        </div>
-                      </label>
-
-                      {usarIaConexao && (
-                        <label className={styles.field}>
-                          <span className={styles.label}>Descrição para IA</span>
-
-                          <textarea
-                            className={styles.textarea}
-                            value={descricaoIaConexao}
-                            onChange={(e) => setDescricaoIaConexao(e.target.value)}
-                            placeholder="Ex: Use esta conexão quando o cliente quiser saber preço, planos, mensalidade, orçamento ou contratar."
-                          />
-
-                          <span className={styles.help}>
-                            Descreva a intenção do cliente. Não coloque resposta pronta; coloque quando esta conexão deve ser usada.
-                          </span>
-                        </label>
-                      )}
-
-                      {tipoCondicaoConexao !== "sempre" &&
-                        tipoCondicaoConexao !== "timeout_sem_resposta" && (
-                          <button
-                            type="button"
-                            className={`${styles.smallButtonIA} ${styles.generateIaButton}`}
-                            onClick={gerarDescricaoConexaoComIa}
-                            disabled={gerandoDescricaoIaConexao || salvando}
-                          >
-                            <Sparkles size={14} />
-                            {gerandoDescricaoIaConexao
-                              ? "Gerando..."
-                              : "Gerar descrição com IA"}
-                          </button>
-                        )}
-                    </div>
-
-                    {tipoCondicaoConexao !== "sempre" &&
-                      tipoCondicaoConexao !== "timeout_sem_resposta" &&
-                      !usarIaConexao && (
-                      <label className={styles.field}>
-                        <span className={styles.label}>ID da resposta 
-                        </span>
-                        <input
-                          className={styles.input}
-                          value={valorCondicao}
-                          onChange={(e) => {
-                            const novoValor = e.target.value;
-
-                            setValorCondicao(novoValor);
-
-                            if (!nomeConexaoEditadoManual) {
-                              setRotuloConexao(novoValor);
-                            }
-
-                            if (!descricaoIaConexao.trim()) {
-                              setDescricaoIaConexao(
-                                gerarSugestaoDescricaoIaConexao({
-                                  edge: edgeEditada,
-                                  rotulo: nomeConexaoEditadoManual
-                                    ? rotuloConexao
-                                    : novoValor,
-                                  valor: novoValor,
-                                })
-                              );
-                            }
-                          }}
-                          placeholder="Ex: 1, sim, quero comprar"
-                        />
-                      </label>
-                    )}
-
-                    <div
-                      className={`${styles.actionButtonsRow} ${styles.connectionActionButtonsRow}`}
-                    >
-                      {edgeEditada && (
-                        <>
-                          {confirmandoExclusaoConexao ? (
-                            <button
-                              type="button"
-                              className={styles.deleteNodeConfirmButton}
-                              onClick={() => removerConexao(edgeEditada.id)}
-                            >
-                              Excluir
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className={styles.deleteNodeIconButton}
-                              onClick={() => setConfirmandoExclusaoConexao(true)}
-                              title="Excluir conexão"
-                            >
-                              🗑
-                            </button>
-                          )}
-                        </>
-                      )}
-
-                      <button
-                        type="button"
-                        className={styles.secondaryButton}
-                        onClick={fecharPainelEdicao}
-                        
-                      >
-                        Cancelar
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.primaryButton}
-                        onClick={() => aplicarEdicaoConexao()}
-                        disabled={salvando}
-                      >
-                        Aplicar na conexão
-                      </button>
-                    </div>
-
-                    <p className={styles.help}>
-                    Depois de aplicar, clique em Salvar fluxo para gravar no banco.
-                    </p>
-                </div>
+                      if (!descricaoIaConexao.trim()) {
+                        setDescricaoIaConexao(
+                          gerarSugestaoDescricaoIaConexao({
+                            edge: edgeEditada,
+                            rotulo: nomeConexaoEditadoManual
+                              ? rotuloConexao
+                              : novoValor,
+                            valor: novoValor,
+                          })
+                        );
+                      }
+                    }}
+                    onPedirExclusao={() =>
+                      setConfirmandoExclusaoConexao(true)
+                    }
+                    onConfirmarExclusao={() => {
+                      if (edgeEditada) {
+                        removerConexao(edgeEditada.id);
+                      }
+                    }}
+                    onCancelar={fecharPainelEdicao}
+                    onAplicar={() => {
+                      void aplicarEdicaoConexao();
+                    }}
+                  />
                 )}
             </aside>
             )}
