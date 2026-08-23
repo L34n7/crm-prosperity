@@ -25,6 +25,9 @@ import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
 import ConnectionEditor from "./components/ConnectionEditor";
 import PropertiesPanel from "./components/PropertiesPanel";
+import EncerrarConfig from "./components/node-config/EncerrarConfig";
+import CapturarRespostaConfig from "./components/node-config/CapturarRespostaConfig";
+import AvaliacaoConfig from "./components/node-config/AvaliacaoConfig";
 import FluxoCanvas from "./components/FluxoCanvas";
 import FluxoEditorHeader from "./components/FluxoEditorHeader";
 import FluxosSidebar from "./components/FluxosSidebar";
@@ -7193,243 +7196,88 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                   )}
 
-                  {tipoNodeEdicao === "encerrar" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Resultado do fluxo</span>
-                        <select
-                          className={styles.input}
-                          value={encerrarResultadoNode}
-                          onChange={(e) => {
-                            const resultado = e.target.value;
+                  <EncerrarConfig
+          resultado={encerrarResultadoNode}
+          tipoValor={encerrarValorTipoNode}
+          valorFixo={encerrarValorFixoNode}
+          valorVariavel={encerrarValorVariavelNode}
+          onResultadoChange={(resultado) => {
+            setEncerrarResultadoNode(
+              resultadoEncerramentoValido(resultado)
+                ? resultado
+                : "positivo"
+            );
 
-                            setEncerrarResultadoNode(
-                              resultadoEncerramentoValido(resultado)
-                                ? resultado
-                                : "positivo"
-                            );
+            if (resultado !== "positivo") {
+              setEncerrarValorTipoNode("sem_valor");
+              setEncerrarValorFixoNode("");
+              setEncerrarValorVariavelNode("");
+            }
+          }}
+          onTipoValorChange={(tipoValor) => {
+            setEncerrarValorTipoNode(
+              tipoValorConversaoValido(tipoValor)
+                ? tipoValor
+                : "sem_valor"
+            );
 
-                            if (resultado !== "positivo") {
-                              setEncerrarValorTipoNode("sem_valor");
-                              setEncerrarValorFixoNode("");
-                              setEncerrarValorVariavelNode("");
-                            }
-                          }}
-                        >
-                          <option value="positivo">Positivo</option>
-                          <option value="negativo">Negativo</option>
-                          <option value="neutro">Neutro</option>
-                        </select>
-                        <span className={styles.help}>
-                          Esse resultado sera usado nos eventos e relatorios do
-                          rastreamento.
-                        </span>
-                      </label>
+            if (tipoValor !== "valor_fixo") {
+              setEncerrarValorFixoNode("");
+            }
 
-                      {encerrarResultadoNode === "positivo" && (
-                        <>
-                          <label className={styles.field}>
-                            <span className={styles.label}>
-                              Valor da conversao
-                            </span>
-                            <select
-                              className={styles.input}
-                              value={encerrarValorTipoNode}
-                              onChange={(e) => {
-                                const tipoValor = e.target.value;
+            if (tipoValor !== "variavel") {
+              setEncerrarValorVariavelNode("");
+            }
+          }}
+          onValorFixoChange={setEncerrarValorFixoNode}
+          onValorVariavelChange={setEncerrarValorVariavelNode}
+        />
 
-                                setEncerrarValorTipoNode(
-                                  tipoValorConversaoValido(tipoValor)
-                                    ? tipoValor
-                                    : "sem_valor"
-                                );
+                  <CapturarRespostaConfig
+          tipoCaptura={capturaTipoNode}
+          variavel={capturaVariavelNode}
+          mensagemErro={capturaMensagemErroNode}
+          onTipoCapturaChange={(novoTipo) => {
+            const variavelAtual = capturaVariavelNode
+              .trim()
+              .toLowerCase();
 
-                                if (tipoValor !== "valor_fixo") {
-                                  setEncerrarValorFixoNode("");
-                                }
+            setCapturaTipoNode(novoTipo);
 
-                                if (tipoValor !== "variavel") {
-                                  setEncerrarValorVariavelNode("");
-                                }
-                              }}
-                            >
-                              <option value="sem_valor">Sem valor</option>
-                              <option value="valor_fixo">Valor fixo</option>
-                              <option value="variavel">Variavel do fluxo</option>
-                            </select>
-                          </label>
+            const variaveisPadrao = [
+              "resposta",
+              "texto",
+              "nome",
+              "cpf",
+              "cnpj",
+              "email",
+              "telefone",
+              "numero",
+              "data",
+              "cep",
+            ];
 
-                          {encerrarValorTipoNode === "valor_fixo" && (
-                            <label className={styles.field}>
-                              <span className={styles.label}>
-                                Valor fixo da conversao
-                              </span>
-                              <input
-                                className={styles.input}
-                                value={encerrarValorFixoNode}
-                                onChange={(e) =>
-                                  setEncerrarValorFixoNode(e.target.value)
-                                }
-                                placeholder="Ex: 497,00"
-                              />
-                            </label>
-                          )}
+            if (
+              !variavelAtual ||
+              variaveisPadrao.includes(variavelAtual)
+            ) {
+              setCapturaVariavelNode(novoTipo);
+            }
+          }}
+          onVariavelChange={setCapturaVariavelNode}
+          onMensagemErroChange={setCapturaMensagemErroNode}
+        />
 
-                          {encerrarValorTipoNode === "variavel" && (
-                            <label className={styles.field}>
-                              <span className={styles.label}>
-                                Variavel com o valor
-                              </span>
-                              <input
-                                className={styles.input}
-                                value={encerrarValorVariavelNode}
-                                onChange={(e) =>
-                                  setEncerrarValorVariavelNode(e.target.value)
-                                }
-                                placeholder="Ex: valor_plano"
-                              />
-                              <span className={styles.help}>
-                                Informe o nome da variavel salva no fluxo, sem
-                                chaves. Exemplo: valor_plano.
-                              </span>
-                            </label>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "capturar_resposta" && (
-                    <div className={styles.optionsBox}>
-                      <label className={styles.field}>
-                        <span className={styles.label}>Tipo de captura</span>
-                          <select
-                            className={styles.input}
-                            value={capturaTipoNode}
-                            onChange={(e) => {
-                              const novoTipo = e.target.value;
-                              const variavelAtual = capturaVariavelNode.trim().toLowerCase();
-
-                              setCapturaTipoNode(novoTipo);
-
-                              const variaveisPadrao = [
-                                "resposta",
-                                "texto",
-                                "nome",
-                                "cpf",
-                                "cnpj",
-                                "email",
-                                "telefone",
-                                "numero",
-                                "data",
-                                "cep",
-                              ];
-
-                              if (!variavelAtual || variaveisPadrao.includes(variavelAtual)) {
-                                setCapturaVariavelNode(novoTipo);
-                              }
-                            }}
-                          >
-                          <option value="texto">Texto livre</option>
-                          <option value="nome">Nome</option>
-                          <option value="cpf">CPF</option>
-                          <option value="cnpj">CNPJ</option>
-                          <option value="email">Email</option>
-                          <option value="telefone">Telefone</option>
-                          <option value="numero">Número</option>
-                          <option value="data">Data</option>
-                          <option value="cep">CEP</option>
-                        </select>
-                      </label>
-
-                      <label className={styles.field}>
-                        <span className={styles.label}>Salvar resposta na variável</span>
-                        <input
-                          className={styles.input}
-                          value={capturaVariavelNode}
-                          onChange={(e) => setCapturaVariavelNode(e.target.value)}
-                          placeholder="Ex: nome, cpf, email"
-                        />
-                        <p className={styles.help}>
-                          Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
-                        </p>
-                        <p className={styles.help}>
-                          Nao use os nomes fixos do contato para salvar respostas.
-                        </p>
-                      </label>
-                      
-                      <label className={styles.field}>
-                        <span className={styles.label}>Mensagem quando inválido</span>
-                        <textarea
-                          className={styles.textarea}
-                          value={capturaMensagemErroNode}
-                          onChange={(e) => setCapturaMensagemErroNode(e.target.value)}
-                        />
-                      </label>
-                    </div>
-                  )}
-
-                  {tipoNodeEdicao === "avaliacao" && (
-
-                    <div className={styles.optionsBox}>
-
-                      <div className={styles.optionRow}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Nota mínima</span>
-
-                          <input
-                            type="number"
-                            className={styles.input}
-                            value={notaMinimaNode}
-                            onChange={(e) => setNotaMinimaNode(e.target.value)}
-                            min={0}
-                          />
-                        </label>
-
-                        <label className={styles.field}>
-                          <span className={styles.label}>Nota máxima</span>
-
-                          <input
-                            type="number"
-                            className={styles.input}
-                            value={notaMaximaNode}
-                            onChange={(e) => setNotaMaximaNode(e.target.value)}
-                            min={1}
-                          />
-                        </label>
-                      </div>
-
-                      <label className={styles.switchField}>
-                        <input
-                          type="checkbox"
-                          checked={solicitarComentarioNode}
-                          onChange={(e) => setSolicitarComentarioNode(e.target.checked)}
-                        />
-
-                        <div>
-                          <strong>Solicitar comentário</strong>
-                          <p>
-                            Após enviar a nota, o cliente poderá escrever um comentário sobre o atendimento.
-                          </p>
-                        </div>
-                      </label>
-
-                      {solicitarComentarioNode && (
-                        <label className={styles.field}>
-                          <span className={styles.label}>
-                            Mensagem para solicitar comentário
-                          </span>
-
-                          <textarea
-                            className={styles.textarea}
-                            value={mensagemComentarioNode}
-                            onChange={(e) => setMensagemComentarioNode(e.target.value)}
-                            placeholder="Ex: Conte como foi sua experiência."
-                          />
-                        </label>
-                      )}
-                    </div>
-                  )}
+                  <AvaliacaoConfig
+          notaMinima={notaMinimaNode}
+          notaMaxima={notaMaximaNode}
+          solicitarComentario={solicitarComentarioNode}
+          mensagemComentario={mensagemComentarioNode}
+          onNotaMinimaChange={setNotaMinimaNode}
+          onNotaMaximaChange={setNotaMaximaNode}
+          onSolicitarComentarioChange={setSolicitarComentarioNode}
+          onMensagemComentarioChange={setMensagemComentarioNode}
+        />
 
                   {[
                     "enviar_imagem",
