@@ -49,6 +49,7 @@ import useFluxoResources from "./hooks/useFluxoResources";
 import WhatsappFlowPreview from "./components/WhatsappFlowPreview";
 import IaTokenEstimateModal from "./components/modals/IaTokenEstimateModal";
 import DisparoCostConfirmModal from "./components/modals/DisparoCostConfirmModal";
+import MediaManagerModal from "./components/modals/MediaManagerModal";
 import {
   montarPreviaWhatsappFluxo,
   type EncerramentoInatividadePreviaWhatsapp,
@@ -671,16 +672,6 @@ function formatarTamanhoArquivo(bytes?: number | null) {
   return `${(valor / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function formatarStorageMidiasMb(bytes?: number | null) {
-  const valor = Number(bytes || 0);
-
-  if (!Number.isFinite(valor) || valor <= 0) {
-    return "0";
-  }
-
-  return (valor / 1024 / 1024).toFixed(1);
-}
-
 function formatarUltimoSalvamento(data: Date | null) {
   if (!data) return "Ainda não salvo nesta sessão";
 
@@ -706,38 +697,6 @@ function formatarUltimoSalvamento(data: Date | null) {
   });
 
   return `Salvo em ${diaMes}, às ${hora}`;
-}
-
-function formatarDataMidia(data?: string | null) {
-  if (!data) return "Data não informada";
-
-  try {
-    return new Date(data).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "Data não informada";
-  }
-}
-
-function labelTipoMidia(tipo: string) {
-  if (tipo === "imagem") return "Imagem";
-  if (tipo === "video") return "Vídeo";
-  if (tipo === "audio") return "Áudio";
-  if (tipo === "arquivo") return "Arquivo";
-  return "Mídia";
-}
-
-function iconeTipoMidia(tipo: string) {
-  if (tipo === "imagem") return "🖼️";
-  if (tipo === "video") return "🎬";
-  if (tipo === "audio") return "🎧";
-  if (tipo === "arquivo") return "📄";
-  return "📎";
 }
 
 function classeUsoStorageMidias(usadoBytes: number, limiteBytes: number) {
@@ -2076,12 +2035,6 @@ function FluxosPageContent() {
         tamanhoTotal,
       };
     }, [midias]);
-
-    const midiasFiltradasModal = useMemo(() => {
-      if (abaMidias === "todas") return midias;
-
-      return midias.filter((midia) => midia.tipo === abaMidias);
-    }, [midias, abaMidias]);
 
     const limiteStorageMidiasAtingido =
       resumoMidias.tamanhoTotal >= LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES;
@@ -7574,191 +7527,28 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
       )}
 
       {modalMidiasAberto && (
-        <div className={styles.modalOverlay}>
-          <div className={`${styles.modalCard} ${styles.mediaManagerModal}`}>
-            <div className={styles.modalHeader}>
-              <div>
-                <p className={styles.eyebrow}>Biblioteca de mídias</p>
-                <h3 className={styles.modalTitle}>Gerenciar mídias</h3>
-                <p className={styles.modalSubtitle}>
-                  Baixe, consulte ou exclua definitivamente mídias da empresa.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className={styles.closePanelButton}
-                onClick={() => {
-                  setModalMidiasAberto(false);
-                  setConfirmandoExclusaoMidiaId(null);
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className={styles.mediaSummaryGrid}>
-              <div className={styles.mediaSummaryCard}>
-                <span>Total</span>
-                <strong>{resumoMidias.total}</strong>
-              </div>
-
-              <div className={styles.mediaSummaryCard}>
-                <span>Imagens</span>
-                <strong>{resumoMidias.imagens}</strong>
-              </div>
-
-              <div className={styles.mediaSummaryCard}>
-                <span>Vídeos</span>
-                <strong>{resumoMidias.videos}</strong>
-              </div>
-
-              <div className={styles.mediaSummaryCard}>
-                <span>Áudios</span>
-                <strong>{resumoMidias.audios}</strong>
-              </div>
-
-              <div className={styles.mediaSummaryCard}>
-                <span>Arquivos</span>
-                <strong>{resumoMidias.arquivos}</strong>
-              </div>
-
-              <div
-                className={`${styles.mediaSummaryCard} ${styles.mediaSummaryStorageCard} ${classeUsoStorageMidias(
-                  resumoMidias.tamanhoTotal,
-                  LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
-                )}`}
-              >
-                <span>Storage</span>
-
-                <div className={styles.mediaSummaryStorageValue}>
-                  <strong>{formatarStorageMidiasMb(resumoMidias.tamanhoTotal)}</strong>
-                  <small>50 MB</small>
-                </div>
-
-                <div className={styles.mediaSummaryStorageTrack}>
-                  <div
-                    className={styles.mediaSummaryStorageBar}
-                    style={{
-                      width: `${Math.min(
-                        100,
-                        Math.round(
-                          (resumoMidias.tamanhoTotal / LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES) *
-                            100
-                        )
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.mediaTabs}>
-              <button
-                type="button"
-                className={abaMidias === "todas" ? styles.mediaTabActive : styles.mediaTab}
-                onClick={() => setAbaMidias("todas")}
-              >
-                Todas ({resumoMidias.total})
-              </button>
-
-              <button
-                type="button"
-                className={abaMidias === "imagem" ? styles.mediaTabActive : styles.mediaTab}
-                onClick={() => setAbaMidias("imagem")}
-              >
-                Imagens ({resumoMidias.imagens})
-              </button>
-
-              <button
-                type="button"
-                className={abaMidias === "video" ? styles.mediaTabActive : styles.mediaTab}
-                onClick={() => setAbaMidias("video")}
-              >
-                Vídeos ({resumoMidias.videos})
-              </button>
-
-              <button
-                type="button"
-                className={abaMidias === "audio" ? styles.mediaTabActive : styles.mediaTab}
-                onClick={() => setAbaMidias("audio")}
-              >
-                Áudios ({resumoMidias.audios})
-              </button>
-
-              <button
-                type="button"
-                className={abaMidias === "arquivo" ? styles.mediaTabActive : styles.mediaTab}
-                onClick={() => setAbaMidias("arquivo")}
-              >
-                Arquivos ({resumoMidias.arquivos})
-              </button>
-            </div>
-
-            <div className={styles.mediaManagerList}>
-              {carregandoMidias ? (
-                <div className={styles.emptyMini}>Carregando mídias...</div>
-              ) : midiasFiltradasModal.length === 0 ? (
-                <div className={styles.emptyMini}>Nenhuma mídia encontrada.</div>
-              ) : (
-                midiasFiltradasModal.map((midia) => (
-                  <div key={midia.id} className={styles.mediaManagerItem}>
-                    <div className={styles.mediaManagerIcon}>
-                      {iconeTipoMidia(midia.tipo)}
-                    </div>
-
-                    <div className={styles.mediaManagerInfo}>
-                      <strong>{midia.nome}</strong>
-
-                      <span>
-                        {labelTipoMidia(midia.tipo)} · {formatarTamanhoArquivo(midia.tamanho_bytes)}
-                      </span>
-
-                      <small>
-                        {midia.mime_type || "Tipo não informado"} · {formatarDataMidia(midia.created_at)}
-                      </small>
-                    </div>
-
-                    <div className={styles.mediaManagerActions}>
-                      <a
-                        className={styles.smallButton}
-                        href={midia.url}
-                        download={midia.nome}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Baixar
-                      </a>
-
-                      {podeGerenciarMidias && (confirmandoExclusaoMidiaId === midia.id ? (
-                        <button
-                          type="button"
-                          className={styles.dangerSmallButton}
-                          disabled={midiaExcluindoId === midia.id}
-                          onClick={() => excluirMidiaDefinitivamente(midia)}
-                        >
-                          {midiaExcluindoId === midia.id ? "Excluindo..." : "Confirmar"}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className={styles.dangerSmallButton}
-                          onClick={() => setConfirmandoExclusaoMidiaId(midia.id)}
-                        >
-                          Excluir
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <p className={styles.help}>
-              A exclusão é definitiva: remove o registro da tabela e o arquivo do Storage. Se algum bloco estiver usando essa mídia, ele ficará sem mídia selecionada e precisará ser ajustado antes de ativar/salvar o fluxo.
-            </p>
-          </div>
-        </div>
+        <MediaManagerModal
+          midias={midias}
+          resumo={resumoMidias}
+          aba={abaMidias}
+          carregando={carregandoMidias}
+          podeGerenciar={podeGerenciarMidias}
+          confirmandoExclusaoId={confirmandoExclusaoMidiaId}
+          excluindoId={midiaExcluindoId}
+          storageClassName={classeUsoStorageMidias(
+            resumoMidias.tamanhoTotal,
+            LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
+          )}
+          onAbaChange={setAbaMidias}
+          onFechar={() => {
+            setModalMidiasAberto(false);
+            setConfirmandoExclusaoMidiaId(null);
+          }}
+          onPedirExclusao={setConfirmandoExclusaoMidiaId}
+          onConfirmarExclusao={(midia) => {
+            void excluirMidiaDefinitivamente(midia);
+          }}
+        />
       )}
 
       {modalVariaveisAberto && (
