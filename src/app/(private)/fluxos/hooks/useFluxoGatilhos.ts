@@ -10,7 +10,6 @@ type GatilhoNovoFluxo = {
 };
 
 type UseFluxoGatilhosOptions = {
-  fluxoAlvoEdicao: Fluxo | null;
   podeGerenciarGatilhos: boolean;
   onErroEdicao: (message: string) => void;
   onErroCriacao: (message: string) => void;
@@ -18,7 +17,6 @@ type UseFluxoGatilhosOptions = {
 };
 
 export default function useFluxoGatilhos({
-  fluxoAlvoEdicao,
   podeGerenciarGatilhos,
   onErroEdicao,
   onErroCriacao,
@@ -57,7 +55,8 @@ export default function useFluxoGatilhos({
     [onErroEdicao]
   );
 
-  const criarGatilhoFluxo = useCallback(async () => {
+  const criarGatilhoFluxo = useCallback(
+    async (fluxoAlvoEdicao: Fluxo | null) => {
     if (!podeGerenciarGatilhos) {
       onErroEdicao("Você não tem permissão para gerenciar gatilhos.");
       return;
@@ -107,7 +106,6 @@ export default function useFluxoGatilhos({
     }
   }, [
     carregarGatilhosFluxo,
-    fluxoAlvoEdicao,
     novoGatilhoCondicao,
     novoGatilhoValor,
     onErroEdicao,
@@ -116,7 +114,10 @@ export default function useFluxoGatilhos({
   ]);
 
   const removerGatilhoFluxo = useCallback(
-    async (gatilhoId: string) => {
+    async (
+      gatilhoId: string,
+      fluxoAlvoEdicao: Fluxo | null
+    ) => {
       if (!podeGerenciarGatilhos) {
         onErroEdicao("Você não tem permissão para gerenciar gatilhos.");
         return;
@@ -156,7 +157,6 @@ export default function useFluxoGatilhos({
     },
     [
       carregarGatilhosFluxo,
-      fluxoAlvoEdicao,
       onErroEdicao,
       onSuccess,
       podeGerenciarGatilhos,
@@ -164,7 +164,10 @@ export default function useFluxoGatilhos({
   );
 
   const alternarGatilhoFluxo = useCallback(
-    async (gatilho: GatilhoFluxo) => {
+    async (
+      gatilho: GatilhoFluxo,
+      fluxoAlvoEdicao: Fluxo | null
+    ) => {
       if (!podeGerenciarGatilhos) {
         onErroEdicao("Você não tem permissão para gerenciar gatilhos.");
         return;
@@ -204,7 +207,6 @@ export default function useFluxoGatilhos({
     },
     [
       carregarGatilhosFluxo,
-      fluxoAlvoEdicao,
       onErroEdicao,
       podeGerenciarGatilhos,
     ]

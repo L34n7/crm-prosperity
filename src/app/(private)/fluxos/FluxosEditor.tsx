@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   addEdge,
@@ -14,9 +14,7 @@ import Header from "@/components/Header";
 import AssistenteFluxosPanel, {
   type AssistenteFluxosFluxoCriado,
 } from "./AssistenteFluxosPanel";
-import TemplateVariableCombobox, {
-  type TemplateVariableOption,
-} from "@/components/TemplateVariableCombobox";
+import type { TemplateVariableOption } from "@/components/TemplateVariableCombobox";
 import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
@@ -50,33 +48,58 @@ import WhatsappFlowPreview from "./components/WhatsappFlowPreview";
 import IaTokenEstimateModal from "./components/modals/IaTokenEstimateModal";
 import DisparoCostConfirmModal from "./components/modals/DisparoCostConfirmModal";
 import MediaManagerModal from "./components/modals/MediaManagerModal";
+import ArchiveFlowModal from "./components/modals/ArchiveFlowModal";
+import DeleteFlowModal from "./components/modals/DeleteFlowModal";
+import ShareFlowModal from "./components/modals/ShareFlowModal";
+import ImportFlowModal from "./components/modals/ImportFlowModal";
+import useFluxoVariaveis from "./hooks/useFluxoVariaveis";
+import VariablesManagerModal from "./components/modals/VariablesManagerModal";
+import useFluxoCompartilhamento from "./hooks/useFluxoCompartilhamento";
+import useFluxoGatilhos from "./hooks/useFluxoGatilhos";
+import useFluxoCrud from "./hooks/useFluxoCrud";
+import CreateFlowModal from "./components/modals/CreateFlowModal";
+import EditFlowModal from "./components/modals/EditFlowModal";
+import useFluxoForm from "./hooks/useFluxoForm";
+import { validarFluxoAntesDeAtivar } from "./fluxo-validation";
+import useFluxoMidias from "./hooks/useFluxoMidias";
 import {
   montarPreviaWhatsappFluxo,
   type EncerramentoInatividadePreviaWhatsapp,
 } from "./whatsapp-preview";
+import {
+  normalizarEscopoIntegracoesFluxo,
+  normalizarTemplatesPorIntegracao,
+  obterIntegracoesDoEscopoFluxo,
+  rotuloIntegracaoWhatsapp,
+  templateCompativelComIntegracao,
+  templateWhatsappAprovado,
+  usaTemplatesPorIntegracao,
+} from "./fluxo-integracoes";
+
+import {
+  atualizarLinhaVariavelTemplate,
+  contarVariaveisObrigatoriasPreenchidas,
+  contarVariaveisTemplateWhatsapp,
+  montarPreviewTemplateWhatsapp,
+  normalizarEntradaVariavelTemplate,
+  preencherPrimeiraLinhaVariavelTemplate,
+  templateWhatsappTemCabecalhoMidia,
+} from "./template-utils";
+
 import type {
-  AlvoVariavelFluxo,
   AutomacaoConexao,
   AutomacaoNo,
   EscopoFilaNode,
-  EscopoIntegracoesFluxo,
-  EscopoIntegracoesModo,
   EstrategiaTransferenciaNode,
   Fluxo,
-  GatilhoFluxo,
-  ImpactoExclusaoMidia,
   IntegracaoWhatsappOpcao,
-  MidiaOpcao,
   PreviaGeracaoDescricaoIa,
-  PreviewTemplateWhatsapp,
   ResultadoEncerramentoFluxo,
   TemplateWhatsappOpcao,
   TipoValorConversao,
-  VariavelPersonalizada,
 } from "./types";
 import {
   AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA,
-  CHAVES_REFERENCIA_MIDIA_NODE,
   LIMITE_ARQUIVO_BYTES,
   LIMITE_AUDIO_BYTES,
   LIMITE_DELAY_SEGUNDOS,
@@ -106,14 +129,7 @@ import {
 } from "./utils";
 import { obterConfiguracaoEncerramentoInatividade } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import { gerarSugestaoDescricaoIAComContexto } from "@/lib/ia/sugestoes-descricao-ia";
-import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  Copy,
-  CopyPlus,
-  LoaderCircle,
-  Share2,
-  Sparkles,
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 // CRM_QUEUE_SCOPE_EDITOR_V1
 function normalizarEscopoFilaNode(
@@ -151,336 +167,6 @@ function normalizarEstrategiaTransferenciaNode(
   return String(atendenteId || "").trim()
     ? "atendente_especifico"
     : "fila_setor";
-}
-
-function templateWhatsappAprovado(template?: TemplateWhatsappOpcao | null) {
-  return String(template?.status || "").trim().toUpperCase() === "APPROVED";
-}
-
-function normalizarEscopoIntegracoesFluxo(
-  configuracao?: Record<string, any> | null
-): EscopoIntegracoesFluxo {
-  const escopo = configuracao?.integracoes_whatsapp || {};
-  const idsLegados = [
-    ...(Array.isArray(configuracao?.integracoes_whatsapp_ids)
-      ? configuracao?.integracoes_whatsapp_ids
-      : []),
-    configuracao?.integracao_whatsapp_id,
-  ];
-  const ids = Array.from(
-    new Set(
-      [
-        ...(Array.isArray(escopo?.ids) ? escopo.ids : []),
-        ...idsLegados,
-      ]
-        .map((id) => String(id || "").trim())
-        .filter(Boolean)
-    )
-  );
-  const modo =
-    String(escopo?.modo || configuracao?.integracoes_whatsapp_modo || "") ===
-      "selecionadas" && ids.length > 0
-      ? "selecionadas"
-      : "todas";
-
-  return {
-    modo,
-    ids: modo === "selecionadas" ? ids : [],
-  };
-}
-
-function montarEscopoIntegracoesFluxo(
-  modo: EscopoIntegracoesModo,
-  ids: string[]
-): EscopoIntegracoesFluxo {
-  const idsUnicos = Array.from(
-    new Set(ids.map((id) => String(id || "").trim()).filter(Boolean))
-  );
-
-  return modo === "selecionadas" && idsUnicos.length > 0
-    ? { modo: "selecionadas", ids: idsUnicos }
-    : { modo: "todas", ids: [] };
-}
-
-function escoposIntegracaoConflitam(
-  atual: EscopoIntegracoesFluxo,
-  existente: EscopoIntegracoesFluxo
-) {
-  if (atual.modo !== "selecionadas" || existente.modo !== "selecionadas") {
-    return true;
-  }
-
-  const idsExistentes = new Set(existente.ids);
-  return atual.ids.some((id) => idsExistentes.has(id));
-}
-
-function rotuloIntegracaoWhatsapp(integracao: IntegracaoWhatsappOpcao) {
-  const posicao = integracao.posicao ? `Numero ${integracao.posicao}` : "Numero";
-  const nome =
-    String(integracao.nome_conexao || "").trim() ||
-    String(integracao.numero || "").trim() ||
-    "WhatsApp";
-
-  return `${posicao} - ${nome}`;
-}
-
-function normalizarTemplatesPorIntegracao(valor: unknown) {
-  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(valor as Record<string, unknown>)
-      .map(([integracaoId, templateId]) => [
-        String(integracaoId || "").trim(),
-        String(templateId || "").trim(),
-      ])
-      .filter(([integracaoId, templateId]) => integracaoId && templateId)
-  );
-}
-
-function obterIntegracoesDoEscopoFluxo(
-  escopo: EscopoIntegracoesFluxo,
-  integracoes: IntegracaoWhatsappOpcao[]
-) {
-  if (escopo.modo !== "selecionadas") return integracoes;
-
-  const ids = new Set(escopo.ids);
-  return integracoes.filter((integracao) => ids.has(integracao.id));
-}
-
-function chaveWabaIntegracao(integracao: IntegracaoWhatsappOpcao) {
-  return String(integracao.waba_id || "").trim() || `integracao:${integracao.id}`;
-}
-
-function usaTemplatesPorIntegracao(integracoes: IntegracaoWhatsappOpcao[]) {
-  return new Set(integracoes.map(chaveWabaIntegracao)).size > 1;
-}
-
-function templateCompativelComIntegracao(
-  template: TemplateWhatsappOpcao | null | undefined,
-  integracao: IntegracaoWhatsappOpcao
-) {
-  if (!template) return false;
-  if (template.integracao_whatsapp_id === integracao.id) return true;
-
-  const templateWabaId = String(template.waba_id || "").trim();
-  const integracaoWabaId = String(integracao.waba_id || "").trim();
-
-  return Boolean(templateWabaId && integracaoWabaId && templateWabaId === integracaoWabaId);
-}
-
-function contarVariaveisTextoTemplate(texto?: string | null) {
-  const matches = String(texto || "").match(/\{\{\d+\}\}/g) || [];
-  const numeros = matches
-    .map((item) => Number(item.replace(/[{}]/g, "")))
-    .filter((numero) => Number.isFinite(numero));
-
-  return numeros.length > 0 ? Math.max(...numeros) : 0;
-}
-
-function contarVariaveisTemplateWhatsapp(template?: TemplateWhatsappOpcao | null) {
-  const components = Array.isArray(template?.payload?.components)
-    ? template?.payload?.components
-    : [];
-
-  const header = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
-  );
-  const body = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BODY"
-  );
-  const buttons = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
-  );
-
-  const totalHeader = contarVariaveisTextoTemplate(header?.text);
-  const totalBody = contarVariaveisTextoTemplate(body?.text);
-  const totalButtons = (buttons?.buttons || []).reduce(
-    (total: number, button: any) => {
-      if (String(button?.type || "").toUpperCase() !== "URL") return total;
-      return total + contarVariaveisTextoTemplate(button?.url);
-    },
-    0
-  );
-
-  return totalHeader + totalBody + totalButtons;
-}
-
-function templateWhatsappTemCabecalhoMidia(template?: TemplateWhatsappOpcao | null) {
-  const components = Array.isArray(template?.payload?.components)
-    ? template?.payload?.components
-    : [];
-  const header = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
-  );
-  const formatoHeader = String(header?.format || "").toUpperCase();
-
-  return ["IMAGE", "VIDEO", "DOCUMENT"].includes(formatoHeader);
-}
-
-function contarVariaveisObrigatoriasPreenchidas(
-  variaveis: string[] | string,
-  totalObrigatorio: number
-) {
-  const linhas = Array.isArray(variaveis)
-    ? variaveis
-    : obterLinhasVariaveisTemplate(variaveis);
-
-  return linhas
-    .slice(0, totalObrigatorio)
-    .map((item) => String(item || "").trim())
-    .filter(Boolean).length;
-}
-
-function obterLinhasVariaveisTemplate(valor: string) {
-  const linhas = String(valor || "").split("\n");
-  return [linhas[0] || "", linhas[1] || "", linhas[2] || ""];
-}
-
-function normalizarEntradaVariavelTemplate(valor: string) {
-  return String(valor || "")
-    .replace(/[{}]/g, "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9_]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+/g, "");
-}
-
-function atualizarLinhaVariavelTemplate(
-  valorAtual: string,
-  index: number,
-  novoValor: string
-) {
-  const linhas = obterLinhasVariaveisTemplate(valorAtual);
-  linhas[index] = normalizarEntradaVariavelTemplate(novoValor);
-  return linhas.join("\n");
-}
-
-function preencherPrimeiraLinhaVariavelTemplate(valorAtual: string, novoValor: string) {
-  const linhas = obterLinhasVariaveisTemplate(valorAtual);
-  const indiceVazio = linhas.findIndex((item) => !item.trim());
-  linhas[indiceVazio >= 0 ? indiceVazio : 0] =
-    normalizarEntradaVariavelTemplate(novoValor);
-  return linhas.join("\n");
-}
-
-function substituirVariaveisPreviewTemplate(
-  texto: string,
-  variaveis: string[],
-  offset: number
-) {
-  return String(texto || "").replace(/\{\{(\d+)\}\}/g, (_, numero) => {
-    const index = offset + Number(numero) - 1;
-    return variaveis[index]?.trim() || `{{${numero}}}`;
-  });
-}
-
-function montarPreviewTemplateWhatsapp(
-  template: TemplateWhatsappOpcao | null,
-  variaveisRaw: string
-): PreviewTemplateWhatsapp | null {
-  if (!template) return null;
-
-  const variaveis = obterLinhasVariaveisTemplate(variaveisRaw);
-  const components = Array.isArray(template.payload?.components)
-    ? template.payload.components
-    : [];
-  const header = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "HEADER"
-  );
-  const body = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BODY"
-  );
-  const footer = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "FOOTER"
-  );
-  const buttons = components.find(
-    (item: any) => String(item?.type || "").toUpperCase() === "BUTTONS"
-  );
-
-  let offset = 0;
-  const headerText = substituirVariaveisPreviewTemplate(
-    header?.text || "",
-    variaveis,
-    offset
-  ).trim();
-  offset += contarVariaveisTextoTemplate(header?.text);
-
-  const bodyText = substituirVariaveisPreviewTemplate(
-    body?.text || "",
-    variaveis,
-    offset
-  ).trim();
-
-  const quickReplies =
-    buttons?.buttons
-      ?.filter((button: any) => button?.type === "QUICK_REPLY" && button?.text)
-      .map((button: any) => String(button.text || "").trim())
-      .filter(Boolean) || [];
-
-  return {
-    titulo: headerText || template.nome || "Template WhatsApp",
-    corpo: bodyText || "Template sem texto para previsualizacao.",
-    rodape: String(footer?.text || "").trim() || "Equipe de atendimento",
-    botoes: quickReplies,
-  };
-}
-
- // 50 MB
-function mimeTypeParaUpload(arquivo: File) {
-  const extensao = arquivo.name.split(".").pop()?.toLowerCase() || "";
-  const mimePorExtensao: Record<string, string> = {
-    pdf: "application/pdf",
-    txt: "text/plain",
-    csv: "text/csv",
-    doc: "application/msword",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    xls: "application/vnd.ms-excel",
-    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ppt: "application/vnd.ms-powerpoint",
-    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  };
-
-  return (
-    mimePorExtensao[extensao] ||
-    arquivo.type ||
-    "application/octet-stream"
-  );
-}
- 
-async function lerRespostaApi(res: Response, mensagemPadrao: string) {
-  const contentType = res.headers.get("content-type") || "";
-  const text = await res.text();
-
-  if (contentType.includes("application/json")) {
-    try {
-      return text ? JSON.parse(text) : {};
-    } catch {
-      throw new Error(mensagemPadrao);
-    }
-  }
-
-  if (!res.ok) {
-    if (
-      res.status === 413 ||
-      /request entity too large|payload too large|function_payload_too_large/i.test(text)
-    ) {
-      throw new Error(
-        "O arquivo excede o limite de upload aceito pelo servidor. Tente reduzir o tamanho e envie novamente."
-      );
-    }
-
-    throw new Error(text || mensagemPadrao);
-  }
-
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch {
-    return {};
-  }
 }
 
 function criarIdTemporario(prefixo: string) {
@@ -562,48 +248,6 @@ function nodeEhBlocoMidia(node: Node) {
   return TIPOS_NO_MIDIA.has(String(node.data?.tipo_no || ""));
 }
 
-function nodeUsaMidia(node: Node, midia: MidiaOpcao) {
-  if (!nodeEhBlocoMidia(node)) return false;
-
-  const config = configuracaoNodeComoObjeto(node.data?.configuracao_json);
-
-  return (
-    String(config.midia_url || "").trim() === midia.url ||
-    String(config.media_url || "").trim() === midia.url ||
-    String(config.arquivo_url || "").trim() === midia.url ||
-    String(config.midia_id || "").trim() === midia.id ||
-    String(config.media_id || "").trim() === midia.id ||
-    String(config.arquivo_id || "").trim() === midia.id
-  );
-}
-
-function limparMidiaDoNode(node: Node, midia: MidiaOpcao) {
-  if (!nodeUsaMidia(node, midia)) return node;
-
-  const configuracao = {
-    ...configuracaoNodeComoObjeto(node.data?.configuracao_json),
-  };
-
-  for (const chave of CHAVES_REFERENCIA_MIDIA_NODE) {
-    delete configuracao[chave];
-  }
-
-  configuracao.midia_removida = {
-    id: midia.id,
-    nome: midia.nome,
-    removida_em: new Date().toISOString(),
-    motivo: "midia_excluida_biblioteca",
-  };
-
-  return {
-    ...node,
-    data: {
-      ...node.data,
-      configuracao_json: configuracao,
-    },
-  };
-}
-
 function validarMidiasObrigatoriasNodes(nodesValidacao: Node[]) {
   for (const node of nodesValidacao) {
     if (!nodeEhBlocoMidia(node)) continue;
@@ -618,30 +262,6 @@ function validarMidiasObrigatoriasNodes(nodesValidacao: Node[]) {
   return "";
 }
 
-function mensagemExclusaoMidia(impacto?: ImpactoExclusaoMidia | null) {
-  const totalBlocos = Number(impacto?.total_blocos_afetados || 0);
-  const totalFluxos = Number(impacto?.total_fluxos_afetados || 0);
-  const totalPausados = Number(impacto?.total_fluxos_pausados || 0);
-
-  if (totalBlocos <= 0) {
-    return "Midia excluida definitivamente.";
-  }
-
-  const partes = [
-    `Midia excluida e removida de ${totalBlocos} bloco(s) em ${totalFluxos} fluxo(s).`,
-  ];
-
-  if (totalPausados > 0) {
-    partes.push(
-      `${totalPausados} fluxo(s) ativo(s) foram pausados ate selecionar outra midia.`
-    );
-  }
-
-  partes.push("Os blocos afetados precisam de uma nova midia antes de salvar/ativar.");
-
-  return partes.join(" ");
-}
-
 function normalizarVariavelFluxo(valor: string) {
   return String(valor || "")
     .replace(/[{}]/g, "")
@@ -652,24 +272,6 @@ function normalizarVariavelFluxo(valor: string) {
     .replace(/[^a-z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "");
-}
-
-function formatarTamanhoArquivo(bytes?: number | null) {
-  const valor = Number(bytes || 0);
-
-  if (!Number.isFinite(valor) || valor <= 0) {
-    return "Tamanho não informado";
-  }
-
-  if (valor < 1024) {
-    return `${valor} B`;
-  }
-
-  if (valor < 1024 * 1024) {
-    return `${(valor / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(valor / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function formatarUltimoSalvamento(data: Date | null) {
@@ -1016,8 +618,6 @@ function FluxosPageContent() {
   const podeGerenciarMidias = headerUser.permissoes.includes(
     "fluxos.gerenciar_midias"
   );
-  const [abrirCriacao, setAbrirCriacao] = useState(false);
-  const [descricaoNovoFluxo, setDescricaoNovoFluxo] = useState("");
 
   const {
     nodes,
@@ -1109,6 +709,8 @@ function FluxosPageContent() {
   const [notaMaximaNode, setNotaMaximaNode] = useState("5");
 
   const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
+
   const limparErroFluxos = useCallback(() => {
     setErro("");
   }, []);
@@ -1124,6 +726,38 @@ function FluxosPageContent() {
     fluxoParam,
     onClearError: limparErroFluxos,
     onError: setErro,
+  });
+
+  const {
+    duplicarFluxo,
+    restaurarFluxo,
+    modalArquivarAberto,
+    fluxoParaArquivar,
+    abrirModalArquivarFluxo,
+    fecharModalArquivarFluxo,
+    confirmarArquivarFluxo,
+    modalApagarDefinitivoAberto,
+    fluxoParaApagarDefinitivo,
+    apagandoFluxoDefinitivo,
+    abrirModalApagarDefinitivo,
+    fecharModalApagarDefinitivo,
+    confirmarApagarDefinitivo,
+  } = useFluxoCrud({
+    fluxoSelecionado,
+    setFluxoSelecionado,
+    carregarFluxos,
+
+    onLimparEditorSelecionado: () => {
+      setNodes([]);
+      setEdges([]);
+      setEditandoNodeId(null);
+      setEditandoEdgeId(null);
+    },
+
+    onError: setErro,
+    onClearError: () => setErro(""),
+    onSuccess: setSucesso,
+    onClearSuccess: () => setSucesso(""),
   });
 
   const {
@@ -1146,53 +780,36 @@ function FluxosPageContent() {
   });
 
   const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
-  const [sucesso, setSucesso] = useState("");
-  const [modalVariaveisAberto, setModalVariaveisAberto] = useState(false);
-  const [variaveisPersonalizadas, setVariaveisPersonalizadas] = useState<
-    VariavelPersonalizada[]
-  >([]);
-  const [loadingVariaveis, setLoadingVariaveis] = useState(false);
-  const [salvandoVariavel, setSalvandoVariavel] = useState(false);
-  const [erroVariavelModal, setErroVariavelModal] = useState("");
-  const [novaVariavelChave, setNovaVariavelChave] = useState("");
-  const [novaVariavelValor, setNovaVariavelValor] = useState("");
-  const [novaVariavelDescricao, setNovaVariavelDescricao] = useState("");
-  const [alvoVariavelFluxo, setAlvoVariavelFluxo] =
-    useState<AlvoVariavelFluxo>("mensagem");
+  const {
+    modalCompartilharAberto,
+    fluxoParaCompartilhar,
+    codigoCompartilhamento,
+    carregandoCodigoCompartilhamento,
+    erroCompartilhamento,
+    gerarCodigoCompartilhamento,
+    abrirCompartilhamentoFluxo,
+    fecharCompartilhamentoFluxo,
+    copiarCodigoCompartilhamento,
+    modalImportarAberto,
+    codigoImportacao,
+    setCodigoImportacao,
+    importandoFluxo,
+    erroImportacao,
+    abrirImportacaoFluxo,
+    fecharImportacaoFluxo,
+    importarFluxoCompartilhado,
+  } = useFluxoCompartilhamento({
+    carregarFluxos,
+    setFluxoSelecionado,
+    onClearError: () => setErro(""),
+    onClearSuccess: () => setSucesso(""),
+    onSuccess: setSucesso,
+  });
   const [tooltipAlertaFluxo, setTooltipAlertaFluxo] = useState<{
     texto: string;
     x: number;
     y: number;
   } | null>(null);
-
-  const [novoFluxoNome, setNovoFluxoNome] = useState("");
-  const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
-  const [novoFluxoEscopoIntegracoesModo, setNovoFluxoEscopoIntegracoesModo] =
-    useState<EscopoIntegracoesModo>("todas");
-  const [novoFluxoIntegracoesIds, setNovoFluxoIntegracoesIds] = useState<
-    string[]
-  >([]);
-  const deveMostrarEscopoIntegracoesFluxo =
-    limiteIntegracoesWhatsappFluxos > 1 || integracoesWhatsapp.length > 1;
-  const jaExisteFluxoPadrao = fluxos.some(
-    (fluxo) => {
-      const escopoNovo = montarEscopoIntegracoesFluxo(
-        deveMostrarEscopoIntegracoesFluxo
-          ? novoFluxoEscopoIntegracoesModo
-          : "todas",
-        deveMostrarEscopoIntegracoesFluxo ? novoFluxoIntegracoesIds : []
-      );
-
-      return (
-        fluxo.fluxo_padrao &&
-        fluxo.status !== "arquivado" &&
-        escoposIntegracaoConflitam(
-          escopoNovo,
-          normalizarEscopoIntegracoesFluxo(fluxo.configuracao_json)
-        )
-      );
-    }
-  );
 
   const [tituloNode, setTituloNode] = useState("");
   const [mensagemNode, setMensagemNode] = useState("");
@@ -1200,45 +817,59 @@ function FluxosPageContent() {
 
   const [midiaUrlNode, setMidiaUrlNode] = useState("");
   const [midiaNomeNode, setMidiaNomeNode] = useState("");
+
+  const selecionarMidiaNode = useCallback(
+    (url: string, nome: string) => {
+      setMidiaUrlNode(url);
+      setMidiaNomeNode(nome);
+    },
+    []
+  );
+
+  const limparMidiaSelecionadaNode = useCallback(() => {
+    setMidiaUrlNode("");
+    setMidiaNomeNode("");
+  }, []);
+
+  const limparSucessoMidias = useCallback(() => {
+    setSucesso("");
+  }, []);
+
+  const {
+    midias,
+    carregandoMidias,
+    enviandoMidia,
+    modalMidiasAberto,
+    abaMidias,
+    setAbaMidias,
+    midiaExcluindoId,
+    confirmandoExclusaoMidiaId,
+    setConfirmandoExclusaoMidiaId,
+    resumoMidias,
+    limiteStorageMidiasAtingido,
+    carregarMidias,
+    enviarNovaMidia,
+    excluirMidiaDefinitivamente,
+    abrirGerenciadorMidias,
+    fecharGerenciadorMidias,
+  } = useFluxoMidias({
+    podeGerenciarMidias,
+    midiaUrlNode,
+    setNodes,
+    setFluxos,
+    setFluxoSelecionado,
+    onSelecionarMidia: selecionarMidiaNode,
+    onLimparMidiaSelecionada: limparMidiaSelecionadaNode,
+    onError: setErro,
+    onClearError: limparErroFluxos,
+    onSuccess: setSucesso,
+    onClearSuccess: limparSucessoMidias,
+  });
+
   const [buscaFluxo, setBuscaFluxo] = useState("");
   const [tipoNodeEdicao, setTipoNodeEdicao] = useState("");
 
-  const [midias, setMidias] = useState<MidiaOpcao[]>([]);
-  const [carregandoMidias, setCarregandoMidias] = useState(false);
-  const [enviandoMidia, setEnviandoMidia] = useState(false);
-  const [modalMidiasAberto, setModalMidiasAberto] = useState(false);
-  const [abaMidias, setAbaMidias] = useState<
-    "todas" | "imagem" | "video" | "audio" | "arquivo"
-  >("todas");
-  const [midiaExcluindoId, setMidiaExcluindoId] = useState<string | null>(null);
-  const [confirmandoExclusaoMidiaId, setConfirmandoExclusaoMidiaId] = useState<string | null>(null);
-
-  const [editandoFluxo, setEditandoFluxo] = useState(false);
-  const [fluxoEmEdicao, setFluxoEmEdicao] = useState<Fluxo | null>(null);
-  const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
-  const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
   const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
-  const [fluxoPadraoEdicao, setFluxoPadraoEdicao] = useState(false);
-  const [fluxoEscopoIntegracoesModoEdicao, setFluxoEscopoIntegracoesModoEdicao] =
-    useState<EscopoIntegracoesModo>("todas");
-  const [fluxoIntegracoesIdsEdicao, setFluxoIntegracoesIdsEdicao] = useState<
-    string[]
-  >([]);
-  
-  const [encerrarInatividadeQuantidade, setEncerrarInatividadeQuantidade] = useState("23");
-  const [encerrarInatividadeUnidade, setEncerrarInatividadeUnidade] =
-    useState<"minutos" | "horas">("horas");
-  const [encerrarInatividadeMensagem, setEncerrarInatividadeMensagem] = useState(
-    "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem."
-  );
-
-  function resetarEncerramentoInatividadePadrao() {
-    setEncerrarInatividadeQuantidade("23");
-    setEncerrarInatividadeUnidade("horas");
-    setEncerrarInatividadeMensagem(
-      "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem."
-    );
-  }
 
   const [setorDestino, setSetorDestino] = useState("");
   const [escopoFilaTransferenciaNode, setEscopoFilaTransferenciaNode] =
@@ -1250,7 +881,7 @@ function FluxosPageContent() {
     incluirAdministradoresTransferenciaNode,
     setIncluirAdministradoresTransferenciaNode,
   ] = useState(false);
-  const fluxo = fluxoSelecionado;
+
   // CRM_SYSTEM_CALENDAR_FLOW_EDITOR_V1
   const fluxoSistemaCalendario = Boolean(
     fluxoSelecionado?.configuracao_json?.fluxo_sistema_calendario === true &&
@@ -1312,11 +943,6 @@ function FluxosPageContent() {
 
     return estrategia;
   }
-
-  const [gatilhosFluxo, setGatilhosFluxo] = useState<GatilhoFluxo[]>([]);
-  const [novoGatilhoValor, setNovoGatilhoValor] = useState("");
-  const [novoGatilhoCondicao, setNovoGatilhoCondicao] =
-    useState<GatilhoFluxo["condicao"]>("contem");
   
   const [filtroStatusFluxo, setFiltroStatusFluxo] = useState<
     | "todos"
@@ -1327,31 +953,111 @@ function FluxosPageContent() {
     | "arquivado"
   >("todos");
 
-  const [modalArquivarAberto, setModalArquivarAberto] = useState(false);
-  const [fluxoParaArquivar, setFluxoParaArquivar] = useState<Fluxo | null>(null);
+  const {
+    gatilhosFluxo,
+    setGatilhosFluxo,
+    novoGatilhoValor,
+    setNovoGatilhoValor,
+    novoGatilhoCondicao,
+    setNovoGatilhoCondicao,
+    gatilhosNovoFluxo,
+    setGatilhosNovoFluxo,
+    carregarGatilhosFluxo,
+    criarGatilhoFluxo,
+    removerGatilhoFluxo,
+    alternarGatilhoFluxo,
+    adicionarGatilhoNovoFluxo,
+  } = useFluxoGatilhos({
+    podeGerenciarGatilhos,
+    onErroEdicao: setErroEdicaoFluxo,
+    onErroCriacao: setErroCriacaoFluxo,
+    onSuccess: setSucesso,
+  });
 
-  const [gatilhosNovoFluxo, setGatilhosNovoFluxo] = useState<
-    { valor: string; condicao: GatilhoFluxo["condicao"]; ativo?: boolean }[]
-  >([]);
+  const resetarGatilhosNovoFluxoForm = useCallback(() => {
+    setGatilhosNovoFluxo([]);
+  }, [setGatilhosNovoFluxo]);
 
-  const [modalApagarDefinitivoAberto, setModalApagarDefinitivoAberto] =
-    useState(false);
-  const [fluxoParaApagarDefinitivo, setFluxoParaApagarDefinitivo] =
-    useState<Fluxo | null>(null);
-  const [apagandoFluxoDefinitivo, setApagandoFluxoDefinitivo] =
-    useState(false);
-  const apagandoFluxoDefinitivoRef = useRef(false);
-  const [modalCompartilharAberto, setModalCompartilharAberto] = useState(false);
-  const [fluxoParaCompartilhar, setFluxoParaCompartilhar] =
-    useState<Fluxo | null>(null);
-  const [codigoCompartilhamento, setCodigoCompartilhamento] = useState("");
-  const [carregandoCodigoCompartilhamento, setCarregandoCodigoCompartilhamento] =
-    useState(false);
-  const [erroCompartilhamento, setErroCompartilhamento] = useState("");
-  const [modalImportarAberto, setModalImportarAberto] = useState(false);
-  const [codigoImportacao, setCodigoImportacao] = useState("");
-  const [importandoFluxo, setImportandoFluxo] = useState(false);
-  const [erroImportacao, setErroImportacao] = useState("");
+  const resetarNovoGatilhoForm = useCallback(() => {
+    setNovoGatilhoValor("");
+    setNovoGatilhoCondicao("contem");
+  }, [setNovoGatilhoValor, setNovoGatilhoCondicao]);
+
+  const navegarParaFluxoForm = useCallback(
+    (fluxoId: string) => {
+      router.push(`/fluxos?fluxo=${encodeURIComponent(fluxoId)}`);
+    },
+    [router]
+  );
+
+  const {
+    abrirCriacao,
+    descricaoNovoFluxo,
+    setDescricaoNovoFluxo,
+    novoFluxoNome,
+    setNovoFluxoNome,
+    novoFluxoPadrao,
+    setNovoFluxoPadrao,
+    novoFluxoEscopoIntegracoesModo,
+    setNovoFluxoEscopoIntegracoesModo,
+    novoFluxoIntegracoesIds,
+    setNovoFluxoIntegracoesIds,
+    deveMostrarEscopoIntegracoesFluxo,
+    jaExisteFluxoPadrao,
+    alternarIntegracaoEscopoNovoFluxo,
+    abrirCriacaoFluxo,
+    fecharCriacaoFluxo,
+    criarFluxoRapido,
+
+    editandoFluxo,
+    fluxoEmEdicao,
+    nomeFluxoEdicao,
+    setNomeFluxoEdicao,
+    descricaoFluxoEdicao,
+    setDescricaoFluxoEdicao,
+    fluxoPadraoEdicao,
+    setFluxoPadraoEdicao,
+    fluxoEscopoIntegracoesModoEdicao,
+    setFluxoEscopoIntegracoesModoEdicao,
+    fluxoIntegracoesIdsEdicao,
+    setFluxoIntegracoesIdsEdicao,
+    alternarIntegracaoEscopoEdicao,
+    existeOutroFluxoPadraoNaEmpresa,
+    abrirEdicaoFluxo,
+    fecharEdicaoFluxo,
+    salvarEdicaoFluxo,
+
+    encerrarInatividadeQuantidade,
+    setEncerrarInatividadeQuantidade,
+    encerrarInatividadeUnidade,
+    setEncerrarInatividadeUnidade,
+    encerrarInatividadeMensagem,
+    setEncerrarInatividadeMensagem,
+    limitarQuantidadeInatividade,
+    corrigirQuantidadeMinimaInatividade,
+  } = useFluxoForm({
+    fluxos,
+    fluxoSelecionado,
+    setFluxoSelecionado,
+    integracoesWhatsapp,
+    limiteIntegracoesWhatsappFluxos,
+    carregarFluxos,
+
+    gatilhosNovoFluxo,
+    resetarGatilhosNovoFluxo: resetarGatilhosNovoFluxoForm,
+    resetarNovoGatilho: resetarNovoGatilhoForm,
+    setGatilhosFluxo,
+    carregarGatilhosFluxo,
+
+    navegarParaFluxo: navegarParaFluxoForm,
+
+    onErroEdicao: setErroEdicaoFluxo,
+    onErroCriacao: setErroCriacaoFluxo,
+
+    onClearError: () => setErro(""),
+    onClearSuccess: () => setSucesso(""),
+    onSuccess: setSucesso,
+  });
 
   const [opcoesNode, setOpcoesNode] = useState<
     { valor: string; titulo: string }[]
@@ -1458,6 +1164,49 @@ function FluxosPageContent() {
     useState("");
   const [agendaLembreteVariaveisNode, setAgendaLembreteVariaveisNode] =
     useState("");
+  const {
+    modalVariaveisAberto,
+    variaveisPersonalizadas,
+    loadingVariaveis,
+    salvandoVariavel,
+    erroVariavelModal,
+    novaVariavelChave,
+    setNovaVariavelChave,
+    novaVariavelValor,
+    setNovaVariavelValor,
+    novaVariavelDescricao,
+    setNovaVariavelDescricao,
+    carregarVariaveisPersonalizadas,
+    abrirModalGerenciarVariaveis,
+    fecharModalGerenciarVariaveis,
+    salvarVariavelPersonalizada,
+    removerVariavelPersonalizada,
+    aplicarVariavelNoBloco,
+  } = useFluxoVariaveis({
+    onAplicarMensagemToken: (token) => {
+      setMensagemNode((atual) => {
+        const texto = atual.trimEnd();
+        return texto ? `${texto} ${token}` : token;
+      });
+    },
+
+    onAplicarAgendarDisparo: (chave) => {
+      setAgendarDisparoVariaveisNode((atual) =>
+        preencherPrimeiraLinhaVariavelTemplate(atual, chave)
+      );
+    },
+
+    onAplicarAgendaLembrete: (chave) => {
+      setAgendaLembreteVariaveisNode((atual) =>
+        preencherPrimeiraLinhaVariavelTemplate(atual, chave)
+      );
+    },
+
+    onError: setErro,
+    onClearError: () => setErro(""),
+    onSuccess: setSucesso,
+    onClearSuccess: () => setSucesso(""),
+  });
   const [agendaMotivoCancelamentoNode, setAgendaMotivoCancelamentoNode] =
     useState("Cancelado pelo cliente via automacao");
   const [encerrarResultadoNode, setEncerrarResultadoNode] =
@@ -2015,209 +1764,6 @@ function FluxosPageContent() {
     );
   }, [totalVariaveisTemplateAgendaLembrete]);
 
-    const resumoMidias = useMemo(() => {
-      const imagens = midias.filter((midia) => midia.tipo === "imagem");
-      const videos = midias.filter((midia) => midia.tipo === "video");
-      const audios = midias.filter((midia) => midia.tipo === "audio");
-      const arquivos = midias.filter((midia) => midia.tipo === "arquivo");
-
-      const tamanhoTotal = midias.reduce(
-        (total, midia) => total + Number(midia.tamanho_bytes || 0),
-        0
-      );
-
-      return {
-        total: midias.length,
-        imagens: imagens.length,
-        videos: videos.length,
-        audios: audios.length,
-        arquivos: arquivos.length,
-        tamanhoTotal,
-      };
-    }, [midias]);
-
-    const limiteStorageMidiasAtingido =
-      resumoMidias.tamanhoTotal >= LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES;
-
-  function alternarIntegracaoEscopoNovoFluxo(integracaoId: string) {
-    setNovoFluxoIntegracoesIds((atuais) =>
-      atuais.includes(integracaoId)
-        ? atuais.filter((id) => id !== integracaoId)
-        : [...atuais, integracaoId]
-    );
-  }
-
-  function alternarIntegracaoEscopoEdicao(integracaoId: string) {
-    setFluxoIntegracoesIdsEdicao((atuais) =>
-      atuais.includes(integracaoId)
-        ? atuais.filter((id) => id !== integracaoId)
-        : [...atuais, integracaoId]
-    );
-  }
-
-  async function carregarVariaveisPersonalizadas(
-    options: { erroNoModal?: boolean } = {}
-  ) {
-    try {
-      setLoadingVariaveis(true);
-
-      const res = await fetch("/api/variaveis", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar variaveis.");
-      }
-
-      setVariaveisPersonalizadas(
-        Array.isArray(json.variaveis) ? json.variaveis : []
-      );
-    } catch (error: unknown) {
-      const mensagem =
-        error instanceof Error ? error.message : "Erro ao carregar variaveis.";
-
-      if (options.erroNoModal) {
-        setErroVariavelModal(mensagem);
-      } else {
-        setErro(mensagem);
-      }
-    } finally {
-      setLoadingVariaveis(false);
-    }
-  }
-
-  async function abrirModalGerenciarVariaveis(
-    alvo: AlvoVariavelFluxo = "mensagem"
-  ) {
-    setAlvoVariavelFluxo(alvo);
-    setNovaVariavelChave("");
-    setNovaVariavelValor("");
-    setNovaVariavelDescricao("");
-    setErroVariavelModal("");
-    setModalVariaveisAberto(true);
-    await carregarVariaveisPersonalizadas({ erroNoModal: true });
-  }
-
-  function fecharModalGerenciarVariaveis() {
-    setModalVariaveisAberto(false);
-    setNovaVariavelChave("");
-    setNovaVariavelValor("");
-    setNovaVariavelDescricao("");
-    setErroVariavelModal("");
-  }
-
-  async function salvarVariavelPersonalizada() {
-    try {
-      setErro("");
-      setErroVariavelModal("");
-      setSucesso("");
-
-      const chave = normalizarEntradaVariavelTemplate(novaVariavelChave);
-      const valor = novaVariavelValor.trim();
-
-      if (!chave) {
-        setErroVariavelModal("Informe o nome da variavel.");
-        return;
-      }
-
-      if (!valor) {
-        setErroVariavelModal("Informe o valor da variavel.");
-        return;
-      }
-
-      setSalvandoVariavel(true);
-
-      const res = await fetch("/api/variaveis", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chave,
-          valor,
-          descricao: novaVariavelDescricao.trim(),
-        }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao salvar variavel.");
-      }
-
-      setNovaVariavelChave("");
-      setNovaVariavelValor("");
-      setNovaVariavelDescricao("");
-
-      setSucesso("Variavel salva com sucesso.");
-      await carregarVariaveisPersonalizadas({ erroNoModal: true });
-    } catch (error: unknown) {
-      setErroVariavelModal(
-        error instanceof Error ? error.message : "Erro ao salvar variavel."
-      );
-    } finally {
-      setSalvandoVariavel(false);
-    }
-  }
-
-  async function removerVariavelPersonalizada(id: string) {
-    try {
-      setErro("");
-      setErroVariavelModal("");
-      setSucesso("");
-
-      const res = await fetch("/api/variaveis", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao remover variavel.");
-      }
-
-      setSucesso("Variavel removida com sucesso.");
-      await carregarVariaveisPersonalizadas({ erroNoModal: true });
-    } catch (error: unknown) {
-      setErroVariavelModal(
-        error instanceof Error ? error.message : "Erro ao remover variavel."
-      );
-    }
-  }
-
-  function aplicarVariavelNoBloco(chave: string) {
-    const valor = normalizarEntradaVariavelTemplate(chave);
-
-    if (!valor) return;
-
-    if (alvoVariavelFluxo === "agendar_disparo") {
-      setAgendarDisparoVariaveisNode((atual) =>
-        preencherPrimeiraLinhaVariavelTemplate(atual, valor)
-      );
-      return;
-    }
-
-    if (alvoVariavelFluxo === "agenda_lembrete") {
-      setAgendaLembreteVariaveisNode((atual) =>
-        preencherPrimeiraLinhaVariavelTemplate(atual, valor)
-      );
-      return;
-    }
-
-    const token = `{{${valor}}}`;
-
-    setMensagemNode((atual) => {
-      const texto = atual.trimEnd();
-      return texto ? `${texto} ${token}` : token;
-    });
-  }
-
   async function calcularPreviewCustoAgendarDisparo(categoria: string) {
     try {
       const categoriaFinal = String(categoria || "").trim();
@@ -2275,253 +1821,6 @@ function FluxosPageContent() {
       setLoadingPreviewCustoAgendarDisparo(false);
     }
   }
-
-  function excedeLimiteStorageMidias(tamanhoArquivoBytes: number) {
-    return (
-      resumoMidias.tamanhoTotal + Number(tamanhoArquivoBytes || 0) >
-      LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
-    );
-  }
-
-
-  async function enviarNovaMidia(arquivo: File) {
-    if (!podeGerenciarMidias) {
-      setErro("Você não tem permissão para enviar mídias de fluxos.");
-      return;
-    }
-
-    try {
-      setEnviandoMidia(true);
-      setErro("");
-      setSucesso("");
-      const mimeTypeUpload = mimeTypeParaUpload(arquivo);
-
-      if (excedeLimiteStorageMidias(arquivo.size)) {
-        throw new Error(
-          `Limite de ${formatarTamanhoArquivo(
-            LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
-          )} de mídias atingido. Exclua uma mídia antes de enviar outra.`
-        );
-      }
-
-      const preparacaoRes = await fetch("/api/automacoes/midias/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          acao: "preparar_upload",
-          nome: arquivo.name,
-          mimeType: mimeTypeUpload,
-          tamanhoBytes: arquivo.size,
-        }),
-      });
-
-      const preparacaoJson = await lerRespostaApi(
-        preparacaoRes,
-        "Erro ao preparar envio da mídia."
-      );
-
-      if (!preparacaoRes.ok || !preparacaoJson.ok) {
-        throw new Error(
-          preparacaoJson.error || "Erro ao preparar envio da mídia."
-        );
-      }
-
-      const upload = preparacaoJson.upload;
-
-      if (!upload?.bucket || !upload?.path || !upload?.token) {
-        throw new Error("Dados de upload inválidos.");
-      }
-
-      const supabase = createSupabaseBrowserClient();
-
-      const { error: uploadError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.path, upload.token, arquivo, {
-          contentType: mimeTypeUpload,
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw new Error(
-          uploadError.message || "Erro ao enviar mídia para o Storage."
-        );
-      }
-
-      const conclusaoRes = await fetch("/api/automacoes/midias/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          acao: "concluir_upload",
-          nome: arquivo.name,
-          mimeType: mimeTypeUpload,
-          tamanhoBytes: arquivo.size,
-          storagePath: upload.path,
-        }),
-      });
-
-      const conclusaoJson = await lerRespostaApi(
-        conclusaoRes,
-        "Erro ao concluir envio da mídia."
-      );
-
-      if (!conclusaoRes.ok || !conclusaoJson.ok) {
-        throw new Error(
-          conclusaoJson.error || "Erro ao concluir envio da mídia."
-        );
-      }
-
-      const midiaEnviada: MidiaOpcao = conclusaoJson.midia;
-
-      if (!midiaEnviada?.id || !midiaEnviada?.url) {
-        throw new Error("A API não retornou os dados da mídia enviada.");
-      }
-
-      setMidiaUrlNode(midiaEnviada.url);
-      setMidiaNomeNode(midiaEnviada.nome);
-
-      setMidias((atuais) => {
-        const jaExiste = atuais.some(
-          (midia) => midia.id === midiaEnviada.id
-        );
-
-        if (jaExiste) {
-          return atuais;
-        }
-
-        return [midiaEnviada, ...atuais];
-      });
-
-      setSucesso(
-        arquivo.type.startsWith("video/")
-          ? "Vídeo enviado com sucesso."
-          : "Mídia enviada com sucesso."
-      );
-
-      await carregarMidias();
-    } catch (error: unknown) {
-      setErro(
-        error instanceof Error
-          ? error.message
-          : "Erro ao enviar mídia."
-      );
-    } finally {
-      setEnviandoMidia(false);
-    }
-  }
-
-
-  async function carregarMidias(tipo?: "imagem" | "video" | "audio") {
-    try {
-      setCarregandoMidias(true);
-
-      const params = tipo ? `?tipo=${tipo}` : "";
-
-      const res = await fetch(`/api/automacoes/midias${params}`, {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar mídias.");
-      }
-
-      setMidias(json.midias || []);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar mídias.");
-    } finally {
-      setCarregandoMidias(false);
-    }
-  }
-
-    async function excluirMidiaDefinitivamente(midia: MidiaOpcao) {
-      if (!podeGerenciarMidias) {
-        setErro("Você não tem permissão para excluir mídias de fluxos.");
-        return;
-      }
-
-      try {
-        setErro("");
-        setSucesso("");
-        setMidiaExcluindoId(midia.id);
-
-        const res = await fetch("/api/automacoes/midias", {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id: midia.id,
-          }),
-        });
-
-        const json = await res.json();
-
-        if (!res.ok || !json.ok) {
-          throw new Error(json.error || "Erro ao excluir mídia.");
-        }
-
-        const impacto = (json.impacto || null) as ImpactoExclusaoMidia | null;
-        const fluxosAfetados = impacto?.fluxos_afetados || [];
-
-        setMidias((atuais) => atuais.filter((item) => item.id !== midia.id));
-        setNodes((atuais) =>
-          atuais.map((node) => limparMidiaDoNode(node, midia))
-        );
-
-        if (midiaUrlNode === midia.url) {
-          setMidiaUrlNode("");
-          setMidiaNomeNode("");
-        }
-
-        if (fluxosAfetados.length > 0) {
-          setFluxos((atuais) =>
-            atuais.map((fluxo) => {
-              const fluxoAfetado = fluxosAfetados.find(
-                (item) => item.id === fluxo.id
-              );
-
-              if (!fluxoAfetado?.status_atual) return fluxo;
-
-              return {
-                ...fluxo,
-                status: fluxoAfetado.status_atual as Fluxo["status"],
-              };
-            })
-          );
-
-          setFluxoSelecionado((atual) => {
-            if (!atual) return atual;
-
-            const fluxoAfetado = fluxosAfetados.find(
-              (item) => item.id === atual.id
-            );
-
-            if (!fluxoAfetado?.status_atual) return atual;
-
-            return {
-              ...atual,
-              status: fluxoAfetado.status_atual as Fluxo["status"],
-            };
-          });
-        }
-
-        setConfirmandoExclusaoMidiaId(null);
-        setSucesso(
-          json.storage_removido === false && json.storage_erro
-            ? `${mensagemExclusaoMidia(impacto)} Aviso: o arquivo no Storage nao foi removido automaticamente.`
-            : mensagemExclusaoMidia(impacto)
-        );
-      } catch (error: any) {
-        setErro(error?.message || "Erro ao excluir mídia.");
-      } finally {
-        setMidiaExcluindoId(null);
-      }
-    }
 
   async function carregarEstrutura(fluxoId: string) {
     try {
@@ -2793,134 +2092,12 @@ function FluxosPageContent() {
     [nodes, edges, setEdges]
   );
 
-async function criarFluxoRapido() {
-  try {
-    setErro("");
-    setErroEdicaoFluxo("");
-    setSucesso("");
-    setErroCriacaoFluxo("");
 
-    const nome = novoFluxoNome.trim();
 
-    if (!nome) {
-      setErroCriacaoFluxo("Informe o nome do fluxo.");
-      return;
-    }
-
-    const fluxoPadraoFinal = !jaExisteFluxoPadrao && novoFluxoPadrao;
-
-    const gatilhosValidos = gatilhosNovoFluxo.filter((gatilho) =>
-      String(gatilho.valor || "").trim()
-    );
-
-    if (!fluxoPadraoFinal && gatilhosValidos.length === 0) {
-      setErroCriacaoFluxo(
-        "Adicione pelo menos uma palavra-chave para iniciar o fluxo."
-      );
-      return;
-    }
-
-    const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
-
-    const segundosInatividade =
-      encerrarInatividadeUnidade === "horas"
-        ? quantidadeInformada * 60 * 60
-        : quantidadeInformada * 60;
-
-    if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
-      setErroCriacaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
-      return;
-    }
-
-    if (segundosInatividade < 5 * 60) {
-      setErroCriacaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
-      return;
-    }
-
-    if (segundosInatividade > 23 * 60 * 60) {
-      setErroCriacaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
-      return;
-    }
-
-    const escopoIntegracoes = montarEscopoIntegracoesFluxo(
-      deveMostrarEscopoIntegracoesFluxo
-        ? novoFluxoEscopoIntegracoesModo
-        : "todas",
-      deveMostrarEscopoIntegracoesFluxo ? novoFluxoIntegracoesIds : []
-    );
-
-    if (
-      deveMostrarEscopoIntegracoesFluxo &&
-      novoFluxoEscopoIntegracoesModo === "selecionadas" &&
-      escopoIntegracoes.ids.length === 0
-    ) {
-      setErroCriacaoFluxo("Selecione pelo menos uma integração WhatsApp.");
-      return;
-    }
-
-    const res = await fetch("/api/automacoes", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        nome,
-        descricao: descricaoNovoFluxo,
-        canal: "whatsapp",
-        status: "rascunho",
-        fluxo_padrao: fluxoPadraoFinal,
-        gatilhos: fluxoPadraoFinal
-          ? []
-          : gatilhosValidos.map((gatilho) => ({
-              tipo_gatilho: "palavra_chave",
-              valor: gatilho.valor,
-              condicao: gatilho.condicao,
-              ativo: gatilho.ativo !== false,
-            })),
-        configuracao_json: {
-          integracoes_whatsapp: escopoIntegracoes,
-          encerramento_inatividade: {
-            ativo: true,
-            tempo_quantidade: quantidadeInformada,
-            tempo_unidade: encerrarInatividadeUnidade,
-            mensagem: encerrarInatividadeMensagem.trim(),
-          },
-        },
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao criar fluxo.");
-    }
-
-    const fluxoCriado = json.fluxo;
-
-    setNovoFluxoNome("");
-    setDescricaoNovoFluxo("");
-    setGatilhosNovoFluxo([]);
-    setNovoFluxoPadrao(false);
-    setNovoFluxoEscopoIntegracoesModo("todas");
-    setNovoFluxoIntegracoesIds([]);
-    setNovoGatilhoValor("");
-    setNovoGatilhoCondicao("contem");
-    resetarEncerramentoInatividadePadrao();
-    setAbrirCriacao(false);
-
-    setSucesso("Fluxo criado com sucesso.");
-    await carregarFluxos();
-    setFluxoSelecionado(fluxoCriado);
-    router.push(`/fluxos?fluxo=${encodeURIComponent(fluxoCriado.id)}`);
-  } catch (error: any) {
-    setErroCriacaoFluxo(error?.message || "Erro ao criar fluxo.");
+  function abrirFluxo(fluxo: Fluxo) {
+    setFluxoSelecionado(fluxo);
+    router.push(`/fluxos?fluxo=${encodeURIComponent(fluxo.id)}`);
   }
-}
-
-function abrirFluxo(fluxo: Fluxo) {
-  setFluxoSelecionado(fluxo);
-  router.push(`/fluxos?fluxo=${encodeURIComponent(fluxo.id)}`);
-}
 
   function adicionarNo(tipoNo: string) {
     if (tipoNo === "inicio") {
@@ -4713,351 +3890,10 @@ async function confirmarPreviaGeracaoDescricaoIa() {
   await executarGeracaoDescricoesConexoesDoBlocoComIa();
 }
 
-function obterFluxoAlvoEdicao() {
-  return fluxoEmEdicao || fluxoSelecionado;
-}
-
-function existeOutroFluxoPadraoNaEmpresa() {
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return false;
-
-  const escopoEdicao = montarEscopoIntegracoesFluxo(
-    deveMostrarEscopoIntegracoesFluxo
-      ? fluxoEscopoIntegracoesModoEdicao
-      : "todas",
-    deveMostrarEscopoIntegracoesFluxo ? fluxoIntegracoesIdsEdicao : []
-  );
-
-  return fluxos.some(
-    (fluxo) =>
-      fluxo.fluxo_padrao &&
-      fluxo.status !== "arquivado" &&
-      fluxo.id !== fluxoParaEditar.id &&
-      escoposIntegracaoConflitam(
-        escopoEdicao,
-        normalizarEscopoIntegracoesFluxo(fluxo.configuracao_json)
-      )
-  );
-}
-
-function abrirEdicaoFluxo(fluxoAlvo?: Fluxo) {
-  const fluxoParaEditar = fluxoAlvo || fluxoSelecionado;
-
-  if (!fluxoParaEditar) return;
-
-  if (fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()) {
-    setErroEdicaoFluxo(
-      "Já existe outro fluxo padrão cadastrado. Desmarque o fluxo padrão atual antes de definir este fluxo como padrão."
-    );
-    return;
-  }
-
-  setErro("");
-  setErroEdicaoFluxo("");
-  setFluxoEmEdicao(fluxoParaEditar);
-  setEditandoFluxo(true);
-  setNomeFluxoEdicao(fluxoParaEditar.nome || "");
-  setDescricaoFluxoEdicao(fluxoParaEditar.descricao || "");
-  setFluxoPadraoEdicao(Boolean(fluxoParaEditar.fluxo_padrao));
-
-  const config = fluxoParaEditar.configuracao_json || {};
-  const escopoIntegracoes = normalizarEscopoIntegracoesFluxo(config);
-  setFluxoEscopoIntegracoesModoEdicao(escopoIntegracoes.modo);
-  setFluxoIntegracoesIdsEdicao(escopoIntegracoes.ids);
-  const encerramento = config.encerramento_inatividade || {};
-  const unidadeEncerramento =
-    encerramento.tempo_unidade === "minutos" ? "minutos" : "horas";
-  const quantidadePadraoEncerramento =
-    unidadeEncerramento === "minutos" ? 1380 : 23;
-
-  setEncerrarInatividadeQuantidade(
-    String(encerramento.tempo_quantidade || quantidadePadraoEncerramento)
-  );
-
-  setEncerrarInatividadeUnidade(unidadeEncerramento);
-
-  setEncerrarInatividadeMensagem(
-    String(
-      encerramento.mensagem ||
-        "Como não tivemos retorno, este atendimento será encerrado. Caso precise de ajuda, envie uma nova mensagem."
-    )
-  );
-
-  setNovoGatilhoValor("");
-  setNovoGatilhoCondicao("contem");
-
-  if (fluxoParaEditar.fluxo_padrao) {
-    setGatilhosFluxo([]);
-  } else {
-    carregarGatilhosFluxo(fluxoParaEditar.id);
-  }
-}
-
-async function salvarEdicaoFluxo() {
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
-
-  const segundosInatividade =
-    encerrarInatividadeUnidade === "horas"
-      ? quantidadeInformada * 60 * 60
-      : quantidadeInformada * 60;
-
-  if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
-    setErroEdicaoFluxo("Informe um tempo válido para o encerramento por inatividade.");
-    return;
-  }
-
-  if (segundosInatividade < 5 * 60) {
-    setErroEdicaoFluxo("O tempo mínimo para encerramento por inatividade é de 5 minutos.");
-    return;
-  }
-
-  if (segundosInatividade > 23 * 60 * 60) {
-    setErroEdicaoFluxo("O tempo máximo para encerramento por inatividade é de 23 horas.");
-    return;
-  }
-
-  const escopoIntegracoes = montarEscopoIntegracoesFluxo(
-    deveMostrarEscopoIntegracoesFluxo
-      ? fluxoEscopoIntegracoesModoEdicao
-      : "todas",
-    deveMostrarEscopoIntegracoesFluxo ? fluxoIntegracoesIdsEdicao : []
-  );
-
-  if (
-    deveMostrarEscopoIntegracoesFluxo &&
-    fluxoEscopoIntegracoesModoEdicao === "selecionadas" &&
-    escopoIntegracoes.ids.length === 0
-  ) {
-    setErroEdicaoFluxo("Selecione pelo menos uma integração WhatsApp.");
-    return;
-  }
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxoParaEditar.id,
-        nome: nomeFluxoEdicao,
-        descricao: descricaoFluxoEdicao,
-        fluxo_padrao: fluxoPadraoEdicao,
-        configuracao_json: {
-          ...(fluxoParaEditar.configuracao_json || {}),
-          integracoes_whatsapp: escopoIntegracoes,
-          encerramento_inatividade: {
-            ativo: true,
-            tempo_quantidade: quantidadeInformada,
-            tempo_unidade: encerrarInatividadeUnidade,
-            mensagem: encerrarInatividadeMensagem.trim(),
-          },
-        },
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao editar fluxo.");
-    }
-
-    setSucesso("Fluxo atualizado com sucesso.");
-    setEditandoFluxo(false);
-    setFluxoEmEdicao(null);
-    setFluxoSelecionado(json.fluxo);
-    await carregarFluxos();
-  } catch (error: any) {
-    setErroEdicaoFluxo(error?.message || "Erro ao editar fluxo.");
-  }
-}
-
-function obterLimitesInatividade(unidade: "minutos" | "horas") {
-  if (unidade === "horas") {
-    return {
-      min: 1,
-      max: 23,
-    };
-  }
-
-  return {
-    min: 5,
-    max: 1380, // 23 horas em minutos
-  };
-}
-
-function limitarQuantidadeInatividade(
-  valor: string,
-  unidade: "minutos" | "horas"
-) {
-  const somenteNumeros = valor.replace(/\D/g, "");
-
-  if (!somenteNumeros) {
-    return "";
-  }
-
-  const numero = Number(somenteNumeros);
-  const limites = obterLimitesInatividade(unidade);
-
-  if (!Number.isFinite(numero)) {
-    return "";
-  }
-
-  if (numero > limites.max) {
-    return String(limites.max);
-  }
-
-  return String(numero);
-}
-
-function corrigirQuantidadeMinimaInatividade(
-  valor: string,
-  unidade: "minutos" | "horas"
-) {
-  const numero = Number(valor || 0);
-  const limites = obterLimitesInatividade(unidade);
-
-  if (!Number.isFinite(numero) || numero < limites.min) {
-    return String(limites.min);
-  }
-
-  if (numero > limites.max) {
-    return String(limites.max);
-  }
-
-  return String(numero);
-}
-
 function mensagemErroFluxo(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-async function duplicarFluxo(fluxo: Fluxo) {
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxo.id,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao duplicar fluxo.");
-    }
-
-    setSucesso("Fluxo duplicado com sucesso.");
-    await carregarFluxos();
-    setFluxoSelecionado(json.fluxo);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao duplicar fluxo.");
-  }
-}
-
-async function gerarCodigoCompartilhamento(fluxo: Fluxo) {
-  try {
-    setCarregandoCodigoCompartilhamento(true);
-    setErroCompartilhamento("");
-    setCodigoCompartilhamento("");
-
-    const res = await fetch("/api/automacoes/compartilhamentos", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        fluxo_id: fluxo.id,
-      }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao gerar codigo.");
-    }
-
-    setCodigoCompartilhamento(json.codigo || "");
-  } catch (error: unknown) {
-    setErroCompartilhamento(mensagemErroFluxo(error, "Erro ao gerar codigo."));
-  } finally {
-    setCarregandoCodigoCompartilhamento(false);
-  }
-}
-
-function abrirCompartilhamentoFluxo(fluxo: Fluxo) {
-  setFluxoParaCompartilhar(fluxo);
-  setModalCompartilharAberto(true);
-  gerarCodigoCompartilhamento(fluxo);
-}
-
-async function copiarCodigoCompartilhamento() {
-  try {
-    if (!codigoCompartilhamento) return;
-
-    await navigator.clipboard.writeText(codigoCompartilhamento);
-    setSucesso("Codigo copiado com sucesso.");
-  } catch {
-    setErroCompartilhamento(
-      "Nao foi possivel copiar automaticamente. Selecione e copie o codigo."
-    );
-  }
-}
-
-async function importarFluxoCompartilhado() {
-  try {
-    setErroImportacao("");
-    setErro("");
-    setSucesso("");
-
-    const codigo = codigoImportacao.trim();
-
-    if (!codigo) {
-      setErroImportacao("Cole o codigo do fluxo.");
-      return;
-    }
-
-    setImportandoFluxo(true);
-
-    const res = await fetch("/api/automacoes/compartilhamentos", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ codigo }),
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao importar fluxo.");
-    }
-
-    setCodigoImportacao("");
-    setModalImportarAberto(false);
-    setSucesso("Fluxo importado como rascunho.");
-    await carregarFluxos();
-    setFluxoSelecionado(json.fluxo);
-  } catch (error: unknown) {
-    setErroImportacao(mensagemErroFluxo(error, "Erro ao importar fluxo."));
-  } finally {
-    setImportandoFluxo(false);
-  }
-}
 
   async function salvarEstrutura(params?: {
     nodesParaSalvar?: Node[];
@@ -5154,816 +3990,6 @@ async function importarFluxoCompartilhado() {
     }
   }
 
-function abrirModalArquivarFluxo(fluxo: Fluxo) {
-  if (fluxoEhSistemaCalendario(fluxo)) {
-    setErro("Fluxos fixos do sistema não podem ser arquivados.");
-    return;
-  }
-
-  setFluxoParaArquivar(fluxo);
-  setModalArquivarAberto(true);
-}
-
-async function confirmarArquivarFluxo() {
-  if (!fluxoParaArquivar) return;
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxoParaArquivar.id,
-        definitivo: false,
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao arquivar fluxo.");
-    }
-
-    setSucesso("Fluxo arquivado com sucesso.");
-    setModalArquivarAberto(false);
-
-    if (fluxoSelecionado?.id === fluxoParaArquivar.id) {
-      setFluxoSelecionado(null);
-      setNodes([]);
-      setEdges([]);
-      setEditandoNodeId(null);
-      setEditandoEdgeId(null);
-    }
-
-    setFluxoParaArquivar(null);
-    await carregarFluxos();
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao arquivar fluxo.");
-  }
-}
-
-
-async function carregarGatilhosFluxo(fluxoId: string) {
-  try {
-    const res = await fetch(`/api/automacoes/${fluxoId}/gatilhos`, {
-      cache: "no-store",
-    });
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao carregar gatilhos.");
-    }
-
-    setGatilhosFluxo(json.gatilhos || []);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao carregar gatilhos.");
-  }
-}
-
-async function criarGatilhoFluxo() {
-  if (!podeGerenciarGatilhos) {
-    setErroEdicaoFluxo("Você não tem permissão para gerenciar gatilhos.");
-    return;
-  }
-
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  try {
-    setErroEdicaoFluxo("");
-    setSucesso("");
-
-    const valor = novoGatilhoValor.trim();
-
-    if (!valor) {
-      setErroEdicaoFluxo("Informe a palavra-chave do gatilho.");
-      return;
-    }
-
-    const res = await fetch(
-      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tipo_gatilho: "palavra_chave",
-          valor,
-          condicao: novoGatilhoCondicao,
-        }),
-      }
-    );
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao criar gatilho.");
-    }
-
-    setNovoGatilhoValor("");
-    setNovoGatilhoCondicao("contem");
-    setSucesso("Gatilho criado com sucesso.");
-    await carregarGatilhosFluxo(fluxoParaEditar.id);
-  } catch (error: any) {
-    setErroEdicaoFluxo(error?.message || "Erro ao criar gatilho.");
-  }
-}
-
-async function removerGatilhoFluxo(gatilhoId: string) {
-  if (!podeGerenciarGatilhos) {
-    setErroEdicaoFluxo("Você não tem permissão para gerenciar gatilhos.");
-    return;
-  }
-
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  // CRM_MODAL_TRIGGER_ERRORS_V1
-  try {
-    setErroEdicaoFluxo("");
-    setSucesso("");
-
-    const res = await fetch(
-      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: gatilhoId,
-        }),
-      }
-    );
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao remover gatilho.");
-    }
-
-    setSucesso("Gatilho removido com sucesso.");
-    await carregarGatilhosFluxo(fluxoParaEditar.id);
-  } catch (error: any) {
-    setErroEdicaoFluxo(
-      error?.message || "Erro ao remover gatilho."
-    );
-  }
-}
-
-async function alternarGatilhoFluxo(gatilho: GatilhoFluxo) {
-  if (!podeGerenciarGatilhos) {
-    setErroEdicaoFluxo("Você não tem permissão para gerenciar gatilhos.");
-    return;
-  }
-
-  const fluxoParaEditar = obterFluxoAlvoEdicao();
-
-  if (!fluxoParaEditar) return;
-
-  try {
-    setErroEdicaoFluxo("");
-    setSucesso("");
-
-    const res = await fetch(
-      `/api/automacoes/${fluxoParaEditar.id}/gatilhos`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: gatilho.id,
-          ativo: !gatilho.ativo,
-        }),
-      }
-    );
-
-    const json = await res.json();
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao atualizar gatilho.");
-    }
-
-    await carregarGatilhosFluxo(fluxoParaEditar.id);
-  } catch (error: any) {
-    setErroEdicaoFluxo(
-      error?.message || "Erro ao atualizar gatilho."
-    );
-  }
-}
-
-
-function adicionarGatilhoNovoFluxo() {
-  const valor = novoGatilhoValor.trim().toLowerCase();
-
-  if (!valor) {
-    setErroCriacaoFluxo("Informe a palavra-chave do gatilho.");
-    return;
-  }
-
-  const jaExiste = gatilhosNovoFluxo.some(
-    (gatilho) => gatilho.valor === valor
-  );
-
-  if (jaExiste) {
-    setErroCriacaoFluxo("Essa palavra-chave já foi adicionada.");
-    return;
-  }
-
-  setErroCriacaoFluxo("");
-  setGatilhosNovoFluxo((atuais) => [
-    ...atuais,
-    {
-      valor,
-      condicao: novoGatilhoCondicao,
-      ativo: true,
-    },
-  ]);
-
-  setNovoGatilhoValor("");
-  setNovoGatilhoCondicao("contem");
-}
-
-
-async function restaurarFluxo(fluxo: Fluxo) {
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxo.id,
-        status: "rascunho",
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao restaurar fluxo.");
-    }
-
-    setSucesso("Fluxo restaurado como rascunho.");
-    await carregarFluxos();
-    setFluxoSelecionado(json.fluxo);
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao restaurar fluxo.");
-  }
-}
-  
-
-function abrirModalApagarDefinitivo(fluxo: Fluxo) {
-  if (fluxoEhSistemaCalendario(fluxo)) {
-    setErro("Fluxos fixos do sistema não podem ser excluídos.");
-    return;
-  }
-
-  if (apagandoFluxoDefinitivoRef.current) return;
-
-  setFluxoParaApagarDefinitivo(fluxo);
-  setModalApagarDefinitivoAberto(true);
-}
-
-async function confirmarApagarDefinitivo() {
-  if (!fluxoParaApagarDefinitivo || apagandoFluxoDefinitivoRef.current) return;
-
-  const fluxoAlvo = fluxoParaApagarDefinitivo;
-  apagandoFluxoDefinitivoRef.current = true;
-  setApagandoFluxoDefinitivo(true);
-
-  try {
-    setErro("");
-    setSucesso("");
-
-    const res = await fetch("/api/automacoes", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: fluxoAlvo.id,
-        definitivo: true,
-      }),
-    });
-
-    const text = await res.text();
-    const json = text ? JSON.parse(text) : {};
-
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || "Erro ao apagar definitivamente.");
-    }
-
-    setSucesso("Fluxo apagado definitivamente.");
-    setModalApagarDefinitivoAberto(false);
-
-    if (fluxoSelecionado?.id === fluxoAlvo.id) {
-      setFluxoSelecionado(null);
-      setNodes([]);
-      setEdges([]);
-      setEditandoNodeId(null);
-      setEditandoEdgeId(null);
-    }
-
-    setFluxoParaApagarDefinitivo(null);
-    await carregarFluxos();
-  } catch (error: any) {
-    setErro(error?.message || "Erro ao apagar definitivamente.");
-  } finally {
-    apagandoFluxoDefinitivoRef.current = false;
-    setApagandoFluxoDefinitivo(false);
-  }
-}
-
-function validarFluxoAntesDeAtivar(params?: {
-  fluxo?: Fluxo | null;
-  nodesValidacao?: Node[];
-  edgesValidacao?: Edge[];
-}) {
-  const fluxoValidacao = params?.fluxo ?? fluxoSelecionado;
-  const nodesValidacao = params?.nodesValidacao ?? nodes;
-  const edgesValidacao = params?.edgesValidacao ?? edges;
-  const escopoIntegracoesValidacao = normalizarEscopoIntegracoesFluxo(
-    fluxoValidacao?.configuracao_json
-  );
-  const integracoesEscopoValidacao = obterIntegracoesDoEscopoFluxo(
-    escopoIntegracoesValidacao,
-    integracoesWhatsapp
-  );
-  const usaTemplatesPorIntegracaoValidacao = usaTemplatesPorIntegracao(
-    integracoesEscopoValidacao
-  );
-
-  if (!fluxoValidacao) {
-    return "Selecione um fluxo.";
-  }
-
-  const inicio = nodesValidacao.find((node) => node.data?.tipo_no === "inicio");
-
-  if (!inicio) {
-    return "Adicione um bloco de início antes de ativar o fluxo.";
-  }
-
-  const conexaoSaindoDoInicio = edgesValidacao.some((edge) => edge.source === inicio.id);
-
-  if (!conexaoSaindoDoInicio) {
-    return "O bloco de início precisa estar conectado a outro bloco.";
-  }
-
-  const temBlocoFinal = nodesValidacao.some(
-    (node) =>
-      node.data?.tipo_no === "encerrar" ||
-      node.data?.tipo_no === "transferir_setor"
-  );
-
-  if (!temBlocoFinal) {
-    return "Adicione pelo menos um bloco final: Encerrar ou Transferir.";
-  }
-
-  for (const node of nodesValidacao) {
-    const tipoNo = String(node.data?.tipo_no || "");
-    const config = (node.data?.configuracao_json || {}) as Record<string, any>;
-
-    if (tipoNo === "enviar_texto" && !String(config.mensagem || "").trim()) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
-    }
-
-    if (tipoNo === "encerrar") {
-      const resultadoFluxo = String(config.resultado_fluxo || "positivo");
-      const tipoValorConversao = String(config.valor_conversao_tipo || "sem_valor");
-
-      if (!resultadoEncerramentoValido(resultadoFluxo)) {
-        return `O bloco "${node.data?.titulo}" precisa ter um resultado valido.`;
-      }
-
-      if (resultadoFluxo === "positivo") {
-        if (!tipoValorConversaoValido(tipoValorConversao)) {
-          return `O bloco "${node.data?.titulo}" precisa ter um tipo de valor valido.`;
-        }
-
-        if (
-          tipoValorConversao === "valor_fixo" &&
-          normalizarValorMonetario(config.valor_conversao) == null
-        ) {
-          return `O bloco "${node.data?.titulo}" precisa ter um valor fixo valido.`;
-        }
-
-        if (
-          tipoValorConversao === "variavel" &&
-          !normalizarVariavelFluxo(String(config.valor_conversao_variavel || ""))
-        ) {
-          return `O bloco "${node.data?.titulo}" precisa informar a variavel do valor.`;
-        }
-      }
-    }
-
-    if (tipoNo === "pergunta_opcoes") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
-      }
-
-      if (!Array.isArray(config.opcoes) || config.opcoes.length === 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter pelo menos uma opção.`;
-      }
-    }
-
-    if (tipoNo === TIPO_NO_PERGUNTA_LIVRE_IA) {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
-      }
-
-      const conexoesIa = edgesValidacao.filter((edge) => {
-        const data = edge.data as
-          | {
-              usar_ia?: boolean;
-              descricao_ia?: string | null;
-            }
-          | undefined;
-
-        return edge.source === node.id && data?.usar_ia === true;
-      });
-
-      if (conexoesIa.length === 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter pelo menos uma conexão com IA.`;
-      }
-
-      const temConexaoIaSemDescricao = conexoesIa.some((edge) => {
-        const data = edge.data as
-          | {
-              descricao_ia?: string | null;
-            }
-          | undefined;
-
-        return !String(data?.descricao_ia || "").trim();
-      });
-
-      if (temConexaoIaSemDescricao) {
-        return `Todas as conexões com IA do bloco "${node.data?.titulo}" precisam ter descrição para IA.`;
-      }
-    }
-
-    if (tipoNo === "enviar_botoes") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
-      }
-
-      if (!Array.isArray(config.botoes) || config.botoes.length === 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter pelo menos um botão.`;
-      }
-
-      if (config.botoes.length > 3) {
-        return `O bloco "${node.data?.titulo}" pode ter no máximo 3 botões.`;
-      }
-
-      const idsBotoes = new Set<string>();
-      for (const botao of config.botoes as any[]) {
-        const id = String(botao.id || "").trim();
-        const titulo = String(botao.titulo || "").trim();
-
-        if (!id) {
-          return `O bloco "${node.data?.titulo}" possui um botão sem ID.`;
-        }
-        if (idsBotoes.has(id)) {
-          return `O bloco "${node.data?.titulo}" possui o ID de botão duplicado "${id}".`;
-        }
-        if (!titulo) {
-          return `O bloco "${node.data?.titulo}" possui um botão sem título.`;
-        }
-        if (titulo.length > 20) {
-          return `O botão "${titulo}" do bloco "${node.data?.titulo}" possui ${titulo.length} caracteres. O limite é 20.`;
-        }
-
-        idsBotoes.add(id);
-      }
-    }
-
-    if (tipoNo === "botao_redirect") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem.`;
-      }
-
-      const textoBotao = String(config.botao_texto || "").trim();
-
-      if (!textoBotao || textoBotao.length > 20) {
-        return `O bloco "${node.data?.titulo}" precisa ter texto do botão com até 20 caracteres.`;
-      }
-
-      if (!urlHttpValida(config.url)) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma URL começando com http:// ou https://.`;
-      }
-    }
-
-    if (
-      tipoNo === "avaliacao" &&
-      config.solicitar_comentario === true &&
-      !String(config.mensagem_comentario || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para solicitar comentário.`;
-    }
-
-    if (tipoNo === "avaliacao") {
-      const notaMinima = Number(config.nota_minima);
-      const notaMaxima = Number(config.nota_maxima);
-
-      if (notaMinima >= notaMaxima) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma nota máxima maior que a mínima.`;
-      }
-    }
-
-    if (tipoNo === "capturar_resposta") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma pergunta.`;
-      }
-
-      if (!String(config.variavel || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa informar a variável onde a resposta será salva.`;
-      }
-
-      if (!String(config.tipo_captura || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter um tipo de captura.`;
-      }
-    }
-
-    if (tipoNo === "agendar_disparo") {
-      const templatesPorIntegracao = normalizarTemplatesPorIntegracao(
-        config.templates_por_integracao
-      );
-      const templatesParaValidar = usaTemplatesPorIntegracaoValidacao
-        ? integracoesEscopoValidacao.map((integracao) => {
-            const templateId = String(
-              templatesPorIntegracao[integracao.id] || ""
-            ).trim();
-
-            return {
-              integracao,
-              templateId,
-              template: templatesWhatsapp.find(
-                (template) => template.id === templateId
-              ),
-            };
-          })
-        : [
-            {
-              integracao: null,
-              templateId: String(config.template_id || "").trim(),
-              template: templatesWhatsapp.find(
-                (template) => template.id === String(config.template_id || "").trim()
-              ),
-            },
-          ];
-
-      for (const item of templatesParaValidar) {
-        const rotuloIntegracao = item.integracao
-          ? ` para ${rotuloIntegracaoWhatsapp(item.integracao)}`
-          : "";
-
-        if (!item.templateId || !item.template) {
-          return `O bloco "${node.data?.titulo}" precisa ter um template WhatsApp aprovado${rotuloIntegracao}.`;
-        }
-
-        if (
-          item.integracao &&
-          !templateCompativelComIntegracao(item.template, item.integracao)
-        ) {
-          return `O bloco "${node.data?.titulo}" usa um template de outra WABA${rotuloIntegracao}.`;
-        }
-
-        if (
-          !usaTemplatesPorIntegracaoValidacao &&
-          item.template &&
-          integracoesEscopoValidacao.length > 0 &&
-          !integracoesEscopoValidacao.some((integracao) =>
-            templateCompativelComIntegracao(item.template, integracao)
-          )
-        ) {
-          return `O bloco "${node.data?.titulo}" usa um template fora do escopo do fluxo.`;
-        }
-
-        if (templateWhatsappTemCabecalhoMidia(item.template)) {
-          return `O bloco "${node.data?.titulo}" usa um template com cabecalho de midia. Use um template apenas com texto para disparos agendados.`;
-        }
-
-        const totalVariaveisTemplate =
-          contarVariaveisTemplateWhatsapp(item.template);
-        const totalVariaveisConfiguradas =
-          contarVariaveisObrigatoriasPreenchidas(
-            Array.isArray(config.variaveis) ? config.variaveis : [],
-            totalVariaveisTemplate
-          );
-
-        if (totalVariaveisTemplate > 3) {
-          return `O bloco "${node.data?.titulo}" usa um template com mais de 3 variaveis.`;
-        }
-
-        if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
-          return `O bloco "${node.data?.titulo}" precisa informar ${totalVariaveisTemplate} variavel(is) do template WhatsApp.`;
-        }
-      }
-
-      const quantidade = Number(config.tempo_quantidade || 0);
-
-      if (!Number.isFinite(quantidade) || quantidade <= 0) {
-        return `O bloco "${node.data?.titulo}" precisa ter um tempo válido para agendar o disparo.`;
-      }
-
-      if (!["horas", "dias"].includes(String(config.tempo_unidade || ""))) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma unidade válida.`;
-      }
-    }
-
-    // CRM_SYSTEM_CALENDAR_FLOW_ACTIVATION_VALIDATION_V1
-    if (
-      tipoNo === "agenda_escolher_horario" &&
-      !String(config.agenda_id || "").trim() &&
-      config.usar_agenda_contexto !== true &&
-      config.usar_agenda_contexto !== "true"
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter um calendário.`;
-    }
-
-    if (
-      tipoNo === "agenda_escolher_horario" &&
-      !String(config.mensagem || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma mensagem para pedir o dia.`;
-    }
-
-    if (tipoNo === "agenda_criar_agendamento") {
-      const lembreteAtivo = configuracaoMarcada(
-        config.lembrete_agendamento_ativo
-      );
-      const lembreteWhatsapp = configuracaoMarcada(
-        config.lembrete_agendamento_whatsapp
-      );
-      const lembreteEmail = configuracaoMarcada(
-        config.lembrete_agendamento_email
-      );
-
-      if (lembreteAtivo) {
-        const quantidade = Number(config.lembrete_agendamento_quantidade || 0);
-        const templateLembreteId = String(
-          config.lembrete_agendamento_template_id || ""
-        ).trim();
-        const templateLembreteSelecionado = templatesWhatsapp.find(
-          (template) => template.id === templateLembreteId
-        );
-
-        if (!Number.isFinite(quantidade) || quantidade <= 0) {
-          return `O bloco "${node.data?.titulo}" precisa ter uma antecedencia valida para o lembrete.`;
-        }
-
-        if (
-          !["minutos", "horas", "dias"].includes(
-            String(config.lembrete_agendamento_unidade || "")
-          )
-        ) {
-          return `O bloco "${node.data?.titulo}" precisa ter uma unidade valida para o lembrete.`;
-        }
-
-        if (!lembreteWhatsapp && !lembreteEmail) {
-          return `O bloco "${node.data?.titulo}" precisa ter pelo menos um canal de lembrete.`;
-        }
-
-        if (
-          lembreteWhatsapp &&
-          (!templateLembreteId || !templateLembreteSelecionado)
-        ) {
-          return "Selecione um template WhatsApp para o lembrete.";
-        }
-
-        if (lembreteWhatsapp) {
-          if (
-            templateWhatsappTemCabecalhoMidia(templateLembreteSelecionado)
-          ) {
-            return `O bloco "${node.data?.titulo}" usa um template de lembrete com cabecalho de midia. Use um template apenas com texto.`;
-          }
-
-          if (templateLembreteSelecionado) {
-            const totalVariaveisTemplate =
-              contarVariaveisTemplateWhatsapp(templateLembreteSelecionado);
-            const totalVariaveisConfiguradas =
-              contarVariaveisObrigatoriasPreenchidas(
-                Array.isArray(config.lembrete_agendamento_variaveis)
-                  ? config.lembrete_agendamento_variaveis
-                  : [],
-                totalVariaveisTemplate
-              );
-
-            if (totalVariaveisTemplate > 3) {
-              return `O bloco "${node.data?.titulo}" usa um template de lembrete com mais de 3 variaveis.`;
-            }
-
-            if (totalVariaveisConfiguradas < totalVariaveisTemplate) {
-              return `O bloco "${node.data?.titulo}" precisa informar ${totalVariaveisTemplate} variavel(is) do template de lembrete.`;
-            }
-          }
-        }
-      }
-    }
-
-    if (tipoNo === "interpretar_arquivo_ia") {
-      if (!String(config.mensagem || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma mensagem solicitando o arquivo.`;
-      }
-
-      if (!String(config.instrucao_ia || "").trim()) {
-        return `O bloco "${node.data?.titulo}" precisa ter uma instrução para IA.`;
-      }
-    }
-
-    if (
-        tipoNo === "transferir_setor" &&
-        // CRM_GENERAL_QUEUE_TRANSFER_NODE_ACTIVATION_VALIDATION_V1
-        String(config.escopo_fila || "setor").trim() !== "geral" &&
-        !String(config.setor_id || "").trim()
-      ) {
-        return `O bloco "${node.data?.titulo}" precisa ter um setor destino.`;
-      }
-
-      if (
-        tipoNo === "transferir_setor" &&
-        normalizarEstrategiaTransferenciaNode(
-          config.estrategia_transferencia,
-          config.atendente_id
-        ) === "atendente_especifico" &&
-        !String(config.atendente_id || "").trim()
-      ) {
-        return `O bloco "${node.data?.titulo}" precisa ter um atendente destino.`;
-      }
-
-      if (
-        [
-          "pergunta_opcoes",
-          TIPO_NO_PERGUNTA_LIVRE_IA,
-          "enviar_botoes",
-          "capturar_resposta",
-          "agenda_buscar_agendamento",
-          "agenda_escolher_horario",
-          "avaliacao",
-          "interpretar_arquivo_ia",
-        ].includes(tipoNo) &&
-        String(config.acao_excesso_tentativas || "transferir_atendimento") ===
-          "transferir_atendimento" &&
-        // CRM_GENERAL_QUEUE_ACTIVATION_VALIDATION_V1
-        String(config.escopo_fila_excesso_tentativas || "setor").trim() !==
-          "geral" &&
-        !String(config.setor_excesso_tentativas || "").trim()
-      ) {
-        return `O bloco "${node.data?.titulo}" precisa ter um setor para transferência por excesso de tentativas ou timeout.`;
-      }
-
-      if (
-        [
-          "pergunta_opcoes",
-          TIPO_NO_PERGUNTA_LIVRE_IA,
-          "enviar_botoes",
-          "capturar_resposta",
-          "agenda_buscar_agendamento",
-          "agenda_escolher_horario",
-          "avaliacao",
-          "interpretar_arquivo_ia",
-        ].includes(tipoNo) &&
-        String(config.acao_excesso_tentativas || "transferir_atendimento") ===
-          "transferir_atendimento" &&
-        normalizarEstrategiaTransferenciaNode(
-          config.estrategia_excesso_tentativas,
-          config.atendente_excesso_tentativas
-        ) === "atendente_especifico" &&
-        !String(config.atendente_excesso_tentativas || "").trim()
-      ) {
-        return `O bloco "${node.data?.titulo}" precisa ter um atendente para transferência por excesso de tentativas ou timeout.`;
-      }
-
-      if (
-          (
-          tipoNo === "enviar_imagem" ||
-          tipoNo === "enviar_video" ||
-          tipoNo === "enviar_audio" ||
-          tipoNo === "enviar_arquivo"
-        ) &&
-      !String(config.midia_url || "").trim()
-    ) {
-      return `O bloco "${node.data?.titulo}" precisa ter uma mídia selecionada.`;
-    }
-  }
-
-  return "";
-}
-
 
 async function alterarStatusFluxo(
   fluxo: Fluxo,
@@ -5998,8 +4024,10 @@ async function alterarStatusFluxo(
 
       const erroValidacao = validarFluxoAntesDeAtivar({
         fluxo,
-        nodesValidacao,
-        edgesValidacao,
+        nodes: nodesValidacao,
+        edges: edgesValidacao,
+        integracoesWhatsapp,
+        templatesWhatsapp,
       });
 
       if (erroValidacao) {
@@ -6586,22 +4614,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
         onBuscaFluxoChange={setBuscaFluxo}
         onFiltroStatusChange={setFiltroStatusFluxo}
         onAbrirFluxo={abrirFluxo}
-        onNovoFluxo={() => {
-          setErroCriacaoFluxo("");
-          setNovoFluxoNome("");
-          setDescricaoNovoFluxo("");
-          setNovoFluxoPadrao(false);
-          setGatilhosNovoFluxo([]);
-          setNovoGatilhoValor("");
-          setNovoGatilhoCondicao("contem");
-          resetarEncerramentoInatividadePadrao();
-          setAbrirCriacao(true);
-        }}
-        onImportarFluxo={() => {
-          setErroImportacao("");
-          setCodigoImportacao("");
-          setModalImportarAberto(true);
-        }}
+        onNovoFluxo={abrirCriacaoFluxo}
+        onImportarFluxo={abrirImportacaoFluxo}
         onRestaurarFluxo={(fluxoAlvo) => {
           void restaurarFluxo(fluxoAlvo);
         }}
@@ -6987,14 +5001,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               resumoMidias.tamanhoTotal,
               LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
             )}
-            onSelecionar={(url, nome) => {
-              setMidiaUrlNode(url);
-              setMidiaNomeNode(nome);
-            }}
-            onRemover={() => {
-              setMidiaUrlNode("");
-              setMidiaNomeNode("");
-            }}
+            onSelecionar={selecionarMidiaNode}
+            onRemover={limparMidiaSelecionadaNode}
             onArquivoSelecionado={(arquivo) => {
               setErro("");
               setSucesso("");
@@ -7046,10 +5054,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
               void enviarNovaMidia(arquivo);
             }}
-            onAbrirGerenciador={(tipo) => {
-              setAbaMidias(tipo);
-              setModalMidiasAberto(true);
-            }}
+            onAbrirGerenciador={abrirGerenciadorMidias}
           />
         )}
 
@@ -7540,10 +5545,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES
           )}
           onAbaChange={setAbaMidias}
-          onFechar={() => {
-            setModalMidiasAberto(false);
-            setConfirmandoExclusaoMidiaId(null);
-          }}
+          onFechar={fecharGerenciadorMidias}
           onPedirExclusao={setConfirmandoExclusaoMidiaId}
           onConfirmarExclusao={(midia) => {
             void excluirMidiaDefinitivamente(midia);
@@ -7552,1187 +5554,251 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
       )}
 
       {modalVariaveisAberto && (
-        <div
-          className={styles.modalOverlay}
-          onClick={fecharModalGerenciarVariaveis}
-        >
-          <div
-            className={`${styles.modalCard} ${styles.variableManagerModal}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={styles.modalHeader}>
-              <div>
-                <p className={styles.eyebrow}>Variáveis</p>
-                <h3 className={styles.modalTitle}>Gerenciar variáveis</h3>
-                <p className={styles.modalSubtitle}>
-                  Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para disparos e fluxos.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className={styles.closePanelButton}
-                onClick={fecharModalGerenciarVariaveis}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.modalSection}>
-                <h4 className={styles.modalSectionTitle}>Cadastrar variável personalizada</h4>
-
-                <div className={styles.variableFormGrid}>
-                  <label className={styles.field}>
-                    <span className={styles.label}>Nome da variável</span>
-                    <input
-                      value={novaVariavelChave}
-                      onChange={(e) =>
-                        setNovaVariavelChave(
-                          normalizarEntradaVariavelTemplate(e.target.value)
-                        )
-                      }
-                      className={styles.input}
-                      placeholder="ex: desconto"
-                    />
-                  </label>
-                </div>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Mensagem da variável</span>
-                  <textarea
-                    value={novaVariavelValor}
-                    onChange={(e) => setNovaVariavelValor(e.target.value)}
-                    className={styles.textarea}
-                    placeholder="Digite a mensagem da variável..."
-                    rows={4}
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Descrição Interna</span>
-                  <textarea
-                    value={novaVariavelDescricao}
-                    onChange={(e) => setNovaVariavelDescricao(e.target.value)}
-                    className={styles.textareadesc}
-                    placeholder="ex: essa variável é sobre desconto."
-                  />
-                </label>
-
-                <div className={styles.variablePreviewBox}>
-                  A variável será usada assim:{" "}
-                  <strong>
-                    {"{{"}
-                    {normalizarEntradaVariavelTemplate(novaVariavelChave) ||
-                      "nome_variavel"}
-                    {"}}"}
-                  </strong>
-                </div>
-
-                {erroVariavelModal && (
-                  <div className={styles.errorAlert}>{erroVariavelModal}</div>
-                )}
-
-                <div className={styles.variableFormActions}>
-                  <button
-                    type="button"
-                    className={styles.primaryButton}
-                    onClick={salvarVariavelPersonalizada}
-                    disabled={salvandoVariavel}
-                  >
-                    {salvandoVariavel ? "Salvando..." : "Salvar variável"}
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.modalSection}>
-                <h4 className={styles.modalSectionTitle}>Variáveis cadastradas</h4>
-
-                {loadingVariaveis ? (
-                  <div className={styles.emptyMini}>Carregando variáveis...</div>
-                ) : variaveisPersonalizadas.length === 0 ? (
-                  <div className={styles.emptyMini}>
-                    Nenhuma variável personalizada cadastrada.
-                  </div>
-                ) : (
-                  <div className={styles.variablesList}>
-                    {variaveisPersonalizadas.map((item) => (
-                      <div key={item.id} className={styles.variableItem}>
-                        <div className={styles.variableMain}>
-                          <strong className={styles.variableCode}>
-                            {"{{"}
-                            {item.chave}
-                            {"}}"}
-                          </strong>
-
-                          <p className={styles.variablePerson}>
-                            <strong>Mensagem da variável: </strong>{item.valor}
-                          </p>
-
-                          {item.descricao ? (
-                            <p className={styles.variablePerson}>
-                             <strong> Descrição Interna: </strong>{item.descricao}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <div className={styles.variableActions}>
-                          <button
-                            type="button"
-                            className={styles.variableUseButton}
-                            onClick={() => aplicarVariavelNoBloco(item.chave)}
-                          >
-                            Usar
-                          </button>
-
-                          <button
-                            type="button"
-                            className={styles.variableDeleteButton}
-                            onClick={() => removerVariavelPersonalizada(item.id)}
-                          >
-                            Remover
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.modalSection}>
-                <h4 className={styles.modalSectionTitle}>Variáveis fixas do sistema</h4>
-
-                <div className={styles.variablesList}>
-                  {VARIAVEIS_FIXAS_SISTEMA.map((item) => (
-                    <div key={item.chave} className={styles.variableItem}>
-                      <div className={styles.variableMain}>
-                        <strong className={styles.variableCode}>{item.exemplo}</strong>
-                        <p className={styles.variableDescription}>{item.descricao}</p>
-                      </div>
-
-                      <button
-                        type="button"
-                        className={styles.variableUseButton}
-                        onClick={() => aplicarVariavelNoBloco(item.chave)}
-                      >
-                        Usar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={fecharModalGerenciarVariaveis}
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
+        <VariablesManagerModal
+          variaveis={variaveisPersonalizadas}
+          loading={loadingVariaveis}
+          salvando={salvandoVariavel}
+          erro={erroVariavelModal}
+          chave={novaVariavelChave}
+          valor={novaVariavelValor}
+          descricao={novaVariavelDescricao}
+          onChaveChange={setNovaVariavelChave}
+          onValorChange={setNovaVariavelValor}
+          onDescricaoChange={setNovaVariavelDescricao}
+          onSalvar={salvarVariavelPersonalizada}
+          onRemover={removerVariavelPersonalizada}
+          onUsar={aplicarVariavelNoBloco}
+          onFechar={fecharModalGerenciarVariaveis}
+        />
       )}
 
-        {editandoFluxo && (
-        <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-            <div className={styles.modalHeader}>
-                <div>
-                <p className={styles.eyebrow}>Editar fluxo</p>
-                <h3 className={styles.modalTitle}>Nome e descrição</h3>
-                </div>
+      {editandoFluxo && (
+        <EditFlowModal
+          nome={nomeFluxoEdicao}
+          descricao={descricaoFluxoEdicao}
+          fluxoPadrao={fluxoPadraoEdicao}
+          outroFluxoPadraoExiste={existeOutroFluxoPadraoNaEmpresa()}
+          mostrarEscopoIntegracoes={deveMostrarEscopoIntegracoesFluxo}
+          escopoModo={fluxoEscopoIntegracoesModoEdicao}
+          integracoesIds={fluxoIntegracoesIdsEdicao}
+          integracoes={integracoesWhatsapp}
+          carregandoIntegracoes={carregandoIntegracoesWhatsapp}
+          quantidadeInatividade={encerrarInatividadeQuantidade}
+          unidadeInatividade={encerrarInatividadeUnidade}
+          mensagemInatividade={encerrarInatividadeMensagem}
+          gatilhos={gatilhosFluxo}
+          novoGatilhoValor={novoGatilhoValor}
+          novoGatilhoCondicao={novoGatilhoCondicao}
+          podeGerenciarGatilhos={podeGerenciarGatilhos}
+          podeEditar={podeEditarFluxos}
+          erro={erroEdicaoFluxo}
+          rotuloIntegracao={rotuloIntegracaoWhatsapp}
+          onNomeChange={(valor) => {
+            setErroEdicaoFluxo("");
+            setNomeFluxoEdicao(valor);
+          }}
+          onDescricaoChange={setDescricaoFluxoEdicao}
+          onFluxoPadraoChange={(marcado) => {
+            setErroEdicaoFluxo("");
+            setFluxoPadraoEdicao(marcado);
 
-                <button
-                type="button"
-                className={styles.closePanelButton}
-                onClick={() => {
-                  setErroEdicaoFluxo("");
-                  setEditandoFluxo(false);
-                  setFluxoEmEdicao(null);
-                }}
-                >
-                ×
-                </button>
-            </div>
+            if (marcado) {
+              setNovoGatilhoValor("");
+              setNovoGatilhoCondicao("contem");
+            }
+          }}
+          onEscopoModoChange={(modo) => {
+            setFluxoEscopoIntegracoesModoEdicao(modo);
 
-            <div className={styles.modalBody}>
-                {erroEdicaoFluxo && (
-                  <div className={styles.errorAlert}>{erroEdicaoFluxo}</div>
-                )}
+            if (modo === "todas") {
+              setFluxoIntegracoesIdsEdicao([]);
+            }
+          }}
+          onAlternarIntegracao={alternarIntegracaoEscopoEdicao}
+          onQuantidadeInatividadeChange={(valor) => {
+            setEncerrarInatividadeQuantidade(
+              limitarQuantidadeInatividade(
+                valor,
+                encerrarInatividadeUnidade
+              )
+            );
+          }}
+          onQuantidadeInatividadeBlur={() => {
+            setEncerrarInatividadeQuantidade(
+              corrigirQuantidadeMinimaInatividade(
+                encerrarInatividadeQuantidade,
+                encerrarInatividadeUnidade
+              )
+            );
+          }}
+          onUnidadeInatividadeChange={(novaUnidade) => {
+            setEncerrarInatividadeUnidade(novaUnidade);
 
-                <label className={styles.field}>
-                <span className={styles.label}>Nome</span>
-                <input
-                    className={styles.input}
-                    value={nomeFluxoEdicao}
-                    onChange={(e) => {
-                      setErroEdicaoFluxo("");
-                      setNomeFluxoEdicao(e.target.value);
-                    }}
-                />
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Descrição</span>
-                  <textarea
-                      className={styles.textareadesc}
-                      value={descricaoFluxoEdicao}
-                      onChange={(e) => setDescricaoFluxoEdicao(e.target.value)}
-                  />
-                </label>
-
-                {deveMostrarEscopoIntegracoesFluxo && (
-                <div className={styles.sectionBlock}>
-                  <div>
-                    <p className={styles.modalSectionTitle}>Integrações WhatsApp</p>
-                    <p className={styles.helperText}>
-                      Defina em quais números este fluxo poderá iniciar.
-                    </p>
-                  </div>
-
-                  <label className={styles.field}>
-                    <span className={styles.label}>Escopo do fluxo</span>
-                    <select
-                      className={styles.input}
-                      value={fluxoEscopoIntegracoesModoEdicao}
-                      onChange={(e) => {
-                        const modo =
-                          e.target.value === "selecionadas"
-                            ? "selecionadas"
-                            : "todas";
-
-                        setFluxoEscopoIntegracoesModoEdicao(modo);
-
-                        if (modo === "todas") {
-                          setFluxoIntegracoesIdsEdicao([]);
-                        }
-                      }}
-                    >
-                      <option value="todas">Todas as integrações</option>
-                      <option value="selecionadas">Integrações selecionadas</option>
-                    </select>
-                  </label>
-
-                  {fluxoEscopoIntegracoesModoEdicao === "selecionadas" && (
-                    <div className={styles.integrationCheckboxList}>
-                      {integracoesWhatsapp.map((integracao) => (
-                        <label
-                          key={integracao.id}
-                          className={styles.integrationCheckboxItem}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={fluxoIntegracoesIdsEdicao.includes(
-                              integracao.id
-                            )}
-                            onChange={() =>
-                              alternarIntegracaoEscopoEdicao(integracao.id)
-                            }
-                          />
-                          <span>{rotuloIntegracaoWhatsapp(integracao)}</span>
-                        </label>
-                      ))}
-
-                      {integracoesWhatsapp.length === 0 && (
-                        <p className={styles.helperText}>
-                          {carregandoIntegracoesWhatsapp
-                            ? "Carregando integrações..."
-                            : "Nenhuma integração disponível para este usuário."}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-                )}
-
-                <label className={styles.switchField}>
-                  <input
-                    type="checkbox"
-                    checked={fluxoPadraoEdicao}
-                    disabled={!fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()}
-                    onChange={(e) => {
-                      const marcado = e.target.checked;
-
-                      setErroEdicaoFluxo("");
-                      setFluxoPadraoEdicao(marcado);
-
-                      if (marcado) {
-                        setNovoGatilhoValor("");
-                        setNovoGatilhoCondicao("contem");
-                      }
-                    }}
-                  />
-
-                  <div>
-                    <strong>Tornar este fluxo padrão</strong>
-
-                    <p>
-                      O fluxo padrão é iniciado automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
-                    </p>
-
-                    {!fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa() && (
-                      <p className={styles.help}>
-                        Já existe outro fluxo padrão nesta empresa. Só pode existir 1 fluxo padrão por empresa.
-                      </p>
-                    )}
-                  </div>
-                </label>
-
-
-                {fluxoPadraoEdicao ? (
-                  <div className={styles.defaultFlowNotice}>
-                    <div className={styles.defaultFlowIcon}>↪</div>
-
-                    <div className={styles.defaultFlowContent}>
-                      <div className={styles.defaultFlowTop}>
-                        <strong>Fluxo padrão de fallback</strong>
-                        <span className={styles.defaultFlowBadge}>Padrão</span>
-                      </div>
-
-                      <p>
-                        Este fluxo é iniciado automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
-                      </p>
-
-                      <p>
-                        Por isso, ele não usa gatilhos próprios.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={styles.gatilhosBox}>
-                    <div>
-                        <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
-                        <p className={styles.help}>
-                        Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
-                        </p>
-                    </div>
-
-                    {podeGerenciarGatilhos && <div className={styles.gatilhoCreateRow}>
-                        <input
-                        className={styles.input}
-                        value={novoGatilhoValor}
-                        onChange={(e) => setNovoGatilhoValor(e.target.value)}
-                        placeholder="Ex: suporte, login, senha"
-                        />
-
-                        <div className={styles.gatilhoBottomRow}>
-                          <select
-                              className={styles.input}
-                              value={novoGatilhoCondicao}
-                              onChange={(e) =>
-                              setNovoGatilhoCondicao(e.target.value as GatilhoFluxo["condicao"])
-                              }
-                          >
-                              <option value="contem">Contém a palavra</option>
-                              <option value="exata">Igual exatamente</option>
-                              <option value="inicia_com">Começa com</option>
-                              <option value="regex">Regex</option>
-                          </select>
-
-                          <button
-                              type="button"
-                              className={styles.primaryButton}
-                              onClick={criarGatilhoFluxo}
-                          >
-                              Adicionar
-                          </button>
-                        </div>
-                    </div>}
-
-                    {gatilhosFluxo.length === 0 ? (
-                        <div className={styles.emptyMini}>
-                        Nenhum gatilho cadastrado para este fluxo.
-                        </div>
-                      ) : (
-                          <div className={styles.gatilhosList}>
-                            {gatilhosFluxo.map((gatilho) => (
-                                <div key={gatilho.id} className={styles.gatilhoItem}>
-                                  <div>
-                                      <strong className={styles.gatilhoValor}>{gatilho.valor}</strong>
-                                      <p className={styles.gatilhoMeta}>
-                                      Condição: {gatilho.condicao} ·{" "}
-                                      {gatilho.ativo ? "Ativo" : "Inativo"}
-                                      </p>
-                                  </div>
-
-                                  {podeGerenciarGatilhos && <div className={styles.gatilhoActions}>
-                                      <button
-                                      type="button"
-                                      className={styles.secondaryButton}
-                                      onClick={() => alternarGatilhoFluxo(gatilho)}
-                                      >
-                                      {gatilho.ativo ? "Desativar" : "Ativar"}
-                                      </button>
-
-                                      <button
-                                      type="button"
-                                      className={styles.dangerSmallButton}
-                                      onClick={() => removerGatilhoFluxo(gatilho.id)}
-                                      >
-                                      ×
-                                      </button>
-                                  </div>}
-                                </div>
-                            ))}
-                          </div>
-                        )}
-                  </div>
-                )}
-                <div className={styles.sectionBlock}>
-                  <div>
-                    <p className={styles.modalSectionTitle}>Encerramento por inatividade</p>
-                    <p className={styles.helperText}>
-                      Todo fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
-                      Essa regra tem prioridade sobre conexões "Sem resposta após tempo" maiores.
-                    </p>
-                  </div>
-
-                  <div className={styles.inlineFields}>
-                    <label className={styles.field}>
-                      <span className={styles.label}>Tempo sem resposta</span>
-
-                      <input
-                        className={styles.input}
-                        type="number"
-                        min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
-                        max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
-                        value={encerrarInatividadeQuantidade}
-                        onChange={(e) =>
-                          setEncerrarInatividadeQuantidade(
-                            limitarQuantidadeInatividade(
-                              e.target.value,
-                              encerrarInatividadeUnidade
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setEncerrarInatividadeQuantidade(
-                            corrigirQuantidadeMinimaInatividade(
-                              encerrarInatividadeQuantidade,
-                              encerrarInatividadeUnidade
-                            )
-                          )
-                        }
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span className={styles.label}>Unidade</span>
-
-                      <select
-                        className={styles.input}
-                        value={encerrarInatividadeUnidade}
-                        onChange={(e) => {
-                          const novaUnidade =
-                            e.target.value === "minutos" ? "minutos" : "horas";
-
-                          setEncerrarInatividadeUnidade(novaUnidade);
-
-                          setEncerrarInatividadeQuantidade((valorAtual) =>
-                            corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
-                          );
-                        }}
-                      >
-                        <option value="minutos">Minutos</option>
-                        <option value="horas">Horas</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <p className={styles.helperText}>
-                    O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
-                  </p>
-
-                  <label className={styles.field}>
-                    <span className={styles.label}>Mensagem antes de encerrar</span>
-
-                    <textarea
-                      className={styles.textarea}
-                      value={encerrarInatividadeMensagem}
-                      onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
-                      placeholder="Mensagem enviada antes de encerrar o atendimento."
-                    />
-                  </label>
-                </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-                <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => {
-                  setErroEdicaoFluxo("");
-                  setEditandoFluxo(false);
-                  setFluxoEmEdicao(null);
-                }}
-                >
-                Cancelar
-                </button>
-
-                {podeEditarFluxos && <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={salvarEdicaoFluxo}
-                >
-                Salvar alterações
-                </button>}
-            </div>
-            </div>
-        </div>
-        )}
+            setEncerrarInatividadeQuantidade((valorAtual) =>
+              corrigirQuantidadeMinimaInatividade(
+                valorAtual,
+                novaUnidade
+              )
+            );
+          }}
+          onMensagemInatividadeChange={setEncerrarInatividadeMensagem}
+          onNovoGatilhoValorChange={setNovoGatilhoValor}
+          onNovoGatilhoCondicaoChange={setNovoGatilhoCondicao}
+          onAdicionarGatilho={() => {
+            void criarGatilhoFluxo(
+              fluxoEmEdicao || fluxoSelecionado
+            );
+          }}
+          onAlternarGatilho={(gatilho) => {
+            void alternarGatilhoFluxo(
+              gatilho,
+              fluxoEmEdicao || fluxoSelecionado
+            );
+          }}
+          onRemoverGatilho={(gatilhoId) => {
+            void removerGatilhoFluxo(
+              gatilhoId,
+              fluxoEmEdicao || fluxoSelecionado
+            );
+          }}
+          onCancelar={fecharEdicaoFluxo}
+          onSalvar={salvarEdicaoFluxo}
+        />
+      )}
 
         {modalArquivarAberto && fluxoParaArquivar && (
-        <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-            <div className={styles.modalHeader}>
-                <div>
-                <p className={styles.eyebrow}>Arquivar fluxo</p>
-                <h3 className={styles.modalTitle}>Confirmar arquivamento</h3>
-                </div>
-
-                <button
-                type="button"
-                className={styles.closePanelButton}
-                onClick={() => {
-                    setModalArquivarAberto(false);
-                    setFluxoParaArquivar(null);
-                }}
-                >
-                ×
-                </button>
-            </div>
-
-            <div className={styles.modalBody}>
-                <div className={styles.warningBox}>
-                <strong>O fluxo será arquivado, não excluído definitivamente.</strong>
-                <p>
-                    O fluxo <strong>{fluxoParaArquivar.nome}</strong> ficará com status{" "}
-                    <strong>arquivado</strong>. Ele não será executado e poderá ser
-                    restaurado depois ou excluido definitivo clicando em apagar. 
-                </p>
-                </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-                <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => {
-                    setModalArquivarAberto(false);
-                    setFluxoParaArquivar(null);
-                }}
-                >
-                Cancelar
-                </button>
-
-                {podeArquivarFluxos && <button
-                type="button"
-                className={styles.dangerButton}
-                onClick={confirmarArquivarFluxo}
-                >
-                Arquivar fluxo
-                </button>}
-            </div>
-            </div>
-        </div>
+          <ArchiveFlowModal
+            fluxo={fluxoParaArquivar}
+            podeArquivar={podeArquivarFluxos}
+            onConfirmar={confirmarArquivarFluxo}
+            onFechar={fecharModalArquivarFluxo}
+          />
         )}
 
         {modalApagarDefinitivoAberto && fluxoParaApagarDefinitivo && (
-        <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-            <div className={styles.modalHeader}>
-                <div>
-                <p className={styles.eyebrow}>Apagar definitivo</p>
-                <h3 className={styles.modalTitle}>Essa ação não poderá ser desfeita</h3>
-                </div>
-
-                <button
-                type="button"
-                className={styles.closePanelButton}
-                disabled={apagandoFluxoDefinitivo}
-                onClick={() => {
-                    setModalApagarDefinitivoAberto(false);
-                    setFluxoParaApagarDefinitivo(null);
-                }}
-                >
-                ×
-                </button>
-            </div>
-
-            <div className={styles.modalBody}>
-                <div className={styles.dangerBox}>
-                <strong>Você está prestes a apagar este fluxo definitivamente.</strong>
-                <p>
-                    O fluxo <strong>{fluxoParaApagarDefinitivo.nome}</strong> será removido
-                    do banco de dados junto com seus blocos, conexões e gatilhos
-                    relacionados. Essa ação não poderá ser desfeita.
-                </p>
-                {apagandoFluxoDefinitivo && (
-                    <p className={styles.deletionProgress} role="status" aria-live="polite">
-                    Aguarde enquanto removemos o fluxo e seus dados relacionados.
-                    </p>
-                )}
-                </div>
-            </div>
-
-            <div className={styles.modalFooter}>
-                <button
-                type="button"
-                className={styles.secondaryButton}
-                disabled={apagandoFluxoDefinitivo}
-                onClick={() => {
-                    setModalApagarDefinitivoAberto(false);
-                    setFluxoParaApagarDefinitivo(null);
-                }}
-                >
-                Cancelar
-                </button>
-
-                {podeExcluirFluxos && <button
-                type="button"
-                className={styles.dangerButton}
-                onClick={confirmarApagarDefinitivo}
-                disabled={apagandoFluxoDefinitivo}
-                aria-busy={apagandoFluxoDefinitivo}
-                >
-                {apagandoFluxoDefinitivo ? (
-                    <>
-                    <LoaderCircle
-                        aria-hidden="true"
-                        className={styles.buttonSpinner}
-                        size={17}
-                    />
-                    Apagando...
-                    </>
-                ) : (
-                    "Apagar definitivamente"
-                )}
-                </button>}
-            </div>
-            </div>
-        </div>
+          <DeleteFlowModal
+            fluxo={fluxoParaApagarDefinitivo}
+            podeExcluir={podeExcluirFluxos}
+            apagando={apagandoFluxoDefinitivo}
+            onConfirmar={confirmarApagarDefinitivo}
+            onFechar={fecharModalApagarDefinitivo}
+          />
         )}
 
         {modalCompartilharAberto && fluxoParaCompartilhar && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-              <div className={styles.modalHeader}>
-                <div>
-                  <p className={styles.eyebrow}>Compartilhar fluxo</p>
-                  <h3 className={styles.modalTitle}>Codigo do fluxo</h3>
-                </div>
-
-                <button
-                  type="button"
-                  className={styles.closePanelButton}
-                  onClick={() => {
-                    setModalCompartilharAberto(false);
-                    setFluxoParaCompartilhar(null);
-                    setCodigoCompartilhamento("");
-                    setErroCompartilhamento("");
-                  }}
-                >
-                  x
-                </button>
-              </div>
-
-              <div className={styles.modalBody}>
-                <div className={styles.shareInfoBox}>
-                  <Share2 size={18} />
-                  <div>
-                    <strong>{fluxoParaCompartilhar.nome}</strong>
-                    <p>
-                      O código fica salvo neste fluxo e cria uma copia em rascunho na empresa que importar.
-                      Mídias não são copiadas.
-                    </p>
-                  </div>
-                </div>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Codigo para compartilhar</span>
-
-                  <div className={styles.codeCopyRow}>
-                    <input
-                      className={styles.codeInput}
-                      value={
-                        carregandoCodigoCompartilhamento
-                          ? "Carregando codigo..."
-                          : codigoCompartilhamento
-                      }
-                      readOnly
-                    />
-
-                    <button
-                      type="button"
-                      className={styles.iconActionButton}
-                      title="Copiar codigo"
-                      onClick={copiarCodigoCompartilhamento}
-                      disabled={!codigoCompartilhamento}
-                    >
-                      <Copy size={18} strokeWidth={2.4} />
-                    </button>
-                  </div>
-                </label>
-
-                {erroCompartilhamento && (
-                  <div className={styles.errorAlert}>{erroCompartilhamento}</div>
-                )}
-              </div>
-
-              <div className={styles.modalFooter}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => {
-                    setModalCompartilharAberto(false);
-                    setFluxoParaCompartilhar(null);
-                    setCodigoCompartilhamento("");
-                    setErroCompartilhamento("");
-                  }}
-                >
-                  Fechar
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={() => gerarCodigoCompartilhamento(fluxoParaCompartilhar)}
-                  disabled={carregandoCodigoCompartilhamento}
-                >
-                  {carregandoCodigoCompartilhamento
-                    ? "Atualizando..."
-                    : "Atualizar compartilhamento"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ShareFlowModal
+            fluxo={fluxoParaCompartilhar}
+            codigo={codigoCompartilhamento}
+            carregando={carregandoCodigoCompartilhamento}
+            erro={erroCompartilhamento}
+            onCopiar={copiarCodigoCompartilhamento}
+            onAtualizar={() =>
+              gerarCodigoCompartilhamento(fluxoParaCompartilhar)
+            }
+            onFechar={fecharCompartilhamentoFluxo}
+          />
         )}
 
-        {modalImportarAberto && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-              <div className={styles.modalHeader}>
-                <div>
-                  <p className={styles.eyebrow}>Importar fluxo</p>
-                  <h3 className={styles.modalTitle}>Colar codigo</h3>
-                </div>
+      {modalImportarAberto && (
+        <ImportFlowModal
+          codigo={codigoImportacao}
+          importando={importandoFluxo}
+          erro={erroImportacao}
+          podeCriar={podeCriarFluxos}
+          onCodigoChange={setCodigoImportacao}
+          onImportar={importarFluxoCompartilhado}
+          onFechar={fecharImportacaoFluxo}
+        />
+      )}
 
-                <button
-                  type="button"
-                  className={styles.closePanelButton}
-                  onClick={() => {
-                    setModalImportarAberto(false);
-                    setCodigoImportacao("");
-                    setErroImportacao("");
-                  }}
-                >
-                  ×
-                </button>
-              </div>
+      {abrirCriacao && (
+        <CreateFlowModal
+          nome={novoFluxoNome}
+          descricao={descricaoNovoFluxo}
+          fluxoPadrao={novoFluxoPadrao}
+          jaExisteFluxoPadrao={jaExisteFluxoPadrao}
+          mostrarEscopoIntegracoes={deveMostrarEscopoIntegracoesFluxo}
+          escopoModo={novoFluxoEscopoIntegracoesModo}
+          integracoesIds={novoFluxoIntegracoesIds}
+          integracoes={integracoesWhatsapp}
+          carregandoIntegracoes={carregandoIntegracoesWhatsapp}
+          quantidadeInatividade={encerrarInatividadeQuantidade}
+          unidadeInatividade={encerrarInatividadeUnidade}
+          mensagemInatividade={encerrarInatividadeMensagem}
+          gatilhos={gatilhosNovoFluxo}
+          novoGatilhoValor={novoGatilhoValor}
+          novoGatilhoCondicao={novoGatilhoCondicao}
+          erro={erroCriacaoFluxo}
+          rotuloIntegracao={rotuloIntegracaoWhatsapp}
+          onNomeChange={setNovoFluxoNome}
+          onDescricaoChange={setDescricaoNovoFluxo}
+          onFluxoPadraoChange={(marcado) => {
+            setNovoFluxoPadrao(marcado);
 
-              <div className={styles.modalBody}>
-                <div className={styles.shareInfoBox}>
-                  <CopyPlus size={18} />
-                  <div>
-                    <strong>Importar copia do fluxo</strong>
-                    <p>
-                      A copia sera criada como rascunho nesta empresa, sem arquivos de midia.
-                    </p>
-                  </div>
-                </div>
+            if (marcado) {
+              setGatilhosNovoFluxo([]);
+              setNovoGatilhoValor("");
+            }
+          }}
+          onEscopoModoChange={(modo) => {
+            setNovoFluxoEscopoIntegracoesModo(modo);
 
-                <label className={styles.field}>
-                  <span className={styles.label}>Codigo recebido</span>
-                  <input
-                    className={styles.input}
-                    value={codigoImportacao}
-                    onChange={(e) => setCodigoImportacao(e.target.value)}
-                    placeholder="FLX-XXXX-XXXX-XXXX"
-                  />
-                </label>
+            if (modo === "todas") {
+              setNovoFluxoIntegracoesIds([]);
+            }
+          }}
+          onAlternarIntegracao={alternarIntegracaoEscopoNovoFluxo}
+          onQuantidadeInatividadeChange={(valor) => {
+            setEncerrarInatividadeQuantidade(
+              limitarQuantidadeInatividade(
+                valor,
+                encerrarInatividadeUnidade
+              )
+            );
+          }}
+          onQuantidadeInatividadeBlur={() => {
+            setEncerrarInatividadeQuantidade(
+              corrigirQuantidadeMinimaInatividade(
+                encerrarInatividadeQuantidade,
+                encerrarInatividadeUnidade
+              )
+            );
+          }}
+          onUnidadeInatividadeChange={(novaUnidade) => {
+            setEncerrarInatividadeUnidade(novaUnidade);
 
-                {erroImportacao && (
-                  <div className={styles.errorAlert}>{erroImportacao}</div>
-                )}
-              </div>
-
-              <div className={styles.modalFooter}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => {
-                    setModalImportarAberto(false);
-                    setCodigoImportacao("");
-                    setErroImportacao("");
-                  }}
-                  disabled={importandoFluxo}
-                >
-                  Cancelar
-                </button>
-
-                {podeCriarFluxos && <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={importarFluxoCompartilhado}
-                  disabled={importandoFluxo}
-                >
-                  {importandoFluxo ? "Importando..." : "Importar fluxo"}
-                </button>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {abrirCriacao && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-              <div className={styles.modalHeader}>
-                <div>
-                  <p className={styles.eyebrow}>Novo fluxo</p>
-                  <h3 className={styles.modalTitle}>Criar automação</h3>
-                </div>
-
-                <button
-                  type="button"
-                  className={styles.closePanelButton}
-                  onClick={() => {
-                    setErroCriacaoFluxo("");
-                    setAbrirCriacao(false);
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className={styles.modalBody}>
-                <label className={styles.field}>
-                  <span className={styles.label}>Nome do fluxo</span>
-                  <input
-                    className={styles.input}
-                    value={novoFluxoNome}
-                    onChange={(e) => setNovoFluxoNome(e.target.value)}
-                    placeholder="Ex: Atendimento inicial"
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Descrição</span>
-                  <textarea
-                    className={styles.textarea}
-                    value={descricaoNovoFluxo}
-                    onChange={(e) => setDescricaoNovoFluxo(e.target.value)}
-                    placeholder="Descrição opcional"
-                  />
-                </label>
-
-                {deveMostrarEscopoIntegracoesFluxo && (
-                <div className={styles.sectionBlock}>
-                  <div>
-                    <p className={styles.modalSectionTitle}>Integrações WhatsApp</p>
-                    <p className={styles.helperText}>
-                      Defina em quais números este fluxo poderá iniciar.
-                    </p>
-                  </div>
-
-                  <label className={styles.field}>
-                    <span className={styles.label}>Escopo do fluxo</span>
-                    <select
-                      className={styles.input}
-                      value={novoFluxoEscopoIntegracoesModo}
-                      onChange={(e) => {
-                        const modo =
-                          e.target.value === "selecionadas"
-                            ? "selecionadas"
-                            : "todas";
-
-                        setNovoFluxoEscopoIntegracoesModo(modo);
-
-                        if (modo === "todas") {
-                          setNovoFluxoIntegracoesIds([]);
-                        }
-                      }}
-                    >
-                      <option value="todas">Todas as integrações</option>
-                      <option value="selecionadas">Integrações selecionadas</option>
-                    </select>
-                  </label>
-
-                  {novoFluxoEscopoIntegracoesModo === "selecionadas" && (
-                    <div className={styles.integrationCheckboxList}>
-                      {integracoesWhatsapp.map((integracao) => (
-                        <label
-                          key={integracao.id}
-                          className={styles.integrationCheckboxItem}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={novoFluxoIntegracoesIds.includes(
-                              integracao.id
-                            )}
-                            onChange={() =>
-                              alternarIntegracaoEscopoNovoFluxo(integracao.id)
-                            }
-                          />
-                          <span>{rotuloIntegracaoWhatsapp(integracao)}</span>
-                        </label>
-                      ))}
-
-                      {integracoesWhatsapp.length === 0 && (
-                        <p className={styles.helperText}>
-                          {carregandoIntegracoesWhatsapp
-                            ? "Carregando integrações..."
-                            : "Nenhuma integração disponível para este usuário."}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-                )}
-
-                <div className={styles.sectionBlock}>
-                  <div>
-                    <p className={styles.modalSectionTitle}>Encerramento por inatividade</p>
-                    <p className={styles.helperText}>
-                      Todo fluxo será encerrado automaticamente quando o contato ficar sem responder pelo tempo definido.
-                      Essa regra tem prioridade sobre conexões "Sem resposta após tempo" maiores.
-                    </p>
-                  </div>
-
-                  <div className={styles.inlineFields}>
-                    <label className={styles.field}>
-                      <span className={styles.label}>Tempo sem resposta</span>
-
-                      <input
-                        className={styles.input}
-                        type="number"
-                        min={encerrarInatividadeUnidade === "minutos" ? 5 : 1}
-                        max={encerrarInatividadeUnidade === "minutos" ? 1380 : 23}
-                        value={encerrarInatividadeQuantidade}
-                        onChange={(e) =>
-                          setEncerrarInatividadeQuantidade(
-                            limitarQuantidadeInatividade(
-                              e.target.value,
-                              encerrarInatividadeUnidade
-                            )
-                          )
-                        }
-                        onBlur={() =>
-                          setEncerrarInatividadeQuantidade(
-                            corrigirQuantidadeMinimaInatividade(
-                              encerrarInatividadeQuantidade,
-                              encerrarInatividadeUnidade
-                            )
-                          )
-                        }
-                      />
-                    </label>
-
-                    <label className={styles.field}>
-                      <span className={styles.label}>Unidade</span>
-
-                      <select
-                        className={styles.input}
-                        value={encerrarInatividadeUnidade}
-                        onChange={(e) => {
-                          const novaUnidade =
-                            e.target.value === "minutos" ? "minutos" : "horas";
-
-                          setEncerrarInatividadeUnidade(novaUnidade);
-
-                          setEncerrarInatividadeQuantidade((valorAtual) =>
-                            corrigirQuantidadeMinimaInatividade(valorAtual, novaUnidade)
-                          );
-                        }}
-                      >
-                        <option value="minutos">Minutos</option>
-                        <option value="horas">Horas</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <p className={styles.helperText}>
-                    O tempo mínimo é de 5 minutos e o máximo é de 23 horas.
-                  </p>
-
-                  <label className={styles.field}>
-                    <span className={styles.label}>Mensagem antes de encerrar</span>
-
-                    <textarea
-                      className={styles.textarea}
-                      value={encerrarInatividadeMensagem}
-                      onChange={(e) => setEncerrarInatividadeMensagem(e.target.value)}
-                      placeholder="Mensagem enviada antes de encerrar o atendimento."
-                    />
-                  </label>
-                </div>
-
-                {!jaExisteFluxoPadrao && (
-                  <label className={styles.switchField}>
-                    <input
-                      type="checkbox"
-                      checked={novoFluxoPadrao}
-                      onChange={(e) => {
-                        setNovoFluxoPadrao(e.target.checked);
-
-                        if (e.target.checked) {
-                          setGatilhosNovoFluxo([]);
-                          setNovoGatilhoValor("");
-                        }
-                      }}
-                    />
-
-                    <div>
-                      <strong>Fluxo padrão</strong>
-                      <p>
-                        Inicia automaticamente quando nenhuma palavra-chave de outro fluxo for encontrada.
-                      </p>
-                    </div>
-                  </label>
-                )}
-
-                {!novoFluxoPadrao && (
-                  <div className={styles.gatilhosBox}>
-                    <div>
-                      <p className={styles.modalSectionTitle}>Gatilhos do fluxo</p>
-                      <p className={styles.help}>
-                        Palavras que iniciam este fluxo quando o cliente envia uma mensagem.
-                      </p>
-                    </div>
-
-                    <div className={styles.gatilhoCreateRow}>
-                      <input
-                        className={styles.input}
-                        value={novoGatilhoValor}
-                        onChange={(e) => setNovoGatilhoValor(e.target.value)}
-                        placeholder="Ex: suporte, login, senha"
-                      />
-
-                      <div className={styles.gatilhoBottomRow}>
-                        <select
-                          className={styles.input}
-                          value={novoGatilhoCondicao}
-                          onChange={(e) =>
-                            setNovoGatilhoCondicao(
-                              e.target.value as GatilhoFluxo["condicao"]
-                            )
-                          }
-                        >
-                          <option value="contem">Contém</option>
-                          <option value="exata">Exata</option>
-                          <option value="inicia_com">Inicia com</option>
-                          <option value="regex">Regex</option>
-                        </select>
-
-                        <button
-                          type="button"
-                          className={styles.primaryButton}
-                          onClick={adicionarGatilhoNovoFluxo}
-                        >
-                          Adicionar
-                        </button>
-                      </div>
-                    </div>
-
-                    {gatilhosNovoFluxo.length === 0 ? (
-                      <div className={styles.emptyMini}>
-                        Nenhum gatilho adicionado para este novo fluxo.
-                      </div>
-                    ) : (
-                      <div className={styles.gatilhosList}>
-                        {gatilhosNovoFluxo.map((gatilho, index) => (
-                          <div
-                            key={`${gatilho.valor}-${gatilho.condicao}-${index}`}
-                            className={styles.gatilhoItem}
-                          >
-                            <div>
-                              <strong className={styles.gatilhoValor}>
-                                {gatilho.valor}
-                              </strong>
-
-                              <p className={styles.gatilhoMeta}>
-                                Condição:{" "}
-                                {gatilho.condicao === "contem"
-                                  ? "Contém a palavra"
-                                  : gatilho.condicao === "exata"
-                                  ? "Igual exatamente"
-                                  : gatilho.condicao === "inicia_com"
-                                  ? "Começa com"
-                                  : gatilho.condicao}{" "}
-                                · {gatilho.ativo === false ? "Inativo" : "Ativo"}
-                              </p>
-                            </div>
-
-                            <div className={styles.gatilhoActions}>
-                              <button
-                                type="button"
-                                className={styles.secondaryButton}
-                                onClick={() =>
-                                  setGatilhosNovoFluxo((atuais) =>
-                                    atuais.map((item, i) =>
-                                      i === index
-                                        ? {
-                                            ...item,
-                                            ativo: item.ativo === false ? true : false,
-                                          }
-                                        : item
-                                    )
-                                  )
-                                }
-                              >
-                                {gatilho.ativo === false ? "Ativar" : "Desativar"}
-                              </button>
-
-                              <button
-                                type="button"
-                                className={styles.dangerSmallButton}
-                                onClick={() =>
-                                  setGatilhosNovoFluxo((atuais) =>
-                                    atuais.filter((_, i) => i !== index)
-                                  )
-                                }
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              {erroCriacaoFluxo && (
-                <div className={styles.errorAlertBox}>
-                  <div className={styles.errorAlert}>
-                    {erroCriacaoFluxo}
-                  </div>
-                </div>
-              )}
-              <div className={styles.modalFooter}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => setAbrirCriacao(false)}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={criarFluxoRapido}
-                >
-                  Criar fluxo
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+            setEncerrarInatividadeQuantidade((valorAtual) =>
+              corrigirQuantidadeMinimaInatividade(
+                valorAtual,
+                novaUnidade
+              )
+            );
+          }}
+          onMensagemInatividadeChange={setEncerrarInatividadeMensagem}
+          onNovoGatilhoValorChange={setNovoGatilhoValor}
+          onNovoGatilhoCondicaoChange={setNovoGatilhoCondicao}
+          onAdicionarGatilho={adicionarGatilhoNovoFluxo}
+          onAlternarGatilho={(index) => {
+            setGatilhosNovoFluxo((atuais) =>
+              atuais.map((item, i) =>
+                i === index
+                  ? {
+                      ...item,
+                      ativo: item.ativo === false,
+                    }
+                  : item
+              )
+            );
+          }}
+          onRemoverGatilho={(index) => {
+            setGatilhosNovoFluxo((atuais) =>
+              atuais.filter((_, i) => i !== index)
+            );
+          }}
+          onCancelar={fecharCriacaoFluxo}
+          onCriar={criarFluxoRapido}
+        />
+      )}
 
         {previaGeracaoDescricaoIa && (
           <IaTokenEstimateModal

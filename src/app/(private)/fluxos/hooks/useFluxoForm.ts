@@ -40,6 +40,8 @@ type UseFluxoFormOptions = {
   setGatilhosFluxo: Dispatch<SetStateAction<GatilhoFluxo[]>>;
   carregarGatilhosFluxo: (fluxoId: string) => Promise<void>;
   navegarParaFluxo: (fluxoId: string) => void;
+  onErroEdicao: (message: string) => void;
+  onErroCriacao: (message: string) => void;
   onClearError: () => void;
   onClearSuccess: () => void;
   onSuccess: (message: string) => void;
@@ -61,13 +63,14 @@ export default function useFluxoForm({
   setGatilhosFluxo,
   carregarGatilhosFluxo,
   navegarParaFluxo,
+  onErroEdicao,
+  onErroCriacao,
   onClearError,
   onClearSuccess,
   onSuccess,
 }: UseFluxoFormOptions) {
   const [abrirCriacao, setAbrirCriacao] = useState(false);
   const [descricaoNovoFluxo, setDescricaoNovoFluxo] = useState("");
-  const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
   const [novoFluxoNome, setNovoFluxoNome] = useState("");
   const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
   const [
@@ -82,7 +85,6 @@ export default function useFluxoForm({
   const [fluxoEmEdicao, setFluxoEmEdicao] = useState<Fluxo | null>(null);
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
-  const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
   const [fluxoPadraoEdicao, setFluxoPadraoEdicao] = useState(false);
   const [
     fluxoEscopoIntegracoesModoEdicao,
@@ -197,7 +199,7 @@ export default function useFluxoForm({
   ]);
 
   const abrirCriacaoFluxo = useCallback(() => {
-    setErroCriacaoFluxo("");
+    onErroCriacao("");
     setNovoFluxoNome("");
     setDescricaoNovoFluxo("");
     setNovoFluxoPadrao(false);
@@ -208,27 +210,28 @@ export default function useFluxoForm({
     resetarEncerramentoInatividadePadrao();
     setAbrirCriacao(true);
   }, [
+    onErroCriacao,
     resetarEncerramentoInatividadePadrao,
     resetarGatilhosNovoFluxo,
     resetarNovoGatilho,
   ]);
 
   const fecharCriacaoFluxo = useCallback(() => {
-    setErroCriacaoFluxo("");
+    onErroCriacao("");
     setAbrirCriacao(false);
-  }, []);
+  }, [onErroCriacao]);
 
   const criarFluxoRapido = useCallback(async () => {
     try {
       onClearError();
-      setErroEdicaoFluxo("");
+      onErroEdicao("");
       onClearSuccess();
-      setErroCriacaoFluxo("");
+      onErroCriacao("");
 
       const nome = novoFluxoNome.trim();
 
       if (!nome) {
-        setErroCriacaoFluxo("Informe o nome do fluxo.");
+        onErroCriacao("Informe o nome do fluxo.");
         return;
       }
 
@@ -238,7 +241,7 @@ export default function useFluxoForm({
       );
 
       if (!fluxoPadraoFinal && gatilhosValidos.length === 0) {
-        setErroCriacaoFluxo(
+        onErroCriacao(
           "Adicione pelo menos uma palavra-chave para iniciar o fluxo."
         );
         return;
@@ -256,21 +259,21 @@ export default function useFluxoForm({
         !Number.isFinite(segundosInatividade) ||
         quantidadeInformada <= 0
       ) {
-        setErroCriacaoFluxo(
+        onErroCriacao(
           "Informe um tempo válido para o encerramento por inatividade."
         );
         return;
       }
 
       if (segundosInatividade < 5 * 60) {
-        setErroCriacaoFluxo(
+        onErroCriacao(
           "O tempo mínimo para encerramento por inatividade é de 5 minutos."
         );
         return;
       }
 
       if (segundosInatividade > 23 * 60 * 60) {
-        setErroCriacaoFluxo(
+        onErroCriacao(
           "O tempo máximo para encerramento por inatividade é de 23 horas."
         );
         return;
@@ -288,7 +291,7 @@ export default function useFluxoForm({
         novoFluxoEscopoIntegracoesModo === "selecionadas" &&
         escopoIntegracoes.ids.length === 0
       ) {
-        setErroCriacaoFluxo(
+        onErroCriacao(
           "Selecione pelo menos uma integração WhatsApp."
         );
         return;
@@ -346,7 +349,7 @@ export default function useFluxoForm({
       setFluxoSelecionado(fluxoCriado);
       navegarParaFluxo(fluxoCriado.id);
     } catch (error: unknown) {
-      setErroCriacaoFluxo(
+      onErroCriacao(
         error instanceof Error ? error.message : "Erro ao criar fluxo."
       );
     }
@@ -366,6 +369,8 @@ export default function useFluxoForm({
     novoFluxoPadrao,
     onClearError,
     onClearSuccess,
+    onErroCriacao,
+    onErroEdicao,
     onSuccess,
     resetarEncerramentoInatividadePadrao,
     resetarGatilhosNovoFluxo,
@@ -378,7 +383,14 @@ export default function useFluxoForm({
       const fluxoParaEditar = fluxoAlvo || fluxoSelecionado;
       if (!fluxoParaEditar) return;
 
-      setErroEdicaoFluxo("");
+    if (fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()) {
+      onErroEdicao(
+        "Já existe outro fluxo padrão cadastrado. Desmarque o fluxo padrão atual antes de definir este fluxo como padrão."
+      );
+      return;
+    }
+
+      onErroEdicao("");
       onClearError();
       setFluxoEmEdicao(fluxoParaEditar);
       setEditandoFluxo(true);
@@ -421,14 +433,17 @@ export default function useFluxoForm({
       onClearError,
       resetarNovoGatilho,
       setGatilhosFluxo,
+      existeOutroFluxoPadraoNaEmpresa,
+      fluxoPadraoEdicao,
+      onErroEdicao,
     ]
   );
 
   const fecharEdicaoFluxo = useCallback(() => {
-    setErroEdicaoFluxo("");
+    onErroEdicao("");
     setEditandoFluxo(false);
     setFluxoEmEdicao(null);
-  }, []);
+  }, [onErroEdicao]);
 
   const salvarEdicaoFluxo = useCallback(async () => {
     const fluxoParaEditar = obterFluxoAlvoEdicao();
@@ -446,21 +461,21 @@ export default function useFluxoForm({
       !Number.isFinite(segundosInatividade) ||
       quantidadeInformada <= 0
     ) {
-      setErroEdicaoFluxo(
+      onErroEdicao(
         "Informe um tempo válido para o encerramento por inatividade."
       );
       return;
     }
 
     if (segundosInatividade < 5 * 60) {
-      setErroEdicaoFluxo(
+      onErroEdicao(
         "O tempo mínimo para encerramento por inatividade é de 5 minutos."
       );
       return;
     }
 
     if (segundosInatividade > 23 * 60 * 60) {
-      setErroEdicaoFluxo(
+      onErroEdicao(
         "O tempo máximo para encerramento por inatividade é de 23 horas."
       );
       return;
@@ -480,7 +495,7 @@ export default function useFluxoForm({
       fluxoEscopoIntegracoesModoEdicao === "selecionadas" &&
       escopoIntegracoes.ids.length === 0
     ) {
-      setErroEdicaoFluxo(
+      onErroEdicao(
         "Selecione pelo menos uma integração WhatsApp."
       );
       return;
@@ -523,7 +538,7 @@ export default function useFluxoForm({
       setFluxoSelecionado(json.fluxo);
       await carregarFluxos();
     } catch (error: unknown) {
-      setErroEdicaoFluxo(
+      onErroEdicao(
         error instanceof Error ? error.message : "Erro ao editar fluxo."
       );
     }
@@ -542,6 +557,7 @@ export default function useFluxoForm({
     onClearError,
     onClearSuccess,
     onSuccess,
+    onErroEdicao,
     setFluxoSelecionado,
   ]);
 
@@ -588,8 +604,6 @@ export default function useFluxoForm({
     abrirCriacao,
     descricaoNovoFluxo,
     setDescricaoNovoFluxo,
-    erroCriacaoFluxo,
-    setErroCriacaoFluxo,
     novoFluxoNome,
     setNovoFluxoNome,
     novoFluxoPadrao,
@@ -597,6 +611,7 @@ export default function useFluxoForm({
     novoFluxoEscopoIntegracoesModo,
     setNovoFluxoEscopoIntegracoesModo,
     novoFluxoIntegracoesIds,
+    setNovoFluxoIntegracoesIds,
     deveMostrarEscopoIntegracoesFluxo,
     jaExisteFluxoPadrao,
     alternarIntegracaoEscopoNovoFluxo,
@@ -609,13 +624,12 @@ export default function useFluxoForm({
     setNomeFluxoEdicao,
     descricaoFluxoEdicao,
     setDescricaoFluxoEdicao,
-    erroEdicaoFluxo,
-    setErroEdicaoFluxo,
     fluxoPadraoEdicao,
     setFluxoPadraoEdicao,
     fluxoEscopoIntegracoesModoEdicao,
     setFluxoEscopoIntegracoesModoEdicao,
     fluxoIntegracoesIdsEdicao,
+    setFluxoIntegracoesIdsEdicao,
     alternarIntegracaoEscopoEdicao,
     existeOutroFluxoPadraoNaEmpresa,
     abrirEdicaoFluxo,
