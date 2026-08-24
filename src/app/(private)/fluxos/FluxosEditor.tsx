@@ -5,9 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   addEdge,
   Position,
-  MarkerType,
-  useEdgesState,
-  useNodesState,
   type Connection,
   type Edge,
   type Node,
@@ -40,18 +37,24 @@ import NodeConfigPanel from "./components/node-config/NodeConfigPanel";
 import MidiaConfig from "./components/node-config/MidiaConfig";
 import PerguntaOpcoesConfig from "./components/node-config/PerguntaOpcoesConfig";
 import BotoesConfig from "./components/node-config/BotoesConfig";
+import NodeActions from "./components/node-config/NodeActions";
 import FluxoCanvas from "./components/FluxoCanvas";
 import FluxoEditorHeader from "./components/FluxoEditorHeader";
 import FluxosSidebar from "./components/FluxosSidebar";
+import useFluxoNodes from "./hooks/useFluxoNodes";
+import useFluxoConnections from "./hooks/useFluxoConnections";
+import useFluxoEditor from "./hooks/useFluxoEditor";
+import useFluxos from "./hooks/useFluxos";
+import useFluxoResources from "./hooks/useFluxoResources";
 import WhatsappFlowPreview from "./components/WhatsappFlowPreview";
+import IaTokenEstimateModal from "./components/modals/IaTokenEstimateModal";
+import DisparoCostConfirmModal from "./components/modals/DisparoCostConfirmModal";
 import {
   montarPreviaWhatsappFluxo,
   type EncerramentoInatividadePreviaWhatsapp,
 } from "./whatsapp-preview";
 import type {
-  AgendaOpcao,
   AlvoVariavelFluxo,
-  AtendenteOpcao,
   AutomacaoConexao,
   AutomacaoNo,
   EscopoFilaNode,
@@ -66,13 +69,11 @@ import type {
   PreviaGeracaoDescricaoIa,
   PreviewTemplateWhatsapp,
   ResultadoEncerramentoFluxo,
-  SetorOpcao,
   TemplateWhatsappOpcao,
   TipoValorConversao,
   VariavelPersonalizada,
 } from "./types";
 import {
-  ACCEPT_ARQUIVOS,
   AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA,
   CHAVES_REFERENCIA_MIDIA_NODE,
   LIMITE_ARQUIVO_BYTES,
@@ -91,7 +92,6 @@ import {
   TIPO_NO_PERGUNTA_LIVRE_IA,
   TOKENS_PROMPT_FIXO_DESCRICAO_IA_ESTIMADOS,
   TOKENS_SAIDA_MAX_DESCRICAO_IA,
-  VARIAVEIS_FIXAS_CONTATO_HELP,
   VARIAVEIS_FIXAS_CONTATO_RESERVADAS,
   VARIAVEIS_FIXAS_SISTEMA,
 } from "./constants";
@@ -1057,13 +1057,67 @@ function FluxosPageContent() {
   const podeGerenciarMidias = headerUser.permissoes.includes(
     "fluxos.gerenciar_midias"
   );
-  const [fluxos, setFluxos] = useState<Fluxo[]>([]);
-  const [fluxoSelecionado, setFluxoSelecionado] = useState<Fluxo | null>(null);
   const [abrirCriacao, setAbrirCriacao] = useState(false);
   const [descricaoNovoFluxo, setDescricaoNovoFluxo] = useState("");
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const {
+    nodes,
+    setNodes,
+    onNodesChange,
+    marcarNodeSelecionado: marcarNodeSelecionadoNos,
+  } = useFluxoNodes();
+
+  const {
+    edges,
+    setEdges,
+    onEdgesChange,
+    rotuloConexao,
+    setRotuloConexao,
+    valorCondicao,
+    setValorCondicao,
+    tipoCondicaoConexao,
+    setTipoCondicaoConexao,
+    nomeConexaoEditadoManual,
+    setNomeConexaoEditadoManual,
+    timeoutQuantidade,
+    setTimeoutQuantidade,
+    timeoutUnidade,
+    setTimeoutUnidade,
+    statusEnvioTimeout,
+    setStatusEnvioTimeout,
+    usarIaConexao,
+    setUsarIaConexao,
+    descricaoIaConexao,
+    setDescricaoIaConexao,
+    gerandoDescricaoIaConexao,
+    setGerandoDescricaoIaConexao,
+    limparSelecaoVisualConexoes,
+    marcarConexaoSelecionada,
+  } = useFluxoConnections();
+
+  const {
+    editandoNodeId,
+    setEditandoNodeId,
+    editandoEdgeId,
+    setEditandoEdgeId,
+    nodeEditado,
+    edgeEditada,
+    confirmandoExclusaoNo,
+    setConfirmandoExclusaoNo,
+    confirmandoExclusaoConexao,
+    setConfirmandoExclusaoConexao,
+    editarNode,
+    editarConexao,
+    fecharPainelEdicao: fecharPainelEdicaoHook,
+  } = useFluxoEditor({
+    nodes,
+    edges,
+    onLimparSelecaoVisual: () => {
+      marcarNodeSelecionadoNos(null);
+      limparSelecaoVisualConexoes();
+    },
+  });
+
   const fluxoTemBuscaQualquerCalendario = useMemo(() => {
     return nodes.some((node) => {
       if (String(node.data?.tipo_no || "") !== "agenda_buscar_agendamento") {
@@ -1082,9 +1136,7 @@ function FluxosPageContent() {
   const [respostasPreviaWhatsapp, setRespostasPreviaWhatsapp] = useState<
     Record<string, string>
   >({});
-  const ignorarCliqueNodeAposArrasteRef = useRef(false);
 
-  const [carregandoFluxos, setCarregandoFluxos] = useState(true);
   const [carregandoEstrutura, setCarregandoEstrutura] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [ultimoSalvamento, setUltimoSalvamento] = useState<Date | null>(null);
@@ -1098,6 +1150,42 @@ function FluxosPageContent() {
   const [notaMaximaNode, setNotaMaximaNode] = useState("5");
 
   const [erro, setErro] = useState("");
+  const limparErroFluxos = useCallback(() => {
+    setErro("");
+  }, []);
+
+  const {
+    fluxos,
+    setFluxos,
+    fluxoSelecionado,
+    setFluxoSelecionado,
+    carregandoFluxos,
+    carregarFluxos,
+  } = useFluxos({
+    fluxoParam,
+    onClearError: limparErroFluxos,
+    onError: setErro,
+  });
+
+  const {
+    templatesWhatsapp,
+    carregandoTemplatesWhatsapp,
+    carregarTemplatesWhatsapp,
+    integracoesWhatsapp,
+    limiteIntegracoesWhatsappFluxos,
+    carregandoIntegracoesWhatsapp,
+    carregarIntegracoesWhatsapp,
+    agendasOpcoes,
+    carregandoAgendasOpcoes,
+    carregarAgendasOpcoes,
+    setores,
+    atendentes,
+    carregandoSetores,
+    carregarSetores,
+  } = useFluxoResources({
+    onError: setErro,
+  });
+
   const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [modalVariaveisAberto, setModalVariaveisAberto] = useState(false);
@@ -1120,13 +1208,6 @@ function FluxosPageContent() {
 
   const [novoFluxoNome, setNovoFluxoNome] = useState("");
   const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
-  const [integracoesWhatsapp, setIntegracoesWhatsapp] = useState<
-    IntegracaoWhatsappOpcao[]
-  >([]);
-  const [limiteIntegracoesWhatsappFluxos, setLimiteIntegracoesWhatsappFluxos] =
-    useState(1);
-  const [carregandoIntegracoesWhatsapp, setCarregandoIntegracoesWhatsapp] =
-    useState(false);
   const [novoFluxoEscopoIntegracoesModo, setNovoFluxoEscopoIntegracoesModo] =
     useState<EscopoIntegracoesModo>("todas");
   const [novoFluxoIntegracoesIds, setNovoFluxoIntegracoesIds] = useState<
@@ -1154,7 +1235,6 @@ function FluxosPageContent() {
     }
   );
 
-  const [editandoNodeId, setEditandoNodeId] = useState<string | null>(null);
   const [tituloNode, setTituloNode] = useState("");
   const [mensagemNode, setMensagemNode] = useState("");
   const [delayNode, setDelayNode] = useState<string>("");
@@ -1162,24 +1242,17 @@ function FluxosPageContent() {
   const [midiaUrlNode, setMidiaUrlNode] = useState("");
   const [midiaNomeNode, setMidiaNomeNode] = useState("");
   const [buscaFluxo, setBuscaFluxo] = useState("");
-  const [menuFluxoAbertoId, setMenuFluxoAbertoId] = useState<string | null>(null);
   const [tipoNodeEdicao, setTipoNodeEdicao] = useState("");
 
   const [midias, setMidias] = useState<MidiaOpcao[]>([]);
   const [carregandoMidias, setCarregandoMidias] = useState(false);
   const [enviandoMidia, setEnviandoMidia] = useState(false);
-  const [timeoutQuantidade, setTimeoutQuantidade] = useState("2");
   const [modalMidiasAberto, setModalMidiasAberto] = useState(false);
   const [abaMidias, setAbaMidias] = useState<
     "todas" | "imagem" | "video" | "audio" | "arquivo"
   >("todas");
   const [midiaExcluindoId, setMidiaExcluindoId] = useState<string | null>(null);
   const [confirmandoExclusaoMidiaId, setConfirmandoExclusaoMidiaId] = useState<string | null>(null);
-
-  const [timeoutUnidade, setTimeoutUnidade] =
-    useState<"minutos" | "horas">("horas");
-  const [statusEnvioTimeout, setStatusEnvioTimeout] =
-    useState<"qualquer" | "entregue" | "lida">("qualquer");
 
   const [editandoFluxo, setEditandoFluxo] = useState(false);
   const [fluxoEmEdicao, setFluxoEmEdicao] = useState<Fluxo | null>(null);
@@ -1233,9 +1306,6 @@ function FluxosPageContent() {
         ).trim()
       )
   );
-  const [confirmandoExclusaoNo, setConfirmandoExclusaoNo] = useState(false);
-  const [confirmandoExclusaoConexao, setConfirmandoExclusaoConexao] =
-    useState(false);
   
   const [mostrarModalCustoAgendamento, setMostrarModalCustoAgendamento] =
     useState(false);
@@ -1243,9 +1313,6 @@ function FluxosPageContent() {
   const [acaoPendenteAplicarNo, setAcaoPendenteAplicarNo] =
     useState<(() => void) | null>(null);
 
-  const [setores, setSetores] = useState<SetorOpcao[]>([]);
-  const [atendentes, setAtendentes] = useState<AtendenteOpcao[]>([]);
-  const [carregandoSetores, setCarregandoSetores] = useState(false);
   const possuiAdministradorAtivo = atendentes.some(
     (atendente) => atendente.is_administrador === true
   );
@@ -1338,17 +1405,6 @@ function FluxosPageContent() {
     useState("Acessar");
   const [redirectUrlNode, setRedirectUrlNode] = useState("");
 
-  const [editandoEdgeId, setEditandoEdgeId] = useState<string | null>(null);
-  const [rotuloConexao, setRotuloConexao] = useState("");
-  const [valorCondicao, setValorCondicao] = useState("");
-  const [tipoCondicaoConexao, setTipoCondicaoConexao] =
-    useState("resposta_contem");
-  const [nomeConexaoEditadoManual, setNomeConexaoEditadoManual] = useState(false);
-
-  const [usarIaConexao, setUsarIaConexao] = useState(false);
-  const [descricaoIaConexao, setDescricaoIaConexao] = useState("");
-  const [gerandoDescricaoIaConexao, setGerandoDescricaoIaConexao] =
-    useState(false);
   const [gerandoDescricoesIaBloco, setGerandoDescricoesIaBloco] =
     useState(false);
   const [previaGeracaoDescricaoIa, setPreviaGeracaoDescricaoIa] =
@@ -1356,7 +1412,6 @@ function FluxosPageContent() {
   const [capturaVariavelNode, setCapturaVariavelNode] = useState("nome");
   const [capturaTipoNode, setCapturaTipoNode] = useState("nome");
   const [capturaMensagemErroNode, setCapturaMensagemErroNode] = useState("");
-  const [capturaMaxTentativasNode, setCapturaMaxTentativasNode] = useState("3");
   const [arquivoCamposExtracaoNode, setArquivoCamposExtracaoNode] = useState("");
 
   const [maxTentativasInvalidasNode, setMaxTentativasInvalidasNode] = useState("3");
@@ -1386,11 +1441,6 @@ function FluxosPageContent() {
   const [notificacaoTituloNode, setNotificacaoTituloNode] = useState("");
   const [notificacaoMensagemNode, setNotificacaoMensagemNode] = useState("");
   const [notificarEmailNode, setNotificarEmailNode] = useState(false);
-
-  const [templatesWhatsapp, setTemplatesWhatsapp] = useState<TemplateWhatsappOpcao[]>([]);
-  const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
-  const [agendasOpcoes, setAgendasOpcoes] = useState<AgendaOpcao[]>([]);
-  const [carregandoAgendasOpcoes, setCarregandoAgendasOpcoes] = useState(false);
 
   const [arquivoInstrucaoIaNode, setArquivoInstrucaoIaNode] = useState("");
   const [arquivoMensagemErroNode, setArquivoMensagemErroNode] = useState("");
@@ -1478,14 +1528,6 @@ function FluxosPageContent() {
 
   const [loadingPreviewCustoAgendarDisparo, setLoadingPreviewCustoAgendarDisparo] =
     useState(false);
-
-  const nodeEditado = useMemo(() => {
-    return nodes.find((node) => node.id === editandoNodeId) || null;
-  }, [nodes, editandoNodeId]);
-
-  const edgeEditada = useMemo(() => {
-    return edges.find((edge) => edge.id === editandoEdgeId) || null;
-  }, [edges, editandoEdgeId]);
 
   const nodeOrigemEdgeEditada = useMemo(() => {
     if (!edgeEditada) return null;
@@ -2044,68 +2086,6 @@ function FluxosPageContent() {
     const limiteStorageMidiasAtingido =
       resumoMidias.tamanhoTotal >= LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES;
 
-  async function carregarTemplatesWhatsapp() {
-    try {
-      setCarregandoTemplatesWhatsapp(true);
-
-      const res = await fetch("/api/whatsapp/templates?status=APPROVED", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar templates.");
-      }
-
-      const templatesRecebidos = Array.isArray(json.templates)
-        ? json.templates
-        : Array.isArray(json.data)
-        ? json.data
-        : [];
-
-      setTemplatesWhatsapp(
-        templatesRecebidos.filter((template: TemplateWhatsappOpcao) =>
-          templateWhatsappAprovado(template)
-        )
-      );
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar templates.");
-    } finally {
-      setCarregandoTemplatesWhatsapp(false);
-    }
-  }
-
-  async function carregarIntegracoesWhatsapp() {
-    try {
-      setCarregandoIntegracoesWhatsapp(true);
-
-      const res = await fetch("/api/integracoes-whatsapp/listar", {
-        cache: "no-store",
-      });
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar integrações WhatsApp.");
-      }
-
-      const lista = Array.isArray(json.data)
-        ? json.data
-        : Array.isArray(json.integracoes)
-        ? json.integracoes
-        : [];
-
-      setIntegracoesWhatsapp(lista);
-      setLimiteIntegracoesWhatsappFluxos(
-        Math.max(1, Number(json.limite_integracoes_whatsapp || 1))
-      );
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar integrações WhatsApp.");
-    } finally {
-      setCarregandoIntegracoesWhatsapp(false);
-    }
-  }
-
   function alternarIntegracaoEscopoNovoFluxo(integracaoId: string) {
     setNovoFluxoIntegracoesIds((atuais) =>
       atuais.includes(integracaoId)
@@ -2120,28 +2100,6 @@ function FluxosPageContent() {
         ? atuais.filter((id) => id !== integracaoId)
         : [...atuais, integracaoId]
     );
-  }
-
-  async function carregarAgendasOpcoes() {
-    try {
-      setCarregandoAgendasOpcoes(true);
-
-      const res = await fetch("/api/agendas/opcoes", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar agendas.");
-      }
-
-      setAgendasOpcoes(json.agendas || []);
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar agendas.");
-    } finally {
-      setCarregandoAgendasOpcoes(false);
-    }
   }
 
   async function carregarVariaveisPersonalizadas(
@@ -2364,30 +2322,6 @@ function FluxosPageContent() {
       setLoadingPreviewCustoAgendarDisparo(false);
     }
   }
-
-  async function carregarSetores() {
-    try {
-      setCarregandoSetores(true);
-
-      const res = await fetch("/api/setores/opcoes", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar setores.");
-      }
-
-      setSetores(json.setores || []);
-    setAtendentes(json.atendentes || []);
-  } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar setores.");
-    } finally {
-      setCarregandoSetores(false);
-    }
-  }
-
 
   function excedeLimiteStorageMidias(tamanhoArquivoBytes: number) {
     return (
@@ -2636,40 +2570,6 @@ function FluxosPageContent() {
       }
     }
 
-  async function carregarFluxos() {
-    try {
-      setCarregandoFluxos(true);
-      setErro("");
-
-      const res = await fetch("/api/automacoes", {
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao carregar fluxos.");
-      }
-
-      const listaFluxos = json.fluxos || [];
-      setFluxos(listaFluxos);
-
-      const fluxoDaUrl = fluxoParam
-        ? listaFluxos.find((item: Fluxo) => item.id === fluxoParam)
-        : null;
-
-      if (fluxoDaUrl) {
-        setFluxoSelecionado(fluxoDaUrl);
-      } else if (!fluxoSelecionado && listaFluxos.length > 0) {
-        setFluxoSelecionado(listaFluxos[0]);
-      }
-    } catch (error: any) {
-      setErro(error?.message || "Erro ao carregar fluxos.");
-    } finally {
-      setCarregandoFluxos(false);
-    }
-  }
-
   async function carregarEstrutura(fluxoId: string) {
     try {
       setCarregandoEstrutura(true);
@@ -2821,7 +2721,6 @@ function FluxosPageContent() {
     setEditandoNodeId(null);
     setEditandoEdgeId(null);
     setAssistenteFluxosAberto(false);
-    setMenuFluxoAbertoId(null);
     setErro("");
     setSucesso(
       `Fluxo "${fluxoNormalizado.nome}" criado com IA e salvo como rascunho.`
@@ -3067,7 +2966,6 @@ async function criarFluxoRapido() {
 
 function abrirFluxo(fluxo: Fluxo) {
   setFluxoSelecionado(fluxo);
-  setMenuFluxoAbertoId(null);
   router.push(`/fluxos?fluxo=${encodeURIComponent(fluxo.id)}`);
 }
 
@@ -3415,30 +3313,10 @@ function offsetLabelConexao(edgeId: string) {
   }
 
   function marcarNodeSelecionado(nodeId: string | null) {
-    setNodes((atuais) =>
-      atuais.map((node) => ({
-        ...node,
-        selected: nodeId ? node.id === nodeId : false,
-        data: {
-          ...(node.data || {}),
-          isSelecionado: nodeId ? node.id === nodeId : false,
-        },
-      }))
-    );
+    marcarNodeSelecionadoNos(nodeId);
 
     if (nodeId) {
-      setEdges((atuais) =>
-        atuais.map((edge) => ({
-          ...edge,
-          selected: false,
-          style: {
-            ...(edge.style || {}),
-            stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
-            strokeWidth: 2,
-            strokeDasharray: "6 6",
-          },
-        }))
-      );
+      limparSelecaoVisualConexoes();
     }
   }
 
@@ -3448,9 +3326,8 @@ function offsetLabelConexao(edgeId: string) {
       | undefined;
 
     marcarNodeSelecionado(node.id);
-    setEditandoNodeId(node.id);
+    editarNode(node.id);
     setTipoNodeEdicao(String(node.data?.tipo_no || ""));
-    setEditandoEdgeId(null);
 
     setTituloNode(String(node.data?.titulo || ""));
     setMensagemNode(
@@ -3508,7 +3385,6 @@ function offsetLabelConexao(edgeId: string) {
         configuracaoJson?.incluir_administradores_distribuicao
       )
     );
-    setConfirmandoExclusaoNo(false);
     
     setCapturaVariavelNode(String(configuracaoJson?.variavel || "nome"));
     setCapturaTipoNode(String(configuracaoJson?.tipo_captura || "nome"));
@@ -3518,7 +3394,6 @@ function offsetLabelConexao(edgeId: string) {
           "Não consegui identificar essa informação. Por favor, envie novamente."
       )
     );
-    setCapturaMaxTentativasNode(String(configuracaoJson?.max_tentativas || 3));
     setMaxTentativasInvalidasNode(
       String(configuracaoJson?.max_tentativas_invalidas || 3)
     );
@@ -3792,12 +3667,10 @@ function abrirEdicaoConexao(edge: Edge) {
   );
 
   marcarNodeSelecionado(null);
-  setEditandoEdgeId(edge.id);
-  setEditandoNodeId(null);
+  editarConexao(edge.id);
 
   setRotuloConexao(String(data?.rotulo || ""));
   setValorCondicao(String(condicao.valor || ""));
-  setConfirmandoExclusaoConexao(false);
 
   const rotuloAtual = String(data?.rotulo || "").trim();
   const valorAtual = String(condicao.valor || "").trim();
@@ -6341,24 +6214,7 @@ function removerConexao(edgeId: string) {
 }
 
 function fecharPainelEdicao() {
-  setEditandoNodeId(null);
-  setEditandoEdgeId(null);
-  setConfirmandoExclusaoNo(false);
-  setConfirmandoExclusaoConexao(false);
-  marcarNodeSelecionado(null);
-
-  setEdges((atuais) =>
-    atuais.map((edge) => ({
-      ...edge,
-      selected: false,
-      style: {
-        ...(edge.style || {}),
-        stroke: "var(--crm-ui-private-content-hex-cbd5e1)",
-        strokeWidth: 2,
-        strokeDasharray: "6 6",
-      },
-    }))
-  );
+  fecharPainelEdicaoHook();
 }
 
 useEffect(() => {
@@ -6872,22 +6728,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             onEditarNode={abrirEdicaoNo}
             onEditarEdge={(edge) => {
               abrirEdicaoConexao(edge);
-
-              setEdges((atuais) =>
-                atuais.map((item) => ({
-                  ...item,
-                  selected: item.id === edge.id,
-                  style: {
-                    ...(item.style || {}),
-                    stroke:
-                      item.id === edge.id
-                        ? "var(--crm-ui-private-border-hex-0098bab6)"
-                        : "var(--crm-ui-private-border-hex-cbd5e1)",
-                    strokeWidth: item.id === edge.id ? 3 : 2,
-                    strokeDasharray: "6 6",
-                  },
-                }))
-              );
+              marcarConexaoSelecionada(edge.id);
             }}
           />
 
@@ -7620,50 +7461,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           />
         )}
 
-        <div className={styles.actionButtonsRow}>
-                      {nodeEditado.data?.tipo_no !== "inicio" && (
-                        <>
-                          {confirmandoExclusaoNo ? (
-                          <button
-                            type="button"
-                            className={styles.deleteNodeConfirmButton}
-                            onClick={() => removerNode(nodeEditado.id)}
-                          >
-                            Excluir
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className={styles.deleteNodeIconButton}
-                            onClick={() => setConfirmandoExclusaoNo(true)}
-                            title="Excluir bloco"
-                          >
-                            🗑
-                          </button>
-                        )}
-                      </>
-                    )}
-
-                    <button
-                      type="button"
-                      className={styles.secondaryButton}
-                      onClick={fecharPainelEdicao}
-                    >
-                      Cancelar
-                    </button>
-
-                    <button
-                      type="button"
-                      className={styles.primaryButton}
-                      onClick={aplicarEdicaoNo}
-                    >
-                      Aplicar no bloco
-                    </button>
-                  </div>
-
-                  <p className={styles.help}>
-                    Depois de aplicar, clique em Salvar fluxo para gravar no banco.
-                  </p>
+                <NodeActions
+                  podeExcluir={nodeEditado.data?.tipo_no !== "inicio"}
+                  confirmandoExclusao={confirmandoExclusaoNo}
+                  onPedirExclusao={() => setConfirmandoExclusaoNo(true)}
+                  onConfirmarExclusao={() => removerNode(nodeEditado.id)}
+                  onCancelar={fecharPainelEdicao}
+                  onAplicar={aplicarEdicaoNo}
+                />
 
 
                 </NodeConfigPanel>
@@ -9140,172 +8945,34 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
 
         {previaGeracaoDescricaoIa && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-              <div className={styles.modalHeader}>
-                <div>
-                  <p className={styles.eyebrow}>Custo de tokens</p>
-                  <h3 className={styles.modalTitle}>
-                    {previaGeracaoDescricaoIa.titulo}
-                  </h3>
-                </div>
-
-                <button
-                  type="button"
-                  className={styles.closePanelButton}
-                  onClick={cancelarPreviaGeracaoDescricaoIa}
-                  disabled={gerandoDescricaoIaConexao || gerandoDescricoesIaBloco}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className={styles.modalBody}>
-                <div className={styles.tokenEstimateBox}>
-                  <span>Consumo estimado</span>
-                  <strong>
-                    {formatarTokens(previaGeracaoDescricaoIa.tokensMin)} ~{" "}
-                    {formatarTokens(previaGeracaoDescricaoIa.tokensMax)} tokens
-                  </strong>
-                  <small>
-                    {previaGeracaoDescricaoIa.conexoes.length === 1
-                      ? "1 conexão será gerada."
-                      : `${previaGeracaoDescricaoIa.conexoes.length} conexões serão geradas.`}
-                  </small>
-                </div>
-
-                <div className={styles.warningBox}>
-                  <strong>Essa é uma estimativa antes da chamada à IA.</strong>
-                  <p>
-                    O consumo real pode variar e será registrado automaticamente
-                    após a geração. A geração só começa depois da confirmação.
-                  </p>
-                </div>
-
-                <div className={styles.tokenEstimateList}>
-                  {previaGeracaoDescricaoIa.conexoes.map((conexao) => (
-                    <div key={conexao.edgeId} className={styles.tokenEstimateItem}>
-                      <span>{conexao.nome}</span>
-                      <strong>
-                        ~{formatarTokens(conexao.tokensEstimados)} tokens
-                      </strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={styles.modalFooter}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={cancelarPreviaGeracaoDescricaoIa}
-                  disabled={gerandoDescricaoIaConexao || gerandoDescricoesIaBloco}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={confirmarPreviaGeracaoDescricaoIa}
-                  disabled={gerandoDescricaoIaConexao || gerandoDescricoesIaBloco}
-                >
-                  {gerandoDescricaoIaConexao || gerandoDescricoesIaBloco
-                    ? "Gerando..."
-                    : "Confirmar geração"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <IaTokenEstimateModal
+            previa={previaGeracaoDescricaoIa}
+            processando={
+              gerandoDescricaoIaConexao || gerandoDescricoesIaBloco
+            }
+            formatarTokens={formatarTokens}
+            onCancelar={cancelarPreviaGeracaoDescricaoIa}
+            onConfirmar={confirmarPreviaGeracaoDescricaoIa}
+          />
         )}
 
         {mostrarModalCustoAgendamento && (
-          <div className={styles.modalOverlay}>
-            <div className={styles.modalCard}>
-              <div className={styles.modalHeader}>
-                <div>
-                  <p className={styles.eyebrow}>Confirmação</p>
-                  <h3 className={styles.modalTitle}>
-                    Confirmar agendamento de disparo
-                  </h3>
-                </div>
+          <DisparoCostConfirmModal
+            custo={previewCustoAgendarDisparo}
+            onCancelar={() => {
+              setMostrarModalCustoAgendamento(false);
+              setAcaoPendenteAplicarNo(null);
+            }}
+            onConfirmar={() => {
+              setMostrarModalCustoAgendamento(false);
 
-                <button
-                  type="button"
-                  className={styles.closePanelButton}
-                  onClick={() => {
-                    setMostrarModalCustoAgendamento(false);
-                    setAcaoPendenteAplicarNo(null);
-                  }}
-                >
-                  ×
-                </button>
-              </div>
+              if (acaoPendenteAplicarNo) {
+                acaoPendenteAplicarNo();
+              }
 
-              <div className={styles.modalBody}>
-                <div className={styles.warningBox}>
-                  <strong>Este bloco agenda um disparo oficial do WhatsApp.</strong>
-
-                  <p>Quando o disparo ocorrer:</p>
-
-                  <ul className={styles.warningList}>
-                    <li>Poderá gerar cobrança da Meta</li>
-                    <li>O envio será realizado automaticamente</li>
-                  </ul>
-
-                  {previewCustoAgendarDisparo && (
-                    <div className={styles.modalCostPreviewBox}>
-                      <span>Estimativa para 1 contato</span>
-
-                      <strong>
-                        R$ {previewCustoAgendarDisparo.valorTotalBrlMin.toFixed(2)} ~ R${" "}
-                        {previewCustoAgendarDisparo.valorTotalBrlMax.toFixed(2)}
-                      </strong>
-
-                      <small>
-                        Categoria: {previewCustoAgendarDisparo.categoria} · USD: US${" "}
-                        {previewCustoAgendarDisparo.valorTotalUsd.toFixed(4)}
-                      </small>
-                    </div>
-                  )}
-
-                  <p>
-                    Use esse recurso apenas quando fizer sentido para recuperação ou
-                    continuidade do atendimento.
-                  </p>
-                </div>
-              </div>
-
-              <div className={styles.modalFooter}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => {
-                    setMostrarModalCustoAgendamento(false);
-                    setAcaoPendenteAplicarNo(null);
-                  }}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={() => {
-                    setMostrarModalCustoAgendamento(false);
-
-                    if (acaoPendenteAplicarNo) {
-                      acaoPendenteAplicarNo();
-                    }
-
-                    setAcaoPendenteAplicarNo(null);
-                  }}
-                >
-                  Continuar e aplicar
-                </button>
-              </div>
-            </div>
-          </div>
+              setAcaoPendenteAplicarNo(null);
+            }}
+          />
         )}
 
         {assistenteFluxosAberto && (
