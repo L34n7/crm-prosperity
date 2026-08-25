@@ -15,6 +15,11 @@ import AssistenteFluxosPanel, {
   type AssistenteFluxosFluxoCriado,
 } from "./AssistenteFluxosPanel";
 import type { TemplateVariableOption } from "@/components/TemplateVariableCombobox";
+import ConsultarEstoqueConfig, {
+  CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO,
+  normalizarConfiguracaoConsultarEstoque,
+  type ConfiguracaoConsultarEstoque,
+} from "@/components/automacoes/ConsultarEstoqueConfig";
 import { useHeaderUser } from "@/components/header-user-context";
 import "@xyflow/react/dist/style.css";
 import styles from "./fluxos.module.css";
@@ -61,6 +66,13 @@ import CreateFlowModal from "./components/modals/CreateFlowModal";
 import EditFlowModal from "./components/modals/EditFlowModal";
 import useFluxoForm from "./hooks/useFluxoForm";
 import { validarFluxoAntesDeAtivar } from "./fluxo-validation";
+import {
+  SAIDAS_CONSULTA_ESTOQUE,
+  TIPO_NO_CONSULTAR_ESTOQUE,
+  VARIAVEIS_SAIDA_ESTOQUE,
+  saidaConsultaEstoquePorValor,
+  validarConsultasEstoqueAntesDeAtivar,
+} from "./consultar-estoque-editor";
 import useFluxoMidias from "./hooks/useFluxoMidias";
 import {
   montarPreviaWhatsappFluxo,
@@ -190,6 +202,7 @@ function tipoNoEsperaResposta(tipoNo: string) {
 }
 
 function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {
+  if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) return "resposta_igual";
   if (tipoNo === "capturar_resposta") return "sempre";
 
   return tipoNoEsperaResposta(tipoNo) ? "resposta_contem" : "sempre";
@@ -868,6 +881,12 @@ function FluxosPageContent() {
 
   const [buscaFluxo, setBuscaFluxo] = useState("");
   const [tipoNodeEdicao, setTipoNodeEdicao] = useState("");
+
+  const [configEstoqueNode, setConfigEstoqueNode] =
+    useState<ConfiguracaoConsultarEstoque>({
+      ...CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO,
+      deposito_ids: [],
+    });
 
   const [erroEdicaoFluxo, setErroEdicaoFluxo] = useState("");
 
@@ -1675,6 +1694,20 @@ function FluxosPageContent() {
       });
     }
 
+    const possuiConsultaEstoque = nodes.some(
+      (node) =>
+        String(node.data?.tipo_no || "") === TIPO_NO_CONSULTAR_ESTOQUE
+    );
+
+    if (possuiConsultaEstoque) {
+      for (const variavel of VARIAVEIS_SAIDA_ESTOQUE) {
+        if (chavesAdicionadas.has(variavel.key)) continue;
+
+        chavesAdicionadas.add(variavel.key);
+        opcoes.push(variavel);
+      }
+    }
+
     return opcoes;
   }, [nodes, opcoesVariaveisTemplate]);
 
@@ -1842,8 +1875,19 @@ function FluxosPageContent() {
       const nosDb: AutomacaoNo[] = json.nos || [];
       const conexoesDb: AutomacaoConexao[] = json.conexoes || [];
 
+      const tiposNosPorId = new Map(
+        nosDb.map((no) => [no.id, no.tipo_no])
+      );
+
       setNodes(nosDb.map(dbNoParaReactFlow));
-      setEdges(conexoesDb.map(dbConexaoParaReactFlow));
+      setEdges(
+        conexoesDb.map((conexao) =>
+          dbConexaoParaReactFlow(
+            conexao,
+            tiposNosPorId.get(conexao.no_origem_id)
+          )
+        )
+      );
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar estrutura.");
     } finally {
@@ -1865,13 +1909,25 @@ function FluxosPageContent() {
     const nosDb: AutomacaoNo[] = json.nos || [];
     const conexoesDb: AutomacaoConexao[] = json.conexoes || [];
 
+    const tiposNosPorId = new Map(
+      nosDb.map((no) => [no.id, no.tipo_no])
+    );
+
     return {
       nodesValidacao: nosDb.map(dbNoParaReactFlow),
-      edgesValidacao: conexoesDb.map(dbConexaoParaReactFlow),
+      edgesValidacao: conexoesDb.map((conexao) =>
+        dbConexaoParaReactFlow(
+          conexao,
+          tiposNosPorId.get(conexao.no_origem_id)
+        )
+      ),
     };
   }
 
-  function dbConexaoParaReactFlow(conexao: AutomacaoConexao): Edge {
+    function dbConexaoParaReactFlow(
+      conexao: AutomacaoConexao,
+      tipoNoOrigem?: string
+    ): Edge {
     const ehSempreSeguir = conexao.condicao_json?.tipo === "sempre";
     const offsetY = offsetLabelConexao(conexao.id);
     const usarIA = conexao.usar_ia === true;
@@ -1884,6 +1940,10 @@ function FluxosPageContent() {
       id: conexao.id,
       source: conexao.no_origem_id,
       target: conexao.no_destino_id,
+      sourceHandle:
+        tipoNoOrigem === TIPO_NO_CONSULTAR_ESTOQUE
+          ? saidaConsultaEstoquePorValor(conexao.condicao_json?.valor)?.valor
+          : undefined,
       type: "default",
       ...( {
         pathOptions: {
@@ -1997,16 +2057,53 @@ function FluxosPageContent() {
     }
   }, [fluxoSelecionado?.id]);
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      const nodeOrigem = nodes.find((node) => node.id === connection.source);
-      const nodeDestino = nodes.find((node) => node.id === connection.target);
-      const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
-      const usarIaPadrao = tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;
-      const opcaoRespostaPadrao = proximaOpcaoRespostaDisponivel(
-        nodeOrigem,
-        edges
+const onConnect = useCallback(
+  (connection: Connection) => {
+    const nodeOrigem = nodes.find((node) => node.id === connection.source);
+    const nodeDestino = nodes.find((node) => node.id === connection.target);
+    const tipoOrigem = String(nodeOrigem?.data?.tipo_no || "");
+
+    const origemConsultaEstoque =
+      tipoOrigem === TIPO_NO_CONSULTAR_ESTOQUE;
+
+    const saidaEstoque = origemConsultaEstoque
+      ? SAIDAS_CONSULTA_ESTOQUE.find(
+          (saida) =>
+            saida.valor === String(connection.sourceHandle || "")
+        ) || null
+      : null;
+
+    if (origemConsultaEstoque && !saidaEstoque) {
+      setErro(
+        "Escolha uma das quatro saídas do bloco Consultar estoque."
       );
+      return;
+    }
+
+    if (
+      saidaEstoque &&
+      edges.some(
+        (edge) =>
+          edge.source === connection.source &&
+          String(
+            (edge.data as EdgeDataConexao | undefined)?.condicao_json
+              ?.valor || ""
+          ) === saidaEstoque.valor
+      )
+    ) {
+      setErro(
+        `A saída "${saidaEstoque.titulo}" já está conectada.`
+      );
+      return;
+    }
+
+    const usarIaPadrao =
+      !origemConsultaEstoque &&
+      tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;
+
+    const opcaoRespostaPadrao =
+      saidaEstoque ||
+      proximaOpcaoRespostaDisponivel(nodeOrigem, edges);
 
       const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
       const rotuloPadrao =
@@ -2222,6 +2319,11 @@ function FluxosPageContent() {
               max_tentativas: 3,
               notificar_excesso_tentativas: true,
               notificar_email_excesso_tentativas: true,
+            }
+          : tipoNo === TIPO_NO_CONSULTAR_ESTOQUE
+          ? {
+              ...CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO,
+              deposito_ids: [],
             }
           : tipoNo === "agendar_disparo"
           ? {
@@ -2455,6 +2557,9 @@ function offsetLabelConexao(edgeId: string) {
       | Record<string, any>
       | undefined;
 
+    setConfigEstoqueNode(
+      normalizarConfiguracaoConsultarEstoque(configuracaoJson)
+    );
     marcarNodeSelecionado(node.id);
     editarNode(node.id);
     setTipoNodeEdicao(String(node.data?.tipo_no || ""));
@@ -2890,6 +2995,42 @@ function aplicarEdicaoNo() {
 async function aplicarEdicaoNoInterno() {
   if (!editandoNodeId) return;
 
+  if (tipoNodeEdicao === TIPO_NO_CONSULTAR_ESTOQUE) {
+    if (
+      configEstoqueNode.origem_produto === "produto_especifico" &&
+      !configEstoqueNode.produto_id
+    ) {
+      setErro("Selecione o produto que será consultado.");
+      return;
+    }
+
+    if (
+      configEstoqueNode.origem_produto === "variavel" &&
+      !configEstoqueNode.variavel_produto
+    ) {
+      setErro("Informe a variável que contém o produto a consultar.");
+      return;
+    }
+
+    if (
+      configEstoqueNode.deposito_modo === "especifico" &&
+      !configEstoqueNode.deposito_id
+    ) {
+      setErro("Selecione o depósito que será consultado.");
+      return;
+    }
+
+    if (
+      configEstoqueNode.deposito_modo === "selecionados" &&
+      configEstoqueNode.deposito_ids.length === 0
+    ) {
+      setErro(
+        "Selecione pelo menos um depósito para a consulta."
+      );
+      return;
+    }
+  }
+
   const valorFixoEncerramento = normalizarValorMonetario(encerrarValorFixoNode);
   const variavelEncerramento = normalizarVariavelFluxo(
     encerrarValorVariavelNode
@@ -3187,7 +3328,13 @@ async function aplicarEdicaoNoInterno() {
       const tipoAtual = String(node.data?.tipo_no || "enviar_texto");
       const tipoFinal = tipoAtual === "inicio" ? "inicio" : tipoNodeEdicao;
 
-      const configuracao_json: Record<string, any> = {};
+      const configuracao_json: Record<string, any> =
+        tipoFinal === TIPO_NO_CONSULTAR_ESTOQUE
+          ? {
+              ...configEstoqueNode,
+              deposito_ids: [...configEstoqueNode.deposito_ids],
+            }
+          : {};
 
       if (
         tipoFinal === "enviar_texto" ||
@@ -3531,10 +3678,14 @@ async function aplicarEdicaoNoInterno() {
           .filter(Boolean);
       }
 
+      if (tipoFinal !== TIPO_NO_CONSULTAR_ESTOQUE) {
         configuracao_json.notificar_ao_chegar = notificarAoChegarNode;
-        configuracao_json.notificacao_titulo = notificacaoTituloNode.trim();
-        configuracao_json.notificacao_mensagem = notificacaoMensagemNode.trim();
+        configuracao_json.notificacao_titulo =
+          notificacaoTituloNode.trim();
+        configuracao_json.notificacao_mensagem =
+          notificacaoMensagemNode.trim();
         configuracao_json.notificar_email = notificarEmailNode;
+      }
 
       const noAtualizado = dbNoParaReactFlow({
         id: node.id,
@@ -3545,7 +3696,8 @@ async function aplicarEdicaoNoInterno() {
         posicao_y: node.position.y,
         configuracao_json,
         delay_segundos:
-          tipoFinal === "inicio"
+          tipoFinal === "inicio" ||
+          tipoFinal === TIPO_NO_CONSULTAR_ESTOQUE
             ? null
             : normalizarDelaySegundos(delayNode),
       });
@@ -4032,6 +4184,17 @@ async function alterarStatusFluxo(
 
       if (erroValidacao) {
         setErro(erroValidacao);
+        return;
+      }
+
+      const erroValidacaoEstoque =
+        validarConsultasEstoqueAntesDeAtivar(
+          nodesValidacao,
+          edgesValidacao
+        );
+
+      if (erroValidacaoEstoque) {
+        setErro(erroValidacaoEstoque);
         return;
       }
 
@@ -4735,6 +4898,16 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
           setTipoNodeEdicao(novoTipo);
 
+          if (
+            novoTipo === TIPO_NO_CONSULTAR_ESTOQUE &&
+            tipoAnterior !== TIPO_NO_CONSULTAR_ESTOQUE
+          ) {
+            setConfigEstoqueNode({
+              ...CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO,
+              deposito_ids: [],
+            });
+          }
+
           if (tituloEhPadraoDoSistema(tituloNode, tipoAnterior)) {
             setTituloNode(tituloPadraoTipoNo(novoTipo));
           }
@@ -4931,7 +5104,16 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
                             />
                   )}
 
-                                    {tipoNodeEdicao === "capturar_resposta" && (
+                    {tipoNodeEdicao === TIPO_NO_CONSULTAR_ESTOQUE && (
+                      <ConsultarEstoqueConfig
+                        configuracao={
+                          configEstoqueNode as unknown as Record<string, unknown>
+                        }
+                        variaveis={opcoesVariaveisFluxo}
+                        onChange={setConfigEstoqueNode}
+                      />
+                    )}
+                    {tipoNodeEdicao === "capturar_resposta" && (
                     <CapturarRespostaConfig
                               tipoCaptura={capturaTipoNode}
                               variavel={capturaVariavelNode}
