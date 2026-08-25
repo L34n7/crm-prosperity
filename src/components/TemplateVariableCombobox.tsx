@@ -25,6 +25,33 @@ type TemplateVariableComboboxProps = {
   loading?: boolean;
 };
 
+const VARIAVEIS_PRECO_ESTOQUE: TemplateVariableOption[] = [
+  { key: "estoque_preco", description: "Preço efetivo do produto no atendimento WhatsApp, com promoção vigente.", category: "Estoque" },
+  { key: "estoque_preco_formatado", description: "Preço efetivo do WhatsApp formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_base", description: "Preço-base cadastrado no produto.", category: "Estoque" },
+  { key: "estoque_preco_base_formatado", description: "Preço-base formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_balcao", description: "Preço vigente para Balcão/PDV.", category: "Estoque" },
+  { key: "estoque_preco_balcao_formatado", description: "Preço vigente para Balcão/PDV formatado.", category: "Estoque" },
+  { key: "estoque_preco_online", description: "Preço vigente para o canal Online.", category: "Estoque" },
+  { key: "estoque_preco_online_formatado", description: "Preço Online formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_whatsapp", description: "Preço vigente para o canal WhatsApp.", category: "Estoque" },
+  { key: "estoque_preco_whatsapp_formatado", description: "Preço WhatsApp formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_promocional", description: "Preço promocional vigente no WhatsApp; vazio quando não há promoção.", category: "Estoque" },
+  { key: "estoque_preco_promocional_formatado", description: "Preço promocional vigente formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_pix", description: "Preço final para pagamento via PIX no WhatsApp.", category: "Estoque" },
+  { key: "estoque_preco_pix_formatado", description: "Preço PIX formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_dinheiro", description: "Preço final para pagamento em dinheiro.", category: "Estoque" },
+  { key: "estoque_preco_dinheiro_formatado", description: "Preço em dinheiro formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_debito", description: "Preço final para pagamento no débito.", category: "Estoque" },
+  { key: "estoque_preco_debito_formatado", description: "Preço no débito formatado em reais.", category: "Estoque" },
+  { key: "estoque_preco_credito", description: "Preço final para crédito em 1x.", category: "Estoque" },
+  { key: "estoque_preco_credito_formatado", description: "Preço no crédito em 1x formatado em reais.", category: "Estoque" },
+  { key: "estoque_promocao_nome", description: "Nome da promoção vigente aplicada ao produto.", category: "Estoque" },
+  { key: "estoque_promocao_inicio_em", description: "Data e hora de início da promoção vigente.", category: "Estoque" },
+  { key: "estoque_promocao_fim_em", description: "Data e hora de término da promoção vigente.", category: "Estoque" },
+  { key: "estoque_promocao_canais", description: "Canais contemplados pela promoção vigente.", category: "Estoque" },
+];
+
 function normalizeSearch(value: string) {
   return String(value || "")
     .toLowerCase()
@@ -51,23 +78,27 @@ export default function TemplateVariableCombobox({
   const [searching, setSearching] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
+  const mergedOptions = useMemo(() => {
+    const mapa = new Map<string, TemplateVariableOption>();
+    for (const option of [...options, ...VARIAVEIS_PRECO_ESTOQUE]) {
+      if (!mapa.has(option.key)) mapa.set(option.key, option);
+    }
+    return Array.from(mapa.values());
+  }, [options]);
+
   const selectedOption = useMemo(
-    () => options.find((option) => option.key === value) || null,
-    [options, value]
+    () => mergedOptions.find((option) => option.key === value) || null,
+    [mergedOptions, value]
   );
 
   const filteredOptions = useMemo(() => {
-    if (!searching) return options;
-
+    if (!searching) return mergedOptions;
     const normalizedQuery = normalizeSearch(query);
-    if (!normalizedQuery) return options;
-
-    return options.filter((option) =>
-      normalizeSearch(
-        `${option.key} ${option.description} ${option.category}`
-      ).includes(normalizedQuery)
+    if (!normalizedQuery) return mergedOptions;
+    return mergedOptions.filter((option) =>
+      normalizeSearch(`${option.key} ${option.description} ${option.category}`).includes(normalizedQuery)
     );
-  }, [options, query, searching]);
+  }, [mergedOptions, query, searching]);
 
   const closeList = useCallback(() => {
     setOpen(false);
@@ -77,44 +108,25 @@ export default function TemplateVariableCombobox({
   }, [value]);
 
   const openList = useCallback(() => {
-    const selectedIndex = options.findIndex((option) => option.key === value);
-
+    const selectedIndex = mergedOptions.findIndex((option) => option.key === value);
     setOpen(true);
     setSearching(false);
     setQuery(value);
-    setActiveIndex(
-      selectedIndex >= 0 ? selectedIndex : options.length > 0 ? 0 : -1
-    );
-  }, [options, value]);
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : mergedOptions.length > 0 ? 0 : -1);
+  }, [mergedOptions, value]);
 
   useEffect(() => {
     if (!open) return;
-
     function closeOnOutsideClick(event: PointerEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        closeList();
-      }
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) closeList();
     }
-
     document.addEventListener("pointerdown", closeOnOutsideClick);
     return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
   }, [closeList, open]);
 
   useEffect(() => {
-    if (
-      !open ||
-      activeIndex < 0 ||
-      activeIndex >= filteredOptions.length
-    ) {
-      return;
-    }
-
-    document
-      .getElementById(`${listboxId}-option-${activeIndex}`)
-      ?.scrollIntoView({ block: "nearest" });
+    if (!open || activeIndex < 0 || activeIndex >= filteredOptions.length) return;
+    document.getElementById(`${listboxId}-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, filteredOptions.length, listboxId, open]);
 
   function selectOption(option: TemplateVariableOption) {
@@ -131,42 +143,25 @@ export default function TemplateVariableCombobox({
       closeList();
       return;
     }
-
     if (event.key === "Tab") {
       closeList();
       return;
     }
-
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-
       if (!open) {
         openList();
         return;
       }
-
       if (filteredOptions.length === 0) return;
-
       const direction = event.key === "ArrowDown" ? 1 : -1;
       setActiveIndex((currentIndex) => {
-        if (currentIndex < 0) {
-          return direction > 0 ? 0 : filteredOptions.length - 1;
-        }
-
-        return (
-          (currentIndex + direction + filteredOptions.length) %
-          filteredOptions.length
-        );
+        if (currentIndex < 0) return direction > 0 ? 0 : filteredOptions.length - 1;
+        return (currentIndex + direction + filteredOptions.length) % filteredOptions.length;
       });
       return;
     }
-
-    if (
-      event.key === "Enter" &&
-      open &&
-      activeIndex >= 0 &&
-      filteredOptions[activeIndex]
-    ) {
+    if (event.key === "Enter" && open && activeIndex >= 0 && filteredOptions[activeIndex]) {
       event.preventDefault();
       selectOption(filteredOptions[activeIndex]);
     }
@@ -174,10 +169,7 @@ export default function TemplateVariableCombobox({
 
   return (
     <div className={styles.field} ref={containerRef}>
-      <label className={styles.label} htmlFor={inputId}>
-        {label}
-      </label>
-
+      <label className={styles.label} htmlFor={inputId}>{label}</label>
       <div className={`${styles.control} ${open ? styles.controlOpen : ""}`}>
         <Search size={16} className={styles.searchIcon} aria-hidden="true" />
         <input
@@ -189,30 +181,15 @@ export default function TemplateVariableCombobox({
           aria-expanded={open}
           aria-controls={listboxId}
           aria-describedby={descriptionId}
-          aria-activedescendant={
-            open && activeIndex >= 0 && activeIndex < filteredOptions.length
-              ? `${listboxId}-option-${activeIndex}`
-              : undefined
-          }
+          aria-activedescendant={open && activeIndex >= 0 && activeIndex < filteredOptions.length ? `${listboxId}-option-${activeIndex}` : undefined}
           autoComplete="off"
           spellCheck={false}
           value={open ? query : value}
           placeholder="Selecione uma variável"
           className={styles.input}
-          onFocus={(event) => {
-            openList();
-            event.currentTarget.select();
-          }}
-          onClick={(event) => {
-            if (!open) openList();
-            if (!searching) event.currentTarget.select();
-          }}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setSearching(true);
-            setOpen(true);
-            setActiveIndex(0);
-          }}
+          onFocus={(event) => { openList(); event.currentTarget.select(); }}
+          onClick={(event) => { if (!open) openList(); if (!searching) event.currentTarget.select(); }}
+          onChange={(event) => { setQuery(event.target.value); setSearching(true); setOpen(true); setActiveIndex(0); }}
           onKeyDown={handleKeyDown}
         />
         <button
@@ -222,33 +199,19 @@ export default function TemplateVariableCombobox({
           aria-expanded={open}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
-            if (open) {
-              closeList();
-            } else {
-              openList();
-              inputRef.current?.focus();
-            }
+            if (open) closeList();
+            else { openList(); inputRef.current?.focus(); }
           }}
         >
-          <ChevronDown
-            size={18}
-            aria-hidden="true"
-            className={open ? styles.chevronOpen : ""}
-          />
+          <ChevronDown size={18} aria-hidden="true" className={open ? styles.chevronOpen : ""} />
         </button>
       </div>
 
       {open ? (
-        <div
-          id={listboxId}
-          role="listbox"
-          aria-label={`Opções para ${label}`}
-          className={styles.menu}
-        >
+        <div id={listboxId} role="listbox" aria-label={`Opções para ${label}`} className={styles.menu}>
           {filteredOptions.map((option, index) => {
             const selected = option.key === value;
             const active = index === activeIndex;
-
             return (
               <button
                 id={`${listboxId}-option-${index}`}
@@ -256,45 +219,26 @@ export default function TemplateVariableCombobox({
                 type="button"
                 role="option"
                 aria-selected={selected}
-                className={`${styles.option} ${
-                  active ? styles.optionActive : ""
-                } ${selected ? styles.optionSelected : ""}`}
+                className={`${styles.option} ${active ? styles.optionActive : ""} ${selected ? styles.optionSelected : ""}`}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => selectOption(option)}
               >
                 <span className={styles.optionHeader}>
                   <strong>{`{{${option.key}}}`}</strong>
                   <span className={styles.category}>{option.category}</span>
-                  {selected ? (
-                    <Check
-                      size={16}
-                      strokeWidth={2.5}
-                      className={styles.check}
-                      aria-hidden="true"
-                    />
-                  ) : null}
+                  {selected ? <Check size={16} strokeWidth={2.5} className={styles.check} aria-hidden="true" /> : null}
                 </span>
                 <small>{option.description}</small>
               </button>
             );
           })}
-
-          {filteredOptions.length === 0 ? (
-            <div className={styles.empty}>Nenhuma variável encontrada.</div>
-          ) : null}
-
-          {loading ? (
-            <div className={styles.loading}>
-              Carregando variáveis personalizadas...
-            </div>
-          ) : null}
+          {filteredOptions.length === 0 ? <div className={styles.empty}>Nenhuma variável encontrada.</div> : null}
+          {loading ? <div className={styles.loading}>Carregando variáveis personalizadas...</div> : null}
         </div>
       ) : null}
 
       <p id={descriptionId} className={styles.description}>
-        {selectedOption
-          ? selectedOption.description
-          : "Selecione uma variável disponível para este campo."}
+        {selectedOption ? selectedOption.description : "Selecione uma variável disponível para este campo."}
       </p>
     </div>
   );

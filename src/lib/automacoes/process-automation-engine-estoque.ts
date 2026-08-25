@@ -72,12 +72,8 @@ function texto(valor: unknown) {
 }
 
 function booleano(valor: unknown, padrao = false) {
-  if (valor === true || valor === "true" || valor === 1 || valor === "1") {
-    return true;
-  }
-  if (valor === false || valor === "false" || valor === 0 || valor === "0") {
-    return false;
-  }
+  if (valor === true || valor === "true" || valor === 1 || valor === "1") return true;
+  if (valor === false || valor === "false" || valor === 0 || valor === "0") return false;
   return padrao;
 }
 
@@ -104,17 +100,14 @@ function modoPesquisaDoConfig(config: Record<string, unknown>) {
 
 function depositosDoConfig(config: Record<string, unknown>) {
   const modo = texto(config.deposito_modo || "todos").toLowerCase();
-
   if (modo === "especifico") {
     const id = texto(config.deposito_id);
     return id ? [id] : [];
   }
-
   if (modo === "selecionados") {
     const ids = Array.isArray(config.deposito_ids) ? config.deposito_ids : [];
     return Array.from(new Set(ids.map(texto).filter(Boolean))).slice(0, 50);
   }
-
   return [];
 }
 
@@ -130,14 +123,8 @@ async function carregarExecucao(params: {
     .eq("empresa_id", params.empresaId)
     .eq("fluxo_id", params.fluxoId)
     .maybeSingle();
-
-  if (error) {
-    throw new Error(`Erro ao carregar execução para consulta de estoque: ${error.message}`);
-  }
-  if (!data) {
-    throw new Error("Execução da automação não encontrada para consulta de estoque.");
-  }
-
+  if (error) throw new Error(`Erro ao carregar execução para consulta de estoque: ${error.message}`);
+  if (!data) throw new Error("Execução da automação não encontrada para consulta de estoque.");
   return data as ExecucaoEstoque;
 }
 
@@ -149,7 +136,6 @@ async function resolverVariavel(params: {
   const metadata = objeto(params.execucao.metadata_json);
   const variaveis = objeto(metadata.variaveis);
   const valorMetadata = variaveis[params.chave];
-
   if (valorMetadata !== null && valorMetadata !== undefined && texto(valorMetadata)) {
     return texto(valorMetadata);
   }
@@ -161,10 +147,7 @@ async function resolverVariavel(params: {
     .eq("execucao_id", params.execucao.id)
     .eq("chave", params.chave)
     .maybeSingle();
-
-  if (variavelError) {
-    throw new Error(`Erro ao ler variável da execução: ${variavelError.message}`);
-  }
+  if (variavelError) throw new Error(`Erro ao ler variável da execução: ${variavelError.message}`);
   if (texto(variavelExecucao?.valor)) return texto(variavelExecucao?.valor);
 
   const { data: variavelGlobal, error: globalError } = await supabaseAdmin
@@ -177,11 +160,7 @@ async function resolverVariavel(params: {
     .eq("metadata_json->>tipo", "global_empresa")
     .eq("metadata_json->>ativo", "true")
     .maybeSingle();
-
-  if (globalError) {
-    throw new Error(`Erro ao ler variável global da empresa: ${globalError.message}`);
-  }
-
+  if (globalError) throw new Error(`Erro ao ler variável global da empresa: ${globalError.message}`);
   return texto(variavelGlobal?.valor);
 }
 
@@ -194,18 +173,11 @@ function ultimaConsultaDoMetadata(metadata: Record<string, unknown>) {
       indice: Number(item.indice),
       produto_id: texto(item.produto_id),
       nome: texto(item.nome),
-      preco:
-        item.preco === null || item.preco === undefined
-          ? null
-          : Number(item.preco),
+      preco: item.preco === null || item.preco === undefined ? null : Number(item.preco),
       preco_formatado: texto(item.preco_formatado),
     }))
-    .filter(
-      (item) =>
-        Number.isInteger(item.indice) && item.indice > 0 && Boolean(item.produto_id)
-    )
+    .filter((item) => Number.isInteger(item.indice) && item.indice > 0 && Boolean(item.produto_id))
     .slice(0, 10);
-
   return candidatos;
 }
 
@@ -213,7 +185,6 @@ function indiceEscolhido(valor: string) {
   const textoLimpo = valor.trim().toLowerCase();
   const match = textoLimpo.match(/^(?:op[cç][aã]o\s*)?(\d{1,2})$/i);
   if (!match) return null;
-
   const indice = Number(match[1]);
   return Number.isInteger(indice) && indice > 0 ? indice : null;
 }
@@ -225,50 +196,26 @@ async function resolverEntradaConsulta(params: {
   mensagemTexto?: string;
 }) {
   const origem = texto(params.config.origem_produto || "resposta_cliente").toLowerCase();
-
   if (origem === "produto_especifico") {
-    return {
-      termo: "",
-      produtoId: texto(params.config.produto_id),
-      selecaoPorIndice: false,
-    };
+    return { termo: "", produtoId: texto(params.config.produto_id), selecaoPorIndice: false };
   }
 
   const chave = normalizarChaveVariavel(
-    origem === "variavel"
-      ? params.config.variavel_produto
-      : params.config.variavel_resposta
+    origem === "variavel" ? params.config.variavel_produto : params.config.variavel_resposta
   );
   const valorVariavel = chave
-    ? await resolverVariavel({
-        empresaId: params.empresaId,
-        execucao: params.execucao,
-        chave,
-      })
+    ? await resolverVariavel({ empresaId: params.empresaId, execucao: params.execucao, chave })
     : "";
   const termo = valorVariavel || texto(params.mensagemTexto);
   const metadata = objeto(params.execucao.metadata_json);
   const indice = indiceEscolhido(termo);
 
   if (indice !== null) {
-    const candidato = ultimaConsultaDoMetadata(metadata).find(
-      (item) => item.indice === indice
-    );
-
-    if (candidato) {
-      return {
-        termo,
-        produtoId: candidato.produto_id,
-        selecaoPorIndice: true,
-      };
-    }
+    const candidato = ultimaConsultaDoMetadata(metadata).find((item) => item.indice === indice);
+    if (candidato) return { termo, produtoId: candidato.produto_id, selecaoPorIndice: true };
   }
 
-  return {
-    termo,
-    produtoId: "",
-    selecaoPorIndice: false,
-  };
+  return { termo, produtoId: "", selecaoPorIndice: false };
 }
 
 function montarCandidatos(consulta: ResultadoConsultaEstoqueProduto) {
@@ -286,13 +233,13 @@ function montarVariaveis(
   candidatos: CandidatoMetadata[]
 ) {
   const produto = consulta.produto;
+  const precos = consulta.precos;
+  const promocao = precos?.promocao;
   const embalagem = consulta.embalagem;
   const depositos = consulta.depositos;
   const depositoUnico = depositos.length === 1 ? depositos[0] : null;
   const candidatosTexto = candidatos
-    .map((item) =>
-      `${item.indice}. ${item.nome}${item.preco_formatado ? ` — ${item.preco_formatado}` : ""}`
-    )
+    .map((item) => `${item.indice}. ${item.nome}${item.preco_formatado ? ` — ${item.preco_formatado}` : ""}`)
     .join("\n");
 
   return {
@@ -302,8 +249,34 @@ function montarVariaveis(
     estoque_produto_sku: produto?.sku || "",
     estoque_produto_codigo_barras: produto?.codigo_barras || "",
     estoque_produto_nome: produto?.nome || "",
+
+    // Compatibilidade: estoque_preco continua sendo o preço efetivo do canal WhatsApp,
+    // já considerando promoção vigente. Fluxos antigos continuam funcionando.
     estoque_preco: numeroTexto(produto?.preco),
     estoque_preco_formatado: produto?.preco_formatado || "",
+    estoque_preco_base: numeroTexto(precos?.base ?? produto?.preco_base),
+    estoque_preco_base_formatado: precos?.formatados.base || produto?.preco_base_formatado || "",
+    estoque_preco_balcao: numeroTexto(precos?.balcao),
+    estoque_preco_balcao_formatado: precos?.formatados.balcao || "",
+    estoque_preco_online: numeroTexto(precos?.online),
+    estoque_preco_online_formatado: precos?.formatados.online || "",
+    estoque_preco_whatsapp: numeroTexto(precos?.whatsapp),
+    estoque_preco_whatsapp_formatado: precos?.formatados.whatsapp || "",
+    estoque_preco_promocional: numeroTexto(precos?.promocional),
+    estoque_preco_promocional_formatado: precos?.formatados.promocional || "",
+    estoque_preco_pix: numeroTexto(precos?.pix),
+    estoque_preco_pix_formatado: precos?.formatados.pix || "",
+    estoque_preco_dinheiro: numeroTexto(precos?.dinheiro),
+    estoque_preco_dinheiro_formatado: precos?.formatados.dinheiro || "",
+    estoque_preco_debito: numeroTexto(precos?.debito),
+    estoque_preco_debito_formatado: precos?.formatados.debito || "",
+    estoque_preco_credito: numeroTexto(precos?.credito),
+    estoque_preco_credito_formatado: precos?.formatados.credito || "",
+    estoque_promocao_nome: promocao?.nome || "",
+    estoque_promocao_inicio_em: promocao?.inicio_em || "",
+    estoque_promocao_fim_em: promocao?.fim_em || "",
+    estoque_promocao_canais: promocao?.canais?.join(",") || "",
+
     estoque_quantidade: numeroTexto(consulta.quantidade_disponivel),
     estoque_quantidade_fisica: numeroTexto(consulta.quantidade_fisica),
     estoque_quantidade_reservada: numeroTexto(consulta.quantidade_reservada),
@@ -318,9 +291,7 @@ function montarVariaveis(
     estoque_embalagem_fator: numeroTexto(embalagem?.fator),
     estoque_embalagem_preco: numeroTexto(embalagem?.preco),
     estoque_embalagem_preco_formatado: embalagem?.preco_formatado || "",
-    estoque_embalagem_quantidade_disponivel: numeroTexto(
-      embalagem?.quantidade_disponivel
-    ),
+    estoque_embalagem_quantidade_disponivel: numeroTexto(embalagem?.quantidade_disponivel),
     estoque_candidatos_quantidade: String(candidatos.length),
     estoque_candidatos_texto: candidatosTexto,
     estoque_candidatos_json: JSON.stringify(candidatos),
@@ -353,39 +324,26 @@ async function persistirResultado(params: {
     const { error } = await supabaseAdmin
       .from("automacao_variaveis")
       .upsert(registros, { onConflict: "execucao_id,chave" });
-
-    if (error) {
-      throw new Error(`Erro ao salvar variáveis da consulta de estoque: ${error.message}`);
-    }
+    if (error) throw new Error(`Erro ao salvar variáveis da consulta de estoque: ${error.message}`);
   }
 
   const metadataAtual = objeto(params.execucao.metadata_json);
   const consultasAtuais = objeto(metadataAtual.estoque_consultas);
   const variaveisAtuais = objeto(metadataAtual.variaveis);
-
   const { error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
     .update({
       metadata_json: {
         ...metadataAtual,
-        variaveis: {
-          ...variaveisAtuais,
-          ...params.variaveis,
-        },
-        estoque_consultas: {
-          ...consultasAtuais,
-          [params.noId]: params.consultaMetadata,
-        },
+        variaveis: { ...variaveisAtuais, ...params.variaveis },
+        estoque_consultas: { ...consultasAtuais, [params.noId]: params.consultaMetadata },
         estoque_ultima_consulta: params.consultaMetadata,
       },
       updated_at: agora,
     })
     .eq("id", params.execucao.id)
     .eq("empresa_id", params.empresaId);
-
-  if (execucaoError) {
-    throw new Error(`Erro ao salvar contexto da consulta de estoque: ${execucaoError.message}`);
-  }
+  if (execucaoError) throw new Error(`Erro ao salvar contexto da consulta de estoque: ${execucaoError.message}`);
 }
 
 export async function executarConsultaEstoqueAutomacao(params: {
@@ -405,10 +363,7 @@ export async function executarConsultaEstoqueAutomacao(params: {
   });
   const modo = modoPesquisaDoConfig(config);
   const depositoIds = depositosDoConfig(config);
-  const limiteCandidatos = Math.min(
-    10,
-    Math.max(1, Number(config.limite_candidatos || 5) || 5)
-  );
+  const limiteCandidatos = Math.min(10, Math.max(1, Number(config.limite_candidatos || 5) || 5));
 
   const consulta = await consultarEstoqueProduto({
     empresaId: params.empresaId,
@@ -419,7 +374,6 @@ export async function executarConsultaEstoqueAutomacao(params: {
     usarEmbalagemVenda: booleano(config.usar_embalagem_venda, true),
     limiteCandidatos,
   });
-
   if (!RESULTADOS_ESTOQUE.has(consulta.resultado)) {
     throw new Error("Resultado inválido retornado pela consulta de estoque.");
   }
