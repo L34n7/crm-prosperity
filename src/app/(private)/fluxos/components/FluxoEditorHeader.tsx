@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Fluxo } from "../types";
 import { TIPO_NO_PERGUNTA_LIVRE_IA } from "../constants";
+import { TIPO_NO_CONSULTAR_ESTOQUE } from "../consultar-estoque-editor";
 import styles from "../fluxos.module.css";
 
 type FluxoEditorHeaderProps = {
@@ -201,6 +202,14 @@ export default function FluxoEditorHeader({
                         onClick={() => adicionarNo("capturar_resposta")}
                       >
                         + Capturar resposta
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.headerDropdownItem}
+                        onClick={() => adicionarNo(TIPO_NO_CONSULTAR_ESTOQUE)}
+                      >
+                        + Consultar estoque
                       </button>
 
                       <button

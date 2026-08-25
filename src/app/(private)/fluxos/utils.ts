@@ -3,6 +3,10 @@ import {
   LIMITE_DELAY_SEGUNDOS,
   TIPO_NO_PERGUNTA_LIVRE_IA,
 } from "./constants";
+import {
+  SAIDAS_CONSULTA_ESTOQUE,
+  TIPO_NO_CONSULTAR_ESTOQUE,
+} from "./consultar-estoque-editor";
 
 export type OpcaoRespostaConexao = {
   valor: string;
@@ -25,6 +29,7 @@ export function labelTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
+  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";
   if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";
   if (tipo === "agenda_escolher_horario") return "Escolher horário";
   if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
@@ -50,6 +55,7 @@ export function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "avaliacao") return "Avaliação";
   if (tipo === "capturar_resposta") return "Capturar resposta";
   if (tipo === "agendar_disparo") return "Agendar disparo";
+  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";
   if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";
   if (tipo === "agenda_escolher_horario") return "Escolher horário";
   if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
@@ -134,6 +140,13 @@ export function opcoesRespostaDoNo(
     opcoes?: Array<Record<string, unknown>>;
     botoes?: Array<Record<string, unknown>>;
   };
+
+  if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) {
+    return SAIDAS_CONSULTA_ESTOQUE.map((saida) => ({
+      valor: saida.valor,
+      titulo: saida.titulo,
+    }));
+  }
 
   if (tipoNo === "pergunta_opcoes") {
     return Array.isArray(configuracao.opcoes)

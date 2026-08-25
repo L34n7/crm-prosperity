@@ -115,6 +115,25 @@ export function validarNodeConsultarEstoque(node: Node, edges: Edge[]) {
     return `O bloco "${titulo}" precisa ter exatamente ${SAIDAS_CONSULTA_ESTOQUE.length} conexões de saída.`;
   }
 
+  for (const edge of conexoesSaida) {
+    const condicao =
+      (edge.data as EdgeDataConexao | undefined)?.condicao_json || {};
+    const tipoCondicao = String(condicao.tipo || "").trim();
+    const valorCondicao = String(condicao.valor || "").trim();
+    const saida = saidaConsultaEstoquePorValor(valorCondicao);
+
+    if (tipoCondicao !== "resposta_igual" || !saida) {
+      return `As conexões do bloco "${titulo}" precisam usar as saídas padrão da consulta de estoque.`;
+    }
+
+    if (
+      edge.sourceHandle &&
+      String(edge.sourceHandle) !== saida.valor
+    ) {
+      return `A conexão "${saida.titulo}" do bloco "${titulo}" está ligada ao conector incorreto.`;
+    }
+  }
+
   const valoresSaida = conexoesSaida.map((edge) =>
     String(
       ((edge.data as EdgeDataConexao | undefined)?.condicao_json || {}).valor ||

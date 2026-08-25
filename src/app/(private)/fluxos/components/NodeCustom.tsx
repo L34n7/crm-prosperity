@@ -7,6 +7,10 @@ import {
   AVISO_BLOCO_TEMPLATE_WABA_AGENDAR_DISPARO,
   TIPO_NO_PERGUNTA_LIVRE_IA,
 } from "../constants";
+import {
+  SAIDAS_CONSULTA_ESTOQUE,
+  TIPO_NO_CONSULTAR_ESTOQUE,
+} from "../consultar-estoque-editor";
 import { labelTipoNo, tituloVisivelCard } from "../utils";
 
 function corTipoNo(tipo: string) {
@@ -25,6 +29,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "avaliacao") return styles.nodeAvaliacao;
   if (tipo === "capturar_resposta") return styles.nodeCaptura;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
+  if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return styles.nodePadrao;
   if (tipo === "agenda_buscar_agendamento") return styles.nodeAgendaBuscar;
   if (tipo === "agenda_escolher_horario") return styles.nodeAgendaEscolher;
   if (tipo === "agenda_criar_agendamento") return styles.nodeAgendaCriar;
@@ -38,6 +43,7 @@ export default function NodeCustom({ data, dragging }: any) {
   const temAlertaConexaoErro = data?.arquivo_ia_sem_conexao_erro === true;
   const temAlertaTemplateWaba =
     data?.agendar_disparo_template_waba_alerta === true;
+  const consultaEstoque = data?.tipo_no === TIPO_NO_CONSULTAR_ESTOQUE;
 
   return (
     <div
@@ -70,6 +76,15 @@ export default function NodeCustom({ data, dragging }: any) {
         <div className={styles.nodeTitleRow}>
           <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>
 
+          {consultaEstoque && (
+            <span
+              title="Disponível · Sem estoque · Não encontrado · Vários encontrados"
+              style={{ fontSize: 9, opacity: 0.72, whiteSpace: "nowrap" }}
+            >
+              4 saídas
+            </span>
+          )}
+
           {temAlertaConexaoErro && (
             <span
               className={`${styles.infoAlertIcon} ${styles.infoAlertIconNode}`}
@@ -96,14 +111,33 @@ export default function NodeCustom({ data, dragging }: any) {
         </div>
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        className={styles.nodeHandle}
-        isConnectable={true}
-        onClick={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-      />
+      {consultaEstoque ? (
+        <>
+          {SAIDAS_CONSULTA_ESTOQUE.map((saida, index) => (
+            <Handle
+              key={saida.valor}
+              id={saida.valor}
+              type="source"
+              position={Position.Right}
+              className={styles.nodeHandle}
+              isConnectable={true}
+              title={saida.titulo}
+              style={{ top: `${22 + index * 19}%` }}
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            />
+          ))}
+        </>
+      ) : (
+        <Handle
+          type="source"
+          position={Position.Right}
+          className={styles.nodeHandle}
+          isConnectable={true}
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        />
+      )}
     </div>
   );
 }

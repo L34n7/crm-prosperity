@@ -1,7 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { TIPO_NO_PERGUNTA_LIVRE_IA, VARIAVEIS_FIXAS_CONTATO_HELP } from "../../constants";
+import {
+  TIPO_NO_PERGUNTA_LIVRE_IA,
+  VARIAVEIS_FIXAS_CONTATO_HELP,
+} from "../../constants";
+import { TIPO_NO_CONSULTAR_ESTOQUE } from "../../consultar-estoque-editor";
 import styles from "../../fluxos.module.css";
 
 type NodeConfigPanelProps = {
@@ -52,9 +56,15 @@ function labelMensagem(tipoNode: string) {
   if (tipoNode === "agenda_buscar_agendamento") return "Mensagem para 1 agendamento";
   if (tipoNode === "agenda_escolher_horario") return "Mensagem para pedir o dia";
   if (tipoNode === "agenda_criar_agendamento") return "Mensagem depois de criar";
-  if (tipoNode === "agenda_remarcar_agendamento") return "Mensagem após remarcar com sucesso";
-  if (tipoNode === "agenda_cancelar_agendamento") return "Mensagem depois de cancelar";
-  if (tipoNode === "interpretar_arquivo_ia") return "Mensagem solicitando o arquivo";
+  if (tipoNode === "agenda_remarcar_agendamento") {
+    return "Mensagem após remarcar com sucesso";
+  }
+  if (tipoNode === "agenda_cancelar_agendamento") {
+    return "Mensagem depois de cancelar";
+  }
+  if (tipoNode === "interpretar_arquivo_ia") {
+    return "Mensagem solicitando o arquivo";
+  }
   return "Mensagem";
 }
 
@@ -90,12 +100,23 @@ export default function NodeConfigPanel({
             <option value="enviar_arquivo">Arquivo</option>
             <option value="enviar_botoes">Pergunta com Botões</option>
             <option value="botao_redirect">Botão redirect</option>
+            <option value={TIPO_NO_CONSULTAR_ESTOQUE}>Consultar estoque</option>
             <option value="agendar_disparo">Agendar disparo</option>
-            <option value="agenda_buscar_agendamento">Agenda: Buscar agendamento</option>
-            <option value="agenda_escolher_horario">Agenda: Escolher horário</option>
-            <option value="agenda_criar_agendamento">Agenda: Criar agendamento</option>
-            <option value="agenda_remarcar_agendamento">Agenda: Remarcar agendamento</option>
-            <option value="agenda_cancelar_agendamento">Agenda: Cancelar agendamento</option>
+            <option value="agenda_buscar_agendamento">
+              Agenda: Buscar agendamento
+            </option>
+            <option value="agenda_escolher_horario">
+              Agenda: Escolher horário
+            </option>
+            <option value="agenda_criar_agendamento">
+              Agenda: Criar agendamento
+            </option>
+            <option value="agenda_remarcar_agendamento">
+              Agenda: Remarcar agendamento
+            </option>
+            <option value="agenda_cancelar_agendamento">
+              Agenda: Cancelar agendamento
+            </option>
             <option value="avaliacao">Avaliação</option>
             <option value="interpretar_arquivo_ia">Interpretar arquivo IA</option>
           </select>
