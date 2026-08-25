@@ -124,4 +124,204 @@
     width: 100%;
     flex-basis: auto;
   }
+
+  /* Padronização dos modais do Estoque em telas pequenas. */
+  .estoque-responsive-scope div:has(> [role="dialog"]) {
+    padding: 0 !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 96dvh !important;
+    margin: 0 !important;
+    border-radius: 18px 18px 0 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > header {
+    position: sticky !important;
+    top: 0;
+    z-index: 5;
+    min-width: 0;
+    padding: 14px 16px !important;
+    gap: 10px !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > header > div {
+    min-width: 0;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > header h2 {
+    max-width: 100%;
+    margin-top: 5px !important;
+    font-size: clamp(19px, 5.4vw, 23px) !important;
+    line-height: 1.15 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > header p {
+    max-width: 100%;
+    margin-top: 4px !important;
+    font-size: 12.5px !important;
+    line-height: 1.4 !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > header button {
+    flex: 0 0 38px !important;
+    width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0 !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > div,
+  .estoque-responsive-scope [role="dialog"] > form,
+  .estoque-responsive-scope [role="dialog"] section,
+  .estoque-responsive-scope [role="dialog"] article {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > div:not(:has(> header)),
+  .estoque-responsive-scope [role="dialog"] > form {
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="formGrid"],
+  .estoque-responsive-scope [role="dialog"] [class*="choiceGrid"],
+  .estoque-responsive-scope [role="dialog"] [class*="reviewGrid"],
+  .estoque-responsive-scope [role="dialog"] [class*="checkGrid"],
+  .estoque-responsive-scope [role="dialog"] [class*="summaryGrid"],
+  .estoque-responsive-scope [role="dialog"] [class*="xmlSummary"],
+  .estoque-responsive-scope [role="dialog"] [class*="line"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="wide"],
+  .estoque-responsive-scope [role="dialog"] [class*="full"] {
+    grid-column: auto !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] input,
+  .estoque-responsive-scope [role="dialog"] select,
+  .estoque-responsive-scope [role="dialog"] textarea {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    font-size: 16px !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="withButton"],
+  .estoque-responsive-scope [role="dialog"] [class*="inputRow"],
+  .estoque-responsive-scope [role="dialog"] [class*="inlineClassification"] {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="steps"],
+  .estoque-responsive-scope [role="dialog"] [class*="segmented"],
+  .estoque-responsive-scope [role="dialog"] [class*="tabs"] {
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="steps"]::-webkit-scrollbar,
+  .estoque-responsive-scope [role="dialog"] [class*="segmented"]::-webkit-scrollbar,
+  .estoque-responsive-scope [role="dialog"] [class*="tabs"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="table"] {
+    max-width: 100%;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="tableWrap"],
+  .estoque-responsive-scope [role="dialog"] [class*="table"]:has(> [class*="tableHead"]) {
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+  }
+
+  .estoque-responsive-scope [role="dialog"] video {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 42dvh !important;
+    object-fit: cover;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > footer,
+  .estoque-responsive-scope [role="dialog"] > form > footer,
+  .estoque-responsive-scope [role="dialog"] [class*="modalFooter"],
+  .estoque-responsive-scope [role="dialog"] [class*="footer"] {
+    position: sticky !important;
+    bottom: 0;
+    z-index: 6;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 !important;
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom)) !important;
+    box-sizing: border-box;
+    background: var(--crm-surface, #fff) !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > footer,
+  .estoque-responsive-scope [role="dialog"] > form > footer,
+  .estoque-responsive-scope [role="dialog"] [class*="modalFooter"] {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > footer button,
+  .estoque-responsive-scope [role="dialog"] > form > footer button,
+  .estoque-responsive-scope [role="dialog"] [class*="modalFooter"] button,
+  .estoque-responsive-scope [role="dialog"] [class*="footer"] button {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+  }
+}
+
+@media (max-width: 440px) {
+  .estoque-responsive-scope [role="dialog"] {
+    max-height: 100dvh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > header {
+    padding: 12px 13px !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="card"],
+  .estoque-responsive-scope [role="dialog"] [class*="modalBody"],
+  .estoque-responsive-scope [role="dialog"] [class*="body"] {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="withButton"],
+  .estoque-responsive-scope [role="dialog"] [class*="inputRow"] {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] [class*="withButton"] button,
+  .estoque-responsive-scope [role="dialog"] [class*="inputRow"] button {
+    width: 100% !important;
+  }
+
+  .estoque-responsive-scope [role="dialog"] > footer,
+  .estoque-responsive-scope [role="dialog"] > form > footer,
+  .estoque-responsive-scope [role="dialog"] [class*="modalFooter"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }
