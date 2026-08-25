@@ -854,6 +854,15 @@
   );
 }
 
+.nodeEstoque {
+  border-color: #53eac7;
+  background: linear-gradient(
+    135deg,
+    #9dffe2 20%,
+    #308f85 100%
+  );
+}
+
 .nodePadrao {
   border-color: var(--crm-border);
   background: var(--crm-surface);

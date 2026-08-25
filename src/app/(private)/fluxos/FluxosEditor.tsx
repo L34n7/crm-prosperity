@@ -3696,8 +3696,7 @@ async function aplicarEdicaoNoInterno() {
         posicao_y: node.position.y,
         configuracao_json,
         delay_segundos:
-          tipoFinal === "inicio" ||
-          tipoFinal === TIPO_NO_CONSULTAR_ESTOQUE
+          tipoFinal === "inicio"
             ? null
             : normalizarDelaySegundos(delayNode),
       });
