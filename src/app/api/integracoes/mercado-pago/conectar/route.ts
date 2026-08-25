@@ -29,7 +29,10 @@ export async function GET() {
   }
 
   try {
-    const state = gerarStateOAuthMercadoPago();
+    const state = gerarStateOAuthMercadoPago({
+      empresaId: resultadoUsuario.usuario.empresa_id,
+      usuarioId: resultadoUsuario.usuario.id,
+    });
     const { codeVerifier, codeChallenge } = gerarPkceOAuthMercadoPago();
     const authorizationUrl = criarUrlAutorizacaoMercadoPago({
       state,
