@@ -23,6 +23,11 @@ function assinaturaEmDia(empresa: Record<string, any> | null) {
   return Number.isFinite(vencimento) && vencimento > Date.now();
 }
 
+function normalizarPlanoRelacao(plano: any) {
+  if (Array.isArray(plano)) return plano[0] ?? null;
+  return plano ?? null;
+}
+
 export async function GET(request: NextRequest) {
   const auth = await autenticarProsperityApi(request, "pagamentos:read");
   if (!auth.ok) return auth.response;
@@ -75,7 +80,7 @@ export async function GET(request: NextRequest) {
     const empresasResult = empresaIds.length
       ? await prosperityApiSupabase
           .from("empresas")
-          .select("id,nome_fantasia,razao_social,assinatura_status,assinatura_inicio_em,assinatura_vencimento_em,assinatura_bloqueio_em,assinatura_renovada_em,assinatura_gateway,assinatura_referencia")
+          .select("id,nome_fantasia,razao_social,plano_id,assinatura_status,assinatura_inicio_em,assinatura_vencimento_em,assinatura_bloqueio_em,assinatura_renovada_em,assinatura_gateway,assinatura_referencia,planos(id,nome,slug)")
           .in("id", empresaIds)
       : { data: [], error: null };
     if (empresasResult.error) throw new Error(empresasResult.error.message);
@@ -97,6 +102,7 @@ export async function GET(request: NextRequest) {
       const lead = item.lead_id ? leads.get(String(item.lead_id)) || null : null;
       const empresaId = item.empresa_id || lead?.empresa_id || null;
       const empresa = empresaId ? empresas.get(String(empresaId)) || null : null;
+      const plano = normalizarPlanoRelacao(empresa?.planos);
       const payload = objetoSeguro(item.payload);
       const transaction = objetoSeguro(payload.transaction);
       const pix = objetoSeguro(transaction.pix);
@@ -129,6 +135,7 @@ export async function GET(request: NextRequest) {
         reembolsado_em: item.refunded_at,
         checkout_url: textoOuNull(transaction.checkout_url) || textoOuNull(payload.checkout_url) || textoOuNull(transaction.url),
         pix_url: textoOuNull(pix.url),
+        pix_copia_cola: textoOuNull(pix.code),
         cliente: {
           nome: lead?.nome || item.customer_nome,
           email: lead?.email || item.customer_email,
@@ -148,6 +155,9 @@ export async function GET(request: NextRequest) {
               gateway: empresa.assinatura_gateway,
               referencia: empresa.assinatura_referencia,
             }
+          : null,
+        plano: plano
+          ? { id: plano.id, nome: plano.nome, slug: plano.slug }
           : null,
         empresa: empresa
           ? { id: empresa.id, nome: empresa.nome_fantasia || empresa.razao_social }
