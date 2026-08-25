@@ -53,6 +53,14 @@ type Props = {
 };
 
 const VARIAVEIS_PADRAO = ["nome_contato", "campanha", "numero_contato"];
+const ACOES_DISPONIVEIS_BUILDER = [
+  ...acoesDisponiveis,
+  { value: "aguardar", label: "Aguardar" },
+];
+
+function acaoLabelBuilder(tipo: string) {
+  return tipo === "aguardar" ? "Aguardar" : acaoLabel(tipo);
+}
 
 function AcaoIcon({ tipo }: { tipo: string }) {
   if (tipo === "fluxo.iniciar") return <Workflow size={18} />;
@@ -63,6 +71,7 @@ function AcaoIcon({ tipo }: { tipo: string }) {
   if (tipo === "conversa.transferir_setor") return <GitBranch size={18} />;
   if (tipo === "agenda.atualizar_status") return <CalendarClock size={18} />;
   if (tipo === "integracao.consultar_api") return <Database size={18} />;
+  if (tipo === "aguardar") return <CalendarClock size={18} />;
   return <Zap size={18} />;
 }
 
@@ -230,7 +239,7 @@ export default function AutomationBuilderModal({
     () =>
       `${gatilhoLabel(form.gatilho)} → ${
         form.condicoes.length ? `${form.condicoes.length} condição(ões)` : "sem condição"
-      } → ${form.acoes.map((item) => acaoLabel(item.tipo_acao)).join(" + ")}`,
+      } → ${form.acoes.map((item) => acaoLabelBuilder(item.tipo_acao)).join(" + ")}`,
     [form.acoes, form.condicoes.length, form.gatilho],
   );
 
@@ -434,6 +443,9 @@ export default function AutomationBuilderModal({
   }
 
   function configuracaoAoSelecionarAcao(tipo: string) {
+    if (tipo === "aguardar") {
+      return { quantidade: 5, unidade: "minutos" };
+    }
     const base = configuracaoPadraoAcao(tipo);
     if (tipo === "whatsapp.enviar_template" && integracaoAutomacaoIds.length === 1) {
       return { ...base, integracao_whatsapp_id: integracaoAutomacaoIds[0] };
@@ -453,6 +465,41 @@ export default function AutomationBuilderModal({
 
   function renderConfigAcao(acao: Acao, index: number) {
     const config = acao.configuracao_json;
+
+    if (acao.tipo_acao === "aguardar") {
+      const quantidade = Math.max(1, Number(config.quantidade || 5));
+      const unidadeConfigurada = String(config.unidade || "minutos");
+      const unidade = ["minutos", "horas", "dias"].includes(unidadeConfigurada)
+        ? unidadeConfigurada
+        : "minutos";
+
+      return (
+        <div className={styles.scheduleGrid} style={{ marginTop: 8 }}>
+          <label className={styles.formField}>
+            <span>Tempo de espera</span>
+            <input
+              type="number"
+              min="1"
+              value={quantidade}
+              onChange={(event) =>
+                configAcao(index, "quantidade", Math.max(1, Number(event.target.value || 1)))
+              }
+            />
+          </label>
+          <label className={styles.formField}>
+            <span>Unidade</span>
+            <select
+              value={unidade}
+              onChange={(event) => configAcao(index, "unidade", event.target.value)}
+            >
+              <option value="minutos">Minutos</option>
+              <option value="horas">Horas</option>
+              <option value="dias">Dias</option>
+            </select>
+          </label>
+        </div>
+      );
+    }
 
     if (acao.tipo_acao === "fluxo.iniciar") {
       return (
@@ -929,7 +976,7 @@ export default function AutomationBuilderModal({
           {etapa === 4 ? (
             <div className={styles.stepContent}>
               <div className={styles.stepHeading}><span>ETAPA 4 DE 4</span><h3>O que o CRM deve fazer?</h3><p>Combine uma ou mais ações. A ordem será preservada pelo motor.</p></div>
-              <div className={styles.reviewGrid}>{form.acoes.map((acao, index) => <div key={`${acao.tipo_acao}-${index}`}><span>AÇÃO {index + 1}</span><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><AcaoIcon tipo={acao.tipo_acao} /><strong>{acaoLabel(acao.tipo_acao)}</strong></div><label className={styles.formField}><span>Tipo de ação</span><select value={acao.tipo_acao} onChange={(event) => atualizarAcao(index, { tipo_acao: event.target.value, configuracao_json: configuracaoAoSelecionarAcao(event.target.value) })}>{acoesDisponiveis.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>{renderConfigAcao(acao, index)}<button className={styles.ghostButton} style={{ marginTop: 10 }} onClick={() => removerAcao(index)} disabled={form.acoes.length === 1}><Trash2 size={15} /> Remover</button></div>)}</div>
+              <div className={styles.reviewGrid}>{form.acoes.map((acao, index) => <div key={`${acao.tipo_acao}-${index}`}><span>AÇÃO {index + 1}</span><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><AcaoIcon tipo={acao.tipo_acao} /><strong>{acaoLabelBuilder(acao.tipo_acao)}</strong></div><label className={styles.formField}><span>Tipo de ação</span><select value={acao.tipo_acao} onChange={(event) => atualizarAcao(index, { tipo_acao: event.target.value, configuracao_json: configuracaoAoSelecionarAcao(event.target.value) })}>{ACOES_DISPONIVEIS_BUILDER.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>{renderConfigAcao(acao, index)}<button className={styles.ghostButton} style={{ marginTop: 10 }} onClick={() => removerAcao(index)} disabled={form.acoes.length === 1}><Trash2 size={15} /> Remover</button></div>)}</div>
               <button className={styles.secondaryButton} style={{ marginTop: 15 }} onClick={adicionarAcao}><Plus size={16} /> Adicionar ação</button>
               <div className={styles.scheduleSummary}><Zap size={19} /><div><b>Resumo</b><p>{resumo}.</p></div></div>
               {alertaDisparosMultiIntegracao ? (
