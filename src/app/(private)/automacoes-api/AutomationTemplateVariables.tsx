@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
+import { CRM_PROSPERITY_SISTEMA_MAPEADO } from "@/lib/integracoes/sistemas-mapeados";
 import disparoStyles from "../disparos-whatsapp/disparos-whatsapp.module.css";
 
 type VariavelPersonalizada = {
@@ -22,8 +23,9 @@ type VariavelPersonalizada = {
 
 type OpcaoVariavelTemplate = {
   chave: string;
+  rotulo?: string;
   descricao: string;
-  categoria: "Fixa" | "Personalizada";
+  categoria: "Evento" | "Fixa" | "Personalizada";
 };
 
 type Props = {
@@ -91,6 +93,30 @@ const VARIAVEIS_FIXAS_SISTEMA = [
   },
 ];
 
+const VARIAVEIS_EVENTO = (() => {
+  const chavesAdicionadas = new Set<string>();
+  const opcoes: OpcaoVariavelTemplate[] = [];
+
+  for (const recurso of CRM_PROSPERITY_SISTEMA_MAPEADO.recursos) {
+    for (const campo of recurso.campos) {
+      if (campo.disponivel_como_variavel !== true) continue;
+
+      const chaveEvento = String(campo.chave || "").trim();
+      if (!chaveEvento || chavesAdicionadas.has(chaveEvento)) continue;
+
+      chavesAdicionadas.add(chaveEvento);
+      opcoes.push({
+        chave: `evento:${chaveEvento}`,
+        rotulo: chaveEvento,
+        descricao: `${campo.nome} · ${recurso.nome}. ${campo.descricao}`,
+        categoria: "Evento",
+      });
+    }
+  }
+
+  return opcoes;
+})();
+
 function normalizarEntradaVariavelTemplate(valor: string) {
   return String(valor || "")
     .replace(/[{}]/g, "")
@@ -147,7 +173,7 @@ function SeletorVariavelTemplate({
 
     return opcoes.filter((opcao) => {
       const conteudo = normalizarBuscaVariavelTemplate(
-        `${opcao.chave} ${opcao.descricao} ${opcao.categoria}`,
+        `${opcao.rotulo || ""} ${opcao.chave} ${opcao.descricao} ${opcao.categoria}`,
       );
       return conteudo.includes(termo);
     });
@@ -164,10 +190,11 @@ function SeletorVariavelTemplate({
     const indiceSelecionado = opcoes.findIndex(
       (opcao) => opcao.chave === value,
     );
+    const selecionada = indiceSelecionado >= 0 ? opcoes[indiceSelecionado] : null;
 
     setAberto(true);
     setBuscando(false);
-    setBusca(value);
+    setBusca(selecionada?.rotulo || value);
     setIndiceAtivo(
       indiceSelecionado >= 0 ? indiceSelecionado : opcoes.length > 0 ? 0 : -1,
     );
@@ -205,7 +232,7 @@ function SeletorVariavelTemplate({
 
   function selecionarOpcao(opcao: OpcaoVariavelTemplate) {
     onChange(opcao.chave);
-    setBusca(opcao.chave);
+    setBusca(opcao.rotulo || opcao.chave);
     setBuscando(false);
     setAberto(false);
     setIndiceAtivo(-1);
@@ -302,7 +329,7 @@ function SeletorVariavelTemplate({
           }
           autoComplete="off"
           spellCheck={false}
-          value={aberto ? busca : value}
+          value={aberto ? busca : opcaoSelecionada?.rotulo || value}
           placeholder="Selecione uma variável"
           className={disparoStyles.variableComboboxInput}
           style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.35 }}
@@ -373,7 +400,7 @@ function SeletorVariavelTemplate({
                 onClick={() => selecionarOpcao(opcao)}
               >
                 <span className={disparoStyles.variableComboboxOptionHeader}>
-                  <strong style={{ fontSize: 12.5 }}>{`{{${opcao.chave}}}`}</strong>
+                  <strong style={{ fontSize: 12.5 }}>{`{{${opcao.rotulo || opcao.chave}}}`}</strong>
                   <span
                     className={disparoStyles.variableComboboxCategory}
                     style={{ fontSize: 10 }}
@@ -466,6 +493,12 @@ export default function AutomationTemplateVariables({
   const opcoesVariaveisTemplate = useMemo<OpcaoVariavelTemplate[]>(() => {
     const chavesAdicionadas = new Set<string>();
     const opcoes: OpcaoVariavelTemplate[] = [];
+
+    for (const variavel of VARIAVEIS_EVENTO) {
+      if (chavesAdicionadas.has(variavel.chave)) continue;
+      chavesAdicionadas.add(variavel.chave);
+      opcoes.push(variavel);
+    }
 
     for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {
       if (chavesAdicionadas.has(variavel.chave)) continue;
