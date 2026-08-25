@@ -150,8 +150,8 @@
 .outputs {
   display: grid;
   gap: 9px;
-  border: 1px dashed var(--crm-success-border);
-  background: var(--crm-success-bg);
+  border: 1px dashed color-mix(in srgb, #22c55e 50%, transparent);
+  background: color-mix(in srgb, #22c55e 7%, transparent);
   color: var(--crm-text);
 }
 
