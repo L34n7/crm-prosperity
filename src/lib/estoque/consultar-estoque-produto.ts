@@ -33,6 +33,9 @@ export type ResultadoConsultaEstoqueProduto = {
   termo_pesquisado: string;
   termo_normalizado: string;
   candidatos: CandidatoEstoque[];
+  total_candidatos: number;
+  tem_mais_candidatos: boolean;
+  offset_candidatos: number;
   produto: {
     id: string;
     codigo: string;
@@ -72,6 +75,8 @@ type ConsultaEstoqueProdutoParams = {
   depositoIds?: string[];
   usarEmbalagemVenda?: boolean;
   limiteCandidatos?: number;
+  offsetCandidatos?: number;
+  permitirSelecaoAutomatica?: boolean;
 };
 
 type ProdutoDb = {
@@ -88,6 +93,7 @@ type CandidatoDb = ProdutoDb & {
   score: number | string | null;
   match_tipo: string | null;
   embalagem_id: string | null;
+  total_resultados?: number | string | null;
 };
 
 type SaldoDb = {
@@ -261,14 +267,16 @@ async function buscarCandidatos(params: {
   termoNormalizado: string;
   modoPesquisa: ModoPesquisaEstoque;
   limite: number;
+  offset: number;
 }) {
   const { data, error } = await supabaseAdmin.rpc(
-    "estoque_buscar_produtos_automacao",
+    "estoque_buscar_produtos_automacao_paginado",
     {
       p_empresa_id: params.empresaId,
       p_termo: params.termoNormalizado,
       p_modo: params.modoPesquisa,
       p_limite: params.limite,
+      p_offset: params.offset,
     }
   );
 
@@ -276,7 +284,15 @@ async function buscarCandidatos(params: {
     throw new Error(`Erro ao localizar produto no estoque: ${error.message}`);
   }
 
-  return ((data || []) as CandidatoDb[]).map(mapearCandidato);
+  const itens = (data || []) as CandidatoDb[];
+  const total = itens.length
+    ? Math.max(0, Math.floor(numeroSeguro(itens[0].total_resultados)))
+    : 0;
+
+  return {
+    candidatos: itens.map(mapearCandidato),
+    total,
+  };
 }
 
 async function carregarDepositosPermitidos(
@@ -479,9 +495,21 @@ export async function consultarEstoqueProduto(
   const termoNormalizado = normalizarTermoConsultaEstoque(termoOriginal);
   const modoPesquisa = params.modoPesquisa || "automatico";
   const depositoIds = Array.from(
-    new Set((params.depositoIds || []).map(String).map((id) => id.trim()).filter(Boolean))
+    new Set(
+      (params.depositoIds || [])
+        .map(String)
+        .map((id) => id.trim())
+        .filter(Boolean)
+    )
   ).slice(0, 50);
-  const limite = Math.min(10, Math.max(1, Number(params.limiteCandidatos || 5)));
+  const limite = Math.min(
+    15,
+    Math.max(1, Math.floor(Number(params.limiteCandidatos || 15) || 15))
+  );
+  const offset = Math.min(
+    100000,
+    Math.max(0, Math.floor(Number(params.offsetCandidatos || 0) || 0))
+  );
 
   if (!empresaId) {
     throw new Error("Empresa não informada para consulta de estoque.");
@@ -489,6 +517,7 @@ export async function consultarEstoqueProduto(
 
   let produto: ProdutoDb | null = null;
   let candidatos: CandidatoEstoque[] = [];
+  let totalCandidatos = 0;
   let embalagemPreferidaId = "";
 
   if (produtoId) {
@@ -501,23 +530,33 @@ export async function consultarEstoqueProduto(
           score: 1,
           match_tipo: "produto_id",
           embalagem_id: null,
+          total_resultados: 1,
         }),
       ];
+      totalCandidatos = 1;
     }
   } else if (termoNormalizado) {
-    candidatos = await buscarCandidatos({
+    const busca = await buscarCandidatos({
       empresaId,
       termoNormalizado,
       modoPesquisa,
       limite,
+      offset,
     });
+    candidatos = busca.candidatos;
+    totalCandidatos = busca.total;
 
-    const candidatoClaro = escolherCandidatoClaro(candidatos);
-    if (candidatoClaro) {
-      produto = await buscarProdutoPorId(empresaId, candidatoClaro.id);
-      embalagemPreferidaId = candidatoClaro.embalagem_id;
+    if (params.permitirSelecaoAutomatica !== false && offset === 0) {
+      const candidatoClaro = escolherCandidatoClaro(candidatos);
+      if (candidatoClaro) {
+        produto = await buscarProdutoPorId(empresaId, candidatoClaro.id);
+        embalagemPreferidaId = candidatoClaro.embalagem_id;
+      }
     }
   }
+
+  const temMaisCandidatos =
+    !produto && totalCandidatos > offset + candidatos.length;
 
   if (!produto) {
     return {
@@ -526,6 +565,9 @@ export async function consultarEstoqueProduto(
       termo_pesquisado: termoOriginal,
       termo_normalizado: termoNormalizado,
       candidatos,
+      total_candidatos: totalCandidatos,
+      tem_mais_candidatos: temMaisCandidatos,
+      offset_candidatos: offset,
       produto: null,
       quantidade_fisica: 0,
       quantidade_reservada: 0,
@@ -553,6 +595,9 @@ export async function consultarEstoqueProduto(
     termo_pesquisado: termoOriginal,
     termo_normalizado: termoNormalizado,
     candidatos,
+    total_candidatos: totalCandidatos || candidatos.length,
+    tem_mais_candidatos: false,
+    offset_candidatos: offset,
     produto: {
       id: produto.id,
       codigo: String(produto.codigo || "").trim(),

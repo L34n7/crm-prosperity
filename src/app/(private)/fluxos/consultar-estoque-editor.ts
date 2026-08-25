@@ -46,9 +46,29 @@ export const VARIAVEIS_SAIDA_ESTOQUE: TemplateVariableOption[] = [
     "estoque_embalagem_quantidade_disponivel",
     "Quantidade de embalagens completas disponíveis.",
   ],
-  ["estoque_candidatos_quantidade", "Quantidade de candidatos encontrados."],
-  ["estoque_candidatos_texto", "Lista pronta dos candidatos encontrados."],
-  ["estoque_candidatos_json", "Candidatos encontrados em JSON."],
+  [
+    "estoque_candidatos_quantidade",
+    "Quantidade de candidatos exibidos na página atual.",
+  ],
+  ["estoque_candidatos_total", "Total de candidatos da busca."],
+  [
+    "estoque_candidatos_texto",
+    "Mensagem pronta com copy, página, lista numerada e navegação.",
+  ],
+  ["estoque_candidatos_json", "Candidatos da página atual em JSON."],
+  ["estoque_pagina", "Página atual dos resultados de estoque."],
+  ["estoque_total_paginas", "Total de páginas dos resultados."],
+  ["estoque_produtos_por_pagina", "Quantidade de produtos por página."],
+  [
+    "estoque_tem_proxima_pagina",
+    "Indica se há uma próxima página de produtos.",
+  ],
+  [
+    "estoque_tem_pagina_anterior",
+    "Indica se há uma página anterior de produtos.",
+  ],
+  ["estoque_busca_termo", "Termo efetivamente usado para pesquisar o estoque."],
+  ["estoque_busca_ia_usada", "Indica se a IA interpretou a busca atual."],
 ].map(([key, description]) => ({
   key,
   description,
@@ -126,10 +146,7 @@ export function validarNodeConsultarEstoque(node: Node, edges: Edge[]) {
       return `As conexões do bloco "${titulo}" precisam usar as saídas padrão da consulta de estoque.`;
     }
 
-    if (
-      edge.sourceHandle &&
-      String(edge.sourceHandle) !== saida.valor
-    ) {
+    if (edge.sourceHandle && String(edge.sourceHandle) !== saida.valor) {
       return `A conexão "${saida.titulo}" do bloco "${titulo}" está ligada ao conector incorreto.`;
     }
   }

@@ -51,6 +51,7 @@
 
 .field input,
 .field select,
+.field textarea,
 .searchRow input {
   width: 100%;
   min-height: 40px;
@@ -65,8 +66,15 @@
   line-height: 1.35;
 }
 
+.field textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
 .field input:focus,
 .field select:focus,
+.field textarea:focus,
 .searchRow input:focus {
   outline: none;
   border-color: var(--crm-primary-border);
