@@ -41,10 +41,11 @@ import CadastroProdutoInteligente from "@/components/estoque/CadastroProdutoInte
 import ErpOperacaoPanel from "@/components/estoque/ErpOperacaoPanel";
 import InventarioReviewButton from "@/components/estoque/InventarioReviewButton";
 import EstruturaEstoquePanel from "@/components/estoque/EstruturaEstoquePanel";
+import PrecosPromocoesPanel from "@/components/estoque/PrecosPromocoesPanel";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./estoque.module.css";
 
-type Aba = "estoque" | "catalogo" | "compras" | "pdv" | "financeiro" | "embalagens" | "fiscal" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
+type Aba = "estoque" | "precos" | "catalogo" | "compras" | "pdv" | "financeiro" | "embalagens" | "fiscal" | "movimentacoes" | "depositos" | "localizacoes" | "lotes" | "reservas" | "inventarios" | "clinico" | "cadastros" | "configuracoes";
 type Modal = "item" | "catalogo" | "movimentacao" | "baixa" | "inventario" | "localizacao" | "categoria" | "marca" | "arquivamento" | "restauracao" | "exclusao" | null;
 type FiltroStatus = "ativos" | "arquivados" | "todos";
 type ScannerContexto = "busca" | "cadastro" | "movimentacao" | "inventario" | null;
@@ -231,6 +232,7 @@ const TIPO_MOVIMENTO_LABEL: Record<Movimentacao["tipo"], string> = {
 
 const ABA_INFO: Record<Aba, { titulo: string; descricao: string }> = {
   estoque: { titulo: "Itens em estoque", descricao: "Saldos, disponibilidade e custos dos produtos e insumos." },
+  precos: { titulo: "Preços e promoções", descricao: "Preços por canal, condições de pagamento e promoções programadas." },
   catalogo: { titulo: "Produtos e serviços", descricao: "Itens comerciais e regras de baixa automática no estoque." },
   compras: { titulo: "Compras e fornecedores", descricao: "Pedidos, documentos fiscais, recebimentos e parceiros." },
   pdv: { titulo: "Vendas e PDV", descricao: "Venda balcão com leitura de código, pagamento e baixa imediata do estoque." },
@@ -331,13 +333,13 @@ export default function EstoquePage() {
   const ehImobiliaria = nichoCodigo === "imobiliaria";
 
   const subtituloPagina = ehSaude
-    ? "Controle produtos, insumos e consumos vinculados aos atendimentos."
+    ? "Controle produtos, insumos, preços e consumos vinculados aos atendimentos."
     : ehImobiliaria
-      ? "Controle materiais, itens e suprimentos utilizados na operação imobiliária."
-      : "Controle produtos, materiais e insumos vinculados à operação da empresa.";
+      ? "Controle materiais, itens, preços e suprimentos utilizados na operação imobiliária."
+      : "Controle produtos, materiais, preços e insumos vinculados à operação da empresa.";
   const descricaoHero = ehSaude
-    ? "Controle compras, saldos e consumo clínico em um fluxo simples e rastreável."
-    : "Controle compras, saldos e movimentações em um fluxo simples e rastreável.";
+    ? "Controle compras, saldos, preços e consumo clínico em um fluxo simples e rastreável."
+    : "Controle compras, saldos, preços e movimentações em um fluxo simples e rastreável.";
   const abaInfo = aba === "catalogo" && ehImobiliaria
     ? { titulo: "Produtos e serviços", descricao: "Materiais, serviços e itens vinculados à operação imobiliária." }
     : ABA_INFO[aba];
@@ -753,6 +755,7 @@ export default function EstoquePage() {
                 <span className={styles.navGroupLabel}>Operação</span>
                 {permissoes.includes("pdv.visualizar") ? <button className={aba === "pdv" ? styles.navActive : ""} onClick={() => setAba("pdv")}><ShoppingCart size={17} /><span>Vendas e PDV</span></button> : null}
                 <button className={aba === "estoque" ? styles.navActive : ""} onClick={() => setAba("estoque")}><Boxes size={17} /><span>Itens em estoque</span></button>
+                <button className={aba === "precos" ? styles.navActive : ""} onClick={() => setAba("precos")}><CircleDollarSign size={17} /><span>Preços e promoções</span></button>
                 <button className={aba === "movimentacoes" ? styles.navActive : ""} onClick={() => setAba("movimentacoes")}><History size={17} /><span>Movimentações</span></button>
                 <button className={aba === "reservas" ? styles.navActive : ""} onClick={() => setAba("reservas")}><ShieldCheck size={17} /><span>Reservas</span></button>
                 <button className={aba === "inventarios" ? styles.navActive : ""} onClick={() => setAba("inventarios")}><ClipboardCheck size={17} /><span>Inventários</span></button>
@@ -788,7 +791,7 @@ export default function EstoquePage() {
               <span>Área do estoque</span>
               <select value={aba} onChange={(event) => setAba(event.target.value as Aba)}>
                 <optgroup label="Operação">
-                  {permissoes.includes("pdv.visualizar") ? <option value="pdv">Vendas e PDV</option> : null}<option value="estoque">Itens em estoque</option><option value="movimentacoes">Movimentações</option><option value="reservas">Reservas</option><option value="inventarios">Inventários</option>{ehSaude ? <option value="clinico">Consumo clínico</option> : null}
+                  {permissoes.includes("pdv.visualizar") ? <option value="pdv">Vendas e PDV</option> : null}<option value="estoque">Itens em estoque</option><option value="precos">Preços e promoções</option><option value="movimentacoes">Movimentações</option><option value="reservas">Reservas</option><option value="inventarios">Inventários</option>{ehSaude ? <option value="clinico">Consumo clínico</option> : null}
                 </optgroup>
                 {permissoes.includes("compras.visualizar") ? <optgroup label="Compras"><option value="compras">Compras e fornecedores</option>{permissoes.includes("financeiro.contas_pagar") ? <option value="financeiro">Contas a pagar</option> : null}</optgroup> : null}
                 <optgroup label="Estrutura">
@@ -806,7 +809,7 @@ export default function EstoquePage() {
               </div>
             </header>
 
-          {!(["compras", "pdv", "financeiro", "embalagens", "fiscal"] as Aba[]).includes(aba) ? <div className={styles.toolbar}>
+          {!(["compras", "pdv", "financeiro", "embalagens", "fiscal", "precos"] as Aba[]).includes(aba) ? <div className={styles.toolbar}>
             <label className={styles.searchBox}>
               <Search size={18} />
               <input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar por nome, código ou tipo" />
@@ -851,6 +854,8 @@ export default function EstoquePage() {
             permissoes={permissoes}
             onAtualizarEstoque={() => void carregar()}
           /> : null}
+
+          {aba === "precos" ? <PrecosPromocoesPanel permissoes={permissoes} /> : null}
 
           {(["pdv", "financeiro", "embalagens", "fiscal"] as Aba[]).includes(aba) ? <ErpOperacaoPanel
             modo={aba as "pdv" | "financeiro" | "embalagens" | "fiscal"}
