@@ -13,22 +13,27 @@
 .intro {
   display: grid;
   gap: 4px;
-  border: 1px solid color-mix(in srgb, var(--border-color, #94a3b8) 45%, transparent);
-  background: color-mix(in srgb, var(--card-background, #0f172a) 88%, #0ea5e9 12%);
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
 }
 
 .intro strong,
 .outputs strong {
-  font-size: 0.82rem;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .intro span,
 .outputs small,
 .field small,
 .toggleRow small {
-  font-size: 0.73rem;
+  color: var(--crm-text-muted);
+  font-size: 12px;
   line-height: 1.45;
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .field,
@@ -38,8 +43,10 @@
 }
 
 .field > span {
-  font-size: 0.78rem;
-  font-weight: 650;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .field input,
@@ -47,12 +54,28 @@
 .searchRow input {
   width: 100%;
   min-height: 40px;
-  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-  border-radius: 9px;
-  padding: 8px 10px;
-  background: var(--input-background, transparent);
-  color: inherit;
-  font: inherit;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.field input:focus,
+.field select:focus,
+.searchRow input:focus {
+  outline: none;
+  border-color: var(--crm-primary-border);
+  box-shadow: 0 0 0 2px var(--crm-primary-soft);
+}
+
+.field select option {
+  font-family: inherit;
+  font-size: 13px;
 }
 
 .searchRow {
@@ -63,12 +86,14 @@
 
 .searchRow button {
   min-height: 40px;
-  border: 1px solid color-mix(in srgb, #0ea5e9 55%, transparent);
-  border-radius: 9px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 10px;
   padding: 0 13px;
-  background: color-mix(in srgb, #0ea5e9 16%, transparent);
-  color: inherit;
-  font-weight: 650;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -93,7 +118,9 @@
 }
 
 .checkItem {
-  font-size: 0.78rem;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .checkItem input,
@@ -103,8 +130,9 @@
 }
 
 .toggleRow {
-  border: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+  border: 1px solid var(--crm-border);
   border-radius: 10px;
+  background: var(--crm-surface-soft);
   padding: 11px 12px;
 }
 
@@ -114,14 +142,17 @@
 }
 
 .toggleRow strong {
-  font-size: 0.78rem;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .outputs {
   display: grid;
   gap: 9px;
-  border: 1px dashed color-mix(in srgb, #22c55e 50%, transparent);
-  background: color-mix(in srgb, #22c55e 7%, transparent);
+  border: 1px dashed var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-text);
 }
 
 .outputGrid {
@@ -133,15 +164,19 @@
 .outputGrid span {
   border-radius: 8px;
   padding: 7px 8px;
-  background: color-mix(in srgb, currentColor 6%, transparent);
-  font-size: 0.72rem;
-  font-weight: 650;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-strong);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .error {
-  border: 1px solid color-mix(in srgb, #ef4444 55%, transparent);
-  background: color-mix(in srgb, #ef4444 9%, transparent);
-  font-size: 0.76rem;
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 @media (max-width: 720px) {
