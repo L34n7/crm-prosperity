@@ -53,10 +53,10 @@
 }
 
 /* No desktop, reduz apenas a largura horizontal do menu.
-   Tipografia, ícones, altura e espaçamentos verticais permanecem iguais ao layout original. */
+   240px mantém os rótulos longos completos sem alterar tipografia, ícones ou altura. */
 @media (min-width: 1101px) {
   .estoque-responsive-scope section:has(> aside[aria-label="Navegação do estoque"]) {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 240px minmax(0, 1fr);
   }
 }
 
