@@ -18,6 +18,9 @@ export type ModoDepositoConsultaEstoque =
   | "especifico"
   | "selecionados";
 
+export const MENSAGEM_MULTIPLOS_PRODUTOS_PADRAO =
+  "Encontrei estas opções. Responda com o número do produto que deseja:";
+
 export type ConfiguracaoConsultarEstoque = {
   origem_produto: OrigemProdutoConsultaEstoque;
   produto_id: string;
@@ -28,6 +31,9 @@ export type ConfiguracaoConsultarEstoque = {
   deposito_id: string;
   deposito_ids: string[];
   usar_embalagem_venda: boolean;
+  produtos_por_pagina: number;
+  mensagem_multiplos_produtos: string;
+  /** Compatibilidade com fluxos salvos antes da paginação. */
   limite_candidatos: number;
 };
 
@@ -64,7 +70,9 @@ export const CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO: ConfiguracaoConsultarEstoque
   deposito_id: "",
   deposito_ids: [],
   usar_embalagem_venda: true,
-  limite_candidatos: 5,
+  produtos_por_pagina: 15,
+  mensagem_multiplos_produtos: MENSAGEM_MULTIPLOS_PRODUTOS_PADRAO,
+  limite_candidatos: 15,
 };
 
 const ORIGENS_PRODUTO = new Set<OrigemProdutoConsultaEstoque>([
@@ -97,6 +105,21 @@ function normalizarVariavel(valor: unknown) {
     .toLowerCase();
 }
 
+function normalizarProdutosPorPagina(config: Record<string, unknown>) {
+  const informado = Number(
+    config.produtos_por_pagina ?? config.limite_candidatos ?? 15
+  );
+
+  if (informado === 5 || informado === 10 || informado === 15) {
+    return informado;
+  }
+
+  // Fluxos antigos podiam usar 3 candidatos. No novo modelo, a menor página é 5.
+  if (informado === 3) return 5;
+
+  return 15;
+}
+
 export function normalizarConfiguracaoConsultarEstoque(
   configuracao?: Record<string, unknown> | null
 ): ConfiguracaoConsultarEstoque {
@@ -113,7 +136,12 @@ export function normalizarConfiguracaoConsultarEstoque(
         new Set(config.deposito_ids.map((id) => texto(id)).filter(Boolean))
       )
     : [];
-  const limiteInformado = Number(config.limite_candidatos || 5);
+  const produtosPorPagina = normalizarProdutosPorPagina(config);
+  const mensagemMultiplos =
+    config.mensagem_multiplos_produtos === undefined ||
+    config.mensagem_multiplos_produtos === null
+      ? MENSAGEM_MULTIPLOS_PRODUTOS_PADRAO
+      : String(config.mensagem_multiplos_produtos).slice(0, 600);
 
   return {
     origem_produto: ORIGENS_PRODUTO.has(origem)
@@ -131,9 +159,9 @@ export function normalizarConfiguracaoConsultarEstoque(
     deposito_id: texto(config.deposito_id),
     deposito_ids: depositoIds.slice(0, 50),
     usar_embalagem_venda: config.usar_embalagem_venda !== false,
-    limite_candidatos: [3, 5, 10].includes(limiteInformado)
-      ? limiteInformado
-      : 5,
+    produtos_por_pagina: produtosPorPagina,
+    mensagem_multiplos_produtos: mensagemMultiplos,
+    limite_candidatos: produtosPorPagina,
   };
 }
 
@@ -144,7 +172,9 @@ function descricaoProduto(produto: ProdutoOpcao) {
     produto.codigo_barras ? `EAN ${produto.codigo_barras}` : "",
   ].filter(Boolean);
 
-  return `${produto.nome}${identificadores.length ? ` · ${identificadores.join(" · ")}` : ""}`;
+  return `${produto.nome}${
+    identificadores.length ? ` · ${identificadores.join(" · ")}` : ""
+  }`;
 }
 
 export default function ConsultarEstoqueConfig({
@@ -216,7 +246,9 @@ export default function ConsultarEstoqueConfig({
       <div className={styles.intro}>
         <strong>Consulta em tempo real</strong>
         <span>
-          O bloco apenas lê o estoque. Ele não reserva, movimenta ou altera saldo.
+          Em buscas por texto, o bloco usa IA quando houver tokens para interpretar
+          o que o cliente deseja. Sem tokens, continua automaticamente pela busca
+          direta do estoque. A consulta não reserva, movimenta ou altera saldo.
         </span>
       </div>
 
@@ -287,12 +319,15 @@ export default function ConsultarEstoqueConfig({
             list={datalistId}
             value={config.variavel_produto}
             onChange={(event) =>
-              atualizar({ variavel_produto: normalizarVariavel(event.target.value) })
+              atualizar({
+                variavel_produto: normalizarVariavel(event.target.value),
+              })
             }
             placeholder="Ex.: produto_desejado"
           />
           <small>
-            Pode ser uma variável criada por Capturar resposta ou outra variável disponível no fluxo.
+            Pode ser uma variável criada por Capturar resposta ou outra variável
+            disponível no fluxo.
           </small>
         </label>
       )}
@@ -304,12 +339,16 @@ export default function ConsultarEstoqueConfig({
             list={datalistId}
             value={config.variavel_resposta}
             onChange={(event) =>
-              atualizar({ variavel_resposta: normalizarVariavel(event.target.value) })
+              atualizar({
+                variavel_resposta: normalizarVariavel(event.target.value),
+              })
             }
             placeholder="Ex.: produto_desejado (recomendado)"
           />
           <small>
-            Se estiver vazia, o motor usa a mensagem que levou a execução até este bloco. Para jornadas com múltiplas etapas, prefira uma variável capturada.
+            Se estiver vazia, o motor usa a mensagem que levou a execução até este
+            bloco. Para jornadas com múltiplas etapas, prefira uma variável
+            capturada.
           </small>
         </label>
       )}
@@ -338,7 +377,9 @@ export default function ConsultarEstoqueConfig({
           <option value="codigo_barras">Código de barras</option>
         </select>
         <small>
-          Código, SKU e código de barras têm prioridade. Busca textual ambígua nunca escolhe um produto arbitrariamente.
+          A IA é usada nas buscas por texto. Código/SKU e código de barras seguem
+          pela busca exata. Se o saldo de IA acabar, este modo também define o
+          fallback automático.
         </small>
       </label>
 
@@ -368,7 +409,8 @@ export default function ConsultarEstoqueConfig({
             <option value="">Selecione o depósito...</option>
             {depositos.map((deposito) => (
               <option key={deposito.id} value={deposito.id}>
-                {deposito.nome}{deposito.principal ? " · principal" : ""}
+                {deposito.nome}
+                {deposito.principal ? " · principal" : ""}
               </option>
             ))}
           </select>
@@ -392,11 +434,16 @@ export default function ConsultarEstoqueConfig({
                           ? Array.from(
                               new Set([...config.deposito_ids, deposito.id])
                             )
-                          : config.deposito_ids.filter((id) => id !== deposito.id),
+                          : config.deposito_ids.filter(
+                              (id) => id !== deposito.id
+                            ),
                       })
                     }
                   />
-                  <span>{deposito.nome}{deposito.principal ? " · principal" : ""}</span>
+                  <span>
+                    {deposito.nome}
+                    {deposito.principal ? " · principal" : ""}
+                  </span>
                 </label>
               );
             })}
@@ -415,23 +462,50 @@ export default function ConsultarEstoqueConfig({
         <span>
           <strong>Considerar embalagem padrão de venda</strong>
           <small>
-            Retorna fator, preço da embalagem e quantidade de embalagens completas disponíveis.
+            Retorna fator, preço da embalagem e quantidade de embalagens completas
+            disponíveis.
           </small>
         </span>
       </label>
 
       <label className={styles.field}>
-        <span>Máximo de candidatos em resultado ambíguo</span>
+        <span>Produtos por página</span>
         <select
-          value={String(config.limite_candidatos)}
-          onChange={(event) =>
-            atualizar({ limite_candidatos: Number(event.target.value) })
-          }
+          value={String(config.produtos_por_pagina)}
+          onChange={(event) => {
+            const valor = Number(event.target.value);
+            atualizar({
+              produtos_por_pagina: valor,
+              limite_candidatos: valor,
+            });
+          }}
         >
-          <option value="3">3 produtos</option>
           <option value="5">5 produtos</option>
           <option value="10">10 produtos</option>
+          <option value="15">15 produtos</option>
         </select>
+        <small>
+          Se houver mais resultados, o cliente poderá responder “mais” ou “voltar”
+          para navegar pelas páginas sem uma nova consulta de IA.
+        </small>
+      </label>
+
+      <label className={styles.field}>
+        <span>Mensagem quando encontrar vários produtos</span>
+        <textarea
+          value={config.mensagem_multiplos_produtos}
+          maxLength={600}
+          onChange={(event) =>
+            atualizar({ mensagem_multiplos_produtos: event.target.value })
+          }
+          placeholder={MENSAGEM_MULTIPLOS_PRODUTOS_PADRAO}
+        />
+        <small>
+          A página, a lista numerada e as instruções de “mais/voltar” são
+          acrescentadas automaticamente abaixo desta copy. Use
+          {" {{estoque_candidatos_texto}} "}
+          no bloco de mensagem da saída “Vários encontrados”.
+        </small>
       </label>
 
       <div className={styles.outputs}>
@@ -443,7 +517,8 @@ export default function ConsultarEstoqueConfig({
           <span>Vários encontrados</span>
         </div>
         <small>
-          O fluxo só poderá ser ativado quando cada uma das quatro saídas estiver conectada exatamente uma vez.
+          O fluxo só poderá ser ativado quando cada uma das quatro saídas estiver
+          conectada exatamente uma vez.
         </small>
       </div>
 

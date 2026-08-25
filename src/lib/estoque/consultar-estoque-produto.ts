@@ -37,6 +37,9 @@ export type ResultadoConsultaEstoqueProduto = {
   termo_pesquisado: string;
   termo_normalizado: string;
   candidatos: CandidatoEstoque[];
+  total_candidatos: number;
+  tem_mais_candidatos: boolean;
+  offset_candidatos: number;
   produto: {
     id: string;
     codigo: string;
@@ -79,6 +82,8 @@ type ConsultaEstoqueProdutoParams = {
   depositoIds?: string[];
   usarEmbalagemVenda?: boolean;
   limiteCandidatos?: number;
+  offsetCandidatos?: number;
+  permitirSelecaoAutomatica?: boolean;
 };
 
 type ProdutoDb = {
@@ -95,6 +100,7 @@ type CandidatoDb = ProdutoDb & {
   score: number | string | null;
   match_tipo: string | null;
   embalagem_id: string | null;
+  total_resultados?: number | string | null;
 };
 
 type SaldoDb = {
@@ -164,7 +170,10 @@ function numeroSeguro(valor: unknown) {
 }
 
 export function formatarMoedaEstoque(valor: number | null | undefined) {
-  if (valor === null || valor === undefined || !Number.isFinite(valor)) return "";
+  if (valor === null || valor === undefined || !Number.isFinite(valor)) {
+    return "";
+  }
+
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
@@ -216,6 +225,36 @@ function mapearCandidato(item: CandidatoDb): CandidatoEstoque {
   };
 }
 
+async function enriquecerPrecosCandidatos(
+  empresaId: string,
+  candidatos: CandidatoEstoque[]
+) {
+  if (!candidatos.length) {
+    return {
+      candidatos,
+      precos: new Map<string, PrecosProdutoResolvidos>(),
+    };
+  }
+
+  const precos = await resolverPrecosProdutos({
+    empresaId,
+    itemIds: candidatos.map((candidato) => candidato.id),
+  });
+
+  return {
+    precos,
+    candidatos: candidatos.map((candidato) => {
+      const resolvido = precos.get(candidato.id);
+      const preco = resolvido?.whatsapp ?? candidato.preco;
+      return {
+        ...candidato,
+        preco,
+        preco_formatado: formatarMoedaEstoque(preco),
+      };
+    }),
+  };
+}
+
 function candidatoEhIdentificadorExato(candidato: CandidatoEstoque) {
   return new Set([
     "codigo_exato",
@@ -235,7 +274,12 @@ function escolherCandidatoClaro(candidatos: CandidatoEstoque[]) {
 
   const primeiro = candidatos[0];
   const segundo = candidatos[1];
-  if (primeiro.score >= 0.82 && primeiro.score - segundo.score >= 0.16) return primeiro;
+  const diferenca = primeiro.score - segundo.score;
+
+  if (primeiro.score >= 0.82 && diferenca >= 0.16) {
+    return primeiro;
+  }
+
   return null;
 }
 
@@ -248,7 +292,10 @@ async function buscarProdutoPorId(empresaId: string, produtoId: string) {
     .eq("ativo", true)
     .maybeSingle();
 
-  if (error) throw new Error(`Erro ao consultar produto do estoque: ${error.message}`);
+  if (error) {
+    throw new Error(`Erro ao consultar produto do estoque: ${error.message}`);
+  }
+
   return (data || null) as ProdutoDb | null;
 }
 
@@ -257,49 +304,54 @@ async function buscarCandidatos(params: {
   termoNormalizado: string;
   modoPesquisa: ModoPesquisaEstoque;
   limite: number;
+  offset: number;
 }) {
-  const { data, error } = await supabaseAdmin.rpc("estoque_buscar_produtos_automacao", {
-    p_empresa_id: params.empresaId,
-    p_termo: params.termoNormalizado,
-    p_modo: params.modoPesquisa,
-    p_limite: params.limite,
-  });
-  if (error) throw new Error(`Erro ao localizar produto no estoque: ${error.message}`);
-  return ((data || []) as CandidatoDb[]).map(mapearCandidato);
-}
+  const { data, error } = await supabaseAdmin.rpc(
+    "estoque_buscar_produtos_automacao_paginado",
+    {
+      p_empresa_id: params.empresaId,
+      p_termo: params.termoNormalizado,
+      p_modo: params.modoPesquisa,
+      p_limite: params.limite,
+      p_offset: params.offset,
+    }
+  );
 
-async function enriquecerPrecosCandidatos(
-  empresaId: string,
-  candidatos: CandidatoEstoque[]
-) {
-  if (!candidatos.length) return { candidatos, precos: new Map<string, PrecosProdutoResolvidos>() };
-  const precos = await resolverPrecosProdutos({
-    empresaId,
-    itemIds: candidatos.map((candidato) => candidato.id),
-  });
+  if (error) {
+    throw new Error(`Erro ao localizar produto no estoque: ${error.message}`);
+  }
+
+  const itens = (data || []) as CandidatoDb[];
+  const total = itens.length
+    ? Math.max(0, Math.floor(numeroSeguro(itens[0].total_resultados)))
+    : 0;
+
   return {
-    precos,
-    candidatos: candidatos.map((candidato) => {
-      const resolvido = precos.get(candidato.id);
-      const preco = resolvido?.whatsapp ?? candidato.preco;
-      return {
-        ...candidato,
-        preco,
-        preco_formatado: formatarMoedaEstoque(preco),
-      };
-    }),
+    candidatos: itens.map(mapearCandidato),
+    total,
   };
 }
 
-async function carregarDepositosPermitidos(empresaId: string, depositoIds: string[]) {
+async function carregarDepositosPermitidos(
+  empresaId: string,
+  depositoIds: string[]
+) {
   let query = supabaseAdmin
     .from("estoque_depositos")
     .select("id,nome")
     .eq("empresa_id", empresaId)
     .eq("ativo", true);
-  if (depositoIds.length > 0) query = query.in("id", depositoIds);
+
+  if (depositoIds.length > 0) {
+    query = query.in("id", depositoIds);
+  }
+
   const { data, error } = await query.order("principal", { ascending: false });
-  if (error) throw new Error(`Erro ao consultar depósitos do estoque: ${error.message}`);
+
+  if (error) {
+    throw new Error(`Erro ao consultar depósitos do estoque: ${error.message}`);
+  }
+
   return (data || []) as DepositoDb[];
 }
 
@@ -310,8 +362,12 @@ async function carregarDisponibilidade(params: {
   usarEmbalagemVenda: boolean;
   embalagemPreferidaId?: string;
 }) {
-  const depositos = await carregarDepositosPermitidos(params.empresaId, params.depositoIds);
+  const depositos = await carregarDepositosPermitidos(
+    params.empresaId,
+    params.depositoIds
+  );
   const depositoIdsPermitidos = depositos.map((deposito) => deposito.id);
+
   let saldos: SaldoDb[] = [];
 
   if (depositoIdsPermitidos.length > 0) {
@@ -321,52 +377,100 @@ async function carregarDisponibilidade(params: {
       .eq("empresa_id", params.empresaId)
       .eq("estoque_item_id", params.produto.id)
       .in("deposito_id", depositoIdsPermitidos);
-    if (error) throw new Error(`Erro ao consultar saldo do estoque: ${error.message}`);
+
+    if (error) {
+      throw new Error(`Erro ao consultar saldo do estoque: ${error.message}`);
+    }
+
     saldos = (data || []) as SaldoDb[];
   }
 
-  const loteIds = Array.from(new Set(saldos.map((saldo) => saldo.lote_id).filter(Boolean) as string[]));
+  const loteIds = Array.from(
+    new Set(saldos.map((saldo) => saldo.lote_id).filter(Boolean) as string[])
+  );
   const lotesPorId = new Map<string, LoteDb>();
+
   if (loteIds.length > 0) {
-    const { data, error } = await supabaseAdmin
+    const { data: lotes, error: lotesError } = await supabaseAdmin
       .from("estoque_lotes")
       .select("id,bloqueado,validade")
       .eq("empresa_id", params.empresaId)
       .eq("estoque_item_id", params.produto.id)
       .in("id", loteIds);
-    if (error) throw new Error(`Erro ao validar lotes disponíveis do estoque: ${error.message}`);
-    for (const lote of (data || []) as LoteDb[]) lotesPorId.set(String(lote.id), lote);
+
+    if (lotesError) {
+      throw new Error(
+        `Erro ao validar lotes disponíveis do estoque: ${lotesError.message}`
+      );
+    }
+
+    for (const lote of (lotes || []) as LoteDb[]) {
+      lotesPorId.set(String(lote.id), lote);
+    }
   }
 
   const hoje = new Date().toISOString().slice(0, 10);
   const saldoValido = saldos.filter((saldo) => {
     if (!saldo.lote_id) return true;
+
     const lote = lotesPorId.get(saldo.lote_id);
-    return Boolean(lote && lote.bloqueado !== true && (!lote.validade || lote.validade >= hoje));
+    if (!lote) return false;
+    if (lote.bloqueado === true) return false;
+    if (lote.validade && lote.validade < hoje) return false;
+
+    return true;
   });
-  const totaisPorDeposito = new Map<string, { fisico: number; reservado: number }>();
+
+  const totaisPorDeposito = new Map<
+    string,
+    { fisico: number; reservado: number }
+  >();
+
   for (const saldo of saldoValido) {
-    const atual = totaisPorDeposito.get(saldo.deposito_id) || { fisico: 0, reservado: 0 };
+    const atual = totaisPorDeposito.get(saldo.deposito_id) || {
+      fisico: 0,
+      reservado: 0,
+    };
+
     atual.fisico += numeroSeguro(saldo.saldo_fisico);
     atual.reservado += numeroSeguro(saldo.saldo_reservado);
     totaisPorDeposito.set(saldo.deposito_id, atual);
   }
 
   const depositosResultado = depositos.map((deposito) => {
-    const total = totaisPorDeposito.get(deposito.id) || { fisico: 0, reservado: 0 };
+    const total = totaisPorDeposito.get(deposito.id) || {
+      fisico: 0,
+      reservado: 0,
+    };
+    const disponivel = Math.max(0, total.fisico - total.reservado);
+
     return {
       id: deposito.id,
       nome: deposito.nome,
       quantidade_fisica: total.fisico,
       quantidade_reservada: total.reservado,
-      quantidade_disponivel: Math.max(0, total.fisico - total.reservado),
+      quantidade_disponivel: disponivel,
     };
   });
-  const quantidadeFisica = depositosResultado.reduce((total, deposito) => total + deposito.quantidade_fisica, 0);
-  const quantidadeReservada = depositosResultado.reduce((total, deposito) => total + deposito.quantidade_reservada, 0);
-  const quantidadeDisponivel = Math.max(0, depositosResultado.reduce((total, deposito) => total + deposito.quantidade_disponivel, 0));
+
+  const quantidadeFisica = depositosResultado.reduce(
+    (total, deposito) => total + deposito.quantidade_fisica,
+    0
+  );
+  const quantidadeReservada = depositosResultado.reduce(
+    (total, deposito) => total + deposito.quantidade_reservada,
+    0
+  );
+  const quantidadeDisponivel = Math.max(
+    0,
+    depositosResultado.reduce(
+      (total, deposito) => total + deposito.quantidade_disponivel,
+      0
+    )
+  );
 
   let embalagem: ResultadoConsultaEstoqueProduto["embalagem"] = null;
+
   if (params.usarEmbalagemVenda) {
     const { data, error } = await supabaseAdmin
       .from("estoque_embalagens")
@@ -377,16 +481,26 @@ async function carregarDisponibilidade(params: {
       .eq("permite_venda", true)
       .order("padrao_venda", { ascending: false })
       .order("nome", { ascending: true });
-    if (error) throw new Error(`Erro ao consultar embalagem de venda: ${error.message}`);
+
+    if (error) {
+      throw new Error(`Erro ao consultar embalagem de venda: ${error.message}`);
+    }
+
     const embalagens = (data || []) as EmbalagemDb[];
     const selecionada =
       embalagens.find((item) => item.id === params.embalagemPreferidaId) ||
       embalagens.find((item) => item.padrao_venda === true) ||
       embalagens[0] ||
       null;
+
     if (selecionada) {
       const fator = Math.max(0, numeroSeguro(selecionada.fator_conversao));
-      const preco = selecionada.preco_venda == null ? null : numeroSeguro(selecionada.preco_venda);
+      const preco =
+        selecionada.preco_venda === null ||
+        selecionada.preco_venda === undefined
+          ? null
+          : numeroSeguro(selecionada.preco_venda);
+
       embalagem = {
         id: selecionada.id,
         nome: selecionada.nome,
@@ -394,12 +508,19 @@ async function carregarDisponibilidade(params: {
         fator,
         preco,
         preco_formatado: formatarMoedaEstoque(preco),
-        quantidade_disponivel: fator > 0 ? Math.floor(quantidadeDisponivel / fator) : 0,
+        quantidade_disponivel:
+          fator > 0 ? Math.floor(quantidadeDisponivel / fator) : 0,
       };
     }
   }
 
-  return { quantidadeFisica, quantidadeReservada, quantidadeDisponivel, depositosResultado, embalagem };
+  return {
+    quantidadeFisica,
+    quantidadeReservada,
+    quantidadeDisponivel,
+    depositosResultado,
+    embalagem,
+  };
 }
 
 export async function consultarEstoqueProduto(
@@ -410,35 +531,83 @@ export async function consultarEstoqueProduto(
   const termoOriginal = String(params.termo || "").trim();
   const termoNormalizado = normalizarTermoConsultaEstoque(termoOriginal);
   const modoPesquisa = params.modoPesquisa || "automatico";
-  const depositoIds = Array.from(new Set((params.depositoIds || []).map(String).map((id) => id.trim()).filter(Boolean))).slice(0, 50);
-  const limite = Math.min(10, Math.max(1, Number(params.limiteCandidatos || 5)));
-  if (!empresaId) throw new Error("Empresa não informada para consulta de estoque.");
+  const depositoIds = Array.from(
+    new Set(
+      (params.depositoIds || [])
+        .map(String)
+        .map((id) => id.trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 50);
+  const limite = Math.min(
+    15,
+    Math.max(1, Math.floor(Number(params.limiteCandidatos || 15) || 15))
+  );
+  const offset = Math.min(
+    100000,
+    Math.max(0, Math.floor(Number(params.offsetCandidatos || 0) || 0))
+  );
+
+  if (!empresaId) {
+    throw new Error("Empresa não informada para consulta de estoque.");
+  }
 
   let produto: ProdutoDb | null = null;
   let candidatos: CandidatoEstoque[] = [];
+  let totalCandidatos = 0;
   let embalagemPreferidaId = "";
 
   if (produtoId) {
     produto = await buscarProdutoPorId(empresaId, produtoId);
-    if (produto) candidatos = [mapearCandidato({ ...produto, score: 1, match_tipo: "produto_id", embalagem_id: null })];
+
+    if (produto) {
+      candidatos = [
+        mapearCandidato({
+          ...produto,
+          score: 1,
+          match_tipo: "produto_id",
+          embalagem_id: null,
+          total_resultados: 1,
+        }),
+      ];
+      totalCandidatos = 1;
+    }
   } else if (termoNormalizado) {
-    candidatos = await buscarCandidatos({ empresaId, termoNormalizado, modoPesquisa, limite });
-    const candidatoClaro = escolherCandidatoClaro(candidatos);
-    if (candidatoClaro) {
-      produto = await buscarProdutoPorId(empresaId, candidatoClaro.id);
-      embalagemPreferidaId = candidatoClaro.embalagem_id;
+    const busca = await buscarCandidatos({
+      empresaId,
+      termoNormalizado,
+      modoPesquisa,
+      limite,
+      offset,
+    });
+    candidatos = busca.candidatos;
+    totalCandidatos = busca.total;
+
+    if (params.permitirSelecaoAutomatica !== false && offset === 0) {
+      const candidatoClaro = escolherCandidatoClaro(candidatos);
+      if (candidatoClaro) {
+        produto = await buscarProdutoPorId(empresaId, candidatoClaro.id);
+        embalagemPreferidaId = candidatoClaro.embalagem_id;
+      }
     }
   }
 
   const enriquecidos = await enriquecerPrecosCandidatos(empresaId, candidatos);
   candidatos = enriquecidos.candidatos;
 
+  const temMaisCandidatos =
+    !produto && totalCandidatos > offset + candidatos.length;
+
   if (!produto) {
     return {
-      resultado: candidatos.length > 0 ? "multiplos_resultados" : "nao_encontrado",
+      resultado:
+        candidatos.length > 0 ? "multiplos_resultados" : "nao_encontrado",
       termo_pesquisado: termoOriginal,
       termo_normalizado: termoNormalizado,
       candidatos,
+      total_candidatos: totalCandidatos,
+      tem_mais_candidatos: temMaisCandidatos,
+      offset_candidatos: offset,
       produto: null,
       precos: null,
       quantidade_fisica: 0,
@@ -456,15 +625,27 @@ export async function consultarEstoqueProduto(
     usarEmbalagemVenda: params.usarEmbalagemVenda !== false,
     embalagemPreferidaId,
   });
-  const precos = enriquecidos.precos.get(produto.id) || (await resolverPrecosProdutos({ empresaId, itemIds: [produto.id] })).get(produto.id) || null;
-  const precoBase = produto.preco_venda == null ? null : numeroSeguro(produto.preco_venda);
+  const precos =
+    enriquecidos.precos.get(produto.id) ||
+    (await resolverPrecosProdutos({ empresaId, itemIds: [produto.id] })).get(
+      produto.id
+    ) ||
+    null;
+  const precoBase =
+    produto.preco_venda === null || produto.preco_venda === undefined
+      ? null
+      : numeroSeguro(produto.preco_venda);
   const precoEfetivo = precos?.whatsapp ?? precoBase;
 
   return {
-    resultado: disponibilidade.quantidadeDisponivel > 0 ? "disponivel" : "sem_estoque",
+    resultado:
+      disponibilidade.quantidadeDisponivel > 0 ? "disponivel" : "sem_estoque",
     termo_pesquisado: termoOriginal,
     termo_normalizado: termoNormalizado,
     candidatos,
+    total_candidatos: totalCandidatos || candidatos.length,
+    tem_mais_candidatos: false,
+    offset_candidatos: offset,
     produto: {
       id: produto.id,
       codigo: String(produto.codigo || "").trim(),
