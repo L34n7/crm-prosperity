@@ -52,45 +52,11 @@
   flex: 0 0 auto;
 }
 
+/* No desktop, reduz apenas a largura horizontal do menu.
+   Tipografia, ícones, altura e espaçamentos verticais permanecem iguais ao layout original. */
 @media (min-width: 1101px) {
   .estoque-responsive-scope section:has(> aside[aria-label="Navegação do estoque"]) {
     grid-template-columns: 220px minmax(0, 1fr);
-  }
-
-  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] {
-    padding: 8px;
-  }
-
-  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] > div:first-child {
-    min-height: 42px;
-    padding-bottom: 7px;
-    gap: 9px;
-  }
-
-  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav {
-    padding-top: 6px;
-    gap: 4px;
-  }
-
-  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav > div {
-    gap: 0;
-  }
-
-  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav > div > span {
-    padding: 1px 7px 2px;
-    font-size: 11px;
-  }
-
-  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav button {
-    min-height: 29px;
-    padding: 0 7px;
-    gap: 6px;
-    font-size: 13.5px;
-  }
-
-  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav button svg {
-    width: 14px;
-    height: 14px;
   }
 }
 
