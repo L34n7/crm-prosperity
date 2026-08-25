@@ -28,6 +28,33 @@ function normalizarPlanoRelacao(plano: any) {
   return plano ?? null;
 }
 
+function formatarNomePlano(valor: unknown) {
+  const nome = String(valor || "").trim();
+  if (!nome) return null;
+  return /^plano\s+/i.test(nome) ? nome : `Plano ${nome}`;
+}
+
+function referenciasOfertaPagamento(payload: Record<string, any>, offerHash: unknown) {
+  const offer = objetoSeguro(payload.offer);
+  const cart = Array.isArray(payload.cart) ? payload.cart : [];
+  const primeiroItem = objetoSeguro(cart[0]);
+
+  return Array.from(
+    new Set(
+      [
+        offerHash,
+        payload.offer_hash,
+        offer.id,
+        offer.hash,
+        payload.product_hash,
+        primeiroItem.product_hash,
+      ]
+        .map((valor) => String(valor || "").trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 export async function GET(request: NextRequest) {
   const auth = await autenticarProsperityApi(request, "pagamentos:read");
   if (!auth.ok) return auth.response;
@@ -86,6 +113,31 @@ export async function GET(request: NextRequest) {
     if (empresasResult.error) throw new Error(empresasResult.error.message);
     const empresas = new Map<string, any>((empresasResult.data || []).map((item: any) => [item.id, item]));
 
+    const referenciasOfertas = Array.from(
+      new Set(
+        pagamentos.flatMap((item: any) =>
+          referenciasOfertaPagamento(objetoSeguro(item.payload), item.offer_hash),
+        ),
+      ),
+    );
+
+    const ofertasResult = referenciasOfertas.length
+      ? await prosperityApiSupabase
+          .from("ia_token_ofertas")
+          .select("id,gateway,referencia,tipo,nome,plano_id,empresa_id,quantidade_tokens,ativa,planos(id,nome,slug)")
+          .eq("ativa", true)
+          .in("referencia", referenciasOfertas)
+      : { data: [], error: null };
+    if (ofertasResult.error) throw new Error(ofertasResult.error.message);
+
+    const ofertasPorChave = new Map<string, any[]>();
+    for (const oferta of ofertasResult.data || []) {
+      const chave = `${String(oferta.gateway || "").trim().toLowerCase()}:${String(oferta.referencia || "").trim()}`;
+      const atuais = ofertasPorChave.get(chave) || [];
+      atuais.push(oferta);
+      ofertasPorChave.set(chave, atuais);
+    }
+
     const historicoPagoResult = leadIds.length
       ? await prosperityApiSupabase
           .from("pagamentos")
@@ -102,8 +154,24 @@ export async function GET(request: NextRequest) {
       const lead = item.lead_id ? leads.get(String(item.lead_id)) || null : null;
       const empresaId = item.empresa_id || lead?.empresa_id || null;
       const empresa = empresaId ? empresas.get(String(empresaId)) || null : null;
-      const plano = normalizarPlanoRelacao(empresa?.planos);
       const payload = objetoSeguro(item.payload);
+      const gateway = String(item.gateway || "").trim().toLowerCase();
+      const candidatosOferta = referenciasOfertaPagamento(payload, item.offer_hash).flatMap(
+        (referencia) => ofertasPorChave.get(`${gateway}:${referencia}`) || [],
+      );
+      const ofertaConfigurada =
+        candidatosOferta.find((oferta: any) => empresaId && String(oferta.empresa_id || "") === String(empresaId)) ||
+        candidatosOferta.find((oferta: any) => !oferta.empresa_id) ||
+        candidatosOferta[0] ||
+        null;
+      const planoAtual = normalizarPlanoRelacao(empresa?.planos);
+      const planoOferta = normalizarPlanoRelacao(ofertaConfigurada?.planos);
+      const plano = ofertaConfigurada?.tipo === "mensalidade" && planoOferta ? planoOferta : planoAtual;
+      const nomePlano = formatarNomePlano(plano?.nome);
+      const itemCobranca =
+        ofertaConfigurada?.tipo === "recarga"
+          ? textoOuNull(ofertaConfigurada.nome)
+          : nomePlano;
       const transaction = objetoSeguro(payload.transaction);
       const pix = objetoSeguro(transaction.pix);
       const transacaoPaga = estaPago(item.status);
@@ -131,6 +199,7 @@ export async function GET(request: NextRequest) {
         pago_atualmente: transacaoPaga,
         cliente_ja_pagou: clienteJaPagou,
         tipo_cobranca: tipoCobranca,
+        item_cobranca: itemCobranca,
         pago_em: item.paid_at,
         reembolsado_em: item.refunded_at,
         checkout_url: textoOuNull(transaction.checkout_url) || textoOuNull(payload.checkout_url) || textoOuNull(transaction.url),
@@ -157,7 +226,7 @@ export async function GET(request: NextRequest) {
             }
           : null,
         plano: plano
-          ? { id: plano.id, nome: plano.nome, slug: plano.slug }
+          ? { id: plano.id, nome: nomePlano, slug: plano.slug }
           : null,
         empresa: empresa
           ? { id: empresa.id, nome: empresa.nome_fantasia || empresa.razao_social }
@@ -177,6 +246,7 @@ export async function GET(request: NextRequest) {
         transacao_paga: "Indica somente se esta transação específica foi paga.",
         cliente_ja_pagou: "Indica se o cliente possui algum pagamento aprovado no histórico.",
         assinatura_em_dia: "Indica se a assinatura atual está ativa e ainda não venceu.",
+        item_cobranca: "Nome amigável do plano ou pacote de tokens associado à cobrança atual.",
       },
     });
   } catch (error) {

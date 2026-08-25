@@ -12,7 +12,7 @@ const opcoesAssinaturaStatus=[{value:"ativa",label:"Ativa"},{value:"vencida",lab
 const opcoesOnboardingStatus=[{value:"pendente",label:"Pendente"},{value:"concluido",label:"Concluído"},{value:"erro",label:"Com erro"}] as OpcaoCampoSistemaMapeado[];
 
 export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
-  chave:"crm_prosperity",nome:"CRM Prosperity",descricao:"Conector oficial do próprio CRM Prosperity para cobrança, checkout, assinaturas e onboarding.",tipo_integracao:"crm_prosperity",versao_mapeamento:2,base_url_padrao:"https://crmprosperity.com/api/integracoes/prosperity/v1",
+  chave:"crm_prosperity",nome:"CRM Prosperity",descricao:"Conector oficial do próprio CRM Prosperity para cobrança, checkout, assinaturas e onboarding.",tipo_integracao:"crm_prosperity",versao_mapeamento:3,base_url_padrao:"https://crmprosperity.com/api/integracoes/prosperity/v1",
   autenticacao:{tipo:"bearer",descricao:"Token Bearer emitido especificamente para a integração."},
   recursos:[
     {chave:"clientes",nome:"Clientes e leads",descricao:"Cadastros originados do checkout e da contratação do CRM Prosperity.",endpoint:"/clientes",identificador:"cliente.id",eventos:[
@@ -48,6 +48,7 @@ export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
       {chave:"pagamento.checkout_url",api_path:"checkout_url",nome:"Link do checkout",descricao:"URL disponível para continuar ou refazer o pagamento.",tipo:"url",disponivel_como_variavel:true},
       {chave:"pagamento.pix_url",api_path:"pix_url",nome:"Link do PIX",descricao:"Link específico da cobrança PIX quando fornecido pelo gateway.",tipo:"url",disponivel_como_variavel:true},
       {chave:"pagamento.pix_copia_cola",api_path:"pix_copia_cola",nome:"PIX Copia e Cola",descricao:"Código PIX Copia e Cola da cobrança atual.",tipo:"text",disponivel_como_variavel:true},
+      {chave:"pagamento.item_cobranca",api_path:"item_cobranca",nome:"Item da cobrança",descricao:"Nome do plano ou pacote de tokens associado à cobrança atual.",tipo:"text",disponivel_como_variavel:true},
       {chave:"cliente.nome",api_path:"cliente.nome",nome:"Nome do cliente",descricao:"Nome associado à transação.",tipo:"text",disponivel_como_variavel:true},
       {chave:"cliente.email",api_path:"cliente.email",nome:"E-mail do cliente",descricao:"E-mail associado à transação.",tipo:"email",disponivel_como_variavel:true},
       {chave:"cliente.telefone",api_path:"cliente.telefone",nome:"Telefone do cliente",descricao:"Telefone/WhatsApp associado à transação.",tipo:"phone",disponivel_como_variavel:true},
@@ -56,7 +57,7 @@ export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
       {chave:"assinatura.em_dia",api_path:"assinatura.em_dia",nome:"Assinatura está em dia",descricao:"Verdadeiro somente quando a assinatura está ativa e ainda não venceu.",tipo:"boolean"},
       {chave:"assinatura.vencimento_em",api_path:"assinatura.vencimento_em",nome:"Vencimento da assinatura",descricao:"Data de vencimento da assinatura atual.",tipo:"datetime",disponivel_como_variavel:true},
       {chave:"assinatura.bloqueio_em",api_path:"assinatura.bloqueio_em",nome:"Bloqueio previsto",descricao:"Data prevista para bloqueio da assinatura.",tipo:"datetime",disponivel_como_variavel:true},
-      {chave:"plano.nome",api_path:"plano.nome",nome:"Plano",descricao:"Nome do plano associado à cobrança.",tipo:"text",disponivel_como_variavel:true},
+      {chave:"plano.nome",api_path:"plano.nome",nome:"Plano",descricao:"Nome do plano associado à cobrança, formatado como Plano Básico ou Plano Essencial.",tipo:"text",disponivel_como_variavel:true},
       {chave:"oferta.titulo",api_path:"oferta.titulo",nome:"Oferta",descricao:"Nome da oferta comprada.",tipo:"text",disponivel_como_variavel:true},
       {chave:"oferta.preco_centavos",api_path:"oferta.preco_centavos",nome:"Preço da oferta",descricao:"Preço configurado para a oferta em centavos.",tipo:"money",disponivel_como_variavel:true},
       {chave:"pagamento.criado_em",api_path:"created_at",nome:"Criado em",descricao:"Data em que a transação foi registrada.",tipo:"datetime"},
