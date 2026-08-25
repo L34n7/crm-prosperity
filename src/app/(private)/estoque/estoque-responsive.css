@@ -1,0 +1,161 @@
+.estoque-responsive-scope {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.estoque-responsive-scope main:has(aside[aria-label="Navegação do estoque"]) {
+  max-width: 100%;
+  padding-bottom: 12px;
+  overflow-x: clip;
+}
+
+.estoque-responsive-scope section:has(> aside[aria-label="Navegação do estoque"]) {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+}
+
+.estoque-responsive-scope aside[aria-label="Navegação do estoque"] + div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.estoque-responsive-scope aside[aria-label="Navegação do estoque"] + div > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Compras: mantém a barra de ações afastada das bordas do card. */
+.estoque-responsive-scope div:has(> div:first-child input[placeholder="Buscar"]) {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 16px 16px;
+  box-sizing: border-box;
+}
+
+/* PDV: o campo de pesquisa passa a ocupar apenas o espaço realmente disponível. */
+.estoque-responsive-scope section:has(input[placeholder="Nome, SKU ou código de barras"]) > div:first-child {
+  min-width: 0;
+}
+
+.estoque-responsive-scope section:has(input[placeholder="Nome, SKU ou código de barras"]) > div:first-child > div:has(> input[placeholder="Nome, SKU ou código de barras"]) {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.estoque-responsive-scope section:has(input[placeholder="Nome, SKU ou código de barras"]) > div:first-child > button {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 1101px) {
+  .estoque-responsive-scope section:has(> aside[aria-label="Navegação do estoque"]) {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] {
+    padding: 8px;
+  }
+
+  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] > div:first-child {
+    min-height: 42px;
+    padding-bottom: 7px;
+    gap: 9px;
+  }
+
+  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav {
+    padding-top: 6px;
+    gap: 4px;
+  }
+
+  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav > div {
+    gap: 0;
+  }
+
+  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav > div > span {
+    padding: 1px 7px 2px;
+    font-size: 11px;
+  }
+
+  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav button {
+    min-height: 29px;
+    padding: 0 7px;
+    gap: 6px;
+    font-size: 13.5px;
+  }
+
+  .estoque-responsive-scope aside[aria-label="Navegação do estoque"] nav button svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Mantém a grade de itens dentro da largura disponível quando o menu lateral ainda está visível. */
+@media (min-width: 1101px) and (max-width: 1450px) {
+  .estoque-responsive-scope div:has(> div:first-child > span:nth-child(6)) > div:first-child,
+  .estoque-responsive-scope div:has(> div:first-child > span:nth-child(6)) > article {
+    grid-template-columns:
+      minmax(190px, 1.4fr)
+      minmax(80px, 0.6fr)
+      minmax(90px, 0.65fr)
+      minmax(100px, 0.7fr)
+      minmax(105px, 0.75fr)
+      144px;
+    gap: 8px;
+  }
+
+  .estoque-responsive-scope div:has(> div:first-child > span:nth-child(6)) > article button span {
+    display: none;
+  }
+
+  .estoque-responsive-scope div:has(> div:first-child > span:nth-child(6)) > article button[title="Registrar entrada"],
+  .estoque-responsive-scope div:has(> div:first-child > span:nth-child(6)) > article button[title="Registrar saída"] {
+    width: 34px;
+    padding-inline: 0;
+  }
+}
+
+/* Em larguras intermediárias, duas colunas do PDV passam a competir pelo mesmo espaço.
+   Empilha o checkout antes que o carrinho gere overflow horizontal. */
+@media (max-width: 1450px) {
+  .estoque-responsive-scope div:has(> section > div:first-child input[placeholder="Nome, SKU ou código de barras"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1450px) {
+  .estoque-responsive-scope div:has(> section > div:first-child input[placeholder="Nome, SKU ou código de barras"]) > section:last-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .estoque-responsive-scope div:has(> section > div:first-child input[placeholder="Nome, SKU ou código de barras"]) > section:last-child > div:first-child,
+  .estoque-responsive-scope div:has(> section > div:first-child input[placeholder="Nome, SKU ou código de barras"]) > section:last-child > button:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1100px) {
+  .estoque-responsive-scope main:has(aside[aria-label="Navegação do estoque"]) {
+    width: min(100% - 20px, 1520px);
+  }
+}
+
+@media (max-width: 760px) {
+  .estoque-responsive-scope main:has(aside[aria-label="Navegação do estoque"]) {
+    width: min(100% - 14px, 1520px);
+    padding-bottom: 8px;
+  }
+
+  .estoque-responsive-scope div:has(> div:first-child input[placeholder="Buscar"]) {
+    padding: 4px 12px 12px;
+  }
+
+  .estoque-responsive-scope section:has(input[placeholder="Nome, SKU ou código de barras"]) > div:first-child > div:has(> input[placeholder="Nome, SKU ou código de barras"]) {
+    width: 100%;
+    flex-basis: auto;
+  }
+}
