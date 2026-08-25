@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { isAdministrador } from "@/lib/auth/authorization";
 import {
   criarUrlAutorizacaoMercadoPago,
   gerarPkceOAuthMercadoPago,
@@ -12,12 +13,19 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const resultadoUsuario = await getUsuarioBasico();
+  const resultadoUsuario = await getUsuarioContexto();
 
   if (!resultadoUsuario.ok) {
     return NextResponse.json(
       { error: resultadoUsuario.error },
       { status: resultadoUsuario.status }
+    );
+  }
+
+  if (!isAdministrador(resultadoUsuario.usuario)) {
+    return NextResponse.json(
+      { error: "Apenas administradores podem conectar o Mercado Pago." },
+      { status: 403 }
     );
   }
 

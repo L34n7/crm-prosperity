@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
@@ -17,7 +17,8 @@ import {
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { getNichoConfig } from "@/lib/nichos/config";
-import IntegracaoEntradaImoveisSection from "./IntegracaoEntradaImoveisSection";
+import IntegracaoEntradaImoveis from "./IntegracaoEntradaImoveis";
+import IntegracaoMercadoPago from "./IntegracaoMercadoPago";
 import styles from "./configuracoes.module.css";
 
 type Aba = "empresa" | "integracoes";
@@ -116,6 +117,16 @@ export default function ConfiguracoesClient({
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
+  const reportarErro = useCallback((mensagem: string) => {
+    setSucesso("");
+    setErro(mensagem);
+  }, []);
+
+  const reportarSucesso = useCallback((mensagem: string) => {
+    setErro("");
+    setSucesso(mensagem);
+  }, []);
+
   const nichoSelecionado = useMemo(
     () => nichos.find((item) => item.id === form.nicho_id) ?? null,
     [form.nicho_id, nichos]
@@ -124,6 +135,40 @@ export default function ConfiguracoesClient({
   const alterouNicho = Boolean(empresa && form.nicho_id !== empresa.nicho_id);
   const alterouFormulario = Boolean(empresa) && JSON.stringify(form) !== JSON.stringify(paraForm(empresa!));
   const trocaDeGrupo = Boolean(empresa?.nicho && nichoSelecionado) && empresa?.nicho?.grupo !== nichoSelecionado?.grupo;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const retornoMercadoPago = params.get("mercado_pago");
+
+    if (params.get("aba") === "integracoes" || retornoMercadoPago) {
+      setAba("integracoes");
+    }
+
+    if (retornoMercadoPago === "conectado") {
+      setErro("");
+      setSucesso("Mercado Pago conectado com sucesso.");
+    } else if (retornoMercadoPago === "cancelado") {
+      setSucesso("");
+      setErro("A autorização do Mercado Pago foi cancelada. Nenhuma alteração foi feita.");
+    } else if (retornoMercadoPago === "sessao_expirada") {
+      setSucesso("");
+      setErro("A sessão expirou durante a conexão com o Mercado Pago. Tente novamente.");
+    } else if (retornoMercadoPago === "erro") {
+      setSucesso("");
+      setErro("Não foi possível concluir a conexão com o Mercado Pago.");
+    }
+
+    if (retornoMercadoPago) {
+      params.delete("mercado_pago");
+      params.set("aba", "integracoes");
+      const query = params.toString();
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`
+      );
+    }
+  }, []);
 
   useEffect(() => {
     async function carregar() {
@@ -198,11 +243,19 @@ export default function ConfiguracoesClient({
         </div>
 
         {aba === "integracoes" ? (
-          integracaoImobiliariaAtiva ? (
-            <IntegracaoEntradaImoveisSection />
-          ) : (
-            <section className={styles.loadingCard}>Nenhuma integração API específica está disponível para o nicho atual.</section>
-          )
+          <div className={styles.integrationsStack}>
+            <IntegracaoMercadoPago
+              onError={reportarErro}
+              onSuccess={reportarSucesso}
+            />
+            {integracaoImobiliariaAtiva ? (
+              <IntegracaoEntradaImoveis
+                ativo
+                onError={reportarErro}
+                onSuccess={reportarSucesso}
+              />
+            ) : null}
+          </div>
         ) : carregando ? (
           <section className={styles.loadingCard}>Carregando configurações...</section>
         ) : empresa ? (
