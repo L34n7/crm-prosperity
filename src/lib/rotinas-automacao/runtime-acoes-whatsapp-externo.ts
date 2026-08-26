@@ -137,7 +137,7 @@ async function resolverVariaveis(params: {
     .eq("metadata_json->>ativo", "true");
   if (error) throw error;
 
-  const mapaFixas = montarMapaVariaveisFixasContato(params.contatoInferido, {
+  const mapaFixas = await montarMapaVariaveisFixasContato(params.contatoInferido, {
     protocolo_atual: "",
     ultimo_protocolo: "",
   });

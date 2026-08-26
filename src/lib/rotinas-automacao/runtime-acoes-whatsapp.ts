@@ -108,7 +108,7 @@ async function resolverVariaveisTemplateRotina(params: {
   if (ultimoProtocoloResult.error) throw ultimoProtocoloResult.error;
   if (personalizadasResult.error) throw personalizadasResult.error;
 
-  const mapa = montarMapaVariaveisFixasContato(params.contato, {
+  const mapa = await montarMapaVariaveisFixasContato(params.contato, {
     protocolo_atual: String(protocoloAtualResult.data?.protocolo || ""),
     ultimo_protocolo: String(ultimoProtocoloResult.data?.protocolo || ""),
   });

@@ -28,7 +28,7 @@ export const ACCEPT_ARQUIVOS =
   ".pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 export const VARIAVEIS_FIXAS_CONTATO_HELP =
-  "Variáveis do sistema: {{nome_empresa}}, {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{calendario_nome}}, {{agendamento_titulo}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+  "Variáveis do sistema: {{nome_empresa}}, {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{calendario_nome}}, {{agendamento_titulo}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}}, {{ultimo_protocolo}} e {{pagamento.pix_pendentes_resumo}}.";
 
 export const VARIAVEIS_FIXAS_SISTEMA = [
   {
@@ -107,6 +107,12 @@ export const VARIAVEIS_FIXAS_SISTEMA = [
     exemplo: "{{ultimo_protocolo}}",
     descricao: "Último protocolo encerrado/inativo do contato.",
   },
+  {
+    chave: "pagamento.pix_pendentes_resumo",
+    exemplo: "{{pagamento.pix_pendentes_resumo}}",
+    descricao:
+      "Resume os PIX pendentes das últimas 12 horas do cliente no CRM Prosperity.",
+  },
 ] as const;
 
 export const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
@@ -137,6 +143,7 @@ export const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
   "status_lead",
   "protocolo_atual",
   "ultimo_protocolo",
+  "pagamento.pix_pendentes_resumo",
 ];
 
 export const TIPOS_NO_MIDIA = new Set([
@@ -190,6 +197,8 @@ export const EXEMPLOS_VARIAVEIS_PREVIA_WHATSAPP: Record<string, string> = {
   status_lead: "Novo lead",
   protocolo_atual: "PROTO-1024",
   ultimo_protocolo: "PROTO-1008",
+  "pagamento.pix_pendentes_resumo":
+    "*Plano Básico* — gerado em 26/08 às 14:12\nPIX Copia e Cola:\n000201...",
   agenda_data: "12/07",
   agenda_hora: "14:30",
   agenda_nome: "Agenda principal",

@@ -1,6 +1,8 @@
 import { normalizarClassificacaoLead } from "@/lib/leads/classificacao";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type ContatoVariaveisFixas = {
+  id?: string | null;
   nome?: string | null;
   whatsapp_profile_name?: string | null;
   email?: string | null;
@@ -28,6 +30,18 @@ type CampoContatoVariavelFixa =
   | "nome_whatsapp"
   | "protocolo_atual"
   | "ultimo_protocolo";
+
+const VARIAVEL_PIX_PENDENTES_RESUMO = "pagamento.pix_pendentes_resumo";
+const CACHE_PIX_AUTORIZADO_MS = 1000;
+const CACHE_PIX_NAO_AUTORIZADO_MS = 10 * 60 * 1000;
+
+type CachePixPendente = {
+  autorizado: boolean;
+  resumo: string;
+  expiraEm: number;
+};
+
+const cachePixPendentePorContato = new Map<string, CachePixPendente>();
 
 const VARIAVEIS_FIXAS_CONTATO_CAMPOS: Record<
   string,
@@ -78,6 +92,7 @@ export const VARIAVEIS_FIXAS_CONTATO = [
   "classificacao_lead",
   "protocolo_atual",
   "ultimo_protocolo",
+  VARIAVEL_PIX_PENDENTES_RESUMO,
 ] as const;
 
 export function normalizarChaveVariavelFluxo(valor: unknown) {
@@ -91,9 +106,14 @@ export function normalizarChaveVariavelFluxo(valor: unknown) {
 }
 
 export function chaveEhVariavelFixaContato(chave: unknown) {
-  return Object.prototype.hasOwnProperty.call(
-    VARIAVEIS_FIXAS_CONTATO_CAMPOS,
-    normalizarChaveVariavelFluxo(chave)
+  const chaveNormalizada = normalizarChaveVariavelFluxo(chave);
+
+  return (
+    chaveNormalizada === VARIAVEL_PIX_PENDENTES_RESUMO ||
+    Object.prototype.hasOwnProperty.call(
+      VARIAVEIS_FIXAS_CONTATO_CAMPOS,
+      chaveNormalizada
+    )
   );
 }
 
@@ -108,7 +128,82 @@ export function chaveEhVariavelNomeWhatsapp(chave: unknown) {
   return VARIAVEIS_NOME_WHATSAPP.has(normalizarChaveVariavelFluxo(chave));
 }
 
-export function montarMapaVariaveisFixasContato(
+function limparCachePixPendente() {
+  if (cachePixPendentePorContato.size <= 1000) return;
+
+  const agora = Date.now();
+
+  for (const [contatoId, item] of cachePixPendentePorContato) {
+    if (item.expiraEm <= agora) {
+      cachePixPendentePorContato.delete(contatoId);
+    }
+  }
+
+  if (cachePixPendentePorContato.size <= 1000) return;
+
+  const excedentes = cachePixPendentePorContato.size - 1000;
+  let removidos = 0;
+
+  for (const contatoId of cachePixPendentePorContato.keys()) {
+    cachePixPendentePorContato.delete(contatoId);
+    removidos += 1;
+
+    if (removidos >= excedentes) break;
+  }
+}
+
+async function carregarResumoPixPendentesProsperity(contatoId: string) {
+  const id = String(contatoId || "").trim();
+  if (!id) return "";
+
+  const agora = Date.now();
+  const cache = cachePixPendentePorContato.get(id);
+
+  if (cache && cache.expiraEm > agora) {
+    return cache.resumo;
+  }
+
+  if (cache) {
+    cachePixPendentePorContato.delete(id);
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "prosperity_resumo_pix_pendentes_contato",
+    { p_contato_id: id }
+  );
+
+  if (error) {
+    console.error(
+      "[AUTOMACAO_VARIAVEIS] Erro ao resolver resumo de PIX pendentes:",
+      {
+        code: error.code,
+        message: error.message,
+      }
+    );
+
+    return "";
+  }
+
+  const resultado =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : {};
+  const autorizado = resultado.autorizado === true;
+  const resumo = autorizado ? String(resultado.resumo || "") : "";
+
+  cachePixPendentePorContato.set(id, {
+    autorizado,
+    resumo,
+    expiraEm:
+      agora +
+      (autorizado ? CACHE_PIX_AUTORIZADO_MS : CACHE_PIX_NAO_AUTORIZADO_MS),
+  });
+  limparCachePixPendente();
+
+  return resumo;
+}
+
+export async function montarMapaVariaveisFixasContato(
   contato: ContatoVariaveisFixas | null | undefined,
   extras: ExtrasVariaveisFixas = {}
 ) {
@@ -135,6 +230,15 @@ export function montarMapaVariaveisFixasContato(
 
   for (const [chave, campo] of Object.entries(VARIAVEIS_FIXAS_CONTATO_CAMPOS)) {
     mapa.set(chave, valores[campo]);
+  }
+
+  mapa.set(VARIAVEL_PIX_PENDENTES_RESUMO, "");
+
+  if (contato?.id) {
+    mapa.set(
+      VARIAVEL_PIX_PENDENTES_RESUMO,
+      await carregarResumoPixPendentesProsperity(contato.id)
+    );
   }
 
   return mapa;

@@ -326,7 +326,7 @@ async function resolverValores(params: {
       ).trim()
     : "";
 
-  const fixasContato = montarMapaVariaveisFixasContato(params.contato, {
+  const fixasContato = await montarMapaVariaveisFixasContato(params.contato, {
     nome_whatsapp: nomeWhatsapp,
     protocolo_atual: protocoloAtual,
     ultimo_protocolo: ultimoProtocolo,
