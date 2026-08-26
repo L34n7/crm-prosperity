@@ -1,5 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { executarNo as executarNoBase } from "./process-automation-engine-agenda";
+import {
+  enviarMensagemAutomacao,
+  executarNo as executarNoBase,
+} from "./process-automation-engine-agenda";
 import { executarConsultaEstoqueAutomacao } from "./process-automation-engine-estoque";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -12,6 +15,8 @@ const RESULTADOS_ESTOQUE = new Set([
   "multiplos_resultados",
 ]);
 const LIMITE_CONTINUACOES_ESTOQUE = 20;
+const MENSAGEM_SELECAO_INVALIDA =
+  "Não consegui identificar essa opção. Responda com o número de um produto da lista.";
 
 type ContinuarConsultaEstoqueParams = {
   empresaId: string;
@@ -25,6 +30,89 @@ function objeto(valor: unknown): Record<string, any> {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as Record<string, any>)
     : {};
+}
+
+function texto(valor: unknown) {
+  return String(valor ?? "").trim();
+}
+
+function normalizarTextoComando(valor: unknown) {
+  return texto(valor)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function comandoNavegacaoValido(valor: unknown) {
+  const comando = normalizarTextoComando(valor);
+
+  return new Set([
+    "mais",
+    "ver mais",
+    "mais opcoes",
+    "mais produtos",
+    "proximo",
+    "proximos",
+    "proxima",
+    "proximas",
+    "proxima pagina",
+    "pagina seguinte",
+    "seguinte",
+    "voltar",
+    "anterior",
+    "anteriores",
+    "pagina anterior",
+    "voltar pagina",
+    "voltar uma pagina",
+  ]).has(comando);
+}
+
+function indiceEscolhido(valor: unknown) {
+  const match = texto(valor).match(/^(?:op[cç][aã]o\s*)?(\d{1,5})$/i);
+  if (!match) return null;
+
+  const indice = Number(match[1]);
+  return Number.isInteger(indice) && indice > 0 ? indice : null;
+}
+
+function selecaoInternaPendente(metadata: unknown, noId: string) {
+  const metadataObj = objeto(metadata);
+  const pendente = objeto(metadataObj.estoque_selecao_pendente);
+  const consulta = objeto(metadataObj.estoque_ultima_consulta);
+
+  return (
+    texto(pendente.no_id) === noId &&
+    texto(consulta.no_id) === noId &&
+    texto(consulta.resultado) === "multiplos_resultados"
+  );
+}
+
+function respostaSelecaoInternaValida(
+  metadata: unknown,
+  noId: string,
+  mensagemTexto: unknown
+) {
+  if (comandoNavegacaoValido(mensagemTexto)) return true;
+
+  const indice = indiceEscolhido(mensagemTexto);
+  if (indice === null) return false;
+
+  const consulta = objeto(objeto(metadata).estoque_ultima_consulta);
+  if (texto(consulta.no_id) !== noId) return false;
+
+  const candidatos = Array.isArray(consulta.candidatos)
+    ? consulta.candidatos.map(objeto)
+    : [];
+
+  return candidatos.some((candidato) => Number(candidato.indice) === indice);
+}
+
+function textoCandidatosDoMetadata(metadata: unknown) {
+  const variaveis = objeto(objeto(metadata).variaveis);
+  return texto(variaveis.estoque_candidatos_texto);
 }
 
 async function registrarLogEstoque(params: {
@@ -163,6 +251,107 @@ async function buscarConexaoResultado(params: {
   );
 }
 
+async function atualizarSelecaoPendente(params: {
+  empresaId: string;
+  execucaoId: string;
+  noId: string;
+  pendente: boolean;
+}) {
+  const { data: execucaoAtual, error } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("metadata_json")
+    .eq("id", params.execucaoId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (error || !execucaoAtual) {
+    throw new Error(
+      `Erro ao atualizar seleção interna do estoque: ${
+        error?.message || "execução não encontrada"
+      }`
+    );
+  }
+
+  const metadata = { ...objeto(execucaoAtual.metadata_json) };
+
+  if (params.pendente) {
+    metadata.estoque_selecao_pendente = {
+      no_id: params.noId,
+      aguardando_desde: new Date().toISOString(),
+    };
+  } else {
+    delete metadata.estoque_selecao_pendente;
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      metadata_json: metadata,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.execucaoId)
+    .eq("empresa_id", params.empresaId)
+    .eq("no_atual_id", params.noId);
+
+  if (updateError) {
+    throw new Error(`Erro ao salvar seleção interna do estoque: ${updateError.message}`);
+  }
+}
+
+async function enviarListaSelecao(params: {
+  empresaId: string;
+  conversaId: string;
+  execucaoId: string;
+  fluxoId: string;
+  noId: string;
+  numeroDestino: string;
+  mensagem: string;
+  mensagemErro?: string;
+  respostaRecebida?: string;
+}) {
+  const mensagem = [params.mensagemErro, params.mensagem]
+    .map((parte) => texto(parte))
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (!mensagem) {
+    throw new Error("A lista de produtos encontrada está vazia.");
+  }
+
+  const envio = await enviarMensagemAutomacao({
+    empresaId: params.empresaId,
+    conversaId: params.conversaId,
+    numeroDestino: params.numeroDestino,
+    conteudo: mensagem,
+    execucaoId: params.execucaoId,
+    noId: params.noId,
+  });
+
+  if (envio?.ok === false || String(envio?.status_envio || "") === "falha") {
+    throw new Error("Não foi possível enviar a lista de produtos encontrada.");
+  }
+
+  await registrarLogEstoque({
+    empresaId: params.empresaId,
+    execucaoId: params.execucaoId,
+    fluxoId: params.fluxoId,
+    noId: params.noId,
+    tipoEvento: params.mensagemErro
+      ? "consulta_estoque_selecao_invalida"
+      : "consulta_estoque_aguardando_selecao",
+    descricao: params.mensagemErro
+      ? "Resposta não correspondeu às opções da seleção interna de produtos."
+      : "Mais de um produto foi encontrado. O próprio bloco enviou a lista e aguardará a escolha.",
+    entrada: params.mensagemErro
+      ? { resposta: params.respostaRecebida || "" }
+      : {},
+    saida: {
+      mensagem,
+      selecao_interna: true,
+    },
+  });
+}
+
 async function transicionarParaDestino(params: {
   empresaId: string;
   execucaoId: string;
@@ -188,6 +377,8 @@ async function transicionarParaDestino(params: {
   const visitasAtuais = objeto(metadata.visitas_nos);
   const tentativasAtuais = { ...objeto(metadata.tentativas_blocos) };
   delete tentativasAtuais[params.noAtualId];
+  const metadataAtualizado = { ...metadata };
+  delete metadataAtualizado.estoque_selecao_pendente;
 
   const visitasAtualizadas = {
     ...visitasAtuais,
@@ -200,7 +391,7 @@ async function transicionarParaDestino(params: {
       no_atual_id: params.noDestinoId,
       status: "rodando",
       metadata_json: {
-        ...metadata,
+        ...metadataAtualizado,
         tentativas_blocos: tentativasAtuais,
         visitas_nos: visitasAtualizadas,
       },
@@ -246,6 +437,47 @@ export async function continuarConsultasEstoqueAutomacao(
       return { processado: passo > 0, passos: passo };
     }
 
+    const selecaoPendente = selecaoInternaPendente(
+      execucao.metadata_json,
+      noAtual.id
+    );
+
+    if (selecaoPendente && !texto(params.mensagemTexto)) {
+      return {
+        processado: passo > 0,
+        passos: passo,
+        aguardandoSelecao: true,
+      };
+    }
+
+    if (
+      selecaoPendente &&
+      !respostaSelecaoInternaValida(
+        execucao.metadata_json,
+        noAtual.id,
+        params.mensagemTexto
+      )
+    ) {
+      await enviarListaSelecao({
+        empresaId: params.empresaId,
+        conversaId: params.conversaId,
+        execucaoId: execucao.id,
+        fluxoId: execucao.fluxo_id,
+        noId: noAtual.id,
+        numeroDestino,
+        mensagem: textoCandidatosDoMetadata(execucao.metadata_json),
+        mensagemErro: MENSAGEM_SELECAO_INVALIDA,
+        respostaRecebida: texto(params.mensagemTexto),
+      });
+
+      return {
+        processado: true,
+        passos: passo + 1,
+        aguardandoSelecao: true,
+        respostaInvalida: true,
+      };
+    }
+
     try {
       const resultado = await executarConsultaEstoqueAutomacao({
         empresaId: params.empresaId,
@@ -274,6 +506,8 @@ export async function continuarConsultasEstoqueAutomacao(
         },
         saida: {
           resultado: resultado.resultado,
+          motivo_indisponibilidade:
+            resultado.variaveis.estoque_motivo_indisponibilidade || "",
           produto_id: resultado.consulta.produto?.id || null,
           produto_nome: resultado.consulta.produto?.nome || null,
           quantidade_disponivel: resultado.consulta.quantidade_disponivel,
@@ -282,6 +516,44 @@ export async function continuarConsultasEstoqueAutomacao(
           candidatos: resultado.candidatos,
         },
       });
+
+      if (resultado.resultado === "multiplos_resultados") {
+        const mensagemLista = texto(resultado.variaveis.estoque_candidatos_texto);
+
+        await enviarListaSelecao({
+          empresaId: params.empresaId,
+          conversaId: params.conversaId,
+          execucaoId: execucao.id,
+          fluxoId: execucao.fluxo_id,
+          noId: noAtual.id,
+          numeroDestino,
+          mensagem: mensagemLista,
+        });
+
+        await atualizarSelecaoPendente({
+          empresaId: params.empresaId,
+          execucaoId: execucao.id,
+          noId: noAtual.id,
+          pendente: true,
+        });
+
+        return {
+          processado: true,
+          passos: passo + 1,
+          aguardandoSelecao: true,
+          pagina: resultado.pagina,
+          produtosPorPagina: resultado.produtosPorPagina,
+        };
+      }
+
+      if (selecaoPendente) {
+        await atualizarSelecaoPendente({
+          empresaId: params.empresaId,
+          execucaoId: execucao.id,
+          noId: noAtual.id,
+          pendente: false,
+        });
+      }
 
       const conexao = await buscarConexaoResultado({
         empresaId: params.empresaId,

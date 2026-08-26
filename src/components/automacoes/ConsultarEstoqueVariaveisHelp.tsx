@@ -20,7 +20,7 @@ const GRUPOS_VARIAVEIS: GrupoVariaveisAjuda[] = [
       "Use para identificar o resultado final da consulta e o produto selecionado.",
     variaveis: [
       { chave: "estoque_resultado", descricao: "disponivel, sem_estoque ou nao_encontrado." },
-      { chave: "estoque_produto_id", descricao: "ID interno do produto." },
+      { chave: "estoque_produto_id", descricao: "ID interno do produto. Pode ser reutilizado por outro Consultar estoque usando Produto selecionado anteriormente." },
       { chave: "estoque_produto_nome", descricao: "Nome do produto localizado." },
       { chave: "estoque_produto_codigo", descricao: "Código interno do produto." },
       { chave: "estoque_produto_sku", descricao: "SKU do produto." },
@@ -49,11 +49,15 @@ const GRUPOS_VARIAVEIS: GrupoVariaveisAjuda[] = [
   {
     titulo: "Disponibilidade",
     descricao:
-      "Representa o saldo dentro dos depósitos configurados neste bloco.",
+      "Representa o saldo atual dos depósitos configurados. A quantidade solicitada pelo cliente continua sendo a variável criada pelo bloco Capturar resposta.",
     variaveis: [
-      { chave: "estoque_quantidade", descricao: "Quantidade disponível para venda." },
+      { chave: "estoque_quantidade", descricao: "Quantidade disponível para venda no momento da consulta." },
       { chave: "estoque_quantidade_fisica", descricao: "Quantidade física total." },
       { chave: "estoque_quantidade_reservada", descricao: "Quantidade atualmente reservada." },
+      {
+        chave: "estoque_motivo_indisponibilidade",
+        descricao: "Explica a saída Sem estoque: quantidade_insuficiente quando o cliente pediu mais do que há disponível, sem_saldo quando não há saldo ou quantidade_invalida quando a variável informada não contém uma quantidade positiva válida.",
+      },
     ],
   },
   {
@@ -117,6 +121,19 @@ export default function ConsultarEstoqueVariaveisHelp() {
           <code>
             {"Encontrei {{estoque_produto_nome}} por {{estoque_preco_whatsapp_formatado}}. Temos {{estoque_quantidade}} {{estoque_unidade}} disponíveis."}
           </code>
+        </div>
+
+        <div className={styles.variableExample}>
+          <strong>Exemplo quando a quantidade for insuficiente</strong>
+          <code>
+            {"Você solicitou {{quantidade_desejada}}, mas temos {{estoque_quantidade}} {{estoque_unidade}} de {{estoque_produto_nome}} disponíveis."}
+          </code>
+        </div>
+
+        <div className={styles.variableNotice}>
+          A variável <strong>{"{{quantidade_desejada}}"}</strong> do exemplo não é
+          criada pelo Consultar estoque. Ela deve ser criada antes por um bloco
+          Capturar resposta e selecionada em “Variável da quantidade solicitada”.
         </div>
 
         <div className={styles.variableNotice}>

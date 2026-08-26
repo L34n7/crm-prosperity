@@ -3,12 +3,12 @@ import type { TemplateVariableOption } from "@/components/TemplateVariableCombob
 import { normalizarConfiguracaoConsultarEstoque } from "@/components/automacoes/ConsultarEstoqueConfig";
 
 export const TIPO_NO_CONSULTAR_ESTOQUE = "consultar_estoque";
+export const SAIDA_LEGADA_MULTIPLOS_ESTOQUE = "multiplos_resultados";
 
 export const SAIDAS_CONSULTA_ESTOQUE = [
   { valor: "disponivel", titulo: "Disponível" },
   { valor: "sem_estoque", titulo: "Sem estoque" },
   { valor: "nao_encontrado", titulo: "Não encontrado" },
-  { valor: "multiplos_resultados", titulo: "Vários encontrados" },
 ] as const;
 
 export const VARIAVEIS_SAIDA_ESTOQUE: TemplateVariableOption[] = [
@@ -23,6 +23,10 @@ export const VARIAVEIS_SAIDA_ESTOQUE: TemplateVariableOption[] = [
   ["estoque_quantidade", "Quantidade disponível para venda."],
   ["estoque_quantidade_fisica", "Quantidade física no escopo consultado."],
   ["estoque_quantidade_reservada", "Quantidade reservada no escopo consultado."],
+  [
+    "estoque_motivo_indisponibilidade",
+    "Motivo da saída Sem estoque: sem_saldo, quantidade_insuficiente ou quantidade_invalida.",
+  ],
   ["estoque_unidade", "Unidade base do produto."],
   [
     "estoque_deposito_id",
@@ -79,6 +83,13 @@ type EdgeDataConexao = {
   condicao_json?: Record<string, unknown>;
 };
 
+function valorSaidaDaConexao(edge: Edge) {
+  return String(
+    ((edge.data as EdgeDataConexao | undefined)?.condicao_json || {}).valor ||
+      ""
+  ).trim();
+}
+
 export function saidaConsultaEstoquePorValor(valor: unknown) {
   const valorNormalizado = String(valor || "").trim();
 
@@ -118,6 +129,13 @@ export function validarNodeConsultarEstoque(node: Node, edges: Edge[]) {
     return `O bloco "${titulo}" precisa ter uma variável de produto.`;
   }
 
+  if (
+    config.validar_quantidade_solicitada &&
+    !config.variavel_quantidade
+  ) {
+    return `O bloco "${titulo}" precisa informar a variável da quantidade solicitada.`;
+  }
+
   if (config.deposito_modo === "especifico" && !config.deposito_id) {
     return `O bloco "${titulo}" precisa ter um depósito selecionado.`;
   }
@@ -129,7 +147,13 @@ export function validarNodeConsultarEstoque(node: Node, edges: Edge[]) {
     return `O bloco "${titulo}" precisa ter pelo menos um depósito selecionado.`;
   }
 
-  const conexoesSaida = edges.filter((edge) => edge.source === node.id);
+  // Conexões antigas de "Vários encontrados" são ignoradas. O runtime trata
+  // seleção, paginação e navegação internamente no próprio bloco.
+  const conexoesSaida = edges.filter(
+    (edge) =>
+      edge.source === node.id &&
+      valorSaidaDaConexao(edge) !== SAIDA_LEGADA_MULTIPLOS_ESTOQUE
+  );
 
   if (conexoesSaida.length !== SAIDAS_CONSULTA_ESTOQUE.length) {
     return `O bloco "${titulo}" precisa ter exatamente ${SAIDAS_CONSULTA_ESTOQUE.length} conexões de saída.`;
@@ -151,12 +175,7 @@ export function validarNodeConsultarEstoque(node: Node, edges: Edge[]) {
     }
   }
 
-  const valoresSaida = conexoesSaida.map((edge) =>
-    String(
-      ((edge.data as EdgeDataConexao | undefined)?.condicao_json || {}).valor ||
-        ""
-    ).trim()
-  );
+  const valoresSaida = conexoesSaida.map(valorSaidaDaConexao);
 
   for (const saida of SAIDAS_CONSULTA_ESTOQUE) {
     const quantidade = valoresSaida.filter(

@@ -7,7 +7,8 @@ import styles from "./ConsultarEstoqueConfig.module.css";
 export type OrigemProdutoConsultaEstoque =
   | "resposta_cliente"
   | "variavel"
-  | "produto_especifico";
+  | "produto_especifico"
+  | "produto_selecionado_anteriormente";
 export type ModoPesquisaConsultaEstoque =
   | "automatico"
   | "nome"
@@ -31,6 +32,8 @@ export type ConfiguracaoConsultarEstoque = {
   deposito_id: string;
   deposito_ids: string[];
   usar_embalagem_venda: boolean;
+  validar_quantidade_solicitada: boolean;
+  variavel_quantidade: string;
   produtos_por_pagina: number;
   mensagem_multiplos_produtos: string;
   /** Compatibilidade com fluxos salvos antes da paginação. */
@@ -70,6 +73,8 @@ export const CONFIGURACAO_CONSULTAR_ESTOQUE_PADRAO: ConfiguracaoConsultarEstoque
   deposito_id: "",
   deposito_ids: [],
   usar_embalagem_venda: true,
+  validar_quantidade_solicitada: false,
+  variavel_quantidade: "",
   produtos_por_pagina: 15,
   mensagem_multiplos_produtos: MENSAGEM_MULTIPLOS_PRODUTOS_PADRAO,
   limite_candidatos: 15,
@@ -79,6 +84,7 @@ const ORIGENS_PRODUTO = new Set<OrigemProdutoConsultaEstoque>([
   "resposta_cliente",
   "variavel",
   "produto_especifico",
+  "produto_selecionado_anteriormente",
 ]);
 const MODOS_PESQUISA = new Set<ModoPesquisaConsultaEstoque>([
   "automatico",
@@ -154,6 +160,10 @@ export function normalizarConfiguracaoConsultarEstoque(
     deposito_id: texto(config.deposito_id),
     deposito_ids: depositoIds.slice(0, 50),
     usar_embalagem_venda: config.usar_embalagem_venda !== false,
+    validar_quantidade_solicitada:
+      config.validar_quantidade_solicitada === true ||
+      config.validar_quantidade_solicitada === "true",
+    variavel_quantidade: normalizarVariavel(config.variavel_quantidade),
     produtos_por_pagina: produtosPorPagina,
     mensagem_multiplos_produtos: mensagemMultiplos,
     limite_candidatos: produtosPorPagina,
@@ -241,6 +251,7 @@ export default function ConsultarEstoqueConfig({
           Em buscas por texto, o bloco usa IA quando houver tokens para interpretar
           o que o cliente deseja. Se encontrar vários produtos, o próprio bloco
           envia as opções, aguarda a escolha e trata a paginação internamente.
+          Também pode revalidar o saldo do produto escolhido antes da compra.
           A consulta não reserva, movimenta ou altera saldo.
         </span>
       </div>
@@ -258,8 +269,22 @@ export default function ConsultarEstoqueConfig({
           <option value="resposta_cliente">Resposta atual do cliente</option>
           <option value="variavel">Variável do fluxo</option>
           <option value="produto_especifico">Produto específico</option>
+          <option value="produto_selecionado_anteriormente">
+            Produto selecionado anteriormente
+          </option>
         </select>
       </label>
+
+      {config.origem_produto === "produto_selecionado_anteriormente" && (
+        <div className={styles.intro}>
+          <strong>Reutilizar o produto já escolhido</strong>
+          <span>
+            Usa automaticamente {"{{estoque_produto_id}}"} gerado por uma consulta
+            anterior deste fluxo. O produto é consultado novamente pelo ID, sem nova
+            busca por nome e sem consumo de IA.
+          </span>
+        </div>
+      )}
 
       {config.origem_produto === "produto_especifico" && (
         <div className={styles.stack}>
@@ -353,26 +378,28 @@ export default function ConsultarEstoqueConfig({
         ))}
       </datalist>
 
-      <label className={styles.field}>
-        <span>Pesquisar por</span>
-        <select
-          value={config.pesquisar_por}
-          onChange={(event) =>
-            atualizar({
-              pesquisar_por: event.target.value as ModoPesquisaConsultaEstoque,
-            })
-          }
-        >
-          <option value="automatico">Automático (recomendado)</option>
-          <option value="nome">Nome</option>
-          <option value="codigo_sku">Código / SKU</option>
-          <option value="codigo_barras">Código de barras</option>
-        </select>
-        <small>
-          A IA é usada nas buscas por texto. Código/SKU e código de barras seguem
-          pela busca exata. Sem tokens, a busca direta continua funcionando.
-        </small>
-      </label>
+      {config.origem_produto !== "produto_selecionado_anteriormente" && (
+        <label className={styles.field}>
+          <span>Pesquisar por</span>
+          <select
+            value={config.pesquisar_por}
+            onChange={(event) =>
+              atualizar({
+                pesquisar_por: event.target.value as ModoPesquisaConsultaEstoque,
+              })
+            }
+          >
+            <option value="automatico">Automático (recomendado)</option>
+            <option value="nome">Nome</option>
+            <option value="codigo_sku">Código / SKU</option>
+            <option value="codigo_barras">Código de barras</option>
+          </select>
+          <small>
+            A IA é usada nas buscas por texto. Código/SKU e código de barras seguem
+            pela busca exata. Sem tokens, a busca direta continua funcionando.
+          </small>
+        </label>
+      )}
 
       <label className={styles.field}>
         <span>Escopo de depósitos</span>
@@ -459,6 +486,44 @@ export default function ConsultarEstoqueConfig({
         </span>
       </label>
 
+      <label className={styles.toggleRow}>
+        <input
+          type="checkbox"
+          checked={config.validar_quantidade_solicitada}
+          onChange={(event) =>
+            atualizar({ validar_quantidade_solicitada: event.target.checked })
+          }
+        />
+        <span>
+          <strong>Validar quantidade solicitada</strong>
+          <small>
+            Consulta novamente o saldo atual e só retorna Disponível quando houver
+            quantidade suficiente para atender o valor capturado no fluxo.
+          </small>
+        </span>
+      </label>
+
+      {config.validar_quantidade_solicitada && (
+        <label className={styles.field}>
+          <span>Variável da quantidade solicitada</span>
+          <input
+            list={datalistId}
+            value={config.variavel_quantidade}
+            onChange={(event) =>
+              atualizar({
+                variavel_quantidade: normalizarVariavel(event.target.value),
+              })
+            }
+            placeholder="Ex.: quantidade_desejada"
+          />
+          <small>
+            Use a variável criada pelo bloco Capturar resposta, por exemplo
+            {" {{quantidade_desejada}}"}. O Consultar estoque não cria uma nova
+            variável de quantidade solicitada.
+          </small>
+        </label>
+      )}
+
       <label className={styles.field}>
         <span>Produtos por página</span>
         <select
@@ -506,8 +571,9 @@ export default function ConsultarEstoqueConfig({
           <span>Não encontrado</span>
         </div>
         <small>
-          Vários resultados são tratados internamente. Para ativar o fluxo, conecte
-          uma vez cada uma das três saídas finais acima.
+          Vários resultados são tratados internamente. Quando a validação de
+          quantidade estiver ativa, “Sem estoque” também é usada quando o saldo
+          atual é menor que a quantidade solicitada.
         </small>
       </div>
 

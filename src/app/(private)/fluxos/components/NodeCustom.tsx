@@ -78,10 +78,10 @@ export default function NodeCustom({ data, dragging }: any) {
 
           {consultaEstoque && (
             <span
-              title="Disponível · Sem estoque · Não encontrado · Vários encontrados"
+              title="Disponível · Sem estoque · Não encontrado"
               style={{ fontSize: 9, opacity: 0.72, whiteSpace: "nowrap" }}
             >
-              4 saídas
+              3 saídas
             </span>
           )}
 
@@ -122,7 +122,7 @@ export default function NodeCustom({ data, dragging }: any) {
               className={styles.nodeHandle}
               isConnectable={true}
               title={saida.titulo}
-              style={{ top: `${22 + index * 19}%` }}
+              style={{ top: `${28 + index * 24}%` }}
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
             />
