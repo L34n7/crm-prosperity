@@ -128,10 +128,10 @@
 
 .variableItem {
   display: grid;
-  grid-template-columns: minmax(190px, 0.8fr) minmax(0, 1.2fr);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
   align-items: start;
-  padding: 8px 11px;
+  padding: 9px 11px 10px;
 }
 
 .variableItem + .variableItem {
@@ -139,6 +139,7 @@
 }
 
 .variableItem code {
+  display: block;
   color: var(--crm-primary-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
@@ -147,12 +148,11 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 720px) {
-  .variableItem {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
+.variableItem span {
+  display: block;
+}
 
+@media (max-width: 720px) {
   .variablesHelp > summary,
   .variablesHelpBody {
     padding-left: 12px;
