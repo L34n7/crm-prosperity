@@ -1,0 +1,161 @@
+.wrapper {
+  display: grid;
+  gap: 14px;
+}
+
+.variablesHelp {
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  overflow: hidden;
+}
+
+.variablesHelp > summary {
+  position: relative;
+  padding: 12px 38px 12px 14px;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.variablesHelp > summary::-webkit-details-marker {
+  display: none;
+}
+
+.variablesHelp > summary::after {
+  content: "+";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: var(--crm-primary-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.variablesHelp[open] > summary::after {
+  content: "−";
+}
+
+.variablesHelp[open] > summary {
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.variablesHelpBody {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 14px;
+}
+
+.variablesHelpBody > p,
+.variableGroupHeader span,
+.variableItem span,
+.variableNotice {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.variableExample,
+.variableNotice,
+.variableGroup {
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+}
+
+.variableExample {
+  display: grid;
+  gap: 8px;
+  padding: 10px 11px;
+}
+
+.variableExample strong,
+.variableGroupHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.variableExample code {
+  display: block;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.variableNotice {
+  padding: 10px 11px;
+}
+
+.variableNotice strong {
+  color: var(--crm-text-strong);
+}
+
+.variableGroups {
+  display: grid;
+  gap: 10px;
+}
+
+.variableGroup {
+  overflow: hidden;
+}
+
+.variableGroupHeader {
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+
+.variableList {
+  display: grid;
+}
+
+.variableItem {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 11px;
+}
+
+.variableItem + .variableItem {
+  border-top: 1px solid var(--crm-border);
+}
+
+.variableItem code {
+  color: var(--crm-primary-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .variableItem {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .variablesHelp > summary,
+  .variablesHelpBody {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
