@@ -8,6 +8,10 @@ import {
   processarTimeoutSemRespostaAgendado as processarTimeoutSemRespostaAgendadoBase,
 } from "./process-automation-engine-agenda";
 import { continuarConsultasEstoqueAutomacao } from "./process-automation-engine-estoque-runtime";
+import {
+  continuarCheckoutPagamentoAutomacao,
+  interceptarMensagemCheckoutPendente,
+} from "./process-automation-engine-checkout-runtime";
 
 export * from "./process-automation-engine-agenda";
 
@@ -245,20 +249,26 @@ async function tentarPriorizarPreferenciaHorario(input: AutomationEngineInput) {
   };
 }
 
-async function continuarEstoqueDepoisDoMotor(params: {
+async function continuarNosEspeciaisDepoisDoMotor(params: {
   empresaId: string;
   conversaId: string;
   numeroDestino?: string | null;
   mensagemTexto?: string;
   execucaoId?: string | null;
 }) {
-  return continuarConsultasEstoqueAutomacao({
+  const comum = {
     empresaId: params.empresaId,
     conversaId: params.conversaId,
     numeroDestino: String(params.numeroDestino || ""),
-    mensagemTexto: params.mensagemTexto,
     execucaoId: params.execucaoId,
+  };
+
+  await continuarConsultasEstoqueAutomacao({
+    ...comum,
+    mensagemTexto: params.mensagemTexto,
   });
+
+  await continuarCheckoutPagamentoAutomacao(comum);
 }
 
 export async function processAutomationEngine(input: AutomationEngineInput) {
@@ -266,6 +276,15 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 
   if (resultadoTemporal) {
     return resultadoTemporal;
+  }
+
+  const checkoutPendente = await interceptarMensagemCheckoutPendente({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+  });
+
+  if (checkoutPendente) {
+    return checkoutPendente;
   }
 
   const resultadoRotinas = await processarMensagemRecebidaRotinas({
@@ -291,7 +310,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(input);
 
   if (resultadoPreferencia) {
-    await continuarEstoqueDepoisDoMotor({
+    await continuarNosEspeciaisDepoisDoMotor({
       empresaId: input.empresaId,
       conversaId: input.conversaId,
       numeroDestino: input.numeroDestino,
@@ -304,7 +323,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 
   const resultado = await processAutomationEngineAgenda(input);
 
-  await continuarEstoqueDepoisDoMotor({
+  await continuarNosEspeciaisDepoisDoMotor({
     empresaId: input.empresaId,
     conversaId: input.conversaId,
     numeroDestino: input.numeroDestino,
@@ -330,7 +349,7 @@ export async function processarFilaProcessamentoAutoPorId(jobId: string) {
   if (job) {
     const payload = job.payload_json || {};
 
-    await continuarEstoqueDepoisDoMotor({
+    await continuarNosEspeciaisDepoisDoMotor({
       empresaId: job.empresa_id,
       conversaId: job.conversa_id,
       numeroDestino: payload.numero_destino,
@@ -408,7 +427,7 @@ export async function processarTimeoutSemRespostaAgendado(
     const conversaId = String(payload.conversa_id || "").trim();
 
     if (conversaId) {
-      await continuarEstoqueDepoisDoMotor({
+      await continuarNosEspeciaisDepoisDoMotor({
         empresaId: params.empresaId,
         conversaId,
         numeroDestino: payload.numero_destino,

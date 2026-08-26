@@ -6,6 +6,7 @@ import {
   VARIAVEIS_FIXAS_CONTATO_HELP,
 } from "../../constants";
 import { TIPO_NO_CONSULTAR_ESTOQUE } from "../../consultar-estoque-editor";
+import { TIPO_NO_CHECKOUT_PAGAMENTO } from "../../checkout-pagamento-editor";
 import styles from "../../fluxos.module.css";
 
 type NodeConfigPanelProps = {
@@ -39,6 +40,7 @@ const TIPOS_COM_MENSAGEM = new Set([
   "agenda_remarcar_agendamento",
   "agenda_cancelar_agendamento",
   "interpretar_arquivo_ia",
+  TIPO_NO_CHECKOUT_PAGAMENTO,
 ]);
 
 function labelMensagem(tipoNode: string) {
@@ -53,6 +55,9 @@ function labelMensagem(tipoNode: string) {
   if (tipoNode === "transferir_setor") return "Mensagem antes de transferir";
   if (tipoNode === "encerrar") return "Mensagem de encerramento (opcional)";
   if (tipoNode === "avaliacao") return "Pergunta de avaliação";
+  if (tipoNode === TIPO_NO_CHECKOUT_PAGAMENTO) {
+    return "Mensagem com o link de pagamento";
+  }
   if (tipoNode === "agenda_buscar_agendamento") return "Mensagem para 1 agendamento";
   if (tipoNode === "agenda_escolher_horario") return "Mensagem para pedir o dia";
   if (tipoNode === "agenda_criar_agendamento") return "Mensagem depois de criar";
@@ -101,6 +106,7 @@ export default function NodeConfigPanel({
             <option value="enviar_botoes">Pergunta com Botões</option>
             <option value="botao_redirect">Botão redirect</option>
             <option value={TIPO_NO_CONSULTAR_ESTOQUE}>Consultar estoque</option>
+            <option value={TIPO_NO_CHECKOUT_PAGAMENTO}>Checkout / pagamento</option>
             <option value="agendar_disparo">Agendar disparo</option>
             <option value="agenda_buscar_agendamento">
               Agenda: Buscar agendamento
@@ -148,6 +154,11 @@ export default function NodeConfigPanel({
             Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
           </p>
           <p className={styles.help}>{VARIAVEIS_FIXAS_CONTATO_HELP}</p>
+          {tipoNode === TIPO_NO_CHECKOUT_PAGAMENTO && (
+            <p className={styles.help}>
+              O bloco usa o produto selecionado no estoque, a variável {"{{quantidade_desejada}}"} e o preço vigente do canal WhatsApp. Variáveis geradas: {"{{checkout_url}}"}, {"{{pedido_numero}}"}, {"{{pagamento_valor_formatado}}"}, {"{{pagamento_status}}"} e {"{{pagamento_metodo}}"}.
+            </p>
+          )}
           <button
             type="button"
             className={styles.inlineVariablesButton}

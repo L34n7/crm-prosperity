@@ -13,6 +13,7 @@
     { "path": "/api/cron/google_calendar_sync?limit=30", "schedule": "* * * * *" },
     { "path": "/api/cron/agenda_automacoes?limit=50", "schedule": "* * * * *" },
     { "path": "/api/cron/rotinas_integracoes_eventos?limit=50", "schedule": "* * * * *" },
-    { "path": "/api/cron/atomopay_reconciliar_pix?limit=200&idade_minutos=1560", "schedule": "*/15 * * * *" }
+    { "path": "/api/cron/atomopay_reconciliar_pix?limit=200&idade_minutos=1560", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/checkout-pagamentos?limit=50", "schedule": "*/5 * * * *" }
   ]
 }

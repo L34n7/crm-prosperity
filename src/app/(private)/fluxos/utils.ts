@@ -7,6 +7,10 @@ import {
   SAIDAS_CONSULTA_ESTOQUE,
   TIPO_NO_CONSULTAR_ESTOQUE,
 } from "./consultar-estoque-editor";
+import {
+  SAIDAS_CHECKOUT_PAGAMENTO,
+  TIPO_NO_CHECKOUT_PAGAMENTO,
+} from "./checkout-pagamento-editor";
 
 export type OpcaoRespostaConexao = {
   valor: string;
@@ -30,6 +34,7 @@ export function labelTipoNo(tipo: string) {
   if (tipo === "capturar_resposta") return "Captura";
   if (tipo === "agendar_disparo") return "Agendar disparo";
   if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";
+  if (tipo === TIPO_NO_CHECKOUT_PAGAMENTO) return "Checkout / pagamento";
   if (tipo === "agenda_buscar_agendamento") return "Buscar agenda";
   if (tipo === "agenda_escolher_horario") return "Escolher horário";
   if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
@@ -56,6 +61,7 @@ export function tituloPadraoTipoNo(tipo: string) {
   if (tipo === "capturar_resposta") return "Capturar resposta";
   if (tipo === "agendar_disparo") return "Agendar disparo";
   if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return "Consultar estoque";
+  if (tipo === TIPO_NO_CHECKOUT_PAGAMENTO) return "Checkout / pagamento";
   if (tipo === "agenda_buscar_agendamento") return "Buscar agendamento";
   if (tipo === "agenda_escolher_horario") return "Escolher horário";
   if (tipo === "agenda_criar_agendamento") return "Criar agendamento";
@@ -143,6 +149,13 @@ export function opcoesRespostaDoNo(
 
   if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) {
     return SAIDAS_CONSULTA_ESTOQUE.map((saida) => ({
+      valor: saida.valor,
+      titulo: saida.titulo,
+    }));
+  }
+
+  if (tipoNo === TIPO_NO_CHECKOUT_PAGAMENTO) {
+    return SAIDAS_CHECKOUT_PAGAMENTO.map((saida) => ({
       valor: saida.valor,
       titulo: saida.titulo,
     }));
