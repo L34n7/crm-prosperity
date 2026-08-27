@@ -47,6 +47,12 @@ function lerVariavelObrigatoria(nome: string) {
   return valor;
 }
 
+export function usarTokenTesteMercadoPago() {
+  return String(process.env.MERCADOPAGO_TEST_TOKEN || "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
 function chaveStateOAuthMercadoPago() {
   const segredo =
     process.env.MERCADOPAGO_TOKEN_ENCRYPTION_KEY ||
@@ -209,6 +215,15 @@ export async function trocarCodigoPorTokensMercadoPago(input: {
   }
 
   const { clientId, clientSecret, redirectUri } = obterConfigOAuthMercadoPago();
+  const testToken = usarTokenTesteMercadoPago();
+
+  console.info("[MERCADO_PAGO] Trocando codigo OAuth", {
+    client_id: clientId,
+    client_secret_configurado: Boolean(clientSecret),
+    client_secret_tamanho: clientSecret.length,
+    test_token: testToken,
+  });
+
   const response = await fetch(MERCADO_PAGO_TOKEN_URL, {
     method: "POST",
     headers: {
@@ -222,6 +237,7 @@ export async function trocarCodigoPorTokensMercadoPago(input: {
       code,
       redirect_uri: redirectUri,
       code_verifier: codeVerifier,
+      test_token: testToken,
     }),
     cache: "no-store",
   });
@@ -238,6 +254,10 @@ export async function trocarCodigoPorTokensMercadoPago(input: {
       status: response.status,
       error: erro,
       error_description: descricao,
+      client_id: clientId,
+      client_secret_configurado: Boolean(clientSecret),
+      client_secret_tamanho: clientSecret.length,
+      test_token: testToken,
     });
 
     throw new Error(descricao);

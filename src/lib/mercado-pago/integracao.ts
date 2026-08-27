@@ -5,7 +5,10 @@ import {
   randomBytes,
 } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import type { MercadoPagoOAuthTokens } from "@/lib/mercado-pago/oauth";
+import {
+  usarTokenTesteMercadoPago,
+  type MercadoPagoOAuthTokens,
+} from "@/lib/mercado-pago/oauth";
 
 function chaveCriptografiaMercadoPago() {
   const segredo =
@@ -75,9 +78,17 @@ function credenciaisAplicacaoMercadoPago() {
 async function renovarAccessTokenMercadoPago(integracao: any) {
   const supabase = getSupabaseAdmin();
   const { clientId, clientSecret } = credenciaisAplicacaoMercadoPago();
+  const testToken = usarTokenTesteMercadoPago();
   const refreshToken = descriptografarCredencialMercadoPago(
     integracao.refresh_token_encrypted
   );
+
+  console.info("[MERCADO_PAGO] Renovando token OAuth", {
+    client_id: clientId,
+    client_secret_configurado: Boolean(clientSecret),
+    client_secret_tamanho: clientSecret.length,
+    test_token: testToken,
+  });
 
   const response = await fetch("https://api.mercadopago.com/oauth/token", {
     method: "POST",
@@ -87,6 +98,7 @@ async function renovarAccessTokenMercadoPago(integracao: any) {
       client_secret: clientSecret,
       grant_type: "refresh_token",
       refresh_token: refreshToken,
+      test_token: testToken,
     }),
     cache: "no-store",
   });
