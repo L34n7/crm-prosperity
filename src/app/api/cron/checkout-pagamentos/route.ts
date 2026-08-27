@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarCheckoutPagamentosExpirados } from "@/lib/automacoes/process-automation-engine-checkout-runtime";
 import { processarRecuperacoesCheckoutPendentes } from "@/lib/automacoes/process-automation-engine-checkout-recovery";
+import { processarReconciliacoesCheckoutPendentes } from "@/lib/automacoes/process-automation-engine-checkout-reconciliation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,11 +20,13 @@ export async function GET(request: Request) {
     : 50;
 
   try {
+    const reconciliacoes = await processarReconciliacoesCheckoutPendentes(limite);
     const recuperacoes = await processarRecuperacoesCheckoutPendentes(limite);
     const expiracoes = await processarCheckoutPagamentosExpirados(limite);
 
     return NextResponse.json({
       ok: true,
+      reconciliacoes,
       recuperacoes,
       expiracoes,
     });
