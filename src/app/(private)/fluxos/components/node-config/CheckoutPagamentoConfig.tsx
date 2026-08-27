@@ -105,11 +105,12 @@ export default function CheckoutPagamentoConfig({
       <div className={styles.field}>
         <span className={styles.label}>Como o checkout funciona</span>
         <p className={styles.help}>
-          O bloco usa o produto selecionado pela consulta de estoque, a quantidade
-          de {"{{quantidade_desejada}}"} e o preço vigente do canal WhatsApp. Se
-          não houver preço específico para WhatsApp, o sistema herda o preço-base.
-          O pedido e o estoque são reservados antes de gerar o Checkout Pro do
-          Mercado Pago. O fluxo só continua quando o gateway confirmar o resultado.
+          O preço WhatsApp é o preço usado nas vendas automatizadas deste fluxo.
+          O sistema multiplica esse preço pela {"{{quantidade_desejada}}"} e usa o
+          total para gerar o Checkout Pro do Mercado Pago. Se não houver preço
+          específico para WhatsApp, o sistema herda o preço-base. O pedido e o
+          estoque são reservados antes de gerar o checkout, e o fluxo só continua
+          quando o gateway confirmar o resultado.
         </p>
       </div>
 
@@ -123,11 +124,12 @@ export default function CheckoutPagamentoConfig({
       >
         <span className={styles.label}>Tarifas do Mercado Pago</span>
         <p className={styles.help} style={{ marginBottom: 0 }}>
-          O valor configurado no estoque é o valor cobrado do cliente. O Mercado
-          Pago pode descontar tarifas do valor recebido pela empresa, conforme o
-          meio de pagamento e as condições da conta. A Prosperity não acrescenta
-          essa tarifa automaticamente. Se desejar considerar esse custo no preço,
-          ajuste o preço WhatsApp em Estoque → Preços e promoções.
+          O preço WhatsApp define o valor cobrado na venda automatizada e enviado
+          ao checkout do Mercado Pago. O Mercado Pago pode descontar tarifas do
+          valor recebido pela empresa, conforme o meio de pagamento e as condições
+          da conta. A Prosperity não acrescenta essa tarifa automaticamente. Se a
+          empresa quiser considerar esse custo, deve configurar o preço WhatsApp já
+          com a margem desejada em Estoque → Preços e promoções.
         </p>
       </div>
 
