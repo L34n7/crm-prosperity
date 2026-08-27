@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import CrmShell from "@/components/CrmShell";
 import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
 import MobileEmpresaMenuLink from "@/components/MobileEmpresaMenuLink";
@@ -26,20 +27,26 @@ export default async function PrivateLayout({
 
   const resultado = await getUsuarioContexto();
 
-  if (resultado.ok) {
-    profileName = resultado.usuario.nome || "Usuario";
-    avatarUrl = resultado.usuario.avatar_url || "";
-    permissoes = resultado.usuario.permissoes;
-    assinatura = resultado.usuario.assinatura;
-    isAdmin = resultado.usuario.is_admin;
+  if (!resultado.ok) {
+    if (resultado.status === 401) {
+      redirect("/login");
+    }
 
-    if (resultado.usuario.empresa_id) {
-      try {
-        const nicho = await buscarNichoEmpresa(resultado.usuario.empresa_id);
-        nichoCodigo = nicho.codigo;
-      } catch (error) {
-        console.error("Erro ao carregar nicho da empresa:", error);
-      }
+    redirect("/conta-incompleta");
+  }
+
+  profileName = resultado.usuario.nome || "Usuario";
+  avatarUrl = resultado.usuario.avatar_url || "";
+  permissoes = resultado.usuario.permissoes;
+  assinatura = resultado.usuario.assinatura;
+  isAdmin = resultado.usuario.is_admin;
+
+  if (resultado.usuario.empresa_id) {
+    try {
+      const nicho = await buscarNichoEmpresa(resultado.usuario.empresa_id);
+      nichoCodigo = nicho.codigo;
+    } catch (error) {
+      console.error("Erro ao carregar nicho da empresa:", error);
     }
   }
 

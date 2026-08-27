@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import {
   getOrSetTtlCache,
   getTtlCacheKey,
+  invalidateTtlCache,
 } from "@/lib/cache/ttl-cache";
 import { createClient } from "@/lib/supabase/server";
 import { listarSetoresDoUsuario } from "@/lib/usuarios/setores";
@@ -190,6 +191,36 @@ async function buscarUsuarioBasePorAuthId(
   );
 }
 
+async function buscarOuRecuperarUsuarioBase(
+  supabase: SupabaseServerClient,
+  authUserId: string
+) {
+  const usuarioBase = await buscarUsuarioBasePorAuthId(supabase, authUserId);
+
+  if (usuarioBase) {
+    return usuarioBase;
+  }
+
+  const { data: usuarioRecuperadoId, error: recuperacaoError } =
+    await supabase.rpc("recuperar_usuario_auth_faltante");
+
+  if (recuperacaoError) {
+    console.error("[AUTH] Falha ao recuperar usuario interno ausente:", {
+      authUserId,
+      error: recuperacaoError.message,
+    });
+    return null;
+  }
+
+  if (!usuarioRecuperadoId) {
+    return null;
+  }
+
+  invalidateTtlCache(getTtlCacheKey("usuario-base-auth", [authUserId]));
+
+  return await buscarUsuarioBasePorAuthId(supabase, authUserId);
+}
+
 export async function getUsuarioBasico(): Promise<ResultadoUsuarioBasico> {
   try {
     const supabase = await createClient();
@@ -203,7 +234,7 @@ export async function getUsuarioBasico(): Promise<ResultadoUsuarioBasico> {
       };
     }
 
-    const usuarioBase = await buscarUsuarioBasePorAuthId(
+    const usuarioBase = await buscarOuRecuperarUsuarioBase(
       supabase,
       usuarioAutenticado.id
     );
@@ -254,7 +285,7 @@ export async function getUsuarioContexto(
       };
     }
 
-    const usuarioBase = await buscarUsuarioBasePorAuthId(
+    const usuarioBase = await buscarOuRecuperarUsuarioBase(
       supabase,
       usuarioAutenticado.id
     );

@@ -21,6 +21,10 @@ async function obterRotaAposLogin() {
     const data = await response.json();
 
     if (!response.ok || !data.ok) {
+      if (response.status === 403 || response.status === 404) {
+        return "/conta-incompleta";
+      }
+
       return "/painel";
     }
 
@@ -111,7 +115,7 @@ export default function LoginPage() {
     } catch {
       // O registro de sessao nao deve bloquear o login.
     }
-    
+
     const rota = await obterRotaAposLogin();
 
     if (rota === "/configurar-ambiente") {
