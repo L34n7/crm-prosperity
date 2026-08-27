@@ -1,12 +1,18 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useContext, useEffect, type ReactNode } from "react";
 import {
   TIPO_NO_PERGUNTA_LIVRE_IA,
   VARIAVEIS_FIXAS_CONTATO_HELP,
 } from "../../constants";
 import { TIPO_NO_CONSULTAR_ESTOQUE } from "../../consultar-estoque-editor";
 import { TIPO_NO_CHECKOUT_PAGAMENTO } from "../../checkout-pagamento-editor";
+import {
+  atualizarDraftCheckoutPagamento,
+  limparDraftCheckoutPagamento,
+} from "../../checkout-pagamento-draft";
+import { PropertiesPanelNodeContext } from "../PropertiesPanel";
+import CheckoutPagamentoConfig from "./CheckoutPagamentoConfig";
 import styles from "../../fluxos.module.css";
 
 type NodeConfigPanelProps = {
@@ -83,6 +89,30 @@ export default function NodeConfigPanel({
   onMensagemChange,
   onGerenciarVariaveis,
 }: NodeConfigPanelProps) {
+  const nodeEditado = useContext(PropertiesPanelNodeContext);
+
+  useEffect(() => {
+    if (
+      nodeEditado?.id &&
+      tipoNode !== TIPO_NO_CHECKOUT_PAGAMENTO
+    ) {
+      limparDraftCheckoutPagamento(nodeEditado.id);
+    }
+  }, [nodeEditado?.id, tipoNode]);
+
+  function alterarMensagem(valor: string) {
+    onMensagemChange(valor);
+
+    if (
+      tipoNode === TIPO_NO_CHECKOUT_PAGAMENTO &&
+      nodeEditado?.id
+    ) {
+      atualizarDraftCheckoutPagamento(nodeEditado.id, {
+        mensagem: valor,
+      });
+    }
+  }
+
   return (
     <div className={styles.propertiesForm}>
       {tipoNode !== "inicio" && (
@@ -147,7 +177,7 @@ export default function NodeConfigPanel({
           <textarea
             className={styles.textarea}
             value={mensagem}
-            onChange={(e) => onMensagemChange(e.target.value)}
+            onChange={(e) => alterarMensagem(e.target.value)}
             placeholder="Digite o conteúdo"
           />
           <p className={styles.help}>
@@ -167,6 +197,13 @@ export default function NodeConfigPanel({
             Gerenciar variáveis
           </button>
         </div>
+      )}
+
+      {tipoNode === TIPO_NO_CHECKOUT_PAGAMENTO && (
+        <CheckoutPagamentoConfig
+          mensagem={mensagem}
+          onMensagemChange={onMensagemChange}
+        />
       )}
 
       {children}

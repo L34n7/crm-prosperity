@@ -11,6 +11,10 @@ import {
   SAIDAS_CONSULTA_ESTOQUE,
   TIPO_NO_CONSULTAR_ESTOQUE,
 } from "../consultar-estoque-editor";
+import {
+  SAIDAS_CHECKOUT_PAGAMENTO,
+  TIPO_NO_CHECKOUT_PAGAMENTO,
+} from "../checkout-pagamento-editor";
 import { labelTipoNo, tituloVisivelCard } from "../utils";
 
 function corTipoNo(tipo: string) {
@@ -30,6 +34,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "capturar_resposta") return styles.nodeCaptura;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
   if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return styles.nodeEstoque;
+  if (tipo === TIPO_NO_CHECKOUT_PAGAMENTO) return styles.nodeAgendarDisparo;
   if (tipo === "agenda_buscar_agendamento") return styles.nodeAgendaBuscar;
   if (tipo === "agenda_escolher_horario") return styles.nodeAgendaEscolher;
   if (tipo === "agenda_criar_agendamento") return styles.nodeAgendaCriar;
@@ -44,6 +49,12 @@ export default function NodeCustom({ data, dragging }: any) {
   const temAlertaTemplateWaba =
     data?.agendar_disparo_template_waba_alerta === true;
   const consultaEstoque = data?.tipo_no === TIPO_NO_CONSULTAR_ESTOQUE;
+  const checkoutPagamento = data?.tipo_no === TIPO_NO_CHECKOUT_PAGAMENTO;
+  const saidasFixas = consultaEstoque
+    ? SAIDAS_CONSULTA_ESTOQUE
+    : checkoutPagamento
+      ? SAIDAS_CHECKOUT_PAGAMENTO
+      : null;
 
   return (
     <div
@@ -76,12 +87,12 @@ export default function NodeCustom({ data, dragging }: any) {
         <div className={styles.nodeTitleRow}>
           <strong className={styles.nodeTitle}>{tituloVisivelCard(data)}</strong>
 
-          {consultaEstoque && (
+          {saidasFixas && (
             <span
-              title="Disponível · Sem estoque · Não encontrado"
+              title={saidasFixas.map((saida) => saida.titulo).join(" · ")}
               style={{ fontSize: 9, opacity: 0.72, whiteSpace: "nowrap" }}
             >
-              3 saídas
+              {saidasFixas.length} saídas
             </span>
           )}
 
@@ -111,9 +122,9 @@ export default function NodeCustom({ data, dragging }: any) {
         </div>
       </div>
 
-      {consultaEstoque ? (
+      {saidasFixas ? (
         <>
-          {SAIDAS_CONSULTA_ESTOQUE.map((saida, index) => (
+          {saidasFixas.map((saida, index) => (
             <Handle
               key={saida.valor}
               id={saida.valor}
@@ -121,8 +132,8 @@ export default function NodeCustom({ data, dragging }: any) {
               position={Position.Right}
               className={styles.nodeHandle}
               isConnectable={true}
-              title={saida.titulo}
-              style={{ top: `${28 + index * 24}%` }}
+              title={`${saida.titulo} · ${saida.valor}`}
+              style={{ top: `${20 + index * 20}%` }}
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
             />

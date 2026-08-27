@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarCheckoutPagamentosExpirados } from "@/lib/automacoes/process-automation-engine-checkout-runtime";
+import { processarRecuperacoesCheckoutPendentes } from "@/lib/automacoes/process-automation-engine-checkout-recovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,8 +19,14 @@ export async function GET(request: Request) {
     : 50;
 
   try {
-    const resultado = await processarCheckoutPagamentosExpirados(limite);
-    return NextResponse.json({ ok: true, ...resultado });
+    const recuperacoes = await processarRecuperacoesCheckoutPendentes(limite);
+    const expiracoes = await processarCheckoutPagamentosExpirados(limite);
+
+    return NextResponse.json({
+      ok: true,
+      recuperacoes,
+      expiracoes,
+    });
   } catch (error) {
     console.error("[CRON CHECKOUT] Erro:", error);
     return NextResponse.json(

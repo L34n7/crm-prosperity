@@ -1,6 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { TemplateVariableOption } from "@/components/TemplateVariableCombobox";
 import { normalizarConfiguracaoConsultarEstoque } from "@/components/automacoes/ConsultarEstoqueConfig";
+import { validarCheckoutsAntesDeAtivar } from "./checkout-pagamento-editor";
 
 export const TIPO_NO_CONSULTAR_ESTOQUE = "consultar_estoque";
 export const SAIDA_LEGADA_MULTIPLOS_ESTOQUE = "multiplos_resultados";
@@ -60,7 +61,7 @@ export const VARIAVEIS_SAIDA_ESTOQUE: TemplateVariableOption[] = [
     "Mensagem pronta com copy, página, lista numerada e navegação.",
   ],
   ["estoque_candidatos_json", "Candidatos da página atual em JSON."],
-  ["estoque_pagina", "Página atual dos resultados de estoque."],
+  ["estoque_pagina", "Página atual dos resultados."],
   ["estoque_total_paginas", "Total de páginas dos resultados."],
   ["estoque_produtos_por_pagina", "Quantidade de produtos por página."],
   [
@@ -199,5 +200,5 @@ export function validarConsultasEstoqueAntesDeAtivar(
     if (erro) return erro;
   }
 
-  return "";
+  return validarCheckoutsAntesDeAtivar(nodes, edges);
 }

@@ -14,6 +14,38 @@ export type MercadoPagoPayment = {
   date_created?: string | null;
 };
 
+function origemPublicaMercadoPago() {
+  const candidatos = [
+    process.env.MERCADOPAGO_REDIRECT_URI,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+  ];
+
+  for (const candidato of candidatos) {
+    const valor = String(candidato || "").trim();
+    if (!valor) continue;
+
+    try {
+      const url = new URL(valor);
+      if (url.protocol === "https:") return url.origin;
+    } catch {
+      // Tenta a próxima origem configurada.
+    }
+  }
+
+  return "https://crmprosperity.com";
+}
+
+function urlsRetornoMercadoPago() {
+  const origem = origemPublicaMercadoPago();
+
+  return {
+    success: `${origem}/?checkout_mercado_pago=aprovado`,
+    pending: `${origem}/?checkout_mercado_pago=pendente`,
+    failure: `${origem}/?checkout_mercado_pago=falhou`,
+  };
+}
+
 function urlWebhookMercadoPago() {
   const configurada = String(
     process.env.MERCADOPAGO_WEBHOOK_URL || ""
@@ -75,6 +107,8 @@ export async function criarPreferenciaCheckoutMercadoPago(input: {
         ],
         external_reference: input.transacaoId,
         notification_url: urlWebhookMercadoPago(),
+        back_urls: urlsRetornoMercadoPago(),
+        auto_return: "approved",
         expires: true,
         expiration_date_from: new Date().toISOString(),
         expiration_date_to: input.expiraEm,

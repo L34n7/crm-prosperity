@@ -1,5 +1,11 @@
 "use client";
 
+import { useContext, useState } from "react";
+import {
+  limparDraftCheckoutPagamento,
+  prepararDraftCheckoutPagamentoParaAplicar,
+} from "../../checkout-pagamento-draft";
+import { PropertiesPanelNodeContext } from "../PropertiesPanel";
 import styles from "../../fluxos.module.css";
 
 type NodeActionsProps = {
@@ -19,15 +25,63 @@ export default function NodeActions({
   onCancelar,
   onAplicar,
 }: NodeActionsProps) {
+  const nodeEditado = useContext(PropertiesPanelNodeContext);
+  const [erroCheckout, setErroCheckout] = useState("");
+
+  function cancelar() {
+    if (nodeEditado?.id) {
+      limparDraftCheckoutPagamento(nodeEditado.id);
+    }
+    setErroCheckout("");
+    onCancelar();
+  }
+
+  function confirmarExclusao() {
+    if (nodeEditado?.id) {
+      limparDraftCheckoutPagamento(nodeEditado.id);
+    }
+    setErroCheckout("");
+    onConfirmarExclusao();
+  }
+
+  function aplicar() {
+    setErroCheckout("");
+
+    if (nodeEditado?.id) {
+      const resultado = prepararDraftCheckoutPagamentoParaAplicar(
+        nodeEditado.id
+      );
+
+      if (!resultado.ok) {
+        setErroCheckout(resultado.error);
+        return;
+      }
+    }
+
+    onAplicar();
+  }
+
   return (
     <>
+      {erroCheckout && (
+        <p
+          className={styles.help}
+          style={{
+            color: "var(--crm-ui-private-content-hex-dc2626)",
+            fontWeight: 700,
+          }}
+        >
+          {erroCheckout}
+        </p>
+      )}
+
       <div className={styles.actionButtonsRow}>
         {podeExcluir &&
           (confirmandoExclusao ? (
             <button
               type="button"
               className={styles.deleteNodeConfirmButton}
-              onClick={onConfirmarExclusao}
+              onClick={confirmarExclusao}
             >
               Excluir
             </button>
@@ -45,7 +99,7 @@ export default function NodeActions({
         <button
           type="button"
           className={styles.secondaryButton}
-          onClick={onCancelar}
+          onClick={cancelar}
         >
           Cancelar
         </button>
@@ -53,7 +107,7 @@ export default function NodeActions({
         <button
           type="button"
           className={styles.primaryButton}
-          onClick={onAplicar}
+          onClick={aplicar}
         >
           Aplicar no bloco
         </button>

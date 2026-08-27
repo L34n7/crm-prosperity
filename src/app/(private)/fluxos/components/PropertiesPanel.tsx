@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { createContext, type ReactNode } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import { CopyPlus } from "lucide-react";
+import { limparDraftCheckoutPagamento } from "../checkout-pagamento-draft";
 import styles from "../fluxos.module.css";
 
 type PropertiesPanelProps = {
@@ -14,6 +15,8 @@ type PropertiesPanelProps = {
   onFechar: () => void;
 };
 
+export const PropertiesPanelNodeContext = createContext<Node | null>(null);
+
 export default function PropertiesPanel({
   nodeEditado,
   edgeEditada,
@@ -24,36 +27,45 @@ export default function PropertiesPanel({
 }: PropertiesPanelProps) {
   if (!nodeEditado && !edgeEditada) return null;
 
-  return (
-    <aside className={styles.propertiesPanel}>
-      <div className={styles.propertiesHeader}>
-        <h3 className={styles.propertiesTitle}>Editar bloco</h3>
+  function fechar() {
+    if (nodeEditado?.id) {
+      limparDraftCheckoutPagamento(nodeEditado.id);
+    }
+    onFechar();
+  }
 
-        <div className={styles.propertiesHeaderActions}>
-          {nodeEditado && nodeEditado.data?.tipo_no !== "inicio" && (
+  return (
+    <PropertiesPanelNodeContext.Provider value={nodeEditado}>
+      <aside className={styles.propertiesPanel}>
+        <div className={styles.propertiesHeader}>
+          <h3 className={styles.propertiesTitle}>Editar bloco</h3>
+
+          <div className={styles.propertiesHeaderActions}>
+            {nodeEditado && nodeEditado.data?.tipo_no !== "inicio" && (
+              <button
+                type="button"
+                className={styles.duplicateNodeHeaderButton}
+                onClick={() => onDuplicarNode(nodeEditado.id)}
+                title="Duplicar bloco"
+                disabled={salvando}
+              >
+                <CopyPlus size={17} />
+              </button>
+            )}
+
             <button
               type="button"
-              className={styles.duplicateNodeHeaderButton}
-              onClick={() => onDuplicarNode(nodeEditado.id)}
-              title="Duplicar bloco"
-              disabled={salvando}
+              className={styles.closePanelButton}
+              onClick={fechar}
+              title="Fechar"
             >
-              <CopyPlus size={17} />
+              ×
             </button>
-          )}
-
-          <button
-            type="button"
-            className={styles.closePanelButton}
-            onClick={onFechar}
-            title="Fechar"
-          >
-            ×
-          </button>
+          </div>
         </div>
-      </div>
 
-      {children}
-    </aside>
+        {children}
+      </aside>
+    </PropertiesPanelNodeContext.Provider>
   );
 }
