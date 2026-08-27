@@ -24,10 +24,16 @@
 }
 
 .intro strong,
-.warning strong,
-.outputs > strong {
+.warning strong {
   color: var(--crm-text-strong);
   font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.outputs > strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.35;
 }
@@ -37,7 +43,7 @@
 .outputs small {
   color: var(--crm-text-muted);
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .warning strong {
@@ -46,7 +52,7 @@
 
 .outputs {
   display: grid;
-  gap: 9px;
+  gap: 10px;
   border: 1px dashed color-mix(in srgb, #22c55e 50%, transparent);
   background: color-mix(in srgb, #22c55e 7%, transparent);
   color: var(--crm-text);
@@ -54,39 +60,33 @@
 
 .outputGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .outputGrid span {
   min-width: 0;
   display: grid;
-  gap: 3px;
-  border-radius: 8px;
-  padding: 7px 8px;
+  gap: 4px;
+  border-radius: 9px;
+  padding: 10px 11px;
   background: var(--crm-surface-muted);
   color: var(--crm-text-strong);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .outputGrid span strong {
   color: var(--crm-text-strong);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .outputGrid code {
   max-width: 100%;
-  overflow: hidden;
   color: var(--crm-text-muted);
-  font-size: 10px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 720px) {
-  .outputGrid {
-    grid-template-columns: 1fr;
-  }
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }

@@ -127,73 +127,75 @@ export default function CheckoutPagamentoConfig({
         </span>
       </div>
 
-      <label className={styles.field}>
-        <span className={styles.label}>Vencimento do checkout</span>
-        <span className={styles.help}>Entre 5 minutos e 24 horas.</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input
-            className={styles.input}
-            type="number"
-            min={5}
-            max={1440}
-            step={1}
-            value={expiracaoMinutos}
-            onChange={(event) => alterarExpiracao(event.target.value)}
-          />
-          <span className={styles.help}>minutos</span>
-        </div>
-      </label>
+      <div className={styles.optionsBox}>
+        <label className={styles.field}>
+          <span className={styles.label}>Vencimento do checkout</span>
+          <span className={styles.help}>Entre 5 minutos e 24 horas.</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              className={styles.input}
+              type="number"
+              min={5}
+              max={1440}
+              step={1}
+              value={expiracaoMinutos}
+              onChange={(event) => alterarExpiracao(event.target.value)}
+            />
+            <span className={styles.help}>minutos</span>
+          </div>
+        </label>
 
-      <div className={styles.field}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label className={styles.switchField}>
           <input
             type="checkbox"
             checked={recuperacaoAtiva}
             onChange={(event) => alterarRecuperacaoAtiva(event.target.checked)}
           />
-          <span className={styles.label}>Recuperar checkout sem pagamento</span>
+          <div>
+            <strong>Recuperar checkout sem pagamento</strong>
+            <p>
+              Se o pagamento continuar pendente, envia uma única mensagem de
+              recuperação e mantém o fluxo aguardando a confirmação do Mercado Pago.
+            </p>
+          </div>
         </label>
-        <p className={styles.help}>
-          Se o pagamento continuar pendente, envia uma única mensagem de recuperação
-          e mantém o fluxo aguardando a confirmação do Mercado Pago.
-        </p>
-      </div>
 
-      {recuperacaoAtiva && (
-        <>
-          <label className={styles.field}>
-            <span className={styles.label}>Enviar recuperação após</span>
-            <span className={styles.help}>
-              O tempo precisa ser menor que o vencimento do checkout.
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                className={styles.input}
-                type="number"
-                min={1}
-                step={1}
-                value={recuperacaoAposMinutos}
-                onChange={(event) => alterarRecuperacaoApos(event.target.value)}
+        {recuperacaoAtiva && (
+          <>
+            <label className={styles.field}>
+              <span className={styles.label}>Enviar recuperação após</span>
+              <span className={styles.help}>
+                O tempo precisa ser menor que o vencimento do checkout.
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  className={styles.input}
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={recuperacaoAposMinutos}
+                  onChange={(event) => alterarRecuperacaoApos(event.target.value)}
+                />
+                <span className={styles.help}>minutos</span>
+              </div>
+            </label>
+
+            <label className={styles.field}>
+              <span className={styles.label}>Mensagem de recuperação</span>
+              <textarea
+                className={styles.textarea}
+                value={mensagemRecuperacao}
+                onChange={(event) => alterarMensagemRecuperacao(event.target.value)}
+                placeholder={MENSAGEM_RECUPERACAO_CHECKOUT_PADRAO}
               />
-              <span className={styles.help}>minutos</span>
-            </div>
-          </label>
-
-          <label className={styles.field}>
-            <span className={styles.label}>Mensagem de recuperação</span>
-            <textarea
-              className={styles.textarea}
-              value={mensagemRecuperacao}
-              onChange={(event) => alterarMensagemRecuperacao(event.target.value)}
-              placeholder={MENSAGEM_RECUPERACAO_CHECKOUT_PADRAO}
-            />
-            <span className={styles.help}>
-              Pode usar {"{{checkout_url}}"}, {"{{pagamento_valor_formatado}}"},
-              {" {{estoque_produto_nome}}"} e outras variáveis do fluxo.
-            </span>
-          </label>
-        </>
-      )}
+              <span className={styles.help}>
+                Pode usar {"{{checkout_url}}"}, {"{{pagamento_valor_formatado}}"},
+                {" {{estoque_produto_nome}}"} e outras variáveis do fluxo.
+              </span>
+            </label>
+          </>
+        )}
+      </div>
 
       <div className={checkoutStyles.outputs}>
         <strong>Conexões necessárias</strong>
