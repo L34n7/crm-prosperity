@@ -13,6 +13,7 @@ import {
 } from "../../checkout-pagamento-draft";
 import { PropertiesPanelNodeContext } from "../PropertiesPanel";
 import styles from "../../fluxos.module.css";
+import checkoutStyles from "./CheckoutPagamentoConfig.module.css";
 
 type CheckoutPagamentoConfigProps = {
   mensagem: string;
@@ -102,35 +103,28 @@ export default function CheckoutPagamentoConfig({
 
   return (
     <>
-      <div className={styles.field}>
-        <span className={styles.label}>Como o checkout funciona</span>
-        <p className={styles.help}>
+      <div className={checkoutStyles.intro}>
+        <strong>Como o checkout funciona</strong>
+        <span>
           O preço WhatsApp é o preço usado nas vendas automatizadas deste fluxo.
           O sistema multiplica esse preço pela {"{{quantidade_desejada}}"} e usa o
           total para gerar o Checkout Pro do Mercado Pago. Se não houver preço
           específico para WhatsApp, o sistema herda o preço-base. O pedido e o
           estoque são reservados antes de gerar o checkout, e o fluxo só continua
           quando o gateway confirmar o resultado.
-        </p>
+        </span>
       </div>
 
-      <div
-        className={styles.field}
-        style={{
-          border: "1px solid var(--crm-ui-private-content-hex-cbd5e1)",
-          borderRadius: 10,
-          padding: 10,
-        }}
-      >
-        <span className={styles.label}>Tarifas do Mercado Pago</span>
-        <p className={styles.help} style={{ marginBottom: 0 }}>
+      <div className={checkoutStyles.warning}>
+        <strong>Tarifas do Mercado Pago</strong>
+        <span>
           O preço WhatsApp define o valor cobrado na venda automatizada e enviado
           ao checkout do Mercado Pago. O Mercado Pago pode descontar tarifas do
           valor recebido pela empresa, conforme o meio de pagamento e as condições
           da conta. A Prosperity não acrescenta essa tarifa automaticamente. Se a
           empresa quiser considerar esse custo, deve configurar o preço WhatsApp já
           com a margem desejada em Estoque → Preços e promoções.
-        </p>
+        </span>
       </div>
 
       <label className={styles.field}>
@@ -201,34 +195,25 @@ export default function CheckoutPagamentoConfig({
         </>
       )}
 
-      <div className={styles.field}>
-        <span className={styles.label}>Conexões necessárias</span>
-        <p className={styles.help}>
+      <div className={checkoutStyles.outputs}>
+        <strong>Conexões necessárias</strong>
+        <small>
           Arraste cada saída do bloco até o próximo passo. O ID da resposta é
           configurado automaticamente pela própria saída e não precisa ser digitado.
-        </p>
-        <div style={{ display: "grid", gap: 8 }}>
+        </small>
+        <div className={checkoutStyles.outputGrid}>
           {SAIDAS_CHECKOUT_PAGAMENTO.map((saida) => (
-            <div
-              key={saida.valor}
-              style={{
-                border: "1px solid var(--crm-ui-private-content-hex-cbd5e1)",
-                borderRadius: 8,
-                padding: "8px 10px",
-              }}
-            >
+            <span key={saida.valor}>
               <strong>{saida.titulo}</strong>
-              <div className={styles.help}>
-                ID da resposta: <code>{saida.valor}</code>
-              </div>
-            </div>
+              <code>{saida.valor}</code>
+            </span>
           ))}
         </div>
-        <p className={styles.help}>
+        <small>
           Recomendação: Pagamento aprovado → confirmação; Sem estoque → nova
           consulta; Expirado / cancelado → oferecer novo pagamento; Erro →
           transferir para atendimento.
-        </p>
+        </small>
       </div>
     </>
   );
