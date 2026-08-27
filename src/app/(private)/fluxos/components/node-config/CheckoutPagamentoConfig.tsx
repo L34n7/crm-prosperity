@@ -106,9 +106,28 @@ export default function CheckoutPagamentoConfig({
         <span className={styles.label}>Como o checkout funciona</span>
         <p className={styles.help}>
           O bloco usa o produto selecionado pela consulta de estoque, a quantidade
-          de {"{{quantidade_desejada}}"} e o preço vigente do canal WhatsApp. O
-          pedido e o estoque são reservados antes de gerar o Checkout Pro do
+          de {"{{quantidade_desejada}}"} e o preço vigente do canal WhatsApp. Se
+          não houver preço específico para WhatsApp, o sistema herda o preço-base.
+          O pedido e o estoque são reservados antes de gerar o Checkout Pro do
           Mercado Pago. O fluxo só continua quando o gateway confirmar o resultado.
+        </p>
+      </div>
+
+      <div
+        className={styles.field}
+        style={{
+          border: "1px solid var(--crm-ui-private-content-hex-cbd5e1)",
+          borderRadius: 10,
+          padding: 10,
+        }}
+      >
+        <span className={styles.label}>Tarifas do Mercado Pago</span>
+        <p className={styles.help} style={{ marginBottom: 0 }}>
+          O valor configurado no estoque é o valor cobrado do cliente. O Mercado
+          Pago pode descontar tarifas do valor recebido pela empresa, conforme o
+          meio de pagamento e as condições da conta. A Prosperity não acrescenta
+          essa tarifa automaticamente. Se desejar considerar esse custo no preço,
+          ajuste o preço WhatsApp em Estoque → Preços e promoções.
         </p>
       </div>
 

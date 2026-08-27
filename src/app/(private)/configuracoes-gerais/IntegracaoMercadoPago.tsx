@@ -184,6 +184,21 @@ export default function IntegracaoMercadoPago({ onError, onSuccess }: Props) {
           </div>
         ) : null}
 
+        <div className={mpStyles.warning}>
+          <CircleAlert size={18} />
+          <div>
+            <strong>Tarifas sobre os recebimentos</strong>
+            <p>
+              O Mercado Pago pode descontar tarifas do valor recebido pela empresa,
+              conforme o meio de pagamento e as condições da própria conta. O valor
+              do checkout é cobrado do cliente sem acréscimo automático da Prosperity.
+              Se quiser considerar esse custo no preço de venda, ajuste o preço do
+              produto em Estoque → Preços e promoções. Nos fluxos de venda pelo
+              WhatsApp, o checkout usa o preço do canal WhatsApp.
+            </p>
+          </div>
+        </div>
+
         {!configurado && !carregando ? (
           <div className={mpStyles.warning}>
             <CircleAlert size={18} />
