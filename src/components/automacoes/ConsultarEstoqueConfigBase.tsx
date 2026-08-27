@@ -564,16 +564,57 @@ export default function ConsultarEstoqueConfig({
       </label>
 
       <div className={styles.outputs}>
-        <strong>Saídas do bloco</strong>
+        <strong>Conexões necessárias</strong>
+        <small>
+          Arraste cada saída do bloco até o próximo passo. O ID da resposta é
+          configurado automaticamente pela própria saída e não precisa ser digitado.
+        </small>
         <div className={styles.outputGrid}>
-          <span>Disponível</span>
-          <span>Sem estoque</span>
-          <span>Não encontrado</span>
+          <span>
+            <strong>Disponível</strong>
+            <br />
+            <code
+              style={{
+                color: "var(--crm-text-muted)",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              disponivel
+            </code>
+          </span>
+          <span>
+            <strong>Sem estoque</strong>
+            <br />
+            <code
+              style={{
+                color: "var(--crm-text-muted)",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              sem_estoque
+            </code>
+          </span>
+          <span>
+            <strong>Não encontrado</strong>
+            <br />
+            <code
+              style={{
+                color: "var(--crm-text-muted)",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              nao_encontrado
+            </code>
+          </span>
         </div>
         <small>
-          Vários resultados são tratados internamente. Quando a validação de
-          quantidade estiver ativa, “Sem estoque” também é usada quando o saldo
-          atual é menor que a quantidade solicitada.
+          Recomendação: Disponível → continuar a venda; Sem estoque → informar a
+          indisponibilidade ou fazer nova consulta; Não encontrado → solicitar outro
+          produto ou encaminhar para atendimento. Vários resultados continuam sendo
+          tratados internamente pelo próprio bloco.
         </small>
       </div>
 
