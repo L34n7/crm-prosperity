@@ -48,7 +48,7 @@ type PessoaContato = {
   dados_personalizados?: Record<string, unknown> | null;
 };
 
-type ContatoDisponivel = {
+export type ContatoDisponivelPaciente = {
   id: string;
   pessoa_id: string | null;
   nome: string | null;
@@ -92,6 +92,7 @@ type CadastroPacienteModalProps = {
   aberto: boolean;
   nichoNome: string;
   podeCarregarCampos: boolean;
+  contatoInicial?: ContatoDisponivelPaciente | null;
   onClose: () => void;
   onCreated: (pacienteId: string, mensagem: string) => void | Promise<void>;
 };
@@ -153,6 +154,7 @@ export default function CadastroPacienteModalV2({
   aberto,
   nichoNome,
   podeCarregarCampos,
+  contatoInicial = null,
   onClose,
   onCreated,
 }: CadastroPacienteModalProps) {
@@ -161,10 +163,10 @@ export default function CadastroPacienteModalV2({
   const [carregandoCampos, setCarregandoCampos] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [resultadosContato, setResultadosContato] = useState<ContatoDisponivel[]>([]);
+  const [resultadosContato, setResultadosContato] = useState<ContatoDisponivelPaciente[]>([]);
   const [buscandoContato, setBuscandoContato] = useState(false);
   const [buscaContatoExecutada, setBuscaContatoExecutada] = useState(false);
-  const [contatoSelecionado, setContatoSelecionado] = useState<ContatoDisponivel | null>(null);
+  const [contatoSelecionado, setContatoSelecionado] = useState<ContatoDisponivelPaciente | null>(null);
 
   const camposPessoa = useMemo(
     () => campos.filter((campo) => campo.escopo === "pessoa"),
@@ -201,6 +203,43 @@ export default function CadastroPacienteModalV2({
     setBuscaContatoExecutada(false);
     setContatoSelecionado(null);
 
+    if (contatoInicial) {
+      const pessoa = contatoInicial.pessoa;
+      setContatoSelecionado(contatoInicial);
+      setForm((atual) => ({
+        ...atual,
+        nome:
+          pessoa?.nome?.trim() ||
+          contatoInicial.nome?.trim() ||
+          contatoInicial.whatsapp_profile_name?.trim() ||
+          atual.nome,
+        nome_social: pessoa?.nome_social?.trim() || atual.nome_social,
+        telefone: contatoInicial.telefone || atual.telefone,
+        email:
+          pessoa?.email?.trim() ||
+          contatoInicial.email?.trim() ||
+          atual.email,
+        cpf_cnpj: pessoa?.cpf_cnpj?.trim() || atual.cpf_cnpj,
+        data_nascimento:
+          pessoa?.data_nascimento?.trim() || atual.data_nascimento,
+        cep: pessoa?.cep?.trim() || atual.cep,
+        logradouro: pessoa?.logradouro?.trim() || atual.logradouro,
+        numero: pessoa?.numero?.trim() || atual.numero,
+        complemento: pessoa?.complemento?.trim() || atual.complemento,
+        bairro: pessoa?.bairro?.trim() || atual.bairro,
+        cidade: pessoa?.cidade?.trim() || atual.cidade,
+        estado: pessoa?.estado?.trim() || atual.estado,
+        observacoes:
+          pessoa?.observacoes?.trim() ||
+          contatoInicial.observacoes?.trim() ||
+          atual.observacoes,
+        dados_pessoa: {
+          ...atual.dados_pessoa,
+          ...comoObjeto(pessoa?.dados_personalizados),
+        },
+      }));
+    }
+
     if (!podeCarregarCampos) {
       setCampos([]);
       return;
@@ -232,7 +271,7 @@ export default function CadastroPacienteModalV2({
     return () => {
       ativo = false;
     };
-  }, [aberto, podeCarregarCampos]);
+  }, [aberto, contatoInicial, podeCarregarCampos]);
 
   useEffect(() => {
     if (!aberto || contatoSelecionado) return;
@@ -262,7 +301,7 @@ export default function CadastroPacienteModalV2({
         })
         .then((contatos) => {
           if (!ativo) return;
-          setResultadosContato(contatos as ContatoDisponivel[]);
+          setResultadosContato(contatos as ContatoDisponivelPaciente[]);
           setBuscaContatoExecutada(true);
         })
         .catch((error) => {
@@ -294,7 +333,7 @@ export default function CadastroPacienteModalV2({
     setForm((atual) => ({ ...atual, telefone: valor }));
   }
 
-  function selecionarContato(contato: ContatoDisponivel) {
+  function selecionarContato(contato: ContatoDisponivelPaciente) {
     const pessoa = contato.pessoa;
     setContatoSelecionado(contato);
     setResultadosContato([]);

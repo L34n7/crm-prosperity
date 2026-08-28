@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import ContatoCadastroNichoAction from "@/components/conversas/ContatoCadastroNichoAction";
 import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import { solicitarAtualizacaoConversasNaoLidasHeader } from "@/lib/header-summary/events";
 import { createClient } from "@/lib/supabase/client";
@@ -11223,16 +11224,10 @@ const templateFooterTexto = useMemo(() => {
                                 <span className={styles.whatsContactActionText}>Detalhes</span>
                               </button>
 
-                              {podeExportarConversa && (
-                                <button
-                                  type="button"
-                                  className={styles.whatsContactActionButton}
-                                  onClick={baixarConversaPDF}
-                                >
-                                  <span className={styles.whatsContactActionIcon}>↗</span>
-                                  <span className={styles.whatsContactActionText}>Compartilhar</span>
-                                </button>
-                              )}
+                              <ContatoCadastroNichoAction
+                                key={conversaSelecionada.contatos?.id}
+                                contato={conversaSelecionada.contatos}
+                              />
                             </div>
                           </div>
 

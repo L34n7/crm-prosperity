@@ -498,6 +498,12 @@
   gap: 20px;
 }
 
+.modalFieldset {
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
+}
+
 .sectionTitle {
   display: flex;
   align-items: center;

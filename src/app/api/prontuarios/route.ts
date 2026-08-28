@@ -81,7 +81,11 @@ async function garantirAcessoSaude(
   return { ok: true as const, nicho };
 }
 
-async function carregarPacientes(empresaId: string, buscaOriginal: string) {
+async function carregarPacientes(
+  empresaId: string,
+  buscaOriginal: string,
+  pessoaIdFiltro = "",
+) {
   const busca = sanitizarBusca(buscaOriginal);
   let pessoasPermitidas: PessoaRow[] | null = null;
 
@@ -112,6 +116,10 @@ async function carregarPacientes(empresaId: string, buscaOriginal: string) {
     .eq("empresa_id", empresaId)
     .order("created_at", { ascending: false })
     .limit(200);
+
+  if (pessoaIdFiltro) {
+    pacientesQuery = pacientesQuery.eq("pessoa_id", pessoaIdFiltro);
+  }
 
   if (pessoasPermitidas) {
     pacientesQuery = pacientesQuery.in(
@@ -201,11 +209,49 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const busca = searchParams.get("busca") ?? "";
     const pacienteIdParam = searchParams.get("paciente_id") ?? "";
-    const pacientes = await carregarPacientes(usuario.empresa_id, busca);
+    const contatoIdParam = searchParams.get("contato_id") ?? "";
+    let pessoaIdContato = "";
+    let pessoaContato: Record<string, unknown> | null = null;
+
+    if (contatoIdParam) {
+      const { data: contato, error: contatoError } = await supabase
+        .from("contatos")
+        .select("pessoa_id")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("id", contatoIdParam)
+        .maybeSingle();
+
+      if (contatoError) {
+        throw new Error(`Erro ao buscar vínculo do contato: ${contatoError.message}`);
+      }
+
+      pessoaIdContato = texto(contato?.pessoa_id);
+
+      if (pessoaIdContato) {
+        const { data: pessoa, error: pessoaError } = await supabase
+          .from("pessoas")
+          .select(
+            "id, tipo_pessoa, nome, nome_social, razao_social, cpf_cnpj, data_nascimento, email, cep, logradouro, numero, complemento, bairro, cidade, estado, observacoes, dados_personalizados, status",
+          )
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("id", pessoaIdContato)
+          .maybeSingle();
+
+        if (pessoaError) {
+          throw new Error(`Erro ao carregar pessoa do contato: ${pessoaError.message}`);
+        }
+
+        pessoaContato = pessoa;
+      }
+    }
+
+    const pacientes = contatoIdParam && !pessoaIdContato
+      ? []
+      : await carregarPacientes(usuario.empresa_id, busca, pessoaIdContato);
     const selecionado =
-      pacientes.find((paciente) => paciente.id === pacienteIdParam) ??
-      pacientes[0] ??
-      null;
+      (pacienteIdParam
+        ? pacientes.find((paciente) => paciente.id === pacienteIdParam)
+        : pacientes[0]) ?? null;
 
     let prontuario = null;
     let atendimentos: unknown[] = [];
@@ -254,6 +300,7 @@ export async function GET(request: Request) {
       },
       pacientes,
       selecionado,
+      pessoa_contato: pessoaContato,
       prontuario,
       atendimentos,
     });

@@ -84,6 +84,11 @@ type CarregarOpcoes = {
   abrirModal?: boolean;
 };
 
+type PacientesPageClientProps = {
+  pacienteIdModal?: string | null;
+  onModalClose?: () => void;
+};
+
 const ABA_LABELS: Record<ProntuarioAbaCodigo, string> = {
   resumo: "Resumo",
   dados: "Dados do paciente",
@@ -202,7 +207,10 @@ async function carregarVinculosContato(pacientes: PacienteLista[]) {
   }
 }
 
-export default function PacientesPageClient() {
+export default function PacientesPageClient({
+  pacienteIdModal = null,
+  onModalClose,
+}: PacientesPageClientProps = {}) {
   const { permissoes } = useHeaderUser();
   const [pacientes, setPacientes] = useState<PacienteLista[]>([]);
   const [selecionadoId, setSelecionadoId] = useState("");
@@ -218,6 +226,7 @@ export default function PacientesPageClient() {
   const [erro, setErro] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [form, setForm] = useState<FormAtendimento>(() => criarFormInicial());
+  const modoModal = Boolean(pacienteIdModal);
 
   const podeCriarAtendimento = permissoes.includes("prontuarios.criar");
   const podeEditarProntuario = permissoes.includes("prontuarios.editar");
@@ -289,12 +298,20 @@ export default function PacientesPageClient() {
   }, []);
 
   useEffect(() => {
+    if (pacienteIdModal) {
+      setSelecionadoId(pacienteIdModal);
+      setAbaAtiva("resumo");
+      setModalAberto(true);
+      void carregar({ pacienteId: pacienteIdModal, abrirModal: true });
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const pacienteId = params.get("paciente_id") ?? "";
     const abaUrl = params.get("aba");
     if (isProntuarioAbaCodigo(abaUrl)) setAbaAtiva(abaUrl);
     void carregar({ pacienteId, abrirModal: Boolean(pacienteId) });
-  }, [carregar]);
+  }, [carregar, pacienteIdModal]);
 
   useEffect(() => {
     if (!modalAberto) return;
@@ -306,7 +323,8 @@ export default function PacientesPageClient() {
       setModalAberto(false);
       setSelecionadoId("");
       setAtendimentos([]);
-      atualizarUrlPaciente(null, null);
+      if (modoModal) onModalClose?.();
+      else atualizarUrlPaciente(null, null);
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -314,7 +332,7 @@ export default function PacientesPageClient() {
       document.body.style.overflow = overflowAnterior;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [modalAberto]);
+  }, [modalAberto, modoModal, onModalClose]);
 
   useEffect(() => {
     if (!modalAberto || carregandoDetalhe) return;
@@ -329,7 +347,7 @@ export default function PacientesPageClient() {
     setSelecionadoId(pacienteId);
     setAbaAtiva(abaInicial);
     setModalAberto(true);
-    atualizarUrlPaciente(pacienteId, abaInicial);
+    if (!modoModal) atualizarUrlPaciente(pacienteId, abaInicial);
     await carregar({ pacienteId, abrirModal: true });
   }
 
@@ -338,14 +356,15 @@ export default function PacientesPageClient() {
     setSelecionadoId("");
     setAtendimentos([]);
     setAbaAtiva("resumo");
-    atualizarUrlPaciente(null, null);
+    if (modoModal) onModalClose?.();
+    else atualizarUrlPaciente(null, null);
   }
 
   const fecharCadastro = useCallback(() => setModalCadastroAberto(false), []);
 
   function trocarAba(aba: ProntuarioAbaCodigo) {
     setAbaAtiva(aba);
-    if (selecionadoId) atualizarUrlPaciente(selecionadoId, aba);
+    if (selecionadoId && !modoModal) atualizarUrlPaciente(selecionadoId, aba);
   }
 
   async function pacienteCriado(pacienteId: string, mensagemSucesso: string) {
@@ -386,12 +405,14 @@ export default function PacientesPageClient() {
 
   return (
     <>
-      <Header
-        title="Pacientes"
-        subtitle="Cadastre pacientes e acesse prontuário, evoluções e recursos clínicos da especialidade sem sair da mesma tela."
-      />
+      {!modoModal ? (
+        <>
+          <Header
+            title="Pacientes"
+            subtitle="Cadastre pacientes e acesse prontuário, evoluções e recursos clínicos da especialidade sem sair da mesma tela."
+          />
 
-      <main className={styles.page}>
+          <main className={styles.page}>
         <section className={styles.heroCard}>
           <div>
             <span className={styles.eyebrow}>Gestão clínica</span>
@@ -489,7 +510,9 @@ export default function PacientesPageClient() {
             </div>
           )}
         </section>
-      </main>
+          </main>
+        </>
+      ) : null}
 
       {modalAberto ? (
         <div className={styles.modalOverlay} onMouseDown={fecharPaciente}>
@@ -711,13 +734,15 @@ export default function PacientesPageClient() {
         </div>
       ) : null}
 
-      <CadastroPacienteModal
-        aberto={modalCadastroAberto}
-        nichoNome={nichoConfig.nome}
-        podeCarregarCampos={podeVisualizarPessoas}
-        onClose={fecharCadastro}
-        onCreated={pacienteCriado}
-      />
+      {!modoModal ? (
+        <CadastroPacienteModal
+          aberto={modalCadastroAberto}
+          nichoNome={nichoConfig.nome}
+          podeCarregarCampos={podeVisualizarPessoas}
+          onClose={fecharCadastro}
+          onCreated={pacienteCriado}
+        />
+      ) : null}
 
       {mensagem ? <FeedbackToast success={mensagem} onSuccessDismiss={() => setMensagem("")} /> : null}
     </>
