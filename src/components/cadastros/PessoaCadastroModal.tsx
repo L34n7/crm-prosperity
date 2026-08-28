@@ -393,10 +393,11 @@ export default function PessoaCadastroModal({
           </button>
         </header>
 
-        <fieldset
-          className={`${styles.modalBody} ${styles.modalFieldset}`}
-          disabled={!podeSalvar || salvando}
-        >
+        <div className={styles.modalScroll}>
+          <fieldset
+            className={`${styles.modalBody} ${styles.modalFieldset}`}
+            disabled={!podeSalvar || salvando}
+          >
           <div className={styles.sectionTitle}>
             <UserRound size={18} />
             <h3>Identificação</h3>
@@ -541,7 +542,8 @@ export default function PessoaCadastroModal({
           </label>
 
           {erro ? <div className={styles.error}>{erro}</div> : null}
-        </fieldset>
+          </fieldset>
+        </div>
 
         <footer className={styles.modalFooter}>
           <div className={styles.modalFooterStart}>

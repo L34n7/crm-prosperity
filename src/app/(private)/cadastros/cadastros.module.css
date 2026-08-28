@@ -492,25 +492,29 @@
   gap: 10px;
 }
 
-.modalBody {
+.modalScroll {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--crm-border-strong) transparent;
+}
+
+.modalBody {
+  width: 100%;
   padding: 22px;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
 
-.modalBody::-webkit-scrollbar {
+.modalScroll::-webkit-scrollbar {
   width: 10px;
 }
 
-.modalBody::-webkit-scrollbar-thumb {
+.modalScroll::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 999px;
   background: var(--crm-border-strong);
