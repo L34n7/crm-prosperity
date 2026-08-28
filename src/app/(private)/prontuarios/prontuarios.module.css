@@ -411,6 +411,9 @@
   overflow-y: auto;
   padding: 18px 20px 24px;
   background: var(--crm-surface-soft);
+  display: grid;
+  align-content: start;
+  gap: 14px;
 }
 
 .modalBody .error,
@@ -571,7 +574,58 @@
 .formActions {
   display: flex;
   justify-content: flex-end;
+  gap: 9px;
   margin-top: 14px;
+}
+
+.formActions .secondaryButton {
+  min-height: 40px;
+}
+
+.historySection {
+  display: grid;
+  gap: 12px;
+}
+
+.historyToolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px;
+}
+
+.historyToolbar > div {
+  display: grid;
+  gap: 3px;
+}
+
+.historyToolbar strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.historyToolbar > div > span,
+.historyFilter > span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.historyFilter {
+  display: grid;
+  gap: 5px;
+}
+
+.historyFilter select {
+  min-width: 170px;
+  min-height: 38px;
+  padding: 0 34px 0 10px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 13px;
 }
 
 .primaryButton {
@@ -579,6 +633,10 @@
   border: 0;
   background: var(--crm-primary-strong);
   color: var(--crm-text-inverse);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .primaryButton:disabled {
@@ -587,13 +645,31 @@
 }
 
 .timelineItem {
-  padding: 16px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .timelineHeader {
+  width: 100%;
   align-items: flex-start;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--crm-border);
+  padding: 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.timelineHeader:hover {
+  background: var(--crm-surface-soft);
+}
+
+.timelineHeaderEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--crm-text-muted);
 }
 
 .timelineHeader h3 {
@@ -616,7 +692,8 @@
 .timelineBody {
   display: grid;
   gap: 7px;
-  padding-top: 12px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--crm-border);
 }
 
 .timelineBody p {
@@ -699,6 +776,15 @@
   .summaryGrid,
   .formGrid {
     grid-template-columns: 1fr;
+  }
+
+  .historyToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .historyFilter select {
+    width: 100%;
   }
 
   .fullField {
