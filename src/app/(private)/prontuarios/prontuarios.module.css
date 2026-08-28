@@ -327,6 +327,17 @@
   margin-top: 3px;
 }
 
+.modalBadges {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.modalBadges .modalHeaderBadge {
+  margin-top: 0;
+}
+
 .modalHeader h2 {
   min-width: 0;
   font-size: clamp(20px, 2vw, 26px);
@@ -402,6 +413,28 @@
   background: var(--crm-surface-soft);
 }
 
+.modalBody .error,
+.modalBody .empty {
+  font-size: 14px;
+}
+
+.modalBody .eyebrow {
+  font-size: 12px;
+}
+
+.modalBody .summaryText {
+  font-size: 14px;
+}
+
+.modalBody .primaryButton {
+  font-size: 14px;
+}
+
+.modalBody .modalLinkedPanel,
+.modalBody .modalContactLine {
+  font-size: 12px;
+}
+
 .summaryContent,
 .timeline {
   display: grid;
@@ -426,12 +459,12 @@
 
 .summaryCard span {
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .summaryCard strong {
   color: var(--crm-text-strong);
-  font-size: 14px;
+  font-size: 15px;
   overflow-wrap: anywhere;
 }
 
@@ -453,7 +486,7 @@
 
 .sectionHeaderCompact h3 {
   margin-top: 3px;
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .detailList {
@@ -473,7 +506,7 @@
 .detailList dt {
   margin-bottom: 4px;
   color: var(--crm-text-muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -482,7 +515,7 @@
 .detailList dd {
   margin: 0;
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
   overflow-wrap: anywhere;
 }
@@ -500,7 +533,7 @@
 
 .field span {
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 750;
 }
 
@@ -515,7 +548,7 @@
   background: var(--crm-surface-input);
   color: var(--crm-text-strong);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   outline: none;
 }
 
@@ -564,20 +597,20 @@
 }
 
 .timelineHeader h3 {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .muted {
   margin: 4px 0 0;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .statusBadge {
   padding: 5px 9px;
   background: var(--crm-surface-soft);
   color: var(--crm-text);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .timelineBody {
@@ -589,7 +622,7 @@
 .timelineBody p {
   margin: 0;
   color: var(--crm-text);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   white-space: pre-wrap;
 }

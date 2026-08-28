@@ -530,25 +530,23 @@ export default function PacientesPageClient({
                   <h2 id="paciente-modal-title">
                     {pacienteSelecionado?.pessoa?.nome ?? "Carregando paciente..."}
                   </h2>
-                  {pacienteSelecionado?.numero_prontuario ? (
-                    <span className={styles.recordBadge}>{pacienteSelecionado.numero_prontuario}</span>
-                  ) : null}
+                  <div className={styles.modalBadges}>
+                    {pacienteSelecionado?.numero_prontuario ? (
+                      <span className={styles.recordBadge}>{pacienteSelecionado.numero_prontuario}</span>
+                    ) : null}
+                    {pacienteSelecionado ? (
+                      contatoPrincipal ? (
+                        <span className={`${vinculoStyles.badge} ${styles.modalHeaderBadge}`}>
+                          <Link2 size={12} /> {contatoPrincipal.telefone}
+                        </span>
+                      ) : (
+                        <span className={`${vinculoStyles.warning} ${styles.modalHeaderBadge}`}>
+                          <TriangleAlert size={12} /> Sem vínculo com contato
+                        </span>
+                      )
+                    ) : null}
+                  </div>
                 </div>
-                <p>
-                  {nichoConfig.nome}
-                  {pacienteSelecionado?.convenio ? ` · ${pacienteSelecionado.convenio}` : ""}
-                </p>
-                {pacienteSelecionado ? (
-                  contatoPrincipal ? (
-                    <span className={vinculoStyles.badge}>
-                      <Link2 size={12} /> {contatoPrincipal.telefone}
-                    </span>
-                  ) : (
-                    <span className={vinculoStyles.warning}>
-                      <TriangleAlert size={12} /> Sem vínculo com contato
-                    </span>
-                  )
-                ) : null}
               </div>
 
               <button type="button" className={styles.closeButton} onClick={fecharPaciente} aria-label="Fechar paciente">
@@ -576,7 +574,7 @@ export default function PacientesPageClient({
               ) : null}
 
               {!carregandoDetalhe && pacienteSelecionado && !contatoPrincipal && (abaAtiva === "resumo" || abaAtiva === "dados") ? (
-                <div className={vinculoStyles.warningPanel}>
+                <div className={`${vinculoStyles.warningPanel} ${styles.modalLinkedPanel}`}>
                   <TriangleAlert size={18} />
                   <div>
                     <strong>Paciente sem vínculo com contato</strong>
@@ -599,7 +597,7 @@ export default function PacientesPageClient({
                       <div className={styles.sectionHeaderCompact}>
                         <div><span className={styles.eyebrow}>Relacionamento</span><h3>Contato conectado ao paciente</h3></div>
                       </div>
-                      <div className={vinculoStyles.contactLine}>
+                      <div className={`${vinculoStyles.contactLine} ${styles.modalContactLine}`}>
                         <MessageCircle size={16} />
                         <strong>{contatoPrincipal.telefone}</strong>
                         {contatoPrincipal.email ? <span>· {contatoPrincipal.email}</span> : null}

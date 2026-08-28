@@ -11,7 +11,7 @@
   border-radius: 14px;
   background: var(--crm-surface);
   color: var(--crm-text-muted);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .error {
@@ -43,12 +43,12 @@
 
 .mapPanelHeader strong {
   color: var(--crm-text-strong);
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .mapPanelHeader span {
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .regionGrid,
@@ -90,13 +90,13 @@
 }
 
 .mapButton strong {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.15;
 }
 
 .mapButton small {
   color: var(--crm-text-muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.2;
   text-align: center;
 }
@@ -124,7 +124,7 @@
   display: block;
   margin-bottom: 4px;
   color: var(--crm-primary-text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -133,7 +133,7 @@
 .formHeader h3 {
   margin: 0;
   color: var(--crm-text-strong);
-  font-size: 17px;
+  font-size: 18px;
 }
 
 .statusBadge {
@@ -141,7 +141,7 @@
   border-radius: 999px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -159,7 +159,7 @@
 
 .field span {
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -173,7 +173,7 @@
   background: var(--crm-surface-input);
   color: var(--crm-text-strong);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   outline: none;
   padding: 10px 11px;
 }
@@ -208,7 +208,7 @@
   background: var(--crm-primary-strong);
   color: var(--crm-text-inverse);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -220,7 +220,7 @@
 .readOnlyNote {
   margin: 12px 0 0;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 @media (max-width: 900px) {
