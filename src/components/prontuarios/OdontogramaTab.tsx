@@ -167,7 +167,7 @@ function Dente2D({
   destaque?: boolean;
 }) {
   const forma = FORMAS_DENTE[tipoDoDente(numero)];
-  const inferior = Number(numero.charAt(0)) >= 3;
+  const superior = Number(numero.charAt(0)) <= 2;
   const statusClass = styles["toothStatus_" + status] ?? styles.toothStatus_saudavel;
 
   return (
@@ -176,7 +176,7 @@ function Dente2D({
       viewBox="0 0 54 84"
       aria-hidden="true"
     >
-      <g transform={inferior ? "rotate(180 27 42)" : undefined}>
+      <g transform={superior ? "rotate(180 27 42)" : undefined}>
         {forma.raizes.map((raiz, index) => (
           <path key={raiz} d={raiz} className={styles.toothRoot} data-root={index + 1} />
         ))}
@@ -482,41 +482,55 @@ export default function OdontogramaTab({
       </header>
 
       <div className={[styles.odontogramLayout, !modoAtendimento ? enhancedStyles.readOnlyLayout : ""].join(" ")}>
-        <div className={styles.chartCard}>
-          <div className={styles.orientationBar}>
-            <span>Direita do paciente</span>
-            <span>Linha média</span>
-            <span>Esquerda do paciente</span>
+        <div className={modoAtendimento ? enhancedStyles.attendanceChartColumn : undefined}>
+          <div className={styles.chartCard}>
+            <div className={styles.orientationBar}>
+              <span>Direita do paciente</span>
+              <span>Linha média</span>
+              <span>Esquerda do paciente</span>
+            </div>
+
+            <ArcadaOdontologica
+              titulo="Arcada superior"
+              subtitulo="Maxila"
+              numeros={DENTES_SUPERIORES}
+              dentesPorNumero={dentesPorNumero}
+              selecionado={denteSelecionado}
+              onSelect={setDenteSelecionado}
+            />
+
+            <div className={styles.occlusalLine}><span>Plano oclusal</span></div>
+
+            <ArcadaOdontologica
+              titulo="Arcada inferior"
+              subtitulo="Mandíbula"
+              numeros={DENTES_INFERIORES}
+              dentesPorNumero={dentesPorNumero}
+              selecionado={denteSelecionado}
+              onSelect={setDenteSelecionado}
+            />
+
+            <div className={styles.legend}>
+              {STATUS_ORDEM.map((status) => (
+                <span key={status}>
+                  <i className={styles["dot_" + status] ?? ""} />
+                  {STATUS_LABELS[status]}
+                </span>
+              ))}
+            </div>
           </div>
 
-          <ArcadaOdontologica
-            titulo="Arcada superior"
-            subtitulo="Maxila"
-            numeros={DENTES_SUPERIORES}
-            dentesPorNumero={dentesPorNumero}
-            selecionado={denteSelecionado}
-            onSelect={setDenteSelecionado}
-          />
-
-          <div className={styles.occlusalLine}><span>Plano oclusal</span></div>
-
-          <ArcadaOdontologica
-            titulo="Arcada inferior"
-            subtitulo="Mandíbula"
-            numeros={DENTES_INFERIORES}
-            dentesPorNumero={dentesPorNumero}
-            selecionado={denteSelecionado}
-            onSelect={setDenteSelecionado}
-          />
-
-          <div className={styles.legend}>
-            {STATUS_ORDEM.map((status) => (
-              <span key={status}>
-                <i className={styles["dot_" + status] ?? ""} />
-                {STATUS_LABELS[status]}
-              </span>
-            ))}
-          </div>
+          {modoAtendimento ? (
+            <label className={`${styles.field} ${enhancedStyles.attendanceObservations}`}>
+              <span>Observações clínicas</span>
+              <textarea
+                value={form.observacoes}
+                disabled={!podeEditar}
+                onChange={(event) => setForm((atual) => ({ ...atual, observacoes: event.target.value }))}
+                placeholder="Registre achados, indicação e acompanhamento."
+              />
+            </label>
+          ) : null}
         </div>
 
         <aside className={styles.toothInspector}>
@@ -566,16 +580,6 @@ export default function OdontogramaTab({
                   disabled={!podeEditar}
                   onChange={(event) => setForm((atual) => ({ ...atual, procedimento: event.target.value }))}
                   placeholder="Ex.: restauração em resina"
-                />
-              </label>
-
-              <label className={styles.field}>
-                <span>Observações clínicas</span>
-                <textarea
-                  value={form.observacoes}
-                  disabled={!podeEditar}
-                  onChange={(event) => setForm((atual) => ({ ...atual, observacoes: event.target.value }))}
-                  placeholder="Registre achados, indicação e acompanhamento."
                 />
               </label>
             </>
