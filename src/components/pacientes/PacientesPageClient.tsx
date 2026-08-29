@@ -109,7 +109,7 @@ const ABA_LABELS: Record<ProntuarioAbaCodigo, string> = {
   resumo: "Visão geral",
   dados: "Visão geral",
   prontuario: "Prontuário",
-  atendimento: "Novo atendimento",
+  atendimento: "Registrar atendimento",
   evolucoes: "Evoluções",
   odontograma: "Odontograma",
   podograma: "Podograma",
@@ -198,7 +198,7 @@ function labelStatusOdontograma(status: string) {
 
 function normalizarAbaPaciente(aba: ProntuarioAbaCodigo): ProntuarioAbaCodigo {
   if (aba === "dados") return "resumo";
-  return aba === "atendimento" || aba === "evolucoes" ? "prontuario" : aba;
+  return aba === "evolucoes" ? "prontuario" : aba;
 }
 
 function atualizarUrlPaciente(
@@ -269,7 +269,6 @@ export default function PacientesPageClient({
   const [erro, setErro] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [form, setForm] = useState<FormAtendimento>(() => criarFormInicial());
-  const [formAtendimentoAberto, setFormAtendimentoAberto] = useState(false);
   const [atendimentoEditandoId, setAtendimentoEditandoId] = useState("");
   const [atendimentoExpandidoId, setAtendimentoExpandidoId] = useState("");
   const [filtroTipoAtendimento, setFiltroTipoAtendimento] = useState("todos");
@@ -293,13 +292,14 @@ export default function PacientesPageClient({
   const contatoPrincipal = pacienteSelecionado?.contatos_vinculados?.[0] ?? null;
 
   const abasDisponiveis = useMemo(() => {
-    const abas = nichoConfig.prontuarioAbas ?? ["resumo", "dados", "prontuario"];
+    const abas = nichoConfig.prontuarioAbas ?? ["resumo", "dados", "prontuario", "atendimento"];
     return abas.filter((aba) => {
-      if (aba === "dados" || aba === "atendimento" || aba === "evolucoes") return false;
+      if (aba === "dados" || aba === "evolucoes") return false;
+      if (aba === "atendimento") return podeCriarAtendimento;
       if (aba === "odontograma") return podeVisualizarOdontograma;
       return true;
     });
-  }, [nichoConfig.prontuarioAbas, podeVisualizarOdontograma]);
+  }, [nichoConfig.prontuarioAbas, podeCriarAtendimento, podeVisualizarOdontograma]);
 
   const ultimoAtendimento = atendimentos[0] ?? null;
   const atendimentosFiltrados = useMemo(
@@ -365,7 +365,6 @@ export default function PacientesPageClient({
     if (pacienteIdModal) {
       setSelecionadoId(pacienteIdModal);
       setAbaAtiva("resumo");
-      setFormAtendimentoAberto(false);
       setAtendimentoEditandoId("");
       setFiltroTipoAtendimento("todos");
       setModalAberto(true);
@@ -417,7 +416,6 @@ export default function PacientesPageClient({
     setSelecionadoId(pacienteId);
     setAbaAtiva(abaNormalizada);
     setForm(criarFormInicial());
-    setFormAtendimentoAberto(false);
     setAtendimentoEditandoId("");
     setFiltroTipoAtendimento("todos");
     setOdontogramaAlteracoes([]);
@@ -433,7 +431,6 @@ export default function PacientesPageClient({
     setSelecionadoId("");
     setAtendimentos([]);
     setAbaAtiva("resumo");
-    setFormAtendimentoAberto(false);
     setAtendimentoEditandoId("");
     setAtendimentoExpandidoId("");
     setFiltroTipoAtendimento("todos");
@@ -467,13 +464,7 @@ export default function PacientesPageClient({
     setOdontogramaAlteracoes([]);
     setOdontogramaAtendimentoAberto(Boolean(denteInicial));
     setOdontogramaDenteInicial(denteInicial);
-    setFormAtendimentoAberto(true);
-    requestAnimationFrame(() => {
-      document.getElementById("form-novo-atendimento")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
+    trocarAba("atendimento");
   }
 
   function editarAtendimento(atendimento: Atendimento) {
@@ -491,23 +482,17 @@ export default function PacientesPageClient({
       prescricao: atendimento.prescricao ?? "",
       observacoes: atendimento.observacoes ?? "",
     });
-    setFormAtendimentoAberto(true);
     setAtendimentoExpandidoId(atendimento.id);
-    requestAnimationFrame(() => {
-      document.getElementById("form-novo-atendimento")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
+    trocarAba("atendimento");
   }
 
   function cancelarFormularioAtendimento() {
     setForm(criarFormInicial());
-    setFormAtendimentoAberto(false);
     setAtendimentoEditandoId("");
     setOdontogramaAlteracoes([]);
     setOdontogramaAtendimentoAberto(false);
     setOdontogramaDenteInicial("");
+    trocarAba("prontuario");
   }
 
   async function salvarAtendimento() {
@@ -539,7 +524,6 @@ export default function PacientesPageClient({
       setOdontogramaAtendimentoAberto(false);
       setOdontogramaDenteInicial("");
       await carregar({ pacienteId: pacienteSelecionado.id, abrirModal: true });
-      setFormAtendimentoAberto(false);
       setAtendimentoEditandoId("");
       setFiltroTipoAtendimento("todos");
       setAtendimentoExpandidoId(String(data.atendimento?.id ?? ""));
@@ -667,7 +651,9 @@ export default function PacientesPageClient({
           <section
             className={[
               styles.modal,
-              abaAtiva === "prontuario" ? modalStyles.modalTall : modalStyles.modalAdaptive,
+              abaAtiva === "prontuario" || abaAtiva === "atendimento"
+                ? modalStyles.modalTall
+                : modalStyles.modalAdaptive,
             ].join(" ")}
             role="dialog"
             aria-modal="true"
@@ -693,7 +679,7 @@ export default function PacientesPageClient({
                       ) : (
                         <span className={`${vinculoStyles.warning} ${styles.modalHeaderBadge}`}>
                           <TriangleAlert size={12} /> Sem vínculo com contato
-                        </span>
+                              </span>
                       )
                     ) : null}
                   </div>
@@ -721,7 +707,9 @@ export default function PacientesPageClient({
             <div
               className={[
                 styles.modalBody,
-                abaAtiva === "prontuario" ? "" : modalStyles.modalBodyAdaptive,
+                abaAtiva === "prontuario" || abaAtiva === "atendimento"
+                  ? ""
+                  : modalStyles.modalBodyAdaptive,
               ].join(" ")}
             >
               {erro ? <div className={styles.error}>{erro}</div> : null}
@@ -835,8 +823,6 @@ export default function PacientesPageClient({
                         type="button"
                         className={styles.primaryButton}
                         onClick={() => abrirNovoAtendimento()}
-                        aria-expanded={formAtendimentoAberto && !atendimentoEditandoId}
-                        aria-controls="form-novo-atendimento"
                       >
                         <ClipboardList size={17} strokeWidth={2.2} />
                         Registrar novo atendimento
@@ -846,7 +832,7 @@ export default function PacientesPageClient({
                 </div>
               ) : null}
 
-              {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "prontuario" && formAtendimentoAberto ? (
+              {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "atendimento" ? (
                 <section id="form-novo-atendimento" className={`${styles.formCard} ${modalStyles.attendanceFormCard}`}>
                   <div className={`${styles.sectionHeaderCompact} ${modalStyles.attendanceFormHeader}`}>
                     <div>
@@ -906,7 +892,7 @@ export default function PacientesPageClient({
                   </section>
 
                   {nichoCodigo === "odontologia" && podeVisualizarOdontograma ? (
-                    <section className={styles.attendanceOdontogramSection}>
+                    <section className={`${styles.attendanceOdontogramSection} ${modalStyles.attendanceOdontogramSpacing}`}>
                       <div className={styles.attendanceOdontogramHeader}>
                         <div>
                           <span className={styles.eyebrow}>Avaliação odontológica</span>
@@ -1085,10 +1071,7 @@ export default function PacientesPageClient({
                   pacienteId={pacienteSelecionado.id}
                   podeEditar={podeEditarOdontograma}
                   podeRegistrarAtendimento={podeCriarAtendimento}
-                  onRegistrarAtendimento={(dente) => {
-                    trocarAba("prontuario");
-                    abrirNovoAtendimento(dente);
-                  }}
+                  onRegistrarAtendimento={(dente) => abrirNovoAtendimento(dente)}
                   onFeedback={setMensagem}
                 />
               ) : null}

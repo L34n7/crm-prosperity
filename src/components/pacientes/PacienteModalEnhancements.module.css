@@ -1,17 +1,14 @@
-.modalAdaptive {
-  height: auto;
+.modalAdaptive,
+.modalTall {
+  height: min(900px, calc(100dvh - 32px));
   min-height: 0;
   max-height: calc(100dvh - 32px);
-  grid-template-rows: auto auto minmax(0, auto);
-}
-
-.modalTall {
-  height: min(1000px, calc(100dvh - 32px));
-  min-height: 520px;
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .modalBodyAdaptive {
-  max-height: calc(100dvh - 172px);
+  min-height: 0;
+  max-height: none;
 }
 
 .overviewSectionTitle {
@@ -107,6 +104,10 @@
   line-height: 1.45;
 }
 
+.attendanceOdontogramSpacing {
+  margin: 14px 16px 0;
+}
+
 .dentalSummary {
   margin: 14px 16px 0;
   padding: 13px 14px;
@@ -192,6 +193,7 @@
   }
 
   .formSection,
+  .attendanceOdontogramSpacing,
   .dentalSummary {
     margin-inline: 10px;
   }

@@ -35,6 +35,7 @@ const ABAS_PRONTUARIO_PADRAO: ProntuarioAbaCodigo[] = [
   "resumo",
   "dados",
   "prontuario",
+  "atendimento",
 ];
 
 export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
