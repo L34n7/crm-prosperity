@@ -95,27 +95,28 @@ function normalizarAcoes(valor: unknown): AcaoIntencao[] {
     "encerrar",
   ]);
 
-  return valor
-    .map((acao) => {
-      const item =
-        acao && typeof acao === "object" && !Array.isArray(acao)
-          ? (acao as Record<string, unknown>)
-          : {};
-      const tipo = String(item.tipo || "") as TipoAcaoIntencao;
-      if (!permitidas.has(tipo)) return null;
-      const config =
-        item.configuracao_json &&
-        typeof item.configuracao_json === "object" &&
-        !Array.isArray(item.configuracao_json)
-          ? (item.configuracao_json as Record<string, unknown>)
-          : {};
-      return {
-        id: String(item.id || "") || undefined,
-        tipo,
-        configuracao_json: config,
-      } satisfies AcaoIntencao;
-    })
-    .filter((acao): acao is AcaoIntencao => Boolean(acao));
+  return valor.reduce<AcaoIntencao[]>((acoes, acao) => {
+    const item =
+      acao && typeof acao === "object" && !Array.isArray(acao)
+        ? (acao as Record<string, unknown>)
+        : {};
+    const tipo = String(item.tipo || "") as TipoAcaoIntencao;
+    if (!permitidas.has(tipo)) return acoes;
+
+    const config =
+      item.configuracao_json &&
+      typeof item.configuracao_json === "object" &&
+      !Array.isArray(item.configuracao_json)
+        ? (item.configuracao_json as Record<string, unknown>)
+        : {};
+
+    acoes.push({
+      id: String(item.id || "") || undefined,
+      tipo,
+      configuracao_json: config,
+    });
+    return acoes;
+  }, []);
 }
 
 async function buscarIntegracaoConversa(params: {

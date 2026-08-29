@@ -200,7 +200,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const auth = await obterContextoUsuario("fluxos.visualizar");
     if (auth.erro || !auth.usuario) return auth.erro;
 
-    const fluxo = await validarFluxo(auth.usuario.empresa_id, fluxoId);
+    const fluxo = await validarFluxo(auth.usuario.empresa_id!, fluxoId);
     if (!fluxo) {
       return NextResponse.json(
         { ok: false, error: "Fluxo não encontrado." },
@@ -211,7 +211,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const { data, error } = await supabaseAdmin
       .from("automacao_intencoes")
       .select("*")
-      .eq("empresa_id", auth.usuario.empresa_id)
+      .eq("empresa_id", auth.usuario.empresa_id!)
       .eq("fluxo_id", fluxoId)
       .order("ordem", { ascending: true })
       .order("created_at", { ascending: true });
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const fluxo = await validarFluxo(auth.usuario.empresa_id, fluxoId);
+    const fluxo = await validarFluxo(auth.usuario.empresa_id!, fluxoId);
     if (!fluxo) {
       return NextResponse.json(
         { ok: false, error: "Fluxo não encontrado." },
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const contextoIa = await gerarContextoIa({
-      empresaId: auth.usuario.empresa_id,
+      empresaId: auth.usuario.empresa_id!,
       usuarioId: auth.usuario.id,
       fluxo: fluxo as Record<string, unknown>,
       titulo,
@@ -265,7 +265,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const { data: ultima } = await supabaseAdmin
       .from("automacao_intencoes")
       .select("ordem")
-      .eq("empresa_id", auth.usuario.empresa_id)
+      .eq("empresa_id", auth.usuario.empresa_id!)
       .eq("fluxo_id", fluxoId)
       .order("ordem", { ascending: false })
       .limit(1)
@@ -274,7 +274,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const { data, error } = await supabaseAdmin
       .from("automacao_intencoes")
       .insert({
-        empresa_id: auth.usuario.empresa_id,
+        empresa_id: auth.usuario.empresa_id!,
         fluxo_id: fluxoId,
         titulo,
         resposta,
@@ -321,7 +321,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const fluxo = await validarFluxo(auth.usuario.empresa_id, fluxoId);
+    const fluxo = await validarFluxo(auth.usuario.empresa_id!, fluxoId);
     if (!fluxo) {
       return NextResponse.json(
         { ok: false, error: "Fluxo não encontrado." },
@@ -367,7 +367,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       .from("automacao_intencoes")
       .update(atualizacao)
       .eq("id", intencaoId)
-      .eq("empresa_id", auth.usuario.empresa_id)
+      .eq("empresa_id", auth.usuario.empresa_id!)
       .eq("fluxo_id", fluxoId)
       .select("*")
       .maybeSingle();
@@ -408,7 +408,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const fluxo = await validarFluxo(auth.usuario.empresa_id, fluxoId);
+    const fluxo = await validarFluxo(auth.usuario.empresa_id!, fluxoId);
     if (!fluxo) {
       return NextResponse.json(
         { ok: false, error: "Fluxo não encontrado." },
@@ -420,7 +420,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       .from("automacao_intencoes")
       .delete()
       .eq("id", intencaoId)
-      .eq("empresa_id", auth.usuario.empresa_id)
+      .eq("empresa_id", auth.usuario.empresa_id!)
       .eq("fluxo_id", fluxoId);
 
     if (error) throw new Error(`Erro ao excluir intenção: ${error.message}`);

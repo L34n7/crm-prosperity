@@ -23,10 +23,30 @@ type TipoAcaoIntencao =
   | "parar_fluxo"
   | "encerrar";
 
+type BotaoAcaoIntencao = {
+  id?: string;
+  titulo?: string;
+};
+
+type ConfiguracaoAcaoIntencao = {
+  mensagem?: string;
+  botoes?: BotaoAcaoIntencao[];
+  botao_texto?: string;
+  url?: string;
+  escopo_fila?: string;
+  setor_id?: string;
+  estrategia_transferencia?: string;
+  atendente_id?: string;
+  incluir_administradores_distribuicao?: boolean;
+  midia_url?: string;
+  midia_nome?: string;
+  [chave: string]: unknown;
+};
+
 type AcaoIntencao = {
   id: string;
   tipo: TipoAcaoIntencao;
-  configuracao_json: Record<string, any>;
+  configuracao_json: ConfiguracaoAcaoIntencao;
 };
 
 type Intencao = {
@@ -71,7 +91,7 @@ function labelAcao(tipo: TipoAcaoIntencao) {
   return ACOES_DISPONIVEIS.find((item) => item.tipo === tipo)?.label || tipo;
 }
 
-function configuracaoInicial(tipo: TipoAcaoIntencao): Record<string, any> {
+function configuracaoInicial(tipo: TipoAcaoIntencao): ConfiguracaoAcaoIntencao {
   if (tipo === "enviar_botoes") {
     return {
       mensagem: "",
@@ -363,7 +383,7 @@ export default function IntencoesModal({
     ]);
   }
 
-  function atualizarAcao(indice: number, patch: Record<string, any>) {
+  function atualizarAcao(indice: number, patch: Partial<ConfiguracaoAcaoIntencao>) {
     setAcoes((atuais) =>
       atuais.map((acao, posicao) =>
         posicao === indice
@@ -489,7 +509,7 @@ export default function IntencoesModal({
               onChange={(e) => atualizarAcao(indice, { mensagem: e.target.value })}
             />
           </label>
-          {botoes.slice(0, 3).map((botao: any, botaoIndex: number) => (
+          {botoes.slice(0, 3).map((botao: BotaoAcaoIntencao, botaoIndex: number) => (
             <label key={botao.id || botaoIndex} className={styles.field}>
               <span className={styles.label}>Botão {botaoIndex + 1}</span>
               <input
