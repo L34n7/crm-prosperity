@@ -482,6 +482,35 @@
   padding: 17px;
 }
 
+.prontuarioQuickAction {
+  min-height: 0;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.prontuarioQuickAction > div {
+  min-width: 0;
+}
+
+.prontuarioQuickAction h3 {
+  margin: 2px 0 0;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+}
+
+.prontuarioQuickAction .summaryText {
+  margin-top: 3px;
+}
+
+.prontuarioQuickAction .primaryButton {
+  flex: 0 0 auto;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .sectionHeaderCompact {
   align-items: flex-start;
   margin-bottom: 14px;
@@ -708,6 +737,19 @@
   color: var(--crm-text-strong);
 }
 
+.timelineActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--crm-border);
+}
+
+.timelineActions .secondaryButton {
+  min-height: 36px;
+  gap: 7px;
+}
+
 @media (max-width: 980px) {
   .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -717,6 +759,7 @@
     grid-template-columns: 1fr;
   }
 }
+
 
 @media (max-width: 760px) {
   .page {
@@ -781,6 +824,15 @@
   .historyToolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .prontuarioQuickAction {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .prontuarioQuickAction .primaryButton {
+    width: 100%;
   }
 
   .historyFilter select {

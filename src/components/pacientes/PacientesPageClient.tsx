@@ -8,6 +8,7 @@ import {
   FileText,
   Link2,
   MessageCircle,
+  Pencil,
   Search,
   TriangleAlert,
   UserPlus,
@@ -132,6 +133,13 @@ function criarFormInicial(): FormAtendimento {
   };
 }
 
+function dataHoraLocalDoAtendimento(valor: string) {
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return dataHoraLocalInicial();
+  data.setMinutes(data.getMinutes() - data.getTimezoneOffset());
+  return data.toISOString().slice(0, 16);
+}
+
 function formatarDataHora(valor: string | null | undefined) {
   if (!valor) return "Não informado";
   const data = new Date(valor);
@@ -233,6 +241,7 @@ export default function PacientesPageClient({
   const [mensagem, setMensagem] = useState("");
   const [form, setForm] = useState<FormAtendimento>(() => criarFormInicial());
   const [formAtendimentoAberto, setFormAtendimentoAberto] = useState(false);
+  const [atendimentoEditandoId, setAtendimentoEditandoId] = useState("");
   const [atendimentoExpandidoId, setAtendimentoExpandidoId] = useState("");
   const [filtroTipoAtendimento, setFiltroTipoAtendimento] = useState("todos");
   const modoModal = Boolean(pacienteIdModal);
@@ -325,6 +334,7 @@ export default function PacientesPageClient({
       setSelecionadoId(pacienteIdModal);
       setAbaAtiva("resumo");
       setFormAtendimentoAberto(false);
+      setAtendimentoEditandoId("");
       setFiltroTipoAtendimento("todos");
       setModalAberto(true);
       void carregar({ pacienteId: pacienteIdModal, abrirModal: true });
@@ -376,6 +386,7 @@ export default function PacientesPageClient({
     setAbaAtiva(abaNormalizada);
     setForm(criarFormInicial());
     setFormAtendimentoAberto(false);
+    setAtendimentoEditandoId("");
     setFiltroTipoAtendimento("todos");
     setModalAberto(true);
     if (!modoModal) atualizarUrlPaciente(pacienteId, abaNormalizada);
@@ -388,6 +399,7 @@ export default function PacientesPageClient({
     setAtendimentos([]);
     setAbaAtiva("resumo");
     setFormAtendimentoAberto(false);
+    setAtendimentoEditandoId("");
     setAtendimentoExpandidoId("");
     setFiltroTipoAtendimento("todos");
     if (modoModal) onModalClose?.();
@@ -411,6 +423,46 @@ export default function PacientesPageClient({
     await abrirPaciente(pacienteId, "resumo");
   }
 
+  function abrirNovoAtendimento() {
+    setAtendimentoEditandoId("");
+    setForm(criarFormInicial());
+    setFormAtendimentoAberto(true);
+    requestAnimationFrame(() => {
+      document.getElementById("form-novo-atendimento")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
+  function editarAtendimento(atendimento: Atendimento) {
+    setAtendimentoEditandoId(atendimento.id);
+    setForm({
+      data_atendimento: dataHoraLocalDoAtendimento(atendimento.data_atendimento),
+      tipo: atendimento.tipo,
+      queixa_principal: atendimento.queixa_principal ?? "",
+      anamnese: atendimento.anamnese ?? "",
+      diagnostico: atendimento.diagnostico ?? "",
+      conduta: atendimento.conduta ?? "",
+      prescricao: atendimento.prescricao ?? "",
+      observacoes: atendimento.observacoes ?? "",
+    });
+    setFormAtendimentoAberto(true);
+    setAtendimentoExpandidoId(atendimento.id);
+    requestAnimationFrame(() => {
+      document.getElementById("form-novo-atendimento")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
+  function cancelarFormularioAtendimento() {
+    setForm(criarFormInicial());
+    setFormAtendimentoAberto(false);
+    setAtendimentoEditandoId("");
+  }
+
   async function salvarAtendimento() {
     if (!pacienteSelecionado) {
       setErro("Selecione um paciente.");
@@ -421,9 +473,13 @@ export default function PacientesPageClient({
 
     try {
       const response = await fetch("/api/prontuarios", {
-        method: "POST",
+        method: atendimentoEditandoId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, paciente_id: pacienteSelecionado.id }),
+        body: JSON.stringify({
+          ...form,
+          paciente_id: pacienteSelecionado.id,
+          atendimento_id: atendimentoEditandoId || undefined,
+        }),
       });
       const data = await response.json();
       if (!response.ok || !data?.ok) {
@@ -433,6 +489,7 @@ export default function PacientesPageClient({
       setForm(criarFormInicial());
       await carregar({ pacienteId: pacienteSelecionado.id, abrirModal: true });
       setFormAtendimentoAberto(false);
+      setAtendimentoEditandoId("");
       setFiltroTipoAtendimento("todos");
       setAtendimentoExpandidoId(String(data.atendimento?.id ?? ""));
       trocarAba("prontuario");
@@ -684,22 +741,23 @@ export default function PacientesPageClient({
                     <article className={styles.summaryCard}><span>Último atendimento</span><strong>{ultimoAtendimento ? formatarDataHora(ultimoAtendimento.data_atendimento) : "Nenhum"}</strong></article>
                     <article className={styles.summaryCard}><span>Último tipo</span><strong>{ultimoAtendimento ? labelTipo(ultimoAtendimento.tipo) : "Sem registro"}</strong></article>
                   </div>
-                  <section className={styles.detailCard}>
-                    <div className={styles.sectionHeaderCompact}><div><span className={styles.eyebrow}>Prontuário clínico</span><h3>Histórico central do paciente</h3></div></div>
-                    <p className={styles.summaryText}>O prontuário reúne atendimentos, anamnese, diagnóstico, conduta, prescrições e observações clínicas.</p>
+                  <section className={[styles.detailCard, styles.prontuarioQuickAction].join(" ")}>
+                    <div>
+                      <span className={styles.eyebrow}>Prontuário clínico</span>
+                      <h3>Histórico central do paciente</h3>
+                      <p className={styles.summaryText}>Atendimentos, diagnósticos, condutas e prescrições em uma única linha do tempo.</p>
+                    </div>
                     {podeCriarAtendimento ? (
-                      <div className={styles.formActions}>
-                        <button
-                          type="button"
-                          className={styles.primaryButton}
-                          onClick={() => setFormAtendimentoAberto((aberto) => !aberto)}
-                          aria-expanded={formAtendimentoAberto}
-                          aria-controls="form-novo-atendimento"
-                        >
-                          {formAtendimentoAberto ? <ChevronUp size={17} /> : <ClipboardList size={17} strokeWidth={2.2} />}
-                          {formAtendimentoAberto ? "Recolher formulário" : "Registrar novo atendimento"}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className={styles.primaryButton}
+                        onClick={abrirNovoAtendimento}
+                        aria-expanded={formAtendimentoAberto && !atendimentoEditandoId}
+                        aria-controls="form-novo-atendimento"
+                      >
+                        <ClipboardList size={17} strokeWidth={2.2} />
+                        Registrar novo atendimento
+                      </button>
                     ) : null}
                   </section>
                 </div>
@@ -707,7 +765,12 @@ export default function PacientesPageClient({
 
               {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "prontuario" && formAtendimentoAberto ? (
                 <section id="form-novo-atendimento" className={styles.formCard}>
-                  <div className={styles.sectionHeaderCompact}><div><span className={styles.eyebrow}>Novo registro</span><h3>Registrar atendimento</h3></div></div>
+                  <div className={styles.sectionHeaderCompact}>
+                    <div>
+                      <span className={styles.eyebrow}>{atendimentoEditandoId ? "Editar registro" : "Novo registro"}</span>
+                      <h3>{atendimentoEditandoId ? "Editar atendimento" : "Registrar atendimento"}</h3>
+                    </div>
+                  </div>
                   <div className={styles.formGrid}>
                     <label className={styles.field}>
                       <span>Data e hora</span>
@@ -734,16 +797,17 @@ export default function PacientesPageClient({
                     <button
                       type="button"
                       className={styles.secondaryButton}
-                      onClick={() => {
-                        setForm(criarFormInicial());
-                        setFormAtendimentoAberto(false);
-                      }}
+                      onClick={cancelarFormularioAtendimento}
                       disabled={salvando}
                     >
                       Cancelar
                     </button>
                     <button type="button" className={styles.primaryButton} onClick={() => void salvarAtendimento()} disabled={salvando}>
-                      {salvando ? "Salvando..." : "Salvar atendimento"}
+                      {salvando
+                        ? "Salvando..."
+                        : atendimentoEditandoId
+                          ? "Salvar alterações"
+                          : "Salvar atendimento"}
                     </button>
                   </div>
                 </section>
@@ -805,6 +869,13 @@ export default function PacientesPageClient({
                           )}
                           {!atendimento.queixa_principal && !atendimento.anamnese && !atendimento.diagnostico && !atendimento.conduta && !atendimento.prescricao && !atendimento.observacoes ? (
                             <p>Atendimento registrado sem detalhes clínicos adicionais.</p>
+                          ) : null}
+                          {podeEditarProntuario ? (
+                            <div className={styles.timelineActions}>
+                              <button type="button" className={styles.secondaryButton} onClick={() => editarAtendimento(atendimento)}>
+                                <Pencil size={15} /> Editar atendimento
+                              </button>
+                            </div>
                           ) : null}
                         </div> : null}
                       </article>

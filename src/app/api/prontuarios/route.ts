@@ -464,3 +464,144 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function PUT(request: Request) {
+  const resultado = await getUsuarioContexto();
+
+  if (!resultado.ok) {
+    return NextResponse.json(
+      { ok: false, error: resultado.error },
+      { status: resultado.status }
+    );
+  }
+
+  const { usuario } = resultado;
+
+  if (!usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Usuário sem empresa vinculada." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const acesso = await garantirAcessoSaude(
+      usuario.permissoes,
+      "prontuarios.editar",
+      usuario.empresa_id
+    );
+
+    if (!acesso.ok) return acesso.response;
+
+    const body = await request.json();
+    const atendimentoId = texto(body?.atendimento_id);
+    const pacienteId = texto(body?.paciente_id);
+
+    if (!atendimentoId) {
+      return NextResponse.json(
+        { ok: false, error: "Atendimento não informado." },
+        { status: 400 }
+      );
+    }
+
+    const { data: atendimentoAtual, error: buscaError } = await supabase
+      .from("prontuario_atendimentos")
+      .select("*")
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("id", atendimentoId)
+      .maybeSingle();
+
+    if (buscaError) {
+      return NextResponse.json(
+        { ok: false, error: buscaError.message },
+        { status: 400 }
+      );
+    }
+
+    if (!atendimentoAtual) {
+      return NextResponse.json(
+        { ok: false, error: "Atendimento não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    if (pacienteId && atendimentoAtual.paciente_id !== pacienteId) {
+      return NextResponse.json(
+        { ok: false, error: "O atendimento não pertence ao paciente informado." },
+        { status: 400 }
+      );
+    }
+
+    const valorClinico = (chave: string) =>
+      Object.prototype.hasOwnProperty.call(body, chave)
+        ? texto(body?.[chave]) || null
+        : atendimentoAtual[chave] ?? null;
+
+    const { data: atendimento, error: atendimentoError } = await supabase
+      .from("prontuario_atendimentos")
+      .update({
+        data_atendimento:
+          body?.data_atendimento === undefined
+            ? atendimentoAtual.data_atendimento
+            : normalizarDataAtendimento(body.data_atendimento),
+        tipo: texto(body?.tipo) || atendimentoAtual.tipo || "consulta",
+        queixa_principal: valorClinico("queixa_principal"),
+        anamnese: valorClinico("anamnese"),
+        diagnostico: valorClinico("diagnostico"),
+        conduta: valorClinico("conduta"),
+        prescricao: valorClinico("prescricao"),
+        observacoes: valorClinico("observacoes"),
+        updated_by: usuario.id,
+      })
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("id", atendimentoId)
+      .select("*")
+      .single();
+
+    if (atendimentoError) {
+      return NextResponse.json(
+        { ok: false, error: atendimentoError.message },
+        { status: 400 }
+      );
+    }
+
+    const auditMeta = getRequestAuditMetadata(request);
+
+    await registrarLogAuditoriaSeguro({
+      empresa_id: usuario.empresa_id,
+      categoria: "saude",
+      entidade: "prontuario",
+      entidade_id: atendimentoAtual.prontuario_id,
+      acao: "atendimento_atualizado",
+      descricao: "Atendimento atualizado no prontuário",
+      usuario_id: usuario.id,
+      usuario_nome: usuario.nome,
+      usuario_email: usuario.email,
+      metadata: {
+        paciente_id: atendimentoAtual.paciente_id,
+        pessoa_id: atendimentoAtual.pessoa_id,
+        atendimento_id: atendimento.id,
+        tipo: atendimento.tipo,
+      },
+      ip: auditMeta.ip,
+      user_agent: auditMeta.user_agent,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: "Atendimento atualizado com sucesso.",
+      atendimento,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro interno ao atualizar atendimento.",
+      },
+      { status: 400 }
+    );
+  }
+}
