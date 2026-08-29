@@ -5,6 +5,7 @@ import type { Fluxo } from "../types";
 import { TIPO_NO_PERGUNTA_LIVRE_IA } from "../constants";
 import { TIPO_NO_CONSULTAR_ESTOQUE } from "../consultar-estoque-editor";
 import { TIPO_NO_CHECKOUT_PAGAMENTO } from "../checkout-pagamento-editor";
+import IntencoesModal from "./modals/IntencoesModal";
 import styles from "../fluxos.module.css";
 
 type FluxoEditorHeaderProps = {
@@ -51,6 +52,7 @@ export default function FluxoEditorHeader({
   onArquivarFluxo,
 }: FluxoEditorHeaderProps) {
   const [menuAberto, setMenuAberto] = useState(false);
+  const [intencoesAberto, setIntencoesAberto] = useState(false);
 
   function adicionarNo(tipoNo: string) {
     setMenuAberto(false);
@@ -58,6 +60,7 @@ export default function FluxoEditorHeader({
   }
 
   return (
+    <>
     <header className={styles.editorHeader}>
       <div>
         <p className={styles.eyebrow}>Construtor visual</p>
@@ -114,6 +117,15 @@ export default function FluxoEditorHeader({
                   ✨ Assistente IA
                 </button>
               )}
+
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setIntencoesAberto(true)}
+                disabled={!fluxoSelecionado}
+              >
+                Intenções
+              </button>
 
               {podeEditarFluxos && (
                 <button
@@ -444,5 +456,14 @@ export default function FluxoEditorHeader({
         </span>
       </div>
     </header>
+
+    {intencoesAberto && fluxoSelecionado && (
+      <IntencoesModal
+        fluxo={fluxoSelecionado}
+        podeEditar={podeEditarFluxos}
+        onFechar={() => setIntencoesAberto(false)}
+      />
+    )}
+    </>
   );
 }

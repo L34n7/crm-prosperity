@@ -12,6 +12,7 @@ import {
   continuarCheckoutPagamentoAutomacao,
   interceptarMensagemCheckoutPendente,
 } from "./process-automation-engine-checkout-runtime";
+import { processarIntencoesMensagem } from "./intencoes-runtime";
 
 export * from "./process-automation-engine-agenda";
 
@@ -307,27 +308,54 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     };
   }
 
-  const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(input);
+  const resultadoIntencoes = await processarIntencoesMensagem({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    contatoId: input.contatoId || null,
+    mensagemId: input.mensagemId || null,
+    mensagemTexto: input.mensagemTexto || "",
+    mensagemTipo: input.mensagemTipo || null,
+    numeroDestino: input.numeroDestino || null,
+  });
+
+  if (resultadoIntencoes?.interrompeuFluxo || resultadoIntencoes?.somenteIntencao) {
+    return {
+      ok: true,
+      status: resultadoIntencoes.interrompeuFluxo
+        ? "intencao_interrompeu_fluxo"
+        : "intencao_processada",
+      execucaoId: resultadoIntencoes.execucaoId,
+      intencoesExecutadas: resultadoIntencoes.intencoesExecutadas,
+    };
+  }
+
+  const inputPrincipal: AutomationEngineInput =
+    resultadoIntencoes?.mensagemFluxo &&
+    resultadoIntencoes.mensagemFluxo !== String(input.mensagemTexto || "")
+      ? { ...input, mensagemTexto: resultadoIntencoes.mensagemFluxo }
+      : input;
+
+  const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(inputPrincipal);
 
   if (resultadoPreferencia) {
     await continuarNosEspeciaisDepoisDoMotor({
-      empresaId: input.empresaId,
-      conversaId: input.conversaId,
-      numeroDestino: input.numeroDestino,
-      mensagemTexto: input.mensagemTexto,
+      empresaId: inputPrincipal.empresaId,
+      conversaId: inputPrincipal.conversaId,
+      numeroDestino: inputPrincipal.numeroDestino,
+      mensagemTexto: inputPrincipal.mensagemTexto,
       execucaoId: resultadoPreferencia.execucaoId,
     });
 
     return resultadoPreferencia;
   }
 
-  const resultado = await processAutomationEngineAgenda(input);
+  const resultado = await processAutomationEngineAgenda(inputPrincipal);
 
   await continuarNosEspeciaisDepoisDoMotor({
-    empresaId: input.empresaId,
-    conversaId: input.conversaId,
-    numeroDestino: input.numeroDestino,
-    mensagemTexto: input.mensagemTexto,
+    empresaId: inputPrincipal.empresaId,
+    conversaId: inputPrincipal.conversaId,
+    numeroDestino: inputPrincipal.numeroDestino,
+    mensagemTexto: inputPrincipal.mensagemTexto,
     execucaoId:
       resultado && typeof resultado === "object" && "execucaoId" in resultado
         ? String(resultado.execucaoId || "") || null

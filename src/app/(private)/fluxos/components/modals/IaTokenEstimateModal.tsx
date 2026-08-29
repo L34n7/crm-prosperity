@@ -9,6 +9,9 @@ type IaTokenEstimateModalProps = {
   formatarTokens: (valor: number) => string;
   onCancelar: () => void;
   onConfirmar: () => void;
+  itemSingular?: string;
+  itemPlural?: string;
+  acaoLabel?: string;
 };
 
 export default function IaTokenEstimateModal({
@@ -17,6 +20,9 @@ export default function IaTokenEstimateModal({
   formatarTokens,
   onCancelar,
   onConfirmar,
+  itemSingular = "conexão",
+  itemPlural = "conexões",
+  acaoLabel = "geração",
 }: IaTokenEstimateModalProps) {
   return (
     <div className={styles.modalOverlay}>
@@ -45,15 +51,15 @@ export default function IaTokenEstimateModal({
             </strong>
             <small>
               {previa.conexoes.length === 1
-                ? "1 conexão será gerada."
-                : `${previa.conexoes.length} conexões serão geradas.`}
+                ? `1 ${itemSingular} será gerado.`
+                : `${previa.conexoes.length} ${itemPlural} serão gerados.`}
             </small>
           </div>
 
           <div className={styles.warningBox}>
             <strong>Essa é uma estimativa antes da chamada à IA.</strong>
             <p>
-              O consumo real pode variar e será registrado automaticamente após a geração. A geração só começa depois da confirmação.
+              O consumo real pode variar e será registrado automaticamente após a {acaoLabel}. A {acaoLabel} só começa depois da confirmação.
             </p>
           </div>
 

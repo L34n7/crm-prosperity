@@ -5,7 +5,8 @@ export type SendWhatsAppMediaMessageParams = {
   accessToken: string;
   to: string;
   tipoMensagem: MediaMessageType;
-  mediaId: string;
+  mediaId?: string | null;
+  mediaUrl?: string | null;
   caption?: string | null;
   fileName?: string | null;
 };
@@ -38,7 +39,8 @@ export async function sendWhatsAppMediaMessage({
   accessToken,
   to,
   tipoMensagem,
-  mediaId,
+  mediaId = null,
+  mediaUrl = null,
   caption = null,
   fileName = null,
 }: SendWhatsAppMediaMessageParams): Promise<SendWhatsAppMediaMessageResult> {
@@ -54,36 +56,52 @@ export async function sendWhatsAppMediaMessage({
     throw new Error("Número de destino é obrigatório");
   }
 
-  if (!mediaId) {
-    throw new Error("mediaId é obrigatório");
+  const id = String(mediaId || "").trim();
+  const link = String(mediaUrl || "").trim();
+
+  if (!id && !link) {
+    throw new Error("mediaId ou mediaUrl é obrigatório");
   }
 
   const tipoMeta = mapTipoMensagem(tipoMensagem);
-
+  const mediaPayload: Record<string, unknown> = id ? { id } : { link };
   const payload: Record<string, unknown> = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
     to,
     type: tipoMeta,
-    [tipoMeta]: {
-      id: mediaId,
-    },
+    [tipoMeta]: mediaPayload,
   };
 
   if (tipoMensagem === "imagem" || tipoMensagem === "video") {
     if (caption?.trim()) {
-      (payload[tipoMeta] as Record<string, unknown>).caption = caption.trim();
+      mediaPayload.caption = caption.trim();
     }
   }
 
   if (tipoMensagem === "documento") {
     if (caption?.trim()) {
-      (payload[tipoMeta] as Record<string, unknown>).caption = caption.trim();
+      mediaPayload.caption = caption.trim();
     }
 
     if (fileName?.trim()) {
-      (payload[tipoMeta] as Record<string, unknown>).filename = fileName.trim();
+      mediaPayload.filename = fileName.trim();
     }
+  }
+
+  if (process.env.WHATSAPP_TEST_MODE === "true") {
+    const delaySimulado = Number(process.env.WHATSAPP_TEST_META_DELAY_MS || 700);
+    await new Promise((resolve) => setTimeout(resolve, delaySimulado));
+
+    return {
+      ok: true,
+      status: 200,
+      messageId: `test_wamid_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2)}`,
+      raw: { test_mode: true, payload },
+      error: null,
+    };
   }
 
   const response = await fetch(
