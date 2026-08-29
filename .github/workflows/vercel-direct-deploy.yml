@@ -1,5 +1,6 @@
 name: Deploy direto Vercel
 
+# Execucao operacional temporaria para publicar a main sem depender do webhook Git da Vercel.
 on:
   push:
     branches: [main]
