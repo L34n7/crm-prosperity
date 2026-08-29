@@ -1,15 +1,22 @@
 name: Corrigir autoria para Vercel
 
+# Segunda gravação intencional: o workflow já existe na main e agora será executado.
 on:
   push:
     branches:
       - main
+    paths:
+      - .github/workflows/vercel-author-fix.yml
 
 permissions:
   contents: write
 
+concurrency:
+  group: vercel-author-fix
+  cancel-in-progress: false
+
 jobs:
-  corrigir-autoria:
+  validar-e-publicar:
     if: github.event.head_commit.message == 'chore: preparar autoria Vercel'
     runs-on: ubuntu-latest
     steps:
@@ -18,11 +25,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Reescrever commit com autoria GitHub válida
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar ESLint
+        run: npm run lint
+
+      - name: Validar TypeScript
+        run: npx tsc --noEmit
+
+      - name: Validar build Next.js
+        run: npm run build
+
+      - name: Publicar commit final com autoria GitHub válida
         shell: bash
         run: |
+          rm .github/workflows/vercel-author-fix.yml
           git config user.name "L34n7"
           git config user.email "86571901+L34n7@users.noreply.github.com"
-          git rm .github/workflows/vercel-author-fix.yml
-          git commit --amend --no-edit --author="L34n7 <86571901+L34n7@users.noreply.github.com>"
-          git push --force-with-lease origin HEAD:main
+          git add .github/workflows/vercel-author-fix.yml
+          git commit -m 'chore: publicar intenções na Vercel'
+          git push origin HEAD:main
