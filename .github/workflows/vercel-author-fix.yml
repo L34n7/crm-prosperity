@@ -1,0 +1,28 @@
+name: Corrigir autoria para Vercel
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  corrigir-autoria:
+    if: github.event.head_commit.message == 'chore: preparar autoria Vercel'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reescrever commit com autoria GitHub válida
+        shell: bash
+        run: |
+          git config user.name "L34n7"
+          git config user.email "86571901+L34n7@users.noreply.github.com"
+          git rm .github/workflows/vercel-author-fix.yml
+          git commit --amend --no-edit --author="L34n7 <86571901+L34n7@users.noreply.github.com>"
+          git push --force-with-lease origin HEAD:main
