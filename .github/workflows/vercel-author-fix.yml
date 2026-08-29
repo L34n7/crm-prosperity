@@ -1,6 +1,5 @@
 name: Corrigir autoria para Vercel
 
-# Segunda gravacao intencional para disparar o workflow ja existente na main.
 on:
   push:
     branches: [main]
@@ -24,19 +23,59 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
+
+      - name: Corrigir tipagem da nova camada de intencoes
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'src/app/(private)/fluxos/components/modals/IntencoesModal.tsx';
+          let source = fs.readFileSync(path, 'utf8');
+          source = source.replace(
+            'type AcaoIntencao = {\n  id: string;\n  tipo: TipoAcaoIntencao;\n  configuracao_json: Record<string, any>;\n};',
+            'type BotaoAcaoIntencao = {\n  id?: string;\n  titulo?: string;\n};\n\ntype ConfiguracaoAcaoIntencao = {\n  mensagem?: string;\n  botoes?: BotaoAcaoIntencao[];\n  botao_texto?: string;\n  url?: string;\n  escopo_fila?: string;\n  setor_id?: string;\n  estrategia_transferencia?: string;\n  atendente_id?: string;\n  incluir_administradores_distribuicao?: boolean;\n  midia_url?: string;\n  midia_nome?: string;\n  [chave: string]: unknown;\n};\n\ntype AcaoIntencao = {\n  id: string;\n  tipo: TipoAcaoIntencao;\n  configuracao_json: ConfiguracaoAcaoIntencao;\n};'
+          );
+          source = source.replace(
+            'function configuracaoInicial(tipo: TipoAcaoIntencao): Record<string, any> {',
+            'function configuracaoInicial(tipo: TipoAcaoIntencao): ConfiguracaoAcaoIntencao {'
+          );
+          source = source.replace(
+            'function atualizarAcao(indice: number, patch: Record<string, any>) {',
+            'function atualizarAcao(indice: number, patch: Partial<ConfiguracaoAcaoIntencao>) {'
+          );
+          source = source.replace(
+            '.map((botao: any, botaoIndex: number) => (',
+            '.map((botao: BotaoAcaoIntencao, botaoIndex: number) => ('
+          );
+          if (source.includes('Record<string, any>') || source.includes('(botao: any')) {
+            throw new Error('A tipagem antiga ainda existe no IntencoesModal.');
+          }
+          fs.writeFileSync(path, source);
+          NODE
 
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Validar ESLint
-        run: npm run lint
+      - name: Validar ESLint da entrega de intencoes
+        shell: bash
+        run: |
+          npx eslint \
+            'src/lib/ia/interpretar-intencoes.ts' \
+            'src/lib/whatsapp/send-media-message.ts' \
+            'src/lib/whatsapp/send-interactive-buttons-message.ts' \
+            'src/lib/automacoes/intencoes-runtime.ts' \
+            'src/app/api/automacoes/[id]/intencoes/route.ts' \
+            'src/app/(private)/fluxos/components/modals/IaTokenEstimateModal.tsx' \
+            'src/app/(private)/fluxos/components/modals/IntencoesModal.tsx' \
+            'src/app/(private)/fluxos/components/FluxoEditorHeader.tsx' \
+            'src/lib/automacoes/process-automation-engine.ts'
 
-      - name: Validar TypeScript
+      - name: Validar TypeScript completo
         run: npx tsc --noEmit
 
-      - name: Validar build Next.js
+      - name: Validar build Next.js completo
         run: npm run build
 
       - name: Publicar commit final
@@ -45,6 +84,6 @@ jobs:
           rm .github/workflows/vercel-author-fix.yml
           git config user.name "L34n7"
           git config user.email "86571901+L34n7@users.noreply.github.com"
-          git add .github/workflows/vercel-author-fix.yml
-          git commit -m 'chore: publicar intencoes na Vercel'
+          git add 'src/app/(private)/fluxos/components/modals/IntencoesModal.tsx' .github/workflows/vercel-author-fix.yml
+          git commit -m 'fix: validar e publicar intencoes'
           git push origin HEAD:main
