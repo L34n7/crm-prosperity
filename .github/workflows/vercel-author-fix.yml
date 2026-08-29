@@ -26,33 +26,62 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Corrigir tipagem da nova camada de intencoes
+      - name: Corrigir tipagem da entrega
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('fs');
-          const path = 'src/app/(private)/fluxos/components/modals/IntencoesModal.tsx';
-          let source = fs.readFileSync(path, 'utf8');
-          source = source.replace(
-            'type AcaoIntencao = {\n  id: string;\n  tipo: TipoAcaoIntencao;\n  configuracao_json: Record<string, any>;\n};',
-            'type BotaoAcaoIntencao = {\n  id?: string;\n  titulo?: string;\n};\n\ntype ConfiguracaoAcaoIntencao = {\n  mensagem?: string;\n  botoes?: BotaoAcaoIntencao[];\n  botao_texto?: string;\n  url?: string;\n  escopo_fila?: string;\n  setor_id?: string;\n  estrategia_transferencia?: string;\n  atendente_id?: string;\n  incluir_administradores_distribuicao?: boolean;\n  midia_url?: string;\n  midia_nome?: string;\n  [chave: string]: unknown;\n};\n\ntype AcaoIntencao = {\n  id: string;\n  tipo: TipoAcaoIntencao;\n  configuracao_json: ConfiguracaoAcaoIntencao;\n};'
-          );
-          source = source.replace(
-            'function configuracaoInicial(tipo: TipoAcaoIntencao): Record<string, any> {',
-            'function configuracaoInicial(tipo: TipoAcaoIntencao): ConfiguracaoAcaoIntencao {'
-          );
-          source = source.replace(
-            'function atualizarAcao(indice: number, patch: Record<string, any>) {',
-            'function atualizarAcao(indice: number, patch: Partial<ConfiguracaoAcaoIntencao>) {'
-          );
-          source = source.replace(
-            '.map((botao: any, botaoIndex: number) => (',
-            '.map((botao: BotaoAcaoIntencao, botaoIndex: number) => ('
-          );
-          if (source.includes('Record<string, any>') || source.includes('(botao: any')) {
-            throw new Error('A tipagem antiga ainda existe no IntencoesModal.');
+
+          function editar(path, transform) {
+            const original = fs.readFileSync(path, 'utf8');
+            const atualizado = transform(original);
+            if (atualizado === original) {
+              throw new Error(`Nenhuma alteracao aplicada em ${path}`);
+            }
+            fs.writeFileSync(path, atualizado);
           }
-          fs.writeFileSync(path, source);
+
+          editar('src/app/(private)/fluxos/components/modals/IntencoesModal.tsx', (original) => {
+            let source = original;
+            source = source.replace(
+              'type AcaoIntencao = {\n  id: string;\n  tipo: TipoAcaoIntencao;\n  configuracao_json: Record<string, any>;\n};',
+              'type BotaoAcaoIntencao = {\n  id?: string;\n  titulo?: string;\n};\n\ntype ConfiguracaoAcaoIntencao = {\n  mensagem?: string;\n  botoes?: BotaoAcaoIntencao[];\n  botao_texto?: string;\n  url?: string;\n  escopo_fila?: string;\n  setor_id?: string;\n  estrategia_transferencia?: string;\n  atendente_id?: string;\n  incluir_administradores_distribuicao?: boolean;\n  midia_url?: string;\n  midia_nome?: string;\n  [chave: string]: unknown;\n};\n\ntype AcaoIntencao = {\n  id: string;\n  tipo: TipoAcaoIntencao;\n  configuracao_json: ConfiguracaoAcaoIntencao;\n};'
+            );
+            source = source.replace(
+              'function configuracaoInicial(tipo: TipoAcaoIntencao): Record<string, any> {',
+              'function configuracaoInicial(tipo: TipoAcaoIntencao): ConfiguracaoAcaoIntencao {'
+            );
+            source = source.replace(
+              'function atualizarAcao(indice: number, patch: Record<string, any>) {',
+              'function atualizarAcao(indice: number, patch: Partial<ConfiguracaoAcaoIntencao>) {'
+            );
+            source = source.replace(
+              '.map((botao: any, botaoIndex: number) => (',
+              '.map((botao: BotaoAcaoIntencao, botaoIndex: number) => ('
+            );
+            return source;
+          });
+
+          editar('src/app/api/automacoes/[id]/intencoes/route.ts', (source) =>
+            source.replaceAll('auth.usuario.empresa_id', 'auth.usuario.empresa_id!')
+          );
+
+          editar('src/lib/automacoes/intencoes-runtime.ts', (source) => {
+            const inicio = '  return valor\n    .map((acao) => {';
+            const fim = '    .filter((acao): acao is AcaoIntencao => Boolean(acao));';
+            const posInicio = source.indexOf(inicio);
+            const posFim = source.indexOf(fim, posInicio);
+            if (posInicio < 0 || posFim < 0) throw new Error('Bloco normalizarAcoes nao encontrado.');
+            const novo = `  return valor.reduce<AcaoIntencao[]>((acoes, acao) => {\n    const item =\n      acao && typeof acao === "object" && !Array.isArray(acao)\n        ? (acao as Record<string, unknown>)\n        : {};\n    const tipo = String(item.tipo || "") as TipoAcaoIntencao;\n    if (!permitidas.has(tipo)) return acoes;\n\n    const config =\n      item.configuracao_json &&\n      typeof item.configuracao_json === "object" &&\n      !Array.isArray(item.configuracao_json)\n        ? (item.configuracao_json as Record<string, unknown>)\n        : {};\n\n    acoes.push({\n      id: String(item.id || "") || undefined,\n      tipo,\n      configuracao_json: config,\n    });\n    return acoes;\n  }, []);`;
+            return source.slice(0, posInicio) + novo + source.slice(posFim + fim.length);
+          });
+
+          for (const path of [
+            'tests/assistente-fluxos-planejamento.test.mts',
+            'tests/assistente-fluxos-resiliencia.test.mts',
+          ]) {
+            editar(path, (source) => source.replace('  agendas: [],\n', '  agendas: [],\n  midias: [],\n'));
+          }
           NODE
 
       - name: Instalar dependencias
@@ -84,6 +113,12 @@ jobs:
           rm .github/workflows/vercel-author-fix.yml
           git config user.name "L34n7"
           git config user.email "86571901+L34n7@users.noreply.github.com"
-          git add 'src/app/(private)/fluxos/components/modals/IntencoesModal.tsx' .github/workflows/vercel-author-fix.yml
+          git add \
+            'src/app/(private)/fluxos/components/modals/IntencoesModal.tsx' \
+            'src/app/api/automacoes/[id]/intencoes/route.ts' \
+            'src/lib/automacoes/intencoes-runtime.ts' \
+            'tests/assistente-fluxos-planejamento.test.mts' \
+            'tests/assistente-fluxos-resiliencia.test.mts' \
+            .github/workflows/vercel-author-fix.yml
           git commit -m 'fix: validar e publicar intencoes'
           git push origin HEAD:main
