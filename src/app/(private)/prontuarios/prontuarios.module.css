@@ -290,14 +290,14 @@
   z-index: 1200;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 16px;
   background: rgba(15, 23, 42, 0.58);
   backdrop-filter: blur(7px);
 }
 
 .modal {
-  width: min(1180px, 100%);
-  height: min(880px, calc(100vh - 40px));
+  width: min(1700px, 100%);
+  height: min(1000px, calc(100dvh - 32px));
   min-height: 520px;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -750,9 +750,106 @@
   gap: 7px;
 }
 
+
+.attendanceOdontogramSection {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.attendanceOdontogramHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.attendanceOdontogramHeader h4 {
+  margin: 2px 0 0;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+}
+
+.attendanceOdontogramHeader p {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.attendanceOdontogramActions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+}
+
+.attendanceOdontogramActions .secondaryButton {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.pendingDentalBadge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.timelineDentalChanges {
+  margin-top: 5px;
+  padding: 12px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 11px;
+  background: var(--crm-primary-soft);
+  display: grid;
+  gap: 8px;
+}
+
+.timelineDentalChanges > strong {
+  font-size: 13px;
+}
+
+.timelineDentalChanges > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.timelineDentalChanges article {
+  min-width: 180px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--crm-surface);
+  display: grid;
+  gap: 2px;
+}
+
+.timelineDentalChanges article span {
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.timelineDentalChanges article p {
+  font-size: 12px;
+}
+
 @media (max-width: 980px) {
   .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .attendanceOdontogramHeader,
+  .attendanceOdontogramActions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .detailList {

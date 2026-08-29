@@ -238,23 +238,34 @@ export async function GET(request: Request) {
       null;
 
     let dentes: unknown[] = [];
+    let evolucoes: unknown[] = [];
 
     if (selecionado) {
-      const { data, error } = await supabase
-        .from("odontograma_dentes")
-        .select("*")
-        .eq("empresa_id", usuario.empresa_id)
-        .eq("paciente_id", selecionado.id)
-        .order("dente", { ascending: true });
+      const [dentesRes, evolucoesRes] = await Promise.all([
+        supabase
+          .from("odontograma_dentes")
+          .select("*")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("paciente_id", selecionado.id)
+          .order("dente", { ascending: true }),
+        supabase
+          .from("odontograma_evolucoes")
+          .select("*")
+          .eq("empresa_id", usuario.empresa_id)
+          .eq("paciente_id", selecionado.id)
+          .order("created_at", { ascending: false })
+          .limit(160),
+      ]);
 
-      if (error) {
+      if (dentesRes.error || evolucoesRes.error) {
         return NextResponse.json(
-          { ok: false, error: error.message },
+          { ok: false, error: dentesRes.error?.message || evolucoesRes.error?.message },
           { status: 500 }
         );
       }
 
-      dentes = data ?? [];
+      dentes = dentesRes.data ?? [];
+      evolucoes = evolucoesRes.data ?? [];
     }
 
     return NextResponse.json({
@@ -265,6 +276,7 @@ export async function GET(request: Request) {
       pacientes,
       selecionado,
       dentes,
+      evolucoes,
       dentes_padrao: Array.from(DENTES_ADULTOS),
       status_permitidos: Array.from(STATUS_PERMITIDOS),
     });
@@ -314,10 +326,18 @@ export async function POST(request: Request) {
     const pacienteId = texto(body?.paciente_id);
     const dente = texto(body?.dente);
     const status = texto(body?.status) || "saudavel";
+    const atendimentoId = texto(body?.atendimento_id);
 
     if (!pacienteId) {
       return NextResponse.json(
         { ok: false, error: "Selecione um paciente." },
+        { status: 400 }
+      );
+    }
+
+    if (!atendimentoId) {
+      return NextResponse.json(
+        { ok: false, error: "Registre a evolução do dente dentro de um atendimento." },
         { status: 400 }
       );
     }
@@ -345,23 +365,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data, error } = await supabase
-      .from("odontograma_dentes")
-      .upsert(
-        {
-          empresa_id: usuario.empresa_id,
-          paciente_id: paciente.id,
-          pessoa_id: paciente.pessoa_id,
-          dente,
-          status,
-          procedimento: texto(body?.procedimento) || null,
-          observacoes: texto(body?.observacoes) || null,
-          updated_by: usuario.id,
-        },
-        { onConflict: "empresa_id,paciente_id,dente" }
-      )
-      .select("*")
-      .single();
+    const { data: resultadoRpc, error } = await supabase.rpc(
+      "aplicar_evolucao_odontograma",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_paciente_id: paciente.id,
+        p_atendimento_id: atendimentoId,
+        p_dente: dente,
+        p_status: status,
+        p_procedimento: texto(body?.procedimento) || null,
+        p_observacoes: texto(body?.observacoes) || null,
+        p_usuario_id: usuario.id,
+      }
+    );
 
     if (error) {
       return NextResponse.json(
@@ -370,13 +386,21 @@ export async function POST(request: Request) {
       );
     }
 
+    const resultadoOdontograma = (resultadoRpc ?? {}) as {
+      dente?: Record<string, unknown>;
+      evolucao?: Record<string, unknown>;
+    };
+    if (!resultadoOdontograma.dente?.id || !resultadoOdontograma.evolucao?.id) {
+      throw new Error("A evolução do odontograma não foi retornada.");
+    }
+
     const auditMeta = getRequestAuditMetadata(request);
 
     await registrarLogAuditoriaSeguro({
       empresa_id: usuario.empresa_id,
       categoria: "saude",
       entidade: "odontograma",
-      entidade_id: data.id,
+      entidade_id: String(resultadoOdontograma.dente.id),
       acao: "dente_atualizado",
       descricao: `Dente ${dente} atualizado no odontograma`,
       usuario_id: usuario.id,
@@ -394,8 +418,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Odontograma atualizado.",
-      dente: data,
+      message: "Evolução odontológica vinculada ao atendimento.",
+      dente: resultadoOdontograma.dente,
+      evolucao: resultadoOdontograma.evolucao,
     });
   } catch (error) {
     return NextResponse.json(

@@ -18,7 +18,9 @@ import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import { useHeaderUser } from "@/components/header-user-context";
 import CadastroPacienteModal from "@/components/pacientes/CadastroPacienteModal";
-import OdontogramaTab from "@/components/prontuarios/OdontogramaTab";
+import OdontogramaTab, {
+  type OdontogramaAlteracaoDraft,
+} from "@/components/prontuarios/OdontogramaTab";
 import PodogramaTab from "@/components/prontuarios/PodogramaTab";
 import {
   getNichoConfig,
@@ -58,6 +60,16 @@ type PacienteLista = {
   contatos_vinculados?: ContatoVinculado[];
 };
 
+type OdontogramaEvolucaoAtendimento = {
+  id: string;
+  dente: string;
+  status_anterior: string;
+  status_novo: string;
+  procedimento: string | null;
+  observacoes: string | null;
+  created_at: string;
+};
+
 type Atendimento = {
   id: string;
   data_atendimento: string;
@@ -68,6 +80,7 @@ type Atendimento = {
   conduta: string | null;
   prescricao: string | null;
   observacoes: string | null;
+  odontograma_evolucoes?: OdontogramaEvolucaoAtendimento[];
 };
 
 type FormAtendimento = {
@@ -168,6 +181,21 @@ function labelTipo(tipo: string) {
   return labels[tipo] ?? tipo;
 }
 
+function labelStatusOdontograma(status: string) {
+  const labels: Record<string, string> = {
+    saudavel: "Saudável",
+    atencao: "Atenção",
+    carie: "Cárie",
+    restauracao: "Restauração",
+    canal: "Canal",
+    extraido: "Extraído",
+    implante: "Implante",
+    planejado: "Planejado",
+    realizado: "Realizado",
+  };
+  return labels[status] ?? status;
+}
+
 function normalizarAbaPaciente(aba: ProntuarioAbaCodigo): ProntuarioAbaCodigo {
   return aba === "atendimento" || aba === "evolucoes" ? "prontuario" : aba;
 }
@@ -244,6 +272,9 @@ export default function PacientesPageClient({
   const [atendimentoEditandoId, setAtendimentoEditandoId] = useState("");
   const [atendimentoExpandidoId, setAtendimentoExpandidoId] = useState("");
   const [filtroTipoAtendimento, setFiltroTipoAtendimento] = useState("todos");
+  const [odontogramaAlteracoes, setOdontogramaAlteracoes] = useState<OdontogramaAlteracaoDraft[]>([]);
+  const [odontogramaAtendimentoAberto, setOdontogramaAtendimentoAberto] = useState(false);
+  const [odontogramaDenteInicial, setOdontogramaDenteInicial] = useState("");
   const modoModal = Boolean(pacienteIdModal);
 
   const podeCriarAtendimento = permissoes.includes("prontuarios.criar");
@@ -388,6 +419,9 @@ export default function PacientesPageClient({
     setFormAtendimentoAberto(false);
     setAtendimentoEditandoId("");
     setFiltroTipoAtendimento("todos");
+    setOdontogramaAlteracoes([]);
+    setOdontogramaAtendimentoAberto(false);
+    setOdontogramaDenteInicial("");
     setModalAberto(true);
     if (!modoModal) atualizarUrlPaciente(pacienteId, abaNormalizada);
     await carregar({ pacienteId, abrirModal: true });
@@ -402,6 +436,9 @@ export default function PacientesPageClient({
     setAtendimentoEditandoId("");
     setAtendimentoExpandidoId("");
     setFiltroTipoAtendimento("todos");
+    setOdontogramaAlteracoes([]);
+    setOdontogramaAtendimentoAberto(false);
+    setOdontogramaDenteInicial("");
     if (modoModal) onModalClose?.();
     else atualizarUrlPaciente(null, null);
   }
@@ -423,9 +460,12 @@ export default function PacientesPageClient({
     await abrirPaciente(pacienteId, "resumo");
   }
 
-  function abrirNovoAtendimento() {
+  function abrirNovoAtendimento(denteInicial = "") {
     setAtendimentoEditandoId("");
     setForm(criarFormInicial());
+    setOdontogramaAlteracoes([]);
+    setOdontogramaAtendimentoAberto(Boolean(denteInicial));
+    setOdontogramaDenteInicial(denteInicial);
     setFormAtendimentoAberto(true);
     requestAnimationFrame(() => {
       document.getElementById("form-novo-atendimento")?.scrollIntoView({
@@ -437,6 +477,9 @@ export default function PacientesPageClient({
 
   function editarAtendimento(atendimento: Atendimento) {
     setAtendimentoEditandoId(atendimento.id);
+    setOdontogramaAlteracoes([]);
+    setOdontogramaAtendimentoAberto(false);
+    setOdontogramaDenteInicial("");
     setForm({
       data_atendimento: dataHoraLocalDoAtendimento(atendimento.data_atendimento),
       tipo: atendimento.tipo,
@@ -461,6 +504,9 @@ export default function PacientesPageClient({
     setForm(criarFormInicial());
     setFormAtendimentoAberto(false);
     setAtendimentoEditandoId("");
+    setOdontogramaAlteracoes([]);
+    setOdontogramaAtendimentoAberto(false);
+    setOdontogramaDenteInicial("");
   }
 
   async function salvarAtendimento() {
@@ -479,6 +525,7 @@ export default function PacientesPageClient({
           ...form,
           paciente_id: pacienteSelecionado.id,
           atendimento_id: atendimentoEditandoId || undefined,
+          odontograma_alteracoes: odontogramaAlteracoes,
         }),
       });
       const data = await response.json();
@@ -487,6 +534,9 @@ export default function PacientesPageClient({
       }
       setMensagem(data.message || "Atendimento registrado.");
       setForm(criarFormInicial());
+      setOdontogramaAlteracoes([]);
+      setOdontogramaAtendimentoAberto(false);
+      setOdontogramaDenteInicial("");
       await carregar({ pacienteId: pacienteSelecionado.id, abrirModal: true });
       setFormAtendimentoAberto(false);
       setAtendimentoEditandoId("");
@@ -751,7 +801,7 @@ export default function PacientesPageClient({
                       <button
                         type="button"
                         className={styles.primaryButton}
-                        onClick={abrirNovoAtendimento}
+                        onClick={() => abrirNovoAtendimento()}
                         aria-expanded={formAtendimentoAberto && !atendimentoEditandoId}
                         aria-controls="form-novo-atendimento"
                       >
@@ -793,6 +843,45 @@ export default function PacientesPageClient({
                       </label>
                     ))}
                   </div>
+                  {nichoCodigo === "odontologia" && podeVisualizarOdontograma ? (
+                    <section className={styles.attendanceOdontogramSection}>
+                      <div className={styles.attendanceOdontogramHeader}>
+                        <div>
+                          <span className={styles.eyebrow}>Avaliação odontológica</span>
+                          <h4>Situação dos dentes neste atendimento</h4>
+                          <p>
+                            Registre achados e procedimentos no mesmo contexto clínico da {labelTipo(form.tipo).toLowerCase()}.
+                          </p>
+                        </div>
+                        <div className={styles.attendanceOdontogramActions}>
+                          {odontogramaAlteracoes.length > 0 ? (
+                            <span className={styles.pendingDentalBadge}>
+                              {odontogramaAlteracoes.length} {odontogramaAlteracoes.length === 1 ? "dente alterado" : "dentes alterados"}
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            className={styles.secondaryButton}
+                            onClick={() => setOdontogramaAtendimentoAberto((aberto) => !aberto)}
+                          >
+                            {odontogramaAtendimentoAberto ? "Recolher odontograma" : "Abrir odontograma 2D"}
+                          </button>
+                        </div>
+                      </div>
+                      {odontogramaAtendimentoAberto ? (
+                        <OdontogramaTab
+                          pacienteId={pacienteSelecionado.id}
+                          podeEditar={podeEditarOdontograma}
+                          modoAtendimento
+                          alteracoesPendentes={odontogramaAlteracoes}
+                          onAlteracoesPendentesChange={setOdontogramaAlteracoes}
+                          denteInicial={odontogramaDenteInicial}
+                          onFeedback={setMensagem}
+                        />
+                      ) : null}
+                    </section>
+                  ) : null}
+
                   <div className={styles.formActions}>
                     <button
                       type="button"
@@ -870,6 +959,22 @@ export default function PacientesPageClient({
                           {!atendimento.queixa_principal && !atendimento.anamnese && !atendimento.diagnostico && !atendimento.conduta && !atendimento.prescricao && !atendimento.observacoes ? (
                             <p>Atendimento registrado sem detalhes clínicos adicionais.</p>
                           ) : null}
+                          {atendimento.odontograma_evolucoes?.length ? (
+                            <section className={styles.timelineDentalChanges}>
+                              <strong>Alterações odontológicas</strong>
+                              <div>
+                                {atendimento.odontograma_evolucoes.map((evolucao) => (
+                                  <article key={evolucao.id}>
+                                    <span>Dente {evolucao.dente}</span>
+                                    <p>
+                                      {labelStatusOdontograma(evolucao.status_anterior)} → {labelStatusOdontograma(evolucao.status_novo)}
+                                      {evolucao.procedimento ? " · " + evolucao.procedimento : ""}
+                                    </p>
+                                  </article>
+                                ))}
+                              </div>
+                            </section>
+                          ) : null}
                           {podeEditarProntuario ? (
                             <div className={styles.timelineActions}>
                               <button type="button" className={styles.secondaryButton} onClick={() => editarAtendimento(atendimento)}>
@@ -887,7 +992,15 @@ export default function PacientesPageClient({
               ) : null}
 
               {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "odontograma" ? (
-                <OdontogramaTab pacienteId={pacienteSelecionado.id} podeEditar={podeEditarOdontograma} onFeedback={setMensagem} />
+                <OdontogramaTab
+                  pacienteId={pacienteSelecionado.id}
+                  podeEditar={podeEditarOdontograma}
+                  onRegistrarAtendimento={(dente) => {
+                    trocarAba("prontuario");
+                    abrirNovoAtendimento(dente);
+                  }}
+                  onFeedback={setMensagem}
+                />
               ) : null}
 
               {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "podograma" ? (
