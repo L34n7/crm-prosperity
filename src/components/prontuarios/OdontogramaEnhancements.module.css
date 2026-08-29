@@ -1,0 +1,247 @@
+.previewCard {
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 15px;
+  background: var(--crm-surface);
+  display: grid;
+  gap: 10px;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.previewHeader h3 {
+  margin: 2px 0 0;
+  color: var(--crm-text-strong);
+  font-size: 17px;
+}
+
+.previewHeader p {
+  margin: 3px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.previewStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 1fr));
+  gap: 7px;
+}
+
+.previewStats div {
+  padding: 6px 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface-soft);
+  display: grid;
+  gap: 1px;
+}
+
+.previewStats strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.previewStats span {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.previewChart {
+  display: grid;
+  gap: 7px;
+}
+
+.previewArchSection {
+  min-width: 0;
+  padding: 7px 9px 5px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+}
+
+.previewArchSection > strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--crm-text-strong);
+  font-size: 11px;
+}
+
+.previewArchScroll {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.previewArchRow {
+  min-width: 610px;
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+}
+
+.previewTooth {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+}
+
+.previewTooth svg {
+  width: 27px;
+  height: 46px;
+  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.1));
+}
+
+.previewTooth span {
+  color: var(--crm-text-muted);
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.previewQuadrantDivider {
+  margin-right: 4px;
+}
+
+.previewQuadrantDivider::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: -3px;
+  width: 1px;
+  height: 39px;
+  background: var(--crm-border-strong);
+}
+
+.previewFooter {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.previewFooter button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 9px;
+  background: var(--crm-surface-input);
+  color: var(--crm-text-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.previewFooter button:hover {
+  border-color: var(--crm-primary-border);
+  color: var(--crm-primary-text);
+}
+
+.readOnlyLayout {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 292px);
+}
+
+.readOnlyDetails {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.readOnlyDetails > div {
+  min-width: 0;
+  padding: 8px 9px;
+  border-radius: 9px;
+  background: var(--crm-surface-soft);
+  display: grid;
+  gap: 3px;
+}
+
+.readOnlyDetails dt {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.readOnlyDetails dd {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.readOnlyDetails dd:first-letter {
+  text-transform: uppercase;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  vertical-align: 1px;
+}
+
+.historyToggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--crm-text-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.historyToggle > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.historyBody {
+  display: grid;
+  gap: 6px;
+}
+
+.historyBody > p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 1050px) {
+  .readOnlyLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .previewHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .previewStats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .previewFooter button {
+    width: 100%;
+  }
+}

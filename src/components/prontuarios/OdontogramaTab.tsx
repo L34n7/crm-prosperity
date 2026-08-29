@@ -1,8 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarPlus, CheckCircle2, History, Save, ShieldCheck } from "lucide-react";
+import {
+  CalendarPlus,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  History,
+  Save,
+  ShieldCheck,
+} from "lucide-react";
 import styles from "./MapaClinicoTab.module.css";
+import enhancedStyles from "./OdontogramaEnhancements.module.css";
 
 export type OdontogramaAlteracaoDraft = {
   dente: string;
@@ -39,10 +48,13 @@ type OdontogramaEvolucao = {
 type OdontogramaTabProps = {
   pacienteId: string;
   podeEditar: boolean;
+  podeRegistrarAtendimento?: boolean;
   modoAtendimento?: boolean;
+  modoPreview?: boolean;
   alteracoesPendentes?: OdontogramaAlteracaoDraft[];
   onAlteracoesPendentesChange?: (alteracoes: OdontogramaAlteracaoDraft[]) => void;
   onRegistrarAtendimento?: (dente: string) => void;
+  onVerOdontogramaCompleto?: () => void;
   denteInicial?: string;
   onFeedback?: (mensagem: string) => void;
 };
@@ -245,13 +257,53 @@ function ArcadaOdontologica({
   );
 }
 
+function ArcadaPreview({
+  titulo,
+  numeros,
+  dentesPorNumero,
+}: {
+  titulo: string;
+  numeros: string[];
+  dentesPorNumero: Map<string, DenteRegistro>;
+}) {
+  return (
+    <section className={enhancedStyles.previewArchSection} aria-label={titulo}>
+      <strong>{titulo}</strong>
+      <div className={enhancedStyles.previewArchScroll}>
+        <div className={enhancedStyles.previewArchRow}>
+          {numeros.map((numero, index) => {
+            const registro = dentesPorNumero.get(numero);
+            const status = registro?.status ?? "saudavel";
+            return (
+              <div
+                key={numero}
+                className={[
+                  enhancedStyles.previewTooth,
+                  index === 7 ? enhancedStyles.previewQuadrantDivider : "",
+                ].join(" ")}
+                title={`Dente ${numero}: ${STATUS_LABELS[status] ?? status}`}
+              >
+                <Dente2D numero={numero} status={status} />
+                <span>{numero}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function OdontogramaTab({
   pacienteId,
   podeEditar,
+  podeRegistrarAtendimento = false,
   modoAtendimento = false,
+  modoPreview = false,
   alteracoesPendentes = ALTERACOES_VAZIAS,
   onAlteracoesPendentesChange,
   onRegistrarAtendimento,
+  onVerOdontogramaCompleto,
   denteInicial,
   onFeedback,
 }: OdontogramaTabProps) {
@@ -261,6 +313,7 @@ export default function OdontogramaTab({
   const [form, setForm] = useState<FormDente>({ ...FORM_INICIAL });
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [historicoAberto, setHistoricoAberto] = useState(false);
 
   const dentesAtuaisPorNumero = useMemo(
     () => new Map(dentes.map((dente) => [dente.dente, dente])),
@@ -279,7 +332,7 @@ export default function OdontogramaTab({
   }, [alteracoesPendentes, dentesAtuaisPorNumero]);
 
   const resumo = useMemo(() => {
-    const registros = Array.from(dentesPorNumero.values());
+    const registros = Array.from(dentesPorNumero.values()) as DenteRegistro[];
     const alterados = registros.filter((dente) => dente.status !== "saudavel").length;
     const planejados = registros.filter((dente) => dente.status === "planejado").length;
     const realizados = registros.filter((dente) => dente.status === "realizado").length;
@@ -290,6 +343,7 @@ export default function OdontogramaTab({
     () => evolucoes.filter((evolucao) => evolucao.dente === denteSelecionado).slice(0, 3),
     [denteSelecionado, evolucoes],
   );
+  const ultimaEvolucaoDente = historicoDente[0] ?? null;
 
   const carregar = useCallback(async () => {
     if (!pacienteId) return;
@@ -331,6 +385,7 @@ export default function OdontogramaTab({
       procedimento: registro?.procedimento ?? "",
       observacoes: registro?.observacoes ?? "",
     });
+    setHistoricoAberto(false);
   }, [denteSelecionado, dentesPorNumero]);
 
   function adicionarAoAtendimento() {
@@ -370,6 +425,39 @@ export default function OdontogramaTab({
     return <div className={styles.loading}>Carregando odontograma...</div>;
   }
 
+  if (modoPreview) {
+    return (
+      <section className={enhancedStyles.previewCard}>
+        {erro ? <div className={styles.error}>{erro}</div> : null}
+        <div className={enhancedStyles.previewHeader}>
+          <div>
+            <span className={styles.eyebrow}>Panorama odontológico</span>
+            <h3>Odontograma</h3>
+            <p>Visão rápida da situação dentária atual.</p>
+          </div>
+          <div className={enhancedStyles.previewStats}>
+            <div><strong>{resumo.alterados}</strong><span>Alterações</span></div>
+            <div><strong>{resumo.planejados}</strong><span>Planejados</span></div>
+            <div><strong>{resumo.realizados}</strong><span>Realizados</span></div>
+          </div>
+        </div>
+
+        <div className={enhancedStyles.previewChart}>
+          <ArcadaPreview titulo="Arcada superior" numeros={DENTES_SUPERIORES} dentesPorNumero={dentesPorNumero} />
+          <ArcadaPreview titulo="Arcada inferior" numeros={DENTES_INFERIORES} dentesPorNumero={dentesPorNumero} />
+        </div>
+
+        {onVerOdontogramaCompleto ? (
+          <div className={enhancedStyles.previewFooter}>
+            <button type="button" onClick={onVerOdontogramaCompleto}>
+              Ver odontograma completo
+            </button>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <div className={[styles.odontogramWorkspace, modoAtendimento ? styles.odontogramWorkspaceEmbedded : ""].join(" ")}>
       {erro ? <div className={styles.error}>{erro}</div> : null}
@@ -393,7 +481,7 @@ export default function OdontogramaTab({
         </div>
       </header>
 
-      <div className={styles.odontogramLayout}>
+      <div className={[styles.odontogramLayout, !modoAtendimento ? enhancedStyles.readOnlyLayout : ""].join(" ")}>
         <div className={styles.chartCard}>
           <div className={styles.orientationBar}>
             <span>Direita do paciente</span>
@@ -443,51 +531,78 @@ export default function OdontogramaTab({
             </div>
           </div>
 
-          <div className={styles.conditionSection}>
-            <div className={styles.fieldLabel}>
-              <strong>Condição clínica</strong>
-              <span>{modoAtendimento ? "Situação observada agora" : "Estado atual consolidado"}</span>
-            </div>
-            <div className={styles.statusPalette}>
-              {STATUS_ORDEM.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  disabled={!modoAtendimento || !podeEditar}
-                  className={[
-                    styles.statusOption,
-                    form.status === status ? styles.statusOptionActive : "",
-                  ].join(" ")}
-                  onClick={() => setForm((atual) => ({ ...atual, status }))}
-                  aria-pressed={form.status === status}
-                >
-                  <i className={styles["dot_" + status] ?? ""} />
-                  {STATUS_LABELS[status]}
-                  {form.status === status ? <CheckCircle2 size={14} /> : null}
-                </button>
-              ))}
-            </div>
-          </div>
+          {modoAtendimento ? (
+            <>
+              <div className={styles.conditionSection}>
+                <div className={styles.fieldLabel}>
+                  <strong>Condição clínica</strong>
+                  <span>Situação observada agora</span>
+                </div>
+                <div className={styles.statusPalette}>
+                  {STATUS_ORDEM.map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      disabled={!podeEditar}
+                      className={[
+                        styles.statusOption,
+                        form.status === status ? styles.statusOptionActive : "",
+                      ].join(" ")}
+                      onClick={() => setForm((atual) => ({ ...atual, status }))}
+                      aria-pressed={form.status === status}
+                    >
+                      <i className={styles["dot_" + status] ?? ""} />
+                      {STATUS_LABELS[status]}
+                      {form.status === status ? <CheckCircle2 size={14} /> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <label className={styles.field}>
-            <span>Procedimento / indicação</span>
-            <input
-              value={form.procedimento}
-              disabled={!modoAtendimento || !podeEditar}
-              onChange={(event) => setForm((atual) => ({ ...atual, procedimento: event.target.value }))}
-              placeholder="Ex.: restauração em resina"
-            />
-          </label>
+              <label className={styles.field}>
+                <span>Procedimento / indicação</span>
+                <input
+                  value={form.procedimento}
+                  disabled={!podeEditar}
+                  onChange={(event) => setForm((atual) => ({ ...atual, procedimento: event.target.value }))}
+                  placeholder="Ex.: restauração em resina"
+                />
+              </label>
 
-          <label className={styles.field}>
-            <span>Observações clínicas</span>
-            <textarea
-              value={form.observacoes}
-              disabled={!modoAtendimento || !podeEditar}
-              onChange={(event) => setForm((atual) => ({ ...atual, observacoes: event.target.value }))}
-              placeholder="Registre achados, indicação e acompanhamento."
-            />
-          </label>
+              <label className={styles.field}>
+                <span>Observações clínicas</span>
+                <textarea
+                  value={form.observacoes}
+                  disabled={!podeEditar}
+                  onChange={(event) => setForm((atual) => ({ ...atual, observacoes: event.target.value }))}
+                  placeholder="Registre achados, indicação e acompanhamento."
+                />
+              </label>
+            </>
+          ) : (
+            <dl className={enhancedStyles.readOnlyDetails}>
+              <div>
+                <dt>Situação atual</dt>
+                <dd><span className={enhancedStyles.statusDot + " " + (styles["dot_" + form.status] ?? "")} />{STATUS_LABELS[form.status] ?? form.status}</dd>
+              </div>
+              <div>
+                <dt>Última atualização</dt>
+                <dd>{ultimaEvolucaoDente ? formatarDataHora(ultimaEvolucaoDente.created_at) : "Sem evolução registrada"}</dd>
+              </div>
+              <div>
+                <dt>Procedimento</dt>
+                <dd>{form.procedimento || "Não informado"}</dd>
+              </div>
+              <div>
+                <dt>Observações clínicas</dt>
+                <dd>{form.observacoes || "Nenhuma observação registrada"}</dd>
+              </div>
+              <div>
+                <dt>Atendimento relacionado</dt>
+                <dd>{ultimaEvolucaoDente ? `Atendimento de ${formatarDataHora(ultimaEvolucaoDente.created_at)}` : "Nenhum atendimento relacionado"}</dd>
+              </div>
+            </dl>
+          )}
 
           {modoAtendimento && podeEditar ? (
             <button type="button" className={styles.saveToothButton} onClick={adicionarAoAtendimento}>
@@ -496,42 +611,51 @@ export default function OdontogramaTab({
                 ? "Atualizar dente no atendimento"
                 : "Adicionar dente ao atendimento"}
             </button>
-          ) : podeEditar && onRegistrarAtendimento ? (
+          ) : !modoAtendimento && podeRegistrarAtendimento && onRegistrarAtendimento ? (
             <button type="button" className={styles.saveToothButton} onClick={() => onRegistrarAtendimento(denteSelecionado)}>
               <CalendarPlus size={16} />
-              Registrar evolução em atendimento
+              Registrar atendimento para este dente
             </button>
-          ) : (
+          ) : !modoAtendimento ? (
             <div className={styles.readOnlyBanner}>
               <ShieldCheck size={16} />
               Visualização protegida. Alterações clínicas são registradas em um atendimento.
             </div>
-          )}
+          ) : null}
 
           {!modoAtendimento ? (
             <section className={styles.toothHistory}>
-              <div className={styles.toothHistoryTitle}>
-                <History size={15} />
-                <strong>Histórico do dente</strong>
-              </div>
-              {historicoDente.length === 0 ? (
-                <p>Nenhuma evolução registrada para este dente.</p>
-              ) : (
-                historicoDente.map((evolucao) => (
-                  <article key={evolucao.id}>
-                    <div>
-                      <strong>{STATUS_LABELS[evolucao.status_novo] ?? evolucao.status_novo}</strong>
-                      <span>{formatarDataHora(evolucao.created_at)}</span>
-                    </div>
-                    <p>
-                      {STATUS_LABELS[evolucao.status_anterior] ?? evolucao.status_anterior}
-                      {" → "}
-                      {STATUS_LABELS[evolucao.status_novo] ?? evolucao.status_novo}
-                      {evolucao.procedimento ? " · " + evolucao.procedimento : ""}
-                    </p>
-                  </article>
-                ))
-              )}
+              <button
+                type="button"
+                className={enhancedStyles.historyToggle}
+                onClick={() => setHistoricoAberto((aberto) => !aberto)}
+                aria-expanded={historicoAberto}
+              >
+                <span><History size={15} /><strong>Histórico do dente</strong></span>
+                {historicoAberto ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              {historicoAberto ? (
+                <div className={enhancedStyles.historyBody}>
+                  {historicoDente.length === 0 ? (
+                    <p>Nenhuma evolução registrada para este dente.</p>
+                  ) : (
+                    historicoDente.map((evolucao) => (
+                      <article key={evolucao.id}>
+                        <div>
+                          <strong>{STATUS_LABELS[evolucao.status_novo] ?? evolucao.status_novo}</strong>
+                          <span>{formatarDataHora(evolucao.created_at)}</span>
+                        </div>
+                        <p>
+                          {STATUS_LABELS[evolucao.status_anterior] ?? evolucao.status_anterior}
+                          {" → "}
+                          {STATUS_LABELS[evolucao.status_novo] ?? evolucao.status_novo}
+                          {evolucao.procedimento ? " · " + evolucao.procedimento : ""}
+                        </p>
+                      </article>
+                    ))
+                  )}
+                </div>
+              ) : null}
             </section>
           ) : null}
         </aside>

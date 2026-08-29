@@ -1,0 +1,210 @@
+.modalAdaptive {
+  height: auto;
+  min-height: 0;
+  max-height: calc(100dvh - 32px);
+  grid-template-rows: auto auto minmax(0, auto);
+}
+
+.modalTall {
+  height: min(1000px, calc(100dvh - 32px));
+  min-height: 520px;
+}
+
+.modalBodyAdaptive {
+  max-height: calc(100dvh - 172px);
+}
+
+.overviewSectionTitle {
+  display: grid;
+  gap: 2px;
+}
+
+.overviewSectionTitle h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 17px;
+}
+
+.overviewSectionTitle p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.alertCard {
+  border-color: color-mix(in srgb, #f59e0b 26%, var(--crm-border));
+  background: color-mix(in srgb, #f59e0b 5%, var(--crm-surface));
+}
+
+.alertText {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.attendanceFormCard {
+  padding: 0;
+  overflow: clip;
+  border-color: var(--crm-primary-border);
+  background:
+    radial-gradient(circle at top right, var(--crm-primary-soft), transparent 34%),
+    color-mix(in srgb, var(--crm-primary-soft) 18%, var(--crm-surface));
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.attendanceFormHeader {
+  margin: 0;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--crm-primary-border);
+  background: color-mix(in srgb, var(--crm-primary-soft) 52%, var(--crm-surface));
+  align-items: center;
+}
+
+.attendanceFormHeader h3 {
+  font-size: 18px;
+}
+
+.draftBadge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.formSection {
+  margin: 14px 16px 0;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface);
+  display: grid;
+  gap: 12px;
+}
+
+.formSectionHeader {
+  display: grid;
+  gap: 2px;
+}
+
+.formSectionHeader h4 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.formSectionHeader p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dentalSummary {
+  margin: 14px 16px 0;
+  padding: 13px 14px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--crm-primary-soft) 42%, var(--crm-surface));
+  display: grid;
+  gap: 10px;
+}
+
+.dentalSummaryHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dentalSummaryHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.dentalSummaryHeader span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.dentalSummaryList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.dentalSummaryItem {
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 9px;
+  background: var(--crm-surface);
+  display: grid;
+  gap: 2px;
+}
+
+.dentalSummaryItem strong {
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.dentalSummaryItem span {
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.stickyFooter {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--crm-border);
+  background: color-mix(in srgb, var(--crm-surface) 94%, transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.06);
+}
+
+@media (max-width: 760px) {
+  .modalAdaptive,
+  .modalTall {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    max-height: 100dvh;
+  }
+
+  .modalBodyAdaptive {
+    max-height: none;
+  }
+
+  .attendanceFormHeader {
+    align-items: flex-start;
+  }
+
+  .formSection,
+  .dentalSummary {
+    margin-inline: 10px;
+  }
+
+  .dentalSummaryHeader {
+    flex-direction: column;
+  }
+
+  .dentalSummaryItem {
+    width: 100%;
+  }
+
+  .stickyFooter {
+    padding-inline: 10px;
+  }
+}

@@ -7,7 +7,6 @@ import {
   ClipboardList,
   FileText,
   Link2,
-  MessageCircle,
   Pencil,
   Search,
   TriangleAlert,
@@ -30,6 +29,7 @@ import {
   type ProntuarioAbaCodigo,
 } from "@/lib/nichos/config";
 import styles from "@/app/(private)/prontuarios/prontuarios.module.css";
+import modalStyles from "./PacienteModalEnhancements.module.css";
 import vinculoStyles from "./PacienteVinculo.module.css";
 
 type ContatoVinculado = {
@@ -106,8 +106,8 @@ type PacientesPageClientProps = {
 };
 
 const ABA_LABELS: Record<ProntuarioAbaCodigo, string> = {
-  resumo: "Resumo",
-  dados: "Dados do paciente",
+  resumo: "Visão geral",
+  dados: "Visão geral",
   prontuario: "Prontuário",
   atendimento: "Novo atendimento",
   evolucoes: "Evoluções",
@@ -197,6 +197,7 @@ function labelStatusOdontograma(status: string) {
 }
 
 function normalizarAbaPaciente(aba: ProntuarioAbaCodigo): ProntuarioAbaCodigo {
+  if (aba === "dados") return "resumo";
   return aba === "atendimento" || aba === "evolucoes" ? "prontuario" : aba;
 }
 
@@ -294,7 +295,7 @@ export default function PacientesPageClient({
   const abasDisponiveis = useMemo(() => {
     const abas = nichoConfig.prontuarioAbas ?? ["resumo", "dados", "prontuario"];
     return abas.filter((aba) => {
-      if (aba === "atendimento" || aba === "evolucoes") return false;
+      if (aba === "dados" || aba === "atendimento" || aba === "evolucoes") return false;
       if (aba === "odontograma") return podeVisualizarOdontograma;
       return true;
     });
@@ -560,103 +561,103 @@ export default function PacientesPageClient({
           />
 
           <main className={styles.page}>
-        <section className={styles.heroCard}>
-          <div>
-            <span className={styles.eyebrow}>Gestão clínica</span>
-            <h1>Pacientes e histórico clínico</h1>
-            <p>
-              Contatos continuam independentes, mas o vínculo com o paciente conecta conversa,
-              agenda, automações e histórico clínico em uma única identidade.
-            </p>
-          </div>
-          <div className={styles.heroBadge}>{nichoConfig.nome}</div>
-        </section>
+            <section className={styles.heroCard}>
+              <div>
+                <span className={styles.eyebrow}>Gestão clínica</span>
+                <h1>Pacientes e histórico clínico</h1>
+                <p>
+                  Contatos continuam independentes, mas o vínculo com o paciente conecta conversa,
+                  agenda, automações e histórico clínico em uma única identidade.
+                </p>
+              </div>
+              <div className={styles.heroBadge}>{nichoConfig.nome}</div>
+            </section>
 
-        <section className={styles.toolbar}>
-          <form
-            className={styles.searchArea}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void carregar({ buscaTermo: busca });
-            }}
-          >
-            <Search size={18} strokeWidth={2.1} />
-            <input
-              value={busca}
-              onChange={(event) => setBusca(event.target.value)}
-              placeholder="Buscar paciente por nome, documento ou e-mail"
-              aria-label="Buscar paciente"
-            />
-            <button type="submit">Buscar</button>
-          </form>
+            <section className={styles.toolbar}>
+              <form
+                className={styles.searchArea}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void carregar({ buscaTermo: busca });
+                }}
+              >
+                <Search size={18} strokeWidth={2.1} />
+                <input
+                  value={busca}
+                  onChange={(event) => setBusca(event.target.value)}
+                  placeholder="Buscar paciente por nome, documento ou e-mail"
+                  aria-label="Buscar paciente"
+                />
+                <button type="submit">Buscar</button>
+              </form>
 
-          {podeCadastrarPaciente ? (
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => setModalCadastroAberto(true)}
-            >
-              <UserPlus size={17} strokeWidth={2.2} />
-              Cadastrar paciente
-            </button>
-          ) : null}
-        </section>
+              {podeCadastrarPaciente ? (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setModalCadastroAberto(true)}
+                >
+                  <UserPlus size={17} strokeWidth={2.2} />
+                  Cadastrar paciente
+                </button>
+              ) : null}
+            </section>
 
-        {erro && !modalAberto ? <div className={styles.error}>{erro}</div> : null}
+            {erro && !modalAberto ? <div className={styles.error}>{erro}</div> : null}
 
-        <section className={styles.patientSection}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <span className={styles.eyebrow}>Pacientes</span>
-              <h2>Pacientes cadastrados</h2>
-            </div>
-            <span className={styles.counter}>{pacientes.length}</span>
-          </div>
+            <section className={styles.patientSection}>
+              <div className={styles.sectionHeader}>
+                <div>
+                  <span className={styles.eyebrow}>Pacientes</span>
+                  <h2>Pacientes cadastrados</h2>
+                </div>
+                <span className={styles.counter}>{pacientes.length}</span>
+              </div>
 
-          {carregandoLista ? (
-            <div className={styles.empty}>Carregando pacientes...</div>
-          ) : pacientes.length === 0 ? (
-            <div className={styles.empty}>
-              Nenhum paciente encontrado. Cadastre um paciente para iniciar o acompanhamento clínico.
-            </div>
-          ) : (
-            <div className={styles.patientGrid}>
-              {pacientes.map((paciente) => {
-                const contato = paciente.contatos_vinculados?.[0] ?? null;
-                return (
-                  <button
-                    key={paciente.id}
-                    type="button"
-                    className={styles.patientCard}
-                    onClick={() => void abrirPaciente(paciente.id)}
-                  >
-                    <div className={styles.patientAvatar}>
-                      {(paciente.pessoa?.nome ?? "P").trim().charAt(0).toUpperCase()}
-                    </div>
-                    <div className={styles.patientCardContent}>
-                      <strong>{paciente.pessoa?.nome ?? "Paciente"}</strong>
-                      <span>{paciente.numero_prontuario || "Prontuário ainda sem número"}</span>
-                      <small>{paciente.convenio || paciente.pessoa?.email || "Sem convênio informado"}</small>
-                      {contato ? (
-                        <span className={vinculoStyles.badge} title={`Contato vinculado: ${contato.telefone}`}>
-                          <Link2 size={12} /> Contato vinculado · {contato.telefone}
-                        </span>
-                      ) : (
-                        <span className={vinculoStyles.warning} title="Vincule este paciente a um contato para conectar conversas, agenda e automações.">
-                          <TriangleAlert size={12} /> Sem vínculo com contato
-                        </span>
-                      )}
-                    </div>
-                    <div className={styles.openHint}>
-                      <FileText size={17} strokeWidth={2.1} />
-                      Abrir paciente
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
+              {carregandoLista ? (
+                <div className={styles.empty}>Carregando pacientes...</div>
+              ) : pacientes.length === 0 ? (
+                <div className={styles.empty}>
+                  Nenhum paciente encontrado. Cadastre um paciente para iniciar o acompanhamento clínico.
+                </div>
+              ) : (
+                <div className={styles.patientGrid}>
+                  {pacientes.map((paciente) => {
+                    const contato = paciente.contatos_vinculados?.[0] ?? null;
+                    return (
+                      <button
+                        key={paciente.id}
+                        type="button"
+                        className={styles.patientCard}
+                        onClick={() => void abrirPaciente(paciente.id)}
+                      >
+                        <div className={styles.patientAvatar}>
+                          {(paciente.pessoa?.nome ?? "P").trim().charAt(0).toUpperCase()}
+                        </div>
+                        <div className={styles.patientCardContent}>
+                          <strong>{paciente.pessoa?.nome ?? "Paciente"}</strong>
+                          <span>{paciente.numero_prontuario || "Prontuário ainda sem número"}</span>
+                          <small>{paciente.convenio || paciente.pessoa?.email || "Sem convênio informado"}</small>
+                          {contato ? (
+                            <span className={vinculoStyles.badge} title={`Contato vinculado: ${contato.telefone}`}>
+                              <Link2 size={12} /> Contato vinculado · {contato.telefone}
+                            </span>
+                          ) : (
+                            <span className={vinculoStyles.warning} title="Vincule este paciente a um contato para conectar conversas, agenda e automações.">
+                              <TriangleAlert size={12} /> Sem vínculo com contato
+                            </span>
+                          )}
+                        </div>
+                        <div className={styles.openHint}>
+                          <FileText size={17} strokeWidth={2.1} />
+                          Abrir paciente
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
           </main>
         </>
       ) : null}
@@ -664,7 +665,10 @@ export default function PacientesPageClient({
       {modalAberto ? (
         <div className={styles.modalOverlay} onMouseDown={fecharPaciente}>
           <section
-            className={styles.modal}
+            className={[
+              styles.modal,
+              abaAtiva === "prontuario" ? modalStyles.modalTall : modalStyles.modalAdaptive,
+            ].join(" ")}
             role="dialog"
             aria-modal="true"
             aria-labelledby="paciente-modal-title"
@@ -714,13 +718,18 @@ export default function PacientesPageClient({
               ))}
             </nav>
 
-            <div className={styles.modalBody}>
+            <div
+              className={[
+                styles.modalBody,
+                abaAtiva === "prontuario" ? "" : modalStyles.modalBodyAdaptive,
+              ].join(" ")}
+            >
               {erro ? <div className={styles.error}>{erro}</div> : null}
               {carregandoDetalhe || !pacienteSelecionado ? (
                 <div className={styles.empty}>Carregando paciente...</div>
               ) : null}
 
-              {!carregandoDetalhe && pacienteSelecionado && !contatoPrincipal && (abaAtiva === "resumo" || abaAtiva === "dados") ? (
+              {!carregandoDetalhe && pacienteSelecionado && !contatoPrincipal && abaAtiva === "resumo" ? (
                 <div className={`${vinculoStyles.warningPanel} ${styles.modalLinkedPanel}`}>
                   <TriangleAlert size={18} />
                   <div>
@@ -733,42 +742,32 @@ export default function PacientesPageClient({
               {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "resumo" ? (
                 <div className={styles.summaryContent}>
                   <div className={styles.summaryGrid}>
-                    <article className={styles.summaryCard}><span>Prontuário</span><strong>{pacienteSelecionado.numero_prontuario || "Não definido"}</strong></article>
-                    <article className={styles.summaryCard}><span>Convênio</span><strong>{pacienteSelecionado.convenio || "Particular / não informado"}</strong></article>
-                    <article className={styles.summaryCard}><span>Data de nascimento</span><strong>{formatarData(pacienteSelecionado.pessoa?.data_nascimento)}</strong></article>
-                    <article className={styles.summaryCard}><span>Contato</span><strong>{contatoPrincipal?.telefone || "Sem vínculo"}</strong></article>
+                    <article className={styles.summaryCard}>
+                      <span>Número do prontuário</span>
+                      <strong>{pacienteSelecionado.numero_prontuario || "Não definido"}</strong>
+                    </article>
+                    <article className={styles.summaryCard}>
+                      <span>Último atendimento</span>
+                      <strong>{ultimoAtendimento ? formatarDataHora(ultimoAtendimento.data_atendimento) : "Nenhum"}</strong>
+                    </article>
+                    <article className={styles.summaryCard}>
+                      <span>Atendimentos registrados</span>
+                      <strong>{atendimentos.length}</strong>
+                    </article>
+                    <article className={styles.summaryCard}>
+                      <span>Convênio</span>
+                      <strong>{pacienteSelecionado.convenio || "Particular / não informado"}</strong>
+                    </article>
                   </div>
-
-                  {contatoPrincipal ? (
-                    <section className={styles.detailCard}>
-                      <div className={styles.sectionHeaderCompact}>
-                        <div><span className={styles.eyebrow}>Relacionamento</span><h3>Contato conectado ao paciente</h3></div>
-                      </div>
-                      <div className={`${vinculoStyles.contactLine} ${styles.modalContactLine}`}>
-                        <MessageCircle size={16} />
-                        <strong>{contatoPrincipal.telefone}</strong>
-                        {contatoPrincipal.email ? <span>· {contatoPrincipal.email}</span> : null}
-                        {contatoPrincipal.origem ? <span>· {contatoPrincipal.origem}</span> : null}
-                      </div>
-                    </section>
-                  ) : null}
 
                   <section className={styles.detailCard}>
                     <div className={styles.sectionHeaderCompact}>
-                      <div><span className={styles.eyebrow}>Última evolução</span><h3>{ultimoAtendimento ? labelTipo(ultimoAtendimento.tipo) : "Sem atendimentos"}</h3></div>
-                      {ultimoAtendimento ? <span className={styles.muted}>{formatarDataHora(ultimoAtendimento.data_atendimento)}</span> : null}
+                      <div className={modalStyles.overviewSectionTitle}>
+                        <span className={styles.eyebrow}>Identificação e contato</span>
+                        <h3>Dados do paciente</h3>
+                        <p>Informações cadastrais e de relacionamento reunidas no mesmo panorama.</p>
+                      </div>
                     </div>
-                    <p className={styles.summaryText}>
-                      {ultimoAtendimento?.conduta || ultimoAtendimento?.observacoes || "Ainda não há evolução registrada para este paciente."}
-                    </p>
-                  </section>
-                </div>
-              ) : null}
-
-              {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "dados" ? (
-                <div className={styles.summaryContent}>
-                  <section className={styles.detailCard}>
-                    <div className={styles.sectionHeaderCompact}><div><span className={styles.eyebrow}>Identificação</span><h3>Dados do paciente</h3></div></div>
                     <dl className={styles.detailList}>
                       <div><dt>Nome</dt><dd>{pacienteSelecionado.pessoa?.nome || "Não informado"}</dd></div>
                       <div><dt>E-mail</dt><dd>{pacienteSelecionado.pessoa?.email || "Não informado"}</dd></div>
@@ -779,6 +778,40 @@ export default function PacientesPageClient({
                       <div><dt>Contato vinculado</dt><dd>{contatoPrincipal?.telefone || "Não vinculado"}</dd></div>
                       <div><dt>Cadastrado em</dt><dd>{formatarDataHora(pacienteSelecionado.created_at)}</dd></div>
                     </dl>
+                  </section>
+
+                  {nichoCodigo === "odontologia" && podeVisualizarOdontograma ? (
+                    <OdontogramaTab
+                      pacienteId={pacienteSelecionado.id}
+                      podeEditar={false}
+                      modoPreview
+                      onVerOdontogramaCompleto={() => trocarAba("odontograma")}
+                    />
+                  ) : null}
+
+                  <section className={styles.detailCard}>
+                    <div className={styles.sectionHeaderCompact}>
+                      <div>
+                        <span className={styles.eyebrow}>Última evolução</span>
+                        <h3>{ultimoAtendimento ? labelTipo(ultimoAtendimento.tipo) : "Sem atendimentos"}</h3>
+                      </div>
+                      {ultimoAtendimento ? <span className={styles.muted}>{formatarDataHora(ultimoAtendimento.data_atendimento)}</span> : null}
+                    </div>
+                    <p className={styles.summaryText}>
+                      {ultimoAtendimento?.conduta || ultimoAtendimento?.observacoes || "Ainda não há evolução registrada para este paciente."}
+                    </p>
+                  </section>
+
+                  <section className={`${styles.detailCard} ${modalStyles.alertCard}`}>
+                    <div className={styles.sectionHeaderCompact}>
+                      <div>
+                        <span className={styles.eyebrow}>Atenção clínica</span>
+                        <h3>Alertas e observações importantes</h3>
+                      </div>
+                    </div>
+                    <p className={modalStyles.alertText}>
+                      {ultimoAtendimento?.observacoes || "Nenhum alerta ou observação importante registrado no último atendimento."}
+                    </p>
                   </section>
                 </div>
               ) : null}
@@ -814,35 +847,64 @@ export default function PacientesPageClient({
               ) : null}
 
               {!carregandoDetalhe && pacienteSelecionado && abaAtiva === "prontuario" && formAtendimentoAberto ? (
-                <section id="form-novo-atendimento" className={styles.formCard}>
-                  <div className={styles.sectionHeaderCompact}>
+                <section id="form-novo-atendimento" className={`${styles.formCard} ${modalStyles.attendanceFormCard}`}>
+                  <div className={`${styles.sectionHeaderCompact} ${modalStyles.attendanceFormHeader}`}>
                     <div>
                       <span className={styles.eyebrow}>{atendimentoEditandoId ? "Editar registro" : "Novo registro"}</span>
                       <h3>{atendimentoEditandoId ? "Editar atendimento" : "Registrar atendimento"}</h3>
                     </div>
+                    <span className={modalStyles.draftBadge}>
+                      {atendimentoEditandoId ? "Edição em andamento" : "Rascunho"}
+                    </span>
                   </div>
-                  <div className={styles.formGrid}>
-                    <label className={styles.field}>
-                      <span>Data e hora</span>
-                      <input type="datetime-local" value={form.data_atendimento} onChange={(event) => setForm((atual) => ({ ...atual, data_atendimento: event.target.value }))} />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Tipo</span>
-                      <select value={form.tipo} onChange={(event) => setForm((atual) => ({ ...atual, tipo: event.target.value }))}>
-                        <option value="consulta">Consulta</option>
-                        <option value="retorno">Retorno</option>
-                        <option value="procedimento">Procedimento</option>
-                        <option value="avaliacao">Avaliação</option>
-                        <option value="emergencia">Emergência</option>
-                      </select>
-                    </label>
-                    {CAMPOS_ATENDIMENTO.map(([chave, label]) => (
-                      <label key={chave} className={`${styles.field} ${styles.fullField}`}>
-                        <span>{label}</span>
-                        <textarea value={form[chave]} onChange={(event) => setForm((atual) => ({ ...atual, [chave]: event.target.value }))} />
+
+                  <section className={modalStyles.formSection}>
+                    <div className={modalStyles.formSectionHeader}>
+                      <span className={styles.eyebrow}>Atendimento</span>
+                      <h4>Identificação do atendimento</h4>
+                      <p>Defina quando ocorreu e qual é o tipo do registro clínico.</p>
+                    </div>
+                    <div className={styles.formGrid}>
+                      <label className={styles.field}>
+                        <span>Data e hora</span>
+                        <input
+                          type="datetime-local"
+                          value={form.data_atendimento}
+                          onChange={(event) => setForm((atual) => ({ ...atual, data_atendimento: event.target.value }))}
+                        />
                       </label>
-                    ))}
-                  </div>
+                      <label className={styles.field}>
+                        <span>Tipo</span>
+                        <select value={form.tipo} onChange={(event) => setForm((atual) => ({ ...atual, tipo: event.target.value }))}>
+                          <option value="consulta">Consulta</option>
+                          <option value="retorno">Retorno</option>
+                          <option value="procedimento">Procedimento</option>
+                          <option value="avaliacao">Avaliação</option>
+                          <option value="emergencia">Emergência</option>
+                        </select>
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className={modalStyles.formSection}>
+                    <div className={modalStyles.formSectionHeader}>
+                      <span className={styles.eyebrow}>Registro clínico</span>
+                      <h4>Evolução do paciente</h4>
+                      <p>Registre queixa, avaliação, diagnóstico, conduta e demais informações da consulta.</p>
+                    </div>
+                    <div className={styles.formGrid}>
+                      {CAMPOS_ATENDIMENTO.map(([chave, label]) => (
+                        <label key={chave} className={`${styles.field} ${styles.fullField}`}>
+                          <span>{label}</span>
+                          <textarea
+                            value={form[chave]}
+                            onChange={(event) => setForm((atual) => ({ ...atual, [chave]: event.target.value }))}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+
                   {nichoCodigo === "odontologia" && podeVisualizarOdontograma ? (
                     <section className={styles.attendanceOdontogramSection}>
                       <div className={styles.attendanceOdontogramHeader}>
@@ -864,7 +926,7 @@ export default function PacientesPageClient({
                             className={styles.secondaryButton}
                             onClick={() => setOdontogramaAtendimentoAberto((aberto) => !aberto)}
                           >
-                            {odontogramaAtendimentoAberto ? "Recolher odontograma" : "Abrir odontograma 2D"}
+                            {odontogramaAtendimentoAberto ? "Recolher odontograma" : "Adicionar situação do dente"}
                           </button>
                         </div>
                       </div>
@@ -882,7 +944,27 @@ export default function PacientesPageClient({
                     </section>
                   ) : null}
 
-                  <div className={styles.formActions}>
+                  {odontogramaAlteracoes.length > 0 ? (
+                    <section className={modalStyles.dentalSummary}>
+                      <div className={modalStyles.dentalSummaryHeader}>
+                        <strong>Dentes adicionados ao atendimento</strong>
+                        <span>Revise as alterações antes de salvar.</span>
+                      </div>
+                      <div className={modalStyles.dentalSummaryList}>
+                        {odontogramaAlteracoes.map((alteracao) => (
+                          <article key={alteracao.dente} className={modalStyles.dentalSummaryItem}>
+                            <strong>Dente {alteracao.dente}</strong>
+                            <span>
+                              {labelStatusOdontograma(alteracao.status)}
+                              {alteracao.procedimento ? ` · ${alteracao.procedimento}` : ""}
+                            </span>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  <div className={`${styles.formActions} ${modalStyles.stickyFooter}`}>
                     <button
                       type="button"
                       className={styles.secondaryButton}
@@ -922,71 +1004,78 @@ export default function PacientesPageClient({
                     </label>
                   </div>
                   <div className={styles.timeline}>
-                  {atendimentosFiltrados.length === 0 ? (
-                    <div className={styles.empty}>
-                      {atendimentos.length === 0
-                        ? "Este paciente ainda não possui atendimentos registrados."
-                        : "Nenhum atendimento corresponde ao filtro selecionado."}
-                    </div>
-                  ) : (
-                    atendimentosFiltrados.map((atendimento) => {
-                      const expandido = atendimentoExpandidoId === atendimento.id;
-                      return (
-                      <article key={atendimento.id} className={styles.timelineItem}>
-                        <button
-                          type="button"
-                          className={styles.timelineHeader}
-                          onClick={() => setAtendimentoExpandidoId(expandido ? "" : atendimento.id)}
-                          aria-expanded={expandido}
-                        >
-                          <div><h3>{labelTipo(atendimento.tipo)}</h3><p className={styles.muted}>{formatarDataHora(atendimento.data_atendimento)}</p></div>
-                          <span className={styles.timelineHeaderEnd}>
-                            <span className={styles.statusBadge}>{labelTipo(atendimento.tipo)}</span>
-                            {expandido ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                          </span>
-                        </button>
-                        {expandido ? <div className={styles.timelineBody}>
-                          {([
-                            ["queixa_principal", "Queixa"],
-                            ["anamnese", "Anamnese"],
-                            ["diagnostico", "Diagnóstico"],
-                            ["conduta", "Conduta"],
-                            ["prescricao", "Prescrição"],
-                            ["observacoes", "Observações"],
-                          ] as Array<[keyof Atendimento, string]>).map(([chave, label]) =>
-                            atendimento[chave] ? <p key={chave}><strong>{label}:</strong> {String(atendimento[chave])}</p> : null,
-                          )}
-                          {!atendimento.queixa_principal && !atendimento.anamnese && !atendimento.diagnostico && !atendimento.conduta && !atendimento.prescricao && !atendimento.observacoes ? (
-                            <p>Atendimento registrado sem detalhes clínicos adicionais.</p>
-                          ) : null}
-                          {atendimento.odontograma_evolucoes?.length ? (
-                            <section className={styles.timelineDentalChanges}>
-                              <strong>Alterações odontológicas</strong>
+                    {atendimentosFiltrados.length === 0 ? (
+                      <div className={styles.empty}>
+                        {atendimentos.length === 0
+                          ? "Este paciente ainda não possui atendimentos registrados."
+                       : "Nenhum atendimento corresponde ao filtro selecionado."}
+                      </div>
+                    ) : (
+                      atendimentosFiltrados.map((atendimento) => {
+                        const expandido = atendimentoExpandidoId === atendimento.id;
+                        return (
+                          <article key={atendimento.id} className={styles.timelineItem}>
+                            <button
+                              type="button"
+                              className={styles.timelineHeader}
+                              onClick={() => setAtendimentoExpandidoId(expandido ? "" : atendimento.id)}
+                              aria-expanded={expandido}
+                            >
                               <div>
-                                {atendimento.odontograma_evolucoes.map((evolucao) => (
-                                  <article key={evolucao.id}>
-                                    <span>Dente {evolucao.dente}</span>
-                                    <p>
-                                      {labelStatusOdontograma(evolucao.status_anterior)} → {labelStatusOdontograma(evolucao.status_novo)}
-                                      {evolucao.procedimento ? " · " + evolucao.procedimento : ""}
-                                    </p>
-                                  </article>
-                                ))}
+                                <h3>{labelTipo(atendimento.tipo)}</h3>
+                                <p className={styles.muted}>{formatarDataHora(atendimento.data_atendimento)}</p>
                               </div>
-                            </section>
-                          ) : null}
-                          {podeEditarProntuario ? (
-                            <div className={styles.timelineActions}>
-                              <button type="button" className={styles.secondaryButton} onClick={() => editarAtendimento(atendimento)}>
-                                <Pencil size={15} /> Editar atendimento
-                              </button>
-                            </div>
-                          ) : null}
-                        </div> : null}
-                      </article>
-                      );
-                    })
-                  )}
+                              <span className={styles.timelineHeaderEnd}>
+                                <span className={styles.statusBadge}>{labelTipo(atendimento.tipo)}</span>
+                                {expandido ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                              </span>
+                            </button>
+                            {expandido ? (
+                              <div className={styles.timelineBody}>
+                                {([
+                                  ["queixa_principal", "Queixa"],
+                                  ["anamnese", "Anamnese"],
+                                  ["diagnostico", "Diagnóstico"],
+                                  ["conduta", "Conduta"],
+                                  ["prescricao", "Prescrição"],
+                                  ["observacoes", "Observações"],
+                                ] as Array<[keyof Atendimento, string]>).map(([chave, label]) =>
+                                  atendimento[chave] ? (
+                                    <p key={chave}><strong>{label}:</strong> {String(atendimento[chave])}</p>
+                                  ) : null,
+                                )}
+                                {!atendimento.queixa_principal && !atendimento.anamnese && !atendimento.diagnostico && !atendimento.conduta && !atendimento.prescricao && !atendimento.observacoes ? (
+                                  <p>Atendimento registrado sem detalhes clínicos adicionais.</p>
+                                ) : null}
+                                {atendimento.odontograma_evolucoes?.length ? (
+                                  <section className={styles.timelineDentalChanges}>
+                                    <strong>Alterações odontológicas</strong>
+                                    <div>
+                                      {atendimento.odontograma_evolucoes.map((evolucao) => (
+                                        <article key={evolucao.id}>
+                                          <span>Dente {evolucao.dente}</span>
+                                          <p>
+                                            {labelStatusOdontograma(evolucao.status_anterior)} → {labelStatusOdontograma(evolucao.status_novo)}
+                                            {evolucao.procedimento ? " · " + evolucao.procedimento : ""}
+                                          </p>
+                                        </article>
+                                      ))}
+                                    </div>
+                                  </section>
+                                ) : null}
+                                {podeEditarProntuario ? (
+                                  <div className={styles.timelineActions}>
+                                    <button type="button" className={styles.secondaryButton} onClick={() => editarAtendimento(atendimento)}>
+                                      <Pencil size={15} /> Editar atendimento
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               ) : null}
@@ -995,6 +1084,7 @@ export default function PacientesPageClient({
                 <OdontogramaTab
                   pacienteId={pacienteSelecionado.id}
                   podeEditar={podeEditarOdontograma}
+                  podeRegistrarAtendimento={podeCriarAtendimento}
                   onRegistrarAtendimento={(dente) => {
                     trocarAba("prontuario");
                     abrirNovoAtendimento(dente);
