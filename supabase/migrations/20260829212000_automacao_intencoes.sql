@@ -63,6 +63,15 @@ create index if not exists idx_automacao_intencao_execucoes_conversa_created
 alter table public.automacao_intencoes enable row level security;
 alter table public.automacao_intencao_execucoes enable row level security;
 
+-- O runtime acessa estas tabelas exclusivamente pelo backend com supabaseAdmin.
+-- Grants explícitos evitam depender do comportamento de exposição automática do Data API.
+grant select, insert, update, delete
+  on public.automacao_intencoes
+  to service_role;
+grant select, insert, update, delete
+  on public.automacao_intencao_execucoes
+  to service_role;
+
 drop policy if exists automacao_intencoes_select_empresa on public.automacao_intencoes;
 create policy automacao_intencoes_select_empresa
   on public.automacao_intencoes
