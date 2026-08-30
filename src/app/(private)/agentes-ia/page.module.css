@@ -336,3 +336,80 @@
   .toolsGrid { grid-template-columns: 1fr; }
   .panel { padding: 13px; border-radius: 14px; }
 }
+
+/* O módulo privado não deve expor o fundo verde global quando a rolagem chega ao fim. */
+:global(html),
+:global(body) {
+  background: var(--crm-shell-bg);
+}
+
+/* Com 1 ou 2 agentes, um seletor horizontal aproveita melhor a área útil do editor. */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.agentList {
+  position: static;
+  top: auto;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 72px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.listHeader {
+  flex: 0 0 168px;
+  min-height: 72px;
+  border-right: 1px solid var(--crm-border-soft);
+  border-bottom: 0;
+}
+
+.agentCard {
+  width: auto;
+  flex: 0 0 250px;
+  min-height: 72px;
+  border-right: 1px solid var(--crm-border-soft);
+  border-bottom: 0;
+}
+
+.agentCard:last-child {
+  border-right: 0;
+}
+
+.emptyList {
+  flex: 1 1 auto;
+  min-height: 72px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12px 18px;
+  text-align: left;
+}
+
+.editorArea {
+  width: 100%;
+}
+
+@media (max-width: 820px) {
+  .agentList {
+    border-radius: 14px;
+  }
+
+  .listHeader {
+    display: none;
+  }
+
+  .agentCard {
+    flex-basis: 220px;
+    min-width: 220px;
+  }
+
+  .emptyList {
+    width: 100%;
+  }
+}
