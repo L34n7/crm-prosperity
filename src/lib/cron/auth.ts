@@ -1,5 +1,6 @@
 type CronAuthOptions = {
   exigirVercelCron?: boolean;
+  permitirQstash?: boolean;
 };
 
 export function validarChamadaCron(
@@ -8,18 +9,24 @@ export function validarChamadaCron(
 ) {
   const authHeader = request.headers.get("authorization");
   const userAgent = request.headers.get("user-agent") || "";
+  const upstashSignature = request.headers.get("upstash-signature");
   const chamadaComSecret =
     !!process.env.CRON_SECRET &&
     authHeader === `Bearer ${process.env.CRON_SECRET}`;
   const chamadaVercelCron = userAgent.includes("vercel-cron");
-  const ok =
-    chamadaComSecret &&
-    (!options.exigirVercelCron || chamadaVercelCron);
+  const chamadaQstash = Boolean(upstashSignature);
+  const permitirQstash = options.permitirQstash !== false;
+  const origemAgendadorPermitida =
+    !options.exigirVercelCron ||
+    chamadaVercelCron ||
+    (permitirQstash && chamadaQstash);
+  const ok = chamadaComSecret && origemAgendadorPermitida;
 
   return {
     ok,
     userAgent,
     temAuthorization: Boolean(authHeader),
     chamadaVercelCron,
+    chamadaQstash,
   };
 }
