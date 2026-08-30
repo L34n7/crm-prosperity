@@ -1,6 +1,7 @@
 import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
 import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtime";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { interceptarMensagemAgenteIa } from "@/lib/agentes-ia/runtime";
 import {
   executarNo as executarNoCore,
   processAutomationEngine as processAutomationEngineAgenda,
@@ -306,6 +307,13 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
       execucaoId: resultadoRotinas.execucaoIds[0] || undefined,
       error: resultadoRotinas.erro || undefined,
     };
+  }
+
+  // Rotinas operacionais independentes continuam tendo prioridade. Depois delas,
+  // um agente ativo assume a conversa antes das intenções e dos fluxos tradicionais.
+  const resultadoAgente = await interceptarMensagemAgenteIa(input);
+  if (resultadoAgente) {
+    return resultadoAgente;
   }
 
   const resultadoIntencoes = await processarIntencoesMensagem({

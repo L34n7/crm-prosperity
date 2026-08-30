@@ -20,6 +20,9 @@ export type SaldoTokensIa = {
   periodo_inicio: string;
   periodo_fim: string;
   updated_at?: string;
+  // aliases de leitura para runtimes conversacionais mais novos
+  limite: number | null;
+  restantes: number | null;
 };
 
 export class SaldoTokensIaEsgotadoError extends Error {
@@ -32,6 +35,14 @@ export class SaldoTokensIaEsgotadoError extends Error {
 function numeroOuNull(valor: unknown) {
   const numero = Number(valor);
   return Number.isFinite(numero) ? numero : null;
+}
+
+function normalizarSaldoTokensIa(data: Omit<SaldoTokensIa, "limite" | "restantes"> | SaldoTokensIa) {
+  return {
+    ...data,
+    limite: data.limite_mensal,
+    restantes: data.tokens_restantes,
+  } as SaldoTokensIa;
 }
 
 export function extrairUsoTokensIa(usage: any): UsoTokensIa {
@@ -64,7 +75,9 @@ export async function buscarSaldoTokensIa(empresaId: string) {
     throw new Error(error.message);
   }
 
-  return data as SaldoTokensIa;
+  return normalizarSaldoTokensIa(
+    data as Omit<SaldoTokensIa, "limite" | "restantes">
+  );
 }
 
 export async function verificarSaldoTokensIa(empresaId: string) {
@@ -93,18 +106,28 @@ export async function registrarUsoTokensIa(params: {
   empresaId: string;
   origem: string;
   modelo: string;
-  uso: UsoTokensIa;
+  uso?: UsoTokensIa;
+  tokensTotal?: number;
+  tokensInput?: number | null;
+  tokensOutput?: number | null;
   usuarioId?: string | null;
   metadata?: Record<string, any>;
 }) {
   const modelo = modeloEfetivo(params);
+  const uso: UsoTokensIa = params.uso ?? {
+    totalTokens: Math.max(Number(params.tokensTotal || 0), 0),
+    inputTokens:
+      params.tokensInput === undefined ? null : Number(params.tokensInput),
+    outputTokens:
+      params.tokensOutput === undefined ? null : Number(params.tokensOutput),
+  };
   const { data, error } = await supabaseAdmin.rpc("registrar_uso_tokens_ia", {
     p_empresa_id: params.empresaId,
     p_origem: params.origem,
     p_modelo: modelo,
-    p_tokens_total: params.uso.totalTokens,
-    p_tokens_input: params.uso.inputTokens,
-    p_tokens_output: params.uso.outputTokens,
+    p_tokens_total: uso.totalTokens,
+    p_tokens_input: uso.inputTokens,
+    p_tokens_output: uso.outputTokens,
     p_usuario_id: params.usuarioId ?? null,
     p_metadata_json: {
       ...(params.metadata ?? {}),
@@ -116,5 +139,7 @@ export async function registrarUsoTokensIa(params: {
     throw new Error(error.message);
   }
 
-  return data as SaldoTokensIa;
+  return normalizarSaldoTokensIa(
+    data as Omit<SaldoTokensIa, "limite" | "restantes">
+  );
 }
