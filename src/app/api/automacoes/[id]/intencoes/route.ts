@@ -238,6 +238,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const body = objeto(await req.json());
     const titulo = String(body.titulo || "").trim();
     const resposta = String(body.resposta || "").trim();
+    const acoes = normalizarAcoes(body.acoes_json);
 
     if (!titulo || !resposta) {
       return NextResponse.json(
@@ -281,7 +282,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         contexto_ia: contextoIa,
         status: "ativa",
         ordem: Math.max(0, Number(ultima?.ordem ?? -1) + 1),
-        acoes_json: [],
+        acoes_json: acoes,
       })
       .select("*")
       .single();

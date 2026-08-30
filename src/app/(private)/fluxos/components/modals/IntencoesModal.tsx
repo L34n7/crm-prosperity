@@ -258,7 +258,11 @@ export default function IntencoesModal({
       const res = await fetch(`/api/automacoes/${fluxo.id}/intencoes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ titulo: titulo.trim(), resposta: resposta.trim() }),
+        body: JSON.stringify({
+          titulo: titulo.trim(),
+          resposta: resposta.trim(),
+          acoes_json: acoes,
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -851,80 +855,78 @@ export default function IntencoesModal({
                   )}
                 </div>
 
-                {modo === "editar" && (
-                  <div className={styles.modalSection}>
-                    <h4 className={styles.modalSectionTitle}>Ações adicionais</h4>
-                    <p className={styles.help}>
-                      A resposta acima é sempre a primeira ação. As ações abaixo executam na ordem mostrada e não alteram o nó atual, exceto transferência, parada ou encerramento.
-                    </p>
+                <div className={styles.modalSection}>
+                  <h4 className={styles.modalSectionTitle}>Ações adicionais</h4>
+                  <p className={styles.help}>
+                    A resposta acima é sempre a primeira ação. As ações abaixo executam na ordem mostrada e não alteram o nó atual, exceto transferência, parada ou encerramento.
+                  </p>
 
-                    {acoes.length === 0 ? (
-                      <div className={styles.emptyMini}>Nenhuma ação adicional.</div>
-                    ) : (
-                      <div className={styles.variablesList}>
-                        {acoes.map((acao, indice) => (
-                          <div key={acao.id} className={styles.variableItem}>
-                            <div className={styles.variableMain}>
-                              <strong className={styles.variableCode}>
-                                {indice + 2}. {labelAcao(acao.tipo)}
-                              </strong>
-                              {renderConfigAcao(acao, indice)}
-                            </div>
-                            {podeEditar && (
-                              <div className={styles.variableActions}>
-                                <button
-                                  type="button"
-                                  className={styles.variableUseButton}
-                                  disabled={indice === 0}
-                                  onClick={() => moverAcao(indice, -1)}
-                                >
-                                  ↑
-                                </button>
-                                <button
-                                  type="button"
-                                  className={styles.variableUseButton}
-                                  disabled={indice === acoes.length - 1}
-                                  onClick={() => moverAcao(indice, 1)}
-                                >
-                                  ↓
-                                </button>
-                                <button
-                                  type="button"
-                                  className={styles.variableDeleteButton}
-                                  onClick={() => removerAcao(indice)}
-                                >
-                                  Remover
-                                </button>
-                              </div>
-                            )}
+                  {acoes.length === 0 ? (
+                    <div className={styles.emptyMini}>Nenhuma ação adicional.</div>
+                  ) : (
+                    <div className={styles.variablesList}>
+                      {acoes.map((acao, indice) => (
+                        <div key={acao.id} className={styles.variableItem}>
+                          <div className={styles.variableMain}>
+                            <strong className={styles.variableCode}>
+                              {indice + 2}. {labelAcao(acao.tipo)}
+                            </strong>
+                            {renderConfigAcao(acao, indice)}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          {podeEditar && (
+                            <div className={styles.variableActions}>
+                              <button
+                                type="button"
+                                className={styles.variableUseButton}
+                                disabled={indice === 0}
+                                onClick={() => moverAcao(indice, -1)}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.variableUseButton}
+                                disabled={indice === acoes.length - 1}
+                                onClick={() => moverAcao(indice, 1)}
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.variableDeleteButton}
+                                onClick={() => removerAcao(indice)}
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                    {podeEditar && (
-                      <div className={styles.variableFormGrid}>
-                        <label className={styles.field}>
-                          <span className={styles.label}>Adicionar ação</span>
-                          <select
-                            className={styles.input}
-                            value={tipoNovaAcao}
-                            onChange={(e) => setTipoNovaAcao(e.target.value as TipoAcaoIntencao)}
-                          >
-                            {ACOES_DISPONIVEIS.map((item) => (
-                              <option key={item.tipo} value={item.tipo}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <button type="button" className={styles.secondaryButton} onClick={adicionarAcao}>
-                          + Adicionar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  {podeEditar && (
+                    <div className={styles.variableFormGrid}>
+                      <label className={styles.field}>
+                        <span className={styles.label}>Adicionar ação</span>
+                        <select
+                          className={styles.input}
+                          value={tipoNovaAcao}
+                          onChange={(e) => setTipoNovaAcao(e.target.value as TipoAcaoIntencao)}
+                        >
+                          {ACOES_DISPONIVEIS.map((item) => (
+                            <option key={item.tipo} value={item.tipo}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button type="button" className={styles.secondaryButton} onClick={adicionarAcao}>
+                        + Adicionar
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </div>
