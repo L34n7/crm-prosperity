@@ -21,7 +21,7 @@
 .header h1 {
   margin: 3px 0 2px;
   color: var(--crm-text-strong);
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.1;
 }
 
@@ -29,7 +29,7 @@
   max-width: 720px;
   margin: 0;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -38,7 +38,7 @@
   align-items: center;
   gap: 6px;
   color: var(--crm-primary-text);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -51,12 +51,12 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 38px;
+  min-height: 40px;
   padding: 0 14px;
   border: 1px solid transparent;
   border-radius: 12px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 750;
   cursor: pointer;
   transition: transform .16s ease, background .16s ease, border-color .16s ease;
@@ -92,7 +92,7 @@
   padding: 10px 13px;
   border: 1px solid;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .noticeError { background: var(--crm-danger-bg); border-color: var(--crm-danger-border); color: var(--crm-danger-text); }
 .noticeSuccess { background: var(--crm-success-bg); border-color: var(--crm-success-border); color: var(--crm-success-text); }
@@ -128,7 +128,7 @@
   padding: 12px 15px;
   border-bottom: 1px solid var(--crm-border-soft);
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
 }
 .listHeader span {
   display: grid;
@@ -138,7 +138,7 @@
   border-radius: 99px;
   background: var(--crm-surface-muted);
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .agentCard {
@@ -169,8 +169,8 @@
   color: var(--crm-primary-strong);
 }
 .agentCardText { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.agentCardText strong { overflow: hidden; color: var(--crm-text-strong); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
-.agentCardText small { color: var(--crm-text-muted); font-size: 10px; }
+.agentCardText strong { overflow: hidden; color: var(--crm-text-strong); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.agentCardText small { color: var(--crm-text-muted); font-size: 12px; }
 
 .statusDot { width: 8px; height: 8px; border-radius: 50%; background: var(--crm-text-soft); }
 .status_ativo { background: var(--crm-success-strong); box-shadow: 0 0 0 3px var(--crm-success-bg); }
@@ -188,8 +188,8 @@
   text-align: center;
   color: var(--crm-text-muted);
 }
-.emptyList strong, .emptyEditor h2 { color: var(--crm-text-strong); margin: 0; }
-.emptyList p, .emptyEditor p { margin: 0; font-size: 12px; line-height: 1.45; }
+.emptyList strong, .emptyEditor h2 { color: var(--crm-text-strong); margin: 0; font-size: 18px; }
+.emptyList p, .emptyEditor p { margin: 0; font-size: 14px; line-height: 1.45; }
 .emptyEditor { min-height: 360px; border-radius: 18px; }
 
 .editorArea { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
@@ -202,14 +202,14 @@
   padding: 12px 15px;
   border-radius: 18px;
 }
-.editorTopbar h2 { margin: 4px 0 0; color: var(--crm-text-strong); font-size: 18px; }
+.editorTopbar h2 { margin: 4px 0 0; color: var(--crm-text-strong); font-size: 20px; }
 .topActions { display: flex; gap: 8px; }
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   color: var(--crm-primary-text);
-  font-size: 9.5px;
+  font-size: 11.5px;
   font-weight: 800;
   letter-spacing: .03em;
   text-transform: uppercase;
@@ -218,12 +218,12 @@
 .gridTwo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .panel { border-radius: 18px; padding: 15px; min-width: 0; }
 .panelTitle { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 14px; color: var(--crm-primary-strong); }
-.panelTitle h3 { margin: 0 0 3px; color: var(--crm-text-strong); font-size: 14px; }
-.panelTitle p { margin: 0; color: var(--crm-text-muted); font-size: 10.5px; line-height: 1.4; }
+.panelTitle h3 { margin: 0 0 3px; color: var(--crm-text-strong); font-size: 16px; }
+.panelTitle p { margin: 0; color: var(--crm-text-muted); font-size: 13px; line-height: 1.4; }
 
 .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.field span { color: var(--crm-text); font-size: 10.5px; font-weight: 750; }
+.field span { color: var(--crm-text); font-size: 13px; font-weight: 750; }
 .field input,
 .field select,
 .field textarea,
@@ -237,10 +237,10 @@
   background: var(--crm-surface-input);
   color: var(--crm-text-strong);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   outline: none;
 }
-.field input, .field select, .knowledgeForm input, .inlineSelect { min-height: 38px; padding: 0 10px; }
+.field input, .field select, .knowledgeForm input, .inlineSelect { min-height: 40px; padding: 0 10px; }
 .field textarea, .knowledgeForm textarea, .testBox textarea { padding: 10px; resize: vertical; line-height: 1.45; }
 .field input:focus, .field select:focus, .field textarea:focus, .knowledgeForm input:focus, .knowledgeForm textarea:focus, .testBox textarea:focus { border-color: var(--crm-primary); box-shadow: var(--crm-focus-ring); }
 
@@ -249,65 +249,65 @@
   margin-bottom: 11px;
   padding: 9px 10px;
   border-radius: 10px;
-  font-size: 10.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .scopeHint { background: var(--crm-surface-muted); color: var(--crm-text-muted); }
 .securityNote { display: flex; gap: 8px; background: var(--crm-success-bg); color: var(--crm-success-text); border: 1px solid var(--crm-success-border); }
 
-.checkList { display: flex; flex-direction: column; gap: 7px; margin-bottom: 11px; max-height: 170px; overflow: auto; }
+.checkList { display: flex; flex-direction: column; gap: 7px; margin-bottom: 11px; max-height: 190px; overflow: auto; }
 .checkRow {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 10px;
+  padding: 9px 10px;
   border: 1px solid var(--crm-border-soft);
   border-radius: 10px;
   cursor: pointer;
 }
 .checkRow input { accent-color: var(--crm-primary); }
 .checkRow span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.checkRow strong { color: var(--crm-text-strong); font-size: 11.5px; }
-.checkRow small { color: var(--crm-text-muted); font-size: 9.5px; }
+.checkRow strong { color: var(--crm-text-strong); font-size: 14px; }
+.checkRow small { color: var(--crm-text-muted); font-size: 12px; }
 
 .toolsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
 .toolCard {
   position: relative;
-  min-height: 118px;
+  min-height: 126px;
   padding: 12px;
   border: 1px solid var(--crm-border-soft);
   border-radius: 12px;
   background: var(--crm-surface-soft);
 }
 .toolCardActive { border-color: var(--crm-primary-border); background: var(--crm-primary-soft); }
-.toolCard strong { display: block; padding-right: 36px; color: var(--crm-text-strong); font-size: 11.5px; }
-.toolCard p { margin: 6px 0 0; color: var(--crm-text-muted); font-size: 10px; line-height: 1.45; }
+.toolCard strong { display: block; padding-right: 36px; color: var(--crm-text-strong); font-size: 14px; }
+.toolCard p { margin: 6px 0 0; color: var(--crm-text-muted); font-size: 12.5px; line-height: 1.45; }
 .toolToggle { position: absolute; top: 11px; right: 11px; cursor: pointer; }
 .toolToggle input { position: absolute; opacity: 0; pointer-events: none; }
 .toggleVisual { display: block; width: 29px; height: 17px; border-radius: 99px; background: var(--crm-surface-muted); position: relative; transition: .16s ease; }
 .toggleVisual::after { content: ""; position: absolute; width: 13px; height: 13px; left: 2px; top: 2px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: .16s ease; }
 .toolToggle input:checked + .toggleVisual { background: var(--crm-success-strong); }
 .toolToggle input:checked + .toggleVisual::after { transform: translateX(12px); }
-.inlineSelect { margin-top: 9px; font-size: 10px; }
+.inlineSelect { margin-top: 9px; font-size: 13px; }
 
 .knowledgeForm { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 .knowledgeForm textarea { grid-column: 1 / -1; }
 .knowledgeForm .secondaryButton { grid-column: 1 / -1; justify-self: start; }
 .knowledgeList { display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow: auto; }
 .knowledgeItem { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 10px; border: 1px solid var(--crm-border-soft); border-radius: 10px; background: var(--crm-surface-soft); }
-.knowledgeItem strong { color: var(--crm-text-strong); font-size: 11.5px; }
-.knowledgeItem small { display: block; margin-top: 2px; color: var(--crm-primary-text); font-size: 9px; }
-.knowledgeItem p { margin: 6px 0 0; color: var(--crm-text-muted); font-size: 10px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.knowledgeItem button { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--crm-danger-border); border-radius: 9px; background: transparent; color: var(--crm-danger-text); cursor: pointer; }
-.emptyKnowledge { padding: 15px; border: 1px dashed var(--crm-border); border-radius: 10px; color: var(--crm-text-muted); font-size: 10.5px; text-align: center; }
+.knowledgeItem strong { color: var(--crm-text-strong); font-size: 14px; }
+.knowledgeItem small { display: block; margin-top: 2px; color: var(--crm-primary-text); font-size: 11.5px; }
+.knowledgeItem p { margin: 6px 0 0; color: var(--crm-text-muted); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.knowledgeItem button { flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--crm-danger-border); border-radius: 9px; background: transparent; color: var(--crm-danger-text); cursor: pointer; }
+.emptyKnowledge { padding: 15px; border: 1px dashed var(--crm-border); border-radius: 10px; color: var(--crm-text-muted); font-size: 13px; text-align: center; }
 
 .testBox { display: flex; flex-direction: column; gap: 10px; }
 .testBox .secondaryButton { align-self: flex-start; }
 .testAnswer { margin-top: 4px; padding: 12px; border: 1px solid var(--crm-primary-border); border-radius: 11px; background: var(--crm-primary-soft); }
-.testAnswer span { color: var(--crm-primary-text); font-size: 9px; font-weight: 800; text-transform: uppercase; }
-.testAnswer p { margin: 6px 0 0; color: var(--crm-text-strong); font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; }
+.testAnswer span { color: var(--crm-primary-text); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.testAnswer p { margin: 6px 0 0; color: var(--crm-text-strong); font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
 
-.loadingPage { min-height: 40vh; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--crm-text-muted); font-size: 13px; }
+.loadingPage { min-height: 40vh; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--crm-text-muted); font-size: 14px; }
 .spin { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -323,7 +323,7 @@
   .workspace { grid-template-columns: 1fr; }
   .agentList { position: static; display: flex; overflow-x: auto; border-radius: 14px; }
   .listHeader { display: none; }
-  .agentCard { min-width: 210px; border-right: 1px solid var(--crm-border-soft); border-bottom: 0; }
+  .agentCard { min-width: 220px; border-right: 1px solid var(--crm-border-soft); border-bottom: 0; }
   .emptyList { width: 100%; }
   .editorTopbar { align-items: flex-start; flex-direction: column; border-radius: 14px; }
   .topActions { width: 100%; }
