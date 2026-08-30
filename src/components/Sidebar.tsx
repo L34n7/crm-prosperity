@@ -22,6 +22,7 @@ import {
   Settings2,
   FileText,
   GitBranch,
+  Bot,
   Workflow,
   MessageCircle,
   ScrollText,
@@ -131,6 +132,11 @@ const menuItems: MenuItem[] = [
     href: "/fluxos",
     icon: GitBranch,
     permissao: "fluxos.visualizar",
+  },
+  {
+    label: "Agentes de IA",
+    href: "/agentes-ia",
+    icon: Bot,
   },
   {
     label: "Automações",
@@ -323,10 +329,10 @@ export default function Sidebar({
       : []),
   ];
   const menuItemsComCadastro: MenuItem[] = [
-    ...menuItems.slice(0, 9),
+    ...menuItems.slice(0, 10),
     ...cadastroComercialMenu,
     ...modulosNichoMenu,
-    ...menuItems.slice(9),
+    ...menuItems.slice(10),
   ];
 
   const visibleMenuItems = menuItemsComCadastro.filter((item) => {
