@@ -21,6 +21,65 @@ type ResultadoIA = {
   motivo: string;
 };
 
+type CacheInterpretacao = {
+  resultado: ResultadoIA;
+  expiraEm: number;
+};
+
+// A arbitragem híbrida consulta a IA interpretativa antes do agente geral.
+// Se o fluxo for preservado, o motor tradicional consulta a mesma decisão logo
+// em seguida. Este cache curtíssimo evita cobrar duas chamadas idênticas no
+// mesmo processamento sem transformar a decisão em memória permanente.
+const CACHE_INTERPRETACAO_TTL_MS = 15_000;
+const CACHE_INTERPRETACAO_MAX_ITENS = 200;
+const cacheInterpretacao = new Map<string, CacheInterpretacao>();
+
+function chaveCacheInterpretacao(params: {
+  mensagemCliente: string;
+  conexoesDisponiveis: ConexaoIA[];
+  empresaId?: string | null;
+  metadata?: Record<string, any>;
+}) {
+  const { mensagemCliente, conexoesDisponiveis, empresaId, metadata } = params;
+
+  return JSON.stringify({
+    empresa_id: empresaId || null,
+    execucao_id: metadata?.execucao_id || null,
+    fluxo_id: metadata?.fluxo_id || null,
+    no_id: metadata?.no_id || null,
+    mensagem: String(mensagemCliente || "").trim(),
+    conexoes: conexoesDisponiveis.map((conexao) => ({
+      id: conexao.id,
+      nome: conexao.nome || null,
+      descricao_ia: conexao.descricao_ia || null,
+    })),
+  });
+}
+
+function buscarCacheInterpretacao(chave: string) {
+  const item = cacheInterpretacao.get(chave);
+  if (!item) return null;
+
+  if (item.expiraEm <= Date.now()) {
+    cacheInterpretacao.delete(chave);
+    return null;
+  }
+
+  return item.resultado;
+}
+
+function salvarCacheInterpretacao(chave: string, resultado: ResultadoIA) {
+  if (cacheInterpretacao.size >= CACHE_INTERPRETACAO_MAX_ITENS) {
+    const primeiraChave = cacheInterpretacao.keys().next().value;
+    if (primeiraChave) cacheInterpretacao.delete(primeiraChave);
+  }
+
+  cacheInterpretacao.set(chave, {
+    resultado,
+    expiraEm: Date.now() + CACHE_INTERPRETACAO_TTL_MS,
+  });
+}
+
 export async function interpretarConexaoComIA({
   mensagemCliente,
   conexoesDisponiveis,
@@ -50,6 +109,25 @@ export async function interpretarConexaoComIA({
       confianca: 0,
       motivo: "Mensagem vazia ou nenhuma conexão disponível.",
     };
+  }
+
+  const chaveCache = chaveCacheInterpretacao({
+    mensagemCliente,
+    conexoesDisponiveis,
+    empresaId,
+    metadata,
+  });
+  const resultadoCache = buscarCacheInterpretacao(chaveCache);
+
+  if (resultadoCache) {
+    console.info("[IA CONEXÃO] Reutilizando decisão interpretativa da mesma execução", {
+      empresaId: empresaId || null,
+      execucaoId: metadata?.execucao_id || null,
+      noId: metadata?.no_id || null,
+      conexaoId: resultadoCache.conexao_id,
+      confianca: resultadoCache.confianca,
+    });
+    return resultadoCache;
   }
 
   if (empresaId) {
@@ -122,5 +200,8 @@ Regras:
     });
   }
 
-  return JSON.parse(resposta.output_text) as ResultadoIA;
+  const resultado = JSON.parse(resposta.output_text) as ResultadoIA;
+  salvarCacheInterpretacao(chaveCache, resultado);
+
+  return resultado;
 }
