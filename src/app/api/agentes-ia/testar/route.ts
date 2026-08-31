@@ -5,6 +5,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 
 const supabaseAdmin = getSupabaseAdmin();
+const MODELO_PADRAO = "gpt-5.6-luna";
+const MAX_RESULTADOS_CONHECIMENTO = 2;
+const MAX_CARACTERES_TRECHO = 850;
 
 export async function POST(request: Request) {
   try {
@@ -39,28 +42,43 @@ export async function POST(request: Request) {
       p_empresa_id: empresaId,
       p_agente_id: id,
       p_consulta: mensagem,
-      p_limite: 5,
+      p_limite: MAX_RESULTADOS_CONHECIMENTO,
     });
-    const base = (conhecimentos || []).map((item: any) => `# ${item.titulo}\n${item.trecho}`).join("\n\n");
+    const conhecimentosCompactos = (conhecimentos || [])
+      .slice(0, MAX_RESULTADOS_CONHECIMENTO)
+      .map((item: any) => ({
+        titulo: item.titulo,
+        categoria: item.categoria,
+        trecho: String(item.trecho || "").slice(0, MAX_CARACTERES_TRECHO),
+      }));
+    const base = conhecimentosCompactos
+      .map((item: any) => `# ${item.titulo}\n${item.trecho}`)
+      .join("\n\n");
     const instructions = [
       `Você é ${agente.nome}, em modo de teste do CRM Prosperity.`,
       agente.prompt_sistema || "",
-      agente.tom_voz ? `Tom de voz: ${agente.tom_voz}` : "",
+      agente.tom_voz ? `Tom: ${agente.tom_voz}` : "",
       agente.instrucoes || "",
-      "Responda em português do Brasil. Não execute ações no CRM neste modo de teste e não invente informações.",
-      base ? `Base de conhecimento recuperada:\n${base}` : "Nenhum trecho de conhecimento foi recuperado para esta pergunta.",
+      "Responda em português do Brasil, de forma curta. Não execute ações no CRM nem invente informações.",
+      base ? `Conhecimento recuperado:\n${base}` : "Nenhum conhecimento relevante foi recuperado.",
     ].filter(Boolean).join("\n\n");
 
-    const modelo = String(agente.modelo || process.env.OPENAI_AGENT_MODEL || "gpt-5.4-mini").trim();
+    const modelo = String(agente.modelo || process.env.OPENAI_AGENT_MODEL || MODELO_PADRAO).trim();
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const response: any = await openai.responses.create({
       model: modelo,
       instructions,
       input: [{ role: "user", content: mensagem }],
-    });
+      reasoning: { effort: "none" },
+      text: { verbosity: "low" },
+      prompt_cache_key: `agente-ia-teste:${id}:${modelo}`,
+      prompt_cache_options: { mode: "implicit", ttl: "30m" },
+    } as any);
     const tokensInput = Number(response.usage?.input_tokens || 0);
     const tokensOutput = Number(response.usage?.output_tokens || 0);
     const tokensTotal = Number(response.usage?.total_tokens || 0);
+    const tokensCached = Number(response.usage?.input_tokens_details?.cached_tokens || 0);
+    const tokensCacheWrite = Number(response.usage?.input_tokens_details?.cache_write_tokens || 0);
 
     if (tokensTotal > 0) {
       await registrarUsoTokensIa({
@@ -71,15 +89,25 @@ export async function POST(request: Request) {
         tokensInput,
         tokensOutput,
         usuarioId: auth.usuario.id,
-        metadata: { agente_id: id },
+        metadata: {
+          agente_id: id,
+          cached_tokens: tokensCached,
+          cache_write_tokens: tokensCacheWrite,
+        },
       });
     }
 
     return NextResponse.json({
       ok: true,
       resposta: String(response.output_text || "").trim(),
-      conhecimentos_usados: conhecimentos || [],
-      tokens: { input: tokensInput, output: tokensOutput, total: tokensTotal },
+      conhecimentos_usados: conhecimentosCompactos,
+      tokens: {
+        input: tokensInput,
+        output: tokensOutput,
+        total: tokensTotal,
+        cached: tokensCached,
+        cache_write: tokensCacheWrite,
+      },
     });
   } catch (error) {
     console.error("[AGENTES_IA_TESTE]", error);
