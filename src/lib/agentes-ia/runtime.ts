@@ -1,1 +1,1 @@
-export { interceptarMensagemAgenteIa, processarPendenciaAgenteIa } from "./runtime-v2";
+export { interceptarMensagemAgenteIa, processarPendenciaAgenteIa } from "./runtime-v3";
