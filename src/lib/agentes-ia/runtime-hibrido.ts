@@ -5,6 +5,7 @@ import {
   resolverRespostaInterativa,
 } from "@/lib/automacoes/resposta-conexao-policy";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
+import { interpretarConexaoComIA } from "@/lib/ia/interpretar-conexao";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   interceptarMensagemAgenteIa as interceptarMensagemAgenteIaBase,
@@ -12,11 +13,12 @@ import {
 } from "./runtime-v3";
 
 const supabaseAdmin = getSupabaseAdmin();
+const CONFIANCA_MINIMA_IA_FLUXO = 0.7;
 
-const NOS_RESPOSTA_LIVRE = new Set([
-  "capturar_resposta",
-  "pergunta_livre_ia",
-]);
+// Captura livre continua pertencendo ao fluxo porque qualquer resposta textual
+// é, por definição, esperada pelo bloco. Já pergunta_livre_ia precisa passar
+// pela IA interpretativa: se nenhuma conexão for encontrada, o agente assume.
+const NOS_RESPOSTA_LIVRE = new Set(["capturar_resposta"]);
 
 const NOS_AVALIACAO = new Set([
   "avaliacao",
@@ -78,7 +80,8 @@ function mensagemCombinaComOpcaoConfigurada(no: any, mensagemTexto: string) {
   const texto = normalizarComparacao(mensagemTexto);
   if (!texto) return false;
 
-  const numeroOpcao = texto.match(/^(?:opcao |numero |n )?#?(\d{1,2})$/)?.[1] || null;
+  const numeroOpcao =
+    texto.match(/^(?:opcao |numero |n )?#?(\d{1,2})$/)?.[1] || null;
 
   return opcoesConfiguradasDoNo(no).some((opcao: OpcaoFluxo) => {
     const id = normalizarComparacao(opcao.id);
@@ -102,7 +105,9 @@ function mensagemPareceRespostaAgenda(no: any, mensagemTexto: string) {
   if (!texto) return false;
 
   if (/^(?:opcao )?#?\d{1,2}$/.test(texto)) return true;
-  if (/^(?:sim|pode ser|confirmo|confirmar|quero|ok|certo)$/.test(texto)) return true;
+  if (/^(?:sim|pode ser|confirmo|confirmar|quero|ok|certo)$/.test(texto)) {
+    return true;
+  }
 
   const interpretacao = interpretarDataHorarioAgenda(
     mensagemTexto,
@@ -116,7 +121,11 @@ function mensagemPareceRespostaAgenda(no: any, mensagemTexto: string) {
   );
 }
 
-function mensagemCombinaComConexoes(no: any, conexoes: any[], mensagemTexto: string) {
+function mensagemCombinaComConexoes(
+  no: any,
+  conexoes: any[],
+  mensagemTexto: string
+) {
   const resposta = resolverRespostaInterativa(no, mensagemTexto);
 
   return conexoes.some((conexao: any) => {
@@ -162,6 +171,95 @@ function mensagemCorrespondeAoNoAtual(params: {
   return false;
 }
 
+async function iaInterpretativaMantemFluxo(params: {
+  input: AutomationEngineInput;
+  execucao: { id: string; fluxo_id: string; no_atual_id: string };
+  no: any;
+  conexoes: any[];
+}) {
+  const { input, execucao, no, conexoes } = params;
+  const conexoesComIA = conexoes.filter(
+    (conexao: any) => conexao?.usar_ia === true
+  );
+
+  if (conexoesComIA.length === 0) return false;
+
+  const respostaInterativa = resolverRespostaInterativa(
+    no,
+    input.mensagemTexto
+  );
+  const mensagemParaInterpretacao =
+    respostaInterativa.textoSemantico || String(input.mensagemTexto || "");
+
+  try {
+    const resultadoIA = await interpretarConexaoComIA({
+      mensagemCliente: mensagemParaInterpretacao,
+      conexoesDisponiveis: conexoesComIA.map((conexao: any) => ({
+        id: String(conexao.id),
+        nome:
+          String(
+            conexao.nome_conexao ||
+              conexao.nome ||
+              conexao.titulo ||
+              "Conexão sem nome"
+          ) || null,
+        descricao_ia: conexao.descricao_ia || null,
+      })),
+      empresaId: input.empresaId,
+      metadata: {
+        execucao_id: execucao.id,
+        fluxo_id: execucao.fluxo_id,
+        no_id: execucao.no_atual_id,
+        origem: "arbitragem_hibrida_fluxo_agente",
+      },
+    });
+
+    const conexaoEncontrada = conexoesComIA.find(
+      (conexao: any) => conexao.id === resultadoIA.conexao_id
+    );
+    const corresponde = Boolean(
+      conexaoEncontrada &&
+        resultadoIA.confianca >= CONFIANCA_MINIMA_IA_FLUXO
+    );
+
+    if (corresponde) {
+      console.info(
+        "[AGENTE_IA] Fluxo preservado pela IA interpretativa da conexão",
+        {
+          conversaId: input.conversaId,
+          execucaoId: execucao.id,
+          fluxoId: execucao.fluxo_id,
+          noId: execucao.no_atual_id,
+          conexaoId: conexaoEncontrada?.id || null,
+          confianca: resultadoIA.confianca,
+        }
+      );
+
+      return true;
+    }
+
+    console.info(
+      "[AGENTE_IA] IA interpretativa não encontrou conexão; agente geral poderá assumir",
+      {
+        conversaId: input.conversaId,
+        execucaoId: execucao.id,
+        fluxoId: execucao.fluxo_id,
+        noId: execucao.no_atual_id,
+        conexaoId: resultadoIA.conexao_id,
+        confianca: resultadoIA.confianca,
+      }
+    );
+
+    return false;
+  } catch (error) {
+    console.error(
+      "[AGENTE_IA] Falha na IA interpretativa durante arbitragem híbrida; encaminhando ao agente geral",
+      error
+    );
+    return false;
+  }
+}
+
 async function mensagemDeveContinuarNoFluxoAtivo(input: AutomationEngineInput) {
   const mensagemTexto = String(input.mensagemTexto || "").trim();
   if (!mensagemTexto && !input.mensagemTipo) return false;
@@ -197,7 +295,9 @@ async function mensagemDeveContinuarNoFluxoAtivo(input: AutomationEngineInput) {
       .maybeSingle(),
     supabaseAdmin
       .from("automacao_conexoes")
-      .select("id, condicao_json, usar_ia, nome, descricao_ia, ordem")
+      .select(
+        "id, condicao_json, usar_ia, nome, nome_conexao, titulo, descricao_ia, ordem"
+      )
       .eq("empresa_id", input.empresaId)
       .eq("fluxo_id", execucao.fluxo_id)
       .eq("no_origem_id", execucao.no_atual_id)
@@ -206,10 +306,13 @@ async function mensagemDeveContinuarNoFluxoAtivo(input: AutomationEngineInput) {
   ]);
 
   if (noResult.error || conexoesResult.error) {
-    console.error("[AGENTE_IA] Erro ao carregar nó do fluxo para arbitragem híbrida:", {
-      no: noResult.error,
-      conexoes: conexoesResult.error,
-    });
+    console.error(
+      "[AGENTE_IA] Erro ao carregar nó do fluxo para arbitragem híbrida:",
+      {
+        no: noResult.error,
+        conexoes: conexoesResult.error,
+      }
+    );
 
     // Se existe uma execução aguardando e houve falha para inspecioná-la,
     // preservamos o fluxo em vez de cancelá-lo por incerteza técnica.
@@ -218,27 +321,46 @@ async function mensagemDeveContinuarNoFluxoAtivo(input: AutomationEngineInput) {
 
   if (!noResult.data) return false;
 
-  const corresponde = mensagemCorrespondeAoNoAtual({
+  const conexoes = conexoesResult.data || [];
+  const correspondeDiretamente = mensagemCorrespondeAoNoAtual({
     no: noResult.data,
-    conexoes: conexoesResult.data || [],
+    conexoes,
     mensagemTexto,
     mensagemTipo: input.mensagemTipo || null,
   });
 
-  if (corresponde) {
-    console.info("[AGENTE_IA] Fluxo ativo preservado; mensagem corresponde ao nó atual", {
-      conversaId: input.conversaId,
-      execucaoId: execucao.id,
-      fluxoId: execucao.fluxo_id,
-      noId: execucao.no_atual_id,
-      tipoNo: noResult.data.tipo_no,
-    });
+  if (correspondeDiretamente) {
+    console.info(
+      "[AGENTE_IA] Fluxo ativo preservado; mensagem corresponde ao nó atual",
+      {
+        conversaId: input.conversaId,
+        execucaoId: execucao.id,
+        fluxoId: execucao.fluxo_id,
+        noId: execucao.no_atual_id,
+        tipoNo: noResult.data.tipo_no,
+      }
+    );
+    return true;
   }
 
-  return corresponde;
+  // Se a resposta direta não bateu, a IA interpretativa do próprio fluxo
+  // recebe a segunda chance. Somente quando ela também não encontrar uma
+  // conexão válida o Agente de IA geral assume a conversa.
+  return iaInterpretativaMantemFluxo({
+    input,
+    execucao: {
+      id: execucao.id,
+      fluxo_id: execucao.fluxo_id,
+      no_atual_id: execucao.no_atual_id,
+    },
+    no: noResult.data,
+    conexoes,
+  });
 }
 
-export async function interceptarMensagemAgenteIa(input: AutomationEngineInput) {
+export async function interceptarMensagemAgenteIa(
+  input: AutomationEngineInput
+) {
   if (await mensagemDeveContinuarNoFluxoAtivo(input)) {
     return null;
   }
