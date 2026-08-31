@@ -64,6 +64,12 @@ type OpcaoIntegracao = {
 };
 
 type Opcao = { id: string; nome: string };
+type OpcaoAgenda = {
+  id: string;
+  nome: string;
+  timezone?: string | null;
+  duracao_minutos?: number | null;
+};
 
 type RespostaLista = {
   ok: boolean;
@@ -72,6 +78,7 @@ type RespostaLista = {
     integracoes: OpcaoIntegracao[];
     fluxos: Opcao[];
     setores: Opcao[];
+    agendas: OpcaoAgenda[];
   };
   error?: string;
 };
@@ -92,11 +99,18 @@ const CARACTERISTICAS_SUGERIDAS = [
   "Consultivo",
 ];
 
+const FERRAMENTAS_AGENDA = new Set<string>([
+  "consultar_agenda",
+  "criar_agendamento",
+  "remarcar_agendamento",
+  "cancelar_agendamento",
+]);
+
 const FERRAMENTAS = [
   {
     tipo: "consultar_conhecimento",
     titulo: "Consultar conhecimento",
-    descricao: "Busca até 5 trechos relevantes da base aprovada do agente.",
+    descricao: "Busca até 3 trechos relevantes da base aprovada do agente.",
   },
   {
     tipo: "consultar_contato",
@@ -106,22 +120,22 @@ const FERRAMENTAS = [
   {
     tipo: "consultar_agenda",
     titulo: "Consultar agenda",
-    descricao: "Consulta disponibilidade real do CRM e Google Calendar.",
+    descricao: "Consulta disponibilidade somente na agenda configurada para este agente.",
   },
   {
     tipo: "criar_agendamento",
     titulo: "Criar agendamento",
-    descricao: "Cria somente após revalidar o horário no backend.",
+    descricao: "Cria na agenda configurada após revalidar o horário no backend.",
   },
   {
     tipo: "remarcar_agendamento",
     titulo: "Remarcar agendamento",
-    descricao: "Move um agendamento do contato com validação de conflito.",
+    descricao: "Remarca somente compromissos da agenda configurada, com validação de conflito.",
   },
   {
     tipo: "cancelar_agendamento",
     titulo: "Cancelar agendamento",
-    descricao: "Cancela de forma idempotente um agendamento do contato.",
+    descricao: "Cancela somente compromissos da agenda configurada de forma idempotente.",
   },
   {
     tipo: "transferir_humano",
@@ -156,6 +170,7 @@ export default function AgentesIaPage() {
   const [integracoes, setIntegracoes] = useState<OpcaoIntegracao[]>([]);
   const [fluxos, setFluxos] = useState<Opcao[]>([]);
   const [setores, setSetores] = useState<Opcao[]>([]);
+  const [agendas, setAgendas] = useState<OpcaoAgenda[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [alterandoStatus, setAlterandoStatus] = useState(false);
@@ -205,6 +220,23 @@ export default function AgentesIaPage() {
     );
   }, [buscaCaracteristica, caracteristicasSelecionadas]);
 
+  const usaFerramentasAgenda = useMemo(
+    () =>
+      editor?.ferramentas?.some(
+        (item) => item.ativo && FERRAMENTAS_AGENDA.has(item.tipo)
+      ) || false,
+    [editor?.ferramentas]
+  );
+
+  const agendaConfiguradaId = useMemo(() => {
+    for (const item of editor?.ferramentas || []) {
+      if (!FERRAMENTAS_AGENDA.has(item.tipo)) continue;
+      const agendaId = String(item.config_json?.agenda_id || "").trim();
+      if (agendaId) return agendaId;
+    }
+    return "";
+  }, [editor?.ferramentas]);
+
   async function carregar(preferirId?: string) {
     setCarregando(true);
     setErro("");
@@ -216,6 +248,7 @@ export default function AgentesIaPage() {
       setIntegracoes(json.opcoes?.integracoes || []);
       setFluxos(json.opcoes?.fluxos || []);
       setSetores(json.opcoes?.setores || []);
+      setAgendas(json.opcoes?.agendas || []);
       const proximoId =
         (preferirId && json.agentes.some((item) => item.id === preferirId) && preferirId) ||
         (selecionadoId && json.agentes.some((item) => item.id === selecionadoId) && selecionadoId) ||
@@ -275,11 +308,25 @@ export default function AgentesIaPage() {
   function alternarFerramenta(tipo: string) {
     if (!editor) return;
     const existe = editor.ferramentas.find((item) => item.tipo === tipo);
+    const ativando = !existe || !existe.ativo;
+    const configAgenda =
+      ativando && FERRAMENTAS_AGENDA.has(tipo) && agendaConfiguradaId
+        ? { agenda_id: agendaConfiguradaId }
+        : {};
     const proxima = existe
       ? editor.ferramentas.map((item) =>
-          item.tipo === tipo ? { ...item, ativo: !item.ativo } : item
+          item.tipo === tipo
+            ? {
+                ...item,
+                ativo: !item.ativo,
+                config_json: { ...(item.config_json || {}), ...configAgenda },
+              }
+            : item
         )
-      : [...editor.ferramentas, { tipo, ativo: true, config_json: {} }];
+      : [
+          ...editor.ferramentas,
+          { tipo, ativo: true, config_json: configAgenda },
+        ];
     setEditor({ ...editor, ferramentas: proxima });
   }
 
@@ -293,6 +340,22 @@ export default function AgentesIaPage() {
             : item
         )
       : [...editor.ferramentas, { tipo, ativo: true, config_json: { [chave]: valor } }];
+    setEditor({ ...editor, ferramentas: proxima });
+  }
+
+  function atualizarAgendaFerramentas(agendaId: string) {
+    if (!editor) return;
+    const proxima = editor.ferramentas.map((item) =>
+      FERRAMENTAS_AGENDA.has(item.tipo)
+        ? {
+            ...item,
+            config_json: {
+              ...(item.config_json || {}),
+              agenda_id: agendaId || null,
+            },
+          }
+        : item
+    );
     setEditor({ ...editor, ferramentas: proxima });
   }
 
@@ -328,6 +391,11 @@ export default function AgentesIaPage() {
 
   async function salvar() {
     if (!editor) return;
+    if (usaFerramentasAgenda && !agendaConfiguradaId) {
+      setErro("Selecione a agenda obrigatória antes de salvar as ferramentas de agenda.");
+      setSucesso("");
+      return;
+    }
     setSalvando(true);
     setErro("");
     setSucesso("");
@@ -365,6 +433,11 @@ export default function AgentesIaPage() {
 
   async function alterarEstado(acao: "ativar" | "pausar") {
     if (!editor) return;
+    if (acao === "ativar" && usaFerramentasAgenda && !agendaConfiguradaId) {
+      setErro("Selecione e salve a agenda obrigatória antes de ativar o agente.");
+      setSucesso("");
+      return;
+    }
     setAlterandoStatus(true);
     setErro("");
     setSucesso("");
@@ -673,6 +746,27 @@ export default function AgentesIaPage() {
 
                 <section className={styles.panel}>
                   <div className={styles.panelTitle}><Wrench size={18} /><div><h3>Ferramentas do agente</h3><p>Somente ferramentas habilitadas são expostas ao modelo. A escrita sempre é validada pelo backend.</p></div></div>
+                  {usaFerramentasAgenda && (
+                    <div className={styles.formGrid}>
+                      <label className={styles.field}>
+                        <span>Agenda obrigatória</span>
+                        <select
+                          value={agendaConfiguradaId}
+                          onChange={(event) => atualizarAgendaFerramentas(event.target.value)}
+                        >
+                          <option value="">Selecione uma agenda</option>
+                          {agendas.map((agenda) => (
+                            <option key={agenda.id} value={agenda.id}>
+                              {agenda.nome}{agenda.duracao_minutos ? ` · ${agenda.duracao_minutos} min` : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <small className={styles.fieldHint}>
+                          Consulta, criação, remarcação e cancelamento ficam restritos a esta agenda. O agente não pode escolher outra agenda durante a conversa.
+                        </small>
+                      </label>
+                    </div>
+                  )}
                   <div className={styles.toolsGrid}>
                     {FERRAMENTAS.map((ferramenta) => (
                       <div key={ferramenta.tipo} className={`${styles.toolCard} ${ferramentaAtiva(ferramenta.tipo) ? styles.toolCardActive : ""}`}>
@@ -694,7 +788,7 @@ export default function AgentesIaPage() {
 
                 <div className={styles.gridTwo}>
                   <section className={styles.panel}>
-                    <div className={styles.panelTitle}><BookOpen size={18} /><div><h3>Base de conhecimento</h3><p>Conteúdo aprovado e pesquisável pelo agente. A busca retorna no máximo 5 trechos por consulta.</p></div></div>
+                    <div className={styles.panelTitle}><BookOpen size={18} /><div><h3>Base de conhecimento</h3><p>Conteúdo aprovado e pesquisável pelo agente. A busca retorna no máximo 3 trechos por consulta.</p></div></div>
                     <div className={styles.knowledgeForm}>
                       <input placeholder="Título" value={novoConhecimento.titulo} onChange={(event) => setNovoConhecimento({ ...novoConhecimento, titulo: event.target.value })} />
                       <input placeholder="Categoria" value={novoConhecimento.categoria} onChange={(event) => setNovoConhecimento({ ...novoConhecimento, categoria: event.target.value })} />
