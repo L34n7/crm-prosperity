@@ -85,6 +85,16 @@ type EstadoConversa = {
   fatos_confirmados: string[];
 };
 
+type EstadoDelta = {
+  tipo_negocio?: string | null;
+  estagio?: string | null;
+  proxima_acao?: string | null;
+  dores?: string[];
+  interesses?: string[];
+  objecoes?: string[];
+  fatos?: string[];
+};
+
 type SaidaAgente = {
   mensagens: string[];
   estado: EstadoConversa;
@@ -165,6 +175,10 @@ function listaCurta(valor: unknown, maxItens: number, maxChars = 120) {
   return saida;
 }
 
+function unirListas(base: string[], adicionais: unknown, maxItens: number, maxChars = 120) {
+  return listaCurta([...(base || []), ...listaCurta(adicionais, maxItens, maxChars)], maxItens, maxChars);
+}
+
 function normalizarEstado(valor: unknown, anterior?: EstadoConversa): EstadoConversa {
   const base = anterior || ESTADO_VAZIO;
   const obj = valor && typeof valor === "object" ? (valor as Record<string, unknown>) : {};
@@ -177,9 +191,30 @@ function normalizarEstado(valor: unknown, anterior?: EstadoConversa): EstadoConv
     interesses: interesses.length ? interesses : base.interesses,
     objecoes: Array.isArray(obj.objecoes) ? listaCurta(obj.objecoes, 5) : base.objecoes,
     estagio: textoCurto(obj.estagio, 80) || base.estagio || "novo",
-    proxima_acao: textoCurto(obj.proxima_acao, 160) || null,
+    proxima_acao: Object.prototype.hasOwnProperty.call(obj, "proxima_acao")
+      ? textoCurto(obj.proxima_acao, 160) || null
+      : base.proxima_acao,
     fatos_confirmados: fatos.length ? fatos : base.fatos_confirmados,
   };
+}
+
+function aplicarDeltaEstado(valor: unknown, anterior: EstadoConversa) {
+  const base = normalizarEstado(anterior);
+  const delta = valor && typeof valor === "object" ? (valor as EstadoDelta) : {};
+  const tipoNegocio = textoCurto(delta.tipo_negocio, 120);
+  const estagio = textoCurto(delta.estagio, 80);
+  const proximaInformada = delta.proxima_acao !== null && delta.proxima_acao !== undefined;
+
+  return normalizarEstado({
+    ...base,
+    tipo_negocio: tipoNegocio || base.tipo_negocio,
+    dores: unirListas(base.dores, delta.dores, 6),
+    interesses: unirListas(base.interesses, delta.interesses, 6),
+    objecoes: unirListas(base.objecoes, delta.objecoes, 5),
+    estagio: estagio || base.estagio,
+    proxima_acao: proximaInformada ? textoCurto(delta.proxima_acao, 160) || null : base.proxima_acao,
+    fatos_confirmados: unirListas(base.fatos_confirmados, delta.fatos, 8, 140),
+  });
 }
 
 function normalizarSaida(valor: unknown, estadoAnterior: EstadoConversa, fallbackTexto = ""): SaidaAgente {
@@ -192,7 +227,10 @@ function normalizarSaida(valor: unknown, estadoAnterior: EstadoConversa, fallbac
         .map((item) => item.slice(0, 900))
     : [];
   if (!mensagens.length && fallbackTexto.trim()) mensagens.push(fallbackTexto.trim().slice(0, 900));
-  return { mensagens, estado: normalizarEstado(obj.estado, estadoAnterior) };
+  return {
+    mensagens,
+    estado: aplicarDeltaEstado(obj.memoria_delta, estadoAnterior),
+  };
 }
 
 function resumoEstruturado(estado: EstadoConversa) {
@@ -212,6 +250,21 @@ function ehFatoOperacionalAgenda(valor: string) {
   if (!texto) return false;
   if (/^Agendamento\b/i.test(texto)) return true;
   return /^Demonstração\b/i.test(texto) && /\b(?:agendad|remarcad|cancelad|às|para|dia)\w*/i.test(texto);
+}
+
+function memoriaCompacta(estado: EstadoConversa) {
+  const fatos = estado.fatos_confirmados
+    .filter((item) => !ehFatoOperacionalAgenda(item))
+    .slice(-4);
+  return [
+    estado.tipo_negocio ? `negócio=${estado.tipo_negocio}` : "",
+    estado.estagio ? `estágio=${estado.estagio}` : "",
+    estado.proxima_acao ? `próxima=${estado.proxima_acao}` : "",
+    estado.interesses.length ? `interesses=${estado.interesses.slice(-4).join("; ")}` : "",
+    estado.dores.length ? `dores=${estado.dores.slice(-3).join("; ")}` : "",
+    estado.objecoes.length ? `objeções=${estado.objecoes.slice(-2).join("; ")}` : "",
+    fatos.length ? `fatos=${fatos.join("; ")}` : "",
+  ].filter(Boolean).join(" | ").slice(0, 900);
 }
 
 function adicionarFatoOperacional(estado: EstadoConversa, fato: string) {
@@ -520,7 +573,7 @@ function mensagemAssistenteTemEstadoOperacionalAntigo(texto: string) {
 }
 
 async function carregarContexto(ctx: ContextoExecucao) {
-  const limite = numeroInteiro(ctx.agente.max_mensagens_contexto, 6, 4, 40);
+  const limite = numeroInteiro(ctx.agente.max_mensagens_contexto, 4, 4, 40);
   const [{ data: mensagens }, { data: estado }] = await Promise.all([
     supabaseAdmin
       .from("mensagens")
@@ -569,7 +622,7 @@ async function carregarContexto(ctx: ContextoExecucao) {
     })
     .map((item: any) => ({
       role: item.remetente_tipo === "contato" ? "user" : "assistant",
-      content: String(item.conteudo || "").slice(0, 650),
+      content: String(item.conteudo || "").slice(0, 500),
     }));
 
   const timezone = agendas[0]?.timezone || "America/Sao_Paulo";
@@ -586,7 +639,7 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "consultar_conhecimento",
-      description: "Busca fatos na base aprovada. Use 2 a 8 termos centrais.",
+      description: "Busca fatos aprovados na base. Consulta curta.",
       strict: true,
       parameters: { type: "object", properties: { consulta: { type: "string" } }, required: ["consulta"], additionalProperties: false },
     });
@@ -595,7 +648,7 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "consultar_agenda",
-      description: "Consulta até 12 horários reais. O backend aplica automaticamente preferências da mensagem como 'depois das 17', 'antes das 10', 'às 18', manhã/tarde/noite antes do limite de 12.",
+      description: "Retorna até 12 horários reais e aplica filtros de data/horário da mensagem.",
       strict: true,
       parameters: {
         type: "object",
@@ -608,13 +661,13 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "criar_agendamento",
-      description: "Cria um novo compromisso na agenda autorizada usando data e hora LOCAL já confirmadas. Não use durante um reagendamento existente.",
+      description: "Cria compromisso na agenda autorizada com data/hora LOCAL confirmadas.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
-          data: { type: "string", description: "YYYY-MM-DD no fuso da agenda" },
-          hora: { type: "string", description: "HH:mm no fuso da agenda" },
+          data: { type: "string", description: "YYYY-MM-DD local" },
+          hora: { type: "string", description: "HH:mm local" },
           titulo: { type: "string" },
         },
         required: ["data", "hora", "titulo"], additionalProperties: false,
@@ -625,15 +678,15 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "remarcar_agendamento",
-      description: "Remarca o compromisso ativo do contato. O backend localiza o agendamento; nunca invente UUID. Se houver mais de um, use referência de data/hora atual somente quando o cliente indicar qual deles.",
+      description: "Remarca compromisso ativo; backend localiza pelo contato e referência local opcional.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
-          data: { type: "string", description: "Nova data YYYY-MM-DD no fuso da agenda" },
-          hora: { type: "string", description: "Nova hora HH:mm no fuso da agenda" },
-          referencia_data: { anyOf: [{ type: "string", description: "Data atual do compromisso a alterar, YYYY-MM-DD" }, { type: "null" }] },
-          referencia_hora: { anyOf: [{ type: "string", description: "Hora atual do compromisso a alterar, HH:mm" }, { type: "null" }] },
+          data: { type: "string", description: "Nova data YYYY-MM-DD" },
+          hora: { type: "string", description: "Nova hora HH:mm" },
+          referencia_data: { anyOf: [{ type: "string" }, { type: "null" }] },
+          referencia_hora: { anyOf: [{ type: "string" }, { type: "null" }] },
         },
         required: ["data", "hora", "referencia_data", "referencia_hora"], additionalProperties: false,
       },
@@ -643,13 +696,13 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "cancelar_agendamento",
-      description: "Cancela o compromisso ativo do contato. O backend localiza o agendamento; nunca invente UUID. Se houver mais de um, use referência de data/hora atual somente quando o cliente indicar qual deles.",
+      description: "Cancela compromisso ativo; backend localiza pelo contato e referência local opcional.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
-          referencia_data: { anyOf: [{ type: "string", description: "Data atual do compromisso a cancelar, YYYY-MM-DD" }, { type: "null" }] },
-          referencia_hora: { anyOf: [{ type: "string", description: "Hora atual do compromisso a cancelar, HH:mm" }, { type: "null" }] },
+          referencia_data: { anyOf: [{ type: "string" }, { type: "null" }] },
+          referencia_hora: { anyOf: [{ type: "string" }, { type: "null" }] },
         },
         required: ["referencia_data", "referencia_hora"], additionalProperties: false,
       },
@@ -659,7 +712,7 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "consultar_contato",
-      description: "Consulta os dados do contato atual.",
+      description: "Consulta dados do contato atual.",
       strict: true,
       parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
     });
@@ -668,7 +721,7 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "transferir_humano",
-      description: "Transfere para humano. O destino já está configurado no CRM.",
+      description: "Transfere para humano no destino já configurado.",
       strict: true,
       parameters: {
         type: "object",
@@ -681,6 +734,108 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     });
   }
   return defs;
+}
+
+function normalizarTextoIntencao(valor: unknown) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function consultaConhecimentoAutomatica(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  if (!texto) return null;
+  if (/\b(preco|precos|valor|valores|custa|custar|mensalidade|plano|planos)\b/.test(texto)) {
+    return "preço planos usuários";
+  }
+  if (/\b(paciente|pacientes|prontuario|odontograma|odontologic)\w*/.test(texto)) {
+    return "pacientes prontuário odontograma cadastro";
+  }
+  if (/\b(estoque|erp|pdv|nota fiscal|nfe)\b/.test(texto)) {
+    return "estoque ERP gestão";
+  }
+  if (/\b(google calendar|whatsapp|integracao|integracoes)\b/.test(texto)) {
+    return texto.includes("google") ? "agenda Google Calendar integração" : "WhatsApp integrações atendimento";
+  }
+  if (/\b(tem|possui|oferece)\b.*\b(ia|inteligencia artificial)\b|\bagentes? de ia\b/.test(texto)) {
+    return "IA automações agentes";
+  }
+  if (/\b(como funciona|como que funciona|o que faz|oque faz|quero conhecer o crm|conhecer o crm)\b/.test(texto)) {
+    return "visão geral CRM Prosperity";
+  }
+  if (/\b(funcionalidade|funcionalidades|recurso|recursos)\b/.test(texto)) {
+    return textoCurto(mensagem, 120);
+  }
+  return null;
+}
+
+function mensagemEhCurtaDeContinuidade(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  return /^(sim|nao|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|entendi|me mostra|mostra|manda|vamos|fechado)$/.test(texto);
+}
+
+function mensagemTemIntencaoAgenda(mensagem: string, estado: EstadoConversa) {
+  const texto = normalizarTextoIntencao(mensagem);
+  return /\b(agenda|agendar|marcar|remarcar|reagendar|cancelar|horario|horarios|disponivel|disponibilidade|reuniao|demonstracao|amanha|hoje|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
+    /agend|remarc|reagend/i.test(`${estado.estagio} ${estado.proxima_acao || ""}`);
+}
+
+function selecionarFerramentasParaModelo(params: {
+  ativas: Map<TipoFerramenta, Record<string, unknown>>;
+  mensagem: string;
+  estado: EstadoConversa;
+  agendamentosAtivos: any[];
+  preexecutadas: Set<TipoFerramenta>;
+}) {
+  const { ativas, mensagem, estado, agendamentosAtivos, preexecutadas } = params;
+  const selecionadas = new Map<TipoFerramenta, Record<string, unknown>>();
+  const texto = normalizarTextoIntencao(mensagem);
+  const adicionar = (tipo: TipoFerramenta) => {
+    const config = ativas.get(tipo);
+    if (config) selecionadas.set(tipo, config);
+  };
+
+  const querHumano = /\b(atendente|humano|pessoa|alguem|falar com|transferir)\b/.test(texto);
+  const querCancelar = /\b(cancelar|cancela|desmarcar|desmarca)\b/.test(texto);
+  const querRemarcar = /\b(remarcar|reagendar|mudar o horario|mudar horario|trocar o dia|trocar horario)\b/.test(texto) || estadoIndicaReagendamento(estado);
+  const intencaoAgenda = mensagemTemIntencaoAgenda(mensagem, estado);
+  const querContato = /\b(meus dados|meu cadastro|cadastro|meu email|meu e-mail|meu telefone|meu contato)\b/.test(texto);
+  const consultaBase = consultaConhecimentoAutomatica(mensagem);
+  const perguntaGeral = /\?|\b(como|qual|quais|quanto|tem|possui|oferece|explica|explique)\b/.test(texto);
+
+  if (querHumano) {
+    adicionar("transferir_humano");
+    return selecionadas;
+  }
+
+  if (querContato) adicionar("consultar_contato");
+
+  if (intencaoAgenda) {
+    if (!preexecutadas.has("consultar_agenda")) adicionar("consultar_agenda");
+    if (querCancelar) {
+      adicionar("cancelar_agendamento");
+    } else if (querRemarcar) {
+      adicionar("remarcar_agendamento");
+    } else {
+      if (agendamentosAtivos.length) adicionar("remarcar_agendamento");
+      adicionar("criar_agendamento");
+    }
+  }
+
+  if (!preexecutadas.has("consultar_conhecimento") && (consultaBase || (perguntaGeral && !intencaoAgenda))) {
+    adicionar("consultar_conhecimento");
+  }
+
+  if (ativas.has("transferir_humano")) adicionar("transferir_humano");
+
+  if (selecionadas.size === (ativas.has("transferir_humano") ? 1 : 0) && !mensagemEhCurtaDeContinuidade(mensagem)) {
+    adicionar("consultar_conhecimento");
+  }
+
+  return selecionadas;
 }
 
 async function resolverSlotLocal(params: {
@@ -885,7 +1040,8 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
     const timezone = ctx.agendaAutorizada?.timezone || "America/Sao_Paulo";
     const interpretacao = interpretarDataHorarioAgenda(ctx.pendencia.conteudo_agregado, timezone);
-    const data = interpretacao.data || (args.data ? String(args.data).trim() : null);
+    const dataArg = args.data ? String(args.data).trim() : "";
+    const data = /^\d{4}-\d{2}-\d{2}$/.test(dataArg) ? dataArg : interpretacao.data || null;
     const resultado = await listarSlotsDisponiveis({
       supabase: supabaseAdmin,
       empresaId,
@@ -1191,6 +1347,77 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   return { ok: false, error: "Ferramenta não suportada." };
 }
 
+function referenciasTemporaisDistintas(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  const refs = texto.match(/\b(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|\d{1,2}\/\d{1,2})\b/g) || [];
+  return new Set(refs).size;
+}
+
+async function preExecutarConsultasObvias(ctx: ContextoExecucao) {
+  const executadas: Array<{ nome: TipoFerramenta; argumentos: any; resultado: any }> = [];
+  const mensagem = ctx.pendencia.conteudo_agregado;
+
+  const consultaConhecimento = consultaConhecimentoAutomatica(mensagem);
+  if (consultaConhecimento && ctx.ferramentasAtivas.has("consultar_conhecimento")) {
+    try {
+      const argumentos = { consulta: consultaConhecimento };
+      const resultado = await executarFerramenta("consultar_conhecimento", argumentos, ctx);
+      if (resultado?.ok && Array.isArray(resultado.resultados) && resultado.resultados.length) {
+        const item = { nome: "consultar_conhecimento" as const, argumentos, resultado };
+        executadas.push(item);
+        ctx.ferramentasExecutadas.push(item);
+      }
+    } catch (error) {
+      console.error("[AGENTE_IA] Pré-consulta de conhecimento falhou:", error);
+    }
+  }
+
+  if (ctx.ferramentasAtivas.has("consultar_agenda") && ctx.agendaAutorizada) {
+    const timezone = ctx.agendaAutorizada.timezone || "America/Sao_Paulo";
+    const interpretacao = interpretarDataHorarioAgenda(mensagem, timezone);
+    const temIntencaoAgenda = mensagemTemIntencaoAgenda(mensagem, ctx.estadoConversa);
+    const referencias = referenciasTemporaisDistintas(mensagem);
+    if (temIntencaoAgenda && interpretacao.data && referencias <= 1) {
+      try {
+        const argumentos = { data: interpretacao.data };
+        const resultado = await executarFerramenta("consultar_agenda", argumentos, ctx);
+        if (resultado?.ok) {
+          const item = { nome: "consultar_agenda" as const, argumentos, resultado };
+          executadas.push(item);
+          ctx.ferramentasExecutadas.push(item);
+        }
+      } catch (error) {
+        console.error("[AGENTE_IA] Pré-consulta de agenda falhou:", error);
+      }
+    }
+  }
+
+  return executadas;
+}
+
+function contextoPreconsultasParaModelo(executadas: Array<{ nome: TipoFerramenta; resultado: any }>) {
+  const blocos: string[] = [];
+  for (const item of executadas) {
+    if (item.nome === "consultar_conhecimento") {
+      const resultados = Array.isArray(item.resultado?.resultados) ? item.resultado.resultados : [];
+      if (resultados.length) {
+        blocos.push(
+          `BASE JÁ CONSULTADA:\n${resultados.map((r: any) => `[${r.titulo}] ${r.trecho}`).join("\n")}`
+        );
+      }
+    } else if (item.nome === "consultar_agenda") {
+      const slots = Array.isArray(item.resultado?.slots) ? item.resultado.slots : [];
+      const agenda = item.resultado?.agenda?.nome || "agenda autorizada";
+      const resumoSlots = slots.length
+        ? slots.map((s: any) => `${s.data} ${s.hora}`).join(", ")
+        : "nenhum horário disponível";
+      blocos.push(`AGENDA JÁ CONSULTADA (${agenda}): ${resumoSlots}.`);
+    }
+  }
+  if (!blocos.length) return "";
+  return `${blocos.join("\n\n")}\nUse estes dados diretamente e não repita a mesma consulta, salvo se precisar de outra informação.`;
+}
+
 async function executarFallbackFluxos(pendencia: PendenciaRow) {
   return processAutomationEngineFluxos({
     empresaId: pendencia.empresa_id,
@@ -1221,15 +1448,15 @@ function promptDoAgente(
 ) {
   const agenda = agendas[0] || null;
   const agendaInfo = agenda
-    ? `${agenda.nome}; fuso=${agenda.timezone || "America/Sao_Paulo"}; duração=${agenda.duracao_minutos || 60} min; hoje=${dataAtualAgenda(agenda)}`
-    : "nenhuma agenda autorizada";
+    ? `${agenda.nome}; ${agenda.timezone || "America/Sao_Paulo"}; ${agenda.duracao_minutos || 60}min; hoje=${dataAtualAgenda(agenda)}`
+    : "nenhuma";
   const timezone = agenda?.timezone || "America/Sao_Paulo";
   const estadoOperacionalAgenda = agendamentosAtivos.length
     ? agendamentosAtivos
         .slice(0, 3)
         .map((item) => `- ${formatarAgendamentoAtivo(item, timezone).label}`)
         .join("\n")
-    : "- Nenhum agendamento ativo para este contato na agenda autorizada.";
+    : "- nenhum agendamento ativo";
 
   return [
     `Você é ${agente.nome}, assistente do CRM Prosperity.`,
@@ -1237,22 +1464,16 @@ function promptDoAgente(
     agente.tom_voz ? `Características: ${agente.tom_voz}` : "",
     agente.instrucoes ? `Instruções: ${agente.instrucoes}` : "",
     "REGRAS DO RUNTIME:",
-    "- Português do Brasil, conversa natural de WhatsApp, 1 a 3 mensagens curtas e no máximo uma pergunta principal.",
-    "- Continue o contexto e evite repetir. Confirmações curtas como 'quero', 'sim', 'pode' e 'me mostra' aceitam a proposta imediatamente anterior.",
-    "- Memória e histórico servem para continuidade, mas nunca comprovam estado operacional. O ESTADO OPERACIONAL ATUAL DA AGENDA abaixo é a fonte de verdade para dizer se existe reunião/agendamento ativo.",
-    "- Nunca cite como ativo um agendamento que apareça apenas na memória ou em mensagens antigas. Se o estado operacional disser que não há agendamento ativo, trate qualquer referência histórica como passada/cancelada/inválida até uma nova criação confirmada.",
-    "- Para fatos de produto, preço, plano, integração ou recurso, consulte a base quando necessário com poucos termos e não invente.",
-    "- Há no máximo uma agenda autorizada. Consulte disponibilidade antes de criar/remarcar. Nas ferramentas de agenda use apenas data LOCAL YYYY-MM-DD e hora LOCAL HH:mm; nunca converta ou invente UTC.",
-    "- consultar_agenda já interpreta 'depois das X', 'antes das X', horário exato e período; use apenas os slots retornados depois desse filtro.",
-    "- Ao remarcar ou cancelar, não peça nem invente ID. A ferramenta localiza automaticamente o compromisso ativo. Se houver mais de um, use a referência de data/hora do compromisso atual quando o cliente identificar qual deseja alterar.",
-    "- Se a conversa estiver em reagendamento, use remarcar_agendamento; não crie um segundo compromisso.",
-    "- Só confirme ação após ok=true. idempotente=true significa que a ação já estava concluída.",
-    "- Transferência humana usa o destino configurado; mensagem_cliente é para o cliente e motivo_interno nunca deve ser enviado ao cliente.",
-    "- Não diga que é humano.",
-    `Memória estruturada: ${JSON.stringify(estado)}`,
-    "Atualize a memória apenas com fatos confirmados pelo cliente, pela base ou pelas ferramentas.",
-    `Agenda autorizada: ${agendaInfo}`,
-    "ESTADO OPERACIONAL ATUAL DA AGENDA:",
+    "- PT-BR, WhatsApp natural, 1–3 mensagens curtas e no máximo uma pergunta principal. Continue o contexto sem repetir.",
+    "- Memória/histórico dão continuidade, mas agenda ativa só existe se estiver no ESTADO OPERACIONAL abaixo.",
+    "- Produto, preço, plano, integração e recurso: use a base consultada/ferramenta e não invente.",
+    "- Agenda: use data/hora LOCAL, consulte disponibilidade antes de criar/remarcar e só confirme ação após ok=true.",
+    "- Em reagendamento use remarcar_agendamento; não crie outro. Cancelar/remarcar usam o compromisso ativo do backend, sem UUID inventado.",
+    "- Transferência usa o destino configurado. Não diga que é humano.",
+    `Memória: ${memoriaCompacta(estado) || "sem fatos relevantes"}`,
+    "Em memoria_delta envie SOMENTE novidades: null/[] quando não mudou; proxima_acao com string vazia limpa a ação.",
+    `Agenda: ${agendaInfo}`,
+    "ESTADO OPERACIONAL DA AGENDA:",
     estadoOperacionalAgenda,
   ].filter(Boolean).join("\n\n");
 }
@@ -1265,22 +1486,22 @@ const FORMATO_SAIDA = {
     type: "object",
     properties: {
       mensagens: { type: "array", minItems: 1, maxItems: 3, items: { type: "string", minLength: 1, maxLength: 900 } },
-      estado: {
+      memoria_delta: {
         type: "object",
         properties: {
           tipo_negocio: { anyOf: [{ type: "string", maxLength: 120 }, { type: "null" }] },
-          dores: { type: "array", maxItems: 6, items: { type: "string", maxLength: 120 } },
-          interesses: { type: "array", maxItems: 6, items: { type: "string", maxLength: 120 } },
-          objecoes: { type: "array", maxItems: 5, items: { type: "string", maxLength: 120 } },
-          estagio: { type: "string", maxLength: 80 },
+          estagio: { anyOf: [{ type: "string", maxLength: 80 }, { type: "null" }] },
           proxima_acao: { anyOf: [{ type: "string", maxLength: 160 }, { type: "null" }] },
-          fatos_confirmados: { type: "array", maxItems: 8, items: { type: "string", maxLength: 140 } },
+          dores: { type: "array", maxItems: 2, items: { type: "string", maxLength: 120 } },
+          interesses: { type: "array", maxItems: 2, items: { type: "string", maxLength: 120 } },
+          objecoes: { type: "array", maxItems: 2, items: { type: "string", maxLength: 120 } },
+          fatos: { type: "array", maxItems: 3, items: { type: "string", maxLength: 140 } },
         },
-        required: ["tipo_negocio", "dores", "interesses", "objecoes", "estagio", "proxima_acao", "fatos_confirmados"],
+        required: ["tipo_negocio", "estagio", "proxima_acao", "dores", "interesses", "objecoes", "fatos"],
         additionalProperties: false,
       },
     },
-    required: ["mensagens", "estado"],
+    required: ["mensagens", "memoria_delta"],
     additionalProperties: false,
   },
 };
@@ -1425,12 +1646,26 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     ctx.estadoConversa = contexto.estado;
     ctx.agendamentosAtivos = contexto.agendamentosAtivos;
 
+    const preconsultas = await preExecutarConsultasObvias(ctx);
+    const preexecutadas = new Set<TipoFerramenta>(preconsultas.map((item) => item.nome));
+    const ferramentasParaModelo = selecionarFerramentasParaModelo({
+      ativas: ferramentasAtivas,
+      mensagem: pendencia.conteudo_agregado,
+      estado: contexto.estado,
+      agendamentosAtivos: contexto.agendamentosAtivos,
+      preexecutadas,
+    });
+
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const modelo = String(agente.modelo || MODELO_PADRAO).trim() || MODELO_PADRAO;
-    const tools = definicoesFerramentas(ferramentasAtivas);
+    const tools = definicoesFerramentas(ferramentasParaModelo);
     const inputIa: any[] = contexto.historico.length
-      ? contexto.historico
+      ? [...contexto.historico]
       : [{ role: "user", content: pendencia.conteudo_agregado }];
+    const contextoPreconsultado = contextoPreconsultasParaModelo(preconsultas);
+    if (contextoPreconsultado) {
+      inputIa.push({ role: "developer", content: contextoPreconsultado });
+    }
     const instructions = promptDoAgente(
       agente as AgenteRow,
       contexto.estado,
@@ -1551,6 +1786,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
           conversa_id: pendencia.conversa_id,
           cached_tokens: tokensCached,
           cache_write_tokens: tokensCacheWrite,
+          preconsultas_backend: Array.from(preexecutadas),
+          ferramentas_modelo: Array.from(ferramentasParaModelo.keys()),
         },
       });
     }
@@ -1571,6 +1808,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
           acao_critica_executada: ctx.acaoCriticaExecutada,
           cached_tokens: tokensCached,
           cache_write_tokens: tokensCacheWrite,
+          preconsultas_backend: Array.from(preexecutadas),
+          ferramentas_modelo: Array.from(ferramentasParaModelo.keys()),
         },
       }).eq("id", execucaoId);
       await finalizarPendencia({ pendencia, lockToken, status: "processado" });
@@ -1622,6 +1861,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         cache_write_tokens: tokensCacheWrite,
         resposta_deterministica_pos_ferramenta: Boolean(ctx.respostaDeterministica?.length),
         agendamentos_ativos_confirmados: ctx.agendamentosAtivos.length,
+        preconsultas_backend: Array.from(preexecutadas),
+        ferramentas_modelo: Array.from(ferramentasParaModelo.keys()),
       },
     }).eq("id", execucaoId);
     await finalizarPendencia({ pendencia, lockToken, status: "processado" });
