@@ -48,11 +48,10 @@ function chaveCacheInterpretacao(params: {
     fluxo_id: metadata?.fluxo_id || null,
     no_id: metadata?.no_id || null,
     mensagem: String(mensagemCliente || "").trim(),
-    conexoes: conexoesDisponiveis.map((conexao) => ({
-      id: conexao.id,
-      nome: conexao.nome || null,
-      descricao_ia: conexao.descricao_ia || null,
-    })),
+    // O motor legado e a arbitragem híbrida podem montar rótulos diferentes
+    // para a mesma conexão. O ID é a identidade canônica e permite reaproveitar
+    // a decisão sem uma segunda chamada ao modelo.
+    conexoes: conexoesDisponiveis.map((conexao) => conexao.id),
   });
 }
 
