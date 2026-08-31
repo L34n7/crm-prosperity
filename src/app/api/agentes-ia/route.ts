@@ -3,7 +3,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
-const MODELO_PADRAO = "gpt-5.4-mini";
+const MODELO_PADRAO = "gpt-5.6-luna";
 const LIMITE_CARACTERISTICAS = 5;
 
 const FERRAMENTAS_VALIDAS = new Set([
@@ -297,7 +297,7 @@ export async function POST(request: Request) {
         prompt_sistema: String(body.prompt_sistema || "").trim(),
         tom_voz: null,
         instrucoes: "",
-        max_mensagens_contexto: 12,
+        max_mensagens_contexto: 6,
         debounce_ms: 1200,
         integracoes_whatsapp_ids: [],
         created_by: contexto.usuario.id,
@@ -496,7 +496,7 @@ export async function PATCH(request: Request) {
 
     const maxContexto = Math.min(
       40,
-      Math.max(4, Number(body.max_mensagens_contexto || atual.max_mensagens_contexto || 12))
+      Math.max(4, Number(body.max_mensagens_contexto || atual.max_mensagens_contexto || 6))
     );
     const debounce = Math.min(
       10000,
