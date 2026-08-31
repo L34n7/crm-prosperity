@@ -5,7 +5,13 @@ import OpenAI from "openai";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
-import { dataLocalDeIso, listarSlotsDisponiveis } from "@/lib/agendas/agenda-service";
+import {
+  dataLocalDeIso,
+  filtrarSlotsPorPreferencia,
+  formatarSlotAgenda,
+  interpretarDataHorarioAgenda,
+  listarSlotsDisponiveis,
+} from "@/lib/agendas/agenda-service";
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
 import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribuicao-transferencia";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -96,6 +102,9 @@ type ContextoExecucao = {
   transferidoHumano: boolean;
   respostaEnviada: boolean;
   respostaDeterministica: string[] | null;
+  agendaAutorizada: any | null;
+  estadoConversa: EstadoConversa;
+  agendamentosAtivos: any[];
 };
 
 const ESTADO_VAZIO: EstadoConversa = {
@@ -198,9 +207,16 @@ function resumoEstruturado(estado: EstadoConversa) {
   ].filter(Boolean).join(" | ").slice(0, 1800);
 }
 
+function ehFatoOperacionalAgenda(valor: string) {
+  const texto = String(valor || "").trim();
+  if (!texto) return false;
+  if (/^Agendamento\b/i.test(texto)) return true;
+  return /^Demonstração\b/i.test(texto) && /\b(?:agendad|remarcad|cancelad|às|para|dia)\w*/i.test(texto);
+}
+
 function adicionarFatoOperacional(estado: EstadoConversa, fato: string) {
   const semOperacionalAnterior = estado.fatos_confirmados.filter(
-    (item) => !/^Agendamento (confirmado|remarcado|cancelado):?/i.test(item)
+    (item) => !ehFatoOperacionalAgenda(item)
   );
   return [...semOperacionalAnterior, fato].slice(-8);
 }
@@ -415,6 +431,94 @@ async function carregarFerramentas(empresaId: string, agenteId: string) {
   return mapa;
 }
 
+function normalizarHoraLocal(valor: unknown) {
+  const texto = String(valor || "").trim();
+  const match = texto.match(/^(\d{1,2})(?::(\d{2}))?$/);
+  if (!match) return null;
+  const hora = Number(match[1]);
+  const minuto = Number(match[2] || 0);
+  if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) return null;
+  return `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
+}
+
+function formatarAgendamentoAtivo(item: any, timezone: string) {
+  const labels = formatarSlotAgenda(item.inicio_at, item.fim_at, timezone);
+  return {
+    id: item.id,
+    titulo: item.titulo || "Agendamento",
+    status: item.status,
+    data: dataLocalDeIso(item.inicio_at, timezone),
+    hora: labels.hora_label,
+    label: String(labels.label || "").replace(/\s*\(([^)]+)\)\s*$/, " até $1").trim(),
+  };
+}
+
+async function buscarAgendamentosAtivos(params: {
+  empresaId: string;
+  agendaId: string;
+  conversaId: string;
+  contatoId?: string | null;
+}) {
+  let query = supabaseAdmin
+    .from("agenda_agendamentos")
+    .select("id, agenda_id, contato_id, conversa_id, titulo, inicio_at, fim_at, status, metadata_json")
+    .eq("empresa_id", params.empresaId)
+    .eq("agenda_id", params.agendaId)
+    .in("status", ["agendado", "confirmado"])
+    .gte("fim_at", new Date().toISOString())
+    .order("inicio_at", { ascending: true });
+
+  if (params.contatoId) {
+    query = query.or(`conversa_id.eq.${params.conversaId},contato_id.eq.${params.contatoId}`);
+  } else {
+    query = query.eq("conversa_id", params.conversaId);
+  }
+
+  const { data, error } = await query.limit(5);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+function sincronizarEstadoComAgendamentosAtivos(
+  estadoBase: EstadoConversa,
+  agendamentosAtivos: any[],
+  timezone: string
+) {
+  const estado = normalizarEstado(estadoBase);
+  const fatosSemAgenda = estado.fatos_confirmados.filter((item) => !ehFatoOperacionalAgenda(item));
+  const fatosAgenda = agendamentosAtivos.slice(0, 3).map((item) => {
+    const agendamento = formatarAgendamentoAtivo(item, timezone);
+    return `Agendamento ativo: ${agendamento.label}`;
+  });
+  let estagio = estado.estagio;
+  let proximaAcao = estado.proxima_acao;
+
+  if (!agendamentosAtivos.length && /(?:agend|remarc)/i.test(estagio)) {
+    estagio = "sem agendamento ativo";
+    if (proximaAcao && /(?:agend|demonstra|reuni)/i.test(proximaAcao)) {
+      proximaAcao = "definir próximo passo";
+    }
+  } else if (agendamentosAtivos.length && /cancelad/i.test(estagio)) {
+    estagio = "agendamento ativo";
+  }
+
+  return {
+    ...estado,
+    estagio,
+    proxima_acao: proximaAcao,
+    fatos_confirmados: [...fatosSemAgenda, ...fatosAgenda].slice(-8),
+  };
+}
+
+function estadoIndicaReagendamento(estado: EstadoConversa) {
+  return /reagend|remarc/i.test(`${estado.estagio} ${estado.proxima_acao || ""}`);
+}
+
+function mensagemAssistenteTemEstadoOperacionalAntigo(texto: string) {
+  return /\b(?:agendad[oa]|remarcad[oa]|marcad[oa]|cancelad[oa])\b/i.test(texto) &&
+    /\b(?:\d{1,2}[:h]\d{0,2}|segunda|terça|quarta|quinta|sexta|sábado|domingo|hoje|amanhã)\b/i.test(texto);
+}
+
 async function carregarContexto(ctx: ContextoExecucao) {
   const limite = numeroInteiro(ctx.agente.max_mensagens_contexto, 6, 4, 40);
   const [{ data: mensagens }, { data: estado }] = await Promise.all([
@@ -436,6 +540,7 @@ async function carregarContexto(ctx: ContextoExecucao) {
 
   const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
   let agendas: any[] = [];
+  let agendamentosAtivos: any[] = [];
   if (agendaId) {
     const { data: agenda, error: agendaError } = await supabaseAdmin
       .from("calendarios")
@@ -447,17 +552,32 @@ async function carregarContexto(ctx: ContextoExecucao) {
     if (agendaError) throw new Error(agendaError.message);
     if (!agenda) throw new Error("A agenda obrigatória configurada para o agente não está disponível.");
     agendas = [agenda];
+    agendamentosAtivos = await buscarAgendamentosAtivos({
+      empresaId: ctx.pendencia.empresa_id,
+      agendaId,
+      conversaId: ctx.pendencia.conversa_id,
+      contatoId: ctx.pendencia.contato_id || null,
+    });
   }
 
   const historico = (mensagens || [])
     .reverse()
     .filter((item: any) => String(item.conteudo || "").trim())
+    .filter((item: any) => {
+      if (item.remetente_tipo === "contato") return true;
+      return !mensagemAssistenteTemEstadoOperacionalAntigo(String(item.conteudo || ""));
+    })
     .map((item: any) => ({
       role: item.remetente_tipo === "contato" ? "user" : "assistant",
       content: String(item.conteudo || "").slice(0, 650),
     }));
 
-  return { historico, estado: normalizarEstado(estado?.estado_json), agendas };
+  const timezone = agendas[0]?.timezone || "America/Sao_Paulo";
+  const estadoSincronizado = agendaId
+    ? sincronizarEstadoComAgendamentosAtivos(normalizarEstado(estado?.estado_json), agendamentosAtivos, timezone)
+    : normalizarEstado(estado?.estado_json);
+
+  return { historico, estado: estadoSincronizado, agendas, agendamentosAtivos };
 }
 
 function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknown>>) {
@@ -475,7 +595,7 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "consultar_agenda",
-      description: "Consulta até 12 horários reais na agenda autorizada.",
+      description: "Consulta até 12 horários reais. O backend aplica automaticamente preferências da mensagem como 'depois das 17', 'antes das 10', 'às 18', manhã/tarde/noite antes do limite de 12.",
       strict: true,
       parameters: {
         type: "object",
@@ -488,7 +608,7 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "criar_agendamento",
-      description: "Cria na agenda autorizada usando data e hora LOCAL já confirmadas.",
+      description: "Cria um novo compromisso na agenda autorizada usando data e hora LOCAL já confirmadas. Não use durante um reagendamento existente.",
       strict: true,
       parameters: {
         type: "object",
@@ -505,16 +625,17 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "remarcar_agendamento",
-      description: "Remarca um agendamento do contato na agenda autorizada usando data/hora LOCAL.",
+      description: "Remarca o compromisso ativo do contato. O backend localiza o agendamento; nunca invente UUID. Se houver mais de um, use referência de data/hora atual somente quando o cliente indicar qual deles.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
-          agendamento_id: { type: "string" },
-          data: { type: "string", description: "YYYY-MM-DD no fuso da agenda" },
-          hora: { type: "string", description: "HH:mm no fuso da agenda" },
+          data: { type: "string", description: "Nova data YYYY-MM-DD no fuso da agenda" },
+          hora: { type: "string", description: "Nova hora HH:mm no fuso da agenda" },
+          referencia_data: { anyOf: [{ type: "string", description: "Data atual do compromisso a alterar, YYYY-MM-DD" }, { type: "null" }] },
+          referencia_hora: { anyOf: [{ type: "string", description: "Hora atual do compromisso a alterar, HH:mm" }, { type: "null" }] },
         },
-        required: ["agendamento_id", "data", "hora"], additionalProperties: false,
+        required: ["data", "hora", "referencia_data", "referencia_hora"], additionalProperties: false,
       },
     });
   }
@@ -522,9 +643,16 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "cancelar_agendamento",
-      description: "Cancela de forma idempotente um agendamento do contato na agenda autorizada.",
+      description: "Cancela o compromisso ativo do contato. O backend localiza o agendamento; nunca invente UUID. Se houver mais de um, use referência de data/hora atual somente quando o cliente indicar qual deles.",
       strict: true,
-      parameters: { type: "object", properties: { agendamento_id: { type: "string" } }, required: ["agendamento_id"], additionalProperties: false },
+      parameters: {
+        type: "object",
+        properties: {
+          referencia_data: { anyOf: [{ type: "string", description: "Data atual do compromisso a cancelar, YYYY-MM-DD" }, { type: "null" }] },
+          referencia_hora: { anyOf: [{ type: "string", description: "Hora atual do compromisso a cancelar, HH:mm" }, { type: "null" }] },
+        },
+        required: ["referencia_data", "referencia_hora"], additionalProperties: false,
+      },
     });
   }
   if (ativas.has("consultar_contato")) {
@@ -553,16 +681,6 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     });
   }
   return defs;
-}
-
-function normalizarHoraLocal(valor: unknown) {
-  const texto = String(valor || "").trim();
-  const match = texto.match(/^(\d{1,2})(?::(\d{2}))?$/);
-  if (!match) return null;
-  const hora = Number(match[1]);
-  const minuto = Number(match[2] || 0);
-  if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) return null;
-  return `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
 }
 
 async function resolverSlotLocal(params: {
@@ -603,10 +721,11 @@ async function resolverSlotLocal(params: {
   return { ok: true as const, agenda, slot };
 }
 
-function compactarSlots(resultado: any) {
+function compactarSlots(resultado: any, slotsOverride?: any[]) {
   const timezone = resultado.agenda?.timezone || "America/Sao_Paulo";
-  return (resultado.slots || []).map((slot: any) => ({
-    n: slot.indice,
+  const slots = slotsOverride || resultado.slots || [];
+  return slots.map((slot: any, index: number) => ({
+    n: index + 1,
     data: dataLocalDeIso(slot.inicio_at, timezone),
     hora: slot.hora_label,
     label: slot.label,
@@ -617,6 +736,48 @@ function labelNaturalSlot(slot: any) {
   return String(slot?.label || "")
     .replace(/\s*\(([^)]+)\)\s*$/, " até $1")
     .trim();
+}
+
+async function resolverAgendamentoAtivo(params: {
+  ctx: ContextoExecucao;
+  agendaId: string;
+  referenciaData?: unknown;
+  referenciaHora?: unknown;
+}) {
+  const timezone = params.ctx.agendaAutorizada?.timezone || "America/Sao_Paulo";
+  const ativos = await buscarAgendamentosAtivos({
+    empresaId: params.ctx.pendencia.empresa_id,
+    agendaId: params.agendaId,
+    conversaId: params.ctx.pendencia.conversa_id,
+    contatoId: params.ctx.pendencia.contato_id || null,
+  });
+  params.ctx.agendamentosAtivos = ativos;
+
+  const referenciaData = String(params.referenciaData || "").trim() || null;
+  const referenciaHora = normalizarHoraLocal(params.referenciaHora);
+  let candidatos = ativos;
+  if (referenciaData) {
+    candidatos = candidatos.filter((item) => dataLocalDeIso(item.inicio_at, timezone) === referenciaData);
+  }
+  if (referenciaHora) {
+    candidatos = candidatos.filter((item) => formatarAgendamentoAtivo(item, timezone).hora === referenciaHora);
+  }
+
+  const opcoes = (candidatos.length ? candidatos : ativos).map((item) => {
+    const agendamento = formatarAgendamentoAtivo(item, timezone);
+    return { data: agendamento.data, hora: agendamento.hora, label: agendamento.label, titulo: agendamento.titulo };
+  });
+
+  if (!ativos.length) {
+    return { ok: false as const, code: "SEM_AGENDAMENTO_ATIVO", error: "Não existe agendamento ativo para este contato na agenda autorizada.", opcoes: [] };
+  }
+  if (!candidatos.length) {
+    return { ok: false as const, code: "REFERENCIA_NAO_ENCONTRADA", error: "Não encontrei um agendamento ativo que corresponda à referência informada.", opcoes };
+  }
+  if (candidatos.length > 1) {
+    return { ok: false as const, code: "MULTIPLOS_AGENDAMENTOS_ATIVOS", error: "Há mais de um agendamento ativo. Pergunte ao cliente qual deseja alterar/cancelar usando data ou horário.", opcoes };
+  }
+  return { ok: true as const, agendamento: candidatos[0], timezone };
 }
 
 async function enviarMensagemAgente(params: {
@@ -722,28 +883,57 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   if (nome === "consultar_agenda") {
     const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
     if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
-    const data = args.data ? String(args.data).trim() : null;
+    const timezone = ctx.agendaAutorizada?.timezone || "America/Sao_Paulo";
+    const interpretacao = interpretarDataHorarioAgenda(ctx.pendencia.conteudo_agregado, timezone);
+    const data = interpretacao.data || (args.data ? String(args.data).trim() : null);
     const resultado = await listarSlotsDisponiveis({
       supabase: supabaseAdmin,
       empresaId,
       agendaId,
       data,
       janelaDias: data ? 1 : 14,
-      limite: 12,
+      limite: interpretacao.preferencia ? 50 : 12,
     });
+    const filtrados = filtrarSlotsPorPreferencia(
+      resultado.slots,
+      interpretacao.preferencia,
+      timezone
+    ).slice(0, 12);
     return {
       ok: true,
       agenda: resultado.agenda ? {
         nome: resultado.agenda.nome,
         timezone: resultado.agenda.timezone,
       } : null,
-      slots: compactarSlots(resultado),
+      slots: compactarSlots(resultado, filtrados),
     };
   }
 
   if (nome === "criar_agendamento") {
     const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
     if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
+
+    if (estadoIndicaReagendamento(ctx.estadoConversa)) {
+      const ativos = await buscarAgendamentosAtivos({
+        empresaId,
+        agendaId,
+        conversaId,
+        contatoId: ctx.pendencia.contato_id || null,
+      });
+      if (ativos.length) {
+        const timezone = ctx.agendaAutorizada?.timezone || "America/Sao_Paulo";
+        return {
+          ok: false,
+          code: "REAGENDAMENTO_EM_ANDAMENTO",
+          error: "Existe agendamento ativo e a conversa está em reagendamento. Use remarcar_agendamento em vez de criar outro compromisso.",
+          agendamentos_ativos: ativos.map((item) => {
+            const agendamento = formatarAgendamentoAtivo(item, timezone);
+            return { data: agendamento.data, hora: agendamento.hora, label: agendamento.label };
+          }),
+        };
+      }
+    }
+
     const resolvido = await resolverSlotLocal({
       empresaId,
       agendaId,
@@ -802,37 +992,38 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   if (nome === "remarcar_agendamento") {
     const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
     if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
-    const id = String(args.agendamento_id || "").trim();
-    const { data: atual } = await supabaseAdmin.from("agenda_agendamentos")
-      .select("id, agenda_id, contato_id, conversa_id, inicio_at, fim_at, status, metadata_json")
-      .eq("empresa_id", empresaId)
-      .eq("id", id)
-      .maybeSingle();
-    if (!atual || atual.status === "cancelado") return { ok: false, error: "Agendamento não encontrado ou já cancelado." };
-    if (atual.agenda_id !== agendaId) return { ok: false, error: "Esse agendamento não pertence à agenda autorizada." };
-    if (atual.conversa_id !== conversaId && atual.contato_id !== ctx.pendencia.contato_id) {
-      return { ok: false, error: "Esse agendamento não pertence ao contato atual." };
+    const atualResolvido = await resolverAgendamentoAtivo({
+      ctx,
+      agendaId,
+      referenciaData: args.referencia_data,
+      referenciaHora: args.referencia_hora,
+    });
+    if (!atualResolvido.ok) return atualResolvido;
+    const atual = atualResolvido.agendamento;
+
+    const dataNova = String(args.data || "").trim();
+    const horaNova = normalizarHoraLocal(args.hora);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataNova) || !horaNova) {
+      return { ok: false, error: "Nova data ou horário local inválido." };
+    }
+
+    const atualFormatado = formatarAgendamentoAtivo(atual, atualResolvido.timezone);
+    if (atualFormatado.data === dataNova && atualFormatado.hora === horaNova) {
+      ctx.acaoCriticaExecutada = true;
+      ctx.respostaDeterministica = [`Esse agendamento já está nesse horário: ${atualFormatado.label}.`];
+      return { ok: true, idempotente: true, agendamento: { id: atual.id, status: atual.status }, quando: atualFormatado.label };
     }
 
     const resolvido = await resolverSlotLocal({
       empresaId,
       agendaId,
-      data: String(args.data || ""),
-      hora: String(args.hora || ""),
+      data: dataNova,
+      hora: horaNova,
     });
     if (!resolvido.ok) return resolvido;
     const inicioAt = resolvido.slot.inicio_at;
     const fimAt = resolvido.slot.fim_at;
     const quando = labelNaturalSlot(resolvido.slot);
-
-    if (
-      new Date(inicioAt).getTime() === new Date(atual.inicio_at).getTime() &&
-      new Date(fimAt).getTime() === new Date(atual.fim_at).getTime()
-    ) {
-      ctx.acaoCriticaExecutada = true;
-      ctx.respostaDeterministica = [`Esse agendamento já está nesse horário: ${quando}.`];
-      return { ok: true, idempotente: true, agendamento: atual, quando };
-    }
 
     const { data: atualizado, error } = await supabaseAdmin.from("agenda_agendamentos").update({
       inicio_at: inicioAt,
@@ -843,7 +1034,7 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
         agente_id: ctx.agente.id,
       },
       updated_at: new Date().toISOString(),
-    }).eq("empresa_id", empresaId).eq("id", id).eq("agenda_id", agendaId)
+    }).eq("empresa_id", empresaId).eq("id", atual.id).eq("agenda_id", agendaId)
       .select("id, agenda_id, titulo, status").single();
     if (error || !atualizado) throw new Error(error?.message || "Erro ao remarcar agendamento.");
 
@@ -858,37 +1049,30 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   if (nome === "cancelar_agendamento") {
     const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
     if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
-    const id = String(args.agendamento_id || "").trim();
-    const { data: atual } = await supabaseAdmin.from("agenda_agendamentos")
-      .select("id, agenda_id, contato_id, conversa_id, status")
-      .eq("empresa_id", empresaId)
-      .eq("id", id)
-      .maybeSingle();
-    if (!atual) return { ok: false, error: "Agendamento não encontrado." };
-    if (atual.agenda_id !== agendaId) return { ok: false, error: "Esse agendamento não pertence à agenda autorizada." };
-    if (atual.conversa_id !== conversaId && atual.contato_id !== ctx.pendencia.contato_id) {
-      return { ok: false, error: "Esse agendamento não pertence ao contato atual." };
-    }
-    if (atual.status === "cancelado") {
-      ctx.acaoCriticaExecutada = true;
-      ctx.respostaDeterministica = ["Certo — esse agendamento já estava cancelado."];
-      return { ok: true, idempotente: true, agendamento_id: id, status: "cancelado" };
-    }
+    const atualResolvido = await resolverAgendamentoAtivo({
+      ctx,
+      agendaId,
+      referenciaData: args.referencia_data,
+      referenciaHora: args.referencia_hora,
+    });
+    if (!atualResolvido.ok) return atualResolvido;
+    const atual = atualResolvido.agendamento;
 
     const agora = new Date().toISOString();
     const { error } = await supabaseAdmin.from("agenda_agendamentos")
       .update({ status: "cancelado", cancelado_em: agora, updated_at: agora })
       .eq("empresa_id", empresaId)
-      .eq("id", id)
-      .eq("agenda_id", agendaId);
+      .eq("id", atual.id)
+      .eq("agenda_id", agendaId)
+      .in("status", ["agendado", "confirmado"]);
     if (error) throw new Error(error.message);
 
     ctx.acaoCriticaExecutada = true;
     ctx.respostaDeterministica = ["Certo — o agendamento foi cancelado."];
-    await sincronizarAgendamentoGoogleCalendar({ empresaId, agendaId, agendamentoId: id, forcar: true }).catch((errorSync) =>
+    await sincronizarAgendamentoGoogleCalendar({ empresaId, agendaId, agendamentoId: atual.id, forcar: true }).catch((errorSync) =>
       console.error("[AGENTE_IA] Erro ao sincronizar cancelamento no Google:", errorSync)
     );
-    return { ok: true, agendamento_id: id, status: "cancelado" };
+    return { ok: true, agendamento_id: atual.id, status: "cancelado" };
   }
 
   if (nome === "transferir_humano") {
@@ -1029,11 +1213,23 @@ function dataAtualAgenda(agenda: any) {
   }).format(new Date());
 }
 
-function promptDoAgente(agente: AgenteRow, estado: EstadoConversa, agendas: any[]) {
+function promptDoAgente(
+  agente: AgenteRow,
+  estado: EstadoConversa,
+  agendas: any[],
+  agendamentosAtivos: any[]
+) {
   const agenda = agendas[0] || null;
   const agendaInfo = agenda
     ? `${agenda.nome}; fuso=${agenda.timezone || "America/Sao_Paulo"}; duração=${agenda.duracao_minutos || 60} min; hoje=${dataAtualAgenda(agenda)}`
     : "nenhuma agenda autorizada";
+  const timezone = agenda?.timezone || "America/Sao_Paulo";
+  const estadoOperacionalAgenda = agendamentosAtivos.length
+    ? agendamentosAtivos
+        .slice(0, 3)
+        .map((item) => `- ${formatarAgendamentoAtivo(item, timezone).label}`)
+        .join("\n")
+    : "- Nenhum agendamento ativo para este contato na agenda autorizada.";
 
   return [
     `Você é ${agente.nome}, assistente do CRM Prosperity.`,
@@ -1043,15 +1239,21 @@ function promptDoAgente(agente: AgenteRow, estado: EstadoConversa, agendas: any[
     "REGRAS DO RUNTIME:",
     "- Português do Brasil, conversa natural de WhatsApp, 1 a 3 mensagens curtas e no máximo uma pergunta principal.",
     "- Continue o contexto e evite repetir. Confirmações curtas como 'quero', 'sim', 'pode' e 'me mostra' aceitam a proposta imediatamente anterior.",
-    "- Use a memória para continuidade, mas memória não comprova estado operacional. Agendamentos, disponibilidade e ações devem ser confirmados pelas ferramentas/CRM antes de afirmar que estão válidos.",
+    "- Memória e histórico servem para continuidade, mas nunca comprovam estado operacional. O ESTADO OPERACIONAL ATUAL DA AGENDA abaixo é a fonte de verdade para dizer se existe reunião/agendamento ativo.",
+    "- Nunca cite como ativo um agendamento que apareça apenas na memória ou em mensagens antigas. Se o estado operacional disser que não há agendamento ativo, trate qualquer referência histórica como passada/cancelada/inválida até uma nova criação confirmada.",
     "- Para fatos de produto, preço, plano, integração ou recurso, consulte a base quando necessário com poucos termos e não invente.",
     "- Há no máximo uma agenda autorizada. Consulte disponibilidade antes de criar/remarcar. Nas ferramentas de agenda use apenas data LOCAL YYYY-MM-DD e hora LOCAL HH:mm; nunca converta ou invente UTC.",
+    "- consultar_agenda já interpreta 'depois das X', 'antes das X', horário exato e período; use apenas os slots retornados depois desse filtro.",
+    "- Ao remarcar ou cancelar, não peça nem invente ID. A ferramenta localiza automaticamente o compromisso ativo. Se houver mais de um, use a referência de data/hora do compromisso atual quando o cliente identificar qual deseja alterar.",
+    "- Se a conversa estiver em reagendamento, use remarcar_agendamento; não crie um segundo compromisso.",
     "- Só confirme ação após ok=true. idempotente=true significa que a ação já estava concluída.",
     "- Transferência humana usa o destino configurado; mensagem_cliente é para o cliente e motivo_interno nunca deve ser enviado ao cliente.",
     "- Não diga que é humano.",
     `Memória estruturada: ${JSON.stringify(estado)}`,
-    "Atualize a memória apenas com fatos confirmados pelo cliente ou pelas ferramentas.",
+    "Atualize a memória apenas com fatos confirmados pelo cliente, pela base ou pelas ferramentas.",
     `Agenda autorizada: ${agendaInfo}`,
+    "ESTADO OPERACIONAL ATUAL DA AGENDA:",
+    estadoOperacionalAgenda,
   ].filter(Boolean).join("\n\n");
 }
 
@@ -1198,6 +1400,9 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       transferidoHumano: false,
       respostaEnviada: false,
       respostaDeterministica: null,
+      agendaAutorizada: null,
+      estadoConversa: ESTADO_VAZIO,
+      agendamentosAtivos: [],
     };
 
     const saldo = await buscarSaldoTokensIa(pendencia.empresa_id);
@@ -1216,13 +1421,22 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
 
     if (!process.env.OPENAI_API_KEY?.trim()) throw new Error("OPENAI_API_KEY não configurada.");
     const contexto = await carregarContexto(ctx);
+    ctx.agendaAutorizada = contexto.agendas[0] || null;
+    ctx.estadoConversa = contexto.estado;
+    ctx.agendamentosAtivos = contexto.agendamentosAtivos;
+
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const modelo = String(agente.modelo || MODELO_PADRAO).trim() || MODELO_PADRAO;
     const tools = definicoesFerramentas(ferramentasAtivas);
     const inputIa: any[] = contexto.historico.length
       ? contexto.historico
       : [{ role: "user", content: pendencia.conteudo_agregado }];
-    const instructions = promptDoAgente(agente as AgenteRow, contexto.estado, contexto.agendas);
+    const instructions = promptDoAgente(
+      agente as AgenteRow,
+      contexto.estado,
+      contexto.agendas,
+      contexto.agendamentosAtivos
+    );
     let tokensInput = 0;
     let tokensOutput = 0;
     let tokensTotal = 0;
@@ -1299,6 +1513,28 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         mensagens: ctx.respostaDeterministica,
         estado: estadoAposFerramentas(contexto.estado, ctx.ferramentasExecutadas),
       };
+    }
+
+    const agendaIdFinal = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
+    if (agendaIdFinal && ctx.agendaAutorizada) {
+      const houveMutacaoAgenda = ctx.ferramentasExecutadas.some((item) =>
+        ["criar_agendamento", "remarcar_agendamento", "cancelar_agendamento"].includes(String(item.nome || "")) &&
+        item.resultado?.ok === true
+      );
+      const agendamentosAtivosFinais = houveMutacaoAgenda
+        ? await buscarAgendamentosAtivos({
+            empresaId: pendencia.empresa_id,
+            agendaId: agendaIdFinal,
+            conversaId: pendencia.conversa_id,
+            contatoId: pendencia.contato_id || null,
+          })
+        : ctx.agendamentosAtivos;
+      ctx.agendamentosAtivos = agendamentosAtivosFinais;
+      saidaFinal.estado = sincronizarEstadoComAgendamentosAtivos(
+        saidaFinal.estado,
+        agendamentosAtivosFinais,
+        ctx.agendaAutorizada.timezone || "America/Sao_Paulo"
+      );
     }
 
     if (tokensTotal > 0) {
@@ -1385,6 +1621,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         cached_tokens: tokensCached,
         cache_write_tokens: tokensCacheWrite,
         resposta_deterministica_pos_ferramenta: Boolean(ctx.respostaDeterministica?.length),
+        agendamentos_ativos_confirmados: ctx.agendamentosAtivos.length,
       },
     }).eq("id", execucaoId);
     await finalizarPendencia({ pendencia, lockToken, status: "processado" });
