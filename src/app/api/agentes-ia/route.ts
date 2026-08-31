@@ -15,6 +15,18 @@ const FERRAMENTAS_VALIDAS = new Set([
   "consultar_contato",
   "transferir_humano",
 ]);
+const FERRAMENTAS_AGENDA = new Set([
+  "consultar_agenda",
+  "criar_agendamento",
+  "remarcar_agendamento",
+  "cancelar_agendamento",
+]);
+
+type FerramentaBody = {
+  tipo: string;
+  ativo: boolean;
+  config_json: Record<string, unknown>;
+};
 
 function idsString(valor: unknown) {
   if (!Array.isArray(valor)) return [] as string[];
@@ -36,11 +48,13 @@ function normalizarCaracteristicas(valor: unknown) {
   return itens.length ? itens.join(", ") : null;
 }
 
-function ferramentasBody(valor: unknown) {
+function ferramentasBody(valor: unknown): FerramentaBody[] {
   if (!Array.isArray(valor)) return [];
   return valor
     .map((item) => {
-      if (typeof item === "string") return { tipo: item, ativo: true, config_json: {} };
+      if (typeof item === "string") {
+        return { tipo: item, ativo: true, config_json: {} as Record<string, unknown> };
+      }
       if (!item || typeof item !== "object") return null;
       const obj = item as Record<string, unknown>;
       return {
@@ -48,19 +62,92 @@ function ferramentasBody(valor: unknown) {
         ativo: obj.ativo !== false,
         config_json:
           obj.config_json && typeof obj.config_json === "object" && !Array.isArray(obj.config_json)
-            ? obj.config_json
+            ? (obj.config_json as Record<string, unknown>)
             : {},
       };
     })
-    .filter((item): item is { tipo: string; ativo: boolean; config_json: object } =>
-      !!item && FERRAMENTAS_VALIDAS.has(item.tipo)
-    );
+    .filter((item): item is FerramentaBody => !!item && FERRAMENTAS_VALIDAS.has(item.tipo));
 }
 
 function escoposConflitam(a: string[], b: string[]) {
   if (!a.length || !b.length) return true;
   const conjunto = new Set(b);
   return a.some((id) => conjunto.has(id));
+}
+
+function agendaConfiguradaNasFerramentas(ferramentas: FerramentaBody[]) {
+  const ferramentasAgendaAtivas = ferramentas.filter(
+    (item) => item.ativo && FERRAMENTAS_AGENDA.has(item.tipo)
+  );
+  if (!ferramentasAgendaAtivas.length) {
+    return { usaAgenda: false, agendaId: null as string | null };
+  }
+
+  const ids = ferramentasAgendaAtivas.map((item) =>
+    String(item.config_json?.agenda_id || "").trim()
+  );
+  if (ids.some((id) => !id)) {
+    return { usaAgenda: true, agendaId: null as string | null };
+  }
+
+  const unicos = Array.from(new Set(ids));
+  return {
+    usaAgenda: true,
+    agendaId: unicos.length === 1 ? unicos[0] : null,
+  };
+}
+
+function normalizarAgendaNasFerramentas(ferramentas: FerramentaBody[], agendaId: string | null) {
+  if (!agendaId) return ferramentas;
+  return ferramentas.map((item) =>
+    FERRAMENTAS_AGENDA.has(item.tipo)
+      ? { ...item, config_json: { ...(item.config_json || {}), agenda_id: agendaId } }
+      : item
+  );
+}
+
+async function validarAgendaObrigatoria(empresaId: string, ferramentas: FerramentaBody[]) {
+  const configuracao = agendaConfiguradaNasFerramentas(ferramentas);
+  if (!configuracao.usaAgenda) {
+    return { ok: true as const, agendaId: null as string | null };
+  }
+  if (!configuracao.agendaId) {
+    return {
+      ok: false as const,
+      error: "Selecione uma única agenda obrigatória para usar as ferramentas de agenda.",
+    };
+  }
+
+  const { data: agenda, error } = await supabaseAdmin
+    .from("calendarios")
+    .select("id, nome, status")
+    .eq("empresa_id", empresaId)
+    .eq("id", configuracao.agendaId)
+    .eq("status", "ativo")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!agenda) {
+    return {
+      ok: false as const,
+      error: "A agenda configurada não existe, está inativa ou não pertence à empresa.",
+    };
+  }
+
+  return { ok: true as const, agendaId: agenda.id };
+}
+
+async function carregarFerramentasAgente(empresaId: string, agenteId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("agente_ia_ferramentas")
+    .select("tipo, ativo, config_json")
+    .eq("empresa_id", empresaId)
+    .eq("agente_id", agenteId);
+  if (error) throw new Error(error.message);
+  return (data || []).map((item) => ({
+    tipo: String(item.tipo || ""),
+    ativo: item.ativo !== false,
+    config_json: (item.config_json || {}) as Record<string, unknown>,
+  }));
 }
 
 async function contextoEmpresa() {
@@ -144,7 +231,7 @@ export async function GET() {
     const contexto = await contextoEmpresa();
     if (!contexto.ok) return contexto.response;
 
-    const [agentes, integracoesResult, fluxosResult, setoresResult] = await Promise.all([
+    const [agentes, integracoesResult, fluxosResult, setoresResult, agendasResult] = await Promise.all([
       carregarAgentes(contexto.empresaId),
       supabaseAdmin
         .from("integracoes_whatsapp")
@@ -163,6 +250,12 @@ export async function GET() {
         .select("id, nome, status, ativo")
         .eq("empresa_id", contexto.empresaId)
         .order("ordem_exibicao", { ascending: true }),
+      supabaseAdmin
+        .from("calendarios")
+        .select("id, nome, timezone, duracao_minutos, status")
+        .eq("empresa_id", contexto.empresaId)
+        .eq("status", "ativo")
+        .order("nome", { ascending: true }),
     ]);
 
     return NextResponse.json({
@@ -174,6 +267,7 @@ export async function GET() {
         setores: (setoresResult.data || []).filter(
           (item) => item.ativo !== false && item.status !== "inativo"
         ),
+        agendas: agendasResult.data || [],
       },
     });
   } catch (error) {
@@ -265,6 +359,16 @@ export async function PATCH(request: Request) {
       if (atual.status === "ativo") {
         return NextResponse.json({ ok: true, agentes: await carregarAgentes(contexto.empresaId) });
       }
+
+      const ferramentasAtuais = await carregarFerramentasAgente(contexto.empresaId, id);
+      const validacaoAgenda = await validarAgendaObrigatoria(contexto.empresaId, ferramentasAtuais);
+      if (!validacaoAgenda.ok) {
+        return NextResponse.json(
+          { ok: false, code: "AGENDA_AGENTE_OBRIGATORIA", error: validacaoAgenda.error },
+          { status: 409 }
+        );
+      }
+
       const integracoes = idsString(atual.integracoes_whatsapp_ids);
       const conflito = await validarEscopoAtivacao(contexto.empresaId, id, integracoes);
       if (conflito) {
@@ -374,6 +478,22 @@ export async function PATCH(request: Request) {
       }
     }
 
+    let ferramentasNormalizadas: FerramentaBody[] | null = null;
+    if (Array.isArray(body.ferramentas)) {
+      const ferramentas = ferramentasBody(body.ferramentas);
+      const validacaoAgenda = await validarAgendaObrigatoria(contexto.empresaId, ferramentas);
+      if (!validacaoAgenda.ok) {
+        return NextResponse.json(
+          { ok: false, code: "AGENDA_AGENTE_OBRIGATORIA", error: validacaoAgenda.error },
+          { status: 400 }
+        );
+      }
+      ferramentasNormalizadas = normalizarAgendaNasFerramentas(
+        ferramentas,
+        validacaoAgenda.agendaId
+      );
+    }
+
     const maxContexto = Math.min(
       40,
       Math.max(4, Number(body.max_mensagens_contexto || atual.max_mensagens_contexto || 12))
@@ -403,19 +523,18 @@ export async function PATCH(request: Request) {
       .eq("id", id);
     if (updateError) throw new Error(updateError.message);
 
-    if (Array.isArray(body.ferramentas)) {
-      const ferramentas = ferramentasBody(body.ferramentas);
+    if (ferramentasNormalizadas) {
       const { error: deleteFerramentasError } = await supabaseAdmin
         .from("agente_ia_ferramentas")
         .delete()
         .eq("empresa_id", contexto.empresaId)
         .eq("agente_id", id);
       if (deleteFerramentasError) throw new Error(deleteFerramentasError.message);
-      if (ferramentas.length) {
+      if (ferramentasNormalizadas.length) {
         const { error: ferramentasError } = await supabaseAdmin
           .from("agente_ia_ferramentas")
           .insert(
-            ferramentas.map((item) => ({
+            ferramentasNormalizadas.map((item) => ({
               empresa_id: contexto.empresaId,
               agente_id: id,
               tipo: item.tipo,
@@ -462,7 +581,7 @@ export async function DELETE(request: Request) {
         { status: 409 }
       );
     }
-    if (!['inativo', 'rascunho'].includes(agente.status)) {
+    if (!["inativo", "rascunho"].includes(agente.status)) {
       return NextResponse.json(
         { ok: false, error: "Somente agentes pausados podem ser apagados." },
         { status: 409 }
