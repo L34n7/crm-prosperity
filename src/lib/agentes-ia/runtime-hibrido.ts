@@ -196,13 +196,7 @@ async function iaInterpretativaMantemFluxo(params: {
       mensagemCliente: mensagemParaInterpretacao,
       conexoesDisponiveis: conexoesComIA.map((conexao: any) => ({
         id: String(conexao.id),
-        nome:
-          String(
-            conexao.nome_conexao ||
-              conexao.nome ||
-              conexao.titulo ||
-              "Conexão sem nome"
-          ) || null,
+        nome: String(conexao.rotulo || "Conexão sem nome") || null,
         descricao_ia: conexao.descricao_ia || null,
       })),
       empresaId: input.empresaId,
@@ -295,9 +289,7 @@ async function mensagemDeveContinuarNoFluxoAtivo(input: AutomationEngineInput) {
       .maybeSingle(),
     supabaseAdmin
       .from("automacao_conexoes")
-      .select(
-        "id, condicao_json, usar_ia, nome, nome_conexao, titulo, descricao_ia, ordem"
-      )
+      .select("id, condicao_json, usar_ia, rotulo, descricao_ia, ordem")
       .eq("empresa_id", input.empresaId)
       .eq("fluxo_id", execucao.fluxo_id)
       .eq("no_origem_id", execucao.no_atual_id)
