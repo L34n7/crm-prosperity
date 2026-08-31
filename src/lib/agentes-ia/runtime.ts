@@ -1,1 +1,1 @@
-export { interceptarMensagemAgenteIa, processarPendenciaAgenteIa } from "./runtime-v3";
+export { interceptarMensagemAgenteIa, processarPendenciaAgenteIa } from "./runtime-hibrido";
