@@ -23,6 +23,11 @@ const NOS_AVALIACAO = new Set([
   "avaliacao_atendimento",
 ]);
 
+type OpcaoFluxo = {
+  id: string;
+  titulo: string;
+};
+
 function normalizarComparacao(valor: unknown) {
   return String(valor || "")
     .normalize("NFD")
@@ -37,29 +42,33 @@ function isRecord(valor: unknown): valor is Record<string, unknown> {
   return Boolean(valor) && typeof valor === "object" && !Array.isArray(valor);
 }
 
-function opcoesConfiguradasDoNo(no: any) {
+function opcoesConfiguradasDoNo(no: any): OpcaoFluxo[] {
   const config = isRecord(no?.configuracao_json) ? no.configuracao_json : {};
 
   if (no?.tipo_no === "enviar_botoes") {
-    const botoes = Array.isArray(config.botoes) ? config.botoes : [];
+    const botoes: Record<string, unknown>[] = Array.isArray(config.botoes)
+      ? config.botoes.filter(isRecord)
+      : [];
+
     return botoes
-      .filter(isRecord)
-      .map((item) => ({
+      .map((item: Record<string, unknown>) => ({
         id: String(item.id || "").trim(),
         titulo: String(item.titulo || "").trim(),
       }))
-      .filter((item) => item.id || item.titulo);
+      .filter((item: OpcaoFluxo) => Boolean(item.id || item.titulo));
   }
 
   if (no?.tipo_no === "pergunta_opcoes") {
-    const opcoes = Array.isArray(config.opcoes) ? config.opcoes : [];
+    const opcoes: Record<string, unknown>[] = Array.isArray(config.opcoes)
+      ? config.opcoes.filter(isRecord)
+      : [];
+
     return opcoes
-      .filter(isRecord)
-      .map((item) => ({
+      .map((item: Record<string, unknown>) => ({
         id: String(item.valor || "").trim(),
         titulo: String(item.titulo || "").trim(),
       }))
-      .filter((item) => item.id || item.titulo);
+      .filter((item: OpcaoFluxo) => Boolean(item.id || item.titulo));
   }
 
   return [];
@@ -71,7 +80,7 @@ function mensagemCombinaComOpcaoConfigurada(no: any, mensagemTexto: string) {
 
   const numeroOpcao = texto.match(/^(?:opcao |numero |n )?#?(\d{1,2})$/)?.[1] || null;
 
-  return opcoesConfiguradasDoNo(no).some((opcao) => {
+  return opcoesConfiguradasDoNo(no).some((opcao: OpcaoFluxo) => {
     const id = normalizarComparacao(opcao.id);
     const titulo = normalizarComparacao(opcao.titulo);
 
@@ -110,7 +119,7 @@ function mensagemPareceRespostaAgenda(no: any, mensagemTexto: string) {
 function mensagemCombinaComConexoes(no: any, conexoes: any[], mensagemTexto: string) {
   const resposta = resolverRespostaInterativa(no, mensagemTexto);
 
-  return conexoes.some((conexao) => {
+  return conexoes.some((conexao: any) => {
     const condicao = isRecord(conexao?.condicao_json)
       ? conexao.condicao_json
       : null;
