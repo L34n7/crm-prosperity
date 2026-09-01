@@ -777,10 +777,19 @@ function mensagemEhCurtaDeContinuidade(mensagem: string) {
   return /^(sim|nao|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|entendi|me mostra|mostra|manda|vamos|fechado)$/.test(texto);
 }
 
-function mensagemTemIntencaoAgenda(mensagem: string, estado: EstadoConversa) {
+function mensagemTemIntencaoAgenda(mensagem: string, _estado: EstadoConversa) {
   const texto = normalizarTextoIntencao(mensagem);
   return /\b(agenda|agendar|marcar|remarcar|reagendar|cancelar|horario|horarios|disponivel|disponibilidade|reuniao|demonstracao|amanha|hoje|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
-    /agend|remarc|reagend/i.test(`${estado.estagio} ${estado.proxima_acao || ""}`);
+    /\b\d{1,2}(?::\d{2}|\s*h)\b/.test(texto);
+}
+
+function sinalTransferenciaHumana(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  if (!texto) return false;
+  if (/\b(me transfere|me encaminha|transferir para|encaminhar para)\b/.test(texto)) return true;
+  if (/\b(quero|gostaria|preciso|posso|pode)\b.{0,30}\b(falar|conversar)\b.{0,30}\b(humano|atendente|pessoa|alguem|vendedor|comercial|suporte)\b/.test(texto)) return true;
+  if (/\b(falar|conversar)\b.{0,25}\b(com )?(um |uma )?(humano|atendente|pessoa|alguem|vendedor|comercial|suporte)\b/.test(texto)) return true;
+  return /^(atendente|humano|falar com atendente|falar com humano)$/.test(texto);
 }
 
 function selecionarFerramentasParaModelo(params: {
@@ -790,48 +799,47 @@ function selecionarFerramentasParaModelo(params: {
   agendamentosAtivos: any[];
   preexecutadas: Set<TipoFerramenta>;
 }) {
-  const { ativas, mensagem, estado, agendamentosAtivos, preexecutadas } = params;
+  const { ativas, mensagem, estado, preexecutadas } = params;
   const selecionadas = new Map<TipoFerramenta, Record<string, unknown>>();
   const texto = normalizarTextoIntencao(mensagem);
   const adicionar = (tipo: TipoFerramenta) => {
+    if ((tipo === "consultar_conhecimento" || tipo === "consultar_agenda") && preexecutadas.has(tipo)) return;
     const config = ativas.get(tipo);
     if (config) selecionadas.set(tipo, config);
   };
 
-  const querHumano = /\b(atendente|humano|pessoa|alguem|falar com|transferir)\b/.test(texto);
+  const statusAgenda = `${estado.estagio} ${estado.proxima_acao || ""}`.toLowerCase();
+  const estadoAgendaEmAndamento = /agend|remarc|reagend|demonstr|reuni|aguardar escolha/.test(statusAgenda);
+  const intencaoAgendaExplicita = mensagemTemIntencaoAgenda(mensagem, estado);
+  const referenciaCurtaAgenda = texto.length <= 40 && (
+    mensagemEhCurtaDeContinuidade(mensagem) ||
+    /^(?:\d{1,2})(?::\d{2})?(?:\s*h)?$/.test(texto) ||
+    /^(segunda|terca|quarta|quinta|sexta|sabado|domingo|hoje|amanha)$/.test(texto)
+  );
+  const continuacaoAgenda = estadoAgendaEmAndamento && referenciaCurtaAgenda;
   const querCancelar = /\b(cancelar|cancela|desmarcar|desmarca)\b/.test(texto);
-  const querRemarcar = /\b(remarcar|reagendar|mudar o horario|mudar horario|trocar o dia|trocar horario)\b/.test(texto) || estadoIndicaReagendamento(estado);
-  const intencaoAgenda = mensagemTemIntencaoAgenda(mensagem, estado);
-  const querContato = /\b(meus dados|meu cadastro|cadastro|meu email|meu e-mail|meu telefone|meu contato)\b/.test(texto);
+  const querRemarcarExplicito = /\b(remarcar|reagendar|mudar o horario|mudar horario|trocar o dia|trocar dia|trocar horario|mudar dia)\b/.test(texto);
+  const querRemarcar = querRemarcarExplicito || (continuacaoAgenda && estadoIndicaReagendamento(estado));
+  const querAgendar = /\b(agendar|marcar|reservar|confirmo|quero a demo|quero demonstracao)\b/.test(texto) ||
+    (continuacaoAgenda && /aguardar escolha|agend|demonstr|reuni/.test(statusAgenda) && /^(sim|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|vamos|fechado|\d{1,2}(?::\d{2})?(?:\s*h)?)$/.test(texto));
+  const querContato = /\b(meus dados|meu cadastro|meu email|meu e-mail|meu telefone|meu contato|quem sou)\b/.test(texto);
   const consultaBase = consultaConhecimentoAutomatica(mensagem);
   const perguntaGeral = /\?|\b(como|qual|quais|quanto|tem|possui|oferece|explica|explique)\b/.test(texto);
 
-  if (querHumano) {
-    adicionar("transferir_humano");
-    return selecionadas;
-  }
-
+  if (sinalTransferenciaHumana(mensagem)) adicionar("transferir_humano");
   if (querContato) adicionar("consultar_contato");
 
-  if (intencaoAgenda) {
-    if (!preexecutadas.has("consultar_agenda")) adicionar("consultar_agenda");
-    if (querCancelar) {
-      adicionar("cancelar_agendamento");
-    } else if (querRemarcar) {
-      adicionar("remarcar_agendamento");
-    } else {
-      if (agendamentosAtivos.length) adicionar("remarcar_agendamento");
-      adicionar("criar_agendamento");
-    }
+  if (querCancelar) {
+    adicionar("cancelar_agendamento");
+  } else if (querRemarcar && (intencaoAgendaExplicita || continuacaoAgenda)) {
+    adicionar("consultar_agenda");
+    adicionar("remarcar_agendamento");
+  } else if (intencaoAgendaExplicita || continuacaoAgenda) {
+    adicionar("consultar_agenda");
+    if (querAgendar) adicionar("criar_agendamento");
   }
 
-  if (!preexecutadas.has("consultar_conhecimento") && (consultaBase || (perguntaGeral && !intencaoAgenda))) {
-    adicionar("consultar_conhecimento");
-  }
-
-  if (ativas.has("transferir_humano")) adicionar("transferir_humano");
-
-  if (selecionadas.size === (ativas.has("transferir_humano") ? 1 : 0) && !mensagemEhCurtaDeContinuidade(mensagem)) {
+  if (!preexecutadas.has("consultar_conhecimento") && (consultaBase || (perguntaGeral && !intencaoAgendaExplicita && !continuacaoAgenda))) {
     adicionar("consultar_conhecimento");
   }
 
@@ -1675,17 +1683,9 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     let tokensInput = 0;
     let tokensOutput = 0;
     let tokensTotal = 0;
-    let tokensCached = 0;
-    let tokensCacheWrite = 0;
     let saidaFinal: SaidaAgente = { mensagens: [], estado: contexto.estado };
 
     for (let rodada = 0; rodada < MAX_RODADAS_FERRAMENTAS; rodada++) {
-      const cacheOptions = modelo.startsWith("gpt-5.6")
-        ? {
-            prompt_cache_key: `agente-ia:${agente.id}:${modelo}`,
-            prompt_cache_options: { mode: "implicit", ttl: "30m" },
-          }
-        : {};
       const response: any = await openai.responses.create({
         model: modelo,
         instructions,
@@ -1694,33 +1694,30 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         parallel_tool_calls: false,
         reasoning: { effort: "none" },
         text: { verbosity: "low", format: FORMATO_SAIDA },
-        ...cacheOptions,
       } as any);
       tokensInput += Number(response.usage?.input_tokens || 0);
       tokensOutput += Number(response.usage?.output_tokens || 0);
       tokensTotal += Number(response.usage?.total_tokens || 0);
-      tokensCached += Number(response.usage?.input_tokens_details?.cached_tokens || 0);
-      tokensCacheWrite += Number(response.usage?.input_tokens_details?.cache_write_tokens || 0);
 
       const chamadas = (response.output || []).filter((item: any) => item.type === "function_call");
       inputIa.push(...(response.output || []));
       if (!chamadas.length) {
-        const texto = String(response.output_text || "").trim();
+        const textoSaida = String(response.output_text || "").trim();
         try {
-          saidaFinal = normalizarSaida(JSON.parse(texto), contexto.estado);
+          saidaFinal = normalizarSaida(JSON.parse(textoSaida), contexto.estado);
         } catch {
-          saidaFinal = normalizarSaida(null, contexto.estado, texto);
+          saidaFinal = normalizarSaida(null, contexto.estado, textoSaida);
         }
         break;
       }
 
       for (const chamada of chamadas) {
         const nome = String(chamada.name || "");
-        if (!isTipoFerramenta(nome) || !ferramentasAtivas.has(nome)) {
+        if (!isTipoFerramenta(nome) || !ferramentasParaModelo.has(nome)) {
           inputIa.push({
             type: "function_call_output",
             call_id: chamada.call_id,
-            output: JSON.stringify({ ok: false, error: "Ferramenta não habilitada." }),
+            output: JSON.stringify({ ok: false, error: "Ferramenta não habilitada para esta mensagem." }),
           });
           continue;
         }
@@ -1784,8 +1781,6 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
           agente_id: agente.id,
           agente_execucao_id: execucaoId,
           conversa_id: pendencia.conversa_id,
-          cached_tokens: tokensCached,
-          cache_write_tokens: tokensCacheWrite,
           preconsultas_backend: Array.from(preexecutadas),
           ferramentas_modelo: Array.from(ferramentasParaModelo.keys()),
         },
@@ -1806,8 +1801,6 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         metadata_json: {
           supersedido_por_novas_mensagens: true,
           acao_critica_executada: ctx.acaoCriticaExecutada,
-          cached_tokens: tokensCached,
-          cache_write_tokens: tokensCacheWrite,
           preconsultas_backend: Array.from(preexecutadas),
           ferramentas_modelo: Array.from(ferramentasParaModelo.keys()),
         },
@@ -1857,8 +1850,6 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       metadata_json: {
         quantidade_mensagens_saida: saidaFinal.mensagens.length,
         estado_estruturado: saidaFinal.estado,
-        cached_tokens: tokensCached,
-        cache_write_tokens: tokensCacheWrite,
         resposta_deterministica_pos_ferramenta: Boolean(ctx.respostaDeterministica?.length),
         agendamentos_ativos_confirmados: ctx.agendamentosAtivos.length,
         preconsultas_backend: Array.from(preexecutadas),
