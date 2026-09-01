@@ -71,14 +71,10 @@ export async function POST(request: Request) {
       input: [{ role: "user", content: mensagem }],
       reasoning: { effort: "none" },
       text: { verbosity: "low" },
-      prompt_cache_key: `agente-ia-teste:${id}:${modelo}`,
-      prompt_cache_options: { mode: "implicit", ttl: "30m" },
     } as any);
     const tokensInput = Number(response.usage?.input_tokens || 0);
     const tokensOutput = Number(response.usage?.output_tokens || 0);
     const tokensTotal = Number(response.usage?.total_tokens || 0);
-    const tokensCached = Number(response.usage?.input_tokens_details?.cached_tokens || 0);
-    const tokensCacheWrite = Number(response.usage?.input_tokens_details?.cache_write_tokens || 0);
 
     if (tokensTotal > 0) {
       await registrarUsoTokensIa({
@@ -91,8 +87,6 @@ export async function POST(request: Request) {
         usuarioId: auth.usuario.id,
         metadata: {
           agente_id: id,
-          cached_tokens: tokensCached,
-          cache_write_tokens: tokensCacheWrite,
         },
       });
     }
@@ -105,8 +99,6 @@ export async function POST(request: Request) {
         input: tokensInput,
         output: tokensOutput,
         total: tokensTotal,
-        cached: tokensCached,
-        cache_write: tokensCacheWrite,
       },
     });
   } catch (error) {
