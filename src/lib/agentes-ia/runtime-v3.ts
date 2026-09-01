@@ -757,8 +757,12 @@ function consultaConhecimentoAutomatica(mensagem: string) {
   if (/\b(estoque|erp|pdv|nota fiscal|nfe)\b/.test(texto)) {
     return "estoque ERP gestão";
   }
-  if (/\b(google calendar|whatsapp|integracao|integracoes)\b/.test(texto)) {
-    return texto.includes("google") ? "agenda Google Calendar integração" : "WhatsApp integrações atendimento";
+  if (/\b(google calendar|whatsapp|integracao|integracoes|integrar|integra|conexao|conexoes|conectar|conecta|compativel|compatibilidade)\b/.test(texto)) {
+    if (texto.includes("google")) return "agenda Google Calendar integração";
+    if (/\bixc\b/.test(texto)) return "integração iXC CRM Prosperity";
+    if (/\bimobiliari\w*/.test(texto)) return "integração imobiliária CRM Prosperity";
+    if (texto.includes("whatsapp")) return "WhatsApp integrações atendimento";
+    return "integrações CRM Prosperity";
   }
   if (/\b(tem|possui|oferece)\b.*\b(ia|inteligencia artificial)\b|\bagentes? de ia\b/.test(texto)) {
     return "IA automações agentes";
@@ -783,19 +787,45 @@ function estadoTemAgendaEmAndamento(estado: EstadoConversa) {
   );
 }
 
+function textoHorarioAgendaNormalizado(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem)
+    .replace(/[?!.,;:]+$/g, "")
+    .trim();
+  const match = texto.match(
+    /^(?:(?:tem|pode ser|pode|as)\s+)?(\d{1,2})(?::(\d{2}))?\s*(?:h|hr|hrs|hora|horas)$/
+  );
+  if (!match) return mensagem;
+  const hora = Number(match[1]);
+  const minuto = Number(match[2] || 0);
+  if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) return mensagem;
+  return `às ${hora}:${String(minuto).padStart(2, "0")}`;
+}
+
 function mensagemEhFragmentoContextualAgenda(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   if (!texto || texto.length > 80) return false;
   if (/^(?:de |pela |a )?(?:manha|tarde|noite)$/.test(texto)) return true;
-  if (/^(?:depois|apos|antes|ate|a partir)(?:\s+das?|\s+de|\s+as?)?\s+\d{1,2}(?::\d{2})?(?:\s*h(?:r|rs)?)?$/.test(texto)) return true;
+  if (/^(?:depois|apos|antes|ate|a partir)(?:\s+das?|\s+de|\s+as?)?\s+\d{1,2}(?::\d{2})?(?:\s*(?:h|hr|hrs|hora|horas))?[?!.,;:]?$/.test(texto)) return true;
+  if (/^(?:(?:tem|pode ser|pode|as)\s+)?\d{1,2}(?::\d{2})?\s*(?:h|hr|hrs|hora|horas)[?!.,;:]?$/.test(texto)) return true;
   if (/^(?:mais cedo|mais tarde|nesse horario|esse horario|o primeiro|o segundo|o terceiro)$/.test(texto)) return true;
   return false;
 }
 
+function mensagemRecusaReferenciaTemporal(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  if (!texto) return false;
+  const referencia = "(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|dia\\s+\\d{1,2}|\\d{1,2}[\\/.-]\\d{1,2})";
+  const recusa = "(?:nao\\s+(?:consigo|posso|da|vai dar)|nao da|fica ruim|ficou ruim|impossivel|sem chance)";
+  return new RegExp(`\\b${referencia}\\b.{0,45}\\b${recusa}\\b|\\b${recusa}\\b.{0,45}\\b${referencia}\\b`).test(texto);
+}
+
 function mensagemTemIntencaoAgenda(mensagem: string, estado: EstadoConversa) {
   const texto = normalizarTextoIntencao(mensagem);
+  if (mensagemRecusaReferenciaTemporal(mensagem)) {
+    return estadoTemAgendaEmAndamento(estado);
+  }
   const explicita = /\b(agenda|agendar|marcar|remarcar|reagendar|cancelar|horario|horarios|disponivel|disponibilidade|reuniao|demonstracao|amanha|hoje|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
-    /\b\d{1,2}(?::\d{2}|\s*h)\b/.test(texto);
+    /\b\d{1,2}(?::\d{2}|\s*(?:h|hr|hrs|hora|horas))\b/.test(texto);
   if (explicita) return true;
   return estadoTemAgendaEmAndamento(estado) && mensagemEhFragmentoContextualAgenda(mensagem);
 }
@@ -822,9 +852,10 @@ function mensagemAgendaComContexto(
         /\b\d{4}-\d{2}-\d{2}\b/.test(normalizado);
     });
 
+  const mensagemInterpretavel = textoHorarioAgendaNormalizado(mensagem);
   return referencia?.content
-    ? `${String(referencia.content).trim()}\nCliente: ${mensagem}`
-    : mensagem;
+    ? `${String(referencia.content).trim()}\nCliente: ${mensagemInterpretavel}`
+    : mensagemInterpretavel;
 }
 
 function sinalTransferenciaHumana(mensagem: string) {
@@ -854,11 +885,12 @@ function selecionarFerramentasParaModelo(params: {
 
   const statusAgenda = `${estado.estagio} ${estado.proxima_acao || ""}`.toLowerCase();
   const estadoAgendaEmAndamento = estadoTemAgendaEmAndamento(estado);
+  const recusaTemporal = mensagemRecusaReferenciaTemporal(mensagem);
   const intencaoAgendaExplicita = mensagemTemIntencaoAgenda(mensagem, estado);
   const referenciaCurtaAgenda = texto.length <= 40 && (
     mensagemEhCurtaDeContinuidade(mensagem) ||
     mensagemEhFragmentoContextualAgenda(mensagem) ||
-    /^(?:\d{1,2})(?::\d{2})?(?:\s*h)?$/.test(texto) ||
+    /^(?:\d{1,2})(?::\d{2})?(?:\s*(?:h|hr|hrs|hora|horas))?$/.test(texto) ||
     /^(segunda|terca|quarta|quinta|sexta|sabado|domingo|hoje|amanha)$/.test(texto)
   );
   const continuacaoAgenda = estadoAgendaEmAndamento && referenciaCurtaAgenda;
@@ -866,7 +898,7 @@ function selecionarFerramentasParaModelo(params: {
   const querRemarcarExplicito = /\b(remarcar|reagendar|mudar o horario|mudar horario|trocar o dia|trocar dia|trocar horario|mudar dia)\b/.test(texto);
   const querRemarcar = querRemarcarExplicito || (continuacaoAgenda && estadoIndicaReagendamento(estado));
   const querAgendar = /\b(agendar|marcar|reservar|confirmo|quero a demo|quero demonstracao)\b/.test(texto) ||
-    (continuacaoAgenda && /aguardar escolha|agend|demonstr|reuni/.test(statusAgenda) && /^(sim|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|vamos|fechado|\d{1,2}(?::\d{2})?(?:\s*h)?)$/.test(texto));
+    (continuacaoAgenda && /aguardar escolha|agend|demonstr|reuni/.test(statusAgenda) && /^(sim|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|vamos|fechado|\d{1,2}(?::\d{2})?(?:\s*(?:h|hr|hrs|hora|horas))?)$/.test(texto));
   const querContato = /\b(meus dados|meu cadastro|meu email|meu e-mail|meu telefone|meu contato|quem sou)\b/.test(texto);
   const consultaBase = consultaConhecimentoAutomatica(mensagem);
   const perguntaGeral = /\?|\b(como|qual|quais|quanto|tem|possui|oferece|explica|explique)\b/.test(texto);
@@ -876,10 +908,10 @@ function selecionarFerramentasParaModelo(params: {
 
   if (querCancelar) {
     adicionar("cancelar_agendamento");
-  } else if (querRemarcar && (intencaoAgendaExplicita || continuacaoAgenda)) {
+  } else if (!recusaTemporal && querRemarcar && (intencaoAgendaExplicita || continuacaoAgenda)) {
     adicionar("consultar_agenda");
     adicionar("remarcar_agendamento");
-  } else if (intencaoAgendaExplicita || continuacaoAgenda) {
+  } else if (!recusaTemporal && (intencaoAgendaExplicita || continuacaoAgenda)) {
     adicionar("consultar_agenda");
     if (querAgendar) adicionar("criar_agendamento");
   }
@@ -1434,7 +1466,8 @@ async function preExecutarConsultasObvias(
     const interpretacao = interpretarDataHorarioAgenda(mensagemContextual, timezone);
     const temIntencaoAgenda = mensagemTemIntencaoAgenda(mensagem, ctx.estadoConversa);
     const referencias = referenciasTemporaisDistintas(mensagemContextual);
-    if (temIntencaoAgenda && interpretacao.data && referencias <= 1) {
+    const recusaTemporal = mensagemRecusaReferenciaTemporal(mensagem);
+    if (!recusaTemporal && temIntencaoAgenda && interpretacao.data && referencias <= 1) {
       try {
         const argumentos = { data: interpretacao.data };
         const resultado = await executarFerramenta("consultar_agenda", argumentos, ctx);
