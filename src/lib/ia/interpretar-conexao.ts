@@ -9,6 +9,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const MODELO_INTERPRETACAO =
+  process.env.OPENAI_FLOW_INTERPRETER_MODEL?.trim() || "gpt-5.6-luna";
+
 type ConexaoIA = {
   id: string;
   nome: string | null;
@@ -133,7 +136,7 @@ export async function interpretarConexaoComIA({
     await verificarSaldoTokensIa(empresaId);
   }
 
-  const modelo = "gpt-5.4-mini";
+  const modelo = MODELO_INTERPRETACAO;
   const resposta = await openai.responses.create({
     model: modelo,
     input: [
@@ -160,7 +163,9 @@ Regras:
         }),
       },
     ],
+    reasoning: { effort: "none" },
     text: {
+      verbosity: "low",
       format: {
         type: "json_schema",
         name: "decisao_conexao",
@@ -183,7 +188,7 @@ Regras:
         },
       },
     },
-  });
+  } as any);
 
   if (empresaId) {
     await registrarUsoTokensIa({
