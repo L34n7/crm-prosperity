@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/corrigir-conflitos-disparo-anterior-contador.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
