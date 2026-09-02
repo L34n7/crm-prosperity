@@ -22,8 +22,8 @@ jobs:
           from pathlib import Path
           p = Path('src/lib/automacoes/process-automation-engine.ts')
           s = p.read_text()
-          antigo = '''              if (contexto.fluxoAindaRodando) {\n                const resultadoAgente = await interceptarMensagemAgenteIa(inputReavaliado);\n                if (resultadoAgente) {\n                  return { acao: "concluir" as const, resultado: resultadoAgente };\n                }\n                return {\n                  acao: "adiar" as const,\n                  motivo: "fluxo_ainda_rodando_sem_agente_disponivel",\n                };\n              }\n'''
-          novo = '''              if (contexto.fluxoAindaRodando) {\n                // Nunca permitimos o Agente assumir enquanto o Fluxo ainda esta\n                // executando. A mensagem permanece persistida e a fila reavalia\n                // depois, evitando duas respostas concorrentes.\n                return {\n                  acao: "adiar" as const,\n                  motivo: "fluxo_ainda_rodando",\n                };\n              }\n'''
+          antigo = '''      if (contexto.fluxoAindaRodando) {\n        const resultadoAgente = await interceptarMensagemAgenteIa(inputReavaliado);\n        if (resultadoAgente) {\n          return { acao: "concluir" as const, resultado: resultadoAgente };\n        }\n        return {\n          acao: "adiar" as const,\n          motivo: "fluxo_ainda_rodando_sem_agente_disponivel",\n        };\n      }\n'''
+          novo = '''      if (contexto.fluxoAindaRodando) {\n        // Nunca permitimos o Agente assumir enquanto o Fluxo ainda esta\n        // executando. A mensagem permanece persistida e a fila reavalia\n        // depois, evitando duas respostas concorrentes.\n        return {\n          acao: "adiar" as const,\n          motivo: "fluxo_ainda_rodando",\n        };\n      }\n'''
           if antigo not in s:
               raise SystemExit('bloco esperado nao encontrado')
           p.write_text(s.replace(antigo, novo, 1))
