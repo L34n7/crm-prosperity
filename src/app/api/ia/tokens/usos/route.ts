@@ -5,6 +5,11 @@ import { can } from "@/lib/permissoes/frontend";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function numeroInteiroNaoNegativo(valor: unknown, fallback = 0) {
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? Math.max(Math.round(numero), 0) : fallback;
+}
+
 export async function GET(request: Request) {
   const resultado = await getUsuarioContexto();
 
@@ -67,7 +72,30 @@ export async function GET(request: Request) {
     );
   }
 
-  const usos = data ?? [];
+  // O ledger interno pode conter custos e precificação do provider em metadata_json.
+  // A API da empresa nunca devolve esses dados econômicos: o cliente enxerga apenas
+  // seus tokens Prosperity consumidos e as informações operacionais do uso.
+  const usos = (data ?? []).map((uso) => {
+    const metadata =
+      uso.metadata_json && typeof uso.metadata_json === "object"
+        ? (uso.metadata_json as Record<string, unknown>)
+        : {};
+    const tokensProsperity = numeroInteiroNaoNegativo(
+      metadata.tokens_equivalentes,
+      numeroInteiroNaoNegativo(uso.tokens_total)
+    );
+
+    return {
+      id: uso.id,
+      origem: uso.origem,
+      modelo: uso.modelo,
+      tokens_input: uso.tokens_input,
+      tokens_output: uso.tokens_output,
+      tokens_total: tokensProsperity,
+      created_at: uso.created_at,
+    };
+  });
+
   const totais = usos.reduce(
     (acc, uso) => {
       acc.tokens_input += Number(uso.tokens_input || 0);

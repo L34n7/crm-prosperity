@@ -25,8 +25,8 @@ const checkoutEssencial =
 
 const pacotes: PacoteTokens[] = [
   {
-    nome: "Pacote 80 mil tokens",
-    tokens: "80.000 tokens",
+    nome: "Pacote 50 mil tokens",
+    tokens: "50.000 tokens",
     preco: "R$ 25",
     descricao:
       "Reforco rapido para manter automacoes, transcricoes e analises com IA funcionando ate a renovacao.",
@@ -39,17 +39,16 @@ const pacotes: PacoteTokens[] = [
     checkoutUrl: process.env.NEXT_PUBLIC_TOKEN_PACKAGE_1M_URL || "",
   },
   {
-    nome: "Pacote 400 mil",
-    tokens: "400.000 tokens",
+    nome: "Pacote 200 mil tokens",
+    tokens: "200.000 tokens",
     preco: "R$ 100",
     descricao:
-      "Melhor custo por volume para operacoes que usam IA com frequencia durante o atendimento. Garanta a sua operação até a renovacao",
-    economia: "Economize R$25 comparado a 5 pacotes de 80 mil.",
+      "Mais volume em uma unica compra para complementar o saldo ate a renovacao do plano.",
     recursos: [
       "Maior folga para automacoes com IA",
-      "Melhor custo por mil tokens",
-      "Recomendado para equipes com alto volume",
-      "Mantem analises e transcricoes operando",
+      "Quatro vezes o volume do pacote de R$ 25",
+      "Recomendado para picos maiores de atendimento",
+      "Compra avulsa, sem alterar o plano",
     ],
     checkoutUrl: process.env.NEXT_PUBLIC_TOKEN_PACKAGE_5M_URL || "",
     destaque: true,
@@ -111,7 +110,7 @@ export default function PacotesTokensPage() {
 
           <div className={styles.heroPanel}>
             <span>Planos atuais</span>
-            <strong>Basico: 80 mil tokens</strong>
+            <strong>Basico: 100 mil tokens</strong>
             <strong>Essencial: 400 mil tokens</strong>
             <Link href="/ia/tokens" className={styles.heroLink}>
               Ver extrato de consumo
@@ -128,7 +127,7 @@ export default function PacotesTokensPage() {
               }`}
             >
               {pacote.destaque && (
-                <span className={styles.cornerSeal}>Melhor valor</span>
+                <span className={styles.cornerSeal}>Mais volume</span>
               )}
 
               <div className={styles.badgeRow}>
