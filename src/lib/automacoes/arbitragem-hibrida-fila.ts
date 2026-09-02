@@ -41,6 +41,12 @@ type ContextoReavaliacao = {
   tentativas: number;
 };
 
+type SaidaFluxoAposMensagem = {
+  id: string;
+  created_at: string;
+  automacao_no_id?: string | null;
+};
+
 function inteiroAmbiente(
   valor: string | undefined,
   fallback: number,
@@ -129,7 +135,9 @@ async function publicarJobQstash(jobId: string, delayMs: number) {
   }
 }
 
-function tipoMensagemValido(valor: unknown): AutomationEngineInput["mensagemTipo"] {
+function tipoMensagemValido(
+  valor: unknown
+): AutomationEngineInput["mensagemTipo"] {
   const tipo = String(valor || "").trim().toLowerCase();
   if (["texto", "imagem", "documento", "audio", "video"].includes(tipo)) {
     return tipo as AutomationEngineInput["mensagemTipo"];
@@ -215,8 +223,8 @@ export async function deferirMensagemSeFluxoRodando(
     return null;
   }
 
-  // Se a execucao esta propositalmente estacionada em um job longo, nao se trata
-  // da pequena janela de concorrencia entre mensagens sequenciais do fluxo.
+  // Um job longo representa uma pausa intencional do fluxo, não a pequena
+  // janela em que ele ainda está enviando uma sequência de mensagens.
   if (
     await execucaoEstaEstacionadaEmJobLongo({
       empresaId: input.empresaId,
@@ -391,6 +399,77 @@ async function carregarInputOriginal(job: JobArbitragemHibrida) {
   } satisfies AutomationEngineInput;
 }
 
+async function buscarSaidaFluxoAposMensagem(
+  job: JobArbitragemHibrida
+): Promise<SaidaFluxoAposMensagem | null> {
+  const mensagemId = String(job.payload_json?.mensagem_id || "").trim();
+  if (!mensagemId) return null;
+
+  const { data: mensagemOriginal, error: mensagemError } = await supabaseAdmin
+    .from("mensagens")
+    .select("created_at")
+    .eq("id", mensagemId)
+    .eq("empresa_id", job.empresa_id)
+    .eq("conversa_id", job.conversa_id)
+    .eq("remetente_tipo", "contato")
+    .maybeSingle();
+
+  if (mensagemError) {
+    throw new Error(
+      `Erro ao consultar ordem da mensagem diferida: ${mensagemError.message}`
+    );
+  }
+
+  if (!mensagemOriginal?.created_at) return null;
+
+  const { data: saidaFluxo, error: saidaError } = await supabaseAdmin
+    .from("mensagens")
+    .select("id, created_at, automacao_no_id")
+    .eq("empresa_id", job.empresa_id)
+    .eq("conversa_id", job.conversa_id)
+    .eq("remetente_tipo", "bot")
+    .eq("automacao_execucao_id", job.execucao_id)
+    .gt("created_at", mensagemOriginal.created_at)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (saidaError) {
+    throw new Error(
+      `Erro ao verificar resposta do fluxo apos mensagem diferida: ${saidaError.message}`
+    );
+  }
+
+  return (saidaFluxo as SaidaFluxoAposMensagem | null) || null;
+}
+
+async function concluirJob(params: {
+  job: JobArbitragemHibrida;
+  payload: Record<string, unknown>;
+  resultado: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const agora = new Date().toISOString();
+
+  await supabaseAdmin
+    .from("fila_processamento_auto")
+    .update({
+      status: "executado",
+      payload_json: {
+        ...params.payload,
+        processado_em: agora,
+        resultado: params.resultado,
+        ...(params.metadata || {}),
+      },
+      locked_at: null,
+      executed_at: agora,
+      erro: null,
+      updated_at: agora,
+    })
+    .eq("id", params.job.id)
+    .eq("status", "executando");
+}
+
 export async function processarJobArbitragemHibrida(params: {
   jobId: string;
   processar: (
@@ -496,6 +575,49 @@ export async function processarJobArbitragemHibrida(params: {
       });
     }
 
+    // A mensagem foi recebida no meio de uma sequência. Se a mesma execução
+    // enviou qualquer saída depois dela, essa saída é a continuação visível da
+    // conversa. A mensagem antiga não pode ser reinterpretada como resposta a
+    // um CTA que só apareceu depois, nem ser entregue ao Agente retroativamente.
+    if (!fluxoAindaRodando) {
+      const saidaFluxo = await buscarSaidaFluxoAposMensagem(job);
+
+      if (saidaFluxo) {
+        await concluirJob({
+          job,
+          payload,
+          resultado: "respondida_pelo_fluxo_apos_diferimento",
+          metadata: {
+            mensagem_fluxo_id: saidaFluxo.id,
+            mensagem_fluxo_em: saidaFluxo.created_at,
+            mensagem_fluxo_no_id: saidaFluxo.automacao_no_id || null,
+          },
+        });
+
+        console.info(
+          "[ARBITRAGEM HIBRIDA] Mensagem não reprocessada porque o fluxo respondeu depois dela",
+          {
+            jobId: job.id,
+            mensagemId: String(payload.mensagem_id || ""),
+            execucaoId: job.execucao_id,
+            mensagemFluxoId: saidaFluxo.id,
+          }
+        );
+
+        return {
+          ok: true,
+          processado: true,
+          jobId: job.id,
+          tipoJob: TIPO_JOB_ARBITRAGEM_HIBRIDA,
+          motivo: "fluxo_respondeu_apos_mensagem_diferida",
+          resultado: {
+            status: "mensagem_absorvida_pela_sequencia_do_fluxo",
+            mensagemFluxoId: saidaFluxo.id,
+          },
+        };
+      }
+    }
+
     const input = await carregarInputOriginal(job);
     const decisao = await params.processar(input, {
       fluxoAindaRodando,
@@ -518,22 +640,11 @@ export async function processarJobArbitragemHibrida(params: {
       });
     }
 
-    await supabaseAdmin
-      .from("fila_processamento_auto")
-      .update({
-        status: "executado",
-        payload_json: {
-          ...payload,
-          processado_em: new Date().toISOString(),
-          resultado: "arbitragem_reavaliada",
-        },
-        locked_at: null,
-        executed_at: new Date().toISOString(),
-        erro: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", job.id)
-      .eq("status", "executando");
+    await concluirJob({
+      job,
+      payload,
+      resultado: "arbitragem_reavaliada",
+    });
 
     return {
       ok: true,
@@ -608,9 +719,7 @@ export async function acordarArbitragensHibridasPendentes(params: {
     .eq("tipo_job", TIPO_JOB_ARBITRAGEM_HIBRIDA)
     .eq("status", "pendente");
 
-  await Promise.all(
-    jobs.map((job) => publicarJobQstash(job.id, 1_000))
-  );
+  await Promise.all(jobs.map((job) => publicarJobQstash(job.id, 1_000)));
 
   return jobs.length;
 }
