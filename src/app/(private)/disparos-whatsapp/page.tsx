@@ -3984,8 +3984,9 @@ export default function DisparosWhatsAppPage() {
           integracao_whatsapp_id: integracaoId,
           template_id: templateId,
           nome_campanha: nomeCampanhaDisparo,
+          // CRM_LISTA_FRIA_CONFIRMACAO_DIRETA_V1
           confirmacao_responsabilidade_lista_fria:
-            utilityComListaFria &&
+            templateComListaFria &&
             confirmacaoResponsabilidadeListaFria,
           destinatarios,
         }),
