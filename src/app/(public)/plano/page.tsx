@@ -113,7 +113,7 @@ export default function PlanoPage() {
       badge: "Entrada inteligente",
       recursos: [
         "2 usuários inclusos",
-        "150 mil de tokens de IA",
+        "100 mil de tokens de IA",
         "API Oficial do WhatsApp inclusa",
         "Atendimento automatizado com IA",
         "Respostas inteligentes em tempo real",

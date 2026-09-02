@@ -237,7 +237,7 @@ const PLANS = [
       "Para começar com atendimento automatizado, organização profissional e IA integrada.",
     features: [
       "2 usuários inclusos",
-      "150 mil tokens de IA",
+      "100 mil tokens de IA",
       "API Oficial do WhatsApp inclusa",
       "Atendimento automatizado com IA",
       "Disparos e relatórios operacionais",
