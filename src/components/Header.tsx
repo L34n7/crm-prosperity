@@ -89,7 +89,7 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
       "Para começar com atendimento automatizado, organização profissional e IA integrada.",
     precoOriginal: "R$ 197/mês",
     preco: "R$ 137/mês",
-    observacao: "2 usuários e 1 milhão de tokens de IA.",
+    observacao: "2 usuários e 100 mil tokens de IA.",
     recursos: [
       "API Oficial do WhatsApp inclusa",
       "Atendimento automatizado com IA",
@@ -108,7 +108,7 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
       "Para equipes que precisam de mais automação, IA e volume para escalar vendas e atendimento.",
     precoOriginal: "R$ 367/mês",
     preco: "R$ 267/mês",
-    observacao: "6 usuários e 5 milhões de tokens de IA.",
+    observacao: "6 usuários e 400 mil tokens de IA.",
     recursos: [
       "Atendimento automatizado avançado",
       "IA treinável para responder clientes",
@@ -1222,13 +1222,13 @@ export default function Header({
               <div className={styles.tokenAlertOffers}>
                 <div>
                   <span>Pacote rápido</span>
-                  <strong>1 mi tokens</strong>
+                  <strong>50 mil tokens</strong>
                   <small>R$ 25</small>
                 </div>
 
                 <div>
-                  <span>Melhor valor</span>
-                  <strong>5 mi tokens</strong>
+                  <span>Mais volume</span>
+                  <strong>200 mil tokens</strong>
                   <small>R$ 100</small>
                 </div>
               </div>
