@@ -1,16 +1,14 @@
-name: Aplicar arbitragem hibrida
+name: aplicar-arbitragem-hibrida
 
 on:
   push:
-    branches:
-      - tmp/arbitragem-hibrida-rodando-20260902
+    branches: ["tmp/arbitragem-hibrida-rodando-20260902"]
 
 permissions:
   contents: write
 
 jobs:
   aplicar:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,9 +16,10 @@ jobs:
           ref: tmp/arbitragem-hibrida-rodando-20260902
           fetch-depth: 0
 
-      - name: Aplicar integracao no motor
-        shell: python
+      - name: aplicar
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path("src/lib/automacoes/process-automation-engine.ts")
@@ -36,230 +35,202 @@ jobs:
           fim = texto.index("export async function processarFilaProcessamentoAutoPorId(jobId: string) {", inicio)
 
           nova_secao = r'''async function acordarArbitragemDepoisDaExecucao(params: {
-  empresaId: string;
-  execucaoId?: string | null;
-}) {
-  const execucaoId = String(params.execucaoId || "").trim();
-  if (!execucaoId) return;
+            empresaId: string;
+            execucaoId?: string | null;
+          }) {
+            const execucaoId = String(params.execucaoId || "").trim();
+            if (!execucaoId) return;
 
-  await acordarArbitragensHibridasPendentes({
-    empresaId: params.empresaId,
-    execucaoId,
-  });
-}
+            await acordarArbitragensHibridasPendentes({
+              empresaId: params.empresaId,
+              execucaoId,
+            });
+          }
 
-async function processarDepoisDasRotinas(
-  input: AutomationEngineInput,
-  opcoes?: {
-    permitirDiferimento?: boolean;
-  }
-) {
-  if (opcoes?.permitirDiferimento !== false) {
-    const resultadoDiferimento = await deferirMensagemSeFluxoRodando(input);
+          async function processarDepoisDasRotinas(
+            input: AutomationEngineInput,
+            opcoes?: { permitirDiferimento?: boolean }
+          ) {
+            if (opcoes?.permitirDiferimento !== false) {
+              const resultadoDiferimento = await deferirMensagemSeFluxoRodando(input);
+              if (resultadoDiferimento) return resultadoDiferimento;
+            }
 
-    if (resultadoDiferimento) {
-      return resultadoDiferimento;
-    }
-  }
+            const resultadoAgente = await interceptarMensagemAgenteIa(input);
+            if (resultadoAgente) return resultadoAgente;
 
-  // Depois das rotinas operacionais, o agente continua tendo prioridade sobre
-  // intencoes e fluxos. A unica excecao e a pequena janela em que um fluxo
-  // ainda esta rodando; nesse caso a mensagem e reavaliada pela fila existente.
-  const resultadoAgente = await interceptarMensagemAgenteIa(input);
-  if (resultadoAgente) {
-    return resultadoAgente;
-  }
+            const resultadoIntencoes = await processarIntencoesMensagem({
+              empresaId: input.empresaId,
+              conversaId: input.conversaId,
+              contatoId: input.contatoId || null,
+              mensagemId: input.mensagemId || null,
+              mensagemTexto: input.mensagemTexto || "",
+              mensagemTipo: input.mensagemTipo || null,
+              numeroDestino: input.numeroDestino || null,
+            });
 
-  const resultadoIntencoes = await processarIntencoesMensagem({
-    empresaId: input.empresaId,
-    conversaId: input.conversaId,
-    contatoId: input.contatoId || null,
-    mensagemId: input.mensagemId || null,
-    mensagemTexto: input.mensagemTexto || "",
-    mensagemTipo: input.mensagemTipo || null,
-    numeroDestino: input.numeroDestino || null,
-  });
+            if (resultadoIntencoes?.interrompeuFluxo || resultadoIntencoes?.somenteIntencao) {
+              return {
+                ok: true,
+                status: resultadoIntencoes.interrompeuFluxo
+                  ? "intencao_interrompeu_fluxo"
+                  : "intencao_processada",
+                execucaoId: resultadoIntencoes.execucaoId,
+                intencoesExecutadas: resultadoIntencoes.intencoesExecutadas,
+              };
+            }
 
-  if (resultadoIntencoes?.interrompeuFluxo || resultadoIntencoes?.somenteIntencao) {
-    return {
-      ok: true,
-      status: resultadoIntencoes.interrompeuFluxo
-        ? "intencao_interrompeu_fluxo"
-        : "intencao_processada",
-      execucaoId: resultadoIntencoes.execucaoId,
-      intencoesExecutadas: resultadoIntencoes.intencoesExecutadas,
-    };
-  }
+            const inputPrincipal: AutomationEngineInput =
+              resultadoIntencoes?.mensagemFluxo &&
+              resultadoIntencoes.mensagemFluxo !== String(input.mensagemTexto || "")
+                ? { ...input, mensagemTexto: resultadoIntencoes.mensagemFluxo }
+                : input;
 
-  const inputPrincipal: AutomationEngineInput =
-    resultadoIntencoes?.mensagemFluxo &&
-    resultadoIntencoes.mensagemFluxo !== String(input.mensagemTexto || "")
-      ? { ...input, mensagemTexto: resultadoIntencoes.mensagemFluxo }
-      : input;
+            const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(inputPrincipal);
 
-  const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(inputPrincipal);
+            if (resultadoPreferencia) {
+              await continuarNosEspeciaisDepoisDoMotor({
+                empresaId: inputPrincipal.empresaId,
+                conversaId: inputPrincipal.conversaId,
+                numeroDestino: inputPrincipal.numeroDestino,
+                mensagemTexto: inputPrincipal.mensagemTexto,
+                execucaoId: resultadoPreferencia.execucaoId,
+              });
 
-  if (resultadoPreferencia) {
-    await continuarNosEspeciaisDepoisDoMotor({
-      empresaId: inputPrincipal.empresaId,
-      conversaId: inputPrincipal.conversaId,
-      numeroDestino: inputPrincipal.numeroDestino,
-      mensagemTexto: inputPrincipal.mensagemTexto,
-      execucaoId: resultadoPreferencia.execucaoId,
-    });
+              await acordarArbitragemDepoisDaExecucao({
+                empresaId: inputPrincipal.empresaId,
+                execucaoId: resultadoPreferencia.execucaoId,
+              });
 
-    await acordarArbitragemDepoisDaExecucao({
-      empresaId: inputPrincipal.empresaId,
-      execucaoId: resultadoPreferencia.execucaoId,
-    });
+              return resultadoPreferencia;
+            }
 
-    return resultadoPreferencia;
-  }
+            const resultado = await processAutomationEngineAgenda(inputPrincipal);
+            const execucaoIdResultado =
+              resultado && typeof resultado === "object" && "execucaoId" in resultado
+                ? String(resultado.execucaoId || "") || null
+                : null;
 
-  const resultado = await processAutomationEngineAgenda(inputPrincipal);
-  const execucaoIdResultado =
-    resultado && typeof resultado === "object" && "execucaoId" in resultado
-      ? String(resultado.execucaoId || "") || null
-      : null;
+            await continuarNosEspeciaisDepoisDoMotor({
+              empresaId: inputPrincipal.empresaId,
+              conversaId: inputPrincipal.conversaId,
+              numeroDestino: inputPrincipal.numeroDestino,
+              mensagemTexto: inputPrincipal.mensagemTexto,
+              execucaoId: execucaoIdResultado,
+            });
 
-  await continuarNosEspeciaisDepoisDoMotor({
-    empresaId: inputPrincipal.empresaId,
-    conversaId: inputPrincipal.conversaId,
-    numeroDestino: inputPrincipal.numeroDestino,
-    mensagemTexto: inputPrincipal.mensagemTexto,
-    execucaoId: execucaoIdResultado,
-  });
+            await acordarArbitragemDepoisDaExecucao({
+              empresaId: inputPrincipal.empresaId,
+              execucaoId: execucaoIdResultado,
+            });
 
-  await acordarArbitragemDepoisDaExecucao({
-    empresaId: inputPrincipal.empresaId,
-    execucaoId: execucaoIdResultado,
-  });
+            return resultado;
+          }
 
-  return resultado;
-}
+          export async function processAutomationEngine(input: AutomationEngineInput) {
+            const resultadoTemporal = await ignorarMensagemTemporalmenteInvalida(input);
+            if (resultadoTemporal) return resultadoTemporal;
 
-export async function processAutomationEngine(input: AutomationEngineInput) {
-  const resultadoTemporal = await ignorarMensagemTemporalmenteInvalida(input);
+            const checkoutPendente = await interceptarMensagemCheckoutPendente({
+              empresaId: input.empresaId,
+              conversaId: input.conversaId,
+            });
+            if (checkoutPendente) return checkoutPendente;
 
-  if (resultadoTemporal) {
-    return resultadoTemporal;
-  }
+            const resultadoRotinas = await processarMensagemRecebidaRotinas({
+              empresaId: input.empresaId,
+              conversaId: input.conversaId,
+              contatoId: input.contatoId || null,
+              mensagemId: input.mensagemId || null,
+              mensagemTexto: input.mensagemTexto || "",
+              mensagemTipo: input.mensagemTipo || null,
+            });
 
-  const checkoutPendente = await interceptarMensagemCheckoutPendente({
-    empresaId: input.empresaId,
-    conversaId: input.conversaId,
-  });
+            if (resultadoRotinas?.interromperFluxoAtual) {
+              return {
+                ok: !resultadoRotinas.erro,
+                status: resultadoRotinas.erro
+                  ? "rotina_automacao_interrompeu_com_erro"
+                  : "rotina_automacao_interrompeu_fluxo",
+                execucaoId: resultadoRotinas.execucaoIds[0] || undefined,
+                error: resultadoRotinas.erro || undefined,
+              };
+            }
 
-  if (checkoutPendente) {
-    return checkoutPendente;
-  }
+            return processarDepoisDasRotinas(input);
+          }
 
-  const resultadoRotinas = await processarMensagemRecebidaRotinas({
-    empresaId: input.empresaId,
-    conversaId: input.conversaId,
-    contatoId: input.contatoId || null,
-    mensagemId: input.mensagemId || null,
-    mensagemTexto: input.mensagemTexto || "",
-    mensagemTipo: input.mensagemTipo || null,
-  });
-
-  if (resultadoRotinas?.interromperFluxoAtual) {
-    return {
-      ok: !resultadoRotinas.erro,
-      status: resultadoRotinas.erro
-        ? "rotina_automacao_interrompeu_com_erro"
-        : "rotina_automacao_interrompeu_fluxo",
-      execucaoId: resultadoRotinas.execucaoIds[0] || undefined,
-      error: resultadoRotinas.erro || undefined,
-    };
-  }
-
-  return processarDepoisDasRotinas(input);
-}
-
-'''
+          '''
           texto = texto[:inicio] + nova_secao + texto[fim:]
 
           inicio_fila = texto.index("export async function processarFilaProcessamentoAutoPorId(jobId: string) {")
           fim_fila = texto.index("export async function processarFilaProcessamentoAutoPendentes", inicio_fila)
 
           nova_fila = r'''export async function processarFilaProcessamentoAutoPorId(jobId: string) {
-  const resultadoArbitragem = await processarJobArbitragemHibrida({
-    jobId,
-    processar: async (inputReavaliado, contexto) => {
-      if (contexto.fluxoAindaRodando) {
-        // Se a pequena janela de concorrencia ja passou, damos ao agente uma
-        // chance de assumir. Sem agente ativo, nao executamos o mesmo bloco do
-        // fluxo em paralelo: a mensagem continua pendente e sera reavaliada.
-        const resultadoAgente = await interceptarMensagemAgenteIa(inputReavaliado);
+            const resultadoArbitragem = await processarJobArbitragemHibrida({
+              jobId,
+              processar: async (inputReavaliado, contexto) => {
+                if (contexto.fluxoAindaRodando) {
+                  const resultadoAgente = await interceptarMensagemAgenteIa(inputReavaliado);
+                  if (resultadoAgente) {
+                    return { acao: "concluir" as const, resultado: resultadoAgente };
+                  }
+                  return {
+                    acao: "adiar" as const,
+                    motivo: "fluxo_ainda_rodando_sem_agente_disponivel",
+                  };
+                }
 
-        if (resultadoAgente) {
-          return {
-            acao: "concluir" as const,
-            resultado: resultadoAgente,
-          };
-        }
+                const resultado = await processarDepoisDasRotinas(inputReavaliado, {
+                  permitirDiferimento: false,
+                });
+                return { acao: "concluir" as const, resultado };
+              },
+            });
 
-        return {
-          acao: "adiar" as const,
-          motivo: "fluxo_ainda_rodando_sem_agente_disponivel",
-        };
-      }
+            if (resultadoArbitragem) return resultadoArbitragem;
 
-      const resultado = await processarDepoisDasRotinas(inputReavaliado, {
-        permitirDiferimento: false,
-      });
+            const resultado = await processarFilaProcessamentoAutoPorIdBase(jobId);
+            const { data: job } = await supabaseAdmin
+              .from("fila_processamento_auto")
+              .select("empresa_id, conversa_id, execucao_id, payload_json")
+              .eq("id", jobId)
+              .maybeSingle();
 
-      return {
-        acao: "concluir" as const,
-        resultado,
-      };
-    },
-  });
+            if (job) {
+              const payload = job.payload_json || {};
+              await continuarNosEspeciaisDepoisDoMotor({
+                empresaId: job.empresa_id,
+                conversaId: job.conversa_id,
+                numeroDestino: payload.numero_destino,
+                execucaoId: job.execucao_id,
+              });
+              await acordarArbitragemDepoisDaExecucao({
+                empresaId: job.empresa_id,
+                execucaoId: job.execucao_id,
+              });
+            }
 
-  if (resultadoArbitragem) {
-    return resultadoArbitragem;
-  }
+            return resultado;
+          }
 
-  const resultado = await processarFilaProcessamentoAutoPorIdBase(jobId);
-
-  const { data: job } = await supabaseAdmin
-    .from("fila_processamento_auto")
-    .select("empresa_id, conversa_id, execucao_id, payload_json")
-    .eq("id", jobId)
-    .maybeSingle();
-
-  if (job) {
-    const payload = job.payload_json || {};
-
-    await continuarNosEspeciaisDepoisDoMotor({
-      empresaId: job.empresa_id,
-      conversaId: job.conversa_id,
-      numeroDestino: payload.numero_destino,
-      execucaoId: job.execucao_id,
-    });
-
-    await acordarArbitragemDepoisDaExecucao({
-      empresaId: job.empresa_id,
-      execucaoId: job.execucao_id,
-    });
-  }
-
-  return resultado;
-}
-
-'''
+          '''
           texto = texto[:inicio_fila] + nova_fila + texto[fim_fila:]
 
-          trecho_timeout = '''      await continuarNosEspeciaisDepoisDoMotor({\n        empresaId: params.empresaId,\n        conversaId,\n        numeroDestino: payload.numero_destino,\n        execucaoId: agendamento.execucao_id,\n      });\n'''
-          trecho_timeout_novo = trecho_timeout + '''\n      await acordarArbitragemDepoisDaExecucao({\n        empresaId: params.empresaId,\n        execucaoId: agendamento.execucao_id,\n      });\n'''
-          if trecho_timeout not in texto:
+          trecho = '''      await continuarNosEspeciaisDepoisDoMotor({\n        empresaId: params.empresaId,\n        conversaId,\n        numeroDestino: payload.numero_destino,\n        execucaoId: agendamento.execucao_id,\n      });\n'''
+          if trecho not in texto:
               raise SystemExit("trecho de timeout nao encontrado")
-          texto = texto.replace(trecho_timeout, trecho_timeout_novo, 1)
+          texto = texto.replace(
+              trecho,
+              trecho + '''\n      await acordarArbitragemDepoisDaExecucao({\n        empresaId: params.empresaId,\n        execucaoId: agendamento.execucao_id,\n      });\n''',
+              1,
+          )
 
           path.write_text(texto)
+          PY
 
-      - name: Remover workflow temporario e registrar alteracoes
+      - name: registrar
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
