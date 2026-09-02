@@ -14,6 +14,11 @@ import {
   interceptarMensagemCheckoutPendente,
 } from "./process-automation-engine-checkout-runtime";
 import { processarIntencoesMensagem } from "./intencoes-runtime";
+import {
+  acordarArbitragensHibridasPendentes,
+  deferirMensagemSeFluxoRodando,
+  processarJobArbitragemHibrida,
+} from "./arbitragem-hibrida-fila";
 
 export * from "./process-automation-engine-agenda";
 
@@ -273,48 +278,30 @@ async function continuarNosEspeciaisDepoisDoMotor(params: {
   await continuarCheckoutPagamentoAutomacao(comum);
 }
 
-export async function processAutomationEngine(input: AutomationEngineInput) {
-  const resultadoTemporal = await ignorarMensagemTemporalmenteInvalida(input);
+async function acordarArbitragemDepoisDaExecucao(params: {
+  empresaId: string;
+  execucaoId?: string | null;
+}) {
+  const execucaoId = String(params.execucaoId || "").trim();
+  if (!execucaoId) return;
 
-  if (resultadoTemporal) {
-    return resultadoTemporal;
-  }
-
-  const checkoutPendente = await interceptarMensagemCheckoutPendente({
-    empresaId: input.empresaId,
-    conversaId: input.conversaId,
+  await acordarArbitragensHibridasPendentes({
+    empresaId: params.empresaId,
+    execucaoId,
   });
+}
 
-  if (checkoutPendente) {
-    return checkoutPendente;
+async function processarDepoisDasRotinas(
+  input: AutomationEngineInput,
+  opcoes?: { permitirDiferimento?: boolean }
+) {
+  if (opcoes?.permitirDiferimento !== false) {
+    const resultadoDiferimento = await deferirMensagemSeFluxoRodando(input);
+    if (resultadoDiferimento) return resultadoDiferimento;
   }
 
-  const resultadoRotinas = await processarMensagemRecebidaRotinas({
-    empresaId: input.empresaId,
-    conversaId: input.conversaId,
-    contatoId: input.contatoId || null,
-    mensagemId: input.mensagemId || null,
-    mensagemTexto: input.mensagemTexto || "",
-    mensagemTipo: input.mensagemTipo || null,
-  });
-
-  if (resultadoRotinas?.interromperFluxoAtual) {
-    return {
-      ok: !resultadoRotinas.erro,
-      status: resultadoRotinas.erro
-        ? "rotina_automacao_interrompeu_com_erro"
-        : "rotina_automacao_interrompeu_fluxo",
-      execucaoId: resultadoRotinas.execucaoIds[0] || undefined,
-      error: resultadoRotinas.erro || undefined,
-    };
-  }
-
-  // Rotinas operacionais independentes continuam tendo prioridade. Depois delas,
-  // um agente ativo assume a conversa antes das intenções e dos fluxos tradicionais.
   const resultadoAgente = await interceptarMensagemAgenteIa(input);
-  if (resultadoAgente) {
-    return resultadoAgente;
-  }
+  if (resultadoAgente) return resultadoAgente;
 
   const resultadoIntencoes = await processarIntencoesMensagem({
     empresaId: input.empresaId,
@@ -354,28 +341,93 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
       execucaoId: resultadoPreferencia.execucaoId,
     });
 
+    await acordarArbitragemDepoisDaExecucao({
+      empresaId: inputPrincipal.empresaId,
+      execucaoId: resultadoPreferencia.execucaoId,
+    });
+
     return resultadoPreferencia;
   }
 
   const resultado = await processAutomationEngineAgenda(inputPrincipal);
+  const execucaoIdResultado =
+    resultado && typeof resultado === "object" && "execucaoId" in resultado
+      ? String(resultado.execucaoId || "") || null
+      : null;
 
   await continuarNosEspeciaisDepoisDoMotor({
     empresaId: inputPrincipal.empresaId,
     conversaId: inputPrincipal.conversaId,
     numeroDestino: inputPrincipal.numeroDestino,
     mensagemTexto: inputPrincipal.mensagemTexto,
-    execucaoId:
-      resultado && typeof resultado === "object" && "execucaoId" in resultado
-        ? String(resultado.execucaoId || "") || null
-        : null,
+    execucaoId: execucaoIdResultado,
+  });
+
+  await acordarArbitragemDepoisDaExecucao({
+    empresaId: inputPrincipal.empresaId,
+    execucaoId: execucaoIdResultado,
   });
 
   return resultado;
 }
 
-export async function processarFilaProcessamentoAutoPorId(jobId: string) {
-  const resultado = await processarFilaProcessamentoAutoPorIdBase(jobId);
+export async function processAutomationEngine(input: AutomationEngineInput) {
+  const resultadoTemporal = await ignorarMensagemTemporalmenteInvalida(input);
+  if (resultadoTemporal) return resultadoTemporal;
 
+  const checkoutPendente = await interceptarMensagemCheckoutPendente({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+  });
+  if (checkoutPendente) return checkoutPendente;
+
+  const resultadoRotinas = await processarMensagemRecebidaRotinas({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    contatoId: input.contatoId || null,
+    mensagemId: input.mensagemId || null,
+    mensagemTexto: input.mensagemTexto || "",
+    mensagemTipo: input.mensagemTipo || null,
+  });
+
+  if (resultadoRotinas?.interromperFluxoAtual) {
+    return {
+      ok: !resultadoRotinas.erro,
+      status: resultadoRotinas.erro
+        ? "rotina_automacao_interrompeu_com_erro"
+        : "rotina_automacao_interrompeu_fluxo",
+      execucaoId: resultadoRotinas.execucaoIds[0] || undefined,
+      error: resultadoRotinas.erro || undefined,
+    };
+  }
+
+  return processarDepoisDasRotinas(input);
+}
+
+export async function processarFilaProcessamentoAutoPorId(jobId: string) {
+  const resultadoArbitragem = await processarJobArbitragemHibrida({
+    jobId,
+    processar: async (inputReavaliado, contexto) => {
+      if (contexto.fluxoAindaRodando) {
+        // Nunca permitimos o Agente assumir enquanto o Fluxo ainda esta
+        // executando. A mensagem permanece persistida e a fila reavalia
+        // depois, evitando duas respostas concorrentes.
+        return {
+          acao: "adiar" as const,
+          motivo: "fluxo_ainda_rodando",
+        };
+      }
+
+      const resultado = await processarDepoisDasRotinas(inputReavaliado, {
+        permitirDiferimento: false,
+      });
+      return { acao: "concluir" as const, resultado };
+    },
+  });
+
+  if (resultadoArbitragem) return resultadoArbitragem;
+
+  const resultado = await processarFilaProcessamentoAutoPorIdBase(jobId);
   const { data: job } = await supabaseAdmin
     .from("fila_processamento_auto")
     .select("empresa_id, conversa_id, execucao_id, payload_json")
@@ -384,11 +436,14 @@ export async function processarFilaProcessamentoAutoPorId(jobId: string) {
 
   if (job) {
     const payload = job.payload_json || {};
-
     await continuarNosEspeciaisDepoisDoMotor({
       empresaId: job.empresa_id,
       conversaId: job.conversa_id,
       numeroDestino: payload.numero_destino,
+      execucaoId: job.execucao_id,
+    });
+    await acordarArbitragemDepoisDaExecucao({
+      empresaId: job.empresa_id,
       execucaoId: job.execucao_id,
     });
   }
@@ -467,6 +522,11 @@ export async function processarTimeoutSemRespostaAgendado(
         empresaId: params.empresaId,
         conversaId,
         numeroDestino: payload.numero_destino,
+        execucaoId: agendamento.execucao_id,
+      });
+
+      await acordarArbitragemDepoisDaExecucao({
+        empresaId: params.empresaId,
         execucaoId: agendamento.execucao_id,
       });
     }
