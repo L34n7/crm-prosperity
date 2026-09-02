@@ -409,13 +409,12 @@ export async function processarFilaProcessamentoAutoPorId(jobId: string) {
     jobId,
     processar: async (inputReavaliado, contexto) => {
       if (contexto.fluxoAindaRodando) {
-        const resultadoAgente = await interceptarMensagemAgenteIa(inputReavaliado);
-        if (resultadoAgente) {
-          return { acao: "concluir" as const, resultado: resultadoAgente };
-        }
+        // Nunca permitimos o Agente assumir enquanto o Fluxo ainda esta
+        // executando. A mensagem permanece persistida e a fila reavalia
+        // depois, evitando duas respostas concorrentes.
         return {
           acao: "adiar" as const,
-          motivo: "fluxo_ainda_rodando_sem_agente_disponivel",
+          motivo: "fluxo_ainda_rodando",
         };
       }
 
