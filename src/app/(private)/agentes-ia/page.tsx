@@ -726,7 +726,7 @@ export default function AgentesIaPage() {
                     <div className={styles.checkList}>
                       {integracoes.map((integracao) => {
                         const checked = (editor.integracoes_whatsapp_ids || []).includes(integracao.id);
-                        const nome = integracao.phone_number_display_name || integracao.verified_name || integracao.nome_conexao || "WhatsApp";
+                        const nome = integracao.nome_conexao || integracao.phone_number_display_name || integracao.verified_name || "WhatsApp";
                         return (
                           <label key={integracao.id} className={styles.checkRow}>
                             <input type="checkbox" checked={checked} onChange={() => alternarIntegracao(integracao.id)} />
