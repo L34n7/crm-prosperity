@@ -134,6 +134,7 @@ export async function loadContext(job: Job): Promise<Context | null> {
     templateResult,
     flowResult,
     variablesResult,
+    capturedNameResult,
     currentProtocolResult,
     lastProtocolResult,
   ] = await Promise.all([
@@ -175,6 +176,17 @@ export async function loadContext(job: Job): Promise<Context | null> {
       .is("contato_id", null)
       .eq("metadata_json->>tipo", "global_empresa")
       .eq("metadata_json->>ativo", "true"),
+    appointment.contato_id
+      ? supabase
+          .from("automacao_variaveis")
+          .select("valor")
+          .eq("empresa_id", job.empresa_id)
+          .eq("contato_id", appointment.contato_id)
+          .eq("chave", "nome_paciente")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     conversation?.id
       ? supabase
           .from("conversa_protocolos")
@@ -203,6 +215,7 @@ export async function loadContext(job: Job): Promise<Context | null> {
   if (templateResult.error) throw new Error(templateResult.error.message);
   if (flowResult.error) throw new Error(flowResult.error.message);
   if (variablesResult.error) throw new Error(variablesResult.error.message);
+  if (capturedNameResult.error) throw new Error(capturedNameResult.error.message);
   if (currentProtocolResult.error) throw new Error(currentProtocolResult.error.message);
   if (lastProtocolResult.error) throw new Error(lastProtocolResult.error.message);
 
@@ -212,6 +225,8 @@ export async function loadContext(job: Job): Promise<Context | null> {
       String(item.valor || ""),
     ])
   );
+  const capturedName = String(capturedNameResult.data?.valor || "").trim();
+  if (capturedName) variables.nome_paciente = capturedName;
 
   return {
     job,
