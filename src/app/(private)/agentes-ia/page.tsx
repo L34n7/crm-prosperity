@@ -1260,6 +1260,47 @@ export default function AgentesIaPage() {
                         regra={REGRAS_CONSUMO.instrucoes}
                       />
                     </label>
+
+                    <div className={styles.formGrid} style={{ marginTop: 4 }}>
+                      <label className={styles.field}>
+                        <span>Contexto recente</span>
+                        <input
+                          type="number"
+                          min={4}
+                          max={40}
+                          value={editor.max_mensagens_contexto}
+                          style={estiloCampoConsumo(
+                            nivelConsumo(editor.max_mensagens_contexto, REGRAS_CONSUMO.contexto)
+                          )}
+                          onChange={(event) =>
+                            setEditor({
+                              ...editor,
+                              max_mensagens_contexto: Number(event.target.value),
+                            })
+                          }
+                        />
+                        <OrientacaoConsumo
+                          valor={editor.max_mensagens_contexto}
+                          regra={REGRAS_CONSUMO.contexto}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>Debounce (ms)</span>
+                        <input
+                          type="number"
+                          min={250}
+                          max={10000}
+                          step={50}
+                          value={editor.debounce_ms}
+                          onChange={(event) =>
+                            setEditor({ ...editor, debounce_ms: Number(event.target.value) })
+                          }
+                        />
+                        <small className={styles.fieldHint}>
+                          Não entra no contexto da IA. Apenas define quanto tempo o sistema espera para agrupar mensagens próximas antes de processar.
+                        </small>
+                      </label>
+                    </div>
                   </section>
 
                   <section className={styles.panel}>
@@ -1656,46 +1697,6 @@ export default function AgentesIaPage() {
                     </div>
                   )}
 
-                  <div className={styles.formGrid} style={{ marginTop: 12 }}>
-                    <label className={styles.field}>
-                      <span>Contexto recente</span>
-                      <input
-                        type="number"
-                        min={4}
-                        max={40}
-                        value={editor.max_mensagens_contexto}
-                        style={estiloCampoConsumo(
-                          nivelConsumo(editor.max_mensagens_contexto, REGRAS_CONSUMO.contexto)
-                        )}
-                        onChange={(event) =>
-                          setEditor({
-                            ...editor,
-                            max_mensagens_contexto: Number(event.target.value),
-                          })
-                        }
-                      />
-                      <OrientacaoConsumo
-                        valor={editor.max_mensagens_contexto}
-                        regra={REGRAS_CONSUMO.contexto}
-                      />
-                    </label>
-                    <label className={styles.field}>
-                      <span>Debounce (ms)</span>
-                      <input
-                        type="number"
-                        min={250}
-                        max={10000}
-                        step={50}
-                        value={editor.debounce_ms}
-                        onChange={(event) =>
-                          setEditor({ ...editor, debounce_ms: Number(event.target.value) })
-                        }
-                      />
-                      <small className={styles.fieldHint}>
-                        Não entra no contexto da IA. Apenas define quanto tempo o sistema espera para agrupar mensagens próximas antes de processar.
-                      </small>
-                    </label>
-                  </div>
                   <div className={styles.securityNote}>
                     <CheckCircle2 size={17} />
                     <span>
