@@ -60,6 +60,56 @@ export function normalizarTextoCapturado(valor: string) {
     .toLocaleLowerCase("pt-BR");
 }
 
+function normalizarTextoParaHeuristica(valor: string) {
+  return normalizarTextoCapturado(valor)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function extrairNomeDeApresentacao(valor: string) {
+  return String(valor || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(
+      /^(?:meu nome(?: completo)? (?:é|e|eh)|me chamo|eu sou|sou|pode me chamar(?: de)?|pode chamar(?: de)?)\s+/i,
+      ""
+    )
+    .trim();
+}
+
+function pareceRespostaConversacionalEmVezDeNome(valor: string) {
+  const texto = normalizarTextoParaHeuristica(valor);
+  const palavras = texto.split(/\s+/).filter(Boolean);
+
+  if (palavras.length > 7) return true;
+
+  if (
+    /^(oi|ola|opa|e ai|ei|bom dia|boa tarde|boa noite|blz|beleza|ok|okay|sim|nao|obrigado|obrigada)(\b|$)/.test(
+      texto
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(quero|preciso|gostaria|agendar|agendamento|marcar|remarcar|reagendar|cancelar|desmarcar|tirar|falar|atendente|atendimento|saber|consultar|boleto|pagamento)\b/.test(
+      texto
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /^(segunda via|duvida|duvidas|consulta|limpeza|horario|informacao|informacoes)$/.test(
+      texto
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function normalizarTelefoneCapturado(valor: string) {
   const digitos = somenteDigitos(valor);
 
@@ -274,22 +324,22 @@ export function validarCaptura(
   }
 
   if (tipo === "nome") {
-    const pareceFrase =
-      valor.split(/\s+/).length > 5 ||
-      /\b(quero|preciso|boleto|conta|pagamento|segunda via|atendente)\b/i.test(
-        valor
-      );
+    const valorLimpo = extrairNomeDeApresentacao(valor);
     const valido =
-      /^[A-Za-zÀ-ÿ'´`^~\s]{2,80}$/.test(valor) &&
-      !/\d/.test(valor) &&
-      !pareceFrase;
+      /^[A-Za-zÀ-ÿ'´`^~\-\s]{2,80}$/.test(valorLimpo) &&
+      !/\d/.test(valorLimpo) &&
+      !pareceRespostaConversacionalEmVezDeNome(valorLimpo);
 
     return valido
       ? resultadoValido({
-          valorLimpo: valor.replace(/\s+/g, " "),
-          valorNormalizado: normalizarTextoCapturado(valor),
+          valorLimpo,
+          valorNormalizado: normalizarTextoCapturado(valorLimpo),
         })
-      : resultadoInvalido(valor, valor, normalizarTextoCapturado(valor));
+      : resultadoInvalido(
+          valorLimpo,
+          valorLimpo,
+          normalizarTextoCapturado(valorLimpo)
+        );
   }
 
   if (tipo === "cpf") {

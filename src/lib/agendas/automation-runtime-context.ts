@@ -178,12 +178,13 @@ export async function loadContext(job: Job): Promise<Context | null> {
       .eq("metadata_json->>ativo", "true"),
     appointment.contato_id
       ? supabase
-          .from("automacao_variaveis")
+          .from("contato_informacoes_captura")
           .select("valor")
           .eq("empresa_id", job.empresa_id)
           .eq("contato_id", appointment.contato_id)
-          .eq("chave", "nome_paciente")
-          .order("created_at", { ascending: false })
+          .eq("tipo", "nome")
+          .eq("ativo", true)
+          .order("capturado_em", { ascending: false })
           .limit(1)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
@@ -226,7 +227,21 @@ export async function loadContext(job: Job): Promise<Context | null> {
     ])
   );
   const capturedName = String(capturedNameResult.data?.valor || "").trim();
-  if (capturedName) variables.nome_paciente = capturedName;
+  const fallbackName = String(
+    contactResult.data?.whatsapp_profile_name ||
+      appointment.nome_cliente ||
+      contactResult.data?.nome ||
+      ""
+  ).trim();
+  const canonicalCapturedName = capturedName || fallbackName;
+
+  if (canonicalCapturedName) {
+    variables.nome_captura = canonicalCapturedName;
+    variables.primeiro_nome_captura =
+      canonicalCapturedName.split(/\s+/).filter(Boolean)[0] || canonicalCapturedName;
+    // Compatibilidade com regras/templates salvos antes da variável canônica.
+    variables.nome_paciente = canonicalCapturedName;
+  }
 
   return {
     job,

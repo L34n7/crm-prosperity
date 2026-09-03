@@ -72,11 +72,20 @@ export const TEMPLATE_SOURCE_OPTIONS: readonly AgendaTemplateSourceOption[] = [
     category: "Nome e número",
   },
   {
-    value: "nome_paciente",
-    variable: "{{nome_paciente}}",
+    value: "nome_captura",
+    variable: "{{nome_captura}}",
     label: "Nome captura",
     description:
-      "Nome capturado pelo fluxo em NOME CAPTURA; quando não existir, usa o nome do WhatsApp.",
+      "Último nome capturado por um nó do tipo Nome; quando não existir, usa o nome do WhatsApp.",
+    kind: "text",
+    category: "Nome e número",
+  },
+  {
+    value: "primeiro_nome_captura",
+    variable: "{{primeiro_nome_captura}}",
+    label: "Primeiro nome da captura",
+    description:
+      "Primeira palavra do Nome captura; quando não existir captura, usa o primeiro nome do WhatsApp.",
     kind: "text",
     category: "Nome e número",
   },
@@ -239,12 +248,14 @@ const LEGACY_TEMPLATE_SOURCES = new Set([
   "contato.primeiro_nome",
   "contato.telefone",
   "contato.email",
+  "nome_paciente",
 ]);
 
 const TEMPLATE_SOURCE_ALIASES = new Map<string, string>([
   ["contato.nome", "nome_contato"],
   ["contato.telefone", "numero_contato"],
   ["contato.email", "email_contato"],
+  ["nome_paciente", "nome_captura"],
 ]);
 
 export const TEMPLATE_FORMAT_OPTIONS = [
@@ -528,6 +539,10 @@ export function formatAgendaDateTime(value: string | Date, timezone: string, for
   }
 }
 
+function firstWord(value: unknown) {
+  return String(value || "").trim().split(/\s+/).filter(Boolean)[0] || "";
+}
+
 function sourceValue(context: AgendaTemplateContext, source: string) {
   const appointment = context.appointment || {};
   const contact = context.contact || {};
@@ -541,20 +556,33 @@ function sourceValue(context: AgendaTemplateContext, source: string) {
       return appointment.nome_cliente || contact.nome || "";
     case "nome_whatsapp":
       return contact.whatsapp_profile_name || appointment.nome_cliente || contact.nome || "";
-    case "nome_paciente":
+    case "nome_captura":
       return (
+        context.variables?.nome_captura ||
         context.variables?.nome_paciente ||
         contact.whatsapp_profile_name ||
         appointment.nome_cliente ||
         contact.nome ||
         ""
       );
+    case "primeiro_nome_captura":
+      return (
+        context.variables?.primeiro_nome_captura ||
+        firstWord(
+          context.variables?.nome_captura ||
+            context.variables?.nome_paciente ||
+            contact.whatsapp_profile_name ||
+            appointment.nome_cliente ||
+            contact.nome ||
+            ""
+        )
+      );
     case "numero_contato":
       return appointment.telefone_cliente || contact.telefone || "";
     case "email_contato":
       return appointment.email_cliente || contact.email || "";
     case "contato.primeiro_nome":
-      return String(appointment.nome_cliente || contact.nome || "").trim().split(/\s+/)[0] || "";
+      return firstWord(appointment.nome_cliente || contact.nome || "");
     case "agendamento.titulo":
       return appointment.titulo || context.agenda?.nome || "";
     case "agendamento.inicio_at":
