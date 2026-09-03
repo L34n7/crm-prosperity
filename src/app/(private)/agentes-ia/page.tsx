@@ -29,6 +29,7 @@ type EstrategiaTransferencia =
   | "atendente_especifico"
   | "rodizio_aleatorio"
   | "menos_conversas";
+type NivelConsumo = "ideal" | "atencao" | "alto";
 
 type Ferramenta = {
   id?: string;
@@ -61,6 +62,15 @@ type TransferenciaFallback = {
   atendente_id: string | null;
   incluir_administradores_distribuicao: boolean;
   mensagem: string;
+};
+
+type RegraConsumo = {
+  amarelo: number;
+  vermelho: number;
+  unidade: "caracteres" | "mensagens";
+  ideal: string;
+  atencao: string;
+  alto: string;
 };
 
 type Agente = {
@@ -202,6 +212,103 @@ const CONDICOES_GATILHO: Array<{ valor: CondicaoGatilho; label: string }> = [
   { valor: "inicia_com", label: "Começa com" },
   { valor: "regex", label: "Expressão regular (regex)" },
 ];
+
+const REGRAS_CONSUMO = {
+  nome: {
+    amarelo: 41,
+    vermelho: 70,
+    unidade: "caracteres",
+    ideal: "Bom. Um nome curto é reenviado em todas as chamadas com impacto mínimo.",
+    atencao: "O nome entra em todas as respostas da IA. Prefira uma identificação mais curta.",
+    alto: "Nome muito longo para um trecho fixo do prompt. Reduza para evitar consumo recorrente desnecessário.",
+  },
+  caracteristicas: {
+    amarelo: 81,
+    vermelho: 140,
+    unidade: "caracteres",
+    ideal: "Faixa econômica. O agente de referência usou 56 caracteres de características.",
+    atencao: "Muitas características aumentam o contexto fixo e podem gerar instruções redundantes ou conflitantes.",
+    alto: "Excesso de características. Mantenha apenas as que realmente mudam o comportamento do agente.",
+  },
+  prompt: {
+    amarelo: 1401,
+    vermelho: 2200,
+    unidade: "caracteres",
+    ideal: "Faixa de referência econômica. O agente testado trabalhou com cerca de 1.356 caracteres de prompt.",
+    atencao: "O prompt inteiro é reenviado a cada resposta. Remova repetições e leve fatos consultáveis para a base de conhecimento.",
+    alto: "Prompt extenso: tende a elevar o custo de todas as respostas. Consolide regras e evite explicar o mesmo comportamento em mais de um lugar.",
+  },
+  instrucoes: {
+    amarelo: 851,
+    vermelho: 1400,
+    unidade: "caracteres",
+    ideal: "Faixa de referência econômica. O teste real usou cerca de 812 caracteres de instruções adicionais.",
+    atencao: "As instruções também são reenviadas em toda chamada. Evite repetir regras que já estão no prompt principal.",
+    alto: "Instruções muito extensas. Consolide regras e mantenha aqui somente exceções ou orientações realmente necessárias.",
+  },
+  contexto: {
+    amarelo: 7,
+    vermelho: 10,
+    unidade: "mensagens",
+    ideal: "Faixa econômica. O menor consumo real observado utilizou 4 mensagens de contexto recente.",
+    atencao: "Mais histórico é reenviado em cada chamada. Aumente apenas quando a continuidade da conversa realmente exigir.",
+    alto: "Contexto alto: cada mensagem pode acrescentar até 500 caracteres ao modelo. Reduza para controlar os tokens de entrada.",
+  },
+  conhecimentoTitulo: {
+    amarelo: 41,
+    vermelho: 70,
+    unidade: "caracteres",
+    ideal: "Bom. Títulos curtos ajudam a busca e entram no contexto quando o conhecimento é consultado.",
+    atencao: "O título acompanha o trecho retornado ao modelo. Prefira um nome objetivo e descritivo.",
+    alto: "Título muito longo. Resuma o assunto em poucas palavras para evitar contexto desnecessário.",
+  },
+  conhecimentoConteudo: {
+    amarelo: 851,
+    vermelho: 1700,
+    unidade: "caracteres",
+    ideal: "Faixa de referência: os conhecimentos do agente testado ficaram entre 507 e 849 caracteres por item.",
+    atencao: "O runtime envia somente o trecho relevante, limitado a 850 caracteres por resultado. Dividir assuntos melhora a precisão da busca.",
+    alto: "Conteúdo muito amplo para um único conhecimento. Divida em blocos focados para melhorar a recuperação e evitar trechos pouco úteis.",
+  },
+} satisfies Record<string, RegraConsumo>;
+
+function nivelConsumo(valor: number, regra: RegraConsumo): NivelConsumo {
+  if (valor > regra.vermelho) return "alto";
+  if (valor >= regra.amarelo) return "atencao";
+  return "ideal";
+}
+
+function estiloCampoConsumo(nivel: NivelConsumo) {
+  if (nivel === "alto") {
+    return {
+      borderColor: "var(--crm-danger-strong)",
+      background: "var(--crm-danger-bg)",
+    };
+  }
+  if (nivel === "atencao") {
+    return {
+      borderColor: "var(--crm-warning-strong)",
+      background: "var(--crm-warning-bg)",
+    };
+  }
+  return undefined;
+}
+
+function OrientacaoConsumo({ valor, regra }: { valor: number; regra: RegraConsumo }) {
+  const nivel = nivelConsumo(valor, regra);
+  const mensagem = nivel === "alto" ? regra.alto : nivel === "atencao" ? regra.atencao : regra.ideal;
+  const cor =
+    nivel === "alto"
+      ? "var(--crm-danger-text)"
+      : nivel === "atencao"
+        ? "var(--crm-warning-text)"
+        : "var(--crm-text-muted)";
+  return (
+    <small className={styles.fieldHint} style={{ color }}>
+      <strong>{valor.toLocaleString("pt-BR")} {regra.unidade}</strong> · {mensagem}
+    </small>
+  );
+}
 
 function cloneAgente(agente: Agente): Agente {
   return JSON.parse(JSON.stringify(agente));
@@ -1003,13 +1110,20 @@ export default function AgentesIaPage() {
                         <p>Defina quem é o agente e como ele deve se comunicar.</p>
                       </div>
                     </div>
+                    <div className={styles.scopeHint}>
+                      <strong>Referência real de consumo:</strong> as chamadas mais econômicas do agente Especialista CRM Prosperity ficaram em aproximadamente 946–980 tokens de entrada, usando 4 mensagens de contexto. O perfil enxuto de referência usa cerca de 1.356 caracteres de prompt, 812 de instruções e 56 de características. As faixas abaixo são orientativas e não bloqueiam a configuração.
+                    </div>
                     <div className={styles.formGrid}>
                       <label className={styles.field}>
                         <span>Nome</span>
                         <input
                           value={editor.nome}
+                          style={estiloCampoConsumo(
+                            nivelConsumo(editor.nome.length, REGRAS_CONSUMO.nome)
+                          )}
                           onChange={(event) => setEditor({ ...editor, nome: event.target.value })}
                         />
+                        <OrientacaoConsumo valor={editor.nome.length} regra={REGRAS_CONSUMO.nome} />
                       </label>
                       <label className={styles.field}>
                         <span>Descrição interna</span>
@@ -1020,6 +1134,9 @@ export default function AgentesIaPage() {
                           }
                           placeholder="Ex.: Especialista em orçamento e vendas"
                         />
+                        <small className={styles.fieldHint}>
+                          Uso interno. Este texto não é enviado ao modelo e não aumenta o contexto do atendimento.
+                        </small>
                       </label>
                     </div>
 
@@ -1030,7 +1147,15 @@ export default function AgentesIaPage() {
                           {caracteristicasSelecionadas.length}/{LIMITE_CARACTERISTICAS}
                         </small>
                       </div>
-                      <div className={styles.characteristicsBox}>
+                      <div
+                        className={styles.characteristicsBox}
+                        style={estiloCampoConsumo(
+                          nivelConsumo(
+                            String(editor.tom_voz || "").length,
+                            REGRAS_CONSUMO.caracteristicas
+                          )
+                        )}
+                      >
                         {caracteristicasSelecionadas.length > 0 && (
                           <div className={styles.characteristicChips}>
                             {caracteristicasSelecionadas.map((item) => (
@@ -1095,6 +1220,10 @@ export default function AgentesIaPage() {
                             </div>
                           )}
                       </div>
+                      <OrientacaoConsumo
+                        valor={String(editor.tom_voz || "").length}
+                        regra={REGRAS_CONSUMO.caracteristicas}
+                      />
                     </div>
 
                     <label className={styles.field}>
@@ -1102,10 +1231,20 @@ export default function AgentesIaPage() {
                       <textarea
                         rows={7}
                         value={editor.prompt_sistema || ""}
+                        style={estiloCampoConsumo(
+                          nivelConsumo(
+                            String(editor.prompt_sistema || "").length,
+                            REGRAS_CONSUMO.prompt
+                          )
+                        )}
                         onChange={(event) =>
                           setEditor({ ...editor, prompt_sistema: event.target.value })
                         }
                         placeholder="Explique o papel, limites, oferta e comportamento esperado do agente."
+                      />
+                      <OrientacaoConsumo
+                        valor={String(editor.prompt_sistema || "").length}
+                        regra={REGRAS_CONSUMO.prompt}
                       />
                     </label>
                     <label className={styles.field}>
@@ -1113,10 +1252,20 @@ export default function AgentesIaPage() {
                       <textarea
                         rows={4}
                         value={editor.instrucoes || ""}
+                        style={estiloCampoConsumo(
+                          nivelConsumo(
+                            String(editor.instrucoes || "").length,
+                            REGRAS_CONSUMO.instrucoes
+                          )
+                        )}
                         onChange={(event) =>
                           setEditor({ ...editor, instrucoes: event.target.value })
                         }
                         placeholder="Regras específicas do negócio."
+                      />
+                      <OrientacaoConsumo
+                        valor={String(editor.instrucoes || "").length}
+                        regra={REGRAS_CONSUMO.instrucoes}
                       />
                     </label>
                   </section>
@@ -1265,6 +1414,9 @@ export default function AgentesIaPage() {
                                         : "Ex.: quero orçamento"
                                     }
                                   />
+                                  <small className={styles.fieldHint}>
+                                    Usada apenas no roteamento inicial. Não é adicionada ao contexto do modelo.
+                                  </small>
                                 </label>
                               </div>
                             </div>
@@ -1482,7 +1634,7 @@ export default function AgentesIaPage() {
                           placeholder={MENSAGEM_TRANSFERENCIA_PADRAO}
                         />
                         <small className={styles.fieldHint}>
-                          Você pode apagar o texto para transferir sem enviar mensagem ao cliente.
+                          Você pode apagar o texto para transferir sem enviar mensagem ao cliente. Esta mensagem não entra no contexto normal da IA; só é usada na contingência.
                         </small>
                       </label>
                     </>
@@ -1520,12 +1672,19 @@ export default function AgentesIaPage() {
                         min={4}
                         max={40}
                         value={editor.max_mensagens_contexto}
+                        style={estiloCampoConsumo(
+                          nivelConsumo(editor.max_mensagens_contexto, REGRAS_CONSUMO.contexto)
+                        )}
                         onChange={(event) =>
                           setEditor({
                             ...editor,
                             max_mensagens_contexto: Number(event.target.value),
                           })
                         }
+                      />
+                      <OrientacaoConsumo
+                        valor={editor.max_mensagens_contexto}
+                        regra={REGRAS_CONSUMO.contexto}
                       />
                     </label>
                     <label className={styles.field}>
@@ -1540,6 +1699,9 @@ export default function AgentesIaPage() {
                           setEditor({ ...editor, debounce_ms: Number(event.target.value) })
                         }
                       />
+                      <small className={styles.fieldHint}>
+                        Não entra no contexto da IA. Apenas define quanto tempo o sistema espera para agrupar mensagens próximas antes de processar.
+                      </small>
                     </label>
                   </div>
                   <div className={styles.securityNote}>
@@ -1557,6 +1719,9 @@ export default function AgentesIaPage() {
                       <h3>Ferramentas do agente</h3>
                       <p>Somente ferramentas habilitadas são expostas ao modelo.</p>
                     </div>
+                  </div>
+                  <div className={styles.scopeHint}>
+                    <strong>Consumo de contexto:</strong> cada ferramenta ativa adiciona sua definição e esquema à chamada do modelo. Ative somente as ferramentas que este agente realmente precisa usar.
                   </div>
                   {usaFerramentasAgenda && (
                     <div className={styles.formGrid}>
@@ -1632,39 +1797,83 @@ export default function AgentesIaPage() {
                         <p>Conteúdo aprovado e pesquisável pelo agente.</p>
                       </div>
                     </div>
+                    <div className={styles.scopeHint}>
+                      <strong>Como entra no consumo:</strong> a base não é enviada inteira em toda resposta. Quando consultada, o runtime retorna no máximo 2 resultados e envia até 850 caracteres do trecho de cada resultado, junto com o título. Por isso, conhecimentos curtos e focados tendem a ser mais precisos e econômicos.
+                    </div>
                     <div className={styles.knowledgeForm}>
-                      <input
-                        placeholder="Título"
-                        value={novoConhecimento.titulo}
-                        onChange={(event) =>
-                          setNovoConhecimento({ ...novoConhecimento, titulo: event.target.value })
-                        }
-                      />
-                      <input
-                        placeholder="Categoria"
-                        value={novoConhecimento.categoria}
-                        onChange={(event) =>
-                          setNovoConhecimento({ ...novoConhecimento, categoria: event.target.value })
-                        }
-                      />
-                      <textarea
-                        rows={5}
-                        placeholder="Conteúdo confiável que o agente pode usar"
-                        value={novoConhecimento.conteudo}
-                        onChange={(event) =>
-                          setNovoConhecimento({ ...novoConhecimento, conteudo: event.target.value })
-                        }
-                      />
-                      <input
-                        placeholder="Palavras-chave separadas por vírgula"
-                        value={novoConhecimento.palavras_chave}
-                        onChange={(event) =>
-                          setNovoConhecimento({
-                            ...novoConhecimento,
-                            palavras_chave: event.target.value,
-                          })
-                        }
-                      />
+                      <label className={styles.field} style={{ marginBottom: 0 }}>
+                        <span>Título do conhecimento</span>
+                        <input
+                          placeholder="Ex.: Planos e preços"
+                          value={novoConhecimento.titulo}
+                          style={estiloCampoConsumo(
+                            nivelConsumo(
+                              novoConhecimento.titulo.length,
+                              REGRAS_CONSUMO.conhecimentoTitulo
+                            )
+                          )}
+                          onChange={(event) =>
+                            setNovoConhecimento({ ...novoConhecimento, titulo: event.target.value })
+                          }
+                        />
+                        <OrientacaoConsumo
+                          valor={novoConhecimento.titulo.length}
+                          regra={REGRAS_CONSUMO.conhecimentoTitulo}
+                        />
+                      </label>
+                      <label className={styles.field} style={{ marginBottom: 0 }}>
+                        <span>Categoria</span>
+                        <input
+                          placeholder="Ex.: Comercial"
+                          value={novoConhecimento.categoria}
+                          onChange={(event) =>
+                            setNovoConhecimento({ ...novoConhecimento, categoria: event.target.value })
+                          }
+                        />
+                        <small className={styles.fieldHint}>
+                          Ajuda a organizar a base. A categoria não é enviada diretamente ao modelo no trecho consultado.
+                        </small>
+                      </label>
+                      <label
+                        className={styles.field}
+                        style={{ gridColumn: "1 / -1", marginBottom: 0 }}
+                      >
+                        <span>Conteúdo</span>
+                        <textarea
+                          rows={5}
+                          placeholder="Conteúdo confiável que o agente pode usar"
+                          value={novoConhecimento.conteudo}
+                          style={estiloCampoConsumo(
+                            nivelConsumo(
+                              novoConhecimento.conteudo.length,
+                              REGRAS_CONSUMO.conhecimentoConteudo
+                            )
+                          )}
+                          onChange={(event) =>
+                            setNovoConhecimento({ ...novoConhecimento, conteudo: event.target.value })
+                          }
+                        />
+                        <OrientacaoConsumo
+                          valor={novoConhecimento.conteudo.length}
+                          regra={REGRAS_CONSUMO.conhecimentoConteudo}
+                        />
+                      </label>
+                      <label className={styles.field} style={{ marginBottom: 0 }}>
+                        <span>Palavras-chave</span>
+                        <input
+                          placeholder="Ex.: plano, preço, usuários"
+                          value={novoConhecimento.palavras_chave}
+                          onChange={(event) =>
+                            setNovoConhecimento({
+                              ...novoConhecimento,
+                              palavras_chave: event.target.value,
+                            })
+                          }
+                        />
+                        <small className={styles.fieldHint}>
+                          Ajudam na recuperação do conteúdo. Não são adicionadas como um bloco fixo em cada resposta da IA.
+                        </small>
+                      </label>
                       <button
                         type="button"
                         className={styles.secondaryButton}
