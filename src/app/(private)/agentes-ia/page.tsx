@@ -218,57 +218,49 @@ const REGRAS_CONSUMO = {
     amarelo: 41,
     vermelho: 70,
     unidade: "caracteres",
-    ideal: "Bom. Um nome curto é reenviado em todas as chamadas com impacto mínimo.",
-    atencao: "O nome entra em todas as respostas da IA. Prefira uma identificação mais curta.",
-    alto: "Nome muito longo para um trecho fixo do prompt. Reduza para evitar consumo recorrente desnecessário.",
+    ideal: "Tamanho adequado. O nome é enviado em todas as chamadas da IA, mas neste tamanho o impacto no consumo é pequeno.",
+    atencao: "O nome passou de 40 caracteres e pode aumentar o consumo recorrente de tokens durante o atendimento. Prefira uma identificação mais curta.",
+    alto: "O nome está muito longo e adiciona texto desnecessário em todas as chamadas da IA. Reduza para uma identificação objetiva.",
   },
   caracteristicas: {
     amarelo: 81,
     vermelho: 140,
     unidade: "caracteres",
-    ideal: "Faixa econômica. O agente de referência usou 56 caracteres de características.",
-    atencao: "Muitas características aumentam o contexto fixo e podem gerar instruções redundantes ou conflitantes.",
-    alto: "Excesso de características. Mantenha apenas as que realmente mudam o comportamento do agente.",
+    ideal: "Tamanho adequado para definir o comportamento do agente sem aumentar demais o contexto.",
+    atencao: "As características passaram de 80 caracteres e podem causar consumo maior de tokens durante o atendimento. Mantenha apenas as que realmente mudam a resposta.",
+    alto: "As características estão muito longas e vão impactar em um grande consumo de tokens ao longo dos atendimentos. Remova termos repetidos ou pouco relevantes.",
   },
   prompt: {
     amarelo: 1401,
     vermelho: 2200,
     unidade: "caracteres",
-    ideal: "Faixa de referência econômica. O agente testado trabalhou com cerca de 1.356 caracteres de prompt.",
-    atencao: "O prompt inteiro é reenviado a cada resposta. Remova repetições e leve fatos consultáveis para a base de conhecimento.",
-    alto: "Prompt extenso: tende a elevar o custo de todas as respostas. Consolide regras e evite explicar o mesmo comportamento em mais de um lugar.",
+    ideal: "Tamanho dentro da faixa recomendada para manter um agente completo sem aumentar demais o contexto fixo.",
+    atencao: "O prompt passou de 1.400 caracteres e pode causar consumo maior de tokens durante o atendimento. Remova repetições e leve informações consultáveis para a base de conhecimento.",
+    alto: "O prompt está muito longo e vai impactar em um grande consumo de tokens em cada atendimento. Resuma regras, elimine repetições e separe informações consultáveis na base de conhecimento.",
   },
   instrucoes: {
     amarelo: 851,
     vermelho: 1400,
     unidade: "caracteres",
-    ideal: "Faixa de referência econômica. O teste real usou cerca de 812 caracteres de instruções adicionais.",
-    atencao: "As instruções também são reenviadas em toda chamada. Evite repetir regras que já estão no prompt principal.",
-    alto: "Instruções muito extensas. Consolide regras e mantenha aqui somente exceções ou orientações realmente necessárias.",
+    ideal: "Tamanho adequado para complementar o prompt com regras específicas sem aumentar demais o contexto.",
+    atencao: "As instruções passaram de 850 caracteres e podem causar consumo maior de tokens durante o atendimento. Evite repetir regras que já estão no prompt principal.",
+    alto: "As instruções estão muito longas e vão impactar em um grande consumo de tokens em cada atendimento. Mantenha somente exceções e regras realmente necessárias.",
   },
   contexto: {
     amarelo: 7,
     vermelho: 10,
     unidade: "mensagens",
-    ideal: "Faixa econômica. O menor consumo real observado utilizou 4 mensagens de contexto recente.",
-    atencao: "Mais histórico é reenviado em cada chamada. Aumente apenas quando a continuidade da conversa realmente exigir.",
-    alto: "Contexto alto: cada mensagem pode acrescentar até 500 caracteres ao modelo. Reduza para controlar os tokens de entrada.",
+    ideal: "Quantidade recomendada para manter boa continuidade da conversa com consumo controlado de tokens.",
+    atencao: "O contexto passou de 6 mensagens e pode causar consumo maior de tokens durante o atendimento, porque mais histórico é reenviado em cada chamada.",
+    alto: "O contexto está muito alto e vai impactar em um grande consumo de tokens durante o atendimento. Reduza a quantidade de mensagens recentes sempre que possível.",
   },
   conhecimentoTitulo: {
     amarelo: 41,
     vermelho: 70,
     unidade: "caracteres",
-    ideal: "Bom. Títulos curtos ajudam a busca e entram no contexto quando o conhecimento é consultado.",
-    atencao: "O título acompanha o trecho retornado ao modelo. Prefira um nome objetivo e descritivo.",
-    alto: "Título muito longo. Resuma o assunto em poucas palavras para evitar contexto desnecessário.",
-  },
-  conhecimentoConteudo: {
-    amarelo: 851,
-    vermelho: 1700,
-    unidade: "caracteres",
-    ideal: "Faixa de referência: os conhecimentos do agente testado ficaram entre 507 e 849 caracteres por item.",
-    atencao: "O runtime envia somente o trecho relevante, limitado a 850 caracteres por resultado. Dividir assuntos melhora a precisão da busca.",
-    alto: "Conteúdo muito amplo para um único conhecimento. Divida em blocos focados para melhorar a recuperação e evitar trechos pouco úteis.",
+    ideal: "Tamanho adequado. Um título curto ajuda a busca e mantém o trecho consultado mais enxuto.",
+    atencao: "O título passou de 40 caracteres e pode aumentar o contexto quando este conhecimento for consultado. Prefira um título direto.",
+    alto: "O título está muito longo e adiciona texto desnecessário quando o conhecimento é enviado para a IA. Resuma o assunto em poucas palavras.",
   },
 } satisfies Record<string, RegraConsumo>;
 
@@ -305,7 +297,7 @@ function OrientacaoConsumo({ valor, regra }: { valor: number; regra: RegraConsum
         : "var(--crm-text-muted)";
   return (
     <small className={styles.fieldHint} style={{ color: cor }}>
-      <strong>{valor.toLocaleString("pt-BR")} {regra.unidade}</strong> · {mensagem}
+      <strong>{valor.toLocaleString("pt-BR")} {regra.unidade}</strong> - {mensagem}
     </small>
   );
 }
@@ -1798,7 +1790,7 @@ export default function AgentesIaPage() {
                       </div>
                     </div>
                     <div className={styles.scopeHint}>
-                      <strong>Como entra no consumo:</strong> a base não é enviada inteira em toda resposta. Quando consultada, o runtime retorna no máximo 2 resultados e envia até 850 caracteres do trecho de cada resultado, junto com o título. Por isso, conhecimentos curtos e focados tendem a ser mais precisos e econômicos.
+                      <strong>Como funciona:</strong> cada conhecimento pode ter no máximo 850 caracteres, que é o limite de texto enviado ao modelo por resultado consultado. Para conteúdos maiores, divida o assunto em conhecimentos separados. A base inteira não é enviada em todas as respostas.
                     </div>
                     <div className={styles.knowledgeForm}>
                       <label className={styles.field} style={{ marginBottom: 0 }}>
@@ -1838,24 +1830,15 @@ export default function AgentesIaPage() {
                         className={styles.field}
                         style={{ gridColumn: "1 / -1", marginBottom: 0 }}
                       >
-                        <span>Conteúdo</span>
+                        <span>Conteúdo · máximo 850 caracteres</span>
                         <textarea
                           rows={5}
+                          maxLength={850}
                           placeholder="Conteúdo confiável que o agente pode usar"
                           value={novoConhecimento.conteudo}
-                          style={estiloCampoConsumo(
-                            nivelConsumo(
-                              novoConhecimento.conteudo.length,
-                              REGRAS_CONSUMO.conhecimentoConteudo
-                            )
-                          )}
                           onChange={(event) =>
                             setNovoConhecimento({ ...novoConhecimento, conteudo: event.target.value })
                           }
-                        />
-                        <OrientacaoConsumo
-                          valor={novoConhecimento.conteudo.length}
-                          regra={REGRAS_CONSUMO.conhecimentoConteudo}
                         />
                       </label>
                       <label className={styles.field} style={{ marginBottom: 0 }}>
