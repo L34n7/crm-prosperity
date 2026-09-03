@@ -482,7 +482,8 @@ export default function AgendaAutomationSettings({
                                 templateId,
                                 templateConfig: defaultTemplateConfiguration(
                                   selected,
-                                  card.tipo === "confirmacao",
+                                  card.tipo === "confirmacao" ||
+                                    card.tipo === "lembrete",
                                 ),
                               });
                             }}
@@ -516,7 +517,9 @@ export default function AgendaAutomationSettings({
                         onChange={(templateConfig) =>
                           updateCard(card.tipo, { templateConfig })
                         }
-                        showButtonMappings={card.tipo === "confirmacao"}
+                        showButtonMappings={
+                          card.tipo === "confirmacao" || card.tipo === "lembrete"
+                        }
                       />
                     </>
                   ) : null}
