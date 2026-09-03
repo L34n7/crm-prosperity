@@ -72,6 +72,15 @@ export const TEMPLATE_SOURCE_OPTIONS: readonly AgendaTemplateSourceOption[] = [
     category: "Nome e número",
   },
   {
+    value: "nome_paciente",
+    variable: "{{nome_paciente}}",
+    label: "Nome captura",
+    description:
+      "Nome capturado pelo fluxo em NOME CAPTURA; quando não existir, usa o nome do WhatsApp.",
+    kind: "text",
+    category: "Nome e número",
+  },
+  {
     value: "numero_contato",
     variable: "{{numero_contato}}",
     label: "Número do contato",
@@ -532,6 +541,14 @@ function sourceValue(context: AgendaTemplateContext, source: string) {
       return appointment.nome_cliente || contact.nome || "";
     case "nome_whatsapp":
       return contact.whatsapp_profile_name || appointment.nome_cliente || contact.nome || "";
+    case "nome_paciente":
+      return (
+        context.variables?.nome_paciente ||
+        contact.whatsapp_profile_name ||
+        appointment.nome_cliente ||
+        contact.nome ||
+        ""
+      );
     case "numero_contato":
       return appointment.telefone_cliente || contact.telefone || "";
     case "email_contato":
