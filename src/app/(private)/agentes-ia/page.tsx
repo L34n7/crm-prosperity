@@ -304,7 +304,7 @@ function OrientacaoConsumo({ valor, regra }: { valor: number; regra: RegraConsum
         ? "var(--crm-warning-text)"
         : "var(--crm-text-muted)";
   return (
-    <small className={styles.fieldHint} style={{ color }}>
+    <small className={styles.fieldHint} style={{ color: cor }}>
       <strong>{valor.toLocaleString("pt-BR")} {regra.unidade}</strong> · {mensagem}
     </small>
   );
