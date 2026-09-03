@@ -148,6 +148,14 @@ function cloneAgente(agente: Agente): Agente {
   return JSON.parse(JSON.stringify(agente));
 }
 
+function normalizarAgenteParaIntegracoes(agente: Agente, integracoes: OpcaoIntegracao[]) {
+  const clone = cloneAgente(agente);
+  if (integracoes.length === 1) {
+    clone.integracoes_whatsapp_ids = [integracoes[0].id];
+  }
+  return clone;
+}
+
 function extrairCaracteristicas(valor?: string | null) {
   const vistos = new Set<string>();
   return String(valor || "")
@@ -244,18 +252,22 @@ export default function AgentesIaPage() {
       const res = await fetch("/api/agentes-ia", { cache: "no-store" });
       const json = (await res.json()) as RespostaLista;
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao carregar agentes.");
-      setAgentes(json.agentes || []);
-      setIntegracoes(json.opcoes?.integracoes || []);
+      const opcoesIntegracoes = json.opcoes?.integracoes || [];
+      const agentesNormalizados = (json.agentes || []).map((agente) =>
+        normalizarAgenteParaIntegracoes(agente, opcoesIntegracoes)
+      );
+      setAgentes(agentesNormalizados);
+      setIntegracoes(opcoesIntegracoes);
       setFluxos(json.opcoes?.fluxos || []);
       setSetores(json.opcoes?.setores || []);
       setAgendas(json.opcoes?.agendas || []);
       const proximoId =
-        (preferirId && json.agentes.some((item) => item.id === preferirId) && preferirId) ||
-        (selecionadoId && json.agentes.some((item) => item.id === selecionadoId) && selecionadoId) ||
-        json.agentes[0]?.id ||
+        (preferirId && agentesNormalizados.some((item) => item.id === preferirId) && preferirId) ||
+        (selecionadoId && agentesNormalizados.some((item) => item.id === selecionadoId) && selecionadoId) ||
+        agentesNormalizados[0]?.id ||
         "";
       setSelecionadoId(proximoId);
-      const proximo = json.agentes.find((item) => item.id === proximoId) || null;
+      const proximo = agentesNormalizados.find((item) => item.id === proximoId) || null;
       setEditor(proximo ? cloneAgente(proximo) : null);
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao carregar agentes.");
@@ -271,13 +283,13 @@ export default function AgentesIaPage() {
 
   useEffect(() => {
     if (selecionado) {
-      setEditor(cloneAgente(selecionado));
+      setEditor(normalizarAgenteParaIntegracoes(selecionado, integracoes));
       setRespostaTeste("");
       setTeste("");
       setBuscaCaracteristica("");
       setSeletorCaracteristicasAberto(false);
     }
-  }, [selecionado]);
+  }, [selecionado, integracoes]);
 
   async function criarAgente() {
     setErro("");
@@ -360,7 +372,7 @@ export default function AgentesIaPage() {
   }
 
   function alternarIntegracao(id: string) {
-    if (!editor) return;
+    if (!editor || integracoes.length <= 1) return;
     const atuais = editor.integracoes_whatsapp_ids || [];
     const proximos = atuais.includes(id)
       ? atuais.filter((item) => item !== id)
@@ -400,6 +412,8 @@ export default function AgentesIaPage() {
     setErro("");
     setSucesso("");
     try {
+      const integracoesSelecionadas =
+        integracoes.length === 1 ? [integracoes[0].id] : editor.integracoes_whatsapp_ids;
       const res = await fetch("/api/agentes-ia", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -414,14 +428,17 @@ export default function AgentesIaPage() {
           max_mensagens_contexto: editor.max_mensagens_contexto,
           debounce_ms: editor.debounce_ms,
           fallback_fluxo_id: editor.fallback_fluxo_id,
-          integracoes_whatsapp_ids: editor.integracoes_whatsapp_ids,
+          integracoes_whatsapp_ids: integracoesSelecionadas,
           ferramentas: editor.ferramentas,
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao salvar agente.");
-      setAgentes(json.agentes || []);
-      const atualizado = (json.agentes || []).find((item: Agente) => item.id === editor.id);
+      const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
+        normalizarAgenteParaIntegracoes(agente, integracoes)
+      );
+      setAgentes(agentesNormalizados);
+      const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
       if (atualizado) setEditor(cloneAgente(atualizado));
       setSucesso("Configuração salva.");
     } catch (error) {
@@ -451,8 +468,11 @@ export default function AgentesIaPage() {
       if (!res.ok || !json.ok) {
         throw new Error(json.error || (acao === "ativar" ? "Erro ao ativar agente." : "Erro ao pausar agente."));
       }
-      setAgentes(json.agentes || []);
-      const atualizado = (json.agentes || []).find((item: Agente) => item.id === editor.id);
+      const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
+        normalizarAgenteParaIntegracoes(agente, integracoes)
+      );
+      setAgentes(agentesNormalizados);
+      const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
       if (atualizado) setEditor(cloneAgente(atualizado));
       setSucesso(acao === "ativar" ? "Agente ativado." : "Agente pausado.");
     } catch (error) {
@@ -493,8 +513,11 @@ export default function AgentesIaPage() {
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao adicionar conhecimento.");
-      setAgentes(json.agentes || []);
-      const atualizado = (json.agentes || []).find((item: Agente) => item.id === editor.id);
+      const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
+        normalizarAgenteParaIntegracoes(agente, integracoes)
+      );
+      setAgentes(agentesNormalizados);
+      const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
       if (atualizado) setEditor(cloneAgente(atualizado));
       setNovoConhecimento({ titulo: "", categoria: "", conteudo: "", palavras_chave: "" });
     } catch (error) {
@@ -513,8 +536,11 @@ export default function AgentesIaPage() {
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao excluir conhecimento.");
-      setAgentes(json.agentes || []);
-      const atualizado = (json.agentes || []).find((item: Agente) => item.id === editor.id);
+      const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
+        normalizarAgenteParaIntegracoes(agente, integracoes)
+      );
+      setAgentes(agentesNormalizados);
+      const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
       if (atualizado) setEditor(cloneAgente(atualizado));
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao excluir conhecimento.");
@@ -721,20 +747,36 @@ export default function AgentesIaPage() {
                   </section>
 
                   <section className={styles.panel}>
-                    <div className={styles.panelTitle}><MessageCircle size={18} /><div><h3>Ativação e fallback</h3><p>Escolha em quais números o agente pode assumir a conversa.</p></div></div>
-                    <div className={styles.scopeHint}>Sem nenhum número marcado, o agente vale para <strong>todas as integrações WhatsApp</strong> da empresa.</div>
-                    <div className={styles.checkList}>
-                      {integracoes.map((integracao) => {
-                        const checked = (editor.integracoes_whatsapp_ids || []).includes(integracao.id);
-                        const nome = integracao.nome_conexao || integracao.phone_number_display_name || integracao.verified_name || "WhatsApp";
-                        return (
-                          <label key={integracao.id} className={styles.checkRow}>
-                            <input type="checkbox" checked={checked} onChange={() => alternarIntegracao(integracao.id)} />
-                            <span><strong>{nome}</strong><small>{integracao.numero || integracao.status || "Integração"}</small></span>
-                          </label>
-                        );
-                      })}
+                    <div className={styles.panelTitle}>
+                      <MessageCircle size={18} />
+                      <div>
+                        <h3>Ativação e fallback</h3>
+                        <p>
+                          {integracoes.length === 0
+                            ? "Conecte um WhatsApp para definir onde o agente atenderá."
+                            : integracoes.length === 1
+                              ? "O WhatsApp da empresa é vinculado automaticamente a este agente."
+                              : "Escolha em quais números o agente pode assumir a conversa."}
+                        </p>
+                      </div>
                     </div>
+                    {integracoes.length > 1 && (
+                      <>
+                        <div className={styles.scopeHint}>Sem nenhum número marcado, o agente vale para <strong>todas as integrações WhatsApp</strong> da empresa.</div>
+                        <div className={styles.checkList}>
+                          {integracoes.map((integracao) => {
+                            const checked = (editor.integracoes_whatsapp_ids || []).includes(integracao.id);
+                            const nome = integracao.nome_conexao || integracao.phone_number_display_name || integracao.verified_name || "WhatsApp";
+                            return (
+                              <label key={integracao.id} className={styles.checkRow}>
+                                <input type="checkbox" checked={checked} onChange={() => alternarIntegracao(integracao.id)} />
+                                <span><strong>{nome}</strong><small>{integracao.numero || integracao.status || "Integração"}</small></span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                     <label className={styles.field}><span>Fluxo de fallback</span><select value={editor.fallback_fluxo_id || ""} onChange={(event) => setEditor({ ...editor, fallback_fluxo_id: event.target.value || null })}><option value="">Motor de Fluxos atual</option>{fluxos.map((fluxo) => <option key={fluxo.id} value={fluxo.id}>{fluxo.nome}</option>)}</select></label>
                     <div className={styles.formGrid}>
                       <label className={styles.field}><span>Contexto recente</span><input type="number" min={4} max={40} value={editor.max_mensagens_contexto} onChange={(event) => setEditor({ ...editor, max_mensagens_contexto: Number(event.target.value) })} /></label>
