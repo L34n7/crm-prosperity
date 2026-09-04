@@ -10,10 +10,32 @@ body .a2 .modal {
 
 body .a2 .modal > fieldset {
   flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * O fieldset fica entre o modal e o .body. Sem esta regra, o seletor global
+ * `.modal > .body` nao se aplica e, principalmente no Safari mobile, o
+ * conteudo pode crescer por baixo do rodape em vez de formar uma area rolavel.
+ */
+body .a2 .modal > fieldset > .body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: 24px;
 }
 
 @media (max-width: 820px) {
   body .a2 .modal {
     height: min(920px, calc(100dvh - 20px));
+  }
+
+  body .a2 .modal > fieldset > .body {
+    padding-bottom: calc(28px + env(safe-area-inset-bottom));
   }
 }
