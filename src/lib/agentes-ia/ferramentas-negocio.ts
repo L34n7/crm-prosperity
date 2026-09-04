@@ -13,25 +13,71 @@ export const TIPOS_FERRAMENTAS_NEGOCIO = [
 ] as const;
 
 export type TipoFerramentaNegocio = (typeof TIPOS_FERRAMENTAS_NEGOCIO)[number];
+export type HistoricoNegocio = { role: "user" | "assistant"; content: string };
+export type ItemVendaAgente = { estoque_item_id: string; quantidade: number };
 
-export type HistoricoNegocio = {
-  role: "user" | "assistant";
-  content: string;
+type ProdutoEstoque = {
+  id: string;
+  nome: string;
+  sku: string | null;
+  codigo: string | null;
+  codigo_barras: string | null;
+  descricao: string | null;
+  unidade: string;
+  saldo_disponivel: number;
+  rank: number;
 };
 
-export type ItemVendaAgente = {
-  estoque_item_id: string;
-  quantidade: number;
+type ProdutoValor = {
+  id: string;
+  nome: string;
+  sku: string | null;
+  codigo: string | null;
+  unidade: string;
+  preco_venda: number | null;
+  rank: number;
+};
+
+type Servico = {
+  id: string;
+  nome: string;
+  codigo: string | null;
+  categoria: string | null;
+  descricao: string | null;
+  unidade: string | null;
+  preco: number | null;
+  duracao_minutos: number | null;
+  rank: number;
+};
+
+type Imovel = {
+  id: string;
+  titulo: string;
+  codigo: string | null;
+  tipo: string | null;
+  finalidade: string | null;
+  valor: number | null;
+  valor_condominio: number | null;
+  valor_iptu: number | null;
+  bairro: string | null;
+  cidade: string | null;
+  estado: string | null;
+  quartos: number | null;
+  suites: number | null;
+  banheiros: number | null;
+  vagas: number | null;
+  area_m2: number | null;
+  descricao: string | null;
+  caracteristicas: string | null;
+  fotos: unknown[];
+  rank: number;
 };
 
 export type PreconsultaNegocio = {
   relevante: boolean;
   consulta: string;
   blocos: string[];
-  resultados: Array<{
-    ferramenta: TipoFerramentaNegocio;
-    dados: unknown[];
-  }>;
+  resultados: Array<{ ferramenta: TipoFerramentaNegocio; dados: unknown[] }>;
   produtosAutorizados: Set<string>;
   confirmacaoVenda: boolean;
 };
@@ -51,57 +97,37 @@ export function normalizarTextoNegocio(valor: unknown) {
 
 export function ehConfirmacaoCurtaVenda(valor: unknown) {
   const texto = normalizarTextoNegocio(valor).replace(/[.!?]+$/g, "");
-  return /^(sim|sim quero|quero|quero sim|pode|pode sim|pode fechar|fecha|fechado|confirmo|confirmado|vou levar|eu quero|compro|pode fazer|pode gerar|pode reservar|separa pra mim|separe pra mim)$/.test(
-    texto
-  );
+  return /^(sim|sim quero|quero|quero sim|pode|pode sim|pode fechar|fecha|fechado|confirmo|confirmado|vou levar|eu quero|compro|pode fazer|pode gerar|pode reservar|separa pra mim|separe pra mim)$/.test(texto);
 }
 
 function possuiIntencaoDiretaVenda(valor: unknown) {
   const texto = normalizarTextoNegocio(valor);
-  return (
-    /\b(quero comprar|vou levar|eu levo|compro|fechar (?:a )?compra|fechar (?:o )?pedido|pode fechar|pode gerar (?:o )?pedido|pode reservar|separa pra mim|separe pra mim|me ve|me vê)\b/.test(
-      texto
-    ) ||
-    /\bquero\s+\d+(?:[,.]\d+)?\b/.test(texto)
-  );
+  return /\b(quero comprar|vou levar|eu levo|compro|fechar (?:a )?compra|fechar (?:o )?pedido|pode fechar|pode gerar (?:o )?pedido|pode reservar|separa pra mim|separe pra mim|me ve|me vê)\b/.test(texto) || /\bquero\s+\d+(?:[,.]\d+)?\b/.test(texto);
 }
 
 function historicoTemContextoVenda(historico: HistoricoNegocio[]) {
-  const ultimos = historico.slice(-5);
-  return ultimos.some((item) => {
+  return historico.slice(-5).some((item) => {
     const texto = normalizarTextoNegocio(item.content);
-    if (item.role === "assistant") {
-      return /\b(r\$|preco|valor|produto|unidade|comprar|pedido|fechar|levar|reservar)\b/.test(texto);
-    }
-    return /\b(produto|comprar|compra|levar|pedido|quantidade|unidade|preco|valor|r\$)\b/.test(texto);
+    return item.role === "assistant"
+      ? /\b(r\$|preco|valor|produto|unidade|comprar|pedido|fechar|levar|reservar)\b/.test(texto)
+      : /\b(produto|comprar|compra|levar|pedido|quantidade|unidade|preco|valor|r\$)\b/.test(texto);
   });
 }
 
-export function confirmacaoVendaPeloHistorico(
-  mensagem: string,
-  historico: HistoricoNegocio[]
-) {
+export function confirmacaoVendaPeloHistorico(mensagem: string, historico: HistoricoNegocio[]) {
   if (possuiIntencaoDiretaVenda(mensagem)) return true;
   return ehConfirmacaoCurtaVenda(mensagem) && historicoTemContextoVenda(historico);
 }
 
 function consultaParaNegocio(mensagem: string, historico: HistoricoNegocio[]) {
   if (!ehConfirmacaoCurtaVenda(mensagem)) return textoCurto(mensagem, 180);
-  const anteriorUsuario = [...historico]
-    .reverse()
-    .find(
-      (item) =>
-        item.role === "user" &&
-        !ehConfirmacaoCurtaVenda(item.content) &&
-        textoCurto(item.content, 180).length >= 3
-    );
-  return textoCurto(anteriorUsuario?.content || mensagem, 180);
+  const anterior = [...historico].reverse().find(
+    (item) => item.role === "user" && !ehConfirmacaoCurtaVenda(item.content) && textoCurto(item.content, 180).length >= 3
+  );
+  return textoCurto(anterior?.content || mensagem, 180);
 }
 
-export async function carregarFerramentasNegocioAtivas(
-  empresaId: string,
-  agenteId: string
-) {
+export async function carregarFerramentasNegocioAtivas(empresaId: string, agenteId: string) {
   const { data, error } = await supabaseAdmin
     .from("agente_ia_ferramentas")
     .select("tipo, config_json")
@@ -110,6 +136,7 @@ export async function carregarFerramentasNegocioAtivas(
     .eq("ativo", true)
     .in("tipo", [...TIPOS_FERRAMENTAS_NEGOCIO]);
   if (error) throw new Error(error.message);
+
   const mapa = new Map<TipoFerramentaNegocio, Record<string, unknown>>();
   for (const item of data || []) {
     const tipo = String(item.tipo || "") as TipoFerramentaNegocio;
@@ -120,14 +147,14 @@ export async function carregarFerramentasNegocioAtivas(
   return mapa;
 }
 
-export async function consultarProdutosEstoque(empresaId: string, consulta: string) {
+export async function consultarProdutosEstoque(empresaId: string, consulta: string): Promise<ProdutoEstoque[]> {
   const { data, error } = await supabaseAdmin.rpc("agente_ia_consultar_produtos_estoque", {
     p_empresa_id: empresaId,
     p_consulta: textoCurto(consulta, 180),
     p_limite: 5,
   });
   if (error) throw new Error(error.message);
-  return (data || []).slice(0, 5).map((item: any) => ({
+  return (data || []).slice(0, 5).map((item: any): ProdutoEstoque => ({
     id: String(item.id),
     nome: textoCurto(item.nome, 160),
     sku: textoCurto(item.sku, 80) || null,
@@ -140,35 +167,32 @@ export async function consultarProdutosEstoque(empresaId: string, consulta: stri
   }));
 }
 
-export async function informarValorProduto(empresaId: string, consulta: string) {
+export async function informarValorProduto(empresaId: string, consulta: string): Promise<ProdutoValor[]> {
   const { data, error } = await supabaseAdmin.rpc("agente_ia_informar_valor_produto", {
     p_empresa_id: empresaId,
     p_consulta: textoCurto(consulta, 180),
     p_limite: 5,
   });
   if (error) throw new Error(error.message);
-  return (data || []).slice(0, 5).map((item: any) => ({
+  return (data || []).slice(0, 5).map((item: any): ProdutoValor => ({
     id: String(item.id),
     nome: textoCurto(item.nome, 160),
     sku: textoCurto(item.sku, 80) || null,
     codigo: textoCurto(item.codigo, 80) || null,
     unidade: textoCurto(item.unidade, 30) || "un",
-    preco_venda:
-      item.preco_venda === null || item.preco_venda === undefined
-        ? null
-        : Number(item.preco_venda),
+    preco_venda: item.preco_venda === null || item.preco_venda === undefined ? null : Number(item.preco_venda),
     rank: Number(item.rank || 0),
   }));
 }
 
-export async function consultarServicos(empresaId: string, consulta: string) {
+export async function consultarServicos(empresaId: string, consulta: string): Promise<Servico[]> {
   const { data, error } = await supabaseAdmin.rpc("agente_ia_consultar_servicos", {
     p_empresa_id: empresaId,
     p_consulta: textoCurto(consulta, 180),
     p_limite: 5,
   });
   if (error) throw new Error(error.message);
-  return (data || []).slice(0, 5).map((item: any) => ({
+  return (data || []).slice(0, 5).map((item: any): Servico => ({
     id: String(item.id),
     nome: textoCurto(item.nome, 160),
     codigo: textoCurto(item.codigo, 80) || null,
@@ -176,10 +200,7 @@ export async function consultarServicos(empresaId: string, consulta: string) {
     descricao: textoCurto(item.descricao, 450) || null,
     unidade: textoCurto(item.unidade, 30) || null,
     preco: item.preco === null || item.preco === undefined ? null : Number(item.preco),
-    duracao_minutos:
-      item.duracao_minutos === null || item.duracao_minutos === undefined
-        ? null
-        : Number(item.duracao_minutos),
+    duracao_minutos: item.duracao_minutos === null || item.duracao_minutos === undefined ? null : Number(item.duracao_minutos),
     rank: Number(item.rank || 0),
   }));
 }
@@ -195,56 +216,39 @@ export async function consultarImoveis(
     quartos_minimos?: number | null;
     vagas_minimas?: number | null;
   }
-) {
+): Promise<Imovel[]> {
   const { data, error } = await supabaseAdmin.rpc("agente_ia_consultar_imoveis", {
     p_empresa_id: empresaId,
     p_consulta: textoCurto(filtros.consulta, 180) || null,
     p_finalidade: textoCurto(filtros.finalidade, 40) || null,
     p_cidade: textoCurto(filtros.cidade, 100) || null,
     p_bairro: textoCurto(filtros.bairro, 100) || null,
-    p_valor_maximo:
-      Number.isFinite(Number(filtros.valor_maximo)) && Number(filtros.valor_maximo) > 0
-        ? Number(filtros.valor_maximo)
-        : null,
-    p_quartos_minimos:
-      Number.isFinite(Number(filtros.quartos_minimos)) && Number(filtros.quartos_minimos) > 0
-        ? Math.floor(Number(filtros.quartos_minimos))
-        : null,
-    p_vagas_minimas:
-      Number.isFinite(Number(filtros.vagas_minimas)) && Number(filtros.vagas_minimas) > 0
-        ? Math.floor(Number(filtros.vagas_minimas))
-        : null,
+    p_valor_maximo: Number.isFinite(Number(filtros.valor_maximo)) && Number(filtros.valor_maximo) > 0 ? Number(filtros.valor_maximo) : null,
+    p_quartos_minimos: Number.isFinite(Number(filtros.quartos_minimos)) && Number(filtros.quartos_minimos) > 0 ? Math.floor(Number(filtros.quartos_minimos)) : null,
+    p_vagas_minimas: Number.isFinite(Number(filtros.vagas_minimas)) && Number(filtros.vagas_minimas) > 0 ? Math.floor(Number(filtros.vagas_minimas)) : null,
     p_limite: 5,
   });
   if (error) throw new Error(error.message);
-  return (data || []).slice(0, 5).map((item: any) => ({
+
+  return (data || []).slice(0, 5).map((item: any): Imovel => ({
     id: String(item.id),
     titulo: textoCurto(item.titulo, 180),
     codigo: textoCurto(item.codigo, 80) || null,
     tipo: textoCurto(item.tipo, 80) || null,
     finalidade: textoCurto(item.finalidade, 50) || null,
     valor: item.valor === null || item.valor === undefined ? null : Number(item.valor),
-    valor_condominio:
-      item.valor_condominio === null || item.valor_condominio === undefined
-        ? null
-        : Number(item.valor_condominio),
-    valor_iptu:
-      item.valor_iptu === null || item.valor_iptu === undefined
-        ? null
-        : Number(item.valor_iptu),
+    valor_condominio: item.valor_condominio === null || item.valor_condominio === undefined ? null : Number(item.valor_condominio),
+    valor_iptu: item.valor_iptu === null || item.valor_iptu === undefined ? null : Number(item.valor_iptu),
     bairro: textoCurto(item.bairro, 100) || null,
     cidade: textoCurto(item.cidade, 100) || null,
     estado: textoCurto(item.estado, 40) || null,
-    quartos: item.quartos ?? null,
-    suites: item.suites ?? null,
-    banheiros: item.banheiros ?? null,
-    vagas: item.vagas ?? null,
-    area_m2: item.area_m2 ?? null,
+    quartos: item.quartos === null || item.quartos === undefined ? null : Number(item.quartos),
+    suites: item.suites === null || item.suites === undefined ? null : Number(item.suites),
+    banheiros: item.banheiros === null || item.banheiros === undefined ? null : Number(item.banheiros),
+    vagas: item.vagas === null || item.vagas === undefined ? null : Number(item.vagas),
+    area_m2: item.area_m2 === null || item.area_m2 === undefined ? null : Number(item.area_m2),
     descricao: textoCurto(item.descricao, 500) || null,
-    caracteristicas:
-      item.caracteristicas && typeof item.caracteristicas === "object"
-        ? JSON.stringify(item.caracteristicas).slice(0, 600)
-        : null,
+    caracteristicas: item.caracteristicas && typeof item.caracteristicas === "object" ? JSON.stringify(item.caracteristicas).slice(0, 600) : null,
     fotos: Array.isArray(item.fotos) ? item.fotos.slice(0, 4) : [],
     rank: Number(item.rank || 0),
   }));
@@ -253,50 +257,27 @@ export async function consultarImoveis(
 function formatarDinheiro(valor: unknown) {
   const numero = Number(valor);
   if (!Number.isFinite(numero)) return "não informado";
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(numero);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(numero);
 }
 
-function blocoProdutos(produtos: Awaited<ReturnType<typeof consultarProdutosEstoque>>) {
+function blocoProdutos(produtos: ProdutoEstoque[]) {
   if (!produtos.length) return "PRODUTOS/ESTOQUE: nenhum produto compatível encontrado.";
-  return `PRODUTOS/ESTOQUE ATUAIS:\n${produtos
-    .map(
-      (item) =>
-        `- id=${item.id}; ${item.nome}; saldo disponível=${item.saldo_disponivel} ${item.unidade}${item.sku ? `; SKU=${item.sku}` : ""}${item.descricao ? `; ${item.descricao}` : ""}`
-    )
-    .join("\n")}`;
+  return `PRODUTOS/ESTOQUE ATUAIS:\n${produtos.map((item: ProdutoEstoque) => `- id=${item.id}; ${item.nome}; saldo disponível=${item.saldo_disponivel} ${item.unidade}${item.sku ? `; SKU=${item.sku}` : ""}${item.descricao ? `; ${item.descricao}` : ""}`).join("\n")}`;
 }
 
-function blocoValores(produtos: Awaited<ReturnType<typeof informarValorProduto>>) {
+function blocoValores(produtos: ProdutoValor[]) {
   if (!produtos.length) return "VALORES DE PRODUTOS: nenhum produto compatível encontrado.";
-  return `PREÇOS DE VENDA ATUAIS:\n${produtos
-    .map(
-      (item) =>
-        `- id=${item.id}; ${item.nome}; preço=${item.preco_venda === null ? "não cadastrado" : formatarDinheiro(item.preco_venda)}; unidade=${item.unidade}`
-    )
-    .join("\n")}`;
+  return `PREÇOS DE VENDA ATUAIS:\n${produtos.map((item: ProdutoValor) => `- id=${item.id}; ${item.nome}; preço=${item.preco_venda === null ? "não cadastrado" : formatarDinheiro(item.preco_venda)}; unidade=${item.unidade}`).join("\n")}`;
 }
 
-function blocoServicos(servicos: Awaited<ReturnType<typeof consultarServicos>>) {
+function blocoServicos(servicos: Servico[]) {
   if (!servicos.length) return "SERVIÇOS: nenhum serviço compatível encontrado.";
-  return `SERVIÇOS ATUAIS:\n${servicos
-    .map(
-      (item) =>
-        `- ${item.nome}${item.preco === null ? "" : `; preço=${formatarDinheiro(item.preco)}`}${item.duracao_minutos ? `; duração=${item.duracao_minutos} min` : ""}${item.descricao ? `; ${item.descricao}` : ""}`
-    )
-    .join("\n")}`;
+  return `SERVIÇOS ATUAIS:\n${servicos.map((item: Servico) => `- ${item.nome}${item.preco === null ? "" : `; preço=${formatarDinheiro(item.preco)}`}${item.duracao_minutos ? `; duração=${item.duracao_minutos} min` : ""}${item.descricao ? `; ${item.descricao}` : ""}`).join("\n")}`;
 }
 
-function blocoImoveis(imoveis: Awaited<ReturnType<typeof consultarImoveis>>) {
+function blocoImoveis(imoveis: Imovel[]) {
   if (!imoveis.length) return "IMÓVEIS: nenhum imóvel disponível compatível encontrado.";
-  return `IMÓVEIS DISPONÍVEIS:\n${imoveis
-    .map(
-      (item) =>
-        `- id=${item.id}; ${item.titulo}${item.codigo ? `; código=${item.codigo}` : ""}${item.finalidade ? `; finalidade=${item.finalidade}` : ""}${item.valor === null ? "" : `; valor=${formatarDinheiro(item.valor)}`}${item.bairro ? `; bairro=${item.bairro}` : ""}${item.cidade ? `; cidade=${item.cidade}` : ""}${item.quartos !== null ? `; quartos=${item.quartos}` : ""}${item.vagas !== null ? `; vagas=${item.vagas}` : ""}${item.descricao ? `; ${item.descricao}` : ""}`
-    )
-    .join("\n")}`;
+  return `IMÓVEIS DISPONÍVEIS:\n${imoveis.map((item: Imovel) => `- id=${item.id}; ${item.titulo}${item.codigo ? `; código=${item.codigo}` : ""}${item.finalidade ? `; finalidade=${item.finalidade}` : ""}${item.valor === null ? "" : `; valor=${formatarDinheiro(item.valor)}`}${item.bairro ? `; bairro=${item.bairro}` : ""}${item.cidade ? `; cidade=${item.cidade}` : ""}${item.quartos !== null ? `; quartos=${item.quartos}` : ""}${item.vagas !== null ? `; vagas=${item.vagas}` : ""}${item.descricao ? `; ${item.descricao}` : ""}`).join("\n")}`;
 }
 
 export async function preconsultarNegocio(params: {
@@ -310,49 +291,31 @@ export async function preconsultarNegocio(params: {
   const texto = normalizarTextoNegocio(params.mensagem);
   const consulta = consultaParaNegocio(params.mensagem, historico);
   const confirmacaoVenda = confirmacaoVendaPeloHistorico(params.mensagem, historico);
-
-  const sinalProduto = /\b(produto|produtos|estoque|disponivel|disponibilidade|tem|vende|vender|comprar|compra|levar|quantidade|unidade)\b/.test(
-    texto
-  );
+  const sinalProduto = /\b(produto|produtos|estoque|disponivel|disponibilidade|tem|vende|vender|comprar|compra|levar|quantidade|unidade)\b/.test(texto);
   const sinalValor = /\b(preco|precos|valor|valores|quanto custa|custa|custam|r\$|reais)\b/.test(texto);
-  const sinalServico = /\b(servico|servicos|procedimento|atendimento|orcamento de servico|banho|tosa|consulta|instalacao|manutencao)\b/.test(
-    texto
-  );
-  const sinalImovel = /\b(imovel|imoveis|casa|apartamento|apto|terreno|sobrado|aluguel|alugar|locacao|quartos|suite|suites|vagas|bairro)\b/.test(
-    texto
-  );
-  const sinalOfertaGenerica = /\b(voces tem|voce tem|tem algum|tem alguma|voces fazem|voce faz|oferece|oferecem)\b/.test(
-    texto
-  );
+  const sinalServico = /\b(servico|servicos|procedimento|atendimento|orcamento de servico|banho|tosa|consulta|instalacao|manutencao)\b/.test(texto);
+  const sinalImovel = /\b(imovel|imoveis|casa|apartamento|apto|terreno|sobrado|aluguel|alugar|locacao|quartos|suite|suites|vagas|bairro)\b/.test(texto);
+  const sinalOfertaGenerica = /\b(voces tem|voce tem|tem algum|tem alguma|voces fazem|voce faz|oferece|oferecem)\b/.test(texto);
 
   const blocos: string[] = [];
   const resultados: PreconsultaNegocio["resultados"] = [];
   const produtosAutorizados = new Set<string>();
 
-  if (
-    params.ferramentas.has("consultar_produtos_estoque") &&
-    (sinalProduto || sinalValor || confirmacaoVenda || sinalOfertaGenerica)
-  ) {
+  if (params.ferramentas.has("consultar_produtos_estoque") && (sinalProduto || sinalValor || confirmacaoVenda || sinalOfertaGenerica)) {
     const dados = await consultarProdutosEstoque(params.empresaId, consulta);
     dados.forEach((item) => produtosAutorizados.add(item.id));
     resultados.push({ ferramenta: "consultar_produtos_estoque", dados });
     if (dados.length || sinalProduto || confirmacaoVenda) blocos.push(blocoProdutos(dados));
   }
 
-  if (
-    params.ferramentas.has("informar_valor_produto") &&
-    (sinalValor || confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem))
-  ) {
+  if (params.ferramentas.has("informar_valor_produto") && (sinalValor || confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem))) {
     const dados = await informarValorProduto(params.empresaId, consulta);
     dados.forEach((item) => produtosAutorizados.add(item.id));
     resultados.push({ ferramenta: "informar_valor_produto", dados });
     if (dados.length || sinalValor) blocos.push(blocoValores(dados));
   }
 
-  if (
-    params.ferramentas.has("consultar_servicos") &&
-    (sinalServico || sinalValor || sinalOfertaGenerica)
-  ) {
+  if (params.ferramentas.has("consultar_servicos") && (sinalServico || sinalValor || sinalOfertaGenerica)) {
     const dados = await consultarServicos(params.empresaId, consulta);
     resultados.push({ ferramenta: "consultar_servicos", dados });
     if (dados.length || sinalServico) blocos.push(blocoServicos(dados));
@@ -364,27 +327,15 @@ export async function preconsultarNegocio(params: {
     blocos.push(blocoImoveis(dados));
   }
 
-  const vendaRelevante =
-    params.ferramentas.has("realizar_venda") &&
-    (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
-
+  const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
   const houveDado = resultados.some((item) => item.dados.length > 0);
   const sinalExplicitoComFerramenta =
     (sinalProduto && params.ferramentas.has("consultar_produtos_estoque")) ||
-    (sinalValor &&
-      (params.ferramentas.has("informar_valor_produto") ||
-        params.ferramentas.has("consultar_servicos"))) ||
+    (sinalValor && (params.ferramentas.has("informar_valor_produto") || params.ferramentas.has("consultar_servicos"))) ||
     (sinalServico && params.ferramentas.has("consultar_servicos")) ||
     (sinalImovel && params.ferramentas.has("consultar_imoveis"));
 
-  return {
-    relevante: vendaRelevante || houveDado || sinalExplicitoComFerramenta,
-    consulta,
-    blocos,
-    resultados,
-    produtosAutorizados,
-    confirmacaoVenda,
-  };
+  return { relevante: vendaRelevante || houveDado || sinalExplicitoComFerramenta, consulta, blocos, resultados, produtosAutorizados, confirmacaoVenda };
 }
 
 export async function executarFerramentaNegocio(params: {
@@ -398,52 +349,35 @@ export async function executarFerramentaNegocio(params: {
   mensagemIds: string[];
 }) {
   if (params.tipo === "consultar_produtos_estoque") {
-    const dados = await consultarProdutosEstoque(
-      params.empresaId,
-      textoCurto(params.argumentos?.consulta, 180)
-    );
+    const dados = await consultarProdutosEstoque(params.empresaId, textoCurto(params.argumentos?.consulta, 180));
     dados.forEach((item) => params.produtosAutorizados.add(item.id));
     return { ok: true, produtos: dados };
   }
-
   if (params.tipo === "informar_valor_produto") {
-    const dados = await informarValorProduto(
-      params.empresaId,
-      textoCurto(params.argumentos?.consulta, 180)
-    );
+    const dados = await informarValorProduto(params.empresaId, textoCurto(params.argumentos?.consulta, 180));
     dados.forEach((item) => params.produtosAutorizados.add(item.id));
     return { ok: true, produtos: dados };
   }
-
   if (params.tipo === "consultar_servicos") {
-    const dados = await consultarServicos(
-      params.empresaId,
-      textoCurto(params.argumentos?.consulta, 180)
-    );
-    return { ok: true, servicos: dados };
+    return { ok: true, servicos: await consultarServicos(params.empresaId, textoCurto(params.argumentos?.consulta, 180)) };
   }
-
   if (params.tipo === "consultar_imoveis") {
-    const dados = await consultarImoveis(params.empresaId, {
-      consulta: textoCurto(params.argumentos?.consulta, 180) || null,
-      finalidade: textoCurto(params.argumentos?.finalidade, 40) || null,
-      cidade: textoCurto(params.argumentos?.cidade, 100) || null,
-      bairro: textoCurto(params.argumentos?.bairro, 100) || null,
-      valor_maximo: params.argumentos?.valor_maximo ?? null,
-      quartos_minimos: params.argumentos?.quartos_minimos ?? null,
-      vagas_minimas: params.argumentos?.vagas_minimas ?? null,
-    });
-    return { ok: true, imoveis: dados };
+    return {
+      ok: true,
+      imoveis: await consultarImoveis(params.empresaId, {
+        consulta: textoCurto(params.argumentos?.consulta, 180) || null,
+        finalidade: textoCurto(params.argumentos?.finalidade, 40) || null,
+        cidade: textoCurto(params.argumentos?.cidade, 100) || null,
+        bairro: textoCurto(params.argumentos?.bairro, 100) || null,
+        valor_maximo: params.argumentos?.valor_maximo ?? null,
+        quartos_minimos: params.argumentos?.quartos_minimos ?? null,
+        vagas_minimas: params.argumentos?.vagas_minimas ?? null,
+      }),
+    };
   }
-
   if (params.tipo === "realizar_venda") {
     if (!params.confirmacaoVenda) {
-      return {
-        ok: false,
-        code: "CONFIRMACAO_CLIENTE_OBRIGATORIA",
-        error:
-          "A venda só pode ser criada depois de uma confirmação explícita do cliente na conversa atual.",
-      };
+      return { ok: false, code: "CONFIRMACAO_CLIENTE_OBRIGATORIA", error: "A venda só pode ser criada depois de uma confirmação explícita do cliente na conversa atual." };
     }
     if (!Array.isArray(params.argumentos?.itens) || !params.argumentos.itens.length) {
       return { ok: false, error: "Informe os itens e quantidades confirmados pelo cliente." };
@@ -454,30 +388,17 @@ export async function executarFerramentaNegocio(params: {
       const id = String(item?.estoque_item_id || "").trim();
       const quantidade = Number(item?.quantidade);
       if (!id || !params.produtosAutorizados.has(id)) {
-        return {
-          ok: false,
-          code: "PRODUTO_NAO_VALIDADO",
-          error:
-            "O produto precisa ter sido consultado no backend nesta execução antes de entrar na venda.",
-        };
+        return { ok: false, code: "PRODUTO_NAO_VALIDADO", error: "O produto precisa ter sido consultado no backend nesta execução antes de entrar na venda." };
       }
       if (!Number.isFinite(quantidade) || quantidade <= 0 || quantidade > 9999) {
         return { ok: false, error: "Quantidade inválida para a venda." };
       }
       agregados.set(id, (agregados.get(id) || 0) + quantidade);
     }
-    const itens: ItemVendaAgente[] = Array.from(agregados.entries()).map(
-      ([estoque_item_id, quantidade]) => ({ estoque_item_id, quantidade })
-    );
-    const assinatura = JSON.stringify(
-      [...itens].sort((a, b) => a.estoque_item_id.localeCompare(b.estoque_item_id))
-    );
-    const idempotencyKey = `agente-ia:${crypto
-      .createHash("sha256")
-      .update(
-        `${params.empresaId}:${params.conversaId}:${params.mensagemIds.join(",")}:${assinatura}`
-      )
-      .digest("hex")}`;
+
+    const itens: ItemVendaAgente[] = Array.from(agregados.entries()).map(([estoque_item_id, quantidade]) => ({ estoque_item_id, quantidade }));
+    const assinatura = JSON.stringify([...itens].sort((a, b) => a.estoque_item_id.localeCompare(b.estoque_item_id)));
+    const idempotencyKey = `agente-ia:${crypto.createHash("sha256").update(`${params.empresaId}:${params.conversaId}:${params.mensagemIds.join(",")}:${assinatura}`).digest("hex")}`;
 
     const { data, error } = await supabaseAdmin.rpc("agente_ia_realizar_venda", {
       p_empresa_id: params.empresaId,
@@ -489,7 +410,6 @@ export async function executarFerramentaNegocio(params: {
     if (error) throw new Error(error.message);
     return data || { ok: false, error: "Não foi possível criar o pedido de venda." };
   }
-
   return { ok: false, error: "Ferramenta de negócio não executável diretamente." };
 }
 
@@ -498,60 +418,20 @@ export function definicoesFerramentasNegocio(
   preconsulta: PreconsultaNegocio
 ) {
   const defs: any[] = [];
-
   if (ferramentas.has("consultar_produtos_estoque")) {
-    defs.push({
-      type: "function",
-      name: "consultar_produtos_estoque",
-      description:
-        "Consulta produtos e saldo disponível real. Não retorna preço. Use antes de afirmar disponibilidade ou antes de vender.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: { consulta: { type: "string", maxLength: 180 } },
-        required: ["consulta"],
-        additionalProperties: false,
-      },
-    });
+    defs.push({ type: "function", name: "consultar_produtos_estoque", description: "Consulta produtos e saldo disponível real. Não retorna preço. Use antes de afirmar disponibilidade ou vender.", strict: true, parameters: { type: "object", properties: { consulta: { type: "string", maxLength: 180 } }, required: ["consulta"], additionalProperties: false } });
   }
-
   if (ferramentas.has("informar_valor_produto")) {
-    defs.push({
-      type: "function",
-      name: "informar_valor_produto",
-      description:
-        "Consulta o preço de venda atual cadastrado. Nunca estime, altere ou invente preço.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: { consulta: { type: "string", maxLength: 180 } },
-        required: ["consulta"],
-        additionalProperties: false,
-      },
-    });
+    defs.push({ type: "function", name: "informar_valor_produto", description: "Consulta o preço de venda atual cadastrado. Nunca estime, altere ou invente preço.", strict: true, parameters: { type: "object", properties: { consulta: { type: "string", maxLength: 180 } }, required: ["consulta"], additionalProperties: false } });
   }
-
   if (ferramentas.has("consultar_servicos")) {
-    defs.push({
-      type: "function",
-      name: "consultar_servicos",
-      description: "Consulta serviços ativos, preço, descrição e duração atuais.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: { consulta: { type: "string", maxLength: 180 } },
-        required: ["consulta"],
-        additionalProperties: false,
-      },
-    });
+    defs.push({ type: "function", name: "consultar_servicos", description: "Consulta serviços ativos, preço, descrição e duração atuais.", strict: true, parameters: { type: "object", properties: { consulta: { type: "string", maxLength: 180 } }, required: ["consulta"], additionalProperties: false } });
   }
-
   if (ferramentas.has("consultar_imoveis")) {
     defs.push({
       type: "function",
       name: "consultar_imoveis",
-      description:
-        "Busca imóveis atualmente disponíveis usando os filtros informados pelo cliente.",
+      description: "Busca imóveis atualmente disponíveis usando os filtros informados pelo cliente.",
       strict: true,
       parameters: {
         type: "object",
@@ -564,26 +444,16 @@ export function definicoesFerramentasNegocio(
           quartos_minimos: { anyOf: [{ type: "integer" }, { type: "null" }] },
           vagas_minimas: { anyOf: [{ type: "integer" }, { type: "null" }] },
         },
-        required: [
-          "consulta",
-          "finalidade",
-          "cidade",
-          "bairro",
-          "valor_maximo",
-          "quartos_minimos",
-          "vagas_minimas",
-        ],
+        required: ["consulta", "finalidade", "cidade", "bairro", "valor_maximo", "quartos_minimos", "vagas_minimas"],
         additionalProperties: false,
       },
     });
   }
-
   if (ferramentas.has("realizar_venda") && preconsulta.confirmacaoVenda) {
     defs.push({
       type: "function",
       name: "realizar_venda",
-      description:
-        "Cria pedido de venda e reserva estoque usando preço real do backend. Use SOMENTE após confirmação explícita do cliente. Não confirma pagamento.",
+      description: "Cria pedido de venda e reserva estoque usando preço real do backend. Use SOMENTE após confirmação explícita do cliente. Não confirma pagamento.",
       strict: true,
       parameters: {
         type: "object",
@@ -594,10 +464,7 @@ export function definicoesFerramentasNegocio(
             maxItems: 10,
             items: {
               type: "object",
-              properties: {
-                estoque_item_id: { type: "string" },
-                quantidade: { type: "number", exclusiveMinimum: 0 },
-              },
+              properties: { estoque_item_id: { type: "string" }, quantidade: { type: "number", exclusiveMinimum: 0 } },
               required: ["estoque_item_id", "quantidade"],
               additionalProperties: false,
             },
@@ -608,7 +475,6 @@ export function definicoesFerramentasNegocio(
       },
     });
   }
-
   return defs;
 }
 
