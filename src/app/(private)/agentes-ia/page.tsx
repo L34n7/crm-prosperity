@@ -180,6 +180,36 @@ const FERRAMENTAS = [
     descricao: "Lê somente os dados do contato da conversa atual.",
   },
   {
+    tipo: "registrar_interesse_preferencia",
+    titulo: "Registrar interesses e preferências",
+    descricao: "Salva automaticamente uma observação curta em OBSERVAÇÕES CAPTURADAS do contato quando identificar uma nova preferência.",
+  },
+  {
+    tipo: "consultar_produtos_estoque",
+    titulo: "Consultar produtos e estoque",
+    descricao: "Busca produtos cadastrados e informa disponibilidade e saldo atual, sem expor o preço.",
+  },
+  {
+    tipo: "informar_valor_produto",
+    titulo: "Informar valor do produto",
+    descricao: "Consulta o preço de venda atual cadastrado antes de informar o cliente.",
+  },
+  {
+    tipo: "consultar_servicos",
+    titulo: "Consultar serviços",
+    descricao: "Consulta serviços ativos, descrição, preço e duração cadastrados.",
+  },
+  {
+    tipo: "consultar_imoveis",
+    titulo: "Consultar imóveis",
+    descricao: "Busca somente imóveis disponíveis e responde com os dados cadastrados no módulo imobiliário.",
+  },
+  {
+    tipo: "realizar_venda",
+    titulo: "Realizar venda",
+    descricao: "Cria um pedido de venda com o preço atual do cadastro e reserva o estoque disponível. Não confirma pagamento.",
+  },
+  {
     tipo: "consultar_agenda",
     titulo: "Consultar agenda",
     descricao: "Consulta disponibilidade somente na agenda configurada para este agente.",
@@ -1710,11 +1740,11 @@ export default function AgentesIaPage() {
                     <Wrench size={18} />
                     <div>
                       <h3>Ferramentas do agente</h3>
-                      <p>Somente ferramentas habilitadas são expostas ao modelo.</p>
+                      <p>Somente as capacidades habilitadas ficam disponíveis para este agente.</p>
                     </div>
                   </div>
                   <div className={styles.scopeHint}>
-                    <strong>Consumo de contexto:</strong> cada ferramenta ativa adiciona sua definição e esquema à chamada do modelo. Ative somente as ferramentas que este agente realmente precisa usar.
+                    <strong>Consumo de contexto:</strong> ferramentas que a IA pode chamar adicionam uma definição curta somente quando forem relevantes para a mensagem. O registro de interesses é automático e não exige uma chamada extra da IA. Ative somente o necessário.
                   </div>
                   {usaFerramentasAgenda && (
                     <div className={styles.formGrid}>
