@@ -52,8 +52,18 @@ function similaridadeDice(textoA: string, textoB: string) {
 }
 
 function temAssinaturaForteDeIa(texto: string) {
+  const bruto = String(texto || "").trim().toLowerCase();
   const normalizado = normalizarTexto(texto);
   if (!normalizado) return false;
+
+  if (
+    /\b(?:memoria_delta|memory_delta|tipo_negocio|proxima_acao|fatos_confirmados)\b/i.test(
+      bruto
+    )
+  ) {
+    return true;
+  }
+
   return [
     /\bto continue the conversation\b/,
     /\bdo not return any other messages?\b/,
@@ -62,7 +72,6 @@ function temAssinaturaForteDeIa(texto: string) {
     /\b(?:system|developer|assistant) (?:prompt|message|instruction)\b/,
     /\bignore (?:all )?(?:previous|prior) instructions\b/,
     /\b(?:memory|memoria) delta\b/,
-    /\btipo negocio\b/,
   ].some((padrao) => padrao.test(normalizado));
 }
 
@@ -76,7 +85,7 @@ function pareceMensagemDeAutomacao(texto: string) {
     /\bpara que eu possa (?:te |lhe )?(?:ajudar|auxiliar|orientar|apresentar)\b/,
     /\bpreciso que voce (?:me )?(?:informe|diga|responda)\b/,
     /\bcomo .{0,80}\b(?:especialista|consultor|assistente|atendente)\b/,
-    /\bestou (?:a|à) disposicao para (?:te |lhe )?(?:ajudar|auxiliar|orientar)\b/,
+    /\bestou a disposicao para (?:te |lhe )?(?:ajudar|auxiliar|orientar)\b/,
   ].some((padrao) => padrao.test(normalizado));
 }
 
@@ -216,12 +225,12 @@ export async function calcularDebounceAdaptativo(params: {
     };
   }
 
-  const referencia = Math.max(
-    ...mensagens
-      .map((item) => new Date(item.created_at).getTime())
-      .filter(Number.isFinite),
-    Date.now() - 15000
-  );
+  const timestamps = mensagens
+    .map((item) => new Date(item.created_at).getTime())
+    .filter(Number.isFinite);
+  const referencia = timestamps.length
+    ? Math.max(...timestamps)
+    : Date.now();
   const contarJanela = (janelaMs: number) =>
     mensagens.filter((item) => {
       const timestamp = new Date(item.created_at).getTime();
