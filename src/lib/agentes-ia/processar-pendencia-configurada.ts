@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { executarContingenciaAgente } from "./fallback";
 import { processarPendenciaAgenteIa as processarPendenciaAgenteIaBase } from "./runtime-v3";
+import { processarPendenciaNegocio } from "./runtime-negocio";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -149,6 +150,15 @@ export async function processarPendenciaAgenteIa(
   const saldo = await buscarSaldoTokensIa(pendencia.empresa_id);
   if (saldo.limite !== null && Number(saldo.restantes || 0) <= 0) {
     return processarSemTokens(pendenciaId, options);
+  }
+
+  const negocio = await processarPendenciaNegocio(pendenciaId, options);
+  if (negocio.tratado) {
+    return negocio.resultado || {
+      ok: true,
+      processado: true,
+      runtime: "negocio",
+    };
   }
 
   return processarPendenciaAgenteIaBase(pendenciaId, options);
