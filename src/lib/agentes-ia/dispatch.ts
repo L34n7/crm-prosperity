@@ -2,6 +2,7 @@ import { Client as QstashClient } from "@upstash/qstash";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { processarPendenciaAgenteIa } from "./processar-pendencia-configurada";
+import { calcularDebounceAdaptativo } from "./protecao-automacao-externa";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -147,7 +148,15 @@ export async function despacharMensagemParaAgente(params: {
     .eq("empresa_id", params.input.empresaId);
   if (conversaError) throw new Error(conversaError.message);
 
-  const debounceMs = numeroInteiro(params.agente.debounce_ms, 1200, 250, 10000);
+  const debounceBaseMs = numeroInteiro(params.agente.debounce_ms, 1200, 250, 10000);
+  const debounce = await calcularDebounceAdaptativo({
+    empresaId: params.input.empresaId,
+    conversaId: params.input.conversaId,
+    debounceBaseMs,
+    mensagemTipo: params.input.mensagemTipo || null,
+  });
+  const debounceMs = debounce.debounceMs;
+
   const { data: pendencia, error: pendenciaError } = await supabaseAdmin.rpc(
     "agente_ia_enfileirar_mensagem",
     {
@@ -181,5 +190,8 @@ export async function despacharMensagemParaAgente(params: {
     status: "agente_ia_agendado",
     agenteId: params.agente.id,
     pendenciaId,
+    debounceMs,
+    debounceAdaptativo: debounce.adaptado,
+    debounceMotivo: debounce.motivo,
   };
 }
