@@ -22,6 +22,19 @@ type PendenciaRow = {
   versao: number;
 };
 
+function conversaComHumano(conversa: {
+  status?: string | null;
+  bot_ativo?: boolean | null;
+  aguardando_atendente?: boolean | null;
+} | null) {
+  if (!conversa) return false;
+  if (conversa.aguardando_atendente === true) return true;
+  return (
+    conversa.bot_ativo !== true &&
+    ["fila", "em_atendimento"].includes(String(conversa.status || ""))
+  );
+}
+
 async function processarSemTokens(
   pendenciaId: string,
   options: { forcar?: boolean }
@@ -216,24 +229,44 @@ async function processarAutomacaoExterna(
 
   const pendencia = reservada as PendenciaRow;
   const inicio = Date.now();
-  const [{ data: agente, error: agenteError }, { data: ferramentaTransferencia }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("agentes_ia")
-        .select("id, empresa_id, status, fallback_transferencia_json")
-        .eq("empresa_id", pendencia.empresa_id)
-        .eq("id", pendencia.agente_id)
-        .eq("status", "ativo")
-        .maybeSingle(),
-      supabaseAdmin
-        .from("agente_ia_ferramentas")
-        .select("config_json")
-        .eq("empresa_id", pendencia.empresa_id)
-        .eq("agente_id", pendencia.agente_id)
-        .eq("tipo", "transferir_humano")
-        .eq("ativo", true)
-        .maybeSingle(),
-    ]);
+  const [
+    { data: agente, error: agenteError },
+    { data: ferramentaTransferencia },
+    { data: conversaAtual },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("agentes_ia")
+      .select("id, empresa_id, status, fallback_transferencia_json")
+      .eq("empresa_id", pendencia.empresa_id)
+      .eq("id", pendencia.agente_id)
+      .eq("status", "ativo")
+      .maybeSingle(),
+    supabaseAdmin
+      .from("agente_ia_ferramentas")
+      .select("config_json")
+      .eq("empresa_id", pendencia.empresa_id)
+      .eq("agente_id", pendencia.agente_id)
+      .eq("tipo", "transferir_humano")
+      .eq("ativo", true)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("conversas")
+      .select("id, status, bot_ativo, aguardando_atendente, responsavel_id")
+      .eq("empresa_id", pendencia.empresa_id)
+      .eq("id", pendencia.conversa_id)
+      .maybeSingle(),
+  ]);
+
+  if (conversaComHumano(conversaAtual)) {
+    await supabaseAdmin.rpc("agente_ia_finalizar_pendencia", {
+      p_pendencia_id: pendencia.id,
+      p_lock_token: lockToken,
+      p_versao: pendencia.versao,
+      p_status: "cancelado",
+      p_erro: "atendimento_humano",
+    });
+    return { ok: true, processado: false, motivo: "atendimento_humano" };
+  }
 
   if (agenteError || !agente) {
     await supabaseAdmin.rpc("agente_ia_finalizar_pendencia", {
