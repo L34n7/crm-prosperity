@@ -13,6 +13,40 @@ export type SendWhatsAppTextMessageResult = {
   error: string | null;
 };
 
+const ARTEFATOS_ESTRUTURADOS_INTERNOS = new Set([
+  "memoria_delta",
+  "memory_delta",
+  "tipo_negocio",
+  "proxima_acao",
+  "fatos_confirmados",
+]);
+
+function chaveEstruturadaIsolada(valor: string) {
+  const normalizado = valor
+    .trim()
+    .toLowerCase()
+    .replace(/["'`\[\]{}:,\s]/g, "");
+  return ARTEFATOS_ESTRUTURADOS_INTERNOS.has(normalizado);
+}
+
+function prepararTextoParaEnvio(valor: string) {
+  const linhas = String(valor || "")
+    .trim()
+    .split(/\r?\n/)
+    .filter((linha) => !chaveEstruturadaIsolada(linha));
+  let texto = linhas.join("\n").trim();
+  if (!texto) {
+    return { texto: "", bloqueado: true, sanitizado: true };
+  }
+
+  const semResiduo = texto.replace(/([?!])\s*\]\s*,?\s*$/, "$1").trim();
+  return {
+    texto: semResiduo,
+    bloqueado: false,
+    sanitizado: semResiduo !== String(valor || "").trim() || linhas.length !== String(valor || "").trim().split(/\r?\n/).length,
+  };
+}
+
 export async function sendWhatsAppTextMessage({
   phoneNumberId,
   accessToken,
@@ -35,25 +69,43 @@ export async function sendWhatsAppTextMessage({
     throw new Error("Texto da mensagem é obrigatório");
   }
 
-if (process.env.WHATSAPP_TEST_MODE === "true") {
-  const delaySimulado = Number(process.env.WHATSAPP_TEST_META_DELAY_MS || 700);
+  const preparado = prepararTextoParaEnvio(body);
+  if (preparado.bloqueado || !preparado.texto) {
+    console.warn("[WHATSAPP] Mensagem bloqueada por conter somente artefato estruturado interno.");
+    return {
+      ok: true,
+      status: 204,
+      messageId: null,
+      raw: {
+        ignored: true,
+        reason: "internal_structured_artifact",
+      },
+      error: null,
+    };
+  }
 
-  await new Promise((resolve) => setTimeout(resolve, delaySimulado));
+  const bodySeguro = preparado.texto;
 
-  return {
-    ok: true,
-    status: 200,
-    messageId: `test_wamid_${Date.now()}_${Math.random()
-      .toString(36)
-      .slice(2)}`,
-    raw: {
-      test_mode: true,
-      to,
-      body: body.trim(),
-    },
-    error: null,
-  };
-}
+  if (process.env.WHATSAPP_TEST_MODE === "true") {
+    const delaySimulado = Number(process.env.WHATSAPP_TEST_META_DELAY_MS || 700);
+
+    await new Promise((resolve) => setTimeout(resolve, delaySimulado));
+
+    return {
+      ok: true,
+      status: 200,
+      messageId: `test_wamid_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2)}`,
+      raw: {
+        test_mode: true,
+        to,
+        body: bodySeguro,
+        sanitized: preparado.sanitizado,
+      },
+      error: null,
+    };
+  }
 
   const response = await fetch(
     `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
@@ -70,7 +122,7 @@ if (process.env.WHATSAPP_TEST_MODE === "true") {
         type: "text",
         text: {
           preview_url: false,
-          body: body.trim(),
+          body: bodySeguro,
         },
       }),
     }
@@ -98,7 +150,9 @@ if (process.env.WHATSAPP_TEST_MODE === "true") {
     ok: response.ok,
     status: response.status,
     messageId,
-    raw,
+    raw: preparado.sanitizado
+      ? { meta_response: raw, sanitized: true, body_sent: bodySeguro }
+      : raw,
     error,
   };
 }
