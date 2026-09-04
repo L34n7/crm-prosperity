@@ -8,8 +8,13 @@ body .a2 .modal {
   height: min(920px, calc(100dvh - 44px));
 }
 
+body .a2 .modal > .dhead,
+body .a2 .modal > .foot {
+  flex: 0 0 auto;
+}
+
 body .a2 .modal > fieldset {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   display: flex;
@@ -33,6 +38,18 @@ body .a2 .modal > fieldset > .body {
 @media (max-width: 820px) {
   body .a2 .modal {
     height: min(920px, calc(100dvh - 20px));
+  }
+
+  /*
+   * No mobile o rodape vira duas linhas: Arquivar e Cancelar/Salvar.
+   * Ele nao pode encolher para o min-height global de 72px, pois isso corta
+   * fisicamente a segunda linha dentro do overflow hidden do modal.
+   */
+  body .a2 .modal > .foot {
+    flex-shrink: 0;
+    height: auto;
+    min-height: 0;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 
   body .a2 .modal > fieldset > .body {
