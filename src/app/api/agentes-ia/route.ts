@@ -16,6 +16,12 @@ const FERRAMENTAS_VALIDAS = new Set([
   "cancelar_agendamento",
   "consultar_contato",
   "transferir_humano",
+  "consultar_produtos_estoque",
+  "informar_valor_produto",
+  "consultar_servicos",
+  "consultar_imoveis",
+  "registrar_interesse_preferencia",
+  "realizar_venda",
 ]);
 const FERRAMENTAS_AGENDA = new Set([
   "consultar_agenda",
