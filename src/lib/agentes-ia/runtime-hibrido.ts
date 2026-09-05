@@ -1,4 +1,5 @@
 import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
+import { validarCaptura } from "@/lib/automacoes/captura-normalizacao";
 import {
   condicaoCombinaComCandidatos,
   condicaoPrecisaDeResposta,
@@ -14,7 +15,6 @@ import { processarPendenciaAgenteIa } from "./processar-pendencia-configurada";
 const supabaseAdmin = getSupabaseAdmin();
 const CONFIANCA_MINIMA_IA_FLUXO = 0.7;
 
-const NOS_RESPOSTA_LIVRE = new Set(["capturar_resposta"]);
 const NOS_AVALIACAO = new Set(["avaliacao", "avaliacao_atendimento"]);
 
 type OpcaoFluxo = { id: string; titulo: string };
@@ -153,6 +153,12 @@ function mensagemCombinaComConexoes(no: any, conexoes: any[], mensagemTexto: str
   });
 }
 
+function mensagemCapturaValida(no: any, mensagemTexto: string) {
+  const config = isRecord(no?.configuracao_json) ? no.configuracao_json : {};
+  const tipoCaptura = String(config.tipo_captura || "texto").trim().toLowerCase();
+  return validarCaptura(tipoCaptura, mensagemTexto).valido;
+}
+
 function mensagemCorrespondeAoNoAtual(params: {
   no: any;
   conexoes: any[];
@@ -164,7 +170,7 @@ function mensagemCorrespondeAoNoAtual(params: {
   const texto = String(mensagemTexto || "").trim();
   if (!tipoNo) return false;
 
-  if (NOS_RESPOSTA_LIVRE.has(tipoNo)) return Boolean(texto) || Boolean(mensagemTipo);
+  if (tipoNo === "capturar_resposta") return mensagemCapturaValida(no, texto);
   if (tipoNo === "interpretar_arquivo_ia") {
     return ["imagem", "documento", "arquivo"].includes(normalizarComparacao(mensagemTipo));
   }
