@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
+import { processarCapturaPendenteAgente } from "./captura-contato";
 import { executarContingenciaAgente } from "./fallback";
 import { detectarAutomacaoExterna, type ResultadoDeteccaoAutomacaoExterna } from "./protecao-automacao-externa";
 import { processarPendenciaAgenteIa as processarPendenciaAgenteIaBase } from "./runtime-v3";
@@ -399,6 +400,22 @@ export async function processarPendenciaAgenteIa(
 
   if (["processado", "erro", "cancelado"].includes(String(pendencia.status || ""))) {
     return { ok: true, processado: false, motivo: "pendencia_finalizada" };
+  }
+
+  try {
+    const captura = await processarCapturaPendenteAgente(pendenciaId);
+    if (captura.capturado) {
+      console.info("[AGENTE_IA] Informação capturada e salva nos detalhes do contato", {
+        pendenciaId,
+        tipo: "tipo" in captura ? captura.tipo : undefined,
+        registroId: "registroId" in captura ? captura.registroId : undefined,
+      });
+    }
+  } catch (capturaError) {
+    console.error(
+      "[AGENTE_IA] Falha ao persistir captura do contato; atendimento seguirá normalmente:",
+      capturaError
+    );
   }
 
   const deteccao = await detectarAutomacaoExterna({
