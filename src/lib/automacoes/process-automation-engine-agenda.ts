@@ -26,6 +26,14 @@ type ContextoEscolhaHorario = {
   opcoes: any[];
 };
 
+type AmbiguidadeDiaHorario = {
+  tipo: "dia_ou_horario";
+  numero: number;
+  minutos: number;
+  data: string;
+  criado_em: string;
+};
+
 function normalizarTextoHorario(valor: string) {
   return String(valor || "")
     .normalize("NFD")
@@ -64,13 +72,20 @@ function horaLabelParaMinutos(valor: string) {
   return minutosValidos(Number(match[1]), Number(match[2]));
 }
 
+function extrairNumeroIsolado(mensagemTexto: string) {
+  const texto = normalizarTextoHorario(mensagemTexto);
+  const match = texto.match(/^#?(\d{1,2})$/);
+
+  return match ? Number(match[1]) : null;
+}
+
 function extrairIndiceOpcaoExplicita(mensagemTexto: string) {
   const texto = normalizarTextoHorario(mensagemTexto);
 
   if (!texto) return null;
 
-  const numeroIsolado = texto.match(/^#?(\d{1,2})$/);
-  if (numeroIsolado) return Number(numeroIsolado[1]);
+  const numeroIsolado = extrairNumeroIsolado(texto);
+  if (numeroIsolado != null) return numeroIsolado;
 
   const linhaCopiada = texto.match(
     /^(\d{1,2})\s*(?:[-–—.)])\s*\d{1,2}:\d{2}$/
@@ -237,6 +252,100 @@ async function carregarContextoEscolhaHorario(
   };
 }
 
+function obterAmbiguidadeDiaHorario(
+  contexto: ContextoEscolhaHorario
+): AmbiguidadeDiaHorario | null {
+  const valor = contexto.metadata?.agenda_ambiguidade?.[contexto.noAtualId];
+
+  if (
+    !valor ||
+    valor.tipo !== "dia_ou_horario" ||
+    !Number.isFinite(Number(valor.numero)) ||
+    !Number.isFinite(Number(valor.minutos)) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(String(valor.data || ""))
+  ) {
+    return null;
+  }
+
+  return {
+    tipo: "dia_ou_horario",
+    numero: Number(valor.numero),
+    minutos: Number(valor.minutos),
+    data: String(valor.data),
+    criado_em: String(valor.criado_em || ""),
+  };
+}
+
+async function salvarAmbiguidadeDiaHorario(params: {
+  input: AutomationEngineInput;
+  contexto: ContextoEscolhaHorario;
+  ambiguidade: AmbiguidadeDiaHorario;
+}) {
+  const { input, contexto, ambiguidade } = params;
+  const metadataAtual = contexto.metadata || {};
+  const ambiguidades = metadataAtual.agenda_ambiguidade || {};
+
+  const { error } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      metadata_json: {
+        ...metadataAtual,
+        agenda_ambiguidade: {
+          ...ambiguidades,
+          [contexto.noAtualId]: ambiguidade,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", contexto.execucao.id)
+    .eq("empresa_id", input.empresaId)
+    .eq("status", "aguardando");
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao salvar ambiguidade de dia/horario:",
+      error
+    );
+  }
+}
+
+async function limparAmbiguidadeDiaHorario(params: {
+  input: AutomationEngineInput;
+  contexto: ContextoEscolhaHorario;
+}) {
+  const { input, contexto } = params;
+  const metadataAtual = contexto.metadata || {};
+  const ambiguidades = { ...(metadataAtual.agenda_ambiguidade || {}) };
+
+  if (!Object.prototype.hasOwnProperty.call(ambiguidades, contexto.noAtualId)) {
+    return;
+  }
+
+  delete ambiguidades[contexto.noAtualId];
+
+  const metadataNovo = {
+    ...metadataAtual,
+    agenda_ambiguidade: ambiguidades,
+  };
+
+  const { error } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      metadata_json: metadataNovo,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", contexto.execucao.id)
+    .eq("empresa_id", input.empresaId)
+    .eq("status", "aguardando");
+
+  if (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao limpar ambiguidade de dia/horario:",
+      error
+    );
+  }
+}
+
 async function buscarSlotExatoNoDia(params: {
   input: AutomationEngineInput;
   contexto: ContextoEscolhaHorario;
@@ -346,6 +455,46 @@ async function reprocessarPreferenciaNoMesmoDia(params: {
   };
 }
 
+async function selecionarHorarioNoMesmoDia(params: {
+  input: AutomationEngineInput;
+  contexto: ContextoEscolhaHorario;
+  minutos: number;
+}) {
+  const { input, contexto, minutos } = params;
+  const opcaoExibida = contexto.opcoes.find(
+    (opcao) => horaLabelParaMinutos(opcao.hora_label) === minutos
+  );
+
+  if (opcaoExibida) {
+    return selecionarOpcaoExistente({
+      input,
+      indice: Number(opcaoExibida.indice),
+    });
+  }
+
+  const slotExato = await buscarSlotExatoNoDia({
+    input,
+    contexto,
+    minutos,
+  });
+
+  if (slotExato) {
+    const resultado = await selecionarSlotForaDaLista({
+      input,
+      contexto,
+      slot: slotExato,
+    });
+
+    if (resultado) return resultado;
+  }
+
+  return reprocessarPreferenciaNoMesmoDia({
+    input,
+    contexto,
+    mensagemPreferencia: `às ${formatarMinutosHorario(minutos)}`,
+  });
+}
+
 async function enviarPerguntaAmbiguidade(params: {
   input: AutomationEngineInput;
   contexto: ContextoEscolhaHorario;
@@ -379,14 +528,166 @@ async function enviarPerguntaAmbiguidade(params: {
   };
 }
 
+async function enviarPerguntaAmbiguidadeDiaHorario(params: {
+  input: AutomationEngineInput;
+  contexto: ContextoEscolhaHorario;
+  numero: number;
+  minutos: number;
+  data: string;
+}) {
+  const { input, contexto, numero, minutos, data } = params;
+  const numeroDestino = String(input.numeroDestino || "").trim();
+
+  if (!numeroDestino) return null;
+
+  const ambiguidade: AmbiguidadeDiaHorario = {
+    tipo: "dia_ou_horario",
+    numero,
+    minutos,
+    data,
+    criado_em: new Date().toISOString(),
+  };
+
+  await salvarAmbiguidadeDiaHorario({
+    input,
+    contexto,
+    ambiguidade,
+  });
+
+  const horaSolicitada = formatarMinutosHorario(minutos);
+  const mensagem =
+    `Só para confirmar: você quis dizer *dia ${numero}* ou o horário *${horaSolicitada}* no dia que já escolheu?\n\n` +
+    `Responda *dia ${numero}* ou *${horaSolicitada}*.`;
+
+  await enviarMensagemAutomacao({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    numeroDestino,
+    conteudo: mensagem,
+    execucaoId: contexto.execucao.id,
+    noId: contexto.noAtualId,
+  });
+
+  return {
+    ok: true,
+    status: "agenda_dia_horario_ambiguo",
+    execucaoId: contexto.execucao.id,
+  };
+}
+
 async function tentarInterpretarRespostaHorario(input: AutomationEngineInput) {
   const mensagemTexto = String(input.mensagemTexto || "").trim();
 
   if (!mensagemTexto) return null;
 
-  // Um número isolado ou uma menção explícita a "opção" continua sendo
-  // escolha da lista. Isso mantém respostas como "6" e "quero a opção 6"
-  // totalmente determinísticas.
+  const contexto = await carregarContextoEscolhaHorario(input);
+  if (!contexto) return null;
+
+  const ambiguidadePendente = obterAmbiguidadeDiaHorario(contexto);
+  const textoNormalizado = normalizarTextoHorario(mensagemTexto);
+
+  if (ambiguidadePendente) {
+    const respondeuHora = /^(?:hora|horario|a hora|o horario|e hora|e a hora|e o horario)$/.test(
+      textoNormalizado
+    );
+    const respondeuDia = /^(?:dia|data|o dia|a data|e dia|e o dia|e a data)$/.test(
+      textoNormalizado
+    );
+    const repetiuNumero =
+      extrairNumeroIsolado(mensagemTexto) === ambiguidadePendente.numero;
+
+    if (repetiuNumero) {
+      return enviarPerguntaAmbiguidadeDiaHorario({
+        input,
+        contexto,
+        numero: ambiguidadePendente.numero,
+        minutos: ambiguidadePendente.minutos,
+        data: ambiguidadePendente.data,
+      });
+    }
+
+    await limparAmbiguidadeDiaHorario({ input, contexto });
+
+    if (respondeuHora) {
+      return selecionarHorarioNoMesmoDia({
+        input,
+        contexto,
+        minutos: ambiguidadePendente.minutos,
+      });
+    }
+
+    if (respondeuDia) {
+      return processAutomationEngineCore({
+        ...input,
+        mensagemTexto: `dia ${ambiguidadePendente.numero}`,
+      });
+    }
+  }
+
+  const numeroIsolado = extrairNumeroIsolado(mensagemTexto);
+
+  if (numeroIsolado != null) {
+    const opcaoMesmoIndice = contexto.opcoes.find(
+      (opcao) => Number(opcao.indice) === numeroIsolado
+    );
+
+    // Se o número corresponde a uma opção realmente exibida, a regra da
+    // própria mensagem da agenda prevalece: trata como índice da lista.
+    if (opcaoMesmoIndice) {
+      return null;
+    }
+
+    const minutosNumero = minutosValidos(numeroIsolado, 0);
+    const interpretacaoNumero = interpretarDataHorarioAgenda(
+      mensagemTexto,
+      "America/Sao_Paulo"
+    );
+
+    let existeHorarioNoDia = false;
+    if (minutosNumero != null) {
+      existeHorarioNoDia = contexto.opcoes.some(
+        (opcao) => horaLabelParaMinutos(opcao.hora_label) === minutosNumero
+      );
+
+      if (!existeHorarioNoDia) {
+        existeHorarioNoDia = Boolean(
+          await buscarSlotExatoNoDia({
+            input,
+            contexto,
+            minutos: minutosNumero,
+          })
+        );
+      }
+    }
+
+    if (
+      minutosNumero != null &&
+      existeHorarioNoDia &&
+      Boolean(interpretacaoNumero.data)
+    ) {
+      return enviarPerguntaAmbiguidadeDiaHorario({
+        input,
+        contexto,
+        numero: numeroIsolado,
+        minutos: minutosNumero,
+        data: String(interpretacaoNumero.data),
+      });
+    }
+
+    if (minutosNumero != null && existeHorarioNoDia) {
+      return selecionarHorarioNoMesmoDia({
+        input,
+        contexto,
+        minutos: minutosNumero,
+      });
+    }
+
+    // Sem horário correspondente, deixa o motor principal decidir se o
+    // número representa outra data ou uma resposta inválida.
+    return null;
+  }
+
+  // Menções explícitas a "opção" continuam sendo escolha da lista.
   if (extrairIndiceOpcaoExplicita(mensagemTexto) != null) {
     return null;
   }
@@ -411,41 +712,11 @@ async function tentarInterpretarRespostaHorario(input: AutomationEngineInput) {
     return null;
   }
 
-  const contexto = await carregarContextoEscolhaHorario(input);
-  if (!contexto) return null;
-
   if (horarioExplicito != null) {
-    const opcaoExibida = contexto.opcoes.find(
-      (opcao) => horaLabelParaMinutos(opcao.hora_label) === horarioExplicito
-    );
-
-    if (opcaoExibida) {
-      return selecionarOpcaoExistente({
-        input,
-        indice: Number(opcaoExibida.indice),
-      });
-    }
-
-    const slotExato = await buscarSlotExatoNoDia({
+    return selecionarHorarioNoMesmoDia({
       input,
       contexto,
       minutos: horarioExplicito,
-    });
-
-    if (slotExato) {
-      const resultado = await selecionarSlotForaDaLista({
-        input,
-        contexto,
-        slot: slotExato,
-      });
-
-      if (resultado) return resultado;
-    }
-
-    return reprocessarPreferenciaNoMesmoDia({
-      input,
-      contexto,
-      mensagemPreferencia: `às ${formatarMinutosHorario(horarioExplicito)}`,
     });
   }
 
