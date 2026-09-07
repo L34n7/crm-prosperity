@@ -1,0 +1,181 @@
+name: Aplicar ajuste visual do Agente IA
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-agent-ia-bubble-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Aplicar diferenciacao visual do Agente IA
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page_path = Path("src/app/(private)/conversas/page.tsx")
+          css_path = Path("src/app/(private)/conversas/conversas.module.css")
+
+          page = page_path.read_text(encoding="utf-8")
+          css = css_path.read_text(encoding="utf-8")
+
+          marker = "\n// CRM_DISPARO_CHAT_PRESENTATION_V1\n"
+          helper = '''
+function mensagemEhAgenteIa(msg: Mensagem) {
+  const metadata = msg.metadata_json as (Mensagem["metadata_json"] & {
+    origem?: string | null;
+  });
+  const origemAgente = String(metadata?.origem || "")
+    .trim()
+    .toLowerCase();
+
+  return origemAgente === "agente_ia" || origemAgente.startsWith("agente_ia_");
+}
+'''
+          if "function mensagemEhAgenteIa(" not in page:
+              if marker not in page:
+                  raise SystemExit("Marcador para helper do Agente IA nao encontrado")
+              page = page.replace(marker, "\n" + helper + marker, 1)
+
+          old = '''                                const disparoModo = getModoDisparo(msg);
+                                const isOutgoing ='''
+          new = '''                                const disparoModo = getModoDisparo(msg);
+                                const isAgenteIa =
+                                  !isDisparo && mensagemEhAgenteIa(msg);
+                                const isOutgoing ='''
+          if "const isAgenteIa =" not in page:
+              if page.count(old) != 1:
+                  raise SystemExit(f"Trecho isAgenteIa inesperado: {page.count(old)}")
+              page = page.replace(old, new, 1)
+
+          old = '''                                            : isOutgoing
+                                            ? styles.messageBubbleOutgoing
+                                            : isAutomatic
+                                            ? styles.messageBubbleAutomatic'''
+          new = '''                                            : isOutgoing
+                                            ? styles.messageBubbleOutgoing
+                                            : isAgenteIa
+                                            ? styles.messageBubbleAgentIa
+                                            : isAutomatic
+                                            ? styles.messageBubbleAutomatic'''
+          if "? styles.messageBubbleAgentIa" not in page:
+              if page.count(old) != 1:
+                  raise SystemExit(f"Trecho do balao inesperado: {page.count(old)}")
+              page = page.replace(old, new, 1)
+
+          old = '''                                                  styles.senderLabel,
+                                                  isDisparo ? styles.disparoSenderLabel : "",
+                                                ]'''
+          new = '''                                                  styles.senderLabel,
+                                                  isDisparo ? styles.disparoSenderLabel : "",
+                                                  isAgenteIa ? styles.agentIaSenderLabel : "",
+                                                ]'''
+          if "isAgenteIa ? styles.agentIaSenderLabel" not in page:
+              if page.count(old) != 1:
+                  raise SystemExit(f"Trecho do label inesperado: {page.count(old)}")
+              page = page.replace(old, new, 1)
+
+          old = '''                                                {isDisparo
+                                                  ? "Disparo"
+                                                  : getRemetenteLabel(msg.remetente_tipo)}'''
+          new = '''                                                {isDisparo
+                                                  ? "Disparo"
+                                                  : isAgenteIa
+                                                  ? "Agente IA"
+                                                  : getRemetenteLabel(msg.remetente_tipo)}'''
+          if '? "Agente IA"' not in page:
+              if page.count(old) != 1:
+                  raise SystemExit(f"Trecho do nome inesperado: {page.count(old)}")
+              page = page.replace(old, new, 1)
+
+          old = ''') : isAutomatic ? (
+                                                <span className={styles.automaticBadge}>automática</span>
+                                              ) : null}'''
+          new = ''') : isAgenteIa ? (
+                                                <span className={styles.agentIaBadge}>IA</span>
+                                              ) : isAutomatic ? (
+                                                <span className={styles.automaticBadge}>automática</span>
+                                              ) : null}'''
+          if "styles.agentIaBadge" not in page:
+              if page.count(old) != 1:
+                  raise SystemExit(f"Trecho do badge inesperado: {page.count(old)}")
+              page = page.replace(old, new, 1)
+
+          automatic_block = '''.messageBubbleAutomatic {
+  background: var(--crm-warning-bg-strong);
+  color: var(--crm-warning-text);
+  border-top-left-radius: 4px;
+}
+'''
+          agent_bubble = '''.messageBubbleAgentIa {
+  background: var(--crm-primary-soft);
+  color: var(--crm-text-strong);
+  border: 1px solid var(--crm-primary-border);
+  border-top-left-radius: 4px;
+}
+
+'''
+          if ".messageBubbleAgentIa {" not in css:
+              if css.count(automatic_block) < 1:
+                  raise SystemExit("Bloco CSS automatico nao encontrado")
+              css = css.replace(automatic_block, agent_bubble + automatic_block, 1)
+
+          sender_block = '''.senderLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--crm-text);
+}
+'''
+          agent_meta = '''.agentIaSenderLabel {
+  color: var(--crm-primary-text);
+}
+
+.agentIaBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  border: 1px solid var(--crm-primary-border);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+'''
+          if ".agentIaSenderLabel {" not in css:
+              if css.count(sender_block) < 1:
+                  raise SystemExit("Bloco CSS senderLabel nao encontrado")
+              css = css.replace(sender_block, sender_block + "\n" + agent_meta, 1)
+
+          page_path.write_text(page, encoding="utf-8")
+          css_path.write_text(css, encoding="utf-8")
+          PY
+
+          git diff --check
+          git diff -- src/app/'(private)'/conversas/page.tsx src/app/'(private)'/conversas/conversas.module.css
+
+      - name: Publicar ajuste na main e remover workflow temporario
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-agent-ia-bubble-once.yml
+          git add "src/app/(private)/conversas/page.tsx" "src/app/(private)/conversas/conversas.module.css"
+          git commit -m "feat: diferenciar mensagens do agente IA no chat"
+          git push origin HEAD:main
