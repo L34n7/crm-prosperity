@@ -19,6 +19,11 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import {
+  ferramentaPermitidaParaNicho,
+  filtrarFerramentasPorNicho,
+  type ContextoNichoFerramenta,
+} from "@/lib/agentes-ia/ferramentas-por-nicho";
 import styles from "./page.module.css";
 
 type ModoAtendimento = "economico" | "geral";
@@ -130,6 +135,12 @@ type RespostaLista = {
     agendas: OpcaoAgenda[];
     atendentes: OpcaoAtendente[];
   };
+  error?: string;
+};
+
+type RespostaNicho = {
+  ok: boolean;
+  nicho: ContextoNichoFerramenta | null;
   error?: string;
 };
 
@@ -336,11 +347,16 @@ function cloneAgente(agente: Agente): Agente {
   return JSON.parse(JSON.stringify(agente));
 }
 
-function normalizarAgente(agente: Agente, integracoes: OpcaoIntegracao[]) {
+function normalizarAgente(
+  agente: Agente,
+  integracoes: OpcaoIntegracao[],
+  nicho?: ContextoNichoFerramenta | null
+) {
   const clone = cloneAgente(agente);
   clone.modo_atendimento = clone.modo_atendimento === "geral" ? "geral" : "economico";
   clone.fluxos_ids = Array.isArray(clone.fluxos_ids) ? clone.fluxos_ids : [];
   clone.gatilhos = Array.isArray(clone.gatilhos) ? clone.gatilhos : [];
+  clone.ferramentas = filtrarFerramentasPorNicho(clone.ferramentas || [], nicho);
   clone.fallback_tipo = ["fluxo", "transferir_humano", "nenhum"].includes(
     clone.fallback_tipo
   )
@@ -375,6 +391,7 @@ export default function AgentesIaPage() {
   const [agentes, setAgentes] = useState<Agente[]>([]);
   const [selecionadoId, setSelecionadoId] = useState("");
   const [editor, setEditor] = useState<Agente | null>(null);
+  const [nichoEmpresa, setNichoEmpresa] = useState<ContextoNichoFerramenta | null>(null);
   const [integracoes, setIntegracoes] = useState<OpcaoIntegracao[]>([]);
   const [fluxos, setFluxos] = useState<Opcao[]>([]);
   const [setores, setSetores] = useState<Opcao[]>([]);
@@ -402,6 +419,11 @@ export default function AgentesIaPage() {
   const selecionado = useMemo(
     () => agentes.find((agente) => agente.id === selecionadoId) || null,
     [agentes, selecionadoId]
+  );
+
+  const ferramentasDisponiveis = useMemo(
+    () => FERRAMENTAS.filter((item) => ferramentaPermitidaParaNicho(item.tipo, nichoEmpresa)),
+    [nichoEmpresa]
   );
 
   const caracteristicasSelecionadas = useMemo(
@@ -458,13 +480,24 @@ export default function AgentesIaPage() {
     setCarregando(true);
     setErro("");
     try {
-      const res = await fetch("/api/agentes-ia", { cache: "no-store" });
-      const json = (await res.json()) as RespostaLista;
+      const [res, resNicho] = await Promise.all([
+        fetch("/api/agentes-ia", { cache: "no-store" }),
+        fetch("/api/agentes-ia/nicho", { cache: "no-store" }),
+      ]);
+      const [json, jsonNicho] = (await Promise.all([
+        res.json(),
+        resNicho.json(),
+      ])) as [RespostaLista, RespostaNicho];
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao carregar agentes.");
+      if (!resNicho.ok || !jsonNicho.ok) {
+        throw new Error(jsonNicho.error || "Erro ao carregar o nicho da empresa.");
+      }
+      const nichoAtual = jsonNicho.nicho || null;
       const opcoesIntegracoes = json.opcoes?.integracoes || [];
       const agentesNormalizados = (json.agentes || []).map((agente) =>
-        normalizarAgente(agente, opcoesIntegracoes)
+        normalizarAgente(agente, opcoesIntegracoes, nichoAtual)
       );
+      setNichoEmpresa(nichoAtual);
       setAgentes(agentesNormalizados);
       setIntegracoes(opcoesIntegracoes);
       setFluxos(json.opcoes?.fluxos || []);
@@ -493,13 +526,13 @@ export default function AgentesIaPage() {
 
   useEffect(() => {
     if (selecionado) {
-      setEditor(normalizarAgente(selecionado, integracoes));
+      setEditor(normalizarAgente(selecionado, integracoes, nichoEmpresa));
       setRespostaTeste("");
       setTeste("");
       setBuscaCaracteristica("");
       setSeletorCaracteristicasAberto(false);
     }
-  }, [selecionado, integracoes]);
+  }, [selecionado, integracoes, nichoEmpresa]);
 
   async function criarAgente() {
     setErro("");
@@ -528,7 +561,7 @@ export default function AgentesIaPage() {
   }
 
   function alternarFerramenta(tipo: string) {
-    if (!editor) return;
+    if (!editor || !ferramentaPermitidaParaNicho(tipo, nichoEmpresa)) return;
     const existe = editor.ferramentas.find((item) => item.tipo === tipo);
     const ativando = !existe || !existe.ativo;
     const configAgenda =
@@ -550,7 +583,7 @@ export default function AgentesIaPage() {
   }
 
   function atualizarConfigFerramenta(tipo: string, chave: string, valor: unknown) {
-    if (!editor) return;
+    if (!editor || !ferramentaPermitidaParaNicho(tipo, nichoEmpresa)) return;
     const existe = editor.ferramentas.find((item) => item.tipo === tipo);
     const proxima = existe
       ? editor.ferramentas.map((item) =>
@@ -765,13 +798,13 @@ export default function AgentesIaPage() {
           fallback_sem_contingencia_aceito:
             editor.fallback_sem_contingencia_aceito === true,
           integracoes_whatsapp_ids: integracoesSelecionadas,
-          ferramentas: editor.ferramentas,
+          ferramentas: filtrarFerramentasPorNicho(editor.ferramentas, nichoEmpresa),
         }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao salvar agente.");
       const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
-        normalizarAgente(agente, integracoes)
+        normalizarAgente(agente, integracoes, nichoEmpresa)
       );
       setAgentes(agentesNormalizados);
       const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
@@ -803,7 +836,7 @@ export default function AgentesIaPage() {
         );
       }
       const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
-        normalizarAgente(agente, integracoes)
+        normalizarAgente(agente, integracoes, nichoEmpresa)
       );
       setAgentes(agentesNormalizados);
       const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
@@ -854,7 +887,7 @@ export default function AgentesIaPage() {
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao adicionar conhecimento.");
       const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
-        normalizarAgente(agente, integracoes)
+        normalizarAgente(agente, integracoes, nichoEmpresa)
       );
       setAgentes(agentesNormalizados);
       const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
@@ -881,7 +914,7 @@ export default function AgentesIaPage() {
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao excluir conhecimento.");
       const agentesNormalizados = (json.agentes || []).map((agente: Agente) =>
-        normalizarAgente(agente, integracoes)
+        normalizarAgente(agente, integracoes, nichoEmpresa)
       );
       setAgentes(agentesNormalizados);
       const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
@@ -1740,7 +1773,7 @@ export default function AgentesIaPage() {
                     <Wrench size={18} />
                     <div>
                       <h3>Ferramentas do agente</h3>
-                      <p>Somente as capacidades habilitadas ficam disponíveis para este agente.</p>
+                      <p>Somente as capacidades habilitadas e compatíveis com o nicho da empresa ficam disponíveis para este agente.</p>
                     </div>
                   </div>
                   <div className={styles.scopeHint}>
@@ -1766,7 +1799,7 @@ export default function AgentesIaPage() {
                     </div>
                   )}
                   <div className={styles.toolsGrid}>
-                    {FERRAMENTAS.map((ferramenta) => (
+                    {ferramentasDisponiveis.map((ferramenta) => (
                       <div
                         key={ferramenta.tipo}
                         className={`${styles.toolCard} ${
