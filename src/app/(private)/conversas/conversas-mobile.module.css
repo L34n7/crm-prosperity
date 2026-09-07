@@ -2,7 +2,7 @@
   display: contents;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 980px) {
   .mobileScope aside {
     width: 100%;
     min-width: 0;
