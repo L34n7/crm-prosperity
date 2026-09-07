@@ -14,7 +14,32 @@ const mobileConversationListStyles = `
     margin-bottom: 8px;
   }
 
+  .${styles.sidebar},
+  .${styles.sidebarHeader},
+  .${styles.sidebarBody},
+  .${styles.virtualConversationList},
+  .${styles.virtualConversationRow},
+  .${styles.conversationItem} {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .${styles.sidebarHeader} {
+    overflow: hidden;
+  }
+
+  .${styles.sidebarBody} {
+    overflow-x: hidden;
+  }
+
   .${styles.quickFilters} {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     flex-wrap: nowrap;
     gap: 8px;
     margin-top: 6px;
@@ -33,6 +58,14 @@ const mobileConversationListStyles = `
   .${styles.quickChip} {
     flex: 0 0 auto;
     white-space: nowrap;
+  }
+
+  .${styles.conversationMain},
+  .${styles.conversationTopLine},
+  .${styles.conversationPreviewRow},
+  .${styles.conversationBottomLine} {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 `;
