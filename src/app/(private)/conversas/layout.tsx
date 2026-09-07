@@ -5,36 +5,36 @@ import styles from "./conversas.module.css";
 
 const mobileConversationListStyles = `
 @media (max-width: 640px) {
-  .${styles.sidebarCount} {
+  .${styles.sidebar} .${styles.sidebarCount} {
     display: none;
   }
 
-  .${styles.sidebarTopRow} {
+  .${styles.sidebar} .${styles.sidebarTopRow} {
     align-items: center;
     margin-bottom: 8px;
   }
 
-  .${styles.sidebar},
-  .${styles.sidebarHeader},
-  .${styles.sidebarBody},
-  .${styles.virtualConversationList},
-  .${styles.virtualConversationRow},
-  .${styles.conversationItem} {
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebar},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebarHeader},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebarBody},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.virtualConversationList},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.virtualConversationRow},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.conversationItem} {
     width: 100%;
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
   }
 
-  .${styles.sidebarHeader} {
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebarHeader} {
     overflow: hidden;
   }
 
-  .${styles.sidebarBody} {
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebarBody} {
     overflow-x: hidden;
   }
 
-  .${styles.quickFilters} {
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebar} .${styles.quickFilters} {
     display: flex;
     width: 100%;
     min-width: 0;
@@ -51,19 +51,19 @@ const mobileConversationListStyles = `
     scrollbar-width: none;
   }
 
-  .${styles.quickFilters}::-webkit-scrollbar {
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebar} .${styles.quickFilters}::-webkit-scrollbar {
     display: none;
   }
 
-  .${styles.quickChip} {
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.sidebar} .${styles.quickFilters} > .${styles.quickChip} {
     flex: 0 0 auto;
     white-space: nowrap;
   }
 
-  .${styles.conversationMain},
-  .${styles.conversationTopLine},
-  .${styles.conversationPreviewRow},
-  .${styles.conversationBottomLine} {
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.conversationMain},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.conversationTopLine},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.conversationPreviewRow},
+  .${styles.pageContent}:not(.${styles.mobileDetailActive}) .${styles.conversationBottomLine} {
     min-width: 0;
     max-width: 100%;
   }
