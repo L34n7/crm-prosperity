@@ -77,6 +77,26 @@ function chunkArray<T>(items: T[], size: number) {
   return chunks;
 }
 
+function prepararMensagemParaInterface(msg: MensagemRow): MensagemRow {
+  const metadata =
+    msg.metadata_json && typeof msg.metadata_json === "object"
+      ? (msg.metadata_json as Record<string, unknown>)
+      : null;
+  const origemMetadata = String(metadata?.origem || "")
+    .trim()
+    .toLowerCase();
+
+  if (!origemMetadata.startsWith("agente_ia")) {
+    return msg;
+  }
+
+  return {
+    ...msg,
+    remetente_tipo: "ia",
+    origem: "recebida",
+  };
+}
+
 async function buscarIdsMensagensFavoritas(
   mensagemIds: string[],
   empresaId: string
@@ -119,7 +139,7 @@ async function anexarFavoritasNasMensagens(
   );
 
   return mensagens.map((msg) => ({
-    ...msg,
+    ...prepararMensagemParaInterface(msg),
     favorita: favoritasSet.has(msg.id),
   }));
 }
