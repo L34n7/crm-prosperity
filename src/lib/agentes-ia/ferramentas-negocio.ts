@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
+import { carregarNichoEmpresa } from "./nicho-empresa";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -128,19 +130,26 @@ function consultaParaNegocio(mensagem: string, historico: HistoricoNegocio[]) {
 }
 
 export async function carregarFerramentasNegocioAtivas(empresaId: string, agenteId: string) {
-  const { data, error } = await supabaseAdmin
-    .from("agente_ia_ferramentas")
-    .select("tipo, config_json")
-    .eq("empresa_id", empresaId)
-    .eq("agente_id", agenteId)
-    .eq("ativo", true)
-    .in("tipo", [...TIPOS_FERRAMENTAS_NEGOCIO]);
+  const [consultaFerramentas, nicho] = await Promise.all([
+    supabaseAdmin
+      .from("agente_ia_ferramentas")
+      .select("tipo, config_json")
+      .eq("empresa_id", empresaId)
+      .eq("agente_id", agenteId)
+      .eq("ativo", true)
+      .in("tipo", [...TIPOS_FERRAMENTAS_NEGOCIO]),
+    carregarNichoEmpresa(empresaId),
+  ]);
+  const { data, error } = consultaFerramentas;
   if (error) throw new Error(error.message);
 
   const mapa = new Map<TipoFerramentaNegocio, Record<string, unknown>>();
   for (const item of data || []) {
     const tipo = String(item.tipo || "") as TipoFerramentaNegocio;
-    if ((TIPOS_FERRAMENTAS_NEGOCIO as readonly string[]).includes(tipo)) {
+    if (
+      (TIPOS_FERRAMENTAS_NEGOCIO as readonly string[]).includes(tipo) &&
+      ferramentaPermitidaParaNicho(tipo, nicho)
+    ) {
       mapa.set(tipo, (item.config_json || {}) as Record<string, unknown>);
     }
   }
