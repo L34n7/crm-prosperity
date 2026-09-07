@@ -1,0 +1,55 @@
+.mobileScope {
+  display: contents;
+}
+
+@media (max-width: 640px) {
+  .mobileScope aside {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .mobileScope aside > div:first-child {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .mobileScope aside > div:first-child > div:first-child {
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .mobileScope aside > div:first-child > div:first-child > div:first-child > p {
+    display: none;
+  }
+
+  .mobileScope aside > div:first-child > div:last-child {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 12px 2px 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .mobileScope aside > div:first-child > div:last-child::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobileScope aside > div:first-child > div:last-child > button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
