@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { processarFollowupAgenteIa } from "@/lib/agentes-ia/followup-inatividade";
 import {
   executarNo,
   registrarTentativaBloco,
@@ -91,8 +92,35 @@ export async function GET(request: Request) {
 
     for (const agendamento of agendamentos || []) {
       try {
-
         const payload = agendamento.payload_json || {};
+
+        if (agendamento.tipo_agendamento === "followup_agente_ia") {
+          const resultado = await processarFollowupAgenteIa({
+            id: agendamento.id,
+            empresa_id: agendamento.empresa_id,
+            payload_json: payload,
+          });
+          const processadoEm = new Date().toISOString();
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: resultado.ok
+                ? resultado.cancelado
+                  ? "cancelado"
+                  : "executado"
+                : "erro",
+              executed_at: processadoEm,
+              locked_at: null,
+              payload_json: {
+                ...payload,
+                resultado_followup: resultado.motivo || null,
+                followup_processado_em: processadoEm,
+              },
+            })
+            .eq("id", agendamento.id)
+            .eq("empresa_id", agendamento.empresa_id);
+          continue;
+        }
 
         if (agendamento.tipo_agendamento === "delay_bloco") {
           if (
@@ -115,7 +143,7 @@ export async function GET(request: Request) {
               .eq("id", agendamento.id)
               .eq("empresa_id", agendamento.empresa_id);
 
-          continue;
+            continue;
           }
 
           const { data: execucao, error: execucaoError } = await supabaseAdmin
@@ -185,7 +213,7 @@ export async function GET(request: Request) {
             .eq("fluxo_id", agendamento.fluxo_id)
             .eq("ativo", true)
             .maybeSingle();
-            
+
           if (noError) {
             throw new Error(
               `Erro ao buscar bloco do delay: ${noError.message}`
@@ -465,11 +493,10 @@ export async function GET(request: Request) {
           .maybeSingle();
 
         const statusEnvioAtual =
-        ultimaMensagemAutomacao?.status_envio || "desconhecido";
+          ultimaMensagemAutomacao?.status_envio || "desconhecido";
 
         const statusExigido =
-        payload.condicao_json?.status_envio || "qualquer";
-
+          payload.condicao_json?.status_envio || "qualquer";
 
         if (statusExigido === "qualquer") {
           const { data: agendamentosEspecificos } = await supabaseAdmin
@@ -531,7 +558,7 @@ export async function GET(request: Request) {
 
           continue;
         }
-          
+
         const { data: noOrigem } = await supabaseAdmin
           .from("automacao_nos")
           .select("*")
@@ -626,103 +653,103 @@ export async function GET(request: Request) {
           .eq("tipo_agendamento", "encerramento_inatividade_fluxo")
           .eq("status", "pendente");
 
-
-          const { data: transicaoAtualizada, error: transicaoError } =
-            await supabaseAdmin
-              .from("automacao_execucoes")
-              .update({
-                no_atual_id: proximoNo.id,
-                status: "rodando",
-                updated_at: new Date().toISOString(),
-                metadata_json: {
-                  ...(execucao.metadata_json || {}),
-                  timeout_sem_resposta: {
-                    no_origem_id: agendamento.no_id,
-                    no_destino_id: proximoNo.id,
-                    agendamento_id: agendamento.id,
-                    executado_em: new Date().toISOString(),
-                  },
-                },
-              })
-              .eq("id", agendamento.execucao_id)
-              .eq("empresa_id", agendamento.empresa_id)
-              .eq("status", "aguardando")
-              .eq("no_atual_id", agendamento.no_id)
-              .select("id")
-              .maybeSingle();
-
-          if (transicaoError || !transicaoAtualizada) {
-            await supabaseAdmin
-              .from("automacao_agendamentos")
-              .update({
-                status: "cancelado",
-                executed_at: new Date().toISOString(),
-                payload_json: {
-                  ...payload,
-                  motivo_cancelamento: "transicao_timeout_nao_aplicada",
-                },
-              })
-              .eq("id", agendamento.id)
-              .eq("empresa_id", agendamento.empresa_id);
-
-            continue;
-          }
-            
-          await executarNo({
-            empresaId: agendamento.empresa_id,
-            conversaId: payload.conversa_id,
-            execucaoId: agendamento.execucao_id,
-            fluxoId: agendamento.fluxo_id,
-            no: proximoNo,
-            numeroDestino: payload.numero_destino,
-          });
-
+        const { data: transicaoAtualizada, error: transicaoError } =
           await supabaseAdmin
-          .from("automacao_agendamentos")
-          .update({
-              status: "executado",
-              executed_at: new Date().toISOString(),
-          })
-            .eq("id", agendamento.id);
-        } catch (error) {
-          console.error("[CRON AUTOMAÇÕES] Erro ao executar agendamento:", {
-            agendamentoId: agendamento.id,
-            tipoAgendamento: agendamento.tipo_agendamento,
-            empresaId: agendamento.empresa_id,
-            execucaoId: agendamento.execucao_id,
-            erro: error,
-          });
+            .from("automacao_execucoes")
+            .update({
+              no_atual_id: proximoNo.id,
+              status: "rodando",
+              updated_at: new Date().toISOString(),
+              metadata_json: {
+                ...(execucao.metadata_json || {}),
+                timeout_sem_resposta: {
+                  no_origem_id: agendamento.no_id,
+                  no_destino_id: proximoNo.id,
+                  agendamento_id: agendamento.id,
+                  executado_em: new Date().toISOString(),
+                },
+              },
+            })
+            .eq("id", agendamento.execucao_id)
+            .eq("empresa_id", agendamento.empresa_id)
+            .eq("status", "aguardando")
+            .eq("no_atual_id", agendamento.no_id)
+            .select("id")
+            .maybeSingle();
 
-          if (agendamento.tipo_agendamento === "timeout_sem_resposta") {
-            await supabaseAdmin
-              .from("automacao_agendamentos")
-              .update({
-                status: "cancelado",
-                executed_at: new Date().toISOString(),
-              })
-              .eq("empresa_id", agendamento.empresa_id)
-              .eq("execucao_id", agendamento.execucao_id)
-              .eq("no_id", agendamento.no_id)
-              .eq("tipo_agendamento", "timeout_sem_resposta")
-              .eq("status", "pendente")
-              .neq("id", agendamento.id);
-          }
-            
+        if (transicaoError || !transicaoAtualizada) {
           await supabaseAdmin
             .from("automacao_agendamentos")
             .update({
-              status: "erro",
+              status: "cancelado",
               executed_at: new Date().toISOString(),
               payload_json: {
-                ...(agendamento.payload_json || {}),
-                erro:
-                  error instanceof Error
-                    ? error.message
-                    : String(error),
+                ...payload,
+                motivo_cancelamento: "transicao_timeout_nao_aplicada",
               },
             })
             .eq("id", agendamento.id)
             .eq("empresa_id", agendamento.empresa_id);
+
+          continue;
+        }
+
+        await executarNo({
+          empresaId: agendamento.empresa_id,
+          conversaId: payload.conversa_id,
+          execucaoId: agendamento.execucao_id,
+          fluxoId: agendamento.fluxo_id,
+          no: proximoNo,
+          numeroDestino: payload.numero_destino,
+        });
+
+        await supabaseAdmin
+          .from("automacao_agendamentos")
+          .update({
+            status: "executado",
+            executed_at: new Date().toISOString(),
+          })
+          .eq("id", agendamento.id);
+      } catch (error) {
+        console.error("[CRON AUTOMAÇÕES] Erro ao executar agendamento:", {
+          agendamentoId: agendamento.id,
+          tipoAgendamento: agendamento.tipo_agendamento,
+          empresaId: agendamento.empresa_id,
+          execucaoId: agendamento.execucao_id,
+          erro: error,
+        });
+
+        if (agendamento.tipo_agendamento === "timeout_sem_resposta") {
+          await supabaseAdmin
+            .from("automacao_agendamentos")
+            .update({
+              status: "cancelado",
+              executed_at: new Date().toISOString(),
+            })
+            .eq("empresa_id", agendamento.empresa_id)
+            .eq("execucao_id", agendamento.execucao_id)
+            .eq("no_id", agendamento.no_id)
+            .eq("tipo_agendamento", "timeout_sem_resposta")
+            .eq("status", "pendente")
+            .neq("id", agendamento.id);
+        }
+
+        await supabaseAdmin
+          .from("automacao_agendamentos")
+          .update({
+            status: "erro",
+            executed_at: new Date().toISOString(),
+            locked_at: null,
+            payload_json: {
+              ...(agendamento.payload_json || {}),
+              erro:
+                error instanceof Error
+                  ? error.message
+                  : String(error),
+            },
+          })
+          .eq("id", agendamento.id)
+          .eq("empresa_id", agendamento.empresa_id);
       }
     }
 
