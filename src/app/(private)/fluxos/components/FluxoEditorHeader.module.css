@@ -9,12 +9,29 @@
   overflow: hidden;
 }
 
-.headerInfo > p:first-child,
-.title,
-.subtitle {
+.title {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   white-space: nowrap !important;
   overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  line-height: 1.2 !important;
+}
+
+.titleText {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .actions,
@@ -22,35 +39,16 @@
   min-width: 0;
 }
 
-/*
- * Em monitores menores, reservamos mais espaco para o titulo e retiramos o
- * Assistente IA da primeira linha de acoes. Assim o titulo continua legivel e
- * as acoes absorvem a variacao causada pelo menu lateral expandido/colapsado.
- */
 @media (min-width: 721px) and (max-width: 1440px) {
   .header {
     gap: 12px !important;
   }
 
   .headerInfo {
-    flex: 0 0 270px !important;
-    width: 270px !important;
-    min-width: 270px !important;
-    max-width: 270px !important;
-  }
-
-  .headerInfo > .title {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    max-height: 1.2em !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    word-break: normal !important;
-    overflow-wrap: normal !important;
+    flex: 0 0 260px !important;
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
   }
 
   .subtitle {
@@ -70,34 +68,25 @@
 
   .actionButtons {
     width: 100% !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    flex-wrap: wrap !important;
-    gap: 6px !important;
-  }
-
-  /*
-   * Quando o Assistente IA existe, ele ocupa a celula logo abaixo de Intencoes.
-   * Os demais botoes permanecem na primeira linha enquanto houver espaco.
-   */
-  .actionButtons:has(> button[class*="aiHeaderButton"]) {
     display: grid !important;
     grid-template-columns: repeat(6, max-content);
     grid-auto-flow: row;
-    align-items: center !important;
+    align-items: start !important;
     justify-content: end !important;
     gap: 6px !important;
   }
 
-  .actionButtons:has(> button[class*="aiHeaderButton"])
-    > button[class*="aiHeaderButton"] {
+  .assistantButton {
     grid-column: 1;
     grid-row: 2;
   }
 
+  .intentionsButton {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .actionButtons > button {
-    flex: 0 0 auto;
     min-height: 34px;
     padding: 7px 9px;
     border-radius: 11px;
@@ -132,11 +121,6 @@
     box-shadow: none !important;
   }
 
-  /*
-   * Com o menu principal expandido o editor fica mais estreito. Nesse ponto,
-   * mantemos o titulo com largura minima util e distribuimos as acoes em duas
-   * linhas, sem permitir que elas empurrem ou escondam o titulo.
-   */
   @container fluxo-editor-header (max-width: 820px) {
     .headerInfo {
       flex-basis: 230px !important;
@@ -145,22 +129,18 @@
       max-width: 230px !important;
     }
 
-    .actionButtons:has(> button[class*="aiHeaderButton"]) {
+    .actionButtons {
       grid-template-columns: repeat(4, max-content);
     }
   }
 }
 
 @media (max-width: 720px) {
-  .headerInfo > .title {
-    display: block !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-height: 1.2em !important;
-    line-height: 1.2 !important;
+  .title,
+  .titleText {
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: ellipsis;
   }
 
   .dropdownMenu {

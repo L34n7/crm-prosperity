@@ -73,7 +73,7 @@ export default function FluxoEditorHeader({
           className={`${styles.editorTitle} ${responsive.title}`}
           title={tituloFluxo}
         >
-          {tituloFluxo}
+          <span className={responsive.titleText}>{tituloFluxo}</span>
         </h2>
 
         {fluxoSistema && (
@@ -122,7 +122,7 @@ export default function FluxoEditorHeader({
               {podeCriarFluxos && (
                 <button
                   type="button"
-                  className={`${styles.secondaryButton} ${styles.aiHeaderButton}`}
+                  className={`${styles.secondaryButton} ${styles.aiHeaderButton} ${responsive.assistantButton}`}
                   onClick={onAbrirAssistente}
                 >
                   ✨ Assistente IA
@@ -131,7 +131,7 @@ export default function FluxoEditorHeader({
 
               <button
                 type="button"
-                className={styles.secondaryButton}
+                className={`${styles.secondaryButton} ${responsive.intentionsButton}`}
                 onClick={() => setIntencoesAberto(true)}
                 disabled={!fluxoSelecionado}
               >
