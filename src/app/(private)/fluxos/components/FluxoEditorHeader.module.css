@@ -9,11 +9,12 @@
   overflow: hidden;
 }
 
+.headerInfo > p:first-child,
 .title,
 .subtitle {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .actions,
@@ -21,98 +22,102 @@
   min-width: 0;
 }
 
-@media (min-width: 721px) {
-  @container fluxo-editor-header (max-width: 980px) {
-    .headerInfo {
-      flex: 1 1 auto;
-      min-width: 220px;
-    }
-
-    .subtitle {
-      display: none;
-    }
-
-    .actions {
-      flex: 0 1 640px;
-      max-width: calc(100% - 238px);
-      gap: 6px;
-    }
-
-    .actionButtons {
-      flex-wrap: nowrap;
-      justify-content: flex-end;
-      gap: 6px;
-    }
-
-    .actionButtons > button {
-      min-height: 36px;
-      padding: 8px 10px;
-      border-radius: 11px;
-      font-size: 12px;
-    }
-
-    .actionButtons > div > button {
-      width: 36px;
-      height: 36px;
-      border-radius: 11px;
-    }
-
-    .actions > span {
-      font-size: 11px;
-      line-height: 1.2;
-    }
-
-    .dropdownMenu {
-      max-height: min(62vh, 460px);
-      overflow-y: auto !important;
-      overflow-x: hidden !important;
-      overscroll-behavior: contain;
-      scrollbar-gutter: stable;
-      scrollbar-width: thin;
-    }
-
-    .submenu {
-      position: static !important;
-      min-width: 0 !important;
-      margin: 4px 0 0 8px;
-      border-radius: 10px;
-      box-shadow: none !important;
-    }
+/*
+ * Em monitores menores, a largura útil do editor muda bastante quando o menu
+ * lateral é expandido. Mantemos uma área fixa para o título e deixamos apenas
+ * as ações absorverem essa variação, quebrando em novas linhas quando preciso.
+ */
+@media (min-width: 721px) and (max-width: 1440px) {
+  .header {
+    gap: 12px !important;
   }
 
-  @container fluxo-editor-header (max-width: 760px) {
-    .headerInfo {
-      flex: 0 0 200px;
-      min-width: 200px;
-    }
+  .headerInfo {
+    flex: 0 0 205px !important;
+    width: 205px !important;
+    min-width: 205px !important;
+    max-width: 205px !important;
+  }
 
-    .actions {
-      flex: 1 1 auto;
-      max-width: calc(100% - 218px);
-    }
+  .title {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
 
-    .actionButtons {
-      width: 100%;
-      flex-wrap: wrap;
-      align-content: flex-start;
-      justify-content: flex-end;
-      gap: 6px;
-    }
+  .subtitle {
+    display: none !important;
+  }
 
-    .actionButtons > button {
-      min-height: 34px;
-      padding: 7px 9px;
-      font-size: 11.5px;
-    }
+  .actions {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+  }
 
-    .actionButtons > div > button {
-      width: 34px;
-      height: 34px;
-    }
+  .actionButtons {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .actionButtons > button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 7px 9px;
+    border-radius: 11px;
+    font-size: 11.5px;
+  }
+
+  .actionButtons > div > button {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+
+  .actions > span {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .dropdownMenu {
+    max-height: min(62vh, 460px);
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  .submenu {
+    position: static !important;
+    min-width: 0 !important;
+    margin: 4px 0 0 8px;
+    border-radius: 10px;
+    box-shadow: none !important;
   }
 }
 
 @media (max-width: 720px) {
+  .title {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
   .dropdownMenu {
     max-height: min(62vh, 420px);
     overflow-y: auto !important;
