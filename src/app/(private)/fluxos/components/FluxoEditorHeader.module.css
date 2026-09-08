@@ -40,12 +40,17 @@
   }
 
   .title {
-    display: block;
+    display: -webkit-box !important;
     width: 100%;
     max-width: 100%;
-    white-space: nowrap !important;
+    max-height: 1.2em !important;
+    line-height: 1.2 !important;
+    white-space: normal !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
     word-break: normal !important;
     overflow-wrap: normal !important;
   }
@@ -113,9 +118,15 @@
 
 @media (max-width: 720px) {
   .title {
-    white-space: nowrap !important;
+    display: -webkit-box !important;
+    max-height: 1.2em !important;
+    line-height: 1.2 !important;
+    white-space: normal !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
 
   .dropdownMenu {
