@@ -45,6 +45,22 @@ function postAttendanceExpired(context: Context) {
   return Date.now() > scheduledAt + graceMinutes * 60_000;
 }
 
+function confirmationAdvanceWindowExpiredWhenPlanned(job: Job) {
+  if (job.tipo !== "confirmacao") return false;
+
+  const payload = asObject(job.payload_json);
+  const plannedAt = Date.parse(String(payload.planejado_em || ""));
+  const originallyScheduledAt = Date.parse(
+    String(payload.horario_original_programado || job.executar_em || "")
+  );
+
+  if (!Number.isFinite(plannedAt) || !Number.isFinite(originallyScheduledAt)) {
+    return false;
+  }
+
+  return originallyScheduledAt <= plannedAt;
+}
+
 function integrationScopeProblem(context: Context) {
   const allowed = calendarIntegrationIds(context.agenda?.metadata_json);
 
@@ -95,6 +111,14 @@ async function processJob(job: Job) {
       recuperado_por_idempotencia: true,
     });
     return "concluido" as const;
+  }
+
+  if (confirmationAdvanceWindowExpiredWhenPlanned(job)) {
+    await cancelJob(
+      job,
+      "Confirmação cancelada porque a antecedência configurada já havia passado quando o agendamento foi planejado."
+    );
+    return "cancelado" as const;
   }
 
   const context = await loadContext(job);
