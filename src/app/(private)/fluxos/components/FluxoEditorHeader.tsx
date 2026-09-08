@@ -59,13 +59,25 @@ export default function FluxoEditorHeader({
     onAdicionarNo(tipoNo);
   }
 
+  const tituloFluxo = fluxoSelecionado?.nome || "Selecione um fluxo";
+  const descricaoEditor =
+    "Adicione blocos, arraste no painel e conecte um bloco no outro.";
+
   return (
     <>
     <header className={styles.editorHeader}>
-      <div>
+      <div style={{ minWidth: 0, flex: "1 1 0", overflow: "hidden" }}>
         <p className={styles.eyebrow}>Construtor visual</p>
-        <h2 className={styles.editorTitle}>
-          {fluxoSelecionado?.nome || "Selecione um fluxo"}
+        <h2
+          className={styles.editorTitle}
+          title={tituloFluxo}
+          style={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {tituloFluxo}
         </h2>
 
         {fluxoSistema && (
@@ -77,8 +89,16 @@ export default function FluxoEditorHeader({
           </span>
         )}
 
-        <p className={styles.editorSubtitle}>
-          Adicione blocos, arraste no painel e conecte um bloco no outro.
+        <p
+          className={styles.editorSubtitle}
+          title={descricaoEditor}
+          style={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {descricaoEditor}
         </p>
       </div>
 
