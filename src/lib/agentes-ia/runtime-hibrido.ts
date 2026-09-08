@@ -64,10 +64,17 @@ function isRecord(valor: unknown): valor is Record<string, unknown> {
 function conversaEstaComHumano(conversa: any) {
   if (!conversa) return true;
   if (conversa.aguardando_atendente === true) return true;
-  return (
-    conversa.bot_ativo !== true &&
-    ["fila", "em_atendimento"].includes(String(conversa.status || ""))
-  );
+  if (conversa.bot_ativo === true) return false;
+
+  const status = String(conversa.status || "");
+  if (status === "em_atendimento") return true;
+
+  // Uma conversa nova nasce em `fila` antes do roteamento. Sem responsável,
+  // isso não representa atendimento humano e deve permanecer elegível para
+  // um agente Geral/fallback exclusivo assumir antes do Fluxo.
+  if (status === "fila" && conversa.responsavel_id) return true;
+
+  return false;
 }
 
 function agentePermiteIntegracao(agente: AgenteRoteamento, integracaoId?: string | null) {
