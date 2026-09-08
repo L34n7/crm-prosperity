@@ -2332,6 +2332,8 @@ function ConversasPageContent() {
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
+  const [carregandoUsuariosAtribuicao, setCarregandoUsuariosAtribuicao] =
+    useState(false);
   const [integracoesWhatsapp, setIntegracoesWhatsapp] = useState<
     IntegracaoWhatsappOpcao[]
   >([]);
@@ -5409,9 +5411,21 @@ function ConversasPageContent() {
   }
 
   async function carregarUsuariosPorSetor(setorId: string) {
+    const setorNormalizado = setorId.trim();
+
+    if (!setorNormalizado) {
+      setUsuarios([]);
+      setCarregandoUsuariosAtribuicao(false);
+      return;
+    }
+
     try {
+      setCarregandoUsuariosAtribuicao(true);
+
       const res = await fetch(
-        `/api/usuarios/opcoes-atribuicao?setor_id=${setorId}`,
+        `/api/usuarios/opcoes-atribuicao?setor_id=${encodeURIComponent(
+          setorNormalizado
+        )}`,
         { cache: "no-store" }
       );
 
@@ -5419,12 +5433,16 @@ function ConversasPageContent() {
 
       if (!res.ok) {
         setUsuarios([]);
+        setErro(data.error || "Erro ao carregar usuários do setor.");
         return;
       }
 
-      setUsuarios(data.usuarios || []);
+      setUsuarios(Array.isArray(data.usuarios) ? data.usuarios : []);
     } catch {
       setUsuarios([]);
+      setErro("Erro ao carregar usuários do setor.");
+    } finally {
+      setCarregandoUsuariosAtribuicao(false);
     }
   }
 
@@ -5709,6 +5727,11 @@ function ConversasPageContent() {
   }
 
   async function confirmarAtribuicao() {
+    if (!novoSetorId) {
+      setErro("Selecione um setor.");
+      return;
+    }
+
     if (!novoResponsavelId || !conversaSelecionada?.id) {
       setErro("Selecione um responsável.");
       return;
@@ -5727,6 +5750,7 @@ function ConversasPageContent() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
+            setor_id: novoSetorId,
             responsavel_id: novoResponsavelId,
           }),
         }
@@ -6041,18 +6065,17 @@ function ConversasPageContent() {
     const setorAtual =
       conversaSelecionada?.setor_id || conversaSelecionada?.setores?.id || "";
 
+    setNovoSetorId(setorAtual);
     setNovoResponsavelId(
       conversaSelecionada?.responsavel_id ||
         conversaSelecionada?.responsavel?.id ||
         ""
     );
-
+    setUsuarios([]);
     setAcaoAberta("atribuir");
 
     if (setorAtual) {
       await carregarUsuariosPorSetor(setorAtual);
-    } else {
-      setUsuarios([]);
     }
   }
 
@@ -9617,13 +9640,47 @@ const templateFooterTexto = useMemo(() => {
                           </div>
 
                           <div className={styles.actionPanelBody}>
+                            <label className={styles.actionLabel}>Setor</label>
+                            <select
+                              value={novoSetorId}
+                              onChange={(e) => {
+                                const setorId = e.target.value;
+                                setNovoSetorId(setorId);
+                                setNovoResponsavelId("");
+                                setUsuarios([]);
+
+                                if (setorId) {
+                                  void carregarUsuariosPorSetor(setorId);
+                                } else {
+                                  setCarregandoUsuariosAtribuicao(false);
+                                }
+                              }}
+                              className={styles.actionSelect}
+                            >
+                              <option value="">Selecione um setor</option>
+                              {setoresDisponiveisParaTransferencia.map((setor) => (
+                                <option key={setor.id} value={setor.id}>
+                                  {setor.nome}
+                                </option>
+                              ))}
+                            </select>
+
                             <label className={styles.actionLabel}>Novo responsável</label>
                             <select
                               value={novoResponsavelId}
                               onChange={(e) => setNovoResponsavelId(e.target.value)}
                               className={styles.actionSelect}
+                              disabled={!novoSetorId || carregandoUsuariosAtribuicao}
                             >
-                              <option value="">Selecione um responsável</option>
+                              <option value="">
+                                {carregandoUsuariosAtribuicao
+                                  ? "Carregando usuários..."
+                                  : !novoSetorId
+                                  ? "Selecione um setor primeiro"
+                                  : usuariosFiltradosPorSetor.length === 0
+                                  ? "Nenhum usuário disponível"
+                                  : "Selecione um responsável"}
+                              </option>
                               {usuariosFiltradosPorSetor.map((usuario) => (
                                 <option key={usuario.id} value={usuario.id}>
                                   {usuario.nome}
