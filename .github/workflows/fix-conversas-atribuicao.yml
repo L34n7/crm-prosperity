@@ -67,42 +67,12 @@ jobs:
             'abertura do painel de atribuicao'
           );
 
-          const assignMarker = '{acaoAberta === "atribuir" && (';
-          const assignIndex = content.indexOf(assignMarker);
-          if (assignIndex === -1) {
-            throw new Error('Painel de atribuicao nao encontrado');
-          }
+          replaceOnce(
+            `                          <div className={styles.actionPanelBody}>\n                            <label className={styles.actionLabel}>Novo responsável</label>\n                            <select\n                              value={novoResponsavelId}\n                              onChange={(e) => setNovoResponsavelId(e.target.value)}\n                              className={styles.actionSelect}\n                            >\n                              <option value="">Selecione um responsável</option>\n                              {usuariosFiltradosPorSetor.map((usuario) => (\n                                <option key={usuario.id} value={usuario.id}>\n                                  {usuario.nome}\n                                </option>\n                              ))}\n                            </select>\n`,
+            `                          <div className={styles.actionPanelBody}>\n                            <label className={styles.actionLabel}>Setor</label>\n                            <select\n                              value={novoSetorId}\n                              onChange={(e) => {\n                                const setorId = e.target.value;\n                                setNovoSetorId(setorId);\n                                setNovoResponsavelId("");\n                                setUsuarios([]);\n\n                                if (setorId) {\n                                  void carregarUsuariosPorSetor(setorId);\n                                } else {\n                                  setCarregandoUsuariosAtribuicao(false);\n                                }\n                              }}\n                              className={styles.actionSelect}\n                            >\n                              <option value="">Selecione um setor</option>\n                              {setoresDisponiveisParaTransferencia.map((setor) => (\n                                <option key={setor.id} value={setor.id}>\n                                  {setor.nome}\n                                </option>\n                              ))}\n                            </select>\n\n                            <label className={styles.actionLabel}>Novo responsável</label>\n                            <select\n                              value={novoResponsavelId}\n                              onChange={(e) => setNovoResponsavelId(e.target.value)}\n                              className={styles.actionSelect}\n                              disabled={!novoSetorId || carregandoUsuariosAtribuicao}\n                            >\n                              <option value="">\n                                {carregandoUsuariosAtribuicao\n                                  ? "Carregando usuários..."\n                                  : !novoSetorId\n                                  ? "Selecione um setor primeiro"\n                                  : usuariosFiltradosPorSetor.length === 0\n                                  ? "Nenhum usuário disponível"\n                                  : "Selecione um responsável"}\n                              </option>\n                              {usuariosFiltradosPorSetor.map((usuario) => (\n                                <option key={usuario.id} value={usuario.id}>\n                                  {usuario.nome}\n                                </option>\n                              ))}\n                            </select>\n`,
+            'campos do painel de atribuicao'
+          );
 
-          const beforeAssign = content.slice(0, assignIndex);
-          let assignTail = content.slice(assignIndex);
-
-          const sectorOnChange = 'onChange={(e) => setNovoSetorId(e.target.value)}';
-          const sectorOnChangeIndex = assignTail.indexOf(sectorOnChange);
-          if (sectorOnChangeIndex === -1) {
-            throw new Error('onChange do setor da atribuicao nao encontrado');
-          }
-
-          const sectorOnChangeReplacement = `onChange={(e) => {\n                                const setorId = e.target.value;\n                                setNovoSetorId(setorId);\n                                setNovoResponsavelId("");\n                                setUsuarios([]);\n\n                                if (setorId) {\n                                  void carregarUsuariosPorSetor(setorId);\n                                } else {\n                                  setCarregandoUsuariosAtribuicao(false);\n                                }\n                              }}`;
-
-          assignTail =
-            assignTail.slice(0, sectorOnChangeIndex) +
-            sectorOnChangeReplacement +
-            assignTail.slice(sectorOnChangeIndex + sectorOnChange.length);
-
-          const responsibleSelect = `                              value={novoResponsavelId}\n                              onChange={(e) => setNovoResponsavelId(e.target.value)}\n                              className={styles.actionSelect}\n                            >\n                              <option value="">Selecione um responsável</option>`;
-          const responsibleSelectIndex = assignTail.indexOf(responsibleSelect);
-          if (responsibleSelectIndex === -1) {
-            throw new Error('Select de responsavel da atribuicao nao encontrado');
-          }
-
-          const responsibleSelectReplacement = `                              value={novoResponsavelId}\n                              onChange={(e) => setNovoResponsavelId(e.target.value)}\n                              className={styles.actionSelect}\n                              disabled={!novoSetorId || carregandoUsuariosAtribuicao}\n                            >\n                              <option value="">\n                                {carregandoUsuariosAtribuicao\n                                  ? "Carregando usuários..."\n                                  : !novoSetorId\n                                  ? "Selecione um setor primeiro"\n                                  : usuariosFiltradosPorSetor.length === 0\n                                  ? "Nenhum usuário disponível"\n                                  : "Selecione um responsável"}\n                              </option>`;
-
-          assignTail =
-            assignTail.slice(0, responsibleSelectIndex) +
-            responsibleSelectReplacement +
-            assignTail.slice(responsibleSelectIndex + responsibleSelect.length);
-
-          content = beforeAssign + assignTail;
           fs.writeFileSync(path, content);
           NODE
 
