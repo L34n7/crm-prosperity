@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  FOLLOWUP_INATIVIDADE_PADRAO,
+  normalizarFollowupInatividade,
+} from "@/lib/agentes-ia/followup-inatividade";
 
 const supabaseAdmin = getSupabaseAdmin();
 const MODELO_PADRAO = "gpt-5.6-luna";
@@ -654,6 +658,12 @@ export async function POST(request: Request) {
         max_mensagens_contexto: 6,
         debounce_ms: 1200,
         integracoes_whatsapp_ids: [],
+        metadata_json: {
+          followup_inatividade: {
+            ...FOLLOWUP_INATIVIDADE_PADRAO,
+            intervalos_minutos: [...FOLLOWUP_INATIVIDADE_PADRAO.intervalos_minutos],
+          },
+        },
         modo_atendimento: "economico",
         fluxos_ids: [],
         fallback_exclusivo: false,
@@ -806,6 +816,15 @@ export async function PATCH(request: Request) {
         .eq("empresa_id", contexto.empresaId)
         .eq("id", id);
       if (error) throw new Error(error.message);
+
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .update({ status: "cancelado", executed_at: new Date().toISOString() })
+        .eq("empresa_id", contexto.empresaId)
+        .eq("tipo_agendamento", "followup_agente_ia")
+        .eq("status", "pendente")
+        .contains("payload_json", { agente_id: id });
+
       return NextResponse.json({ ok: true, agentes: await carregarAgentes(contexto.empresaId) });
     }
 
@@ -946,6 +965,15 @@ export async function PATCH(request: Request) {
       10000,
       Math.max(250, Number(body.debounce_ms || atual.debounce_ms || 1200))
     );
+    const metadataAtual =
+      atual.metadata_json &&
+      typeof atual.metadata_json === "object" &&
+      !Array.isArray(atual.metadata_json)
+        ? (atual.metadata_json as Record<string, unknown>)
+        : {};
+    const followupInatividade = normalizarFollowupInatividade(
+      body.followup_inatividade ?? metadataAtual.followup_inatividade
+    );
 
     const update = {
       nome: String(body.nome ?? atual.nome).trim() || atual.nome,
@@ -965,6 +993,10 @@ export async function PATCH(request: Request) {
       fallback_sem_contingencia_aceito:
         fallbackTipo === "nenhum" ? aceiteSemContingencia : false,
       integracoes_whatsapp_ids: integracoes,
+      metadata_json: {
+        ...metadataAtual,
+        followup_inatividade: followupInatividade,
+      },
       updated_by: contexto.usuario.id,
       updated_at: new Date().toISOString(),
     };
@@ -975,6 +1007,16 @@ export async function PATCH(request: Request) {
       .eq("empresa_id", contexto.empresaId)
       .eq("id", id);
     if (updateError) throw new Error(updateError.message);
+
+    if (!followupInatividade.ativo) {
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .update({ status: "cancelado", executed_at: new Date().toISOString() })
+        .eq("empresa_id", contexto.empresaId)
+        .eq("tipo_agendamento", "followup_agente_ia")
+        .eq("status", "pendente")
+        .contains("payload_json", { agente_id: id });
+    }
 
     if (Array.isArray(body.gatilhos)) {
       const { error: deleteGatilhosError } = await supabaseAdmin
