@@ -7,6 +7,7 @@ import { registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { executarContingenciaAgente } from "./fallback";
+import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {
   carregarFerramentasNegocioAtivas,
   contextoPreconsultadoNegocio,
@@ -817,6 +818,33 @@ export async function processarPendenciaNegocio(
         },
       })
       .eq("id", execucaoId);
+
+    const ultimaMensagemContatoId = pendencia.mensagem_ids.at(-1) || "";
+    const ultimaMensagemSaida = saidaFinal.mensagens.at(-1) || "";
+    const deveAgendarFollowup =
+      ctx.respostaEnviada &&
+      !ctx.acaoCriticaExecutada &&
+      Boolean(saidaFinal.estado.proxima_acao) &&
+      ultimaMensagemSaida.includes("?") &&
+      Boolean(ultimaMensagemContatoId) &&
+      Boolean(pendencia.numero_destino);
+
+    if (deveAgendarFollowup) {
+      await agendarFollowupAgenteIa({
+        empresaId: pendencia.empresa_id,
+        agenteId: agente.id,
+        conversaId: pendencia.conversa_id,
+        numeroDestino: pendencia.numero_destino || "",
+        ultimaMensagemContatoId,
+        proximaAcao: saidaFinal.estado.proxima_acao,
+        tentativa: 1,
+        referenciaExecucaoId: execucaoId,
+        cancelarAnteriores: true,
+      }).catch((error) =>
+        console.error("[AGENTE_IA_NEGOCIO] Falha ao agendar follow-up de inatividade:", error)
+      );
+    }
+
     await finalizarPendencia({ pendencia, lockToken, status: "processado" });
 
     return {
