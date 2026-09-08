@@ -71,12 +71,34 @@ const mobileConversationListStyles = `
 }
 `;
 
+const agentIaMessageStyles = `
+.${styles.messageBubbleIncoming}:has(> .${styles.messageMetaTop}) {
+  background: color-mix(
+    in srgb,
+    var(--crm-primary) 22%,
+    var(--crm-surface)
+  );
+  color: var(--crm-text-strong);
+  border: 1px solid var(--crm-primary-border);
+  border-top-left-radius: 4px;
+  box-shadow:
+    inset 3px 0 0 var(--crm-primary),
+    0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
+}
+
+.${styles.messageBubbleIncoming}:has(> .${styles.messageMetaTop}) .${styles.senderLabel} {
+  color: var(--crm-primary-text);
+  font-weight: 800;
+}
+`;
+
 export default async function ConversasLayout({ children }: { children: ReactNode }) {
   await garantirPermissaoPagina("conversas.visualizar");
 
   return (
     <>
       <style>{mobileConversationListStyles}</style>
+      <style>{agentIaMessageStyles}</style>
       <ConteudoIndisponivelAlignment />
       <div className={mobileStyles.mobileScope}>{children}</div>
     </>
