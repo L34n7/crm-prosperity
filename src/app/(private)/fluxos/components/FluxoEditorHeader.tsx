@@ -7,6 +7,7 @@ import { TIPO_NO_CONSULTAR_ESTOQUE } from "../consultar-estoque-editor";
 import { TIPO_NO_CHECKOUT_PAGAMENTO } from "../checkout-pagamento-editor";
 import IntencoesModal from "./modals/IntencoesModal";
 import styles from "../fluxos.module.css";
+import responsive from "./FluxoEditorHeader.module.css";
 
 type FluxoEditorHeaderProps = {
   fluxoSelecionado: Fluxo | null;
@@ -65,17 +66,12 @@ export default function FluxoEditorHeader({
 
   return (
     <>
-    <header className={styles.editorHeader}>
-      <div style={{ minWidth: 0, flex: "1 1 0", overflow: "hidden" }}>
+    <header className={`${styles.editorHeader} ${responsive.header}`}>
+      <div className={responsive.headerInfo}>
         <p className={styles.eyebrow}>Construtor visual</p>
         <h2
-          className={styles.editorTitle}
+          className={`${styles.editorTitle} ${responsive.title}`}
           title={tituloFluxo}
-          style={{
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
         >
           {tituloFluxo}
         </h2>
@@ -90,20 +86,15 @@ export default function FluxoEditorHeader({
         )}
 
         <p
-          className={styles.editorSubtitle}
+          className={`${styles.editorSubtitle} ${responsive.subtitle}`}
           title={descricaoEditor}
-          style={{
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
         >
           {descricaoEditor}
         </p>
       </div>
 
-      <div className={styles.headerActions}>
-        <div className={styles.headerActionsButtons}>
+      <div className={`${styles.headerActions} ${responsive.actions}`}>
+        <div className={`${styles.headerActionsButtons} ${responsive.actionButtons}`}>
           {fluxoSelecionado?.status === "arquivado" ? (
             <>
               {podeAtivarFluxos && (
@@ -204,7 +195,7 @@ export default function FluxoEditorHeader({
                   </button>
 
                   {menuAberto && fluxoSelecionado && (
-                    <div className={styles.headerDropdownMenu}>
+                    <div className={`${styles.headerDropdownMenu} ${responsive.dropdownMenu}`}>
                       <button
                         type="button"
                         className={styles.headerDropdownItem}
@@ -334,7 +325,7 @@ export default function FluxoEditorHeader({
                           <span className={styles.headerSubmenuArrow}>‹</span>
                         </button>
 
-                        <div className={styles.headerSubmenuLeft}>
+                        <div className={`${styles.headerSubmenuLeft} ${responsive.submenu}`}>
                           <button
                             type="button"
                             className={styles.headerDropdownItem}
