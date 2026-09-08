@@ -18,6 +18,10 @@ import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
+import {
+  agendarFollowupAgenteIa,
+  cancelarFollowupsPendentesAgenteIa,
+} from "./followup-inatividade";
 
 const supabaseAdmin = getSupabaseAdmin();
 const MODELO_PADRAO = process.env.OPENAI_AGENT_MODEL?.trim() || "gpt-5.6-luna";
@@ -401,6 +405,14 @@ export async function interceptarMensagemAgenteIa(input: AutomationEngineInput) 
   const texto = String(input.mensagemTexto || "").trim();
   const mensagemId = String(input.mensagemId || "").trim() || null;
   if (!texto || !mensagemId) return null;
+
+  await cancelarFollowupsPendentesAgenteIa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    motivo: "cliente_respondeu",
+  }).catch((error) =>
+    console.error("[AGENTE_IA] Falha ao cancelar follow-up após resposta do cliente:", error)
+  );
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
@@ -1075,10 +1087,6 @@ async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[])
       await esperar(delay);
     }
 
-    // A mensagem pode já ter chegado ao banco antes do webhook terminar de
-    // atualizar a versão da pendência. Revalidar aqui fecha essa janela de
-    // corrida e também impede que as partes seguintes de uma resposta antiga
-    // sejam enviadas depois que o cliente já escreveu novamente.
     if (await execucaoFoiSupersedida(ctx.pendencia)) {
       return { supersedido: true, mensagensEnviadas };
     }
@@ -2098,6 +2106,41 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         correcoes_promessa_operacional: correcoesPromessaOperacional,
       },
     }).eq("id", execucaoId);
+
+    const ultimaMensagemContatoId = pendencia.mensagem_ids.at(-1) || "";
+    const ultimaMensagemSaida = saidaFinal.mensagens.at(-1) || "";
+    const deveAgendarFollowup =
+      !ctx.transferidoHumano &&
+      ctx.respostaEnviada &&
+      Boolean(saidaFinal.estado.proxima_acao) &&
+      ultimaMensagemSaida.includes("?") &&
+      Boolean(ultimaMensagemContatoId) &&
+      Boolean(pendencia.numero_destino);
+
+    if (deveAgendarFollowup) {
+      await agendarFollowupAgenteIa({
+        empresaId: pendencia.empresa_id,
+        agenteId: agente.id,
+        conversaId: pendencia.conversa_id,
+        numeroDestino: pendencia.numero_destino || "",
+        ultimaMensagemContatoId,
+        proximaAcao: saidaFinal.estado.proxima_acao,
+        tentativa: 1,
+        referenciaExecucaoId: execucaoId,
+        cancelarAnteriores: true,
+      }).catch((error) =>
+        console.error("[AGENTE_IA] Falha ao agendar follow-up de inatividade:", error)
+      );
+    } else {
+      await cancelarFollowupsPendentesAgenteIa({
+        empresaId: pendencia.empresa_id,
+        conversaId: pendencia.conversa_id,
+        motivo: ctx.transferidoHumano ? "transferido_humano" : "agente_nao_aguarda_resposta",
+      }).catch((error) =>
+        console.error("[AGENTE_IA] Falha ao limpar follow-up sem espera de resposta:", error)
+      );
+    }
+
     await finalizarPendencia({ pendencia, lockToken, status: "processado" });
 
     return {
