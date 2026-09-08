@@ -1063,14 +1063,26 @@ async function enviarMensagemAgente(params: {
 }
 
 async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[]) {
-  if (!ctx.pendencia.numero_destino) return;
+  if (!ctx.pendencia.numero_destino) {
+    return { supersedido: false, mensagensEnviadas: 0 };
+  }
   const limpas = mensagens.map((m) => m.trim()).filter(Boolean).slice(0, MAX_MENSAGENS_SAIDA);
+  let mensagensEnviadas = 0;
   for (let indice = 0; indice < limpas.length; indice++) {
     if (indice > 0) {
       const anterior = limpas[indice - 1];
       const delay = Math.min(1350, Math.max(550, 420 + anterior.length * 3));
       await esperar(delay);
     }
+
+    // A mensagem pode já ter chegado ao banco antes do webhook terminar de
+    // atualizar a versão da pendência. Revalidar aqui fecha essa janela de
+    // corrida e também impede que as partes seguintes de uma resposta antiga
+    // sejam enviadas depois que o cliente já escreveu novamente.
+    if (await execucaoFoiSupersedida(ctx.pendencia)) {
+      return { supersedido: true, mensagensEnviadas };
+    }
+
     await enviarMensagemAgente({
       empresaId: ctx.pendencia.empresa_id,
       conversaId: ctx.pendencia.conversa_id,
@@ -1080,7 +1092,9 @@ async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[])
       texto: limpas[indice],
     });
     ctx.respostaEnviada = true;
+    mensagensEnviadas += 1;
   }
+  return { supersedido: false, mensagensEnviadas };
 }
 
 async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: ContextoExecucao) {
@@ -1655,6 +1669,33 @@ async function temNovaVersao(pendencia: PendenciaRow) {
   return Number(data?.versao || 0) > Number(pendencia.versao);
 }
 
+async function temMensagemContatoNaoProcessada(pendencia: PendenciaRow) {
+  const idsProcessados = new Set(
+    Array.isArray(pendencia.mensagem_ids)
+      ? pendencia.mensagem_ids.filter(Boolean).map((id) => String(id))
+      : []
+  );
+  const { data, error } = await supabaseAdmin
+    .from("mensagens")
+    .select("id")
+    .eq("empresa_id", pendencia.empresa_id)
+    .eq("conversa_id", pendencia.conversa_id)
+    .eq("remetente_tipo", "contato")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error("[AGENTE_IA] Falha ao verificar mensagem inbound mais recente:", error);
+    return false;
+  }
+  return Boolean(data?.id && !idsProcessados.has(String(data.id)));
+}
+
+async function execucaoFoiSupersedida(pendencia: PendenciaRow) {
+  if (await temNovaVersao(pendencia)) return true;
+  return temMensagemContatoNaoProcessada(pendencia);
+}
+
 async function finalizarPendencia(params: {
   pendencia: PendenciaRow;
   lockToken: string;
@@ -1948,7 +1989,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       });
     }
 
-    if (await temNovaVersao(pendencia)) {
+    if (await execucaoFoiSupersedida(pendencia)) {
       await supabaseAdmin.from("agente_ia_execucoes").update({
         status: ctx.acaoCriticaExecutada ? "concluido" : "cancelado",
         resposta: saidaFinal.mensagens.join("\n\n") || null,
@@ -1979,7 +2020,45 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
             : "Me conta um pouco mais para eu te ajudar por aqui.",
         ];
       }
-      await enviarMensagensAgente(ctx, saidaFinal.mensagens);
+      const resultadoEnvio = await enviarMensagensAgente(ctx, saidaFinal.mensagens);
+      if (resultadoEnvio.supersedido) {
+        const finalAgora = new Date().toISOString();
+        await supabaseAdmin.from("agente_ia_execucoes").update({
+          status:
+            ctx.respostaEnviada || ctx.acaoCriticaExecutada
+              ? "concluido"
+              : "cancelado",
+          resposta: resultadoEnvio.mensagensEnviadas > 0
+            ? saidaFinal.mensagens
+                .slice(0, resultadoEnvio.mensagensEnviadas)
+                .join("\n\n")
+            : null,
+          ferramentas_json: ctx.ferramentasExecutadas,
+          tokens_input: tokensInput,
+          tokens_output: tokensOutput,
+          tokens_total: tokensTotal,
+          latencia_ms: Date.now() - inicio,
+          finished_at: finalAgora,
+          updated_at: finalAgora,
+          metadata_json: {
+            supersedido_por_novas_mensagens: true,
+            supersedido_durante_envio: true,
+            mensagens_enviadas_antes_supersessao: resultadoEnvio.mensagensEnviadas,
+            acao_critica_executada: ctx.acaoCriticaExecutada,
+            preconsultas_backend: Array.from(preexecutadas),
+            ferramentas_modelo: Array.from(ferramentasParaModelo.keys()),
+            correcoes_promessa_operacional: correcoesPromessaOperacional,
+          },
+        }).eq("id", execucaoId);
+        await finalizarPendencia({ pendencia, lockToken, status: "processado" });
+        return {
+          ok: true,
+          processado: true,
+          supersedido: true,
+          duranteEnvio: true,
+          mensagensEnviadas: resultadoEnvio.mensagensEnviadas,
+        };
+      }
     }
 
     const resumoNovo = resumoEstruturado(saidaFinal.estado);
