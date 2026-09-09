@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth/authorization";
 import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
 import {
+  podeVisualizarAtendimentosBotEfetivo,
   podeVisualizarConversasAtribuidasDoSetor,
   podeVisualizarConversasEncerradasDoSetorEfetivo,
 } from "@/lib/conversas/visibilidade";
@@ -43,9 +44,11 @@ export async function GET() {
     const [
       usuarioPodeVisualizarAtribuidasDoSetor,
       usuarioPodeVisualizarEncerradasDoSetor,
+      usuarioPodeVisualizarAtendimentosBot,
     ] = await Promise.all([
       podeVisualizarConversasAtribuidasDoSetor(usuario),
       podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
+      podeVisualizarAtendimentosBotEfetivo(usuario),
     ]);
 
     const quantidade = await contarConversasNaoLidas({
@@ -56,6 +59,7 @@ export async function GET() {
       usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
       usuarioPodeVisualizarEncerradasSetor:
         usuarioPodeVisualizarEncerradasDoSetor,
+      usuarioPodeVisualizarBot: usuarioPodeVisualizarAtendimentosBot,
     });
 
     return NextResponse.json(

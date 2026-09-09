@@ -54,7 +54,7 @@ export async function GET(
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, setor_id, responsavel_id, status, escopo_fila, integracao_whatsapp_id")
+    .select("id, empresa_id, setor_id, responsavel_id, bot_ativo, status, escopo_fila, integracao_whatsapp_id")
     .eq("id", id)
     .maybeSingle();
 

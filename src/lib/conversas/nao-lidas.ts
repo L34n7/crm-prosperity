@@ -14,6 +14,7 @@ export type ContarConversasNaoLidasParams = {
   setoresIds: string[];
   usuarioPodeAtribuir: boolean;
   usuarioPodeVisualizarEncerradasSetor: boolean;
+  usuarioPodeVisualizarBot: boolean;
   status?: string | null;
   prioridade?: string | null;
   contatoId?: string | null;
@@ -39,6 +40,7 @@ export async function contarConversasNaoLidas(
       setoresKey,
       params.usuarioPodeAtribuir,
       params.usuarioPodeVisualizarEncerradasSetor,
+      params.usuarioPodeVisualizarBot,
       params.status,
       params.prioridade,
       params.contatoId,
@@ -62,6 +64,7 @@ export async function contarConversasNaoLidas(
           p_usuario_pode_atribuir: params.usuarioPodeAtribuir,
           p_usuario_pode_visualizar_encerradas_setor:
             params.usuarioPodeVisualizarEncerradasSetor,
+          p_usuario_pode_visualizar_bot: params.usuarioPodeVisualizarBot,
           p_status: params.status || null,
           p_prioridade: params.prioridade || null,
           p_contato_id: params.contatoId || null,
