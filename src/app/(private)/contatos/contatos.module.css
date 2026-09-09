@@ -1695,3 +1695,177 @@
     white-space: nowrap;
   }
 }
+
+/* Responsividade do módulo de contatos em monitores menores */
+@media (max-width: 1440px) {
+  .pageContent,
+  .card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .pageContent {
+    overflow-x: hidden;
+  }
+
+  .filterGroupsRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .filterGroupBox,
+  .filterChecklist {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .filterChecklist {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .sheetScroll {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .sheet {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sheetHeader,
+  .sheet .itemSummary {
+    grid-template-columns:
+      32px
+      minmax(120px, 1.2fr)
+      minmax(86px, 0.72fr)
+      minmax(82px, 0.68fr)
+      minmax(96px, 0.82fr)
+      54px
+      60px
+      minmax(72px, 0.62fr)
+      minmax(80px, 0.72fr)
+      100px;
+    column-gap: 6px;
+  }
+
+  .sheetHeader {
+    padding: 0 8px;
+    font-size: 9px;
+  }
+
+  .sheet .itemSummary {
+    padding: 5px 8px;
+    gap: 0 6px;
+  }
+
+  .contactCell {
+    gap: 7px;
+  }
+
+  .sheet .avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .sheet .itemTitle {
+    font-size: 12px;
+  }
+
+  .sheet .itemSubline {
+    font-size: 10px;
+  }
+
+  .sheetCell {
+    font-size: 11px;
+  }
+
+  .sheet .statusBadge {
+    padding: 0 6px;
+    font-size: 9px;
+  }
+
+  .rowActionButton {
+    padding: 0 6px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .sheetHeader,
+  .sheet .itemSummary {
+    grid-template-columns:
+      32px
+      minmax(130px, 1fr)
+      minmax(78px, 0.65fr)
+      minmax(84px, 0.7fr)
+      minmax(96px, 0.8fr)
+      minmax(70px, 0.65fr)
+      minmax(78px, 0.7fr)
+      96px;
+  }
+
+  .sheetHeader > :nth-child(6),
+  .sheetHeader > :nth-child(7),
+  .sheet .itemSummary > :nth-child(6),
+  .sheet .itemSummary > :nth-child(7) {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .filterChecklist {
+    overflow-x: visible;
+    flex-wrap: wrap;
+    padding-bottom: 0;
+  }
+
+  .filterCheck {
+    flex: 0 1 auto;
+  }
+
+  .sheetScroll {
+    overflow-x: hidden;
+  }
+
+  .sheet {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sheetHeader {
+    display: none;
+  }
+
+  .sheet .itemSummary {
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    column-gap: 8px;
+    padding: 8px;
+  }
+
+  .sheet .itemSummary > :nth-child(n + 3):not(:nth-child(10)) {
+    display: none;
+  }
+
+  .sheet .itemRight {
+    grid-column: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .sheet .itemRight button {
+    width: auto;
+  }
+
+  .rowActionButton {
+    min-height: 28px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+}
