@@ -1,15 +1,12 @@
 .header {
   container-type: inline-size;
   container-name: fluxo-editor-header;
-  display: grid !important;
-  grid-template-columns: minmax(230px, 1fr) minmax(0, 2fr);
-  align-items: start !important;
-  gap: 12px !important;
 }
 
 .headerInfo {
-  min-width: 0;
-  width: 100%;
+  min-width: 260px;
+  width: 260px;
+  flex: 0 0 260px;
   overflow: hidden;
 }
 
@@ -41,7 +38,8 @@
 
 .actions {
   min-width: 0;
-  width: 100% !important;
+  flex: 1 1 0;
+  width: auto !important;
   max-width: none !important;
   display: flex !important;
   flex-direction: column !important;
@@ -54,17 +52,16 @@
   min-width: 0;
   width: 100% !important;
   display: grid !important;
-  grid-template-columns: repeat(5, max-content);
-  grid-auto-flow: row;
+  grid-template-columns: repeat(4, max-content) !important;
+  grid-auto-flow: row !important;
   align-items: start !important;
   justify-content: end !important;
   gap: 6px !important;
 }
 
 /*
- * O Assistente IA fica sempre em uma segunda linha no header compacto.
- * Como Intenções ocupa a primeira célula, o Assistente fica exatamente abaixo
- * dele e deixa a primeira linha livre para o restante das ações.
+ * Intenções e + Bloco permanecem na primeira linha. O Assistente IA ocupa
+ * obrigatoriamente a linha de baixo, sem disputar espaço com o título.
  */
 .intentionsButton {
   grid-column: 1 !important;
@@ -111,44 +108,23 @@
   box-shadow: none !important;
 }
 
-/*
- * Quando o construtor perde largura por causa do menu principal expandido,
- * reduzimos o número de colunas das ações. O título permanece em uma coluna
- * própria e nunca é invadido pelos botões.
- */
-@container fluxo-editor-header (max-width: 980px) {
-  .header {
-    grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
-  }
-
-  .subtitle {
-    display: none !important;
-  }
-
-  .actionButtons {
-    grid-template-columns: repeat(4, max-content);
-  }
-}
-
-@container fluxo-editor-header (max-width: 760px) {
-  .header {
-    grid-template-columns: minmax(205px, 1fr) minmax(0, 2fr);
-  }
-
-  .actionButtons {
-    grid-template-columns: repeat(3, max-content);
-  }
-}
-
 @media (max-width: 1440px) {
   .subtitle {
     display: none !important;
   }
 }
 
+@container fluxo-editor-header (max-width: 760px) {
+  .actionButtons {
+    grid-template-columns: repeat(3, max-content) !important;
+  }
+}
+
 @media (max-width: 720px) {
-  .header {
-    grid-template-columns: minmax(0, 1fr) !important;
+  .headerInfo {
+    min-width: 0;
+    width: 100%;
+    flex: 1 1 auto;
   }
 
   .title,
@@ -171,13 +147,6 @@
   .intentionsButton,
   .assistantButton {
     grid-column: 1 !important;
-  }
-
-  .intentionsButton {
-    grid-row: auto !important;
-  }
-
-  .assistantButton {
     grid-row: auto !important;
   }
 
