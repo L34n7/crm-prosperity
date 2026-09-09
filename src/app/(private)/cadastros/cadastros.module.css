@@ -675,16 +675,25 @@
     padding: 0px 0px 92px 0px;
   }
 
-  .toolbar,
-  .searchArea,
-  .toolbarActions {
-    flex-direction: column;
+  .toolbar {
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+  }
+
+  .searchArea {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .searchArea button,
+  .toolbarActions button {
+    width: 100%;
   }
 
   .toolbarActions {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
   }
 
   .personCard {
