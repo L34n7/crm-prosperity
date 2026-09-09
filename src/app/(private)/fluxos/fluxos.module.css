@@ -780,11 +780,11 @@
 }
 
 .nodeAgendarDisparo {
-  border-color: var(--crm-ui-private-border-hex-fdb0b0);
+  border-color: var( --crm-ui-private-border-hex-82ddc3);
   background: linear-gradient(
     135deg,
-    var(--crm-ui-private-surface-hex-faa7a7c6) 0%,
-    var(--crm-ui-private-surface-hex-ffec72c6) 80%
+    var( --crm-ui-private-border-hex-82ddc3) 0%,
+    var(--crm-ui-private-surface-hex-ffe090) 90%
   );
 }
 
@@ -860,6 +860,15 @@
     135deg,
     #9dffe2 20%,
     #308f85 100%
+  );
+}
+
+.nodeCheckout {
+  border-color: var(--crm-ui-private-border-hex-fdb0b0);
+  background: linear-gradient(
+    135deg,
+    var(--crm-ui-private-surface-hex-faa7a7c6) 0%,
+    var(--crm-ui-private-surface-hex-ffec72c6) 80%
   );
 }
 

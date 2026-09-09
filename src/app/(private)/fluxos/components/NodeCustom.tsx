@@ -34,7 +34,7 @@ function corTipoNo(tipo: string) {
   if (tipo === "capturar_resposta") return styles.nodeCaptura;
   if (tipo === "agendar_disparo") return styles.nodeAgendarDisparo;
   if (tipo === TIPO_NO_CONSULTAR_ESTOQUE) return styles.nodeEstoque;
-  if (tipo === TIPO_NO_CHECKOUT_PAGAMENTO) return styles.nodeAgendarDisparo;
+  if (tipo === TIPO_NO_CHECKOUT_PAGAMENTO) return styles.nodeCheckout;
   if (tipo === "agenda_buscar_agendamento") return styles.nodeAgendaBuscar;
   if (tipo === "agenda_escolher_horario") return styles.nodeAgendaEscolher;
   if (tipo === "agenda_criar_agendamento") return styles.nodeAgendaCriar;

@@ -3,7 +3,7 @@
   color: var(--crm-text);
 }
 .content {
-  padding: 24px 28px 48px;
+  padding: 5px 28px 48px;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -1432,7 +1432,7 @@
 }
 @media (max-width: 720px) {
   .content {
-    padding: 15px 13px 90px;
+    padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
     gap: 15px;
   }
   .hero {

@@ -351,7 +351,7 @@
 .planCurrentSummary {
   padding: 14px 18px;
   border-bottom: 1px solid var(--crm-border);
-  background: var(--crm-on-strong-soft);
+  background: var(--crm-on-strong-soft-plan);
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -8,17 +8,11 @@
 }
 
 .header h1 {
-  margin: 0;
-  font-size: 28px;
+  margin: 0px 0px 0px 20px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--crm-text-strong);
   letter-spacing: -0.02em;
-}
-
-.header p {
-  margin: 6px 0 0;
-  font-size: 14px;
-  color: var(--crm-text-muted);
 }
 
 .alert {

@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  --crm-bg: #1dbd88;
+  --crm-bg: linear-gradient(180deg, #08111c 0%, #0c2630 58%, #0b3937 140%);
   --crm-bg-soft: #e2f0ec;
   --crm-shell-bg:
     linear-gradient(135deg, #dbdbdb10 0%, #113e500c 34%),
@@ -42,6 +42,7 @@
   --crm-text-inverse: #ffffff;
   --crm-on-strong-muted: #b9d8d8;
   --crm-on-strong-soft: #e5f4f1;
+  --crm-on-strong-soft-plan: #e5f4f1;
   --crm-border: #c9d0df81;
   --crm-border-soft: #dbe1e0;
   --crm-border-strong: #dbe1e0;
@@ -1393,6 +1394,7 @@ html[data-theme="dark"] {
   --crm-text-inverse: #ffffff;
   --crm-on-strong-muted: #cbd5e1;
   --crm-on-strong-soft: #e2e8f0;
+  --crm-on-strong-soft-plan: #1c463d;
   --crm-border: #1d3040;
   --crm-border-soft: rgba(148, 163, 184, 0.12);
   --crm-border-strong: rgba(203, 213, 225, 0.34);
@@ -1567,7 +1569,7 @@ html[data-theme="dark"] {
   --crm-ui-private-border-hex-f1f5f9: #345779;
   --crm-ui-private-border-hex-f3f4f6: #4a5363;
   --crm-ui-private-border-hex-f59e0b: #a5721d;
-  --crm-ui-private-border-hex-f7fffc: #218c64;
+  --crm-ui-private-border-hex-f7fffc: #244438;
   --crm-ui-private-border-hex-f9b7f5: #8c2186;
   --crm-ui-private-border-hex-facc15: #a5891d;
   --crm-ui-private-border-hex-fcc3ff: #87218c;

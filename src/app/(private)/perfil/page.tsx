@@ -568,8 +568,7 @@ export default function PerfilPage() {
       <div className={styles.page}>
         <div className={styles.container}>
           <div className={styles.header}>
-            <h1>Meu perfil</h1>
-            <p>Atualize seus dados pessoais e sua foto de perfil.</p>
+            <h1>Editar o perfil de usuário</h1>
           </div>
 
           <FeedbackToast

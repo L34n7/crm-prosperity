@@ -2,7 +2,7 @@
   width: calc(100% - 40px);
   max-width: none;
   margin: 0 auto;
-  padding: 20px 0 42px;
+  padding: 5px 0 42px;
   display: flex;
   flex-direction: column;
   gap: 18px;
