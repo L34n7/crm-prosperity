@@ -37,6 +37,7 @@ type ConversaAcesso = {
   setor_id: string | null;
   escopo_fila?: string | null;
   responsavel_id: string | null;
+  bot_ativo?: boolean | null;
   status?: string | null;
   origem_atendimento?: string | null;
   historico_importado?: boolean | null;
@@ -364,7 +365,7 @@ export async function GET(request: Request) {
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
       .select(
-        "id, empresa_id, setor_id, escopo_fila, responsavel_id, status, origem_atendimento, historico_importado, contato_id, integracao_whatsapp_id"
+        "id, empresa_id, setor_id, escopo_fila, responsavel_id, bot_ativo, status, origem_atendimento, historico_importado, contato_id, integracao_whatsapp_id"
       )
       .eq("id", conversaId)
       .maybeSingle<ConversaAcesso>();
@@ -770,7 +771,7 @@ export async function POST(request: Request) {
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select(
-      "id, empresa_id, setor_id, escopo_fila, responsavel_id, status, contato_id, integracao_whatsapp_id"
+      "id, empresa_id, setor_id, escopo_fila, responsavel_id, bot_ativo, status, contato_id, integracao_whatsapp_id"
     )
     .eq("id", conversa_id)
     .maybeSingle<ConversaAcesso>();

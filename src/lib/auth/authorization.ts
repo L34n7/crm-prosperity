@@ -53,6 +53,13 @@ export async function podeVisualizarConversas(usuario: UsuarioAuth) {
   return await temPermissao(usuario, "conversas.visualizar");
 }
 
+export async function podeVisualizarAtendimentosBot(usuario: UsuarioAuth) {
+  return await temPermissao(
+    usuario,
+    "conversas.visualizar_atendimentos_bot"
+  );
+}
+
 export async function podeVisualizarConversasDoSetor(usuario: UsuarioAuth) {
   return await temPermissao(
     usuario,

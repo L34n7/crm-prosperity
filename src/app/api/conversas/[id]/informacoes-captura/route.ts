@@ -38,7 +38,7 @@ export async function GET(
   const supabase = getSupabaseAdmin();
   const { data: conversa, error: conversaError } = await supabase
     .from("conversas")
-    .select("id, empresa_id, contato_id, setor_id, responsavel_id, status, escopo_fila, integracao_whatsapp_id")
+    .select("id, empresa_id, contato_id, setor_id, responsavel_id, bot_ativo, status, escopo_fila, integracao_whatsapp_id")
     .eq("id", id)
     .eq("empresa_id", usuario.empresa_id)
     .maybeSingle();

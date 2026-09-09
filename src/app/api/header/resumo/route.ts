@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth/authorization";
 import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
 import {
+  podeVisualizarAtendimentosBotEfetivo,
   podeVisualizarConversasAtribuidasDoSetor,
   podeVisualizarConversasEncerradasDoSetorEfetivo,
 } from "@/lib/conversas/visibilidade";
@@ -78,6 +79,7 @@ async function buscarResumoConversasNaoLidas(params: {
   setoresIds: string[];
   usuarioPodeAtribuir: boolean;
   usuarioPodeVisualizarEncerradasSetor: boolean;
+  usuarioPodeVisualizarBot: boolean;
 }) {
   try {
     const quantidade = await contarConversasNaoLidas(params);
@@ -167,12 +169,14 @@ export async function GET() {
   const [
     usuarioPodeVisualizarAtribuidasDoSetor,
     usuarioPodeVisualizarEncerradasDoSetor,
+    usuarioPodeVisualizarAtendimentosBot,
   ] = podeVerConversas
     ? await Promise.all([
         podeVisualizarConversasAtribuidasDoSetor(usuario),
         podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
+        podeVisualizarAtendimentosBotEfetivo(usuario),
       ])
-    : [false, false];
+    : [false, false, false];
   const podeVerTokensIa = usuario.permissoes.includes(
     "ia.tokens.exibir_header"
   );
@@ -194,6 +198,7 @@ export async function GET() {
           usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
           usuarioPodeVisualizarEncerradasSetor:
             usuarioPodeVisualizarEncerradasDoSetor,
+          usuarioPodeVisualizarBot: usuarioPodeVisualizarAtendimentosBot,
         })
       : Promise.resolve(
           blocoErro("Sem permissao para visualizar conversas.", "sem_permissao")

@@ -1,6 +1,7 @@
 import type { UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
   isAdministrador,
+  podeVisualizarAtendimentosBot,
   podeVisualizarConversasDoSetor,
   podeVisualizarConversasEncerradasDoSetor,
 } from "@/lib/auth/authorization";
@@ -16,6 +17,7 @@ export type ConversaParaVerificarVisibilidade = {
   empresa_id: string;
   setor_id: string | null;
   responsavel_id: string | null;
+  bot_ativo?: boolean | null;
   status?: string | null;
   escopo_fila?: string | null;
   integracao_whatsapp_id?: string | null;
@@ -38,6 +40,14 @@ export async function podeVisualizarConversasEncerradasDoSetorEfetivo(
   return await podeVisualizarConversasEncerradasDoSetor(usuario);
 }
 
+export async function podeVisualizarAtendimentosBotEfetivo(
+  usuario: UsuarioContexto
+) {
+  if (isAdministrador(usuario)) return true;
+
+  return await podeVisualizarAtendimentosBot(usuario);
+}
+
 export async function usuarioPodeVisualizarConversa(
   usuario: UsuarioContexto,
   conversa: ConversaParaVerificarVisibilidade
@@ -57,6 +67,13 @@ export async function usuarioPodeVisualizarConversa(
   }
 
   if (isAdministrador(usuario)) return true;
+
+  if (
+    conversa.bot_ativo === true &&
+    (await podeVisualizarAtendimentosBotEfetivo(usuario))
+  ) {
+    return true;
+  }
 
   if (conversa.responsavel_id === usuario.id) return true;
 

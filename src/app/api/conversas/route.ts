@@ -6,6 +6,7 @@ import {
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { obterContadoresConversas } from "@/lib/conversas/contadores";
 import {
+  podeVisualizarAtendimentosBotEfetivo,
   podeVisualizarConversasAtribuidasDoSetor,
   podeVisualizarConversasEncerradasDoSetorEfetivo,
 } from "@/lib/conversas/visibilidade";
@@ -237,9 +238,11 @@ export async function GET(request: Request) {
   const [
     usuarioPodeVisualizarAtribuidasDoSetor,
     usuarioPodeVisualizarEncerradasDoSetor,
+    usuarioPodeVisualizarAtendimentosBot,
   ] = await Promise.all([
     podeVisualizarConversasAtribuidasDoSetor(usuario),
     podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
+    podeVisualizarAtendimentosBotEfetivo(usuario),
   ]);
   const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
     usuario,
@@ -286,6 +289,7 @@ export async function GET(request: Request) {
       p_usuario_pode_atribuir: usuarioPodeVisualizarAtribuidasDoSetor,
       p_usuario_pode_visualizar_encerradas_setor:
         usuarioPodeVisualizarEncerradasDoSetor,
+      p_usuario_pode_visualizar_bot: usuarioPodeVisualizarAtendimentosBot,
       p_status: status,
       p_prioridade: prioridade,
       p_contato_id: contatoId,
@@ -307,6 +311,7 @@ export async function GET(request: Request) {
           usuarioPodeAtribuir: usuarioPodeVisualizarAtribuidasDoSetor,
           usuarioPodeVisualizarEncerradasSetor:
             usuarioPodeVisualizarEncerradasDoSetor,
+          usuarioPodeVisualizarBot: usuarioPodeVisualizarAtendimentosBot,
           filtros: filtrosComuns,
         })
       : Promise.resolve(null);
