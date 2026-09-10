@@ -126,6 +126,31 @@ const disparoIndividualResponsiveStyles = `
 }
 
 @media (max-height: 820px), (max-width: 1200px) {
+  .${styles.disparoCard} {
+    box-sizing: border-box;
+    max-height: calc(100dvh - 210px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--crm-border-strong) transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .${styles.disparoCard}::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .${styles.disparoCard}::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .${styles.disparoCard}::-webkit-scrollbar-thumb {
+    background: var(--crm-border-strong);
+    border-radius: 999px;
+  }
+
   .${styles.disparoCardExpandido} {
     max-height: none !important;
     overflow: visible !important;
@@ -141,11 +166,6 @@ const disparoIndividualResponsiveStyles = `
     padding-top: 0 !important;
     background: none !important;
   }
-
-  .${styles.timelineArea} {
-    overflow-y: auto !important;
-    overscroll-behavior-y: contain;
-  }
 }
 
 @media (max-width: 768px) {
@@ -156,6 +176,10 @@ const disparoIndividualResponsiveStyles = `
   .${styles.disparoManageVariablesButton} {
     width: fit-content !important;
     max-width: 100%;
+  }
+
+  .${styles.disparoCard} {
+    max-height: calc(100dvh - 165px) !important;
   }
 }
 `;
