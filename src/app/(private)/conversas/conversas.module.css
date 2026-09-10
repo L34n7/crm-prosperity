@@ -7998,3 +7998,70 @@ a.buttonMessageOption:hover {
     width: 100%;
   }
 }
+
+
+/* CRM_INDIVIDUAL_DISPATCH_SCROLL_DENSITY_V2 */
+.disparoManageVariablesRow {
+  margin-top: 4px;
+}
+
+.disparoManageVariablesButton {
+  min-height: 30px;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--crm-text-muted);
+  border-radius: 9px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.disparoManageVariablesButton:hover {
+  border-color: transparent;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
+  transform: none;
+}
+
+.disparoCardExpandido {
+  max-height: min(620px, calc(100dvh - 260px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 5px;
+}
+
+.disparoCardExpandido {
+  scrollbar-width: thin;
+  scrollbar-color: var(--crm-border-strong) transparent;
+}
+
+.disparoCardExpandido::-webkit-scrollbar {
+  width: 7px;
+}
+
+.disparoCardExpandido::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.disparoCardExpandido::-webkit-scrollbar-thumb {
+  background: var(--crm-border-strong);
+  border-radius: 999px;
+}
+
+@media (max-width: 768px) {
+  .disparoManageVariablesRow {
+    width: auto;
+  }
+
+  .disparoManageVariablesButton {
+    width: auto;
+  }
+
+  .disparoCardExpandido {
+    max-height: calc(100dvh - 220px);
+    padding-right: 3px;
+  }
+}
