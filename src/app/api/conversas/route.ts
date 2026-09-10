@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth/authorization";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { obterContadoresConversas } from "@/lib/conversas/contadores";
+import { enriquecerConversasComDisparosAgendados } from "@/lib/conversas/disparos-agendados-pendentes";
 import {
   podeVisualizarAtendimentosBotEfetivo,
   podeVisualizarConversasAtribuidasDoSetor,
@@ -342,7 +343,11 @@ export async function GET(request: Request) {
       return idsIntegracoesPermitidas.has(integracaoConversa);
     });
     const hasMore = recebidas.length > limite;
-    const conversas = hasMore ? recebidas.slice(0, limite) : recebidas;
+    const conversasBase = hasMore ? recebidas.slice(0, limite) : recebidas;
+    const conversas = await enriquecerConversasComDisparosAgendados({
+      empresaId: usuario.empresa_id,
+      conversas: conversasBase,
+    });
     const ultimaConversa = conversas[conversas.length - 1] || null;
 
     return NextResponse.json({
