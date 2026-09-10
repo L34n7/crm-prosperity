@@ -7958,3 +7958,43 @@ a.buttonMessageOption:hover {
 .disparoMessageContent .messageText {
   margin: 0;
 }
+
+
+/* CRM_INDIVIDUAL_DISPATCH_VARIABLE_MANAGER_V1 */
+.disparoManageVariablesRow {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.disparoManageVariablesButton {
+  flex-shrink: 0;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  border-radius: 14px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.disparoManageVariablesButton:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-surface-subtle);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .disparoManageVariablesRow,
+  .disparoManageVariablesButton {
+    width: 100%;
+  }
+}

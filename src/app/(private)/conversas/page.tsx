@@ -3306,6 +3306,9 @@ function ConversasPageContent() {
   const [variaveisGlobais, setVariaveisGlobais] = useState<VariavelGlobal[]>([]);
   const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
   const [modalVariavelAberto, setModalVariavelAberto] = useState(false);
+  const [contextoModalVariavel, setContextoModalVariavel] = useState<
+    "macro" | "disparo-individual"
+  >("macro");
   const [erroVariavelModal, setErroVariavelModal] = useState("");
   const [variavelForm, setVariavelForm] = useState<VariavelForm>({
     chave: "",
@@ -4528,7 +4531,10 @@ function ConversasPageContent() {
     }
   }
 
-  async function abrirModalVariavel() {
+  async function abrirModalVariavelNoContexto(
+    contexto: "macro" | "disparo-individual"
+  ) {
+    setContextoModalVariavel(contexto);
     setMacroCardAberto(false);
     setVariavelForm({
       chave: "",
@@ -4538,6 +4544,14 @@ function ConversasPageContent() {
     setErroVariavelModal("");
     setModalVariavelAberto(true);
     await carregarVariaveisGlobais({ erroNoModal: true });
+  }
+
+  function abrirModalVariavel() {
+    return abrirModalVariavelNoContexto("macro");
+  }
+
+  function abrirModalVariavelDisparoIndividual() {
+    return abrirModalVariavelNoContexto("disparo-individual");
   }
 
   function fecharModalVariavel() {
@@ -4632,6 +4646,22 @@ function ConversasPageContent() {
     const valor = normalizarChaveVariavelMacro(chave);
 
     if (!valor) return;
+
+    if (contextoModalVariavel === "disparo-individual") {
+      const limite = Math.max(1, quantidadeParametrosBody);
+
+      setParametros((atuais) => {
+        const proximo = Array.from(
+          { length: limite },
+          (_, index) => atuais[index] || ""
+        );
+        const primeiroVazio = proximo.findIndex((item) => !item.trim());
+        const indice = primeiroVazio >= 0 ? primeiroVazio : 0;
+        proximo[indice] = valor;
+        return proximo;
+      });
+      return;
+    }
 
     const token = `{{${valor}}}`;
 
@@ -10514,18 +10544,31 @@ const templateFooterTexto = useMemo(() => {
                                     </div>
 
                                     {quantidadeParametrosBody > 0 && (
-                                      <div className={styles.disparoParams}>
-                                        {Array.from({ length: quantidadeParametrosBody }).map((_, i) => (
-                                          <TemplateVariableSearchSelect
-                                            key={i}
-                                            label={`Variável ${i + 1}`}
-                                            value={parametros[i] || ""}
-                                            onChange={(chave) => atualizarParametro(i, chave)}
-                                            opcoes={opcoesVariaveisDisparoIndividual}
-                                            carregando={carregandoVariaveis}
-                                          />
-                                        ))}
-                                      </div>
+                                      <>
+                                        <div className={styles.disparoParams}>
+                                          {Array.from({ length: quantidadeParametrosBody }).map((_, i) => (
+                                            <TemplateVariableSearchSelect
+                                              key={i}
+                                              label={`Variável ${i + 1}`}
+                                              value={parametros[i] || ""}
+                                              onChange={(chave) => atualizarParametro(i, chave)}
+                                              opcoes={opcoesVariaveisDisparoIndividual}
+                                              carregando={carregandoVariaveis}
+                                            />
+                                          ))}
+                                        </div>
+
+                                        <div className={styles.disparoManageVariablesRow}>
+                                          <button
+                                            type="button"
+                                            className={styles.disparoManageVariablesButton}
+                                            onClick={abrirModalVariavelDisparoIndividual}
+                                          >
+                                            <Variable size={14} />
+                                            Gerenciar variáveis
+                                          </button>
+                                        </div>
+                                      </>
                                     )}
 
                                     <div className={styles.disparoQuickBottomRow}>
@@ -13244,14 +13287,21 @@ const templateFooterTexto = useMemo(() => {
         <div className={styles.modalOverlay} onClick={fecharModalVariavel}>
           <div
             className={`${styles.modalConfirmacao} ${styles.variableModalCard}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gerenciar-variaveis-titulo"
             onClick={(e) => e.stopPropagation()}
           >
             <div className={styles.modalHeader}>
               <div>
                 <p className={styles.modalEyebrow}>Variáveis</p>
-                <h3 className={styles.modalTitle}>Gerenciar variáveis</h3>
+                <h3 id="gerenciar-variaveis-titulo" className={styles.modalTitle}>
+                  Gerenciar variáveis
+                </h3>
                 <p className={styles.modalSubtitle}>
-                  Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para macros, disparos e fluxos.
+                  {contextoModalVariavel === "disparo-individual"
+                    ? "Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para disparos e fluxos."
+                    : "Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para macros, disparos e fluxos."}
                 </p>
               </div>
 
