@@ -6,6 +6,7 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { podeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { limparArquivosMensagemAgendada } from "@/lib/whatsapp/mensagem-agendada";
 
 export async function PATCH(
   request: NextRequest,
@@ -50,7 +51,7 @@ export async function PATCH(
       .select("id, status, tipo_agendamento, payload_json")
       .eq("id", id)
       .eq("empresa_id", usuario.empresa_id)
-      .eq("tipo_agendamento", "disparo_template")
+      .in("tipo_agendamento", ["disparo_template", "mensagem_manual"])
       .maybeSingle();
 
     if (fluxoError) {
@@ -109,7 +110,12 @@ export async function PATCH(
         user_agent: auditMeta.user_agent,
       });
 
-      return NextResponse.json({ ok: true, disparo: data, origem: "fluxo" });
+      const origem = disparoFluxo.tipo_agendamento === "mensagem_manual" ? "conversa" : "fluxo";
+      if (disparoFluxo.tipo_agendamento === "mensagem_manual") {
+        await limparArquivosMensagemAgendada(disparoFluxo.payload_json || {});
+      }
+
+      return NextResponse.json({ ok: true, disparo: data, origem });
     }
 
     const { data: execucaoAgenda, error: agendaError } = await supabase

@@ -21,6 +21,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getWhatsAppMessageSpecialState } from "@/lib/whatsapp/message-special-state";
 import { getWhatsAppFlowResponsePresentation } from "@/lib/whatsapp/flow-response-presentation";
 import styles from "./conversas.module.css";
+import AgendarMensagemButton from "./AgendarMensagemButton";
 import VirtualizedConversationRows from "./VirtualizedConversationRows";
 import { can } from "@/lib/permissoes/frontend";
 import {
@@ -10983,6 +10984,32 @@ const templateFooterTexto = useMemo(() => {
 
                                 {/* DIREITA */}
                                 <div className={styles.composerRight}>
+                                  <AgendarMensagemButton
+                                    conversaId={conversaSelecionada.id}
+                                    contatoNome={conversaSelecionada.contatos?.nome}
+                                    texto={arquivoEnvio ? legendaArquivo : conteudo}
+                                    arquivo={arquivoEnvio}
+                                    podeAgendar={podeEnviarMensagem && janela24hAberta}
+                                    podeAgendarMidia={podeEnviarMidia}
+                                    gravandoAudio={gravandoAudio}
+                                    janela24h={janela24hConversa}
+                                    onAgendado={(mensagem) => {
+                                      if (arquivoEnvioPreviewUrl) {
+                                        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+                                      }
+                                      setArquivoEnvio(null);
+                                      setArquivoEnvioPreviewUrl(null);
+                                      setLegendaArquivo("");
+                                      legendaArquivoRef.current = "";
+                                      setConteudo("");
+                                      conteudoRef.current = "";
+                                      if (editorRef.current) editorRef.current.textContent = "";
+                                      if (legendaEditorRef.current) legendaEditorRef.current.textContent = "";
+                                      setMensagemSucesso(mensagem);
+                                      void atualizarConversasCarregadas();
+                                    }}
+                                  />
+
                                   {podeEnviarMidia && (
                                     <>
                                       <button

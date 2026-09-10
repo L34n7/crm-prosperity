@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
           automacao_nos (id, titulo, tipo_no)
         `)
         .eq("empresa_id", usuario.empresa_id)
-        .eq("tipo_agendamento", "disparo_template")
+        .in("tipo_agendamento", ["disparo_template", "mensagem_manual"])
         .order("executar_em", { ascending: false }),
       supabase
         .from("agenda_automacao_execucoes")
@@ -256,6 +256,7 @@ export async function GET(request: NextRequest) {
 
     const normalizadosFluxo = disparosFluxo.map((item: any) => {
       const payload = item.payload_json || {};
+      const origemDisparo = item.tipo_agendamento === "mensagem_manual" ? "conversa" : "fluxo";
       const template = templates.get(String(payload.template_id || ""));
       const messageId = String(payload.resultado_envio?.message_id || "").trim();
       const mensagem: any = messageId ? mensagens.get(messageId) : null;
@@ -264,7 +265,7 @@ export async function GET(request: NextRequest) {
       const rawStatus = whatsappStatus?.raw_status || {};
       const erroMeta = rawStatus?.errors?.[0] || null;
       const codigoErroMeta = erroMeta?.code || null;
-      const erroTecnico = whatsappStatus?.error_message || erroMeta?.message || erroMeta?.title || null;
+      const erroTecnico = whatsappStatus?.error_message || erroMeta?.message || erroMeta?.title || String(payload.erro || "").trim() || null;
       const statusEnvio = mensagem?.status_envio || null;
       const envioStatus =
         statusEnvio === "falha"
@@ -279,10 +280,10 @@ export async function GET(request: NextRequest) {
 
       return {
         ...item,
-        origem_disparo: "fluxo",
+        origem_disparo: origemDisparo,
         payload_json: {
           ...payload,
-          origem_disparo: "fluxo",
+          origem_disparo: origemDisparo,
           template_nome: payload.template_nome || template?.nome || null,
           template_idioma: payload.template_idioma || template?.idioma || null,
           template_payload: payload.template_payload || template?.payload || null,
