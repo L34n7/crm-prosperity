@@ -17,6 +17,14 @@ jobs:
         with:
           ref: feature/agendamento-mensagens-conversas
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
       - name: Apply TypeScript fixes
         shell: bash
         run: |
