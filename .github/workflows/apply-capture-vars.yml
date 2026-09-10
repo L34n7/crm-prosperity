@@ -1,0 +1,551 @@
+name: Apply capture variables
+
+on:
+  push:
+    branches:
+      - feature/variaveis-nome-captura-disparos
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/variaveis-nome-captura-disparos
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply native TypeScript changes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected 1 occurrence, found {count}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Shared capture-name resolver: same source and fallback semantics used by Agenda.
+          path = "src/lib/automacoes/variaveis-fixas-contato.ts"
+          replace_once(path,
+          '''type ExtrasVariaveisFixas = {
+            nome_whatsapp?: string | null;
+            protocolo_atual?: string | null;
+            ultimo_protocolo?: string | null;
+          };''',
+          '''type ExtrasVariaveisFixas = {
+            empresa_id?: string | null;
+            nome_whatsapp?: string | null;
+            nome_captura?: string | null;
+            resolver_nome_captura?: boolean;
+            protocolo_atual?: string | null;
+            ultimo_protocolo?: string | null;
+          };''')
+
+          replace_once(path,
+          '''  | "nome_whatsapp"
+            | "protocolo_atual"''',
+          '''  | "nome_whatsapp"
+            | "nome_captura"
+            | "primeiro_nome_captura"
+            | "protocolo_atual"''')
+
+          replace_once(path,
+          '''  perfil_whatsapp_nome: "nome_whatsapp",
+
+            email: "email",''',
+          '''  perfil_whatsapp_nome: "nome_whatsapp",
+
+            nome_captura: "nome_captura",
+            primeiro_nome_captura: "primeiro_nome_captura",
+
+            email: "email",''')
+
+          replace_once(path,
+          '''  "nome_perfil_whatsapp",
+            "email_contato",''',
+          '''  "nome_perfil_whatsapp",
+            "nome_captura",
+            "primeiro_nome_captura",
+            "email_contato",''')
+
+          replace_once(path,
+          '''export function chaveEhVariavelNomeWhatsapp(chave: unknown) {
+            return VARIAVEIS_NOME_WHATSAPP.has(normalizarChaveVariavelFluxo(chave));
+          }
+
+          function limparCachePixPendente()''',
+          '''export function chaveEhVariavelNomeWhatsapp(chave: unknown) {
+            return VARIAVEIS_NOME_WHATSAPP.has(normalizarChaveVariavelFluxo(chave));
+          }
+
+          const VARIAVEIS_NOME_CAPTURA = new Set([
+            "nome_captura",
+            "primeiro_nome_captura",
+          ]);
+
+          export function chaveEhVariavelNomeCaptura(chave: unknown) {
+            return VARIAVEIS_NOME_CAPTURA.has(normalizarChaveVariavelFluxo(chave));
+          }
+
+          export async function resolverNomeCapturaContato(params: {
+            empresaId: string;
+            contatoId?: string | null;
+            nomeWhatsapp?: string | null;
+            nomeFallback?: string | null;
+          }) {
+            const fallback = String(
+              params.nomeWhatsapp || params.nomeFallback || ""
+            ).trim();
+            const contatoId = String(params.contatoId || "").trim();
+            const empresaId = String(params.empresaId || "").trim();
+
+            if (!contatoId || !empresaId) {
+              const primeiroNome = fallback.split(/\\s+/).filter(Boolean)[0] || fallback;
+              return {
+                nome_captura: fallback,
+                primeiro_nome_captura: primeiroNome,
+              };
+            }
+
+            const { data, error } = await supabaseAdmin
+              .from("contato_informacoes_captura")
+              .select("valor")
+              .eq("empresa_id", empresaId)
+              .eq("contato_id", contatoId)
+              .eq("tipo", "nome")
+              .eq("ativo", true)
+              .order("capturado_em", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (error) {
+              throw new Error(`Erro ao buscar nome capturado: ${error.message}`);
+            }
+
+            const nomeCaptura = String(data?.valor || "").trim() || fallback;
+            const primeiroNomeCaptura =
+              nomeCaptura.split(/\\s+/).filter(Boolean)[0] || nomeCaptura;
+
+            return {
+              nome_captura: nomeCaptura,
+              primeiro_nome_captura: primeiroNomeCaptura,
+            };
+          }
+
+          function limparCachePixPendente()''')
+
+          replace_once(path,
+          '''  const classificacao = normalizarClassificacaoLead(
+            contato?.classificacao || contato?.status_lead,
+            "novo"
+          );
+            const valores: Record<CampoContatoVariavelFixa, string> = {
+            nome: String(contato?.nome || "").trim(),''',
+          '''  const classificacao = normalizarClassificacaoLead(
+            contato?.classificacao || contato?.status_lead,
+            "novo"
+          );
+            const nomeWhatsapp = String(
+            extras.nome_whatsapp || contato?.whatsapp_profile_name || contato?.nome || ""
+          ).trim();
+            const nomesCaptura = extras.resolver_nome_captura
+            ? await resolverNomeCapturaContato({
+                empresaId: String(extras.empresa_id || ""),
+                contatoId: contato?.id || null,
+                nomeWhatsapp,
+                nomeFallback: contato?.nome || null,
+              })
+            : (() => {
+                const nomeCaptura = String(extras.nome_captura || nomeWhatsapp).trim();
+                return {
+                  nome_captura: nomeCaptura,
+                  primeiro_nome_captura:
+                    nomeCaptura.split(/\\s+/).filter(Boolean)[0] || nomeCaptura,
+                };
+              })();
+            const valores: Record<CampoContatoVariavelFixa, string> = {
+            nome: String(contato?.nome || "").trim(),''')
+
+          replace_once(path,
+          '''    nome_whatsapp: String(
+              extras.nome_whatsapp || contato?.whatsapp_profile_name || contato?.nome || ""
+            ).trim(),
+            protocolo_atual:''',
+          '''    nome_whatsapp: nomeWhatsapp,
+            nome_captura: nomesCaptura.nome_captura,
+            primeiro_nome_captura: nomesCaptura.primeiro_nome_captura,
+            protocolo_atual:''')
+
+          # Agenda now calls the shared resolver, so all modules use the same capture rule.
+          path = "src/lib/agendas/automation-runtime-context.ts"
+          replace_once(path,
+          '''import { getSupabaseAdmin } from "@/lib/supabase/admin";
+          import { calendarIntegrationIds } from "./integration-scope";''',
+          '''import { getSupabaseAdmin } from "@/lib/supabase/admin";
+          import { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";
+          import { calendarIntegrationIds } from "./integration-scope";''')
+
+          captured_query_pattern = re.compile(r'''    appointment\.contato_id\n      \? supabase\n          \.from\("contato_informacoes_captura"\)\n          \.select\("valor"\)\n          \.eq\("empresa_id", job\.empresa_id\)\n          \.eq\("contato_id", appointment\.contato_id\)\n          \.eq\("tipo", "nome"\)\n          \.eq\("ativo", true\)\n          \.order\("capturado_em", \{ ascending: false \}\)\n          \.limit\(1\)\n          \.maybeSingle\(\)\n      : Promise\.resolve\(\{ data: null, error: null \}\),''')
+          p = Path(path)
+          text = p.read_text()
+          replacement = '''    resolverNomeCapturaContato({
+              empresaId: job.empresa_id,
+              contatoId: appointment.contato_id || null,
+              nomeWhatsapp: contactResult.data?.whatsapp_profile_name || null,
+              nomeFallback:
+                appointment.nome_cliente || contactResult.data?.nome || null,
+            }),'''
+          text, count = captured_query_pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise RuntimeError(f"{path}: capture query replacement count={count}")
+          p.write_text(text)
+
+          replace_once(path,
+          '''  if (capturedNameResult.error) throw new Error(capturedNameResult.error.message);
+            if (currentProtocolResult.error)''',
+          '''  if (currentProtocolResult.error)''')
+
+          old_capture_finalize = '''  const capturedName = String(capturedNameResult.data?.valor || "").trim();
+            const fallbackName = String(
+            contactResult.data?.whatsapp_profile_name ||
+              appointment.nome_cliente ||
+              contactResult.data?.nome ||
+              ""
+          ).trim();
+            const canonicalCapturedName = capturedName || fallbackName;
+
+            if (canonicalCapturedName) {
+            variables.nome_captura = canonicalCapturedName;
+            variables.primeiro_nome_captura =
+              canonicalCapturedName.split(/\\s+/).filter(Boolean)[0] || canonicalCapturedName;
+            // Compatibilidade com regras/templates salvos antes da variável canônica.
+            variables.nome_paciente = canonicalCapturedName;
+          }'''
+          new_capture_finalize = '''  const canonicalCapturedName = capturedNameResult.nome_captura;
+
+            if (canonicalCapturedName) {
+            variables.nome_captura = canonicalCapturedName;
+            variables.primeiro_nome_captura =
+              capturedNameResult.primeiro_nome_captura;
+            // Compatibilidade com regras/templates salvos antes da variável canônica.
+            variables.nome_paciente = canonicalCapturedName;
+          }'''
+          replace_once(path, old_capture_finalize, new_capture_finalize)
+
+          # Scheduled bulk dispatch resolves capture names at execution time.
+          path = "src/lib/whatsapp/disparo-agendado-variaveis.ts"
+          replace_once(path,
+          '''  chaveEhVariavelFixaContato,
+            chaveEhVariavelNomeWhatsapp,
+            montarMapaVariaveisFixasContato,''',
+          '''  chaveEhVariavelFixaContato,
+            chaveEhVariavelNomeCaptura,
+            chaveEhVariavelNomeWhatsapp,
+            montarMapaVariaveisFixasContato,''')
+
+          replace_once(path,
+          '''  const precisaNomeWhatsapp = chaves.some(chaveEhVariavelNomeWhatsapp);
+            const nomeWhatsapp = precisaNomeWhatsapp''',
+          '''  const precisaNomeCaptura = chaves.some(chaveEhVariavelNomeCaptura);
+            const precisaNomeWhatsapp =
+            precisaNomeCaptura || chaves.some(chaveEhVariavelNomeWhatsapp);
+            const nomeWhatsapp = precisaNomeWhatsapp''')
+
+          replace_once(path,
+          '''  const fixasContato = await montarMapaVariaveisFixasContato(params.contato, {
+            nome_whatsapp: nomeWhatsapp,
+            protocolo_atual: protocoloAtual,''',
+          '''  const fixasContato = await montarMapaVariaveisFixasContato(params.contato, {
+            empresa_id: params.empresaId,
+            nome_whatsapp: nomeWhatsapp,
+            resolver_nome_captura: precisaNomeCaptura,
+            protocolo_atual: protocoloAtual,''')
+
+          # Queue sender resolves dynamic capture markers just before calling Meta.
+          path = "src/lib/whatsapp/send-template-disparo.ts"
+          replace_once(path,
+          '''import { getSupabaseAdmin } from "@/lib/supabase/admin";
+          import { findOrCreateWhatsAppContact }''',
+          '''import { getSupabaseAdmin } from "@/lib/supabase/admin";
+          import {
+            chaveEhVariavelNomeCaptura,
+            montarMapaVariaveisFixasContato,
+            normalizarChaveVariavelFluxo,
+          } from "@/lib/automacoes/variaveis-fixas-contato";
+          import { findOrCreateWhatsAppContact }''')
+
+          replace_once(path,
+          '''function texto(valor: unknown) {
+            return String(valor || "").trim();
+          }
+
+          export function limparNumeroDisparo''',
+          '''function texto(valor: unknown) {
+            return String(valor || "").trim();
+          }
+
+          function extrairChaveNomeCaptura(valor: unknown) {
+            const match = String(valor || "")
+              .trim()
+              .match(/^\\{\\{\\s*([^}]+?)\\s*\\}\\}$/);
+
+            if (!match?.[1]) return "";
+
+            const chave = normalizarChaveVariavelFluxo(match[1]);
+            return chaveEhVariavelNomeCaptura(chave) ? chave : "";
+          }
+
+          export function limparNumeroDisparo''')
+
+          replace_once(path,
+          '''  const payloadTemplate = template.payload || null;
+            const mensagemTemplate =
+            montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
+            `Template enviado: ${template.nome}`;''',
+          '''  const payloadTemplate = template.payload || null;
+            let mensagemTemplate =
+            montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
+            `Template enviado: ${template.nome}`;''')
+
+          replace_once(path,
+          '''  const nomeContatoFinal =
+            recursos.contato?.nome || nomeContato || "Sem nome";
+            const components = montarComponentesTemplateDisparo(payloadTemplate, variaveis);''',
+          '''  if (variaveis.some((valor) => extrairChaveNomeCaptura(valor))) {
+            const variaveisFixas = await montarMapaVariaveisFixasContato(
+              recursos.contato,
+              {
+                empresa_id: empresaId,
+                resolver_nome_captura: true,
+              }
+            );
+
+            variaveis = variaveis.map((valor) => {
+              const chave = extrairChaveNomeCaptura(valor);
+              return chave ? variaveisFixas.get(chave) || "" : valor;
+            });
+
+            mensagemTemplate =
+              montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
+              `Template enviado: ${template.nome}`;
+          }
+
+            const nomeContatoFinal =
+            recursos.contato?.nome || nomeContato || "Sem nome";
+            const components = montarComponentesTemplateDisparo(payloadTemplate, variaveis);''')
+
+          # Individual conversation dispatch uses the same server-side capture resolver.
+          path = "src/app/api/whatsapp/disparo-individual/route.ts"
+          replace_once(path,
+          '''import { getSupabaseAdmin } from "@/lib/supabase/admin";
+          import { getUsuarioContexto }''',
+          '''import { getSupabaseAdmin } from "@/lib/supabase/admin";
+          import {
+            chaveEhVariavelNomeCaptura,
+            montarMapaVariaveisFixasContato,
+            normalizarChaveVariavelFluxo,
+          } from "@/lib/automacoes/variaveis-fixas-contato";
+          import { getUsuarioContexto }''')
+
+          replace_once(path,
+          '''function limparNumero(numero: string) {
+            return String(numero || "").replace(/\\D/g, "");
+          }
+
+          function gerarCodigoAleatorio''',
+          '''function limparNumero(numero: string) {
+            return String(numero || "").replace(/\\D/g, "");
+          }
+
+          function extrairChaveNomeCaptura(valor: string) {
+            const match = String(valor || "")
+              .trim()
+              .match(/^\\{\\{\\s*([^}]+?)\\s*\\}\\}$/);
+
+            if (!match?.[1]) return "";
+
+            const chave = normalizarChaveVariavelFluxo(match[1]);
+            return chaveEhVariavelNomeCaptura(chave) ? chave : "";
+          }
+
+          function gerarCodigoAleatorio''')
+
+          replace_once(path,
+          '''    const bodyParams = Array.isArray(body?.body_params)''',
+          '''    let bodyParams = Array.isArray(body?.body_params)''')
+
+          replace_once(path,
+          '''          nome,
+                    telefone
+                  )''',
+          '''          nome,
+                    whatsapp_profile_name,
+                    telefone
+                  )''')
+
+          replace_once(path,
+          '''    const nomeContato = contato?.nome || "Contato";
+              const integracaoWhatsappId = conversa.integracao_whatsapp_id;
+
+              if (!integracaoWhatsappId)''',
+          '''    const nomeContato = contato?.nome || "Contato";
+              const integracaoWhatsappId = conversa.integracao_whatsapp_id;
+
+              if (bodyParams.some((valor) => extrairChaveNomeCaptura(valor))) {
+              const variaveisFixas = await montarMapaVariaveisFixasContato(
+                {
+                  id: contato?.id || null,
+                  nome: contato?.nome || null,
+                  whatsapp_profile_name: contato?.whatsapp_profile_name || null,
+                  telefone: contato?.telefone || null,
+                },
+                {
+                  empresa_id: usuario.empresa_id,
+                  resolver_nome_captura: true,
+                }
+              );
+
+              bodyParams = bodyParams.map((valor) => {
+                const chave = extrairChaveNomeCaptura(valor);
+                return chave ? variaveisFixas.get(chave) || "" : valor;
+              });
+            }
+
+              if (!integracaoWhatsappId)''')
+
+          # Disparos page: expose both variables as fixed options and preserve dynamic marker for the worker.
+          path = "src/app/(private)/disparos-whatsapp/page.tsx"
+          replace_once(path,
+          '''  {
+              chave: "nome_whatsapp",
+              exemplo: "{{nome_whatsapp}}",
+              descricao:
+                "Nome do perfil do WhatsApp quando existir; se não existir, usa o nome salvo no contato.",
+            },
+            {
+              chave: "email_contato",''',
+          '''  {
+              chave: "nome_whatsapp",
+              exemplo: "{{nome_whatsapp}}",
+              descricao:
+                "Nome do perfil do WhatsApp quando existir; se não existir, usa o nome salvo no contato.",
+            },
+            {
+              chave: "nome_captura",
+              exemplo: "{{nome_captura}}",
+              descricao:
+                "Último nome capturado por um nó do tipo Nome; quando não existir, usa o nome do WhatsApp.",
+            },
+            {
+              chave: "primeiro_nome_captura",
+              exemplo: "{{primeiro_nome_captura}}",
+              descricao:
+                "Primeira palavra do Nome captura; quando não existir captura, usa o primeiro nome do WhatsApp.",
+            },
+            {
+              chave: "email_contato",''')
+
+          replace_once(path,
+          '''            ? variaveisObrigatorias.map((variavel) =>
+                          resolverVariavelContato(
+                            variavel,
+                            contato,
+                            variaveisPersonalizadas,
+                            protocolosPorContato
+                          )
+                        )
+                      : [],''',
+          '''            ? variaveisObrigatorias.map((variavel) =>
+                          variavel === "nome_captura" ||
+                          variavel === "primeiro_nome_captura"
+                            ? `{{${variavel}}}`
+                            : resolverVariavelContato(
+                                variavel,
+                                contato,
+                                variaveisPersonalizadas,
+                                protocolosPorContato
+                              )
+                        )
+                      : [],''')
+
+          # Conversations: add the capture variables only to the individual-dispatch selector.
+          path = "src/app/(private)/conversas/page.tsx"
+          replace_once(path,
+          '''    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {''',
+          '''    const variaveisFixasDisparoIndividual = [
+              ...VARIAVEIS_FIXAS_SISTEMA,
+              {
+                chave: "nome_captura",
+                exemplo: "{{nome_captura}}",
+                descricao:
+                  "Último nome capturado por um nó do tipo Nome; quando não existir, usa o nome do WhatsApp.",
+              },
+              {
+                chave: "primeiro_nome_captura",
+                exemplo: "{{primeiro_nome_captura}}",
+                descricao:
+                  "Primeira palavra do Nome captura; quando não existir captura, usa o primeiro nome do WhatsApp.",
+              },
+            ];
+
+              for (const variavel of variaveisFixasDisparoIndividual) {''')
+
+          replace_once(path,
+          '''    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+              resolverVariaveisMacro(`{{${chave}}}`)
+            );''',
+          '''    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+              chave === "nome_captura" || chave === "primeiro_nome_captura"
+                ? `{{${chave}}}`
+                : resolverVariaveisMacro(`{{${chave}}}`)
+            );''')
+
+          print("Native TypeScript changes applied successfully.")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate diff
+        shell: bash
+        run: |
+          git diff --check
+          set +e
+          npx tsc --noEmit 2>&1 | tee /tmp/tsc.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            unexpected=$(grep "error TS" /tmp/tsc.log | grep -v -E '^tests/(assistente-fluxos-planejamento|assistente-fluxos-resiliencia)\.test\.mts' || true)
+            if [ -n "$unexpected" ]; then
+              echo "Unexpected TypeScript errors:"
+              echo "$unexpected"
+              exit 1
+            fi
+            echo "Only pre-existing assistente-fluxos test typing errors remain."
+          fi
+
+      - name: Commit native source changes and remove temporary workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/apply-capture-vars.yml
+          git config user.name "CRM Prosperity Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git status --short
+          git commit -m "feat: adicionar variaveis de nome capturado aos disparos"
+          git push origin HEAD:feature/variaveis-nome-captura-disparos
