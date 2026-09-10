@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -81,8 +81,8 @@ jobs:
 
           page = replaceOnce(
             page,
-            '            <div className={`${styles.modalConfirmacao} ${styles.variableModalCard}`}\n              onClick={(e) => e.stopPropagation()}\n            >',
-            '            <div className={`${styles.modalConfirmacao} ${styles.variableModalCard}`}\n              role="dialog"\n              aria-modal="true"\n              aria-labelledby="gerenciar-variaveis-titulo"\n              onClick={(e) => e.stopPropagation()}\n            >',
+            '          <div\n            className={`${styles.modalConfirmacao} ${styles.variableModalCard}`}\n            onClick={(e) => e.stopPropagation()}\n          >',
+            '          <div\n            className={`${styles.modalConfirmacao} ${styles.variableModalCard}`}\n            role="dialog"\n            aria-modal="true"\n            aria-labelledby="gerenciar-variaveis-titulo"\n            onClick={(e) => e.stopPropagation()}\n          >',
             'acessibilidade do modal de variáveis'
           );
 
