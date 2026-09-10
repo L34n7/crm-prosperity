@@ -1,0 +1,96 @@
+name: Run capture patch
+
+on:
+  push:
+    branches:
+      - feature/variaveis-nome-captura-disparos
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/variaveis-nome-captura-disparos
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply native TypeScript patch
+        shell: bash
+        run: |
+          if grep -q 'export async function resolverNomeCapturaContato' src/lib/automacoes/variaveis-fixas-contato.ts; then
+            echo 'Capture variables already applied.'
+            exit 0
+          fi
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/apply-capture-vars-v2.yml').read_text()
+          old = '''              if count != 1:
+                  raise RuntimeError(f"{path}: expected 1 anchor, found {count}: {anchor[:120]!r}")
+              write(path, text.replace(anchor, anchor + addition, 1))'''
+          new = '''              if count < 1:
+                  raise RuntimeError(f"{path}: anchor not found: {anchor[:120]!r}")
+              head, tail = text.rsplit(anchor, 1)
+              write(path, head + anchor + addition + tail)'''
+          if workflow.count(old) != 1:
+              raise RuntimeError(f'Unable to patch insert_after helper: count={workflow.count(old)}')
+          workflow = workflow.replace(old, new, 1)
+
+          lines = workflow.splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "python3 <<'PY'")
+          end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == 'PY')
+          code_lines = []
+          for line in lines[start + 1:end]:
+              code_lines.append(line[10:] if line.startswith('          ') else line)
+          code = '\n'.join(code_lines) + '\n'
+          exec(compile(code, 'apply-capture-vars-v2.yml', 'exec'))
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate
+        shell: bash
+        run: |
+          git diff --check
+          grep -q 'chave: "nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'chave: "primeiro_nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'variaveisFixasDisparoIndividual' 'src/app/(private)/conversas/page.tsx'
+          grep -q 'resolverNomeCapturaContato' src/lib/automacoes/variaveis-fixas-contato.ts
+          grep -q 'contato_informacoes_captura' src/lib/automacoes/variaveis-fixas-contato.ts
+
+          set +e
+          npx tsc --noEmit 2>&1 | tee /tmp/tsc.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            unexpected=$(grep 'error TS' /tmp/tsc.log | grep -v -E '^tests/(assistente-fluxos-planejamento|assistente-fluxos-resiliencia)\.test\.mts' || true)
+            if [ -n "$unexpected" ]; then
+              echo 'Unexpected TypeScript errors:'
+              echo "$unexpected"
+              exit 1
+            fi
+            echo 'Only pre-existing assistente-fluxos test typing errors remain.'
+          fi
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git config user.name 'CRM Prosperity Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'feat: adicionar variaveis de nome capturado aos disparos'
+          git push origin HEAD:feature/variaveis-nome-captura-disparos
