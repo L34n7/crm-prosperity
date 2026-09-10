@@ -104,9 +104,23 @@ jobs:
           NODE
 
       - name: Validate changes
+        shell: bash
         run: |
           git diff --check
-          npx tsc --noEmit
+          set +e
+          npx tsc --noEmit > /tmp/tsc.log 2>&1
+          STATUS=$?
+          set -e
+          if [ "$STATUS" -ne 0 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            cp /tmp/tsc.log .github/tsc-error.txt
+            git add .github/tsc-error.txt
+            git commit -m "chore: registrar erro temporario do tsc"
+            git push origin feature/agendamento-mensagens-conversas
+            cat /tmp/tsc.log
+            exit "$STATUS"
+          fi
 
       - name: Commit source changes and remove temporary workflow
         shell: bash
@@ -114,6 +128,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/api/whatsapp/disparo-individual/route.ts src/app/'(private)'/conversas/page.tsx
+          git rm -f .github/tsc-error.txt || true
           git rm .github/workflows/apply-disparo-individual-variable-fix-v2.yml
           git diff --cached --quiet && exit 0
           git commit -m "fix: corrigir disparo individual e seletor de variaveis"
