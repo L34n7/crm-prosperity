@@ -5505,16 +5505,41 @@ function ConversasPageContent() {
       return;
     }
 
-    try {
-      setEnviando(true);
+    const conversaId = conversaSelecionada.id;
+    const mensagemOtimistaId =
+      "otimista-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    const mensagemOtimista: Mensagem = {
+      id: mensagemOtimistaId,
+      conversa_id: conversaId,
+      remetente_tipo: "usuario",
+      remetente_id: usuarioLogado?.id || null,
+      conteudo: textoAtual,
+      tipo_mensagem: "texto",
+      origem: "enviada",
+      status_envio: "pendente",
+      created_at: new Date().toISOString(),
+    };
 
+    conteudoRef.current = "";
+    setConteudo("");
+
+    if (editorRef.current) {
+      editorRef.current.textContent = "";
+    }
+
+    forcarScrollParaFinalRef.current = true;
+    acompanharCrescimentoChatRef.current = false;
+    impedirAutoScrollRef.current = false;
+    setMensagens((atuais) => [...atuais, mensagemOtimista]);
+
+    try {
       const res = await fetch("/api/mensagens", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          conversa_id: conversaSelecionada.id,
+          conversa_id: conversaId,
           conteudo: textoAtual,
           remetente_tipo: "usuario",
           tipo_mensagem: "texto",
@@ -5526,41 +5551,69 @@ function ConversasPageContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErro(data.error || "Erro ao enviar mensagem");
-        setEnviando(false);
+        if (conversaEstaSelecionada(conversaId)) {
+          setMensagens((atuais) =>
+            atuais.map((msg) =>
+              msg.id === mensagemOtimistaId
+                ? {
+                    ...msg,
+                    status_envio: "falha",
+                    metadata_json: {
+                      ...(msg.metadata_json || {}),
+                      erro: data.error || "Erro ao enviar mensagem",
+                    },
+                  }
+                : msg
+            )
+          );
+
+          setErro(data.error || "Erro ao enviar mensagem");
+        }
+
         return;
       }
 
-      conteudoRef.current = "";
-      setConteudo("");
+      const mensagemConfirmada =
+        data?.mensagem && typeof data.mensagem === "object"
+          ? (data.mensagem as Mensagem)
+          : null;
 
-      if (editorRef.current) {
-        editorRef.current.innerHTML = "";
+      if (conversaEstaSelecionada(conversaId)) {
+        setMensagens((atuais) =>
+          atuais.map((msg) =>
+            msg.id === mensagemOtimistaId
+              ? mensagemConfirmada?.id
+                ? mensagemConfirmada
+                : { ...msg, status_envio: "enviada" }
+              : msg
+          )
+        );
+
+        setMensagemSucesso(data.message || "Mensagem enviada com sucesso.");
       }
 
-      setMensagemSucesso(data.message || "Mensagem enviada com sucesso.");
-
-      setEnviando(false);
-
-      atualizarConversasCarregadas()
+      void atualizarConversasCarregadas()
         .then(async (listaAtualizada) => {
+          if (!conversaEstaSelecionada(conversaId)) return;
+
           const conversaAtualizada = listaAtualizada.find(
-            (c: Conversa) => c.id === conversaSelecionada.id
+            (c: Conversa) => c.id === conversaId
           );
 
           const novoFimJanela =
             atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
-            fimJanelaHistorico;
+            null;
 
           forcarScrollParaFinalRef.current = false;
           acompanharCrescimentoChatRef.current = true;
           impedirAutoScrollRef.current = false;
 
           await carregarMensagens(
-            conversaSelecionada.id,
+            conversaId,
             true,
-            protocoloSelecionadoId,
-            mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico,
+            protocoloSelecionadoIdRef.current,
+            mensagemMaisAntigaCarregadaRef.current ||
+              inicioJanelaHistoricoRef.current,
             novoFimJanela,
             {
               modoMergeNovas: true,
@@ -5569,8 +5622,24 @@ function ConversasPageContent() {
         })
         .catch(() => {});
     } catch {
-      setErro("Erro ao enviar mensagem");
-      setEnviando(false);
+      if (conversaEstaSelecionada(conversaId)) {
+        setMensagens((atuais) =>
+          atuais.map((msg) =>
+            msg.id === mensagemOtimistaId
+              ? {
+                  ...msg,
+                  status_envio: "falha",
+                  metadata_json: {
+                    ...(msg.metadata_json || {}),
+                    erro: "Erro ao enviar mensagem",
+                  },
+                }
+              : msg
+          )
+        );
+
+        setErro("Erro ao enviar mensagem");
+      }
     }
   }
 
@@ -9976,8 +10045,9 @@ const templateFooterTexto = useMemo(() => {
                                             )}
                                           </div>
 
-                                          {(msg.remetente_tipo === "usuario" ||
-                                            msg.remetente_tipo === "contato") && (
+                                          {!msg.id.startsWith("otimista-") &&
+                                            (msg.remetente_tipo === "usuario" ||
+                                              msg.remetente_tipo === "contato") && (
                                             <button
                                               type="button"
                                               className={`${styles.messageFavoriteButton} ${
