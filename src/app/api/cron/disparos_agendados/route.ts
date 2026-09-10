@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { enfileirarDisparosAgendadosVencidos } from "@/lib/whatsapp/disparo-agendado-fila";
+import { enfileirarMensagensManuaisAgendadasVencidas } from "@/lib/whatsapp/mensagem-agendada";
 
 function obterLimite(request: Request) {
   const valor = Number(new URL(request.url).searchParams.get("limit") || 1000);
@@ -47,14 +48,19 @@ export async function GET(request: Request) {
 
   try {
     const agora = new Date().toISOString();
-    const resultado = await enfileirarDisparosAgendadosVencidos({
-      limite: obterLimite(request),
-    });
+    const limite = obterLimite(request);
+    const [resultado, mensagensManuais] = await Promise.all([
+      enfileirarDisparosAgendadosVencidos({ limite }),
+      enfileirarMensagensManuaisAgendadasVencidas({
+        limite: Math.min(limite, 200),
+      }),
+    ]);
 
-    if (encontrouTrabalho(resultado)) {
+    if (encontrouTrabalho(resultado) || mensagensManuais.encontrados > 0) {
       console.log("[CRON DISPAROS AGENDADOS] Processamento concluido:", {
         agora,
         resultado,
+        mensagens_manuais: mensagensManuais,
       });
     }
 
@@ -62,6 +68,7 @@ export async function GET(request: Request) {
       ok: true,
       modelo_disparos: "fila_qstash",
       ...resultado,
+      mensagens_manuais: mensagensManuais,
     });
   } catch (error) {
     const mensagem =

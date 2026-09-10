@@ -380,20 +380,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const setorDoUsuario = obterSetorPrincipalDoUsuario(usuario);
-
-    if (!setorDoUsuario) {
-      return NextResponse.json(
-        { ok: false, error: "Usuário sem setor vinculado para reabrir a conversa" },
-        { status: 400 }
-      );
-    }
-
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
       .select(`
         id,
         empresa_id,
+        setor_id,
         integracao_whatsapp_id,
         origem_atendimento,
         historico_importado,
@@ -865,12 +857,17 @@ export async function POST(request: Request) {
       },
     });
 
+    const setorReabertura =
+      (typeof conversa.setor_id === "string" && conversa.setor_id.trim()
+        ? conversa.setor_id
+        : obterSetorPrincipalDoUsuario(usuario)) || null;
+
     await encerrarProtocolosAtivosDaConversa(conversa.id);
 
     await reabrirConversaAposDisparo({
       conversaId: conversa.id,
       usuarioId: usuario.id,
-      setorId: setorDoUsuario,
+      setorId: setorReabertura,
     });
 
     const novoProtocolo = await criarNovoProtocoloDeReabertura({

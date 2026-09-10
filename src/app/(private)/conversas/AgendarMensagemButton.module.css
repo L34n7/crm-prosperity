@@ -1,0 +1,437 @@
+.scheduleButton {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.scheduleButton:hover:not(:disabled) {
+  background: var(--crm-surface-hover, rgba(148, 163, 184, 0.12));
+  border-color: var(--crm-border-strong, var(--crm-border));
+}
+
+.scheduleButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal {
+  width: min(720px, 100%);
+  max-height: min(820px, calc(100dvh - 40px));
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--crm-border-soft, var(--crm-border));
+}
+
+.header h3 {
+  margin: 2px 0 2px;
+  font-size: 20px;
+}
+
+.header p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--crm-primary, #2563eb);
+}
+
+.closeButton,
+.removeButton {
+  border: 0;
+  background: transparent;
+  color: var(--crm-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeButton {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.closeButton:hover,
+.removeButton:hover {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--crm-text);
+}
+
+.body {
+  padding: 18px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.windowNotice {
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: rgba(37, 99, 235, 0.07);
+}
+
+.windowNotice > strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.windowNotice > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--crm-text-muted);
+}
+
+.windowGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.windowGrid span {
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--crm-surface);
+  font-size: 11px;
+  color: var(--crm-text-muted);
+  min-width: 0;
+}
+
+.windowGrid b {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--crm-text);
+  white-space: nowrap;
+}
+
+.section {
+  border: 1px solid var(--crm-border-soft, var(--crm-border));
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.sectionTitle {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 9px;
+}
+
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionHeading small {
+  display: block;
+  color: var(--crm-text-muted);
+  margin-top: -5px;
+  margin-bottom: 10px;
+}
+
+.timeRow {
+  display: grid;
+  grid-template-columns: 110px 110px minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.timeRow label,
+.previewTime {
+  font-size: 11px;
+  color: var(--crm-text-muted);
+}
+
+.timeRow input {
+  margin-top: 5px;
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.previewTime {
+  min-height: 40px;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.09);
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.previewTime strong {
+  color: var(--crm-text);
+  font-size: 13px;
+}
+
+.inlineError,
+.errorBox {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.inlineError {
+  margin: 8px 0 0;
+}
+
+.errorBox {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.itemsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.itemCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--crm-border-soft, var(--crm-border));
+  border-radius: 12px;
+  padding: 9px 10px;
+  min-width: 0;
+}
+
+.itemIndex {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--crm-primary, #2563eb);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.itemContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemContent strong,
+.itemContent span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemContent strong {
+  font-size: 12px;
+}
+
+.itemContent span {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--crm-text-muted);
+}
+
+.captionInput {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 5px;
+  border: 0;
+  border-bottom: 1px solid var(--crm-border);
+  background: transparent;
+  color: var(--crm-text);
+  padding: 4px 0;
+  outline: none;
+  font-size: 12px;
+}
+
+.removeButton {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.addTextRow {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.addTextRow textarea {
+  resize: vertical;
+  min-height: 58px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.addTextRow button,
+.addFileButton {
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.addTextRow button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.addFileButton {
+  margin-top: 8px;
+  min-height: 38px;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.footer {
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--crm-border-soft, var(--crm-border));
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancelButton,
+.confirmButton {
+  min-height: 40px;
+  border-radius: 11px;
+  padding: 0 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cancelButton {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text);
+}
+
+.confirmButton {
+  border: 0;
+  background: var(--crm-primary, #2563eb);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.confirmButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: 10px;
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 20px);
+    border-radius: 18px 18px 12px 12px;
+  }
+
+  .header,
+  .body,
+  .footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .windowGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .timeRow {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .previewTime {
+    grid-column: 1 / -1;
+  }
+
+  .addTextRow {
+    grid-template-columns: 1fr;
+  }
+
+  .addTextRow button {
+    min-height: 38px;
+  }
+}

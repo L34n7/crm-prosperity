@@ -21,6 +21,10 @@ import { createClient } from "@/lib/supabase/client";
 import { getWhatsAppMessageSpecialState } from "@/lib/whatsapp/message-special-state";
 import { getWhatsAppFlowResponsePresentation } from "@/lib/whatsapp/flow-response-presentation";
 import styles from "./conversas.module.css";
+import AgendarMensagemButton from "./AgendarMensagemButton";
+import TemplateVariableSearchSelect, {
+  type TemplateVariableOption,
+} from "@/components/TemplateVariableSearchSelect";
 import VirtualizedConversationRows from "./VirtualizedConversationRows";
 import { can } from "@/lib/permissoes/frontend";
 import {
@@ -3418,6 +3422,36 @@ function ConversasPageContent() {
       .filter((variavel) => variavel.ativo !== false)
       .sort((a, b) => a.chave.localeCompare(b.chave));
   }, [variaveisGlobais]);
+
+  const opcoesVariaveisDisparoIndividual = useMemo<TemplateVariableOption[]>(() => {
+    const chavesAdicionadas = new Set<string>();
+    const opcoes: TemplateVariableOption[] = [];
+
+    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {
+      const chave = normalizarChaveVariavelMacro(variavel.chave);
+      if (!chave || chavesAdicionadas.has(chave)) continue;
+      chavesAdicionadas.add(chave);
+      opcoes.push({
+        chave,
+        descricao: variavel.descricao,
+        categoria: "Fixa",
+      });
+    }
+
+    for (const variavel of variaveisCustomizadasMacro) {
+      if (variavel.escopo && !["global", "disparos"].includes(variavel.escopo)) continue;
+      const chave = normalizarChaveVariavelMacro(variavel.chave);
+      if (!chave || chavesAdicionadas.has(chave)) continue;
+      chavesAdicionadas.add(chave);
+      opcoes.push({
+        chave,
+        descricao: variavel.descricao || "Variável personalizada cadastrada no CRM.",
+        categoria: "Personalizada",
+      });
+    }
+
+    return opcoes;
+  }, [variaveisCustomizadasMacro]);
 
   function resolverVariaveisMacro(texto: string) {
     return texto.replace(/{{\s*([^}]+)\s*}}/g, (_, chaveOriginal) => {
@@ -7462,6 +7496,20 @@ async function baixarConversaPDF() {
       return;
     }
 
+    const parametrosSelecionados = Array.from(
+      { length: quantidadeParametrosBody },
+      (_, index) => String(parametros[index] || "").trim()
+    );
+
+    if (parametrosSelecionados.some((item) => !item)) {
+      setErro("Selecione uma variável para cada parâmetro exigido pelo template.");
+      return;
+    }
+
+    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+      resolverVariaveisMacro(`{{${chave}}}`)
+    );
+
     try {
       setEnviandoDisparoIndividual(true);
       setErro("");
@@ -7475,7 +7523,7 @@ async function baixarConversaPDF() {
         body: JSON.stringify({
           conversa_id: conversaSelecionada.id,
           template_nome: templateDisparoNome.trim(),
-          body_params: parametros.filter((item) => item.trim() !== ""),
+          body_params: parametrosResolvidos,
         }),
       });
 
@@ -8765,6 +8813,7 @@ const templateFooterTexto = useMemo(() => {
     if (!conversaSelecionada?.integracao_whatsapp_id) return;
 
     carregarTemplatesWhatsapp();
+    void carregarVariaveisGlobais();
   }, [mostrarDisparoIndividual, conversaSelecionada?.integracao_whatsapp_id]);
 
   useEffect(() => {
@@ -10467,12 +10516,13 @@ const templateFooterTexto = useMemo(() => {
                                     {quantidadeParametrosBody > 0 && (
                                       <div className={styles.disparoParams}>
                                         {Array.from({ length: quantidadeParametrosBody }).map((_, i) => (
-                                          <input
+                                          <TemplateVariableSearchSelect
                                             key={i}
-                                            className={styles.disparoInput}
-                                            placeholder={`Parâmetro ${i + 1}`}
+                                            label={`Variável ${i + 1}`}
                                             value={parametros[i] || ""}
-                                            onChange={(e) => atualizarParametro(i, e.target.value)}
+                                            onChange={(chave) => atualizarParametro(i, chave)}
+                                            opcoes={opcoesVariaveisDisparoIndividual}
+                                            carregando={carregandoVariaveis}
                                           />
                                         ))}
                                       </div>
@@ -10983,6 +11033,32 @@ const templateFooterTexto = useMemo(() => {
 
                                 {/* DIREITA */}
                                 <div className={styles.composerRight}>
+                                  <AgendarMensagemButton
+                                    conversaId={conversaSelecionada.id}
+                                    contatoNome={conversaSelecionada.contatos?.nome}
+                                    texto={arquivoEnvio ? legendaArquivo : conteudo}
+                                    arquivo={arquivoEnvio}
+                                    podeAgendar={podeEnviarMensagem && janela24hAberta}
+                                    podeAgendarMidia={podeEnviarMidia}
+                                    gravandoAudio={gravandoAudio}
+                                    janela24h={janela24hConversa}
+                                    onAgendado={(mensagem) => {
+                                      if (arquivoEnvioPreviewUrl) {
+                                        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+                                      }
+                                      setArquivoEnvio(null);
+                                      setArquivoEnvioPreviewUrl(null);
+                                      setLegendaArquivo("");
+                                      legendaArquivoRef.current = "";
+                                      setConteudo("");
+                                      conteudoRef.current = "";
+                                      if (editorRef.current) editorRef.current.textContent = "";
+                                      if (legendaEditorRef.current) legendaEditorRef.current.textContent = "";
+                                      setMensagemSucesso(mensagem);
+                                      void atualizarConversasCarregadas();
+                                    }}
+                                  />
+
                                   {podeEnviarMidia && (
                                     <>
                                       <button
