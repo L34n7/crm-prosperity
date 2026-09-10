@@ -1,7 +1,0 @@
-tests/assistente-fluxos-planejamento.test.mts(81,42): error TS2345: Argument of type '{ ativo: true; modo: string; instrucaoCompleta: string; agendas: never[]; }' is not assignable to parameter of type 'ContextoAssistenteFluxos'.
-  Property 'midias' is missing in type '{ ativo: true; modo: string; instrucaoCompleta: string; agendas: never[]; }' but required in type 'ContextoAssistenteFluxos'.
-tests/assistente-fluxos-planejamento.test.mts(97,7): error TS2345: Argument of type '{ ativo: true; modo: string; instrucaoCompleta: string; agendas: never[]; }' is not assignable to parameter of type 'ContextoAssistenteFluxos'.
-  Property 'midias' is missing in type '{ ativo: true; modo: string; instrucaoCompleta: string; agendas: never[]; }' but required in type 'ContextoAssistenteFluxos'.
-tests/assistente-fluxos-planejamento.test.mts(102,52): error TS2741: Property 'midias' is missing in type '{ ativo: true; modo: string; instrucaoCompleta: string; agendas: never[]; }' but required in type 'ContextoAssistenteFluxos'.
-tests/assistente-fluxos-resiliencia.test.mts(62,7): error TS2741: Property 'midias' is missing in type '{ ativo: true; modo: string; instrucaoCompleta: string; agendas: never[]; }' but required in type 'ContextoAssistenteFluxos'.
-tests/assistente-fluxos-resiliencia.test.mts(83,7): error TS2741: Property 'midias' is missing in type '{ ativo: true; modo: string; instrucaoCompleta: string; agendas: never[]; }' but required in type 'ContextoAssistenteFluxos'.
