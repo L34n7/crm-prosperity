@@ -1,0 +1,80 @@
+name: Apply scheduled conversation message
+
+on:
+  push:
+    branches:
+      - feature/agendamento-mensagens-conversas
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/agendamento-mensagens-conversas
+
+      - name: Apply TypeScript integration
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const pagePath = 'src/app/(private)/conversas/page.tsx';
+          let page = fs.readFileSync(pagePath, 'utf8');
+          const importAnchor = 'import styles from "./conversas.module.css";';
+          if (!page.includes('import AgendarMensagemButton from "./AgendarMensagemButton";')) {
+            if (!page.includes(importAnchor)) throw new Error('Import anchor not found');
+            page = page.replace(importAnchor, `${importAnchor}\nimport AgendarMensagemButton from "./AgendarMensagemButton";`);
+          }
+
+          const composerAnchor = `                                <div className={styles.composerRight}>\n                                  {podeEnviarMidia && (`;
+          if (!page.includes('<AgendarMensagemButton')) {
+            if (!page.includes(composerAnchor)) throw new Error('Composer anchor not found');
+            const integration = `                                <div className={styles.composerRight}>\n                                  <AgendarMensagemButton\n                                    conversaId={conversaSelecionada.id}\n                                    contatoNome={conversaSelecionada.contatos?.nome}\n                                    texto={arquivoEnvio ? legendaArquivo : conteudo}\n                                    arquivo={arquivoEnvio}\n                                    podeAgendar={podeEnviarMensagem && janela24hAberta}\n                                    podeAgendarMidia={podeEnviarMidia}\n                                    gravandoAudio={gravandoAudio}\n                                    janela24h={janela24hConversa}\n                                    onAgendado={(mensagem) => {\n                                      if (arquivoEnvioPreviewUrl) {\n                                        URL.revokeObjectURL(arquivoEnvioPreviewUrl);\n                                      }\n                                      setArquivoEnvio(null);\n                                      setArquivoEnvioPreviewUrl(null);\n                                      setLegendaArquivo("");\n                                      legendaArquivoRef.current = "";\n                                      setConteudo("");\n                                      conteudoRef.current = "";\n                                      if (editorRef.current) editorRef.current.textContent = "";\n                                      if (legendaEditorRef.current) legendaEditorRef.current.textContent = "";\n                                      setMensagemSucesso(mensagem);\n                                      void atualizarConversasCarregadas();\n                                    }}\n                                  />\n\n                                  {podeEnviarMidia && (`;
+            page = page.replace(composerAnchor, integration);
+          }
+          fs.writeFileSync(pagePath, page);
+
+          const listPath = 'src/app/api/disparos-agendados/route.ts';
+          let list = fs.readFileSync(listPath, 'utf8');
+          list = list.replace(
+            '.eq("tipo_agendamento", "disparo_template")',
+            '.in("tipo_agendamento", ["disparo_template", "mensagem_manual"])'
+          );
+          if (!list.includes('const origemDisparo = item.tipo_agendamento === "mensagem_manual" ? "conversa" : "fluxo";')) {
+            const anchor = '      const payload = item.payload_json || {};\n      const template = templates.get(String(payload.template_id || ""));';
+            const replacement = '      const payload = item.payload_json || {};\n      const origemDisparo = item.tipo_agendamento === "mensagem_manual" ? "conversa" : "fluxo";\n      const template = templates.get(String(payload.template_id || ""));';
+            if (!list.includes(anchor)) throw new Error('List normalizer anchor not found');
+            list = list.replace(anchor, replacement);
+          }
+          list = list.replace('const erroTecnico = whatsappStatus?.error_message || erroMeta?.message || erroMeta?.title || null;', 'const erroTecnico = whatsappStatus?.error_message || erroMeta?.message || erroMeta?.title || String(payload.erro || "").trim() || null;');
+          list = list.replace('        origem_disparo: "fluxo",\n        payload_json: {\n          ...payload,\n          origem_disparo: "fluxo",', '        origem_disparo: origemDisparo,\n        payload_json: {\n          ...payload,\n          origem_disparo: origemDisparo,');
+          fs.writeFileSync(listPath, list);
+
+          const cancelPath = 'src/app/api/disparos-agendados/[id]/cancelar/route.ts';
+          let cancel = fs.readFileSync(cancelPath, 'utf8');
+          const permImport = 'import { podeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";';
+          if (!cancel.includes('limparArquivosMensagemAgendada')) {
+            cancel = cancel.replace(permImport, `${permImport}\nimport { limparArquivosMensagemAgendada } from "@/lib/whatsapp/mensagem-agendada";`);
+          }
+          cancel = cancel.replace('.eq("tipo_agendamento", "disparo_template")', '.in("tipo_agendamento", ["disparo_template", "mensagem_manual"])');
+          const returnAnchor = '      return NextResponse.json({ ok: true, disparo: data, origem: "fluxo" });';
+          if (cancel.includes(returnAnchor)) {
+            cancel = cancel.replace(returnAnchor, `      const origem = disparoFluxo.tipo_agendamento === "mensagem_manual" ? "conversa" : "fluxo";\n      if (disparoFluxo.tipo_agendamento === "mensagem_manual") {\n        await limparArquivosMensagemAgendada(disparoFluxo.payload_json || {});\n      }\n\n      return NextResponse.json({ ok: true, disparo: data, origem });`);
+          }
+          fs.writeFileSync(cancelPath, cancel);
+          NODE
+
+      - name: Validate and commit
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'src/app/(private)/conversas/page.tsx' 'src/app/api/disparos-agendados/route.ts' 'src/app/api/disparos-agendados/[id]/cancelar/route.ts'
+          git commit -m "feat: integrar mensagens programadas às conversas"
+          git push origin HEAD:feature/agendamento-mensagens-conversas
