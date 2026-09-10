@@ -1,0 +1,38 @@
+name: Fix capture workflow v2
+
+on:
+  push:
+    branches:
+      - feature/variaveis-nome-captura-disparos
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/variaveis-nome-captura-disparos
+          fetch-depth: 0
+      - name: Make insert_after use the last matching anchor
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/apply-capture-vars-v2.yml')
+          text = p.read_text()
+          old = """              if count != 1:\n                  raise RuntimeError(f\"{path}: expected 1 anchor, found {count}: {anchor[:120]!r}\")\n              write(path, text.replace(anchor, anchor + addition, 1))"""
+          new = """              if count < 1:\n                  raise RuntimeError(f\"{path}: anchor not found: {anchor[:120]!r}\")\n              head, tail = text.rsplit(anchor, 1)\n              write(path, head + anchor + addition + tail)"""
+          if text.count(old) != 1:
+              raise SystemExit(f'insert_after helper target count={text.count(old)}')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          rm -f .github/workflows/fix-capture-workflow.yml
+          rm -f .github/workflows/fix-capture-workflow-v2.yml
+          git config user.name "CRM Prosperity Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: ajustar aplicacao das variaveis de captura"
+          git push origin HEAD:feature/variaveis-nome-captura-disparos
