@@ -1,0 +1,40 @@
+name: Fix capture workflow
+
+on:
+  push:
+    branches:
+      - feature/variaveis-nome-captura-disparos
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/variaveis-nome-captura-disparos
+          fetch-depth: 0
+      - name: Fix v2 anchor
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/apply-capture-vars-v2.yml')
+          text = p.read_text()
+          old = '''          insert_after(path, '  "nome_perfil_whatsapp",\\n', '''  "nome_captura",
+            "primeiro_nome_captura",
+          ''')'''
+          new = '''          replace_once(path,
+          ''' + "'''export const VARIAVEIS_FIXAS_CONTATO = [\n  \"nome_contato\",\n  \"nome_whatsapp\",\n  \"nome_perfil_whatsapp\",\n  \"email_contato\",''',\n" + '''          ''' + "'''export const VARIAVEIS_FIXAS_CONTATO = [\n  \"nome_contato\",\n  \"nome_whatsapp\",\n  \"nome_perfil_whatsapp\",\n  \"nome_captura\",\n  \"primeiro_nome_captura\",\n  \"email_contato\",''')" + '''
+          if old not in text:
+              raise SystemExit('target anchor not found in v2 workflow')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          rm -f .github/workflows/fix-capture-workflow.yml
+          git config user.name "CRM Prosperity Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: corrigir aplicacao das variaveis de captura"
+          git push origin HEAD:feature/variaveis-nome-captura-disparos
