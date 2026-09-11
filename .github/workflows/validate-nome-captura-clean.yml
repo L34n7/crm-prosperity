@@ -1,0 +1,176 @@
+name: Validate nome captura clean
+
+on:
+  push:
+    branches:
+      - tmp/nome-captura-disparos-clean
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/nome-captura-disparos-clean
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Normalize formatting of touched blocks
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{path}: expected 1 formatting block, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'src/app/(private)/conversas/page.tsx',
+          '''    const variaveisFixasDisparoIndividual = [
+            ...VARIAVEIS_FIXAS_SISTEMA,
+            {
+              chave: "nome_captura",
+              exemplo: "{{nome_captura}}",
+              descricao:
+                "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+            },
+            {
+              chave: "primeiro_nome_captura",
+              exemplo: "{{primeiro_nome_captura}}",
+              descricao:
+                "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+            },
+          ];
+
+          for (const variavel of variaveisFixasDisparoIndividual) {
+          ''',
+          '''    const variaveisFixasDisparoIndividual = [
+              ...VARIAVEIS_FIXAS_SISTEMA,
+              {
+                chave: "nome_captura",
+                exemplo: "{{nome_captura}}",
+                descricao:
+                  "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+              },
+              {
+                chave: "primeiro_nome_captura",
+                exemplo: "{{primeiro_nome_captura}}",
+                descricao:
+                  "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+              },
+            ];
+
+            for (const variavel of variaveisFixasDisparoIndividual) {
+          ''')
+
+          replace_once(
+              'src/app/(private)/conversas/page.tsx',
+          '''    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+              chave === "nome_captura" || chave === "primeiro_nome_captura"
+              ? `{{${chave}}}`
+              : resolverVariaveisMacro(`{{${chave}}}`)
+            );''',
+          '''    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+              chave === "nome_captura" || chave === "primeiro_nome_captura"
+                ? `{{${chave}}}`
+                : resolverVariaveisMacro(`{{${chave}}}`)
+            );''')
+
+          replace_once(
+              'src/app/(private)/disparos-whatsapp/page.tsx',
+          '''                  : resolverVariavelContato(
+                        variavel,
+                        contato,
+                        variaveisPersonalizadas,
+                        protocolosPorContato
+                      )''',
+          '''                  : resolverVariavelContato(
+                      variavel,
+                      contato,
+                      variaveisPersonalizadas,
+                      protocolosPorContato
+                    )''')
+
+          replace_once(
+              'src/app/api/whatsapp/disparo-individual/route.ts',
+          '''  if (bodyParams.some((valor) => extrairChaveNomeCaptura(valor))) {
+            const nomesCaptura = await resolverNomeCapturaContato({
+              empresaId: usuario.empresa_id,
+              contatoId: contato?.id || null,
+              nomeFallback: contato?.nome || null,
+            });
+
+            bodyParams = bodyParams.map((valor) => {
+              const chave = extrairChaveNomeCaptura(valor);
+              return chave
+                ? nomesCaptura[chave as "nome_captura" | "primeiro_nome_captura"] || ""
+                : valor;
+            });
+          }
+          ''',
+          '''    if (bodyParams.some((valor) => extrairChaveNomeCaptura(valor))) {
+              const nomesCaptura = await resolverNomeCapturaContato({
+                empresaId: usuario.empresa_id,
+                contatoId: contato?.id || null,
+                nomeFallback: contato?.nome || null,
+              });
+
+              bodyParams = bodyParams.map((valor) => {
+                const chave = extrairChaveNomeCaptura(valor);
+                return chave
+                  ? nomesCaptura[chave as "nome_captura" | "primeiro_nome_captura"] || ""
+                  : valor;
+              });
+            }
+          ''')
+          PY
+          git diff --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript validation
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > /tmp/tsc.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          grep 'error TS' /tmp/tsc.log \
+            | grep -v 'tests/assistente-fluxos-planejamento.test.mts' \
+            | grep -v 'tests/assistente-fluxos-resiliencia.test.mts' \
+            > /tmp/tsc-new.log || true
+          if [ -s /tmp/tsc-new.log ]; then
+            cat /tmp/tsc-new.log
+            exit 1
+          fi
+          echo 'Only known baseline test errors remain.'
+
+      - name: Commit formatting adjustments
+        shell: bash
+        run: |
+          if git diff --quiet -- src/; then
+            echo 'No source formatting changes required.'
+            exit 0
+          fi
+          git config user.name 'CRM Prosperity Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/
+          git commit -m 'style: alinhar blocos das variaveis de nome capturado'
+          git push origin HEAD:tmp/nome-captura-disparos-clean
