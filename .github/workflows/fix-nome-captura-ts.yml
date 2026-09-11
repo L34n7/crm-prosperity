@@ -1,0 +1,69 @@
+name: Fix nome captura TypeScript
+
+on:
+  push:
+    branches:
+      - tmp/fix-nome-captura-ts
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/fix-nome-captura-ts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Fix callback typing
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('src/app/api/whatsapp/disparo-individual/route.ts')
+          text = p.read_text()
+          for old, new in [
+              ('bodyParams.some((valor) => extrairChaveNomeCaptura(valor))', 'bodyParams.some((valor: string) => extrairChaveNomeCaptura(valor))'),
+              ('bodyParams.map((valor) => {', 'bodyParams.map((valor: string) => {'),
+          ]:
+              if text.count(old) != 1:
+                  raise RuntimeError(f'expected exactly one occurrence: {old}')
+              text = text.replace(old, new, 1)
+          p.write_text(text)
+          PY
+          git diff --check
+      - run: npm ci
+      - name: TypeScript validation
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > /tmp/tsc.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'TypeScript clean.'
+          else
+            grep 'error TS' /tmp/tsc.log \
+              | grep -v 'tests/assistente-fluxos-planejamento.test.mts' \
+              | grep -v 'tests/assistente-fluxos-resiliencia.test.mts' \
+              > /tmp/tsc-new.log || true
+            if [ -s /tmp/tsc-new.log ]; then
+              echo 'New TypeScript errors:'
+              cat /tmp/tsc-new.log
+              exit 1
+            fi
+            echo 'Only known baseline test errors remain.'
+          fi
+      - name: Commit source fix
+        shell: bash
+        run: |
+          git config user.name 'CRM Prosperity Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/app/api/whatsapp/disparo-individual/route.ts
+          git commit -m 'fix: tipar resolucao de nome capturado no disparo individual'
+          git push origin HEAD:tmp/fix-nome-captura-ts
