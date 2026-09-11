@@ -128,6 +128,62 @@ export function chaveEhVariavelNomeWhatsapp(chave: unknown) {
   return VARIAVEIS_NOME_WHATSAPP.has(normalizarChaveVariavelFluxo(chave));
 }
 
+const VARIAVEIS_NOME_CAPTURA = new Set([
+  "nome_captura",
+  "primeiro_nome_captura",
+]);
+
+export function chaveEhVariavelNomeCaptura(chave: unknown) {
+  return VARIAVEIS_NOME_CAPTURA.has(normalizarChaveVariavelFluxo(chave));
+}
+
+export async function resolverNomeCapturaContato(params: {
+  empresaId: string;
+  contatoId?: string | null;
+  nomeWhatsapp?: string | null;
+  nomeFallback?: string | null;
+}) {
+  const fallback = String(
+    params.nomeWhatsapp || params.nomeFallback || ""
+  ).trim();
+  const primeiroFallback = fallback.split(/\s+/).filter(Boolean)[0] || fallback;
+  const contatoId = String(params.contatoId || "").trim();
+  const empresaId = String(params.empresaId || "").trim();
+
+  if (!contatoId || !empresaId) {
+    return {
+      nome_captura: fallback,
+      primeiro_nome_captura: primeiroFallback,
+    };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("contato_informacoes_captura")
+    .select("valor")
+    .eq("empresa_id", empresaId)
+    .eq("contato_id", contatoId)
+    .eq("tipo", "nome")
+    .eq("ativo", true)
+    .order("capturado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[VARIAVEIS] Nome capturado indisponivel:", error.message);
+    return {
+      nome_captura: fallback,
+      primeiro_nome_captura: primeiroFallback,
+    };
+  }
+
+  const nomeCaptura = String(data?.valor || "").trim() || fallback;
+  return {
+    nome_captura: nomeCaptura,
+    primeiro_nome_captura:
+      nomeCaptura.split(/\s+/).filter(Boolean)[0] || nomeCaptura,
+  };
+}
+
 function limparCachePixPendente() {
   if (cachePixPendentePorContato.size <= 1000) return;
 

@@ -1,6 +1,7 @@
 import {
   chaveEhVariavelFixaContato,
   chaveEhVariavelNomeWhatsapp,
+  resolverNomeCapturaContato,
   montarMapaVariaveisFixasContato,
   normalizarChaveVariavelFluxo,
 } from "@/lib/automacoes/variaveis-fixas-contato";
@@ -312,7 +313,11 @@ async function resolverValores(params: {
     ultimoProtocolo = String(data?.protocolo || "").trim();
   }
 
-  const precisaNomeWhatsapp = chaves.some(chaveEhVariavelNomeWhatsapp);
+  const precisaNomeCaptura = chaves.some(
+    (chave) => chave === "nome_captura" || chave === "primeiro_nome_captura"
+  );
+  const precisaNomeWhatsapp =
+    precisaNomeCaptura || chaves.some(chaveEhVariavelNomeWhatsapp);
   const nomeWhatsapp = precisaNomeWhatsapp
     ? (await carregarNomePerfilWhatsapp({
         empresaId: params.empresaId,
@@ -331,6 +336,14 @@ async function resolverValores(params: {
     protocolo_atual: protocoloAtual,
     ultimo_protocolo: ultimoProtocolo,
   });
+  const nomesCaptura = precisaNomeCaptura
+    ? await resolverNomeCapturaContato({
+        empresaId: params.empresaId,
+        contatoId: params.contato.id || null,
+        nomeWhatsapp,
+        nomeFallback: params.contato.nome || null,
+      })
+    : null;
   const mapaPayload = new Map<string, string>();
 
   function adicionarPayload(chave: string, valor: unknown) {
@@ -372,6 +385,10 @@ async function resolverValores(params: {
   adicionarPayload("contato_telefone", params.payload.numero_destino);
 
   return chaves.map((chave) => {
+    if (chave === "nome_captura" || chave === "primeiro_nome_captura") {
+      return nomesCaptura?.[chave] || "";
+    }
+
     if (chaveEhVariavelFixaContato(chave)) {
       return fixasContato.get(chave) || mapaPayload.get(chave) || "";
     }

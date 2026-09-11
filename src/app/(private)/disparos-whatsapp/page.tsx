@@ -583,6 +583,18 @@ const VARIAVEIS_FIXAS_SISTEMA = [
       "Nome do perfil do WhatsApp quando existir; se não existir, usa o nome salvo no contato.",
   },
   {
+    chave: "nome_captura",
+    exemplo: "{{nome_captura}}",
+    descricao:
+      "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+  },
+  {
+    chave: "primeiro_nome_captura",
+    exemplo: "{{primeiro_nome_captura}}",
+    descricao:
+      "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+  },
+  {
     chave: "email_contato",
     exemplo: "{{email_contato}}",
     descricao: "E-mail salvo no cadastro do contato.",
@@ -3965,7 +3977,10 @@ export default function DisparosWhatsAppPage() {
         variaveis:
           totalVariaveis > 0
             ? variaveisObrigatorias.map((variavel) =>
-                resolverVariavelContato(
+                variavel === "nome_captura" ||
+                variavel === "primeiro_nome_captura"
+                  ? `{{${variavel}}}`
+                  : resolverVariavelContato(
                   variavel,
                   contato,
                   variaveisPersonalizadas,
