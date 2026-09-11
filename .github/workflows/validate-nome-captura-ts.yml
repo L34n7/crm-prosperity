@@ -1,0 +1,41 @@
+name: Validate nome captura TypeScript
+
+on:
+  push:
+    branches:
+      - tmp/validate-nome-captura-disparos
+
+jobs:
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/validate-nome-captura-disparos
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: TypeScript validation
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > /tmp/tsc.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'TypeScript clean.'
+            exit 0
+          fi
+          grep 'error TS' /tmp/tsc.log \
+            | grep -v 'tests/assistente-fluxos-planejamento.test.mts' \
+            | grep -v 'tests/assistente-fluxos-resiliencia.test.mts' \
+            > /tmp/tsc-new.log || true
+          if [ -s /tmp/tsc-new.log ]; then
+            echo 'New TypeScript errors:'
+            cat /tmp/tsc-new.log
+            exit 1
+          fi
+          echo 'Only known baseline test errors remain.'
