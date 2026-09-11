@@ -1,8 +1,13 @@
-import { Client as QstashClient } from "@upstash/qstash";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { processarPendenciaAgenteIa } from "./processar-pendencia-configurada";
 import { calcularDebounceAdaptativo } from "./protecao-automacao-externa";
+import {
+  calcularProximaAbertura,
+  estaDentroHorarioAtendimento,
+  normalizarHorarioAtendimento,
+} from "./horario-atendimento";
+import { publicarPendenciaAgenteIaQstash } from "./fila-agendada";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -17,43 +22,6 @@ function numeroInteiro(valor: unknown, fallback: number, minimo: number, maximo:
   const numero = Number(valor);
   if (!Number.isFinite(numero)) return fallback;
   return Math.min(maximo, Math.max(minimo, Math.floor(numero)));
-}
-
-function appUrl() {
-  const host =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-    process.env.VERCEL_URL ||
-    "";
-  if (!host) return "";
-  return (host.startsWith("http") ? host : `https://${host}`).replace(/\/$/, "");
-}
-
-function workerUrl() {
-  return (
-    process.env.QSTASH_AGENTE_IA_WORKER_URL?.trim() ||
-    (appUrl() ? `${appUrl()}/api/worker/processar-agente-ia` : "")
-  );
-}
-
-async function publicarPendenciaQstash(pendenciaId: string, delayMs: number) {
-  const token = process.env.QSTASH_TOKEN?.trim();
-  const url = workerUrl();
-  if (!token || !url) return false;
-  try {
-    const cliente = new QstashClient({ token });
-    await cliente.publishJSON({
-      url,
-      body: { pendenciaId },
-      delay: Math.max(1, Math.ceil(delayMs / 1000)),
-      retries: 3,
-    });
-    return true;
-  } catch (error) {
-    console.error("[AGENTE_IA] Falha ao publicar pendência no QStash:", error);
-    return false;
-  }
 }
 
 async function esperar(ms: number) {
@@ -148,6 +116,66 @@ export async function despacharMensagemParaAgente(params: {
     .eq("empresa_id", params.input.empresaId);
   if (conversaError) throw new Error(conversaError.message);
 
+  const { data: configuracaoAgente, error: configuracaoError } = await supabaseAdmin
+    .from("agentes_ia")
+    .select("horarios")
+    .eq("empresa_id", params.input.empresaId)
+    .eq("id", params.agente.id)
+    .maybeSingle();
+  if (configuracaoError) throw new Error(configuracaoError.message);
+
+  const horario = normalizarHorarioAtendimento(configuracaoAgente?.horarios);
+  if (horario.ativo && !estaDentroHorarioAtendimento(horario)) {
+    const proximaAbertura = calcularProximaAbertura(horario);
+    if (!proximaAbertura) {
+      console.error("[AGENTE_IA] Horário ativo sem próxima abertura configurada", {
+        agenteId: params.agente.id,
+        conversaId: params.input.conversaId,
+      });
+      return {
+        ok: false,
+        status: "agente_ia_sem_proxima_abertura",
+        agenteId: params.agente.id,
+      };
+    }
+
+    const { data: pendencia, error: pendenciaError } = await supabaseAdmin.rpc(
+      "agente_ia_enfileirar_mensagem_agendada",
+      {
+        p_empresa_id: params.input.empresaId,
+        p_agente_id: params.agente.id,
+        p_conversa_id: params.input.conversaId,
+        p_contato_id: params.input.contatoId || params.contatoId || null,
+        p_numero_destino: params.input.numeroDestino || "",
+        p_mensagem_id: mensagemId,
+        p_conteudo: texto,
+        p_processar_em: proximaAbertura.toISOString(),
+      }
+    );
+    if (pendenciaError || !pendencia) {
+      console.error("[AGENTE_IA] Erro ao agendar mensagem fora do horário:", pendenciaError);
+      return null;
+    }
+
+    const pendenciaId = (pendencia as PendenciaRow).id;
+    const delayMs = Math.max(1_000, proximaAbertura.getTime() - Date.now());
+    const publicou = await publicarPendenciaAgenteIaQstash(pendenciaId, delayMs);
+    if (!publicou) {
+      console.warn("[AGENTE_IA] Pendência ficou salva para recuperação pelo cron", {
+        pendenciaId,
+        processarEm: proximaAbertura.toISOString(),
+      });
+    }
+
+    return {
+      ok: true,
+      status: "agente_ia_fora_horario_agendado",
+      agenteId: params.agente.id,
+      pendenciaId,
+      processarEm: proximaAbertura.toISOString(),
+    };
+  }
+
   const debounceBaseMs = numeroInteiro(params.agente.debounce_ms, 1200, 250, 10000);
   const debounce = await calcularDebounceAdaptativo({
     empresaId: params.input.empresaId,
@@ -177,7 +205,7 @@ export async function despacharMensagemParaAgente(params: {
   }
 
   const pendenciaId = (pendencia as PendenciaRow).id;
-  const publicou = await publicarPendenciaQstash(pendenciaId, debounceMs);
+  const publicou = await publicarPendenciaAgenteIaQstash(pendenciaId, debounceMs);
   if (!publicou) {
     await esperar(debounceMs + 50);
     await processarPendenciaAgenteIa(pendenciaId, { forcar: true }).catch((error) =>
