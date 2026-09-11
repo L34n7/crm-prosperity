@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
 import { isAmbienteConfigurado } from "@/lib/whatsapp/ambiente-configurado";
@@ -67,6 +68,13 @@ type ConfigJsonWhatsapp = {
 
 function limparNumero(numero: string) {
   return String(numero || "").replace(/\D/g, "");
+}
+
+function extrairChaveNomeCaptura(valor: unknown) {
+  const match = String(valor || "")
+    .trim()
+    .match(/^\{\{\s*(nome_captura|primeiro_nome_captura)\s*\}\}$/);
+  return match?.[1] || "";
 }
 
 function gerarCodigoAleatorio(tamanho = 6) {
@@ -337,7 +345,7 @@ export async function POST(request: Request) {
 
     const conversaId = String(body?.conversa_id || "").trim();
     const templateNome = String(body?.template_nome || "").trim();
-    const bodyParams = Array.isArray(body?.body_params)
+    let bodyParams = Array.isArray(body?.body_params)
       ? body.body_params.map((item: unknown) => String(item || ""))
       : [];
 
@@ -420,6 +428,21 @@ export async function POST(request: Request) {
     const telefone = limparNumero(contato?.telefone || "");
     const nomeContato = contato?.nome || "Contato";
     const integracaoWhatsappId = conversa.integracao_whatsapp_id;
+
+  if (bodyParams.some((valor: string) => extrairChaveNomeCaptura(valor))) {
+    const nomesCaptura = await resolverNomeCapturaContato({
+      empresaId: usuario.empresa_id,
+      contatoId: contato?.id || null,
+      nomeFallback: contato?.nome || null,
+    });
+
+    bodyParams = bodyParams.map((valor: string) => {
+      const chave = extrairChaveNomeCaptura(valor);
+      return chave
+        ? nomesCaptura[chave as "nome_captura" | "primeiro_nome_captura"] || ""
+        : valor;
+    });
+  }
 
     if (!integracaoWhatsappId) {
       return NextResponse.json(

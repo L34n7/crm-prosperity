@@ -3430,7 +3430,23 @@ function ConversasPageContent() {
     const chavesAdicionadas = new Set<string>();
     const opcoes: TemplateVariableOption[] = [];
 
-    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {
+    const variaveisFixasDisparoIndividual = [
+    ...VARIAVEIS_FIXAS_SISTEMA,
+    {
+      chave: "nome_captura",
+      exemplo: "{{nome_captura}}",
+      descricao:
+        "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+    },
+    {
+      chave: "primeiro_nome_captura",
+      exemplo: "{{primeiro_nome_captura}}",
+      descricao:
+        "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+    },
+  ];
+
+  for (const variavel of variaveisFixasDisparoIndividual) {
       const chave = normalizarChaveVariavelMacro(variavel.chave);
       if (!chave || chavesAdicionadas.has(chave)) continue;
       chavesAdicionadas.add(chave);
@@ -7537,7 +7553,9 @@ async function baixarConversaPDF() {
     }
 
     const parametrosResolvidos = parametrosSelecionados.map((chave) =>
-      resolverVariaveisMacro(`{{${chave}}}`)
+      chave === "nome_captura" || chave === "primeiro_nome_captura"
+      ? `{{${chave}}}`
+      : resolverVariaveisMacro(`{{${chave}}}`)
     );
 
     try {
