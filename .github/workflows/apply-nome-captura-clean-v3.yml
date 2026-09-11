@@ -1,0 +1,99 @@
+name: Apply nome captura clean v3
+
+on:
+  push:
+    branches:
+      - tmp/nome-captura-disparos-clean
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/nome-captura-disparos-clean
+          fetch-depth: 0
+
+      - name: Apply source patch
+        shell: bash
+        run: |
+          curl -fsSL 'https://raw.githubusercontent.com/L34n7/crm-prosperity/feature/variaveis-nome-captura-disparos/.github/workflows/run-capture-patch-v7.yml' -o /tmp/v7.yml
+          python3 <<'PY'
+          from pathlib import Path
+
+          workflow = Path('/tmp/v7.yml').read_text()
+          lines = workflow.splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "python3 <<'PY'")
+          end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == 'PY')
+          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines[start + 1:end]) + '\n'
+          prefix = code[:code.index('# 6. Conversas')]
+          exec(compile(prefix, 'capture-vars-v7-first-five', 'exec'))
+
+          path = 'src/app/(private)/conversas/page.tsx'
+          p = Path(path)
+          text = p.read_text()
+
+          marker = '  const opcoesVariaveisDisparoIndividual = useMemo<TemplateVariableOption[]>(() => {'
+          section_start = text.index(marker)
+          section_end = text.index('  }, [variaveisCustomizadasMacro]);', section_start)
+          segment = text[section_start:section_end]
+          loop = '    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {\n'
+          if segment.count(loop) != 1:
+              raise RuntimeError('Loop das variaveis fixas do disparo individual nao encontrado')
+
+          expanded_loop = '''    const variaveisFixasDisparoIndividual = [
+              ...VARIAVEIS_FIXAS_SISTEMA,
+              {
+                chave: "nome_captura",
+                exemplo: "{{nome_captura}}",
+                descricao:
+                  "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+              },
+              {
+                chave: "primeiro_nome_captura",
+                exemplo: "{{primeiro_nome_captura}}",
+                descricao:
+                  "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+              },
+            ];
+
+            for (const variavel of variaveisFixasDisparoIndividual) {
+          '''
+          segment = segment.replace(loop, expanded_loop, 1)
+          text = text[:section_start] + segment + text[section_end:]
+
+          parametros_pos = text.index('const parametrosResolvidos')
+          expr = 'resolverVariaveisMacro(`{{${chave}}}`)'
+          expr_pos = text.index(expr, parametros_pos)
+          conditional = '''chave === "nome_captura" || chave === "primeiro_nome_captura"
+                ? `{{${chave}}}`
+                : resolverVariaveisMacro(`{{${chave}}}`)'''
+          text = text[:expr_pos] + conditional + text[expr_pos + len(expr):]
+          p.write_text(text)
+          print('6/6 conversas ui ok')
+          PY
+
+      - name: Validate source patch
+        shell: bash
+        run: |
+          git diff --check
+          test "$(git diff --name-only | grep '^src/' | wc -l)" -eq 6
+          grep -q 'resolverNomeCapturaContato' src/lib/automacoes/variaveis-fixas-contato.ts
+          grep -q 'nome_captura' src/lib/whatsapp/disparo-agendado-variaveis.ts
+          grep -q 'extrairChaveNomeCaptura' src/lib/whatsapp/send-template-disparo.ts
+          grep -q 'extrairChaveNomeCaptura' src/app/api/whatsapp/disparo-individual/route.ts
+          grep -q 'chave: "nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'variaveisFixasDisparoIndividual' 'src/app/(private)/conversas/page.tsx'
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git config user.name 'CRM Prosperity Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/
+          git commit -m 'feat: adicionar variaveis de nome capturado aos disparos'
+          git push origin HEAD:tmp/nome-captura-disparos-clean
