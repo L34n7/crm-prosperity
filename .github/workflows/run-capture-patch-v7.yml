@@ -1,0 +1,366 @@
+name: Run capture patch v7
+
+on:
+  push:
+    branches:
+      - feature/variaveis-nome-captura-disparos
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/variaveis-nome-captura-disparos
+          fetch-depth: 0
+
+      - name: Apply source patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected 1 occurrence, found {count}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          def regex_once(path, pattern, repl, flags=0):
+              p = Path(path)
+              text = p.read_text()
+              new, count = re.subn(pattern, repl, text, count=1, flags=flags)
+              if count != 1:
+                  raise RuntimeError(f"{path}: regex expected 1 occurrence, found {count}: {pattern[:120]!r}")
+              p.write_text(new)
+
+          # 1. Resolver compartilhado do ultimo nome capturado.
+          path = 'src/lib/automacoes/variaveis-fixas-contato.ts'
+          old = '''export function chaveEhVariavelNomeWhatsapp(chave: unknown) {
+            return VARIAVEIS_NOME_WHATSAPP.has(normalizarChaveVariavelFluxo(chave));
+          }
+          '''
+          new = old + '''
+          const VARIAVEIS_NOME_CAPTURA = new Set([
+            "nome_captura",
+            "primeiro_nome_captura",
+          ]);
+
+          export function chaveEhVariavelNomeCaptura(chave: unknown) {
+            return VARIAVEIS_NOME_CAPTURA.has(normalizarChaveVariavelFluxo(chave));
+          }
+
+          export async function resolverNomeCapturaContato(params: {
+            empresaId: string;
+            contatoId?: string | null;
+            nomeWhatsapp?: string | null;
+            nomeFallback?: string | null;
+          }) {
+            const fallback = String(
+              params.nomeWhatsapp || params.nomeFallback || ""
+            ).trim();
+            const primeiroFallback = fallback.split(/\\s+/).filter(Boolean)[0] || fallback;
+            const contatoId = String(params.contatoId || "").trim();
+            const empresaId = String(params.empresaId || "").trim();
+
+            if (!contatoId || !empresaId) {
+              return {
+                nome_captura: fallback,
+                primeiro_nome_captura: primeiroFallback,
+              };
+            }
+
+            const { data, error } = await supabaseAdmin
+              .from("contato_informacoes_captura")
+              .select("valor")
+              .eq("empresa_id", empresaId)
+              .eq("contato_id", contatoId)
+              .eq("tipo", "nome")
+              .eq("ativo", true)
+              .order("capturado_em", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (error) {
+              console.warn("[VARIAVEIS] Nome capturado indisponivel:", error.message);
+              return {
+                nome_captura: fallback,
+                primeiro_nome_captura: primeiroFallback,
+              };
+            }
+
+            const nomeCaptura = String(data?.valor || "").trim() || fallback;
+            return {
+              nome_captura: nomeCaptura,
+              primeiro_nome_captura:
+                nomeCaptura.split(/\\s+/).filter(Boolean)[0] || nomeCaptura,
+            };
+          }
+          '''
+          replace_once(path, old, new)
+          print('1/6 resolver ok')
+
+          # 2. Disparo agendado/automacao.
+          path = 'src/lib/whatsapp/disparo-agendado-variaveis.ts'
+          replace_once(path, '  chaveEhVariavelNomeWhatsapp,\n', '  chaveEhVariavelNomeWhatsapp,\n  resolverNomeCapturaContato,\n')
+          replace_once(path,
+          '''  const precisaNomeWhatsapp = chaves.some(chaveEhVariavelNomeWhatsapp);
+            const nomeWhatsapp = precisaNomeWhatsapp
+          ''',
+          '''  const precisaNomeCaptura = chaves.some(
+              (chave) => chave === "nome_captura" || chave === "primeiro_nome_captura"
+            );
+            const precisaNomeWhatsapp =
+              precisaNomeCaptura || chaves.some(chaveEhVariavelNomeWhatsapp);
+            const nomeWhatsapp = precisaNomeWhatsapp
+          ''')
+          replace_once(path,
+          '''  const fixasContato = await montarMapaVariaveisFixasContato(params.contato, {
+              nome_whatsapp: nomeWhatsapp,
+              protocolo_atual: protocoloAtual,
+              ultimo_protocolo: ultimoProtocolo,
+            });
+            const mapaPayload = new Map<string, string>();
+          ''',
+          '''  const fixasContato = await montarMapaVariaveisFixasContato(params.contato, {
+              nome_whatsapp: nomeWhatsapp,
+              protocolo_atual: protocoloAtual,
+              ultimo_protocolo: ultimoProtocolo,
+            });
+            const nomesCaptura = precisaNomeCaptura
+              ? await resolverNomeCapturaContato({
+                  empresaId: params.empresaId,
+                  contatoId: params.contato.id || null,
+                  nomeWhatsapp,
+                  nomeFallback: params.contato.nome || null,
+                })
+              : null;
+            const mapaPayload = new Map<string, string>();
+          ''')
+          replace_once(path,
+          '''  return chaves.map((chave) => {
+              if (chaveEhVariavelFixaContato(chave)) {
+          ''',
+          '''  return chaves.map((chave) => {
+              if (chave === "nome_captura" || chave === "primeiro_nome_captura") {
+                return nomesCaptura?.[chave] || "";
+              }
+
+              if (chaveEhVariavelFixaContato(chave)) {
+          ''')
+          print('2/6 agendado ok')
+
+          # 3. Disparo em massa/fila resolve por contato no envio.
+          path = 'src/lib/whatsapp/send-template-disparo.ts'
+          replace_once(path, 'import { getSupabaseAdmin } from "@/lib/supabase/admin";\n', 'import { getSupabaseAdmin } from "@/lib/supabase/admin";\nimport { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";\n')
+          replace_once(path,
+          '''function texto(valor: unknown) {
+            return String(valor || "").trim();
+          }
+          ''',
+          '''function texto(valor: unknown) {
+            return String(valor || "").trim();
+          }
+
+          function extrairChaveNomeCaptura(valor: unknown) {
+            const match = String(valor || "")
+              .trim()
+              .match(/^\\{\\{\\s*(nome_captura|primeiro_nome_captura)\\s*\\}\\}$/);
+            return match?.[1] || "";
+          }
+          ''')
+          replace_once(path,
+          '''  const mensagemTemplate =
+              montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
+              `Template enviado: ${template.nome}`;
+          ''',
+          '''  let mensagemTemplate =
+              montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
+              `Template enviado: ${template.nome}`;
+          ''')
+          replace_once(path,
+          '''  const nomeContatoFinal =
+              recursos.contato?.nome || nomeContato || "Sem nome";
+          ''',
+          '''  const nomeContatoFinal =
+              recursos.contato?.nome || nomeContato || "Sem nome";
+
+            if (variaveis.some((valor) => extrairChaveNomeCaptura(valor))) {
+              const nomesCaptura = await resolverNomeCapturaContato({
+                empresaId,
+                contatoId: recursos.contato.id,
+                nomeFallback: nomeContatoFinal,
+              });
+
+              variaveis = variaveis.map((valor) => {
+                const chave = extrairChaveNomeCaptura(valor);
+                return chave
+                  ? nomesCaptura[chave as "nome_captura" | "primeiro_nome_captura"] || ""
+                  : valor;
+              });
+
+              mensagemTemplate =
+                montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
+                `Template enviado: ${template.nome}`;
+            }
+          ''')
+          print('3/6 massa backend ok')
+
+          # 4. Disparo individual resolve no servidor.
+          path = 'src/app/api/whatsapp/disparo-individual/route.ts'
+          replace_once(path, 'import { getSupabaseAdmin } from "@/lib/supabase/admin";\n', 'import { getSupabaseAdmin } from "@/lib/supabase/admin";\nimport { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";\n')
+          replace_once(path,
+          '''function limparNumero(numero: string) {
+            return String(numero || "").replace(/\\D/g, "");
+          }
+          ''',
+          '''function limparNumero(numero: string) {
+            return String(numero || "").replace(/\\D/g, "");
+          }
+
+          function extrairChaveNomeCaptura(valor: unknown) {
+            const match = String(valor || "")
+              .trim()
+              .match(/^\\{\\{\\s*(nome_captura|primeiro_nome_captura)\\s*\\}\\}$/);
+            return match?.[1] || "";
+          }
+          ''')
+          replace_once(path, '    const bodyParams = Array.isArray(body?.body_params)\n', '    let bodyParams = Array.isArray(body?.body_params)\n')
+          replace_once(path,
+          '''    const integracaoWhatsappId = conversa.integracao_whatsapp_id;
+          ''',
+          '''    const integracaoWhatsappId = conversa.integracao_whatsapp_id;
+
+            if (bodyParams.some((valor) => extrairChaveNomeCaptura(valor))) {
+              const nomesCaptura = await resolverNomeCapturaContato({
+                empresaId: usuario.empresa_id,
+                contatoId: contato?.id || null,
+                nomeFallback: contato?.nome || null,
+              });
+
+              bodyParams = bodyParams.map((valor) => {
+                const chave = extrairChaveNomeCaptura(valor);
+                return chave
+                  ? nomesCaptura[chave as "nome_captura" | "primeiro_nome_captura"] || ""
+                  : valor;
+              });
+            }
+          ''')
+          print('4/6 individual backend ok')
+
+          # 5. Tela de disparos: inclui opcoes e preserva marcador para resolucao por contato.
+          path = 'src/app/(private)/disparos-whatsapp/page.tsx'
+          p = Path(path)
+          text = p.read_text()
+          pattern = r'(\n\s*\{\s*\n\s*chave:\s*"nome_whatsapp",\s*\n\s*exemplo:\s*"\{\{nome_whatsapp\}\}",.*?\n\s*\},)'
+          match = re.search(pattern, text, flags=re.S)
+          if not match:
+              raise RuntimeError(f'{path}: bloco nome_whatsapp nao encontrado')
+          bloco = match.group(1)
+          extra = '''
+            {
+              chave: "nome_captura",
+              exemplo: "{{nome_captura}}",
+              descricao:
+                "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+            },
+            {
+              chave: "primeiro_nome_captura",
+              exemplo: "{{primeiro_nome_captura}}",
+              descricao:
+                "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+            },'''
+          text = text[:match.end()] + extra + text[match.end():]
+          p.write_text(text)
+
+          p = Path(path)
+          text = p.read_text()
+          needle = 'variaveisObrigatorias.map((variavel) =>'
+          pos = text.find(needle)
+          if pos < 0:
+              raise RuntimeError(f'{path}: map de variaveis obrigatorias nao encontrado')
+          resolver_pos = text.find('resolverVariavelContato(', pos)
+          if resolver_pos < 0 or resolver_pos - pos > 600:
+              raise RuntimeError(f'{path}: resolverVariavelContato nao encontrado proximo ao map')
+          indent_start = text.rfind('\n', pos, resolver_pos) + 1
+          indent = text[indent_start:resolver_pos]
+          replacement = '''variavel === "nome_captura" ||
+''' + indent + '''variavel === "primeiro_nome_captura"
+''' + indent + '''  ? `{{${variavel}}}`
+''' + indent + '''  : resolverVariavelContato('''
+          text = text[:resolver_pos] + replacement + text[resolver_pos + len('resolverVariavelContato('):]
+          p.write_text(text)
+          print('5/6 massa ui ok')
+
+          # 6. Conversas: opcoes extras apenas no disparo individual e marcador preservado.
+          path = 'src/app/(private)/conversas/page.tsx'
+          p = Path(path)
+          text = p.read_text()
+          marker = 'const opcoesVariaveisDisparo = useMemo(() => {'
+          start = text.index(marker)
+          end = text.index('  }, [variaveisMacro]);', start)
+          segment = text[start:end]
+          old = '    for (const variavel of VARIAVEIS_FIXAS_SISTEMA) {\n'
+          if segment.count(old) != 1:
+              raise RuntimeError(f'{path}: loop de variaveis nao encontrado no escopo do disparo individual')
+          new = '''    const variaveisFixasDisparoIndividual = [
+              ...VARIAVEIS_FIXAS_SISTEMA,
+              {
+                chave: "nome_captura",
+                exemplo: "{{nome_captura}}",
+                descricao:
+                  "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+              },
+              {
+                chave: "primeiro_nome_captura",
+                exemplo: "{{primeiro_nome_captura}}",
+                descricao:
+                  "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+              },
+            ];
+
+            for (const variavel of variaveisFixasDisparoIndividual) {
+          '''
+          segment = segment.replace(old, new, 1)
+          p.write_text(text[:start] + segment + text[end:])
+          replace_once(path,
+          '''    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+              resolverVariaveisMacro(`{{${chave}}}`)
+            );''',
+          '''    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+              chave === "nome_captura" || chave === "primeiro_nome_captura"
+                ? `{{${chave}}}`
+                : resolverVariaveisMacro(`{{${chave}}}`)
+            );''')
+          print('6/6 conversas ui ok')
+          PY
+
+      - name: Validate source patch
+        shell: bash
+        run: |
+          git diff --check
+          test "$(git diff --name-only | grep '^src/' | wc -l)" -eq 6
+          grep -q 'resolverNomeCapturaContato' src/lib/automacoes/variaveis-fixas-contato.ts
+          grep -q 'contato_informacoes_captura' src/lib/automacoes/variaveis-fixas-contato.ts
+          grep -q 'nome_captura' src/lib/whatsapp/disparo-agendado-variaveis.ts
+          grep -q 'extrairChaveNomeCaptura' src/lib/whatsapp/send-template-disparo.ts
+          grep -q 'extrairChaveNomeCaptura' src/app/api/whatsapp/disparo-individual/route.ts
+          grep -q 'chave: "nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'chave: "primeiro_nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'variaveisFixasDisparoIndividual' 'src/app/(private)/conversas/page.tsx'
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git config user.name 'CRM Prosperity Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/
+          git commit -m 'feat: adicionar variaveis de nome capturado aos disparos'
+          git push origin HEAD:feature/variaveis-nome-captura-disparos
