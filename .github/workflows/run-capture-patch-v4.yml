@@ -1,0 +1,72 @@
+name: Run capture patch v4
+
+on:
+  push:
+    branches:
+      - feature/variaveis-nome-captura-disparos
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/variaveis-nome-captura-disparos
+          fetch-depth: 0
+
+      - name: Apply native TypeScript patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          target = Path('src/lib/automacoes/variaveis-fixas-contato.ts')
+          if 'export async function resolverNomeCapturaContato' in target.read_text():
+              print('Capture variables already applied.')
+              raise SystemExit(0)
+
+          workflow = Path('.github/workflows/apply-capture-vars-v2.yml').read_text()
+          lines = workflow.splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "python3 <<'PY'")
+          end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == 'PY')
+          code_lines = [line[10:] if line.startswith('          ') else line for line in lines[start + 1:end]]
+          code = '\n'.join(code_lines) + '\n'
+
+          helper_start = code.index('def insert_after(path, anchor, addition):')
+          helper_end = code.index('\ndef insert_before(path, anchor, addition):', helper_start)
+          helper = '\n'.join([
+              'def insert_after(path, anchor, addition):',
+              '    text = read(path)',
+              '    count = text.count(anchor)',
+              '    if count < 1:',
+              '        raise RuntimeError(f"{path}: anchor not found: {anchor[:120]!r}")',
+              '    head, tail = text.rsplit(anchor, 1)',
+              '    write(path, head + anchor + addition + tail)',
+              '',
+          ])
+          code = code[:helper_start] + helper + code[helper_end:]
+          exec(compile(code, 'capture-vars-patch', 'exec'))
+          PY
+
+      - name: Validate patch
+        shell: bash
+        run: |
+          git diff --check
+          grep -q 'chave: "nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'chave: "primeiro_nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'variaveisFixasDisparoIndividual' 'src/app/(private)/conversas/page.tsx'
+          grep -q 'resolverNomeCapturaContato' src/lib/automacoes/variaveis-fixas-contato.ts
+          grep -q 'contato_informacoes_captura' src/lib/automacoes/variaveis-fixas-contato.ts
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git config user.name 'CRM Prosperity Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/
+          git commit -m 'feat: adicionar variaveis de nome capturado aos disparos'
+          git push origin HEAD:feature/variaveis-nome-captura-disparos
