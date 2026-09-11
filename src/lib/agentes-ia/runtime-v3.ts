@@ -44,6 +44,12 @@ const FERRAMENTAS_AGENDA = new Set<string>([
   "remarcar_agendamento",
   "cancelar_agendamento",
 ]);
+const FERRAMENTAS_CRITICAS = new Set<string>([
+  "criar_agendamento",
+  "remarcar_agendamento",
+  "cancelar_agendamento",
+  "transferir_humano",
+]);
 
 type TipoFerramenta = (typeof TIPOS_FERRAMENTAS)[number];
 
@@ -733,13 +739,19 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "transferir_humano",
-      description: "Transfere para humano no destino já configurado.",
+      description: "Transfere para humano no destino já configurado. Use somente quando a transferência for realmente necessária.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
-          mensagem_cliente: { anyOf: [{ type: "string" }, { type: "null" }] },
-          motivo_interno: { anyOf: [{ type: "string" }, { type: "null" }] },
+          mensagem_cliente: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description: "Mensagem curta enviada DIRETAMENTE ao cliente ao transferir. Nunca use este campo como anotação interna nem repita a solicitação do cliente como se fosse uma mensagem da equipe.",
+          },
+          motivo_interno: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description: "Motivo interno da transferência; este campo não é enviado ao cliente.",
+          },
         },
         required: ["mensagem_cliente", "motivo_interno"], additionalProperties: false,
       },
@@ -760,8 +772,11 @@ function normalizarTextoIntencao(valor: unknown) {
 function consultaConhecimentoAutomatica(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   if (!texto) return null;
+  if (/\b(endereco|localizacao|onde fica|como chegar|fica onde|localizado|localizada)\b/.test(texto)) {
+    return textoCurto(mensagem, 140);
+  }
   if (/\b(preco|precos|valor|valores|custa|custar|mensalidade|plano|planos)\b/.test(texto)) {
-    return "preço planos usuários";
+    return textoCurto(mensagem, 140);
   }
   if (/\b(paciente|pacientes|prontuario|odontograma|odontologic)\w*/.test(texto)) {
     return "pacientes prontuário odontograma cadastro";
@@ -1109,6 +1124,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   const empresaId = ctx.pendencia.empresa_id;
   const conversaId = ctx.pendencia.conversa_id;
 
+  if (FERRAMENTAS_CRITICAS.has(nome) && await execucaoFoiSupersedida(ctx.pendencia)) {
+    return {
+      ok: false,
+      code: "EXECUCAO_SUPERSEDIDA",
+      supersedido: true,
+      error: "Chegou uma nova mensagem do cliente. A ação desta execução foi descartada para preservar o contexto mais recente.",
+    };
+  }
+
   if (nome === "consultar_conhecimento") {
     const consulta = textoCurto(args.consulta, 180);
     const { data, error } = await supabaseAdmin.rpc("agente_ia_buscar_conhecimento", {
@@ -1224,6 +1248,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       return { ok: true, idempotente: true, agendamento: existente, quando };
     }
 
+    if (await execucaoFoiSupersedida(ctx.pendencia)) {
+      return {
+        ok: false,
+        code: "EXECUCAO_SUPERSEDIDA",
+        supersedido: true,
+        error: "Chegou uma nova mensagem antes da criação do agendamento; nenhuma alteração foi feita.",
+      };
+    }
+
     const agora = new Date().toISOString();
     const { data: criado, error } = await supabaseAdmin.from("agenda_agendamentos").insert({
       empresa_id: empresaId,
@@ -1288,6 +1321,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     const fimAt = resolvido.slot.fim_at;
     const quando = labelNaturalSlot(resolvido.slot);
 
+    if (await execucaoFoiSupersedida(ctx.pendencia)) {
+      return {
+        ok: false,
+        code: "EXECUCAO_SUPERSEDIDA",
+        supersedido: true,
+        error: "Chegou uma nova mensagem antes da remarcação; nenhuma alteração foi feita.",
+      };
+    }
+
     const { data: atualizado, error } = await supabaseAdmin.from("agenda_agendamentos").update({
       inicio_at: inicioAt,
       fim_at: fimAt,
@@ -1320,6 +1362,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     });
     if (!atualResolvido.ok) return atualResolvido;
     const atual = atualResolvido.agendamento;
+
+    if (await execucaoFoiSupersedida(ctx.pendencia)) {
+      return {
+        ok: false,
+        code: "EXECUCAO_SUPERSEDIDA",
+        supersedido: true,
+        error: "Chegou uma nova mensagem antes do cancelamento; nenhuma alteração foi feita.",
+      };
+    }
 
     const agora = new Date().toISOString();
     const { error } = await supabaseAdmin.from("agenda_agendamentos")
@@ -1383,6 +1434,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       atendenteId: config.atendente_id as any,
       incluirAdministradores: config.incluir_administradores as any,
     });
+
+    if (await execucaoFoiSupersedida(ctx.pendencia)) {
+      return {
+        ok: false,
+        code: "EXECUCAO_SUPERSEDIDA",
+        supersedido: true,
+        error: "Chegou uma nova mensagem antes da transferência; a conversa permaneceu com o agente para processar o contexto mais recente.",
+      };
+    }
 
     const agora = new Date().toISOString();
     const { data: conversaTransferida, error: transferenciaError } = await supabaseAdmin
@@ -1631,11 +1691,11 @@ function promptDoAgente(
     "REGRAS DO RUNTIME:",
     "- PT-BR, WhatsApp natural, 1–3 mensagens curtas e no máximo uma pergunta principal. Continue o contexto sem repetir.",
     "- Memória/histórico dão continuidade, mas agenda ativa só existe se estiver no ESTADO OPERACIONAL abaixo.",
-    "- Produto, preço, plano, integração e recurso: use a base consultada/ferramenta e não invente.",
+    "- Produto, preço, plano, integração, recurso, endereço e localização: use a base consultada/ferramenta e não invente.",
     "- Agenda: use data/hora LOCAL, consulte disponibilidade antes de criar/remarcar e só confirme ação após ok=true.",
     "- Nunca prometa uma ação operacional para depois (ex.: 'vou consultar', 'vou verificar', 'vou transferir', 'vou agendar'). Execute a ferramenta no mesmo turno ou peça objetivamente a informação que falta.",
     "- Em reagendamento use remarcar_agendamento; não crie outro. Cancelar/remarcar usam o compromisso ativo do backend, sem UUID inventado.",
-    "- Transferência usa o destino configurado. Não diga que é humano.",
+    "- Transferência usa o destino configurado. mensagem_cliente é enviada ao cliente; nunca use esse campo como anotação interna nem para repetir a pergunta dele.",
     `Memória: ${memoriaCompacta(estado) || "sem fatos relevantes"}`,
     "Em memoria_delta envie SOMENTE novidades: null/[] quando não mudou; proxima_acao com string vazia limpa a ação.",
     `Agenda: ${agendaInfo}`,
@@ -1787,6 +1847,16 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     }
 
     agendaIdConfiguradaFerramentas(ferramentasAtivas);
+
+    if (await execucaoFoiSupersedida(pendencia)) {
+      await finalizarPendencia({ pendencia, lockToken, status: "processado" });
+      return {
+        ok: true,
+        processado: true,
+        supersedido: true,
+        motivo: "nova_mensagem_antes_execucao",
+      };
+    }
 
     const { data: execucao, error: execucaoError } = await supabaseAdmin.from("agente_ia_execucoes").insert({
       empresa_id: pendencia.empresa_id,
