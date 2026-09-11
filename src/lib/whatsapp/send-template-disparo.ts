@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
 import { findOrCreateWhatsAppConversation } from "@/lib/whatsapp/find-or-create-conversation";
 import { atualizarReservaLimiteMeta } from "@/lib/whatsapp/meta-limites";
@@ -81,6 +82,13 @@ function objeto(valor: unknown): Record<string, unknown> {
 
 function texto(valor: unknown) {
   return String(valor || "").trim();
+}
+
+function extrairChaveNomeCaptura(valor: unknown) {
+  const match = String(valor || "")
+    .trim()
+    .match(/^\{\{\s*(nome_captura|primeiro_nome_captura)\s*\}\}$/);
+  return match?.[1] || "";
 }
 
 export function limparNumeroDisparo(valor: string) {
@@ -685,7 +693,7 @@ export async function enviarTemplateDisparo({
 }: EnviarTemplateDisparoParams): Promise<ResultadoEnvioTemplateDisparo> {
   const numeroLimpo = limparNumeroDisparo(numero);
   const payloadTemplate = template.payload || null;
-  const mensagemTemplate =
+  let mensagemTemplate =
     montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
     `Template enviado: ${template.nome}`;
 
@@ -724,6 +732,25 @@ export async function enviarTemplateDisparo({
 
   const nomeContatoFinal =
     recursos.contato?.nome || nomeContato || "Sem nome";
+
+  if (variaveis.some((valor) => extrairChaveNomeCaptura(valor))) {
+    const nomesCaptura = await resolverNomeCapturaContato({
+      empresaId,
+      contatoId: recursos.contato.id,
+      nomeFallback: nomeContatoFinal,
+    });
+
+    variaveis = variaveis.map((valor) => {
+      const chave = extrairChaveNomeCaptura(valor);
+      return chave
+        ? nomesCaptura[chave as "nome_captura" | "primeiro_nome_captura"] || ""
+        : valor;
+    });
+
+    mensagemTemplate =
+      montarConteudoTextoTemplateDisparo(payloadTemplate, variaveis) ||
+      `Template enviado: ${template.nome}`;
+  }
   const components = montarComponentesTemplateDisparo(payloadTemplate, variaveis);
   const templateMeta: Record<string, unknown> = {
     name: template.nome,
