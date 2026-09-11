@@ -429,14 +429,14 @@ export async function POST(request: Request) {
     const nomeContato = contato?.nome || "Contato";
     const integracaoWhatsappId = conversa.integracao_whatsapp_id;
 
-  if (bodyParams.some((valor) => extrairChaveNomeCaptura(valor))) {
+  if (bodyParams.some((valor: string) => extrairChaveNomeCaptura(valor))) {
     const nomesCaptura = await resolverNomeCapturaContato({
       empresaId: usuario.empresa_id,
       contatoId: contato?.id || null,
       nomeFallback: contato?.nome || null,
     });
 
-    bodyParams = bodyParams.map((valor) => {
+    bodyParams = bodyParams.map((valor: string) => {
       const chave = extrairChaveNomeCaptura(valor);
       return chave
         ? nomesCaptura[chave as "nome_captura" | "primeiro_nome_captura"] || ""
