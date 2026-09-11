@@ -24,6 +24,7 @@ import {
   filtrarFerramentasPorNicho,
   type ContextoNichoFerramenta,
 } from "@/lib/agentes-ia/ferramentas-por-nicho";
+import HorarioAtendimentoEditor from "@/components/agentes-ia/HorarioAtendimentoEditor";
 import styles from "./page.module.css";
 
 type ModoAtendimento = "economico" | "geral";
@@ -104,6 +105,7 @@ type Agente = {
   fallback_transferencia_json?: TransferenciaFallback;
   fallback_sem_contingencia_aceito?: boolean;
   integracoes_whatsapp_ids?: string[];
+  horarios?: unknown;
   metadata_json?: Record<string, unknown>;
   ferramentas: Ferramenta[];
   conhecimentos: Conhecimento[];
@@ -840,6 +842,17 @@ export default function AgentesIaPage() {
     try {
       const integracoesSelecionadas =
         integracoes.length === 1 ? [integracoes[0].id] : editor.integracoes_whatsapp_ids;
+
+      const resHorario = await fetch("/api/agentes-ia/horario", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editor.id, horarios: editor.horarios }),
+      });
+      const jsonHorario = await resHorario.json();
+      if (!resHorario.ok || !jsonHorario.ok) {
+        throw new Error(jsonHorario.error || "Erro ao salvar horário de atendimento.");
+      }
+
       const res = await fetch("/api/agentes-ia", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1519,175 +1532,182 @@ export default function AgentesIaPage() {
                     )}
                   </section>
 
-                  <section className={styles.panel}>
-                    <div className={styles.panelTitle}>
-                      <MessageCircle size={18} />
-                      <div>
-                        <h3>Onde e quando este agente atende</h3>
-                        <p>
-                          {integracoes.length === 1
-                            ? "O único WhatsApp da empresa é vinculado automaticamente."
-                            : "Defina o WhatsApp e o escopo que pode acionar este agente."}
-                        </p>
+                  <div style={{ display: "grid", gap: 14, alignContent: "start" }}>
+                    <HorarioAtendimentoEditor
+                      value={editor.horarios}
+                      onChange={(horarios) => setEditor({ ...editor, horarios })}
+                    />
+
+                    <section className={styles.panel}>
+                      <div className={styles.panelTitle}>
+                        <MessageCircle size={18} />
+                        <div>
+                          <h3>Onde e quando este agente atende</h3>
+                          <p>
+                            {integracoes.length === 1
+                              ? "O único WhatsApp da empresa é vinculado automaticamente."
+                              : "Defina o WhatsApp e o escopo que pode acionar este agente."}
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    {integracoes.length > 1 && (
-                      <>
-                        <div className={styles.scopeHint}>
-                          Sem nenhum número marcado, este agente vale para <strong>todas as integrações</strong>.
-                        </div>
-                        <div className={styles.checkList}>
-                          {integracoes.map((integracao) => {
-                            const checked = (editor.integracoes_whatsapp_ids || []).includes(
-                              integracao.id
-                            );
-                            const nome =
-                              integracao.nome_conexao ||
-                              integracao.phone_number_display_name ||
-                              integracao.verified_name ||
-                              "WhatsApp";
-                            return (
-                              <label key={integracao.id} className={styles.checkRow}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => alternarIntegracao(integracao.id)}
-                                />
-                                <span>
-                                  <strong>{nome}</strong>
-                                  <small>{integracao.numero || integracao.status || "Integração"}</small>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-
-                    {editor.modo_atendimento === "economico" ? (
-                      <>
-                        <div className={styles.scopeHint}>
-                          <strong>Fluxos protegidos pelo agente:</strong> ele só assume quando um destes Fluxos está aguardando uma resposta e o cliente sai do caminho esperado.
-                        </div>
-                        <label className={styles.checkRow}>
-                          <input
-                            type="checkbox"
-                            checked={todosFluxosEconomico}
-                            onChange={() => setEditor({ ...editor, fluxos_ids: [] })}
-                          />
-                          <span>
-                            <strong>Todos os fluxos</strong>
-                            <small>Usa este agente como especialista econômico para qualquer Fluxo compatível com a integração.</small>
-                          </span>
-                        </label>
-                        {!todosFluxosEconomico && (
-                          <div className={styles.checkList}>
-                            {fluxos.map((fluxo) => (
-                              <label key={fluxo.id} className={styles.checkRow}>
-                                <input
-                                  type="checkbox"
-                                  checked={(editor.fluxos_ids || []).includes(fluxo.id)}
-                                  onChange={() => alternarFluxo(fluxo.id)}
-                                />
-                                <span>
-                                  <strong>{fluxo.nome}</strong>
-                                </span>
-                              </label>
-                            ))}
+                      {integracoes.length > 1 && (
+                        <>
+                          <div className={styles.scopeHint}>
+                            Sem nenhum número marcado, este agente vale para <strong>todas as integrações</strong>.
                           </div>
-                        )}
-                        {todosFluxosEconomico && fluxos.length > 0 && (
+                          <div className={styles.checkList}>
+                            {integracoes.map((integracao) => {
+                              const checked = (editor.integracoes_whatsapp_ids || []).includes(
+                                integracao.id
+                              );
+                              const nome =
+                                integracao.nome_conexao ||
+                                integracao.phone_number_display_name ||
+                                integracao.verified_name ||
+                                "WhatsApp";
+                              return (
+                                <label key={integracao.id} className={styles.checkRow}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => alternarIntegracao(integracao.id)}
+                                  />
+                                  <span>
+                                    <strong>{nome}</strong>
+                                    <small>{integracao.numero || integracao.status || "Integração"}</small>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+
+                      {editor.modo_atendimento === "economico" ? (
+                        <>
+                          <div className={styles.scopeHint}>
+                            <strong>Fluxos protegidos pelo agente:</strong> ele só assume quando um destes Fluxos está aguardando uma resposta e o cliente sai do caminho esperado.
+                          </div>
+                          <label className={styles.checkRow}>
+                            <input
+                              type="checkbox"
+                              checked={todosFluxosEconomico}
+                              onChange={() => setEditor({ ...editor, fluxos_ids: [] })}
+                            />
+                            <span>
+                              <strong>Todos os fluxos</strong>
+                              <small>Usa este agente como especialista econômico para qualquer Fluxo compatível com a integração.</small>
+                            </span>
+                          </label>
+                          {!todosFluxosEconomico && (
+                            <div className={styles.checkList}>
+                              {fluxos.map((fluxo) => (
+                                <label key={fluxo.id} className={styles.checkRow}>
+                                  <input
+                                    type="checkbox"
+                                    checked={(editor.fluxos_ids || []).includes(fluxo.id)}
+                                    onChange={() => alternarFluxo(fluxo.id)}
+                                  />
+                                  <span>
+                                    <strong>{fluxo.nome}</strong>
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          {todosFluxosEconomico && fluxos.length > 0 && (
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={() => setEditor({ ...editor, fluxos_ids: [fluxos[0].id] })}
+                            >
+                              Selecionar fluxos específicos
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <label className={styles.checkRow}>
+                            <input
+                              type="checkbox"
+                              checked={editor.fallback_exclusivo === true}
+                              onChange={(event) =>
+                                setEditor({ ...editor, fallback_exclusivo: event.target.checked })
+                              }
+                            />
+                            <span>
+                              <strong>Fallback exclusivo desta integração</strong>
+                              <small>
+                                Atende qualquer nova conversa que não tenha sido direcionada por uma palavra-chave para outro agente Geral.
+                              </small>
+                            </span>
+                          </label>
+
+                          <div className={styles.scopeHint}>
+                            <strong>Palavras-chave:</strong> usam a mesma lógica dos gatilhos de Fluxo. Na abertura da conversa, uma correspondência tem prioridade sobre o agente fallback.
+                          </div>
+
+                          {(editor.gatilhos || []).map((gatilho, indice) => (
+                            <div key={gatilho.id || `gatilho-${indice}`} className={styles.knowledgeItem}>
+                              <div style={{ flex: 1 }}>
+                                <div className={styles.formGrid}>
+                                  <label className={styles.field}>
+                                    <span>Condição</span>
+                                    <select
+                                      value={gatilho.condicao}
+                                      onChange={(event) =>
+                                        atualizarGatilho(indice, {
+                                          condicao: event.target.value as CondicaoGatilho,
+                                        })
+                                      }
+                                    >
+                                      {CONDICOES_GATILHO.map((opcao) => (
+                                        <option key={opcao.valor} value={opcao.valor}>
+                                          {opcao.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className={styles.field}>
+                                    <span>Palavra ou expressão</span>
+                                    <input
+                                      value={gatilho.valor}
+                                      onChange={(event) =>
+                                        atualizarGatilho(indice, { valor: event.target.value })
+                                      }
+                                      placeholder={
+                                        gatilho.condicao === "regex"
+                                          ? "Ex.: ^quero (orçamento|preço)$"
+                                          : "Ex.: quero orçamento"
+                                      }
+                                    />
+                                    <small className={styles.fieldHint}>
+                                      Usada apenas no roteamento inicial. Não é adicionada ao contexto do modelo.
+                                    </small>
+                                  </label>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removerGatilho(indice)}
+                                title="Remover palavra-chave"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          ))}
                           <button
                             type="button"
                             className={styles.secondaryButton}
-                            onClick={() => setEditor({ ...editor, fluxos_ids: [fluxos[0].id] })}
+                            onClick={adicionarGatilho}
                           >
-                            Selecionar fluxos específicos
+                            <Plus size={16} /> Adicionar palavra-chave
                           </button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <label className={styles.checkRow}>
-                          <input
-                            type="checkbox"
-                            checked={editor.fallback_exclusivo === true}
-                            onChange={(event) =>
-                              setEditor({ ...editor, fallback_exclusivo: event.target.checked })
-                            }
-                          />
-                          <span>
-                            <strong>Fallback exclusivo desta integração</strong>
-                            <small>
-                              Atende qualquer nova conversa que não tenha sido direcionada por uma palavra-chave para outro agente Geral.
-                            </small>
-                          </span>
-                        </label>
-
-                        <div className={styles.scopeHint}>
-                          <strong>Palavras-chave:</strong> usam a mesma lógica dos gatilhos de Fluxo. Na abertura da conversa, uma correspondência tem prioridade sobre o agente fallback.
-                        </div>
-
-                        {(editor.gatilhos || []).map((gatilho, indice) => (
-                          <div key={gatilho.id || `gatilho-${indice}`} className={styles.knowledgeItem}>
-                            <div style={{ flex: 1 }}>
-                              <div className={styles.formGrid}>
-                                <label className={styles.field}>
-                                  <span>Condição</span>
-                                  <select
-                                    value={gatilho.condicao}
-                                    onChange={(event) =>
-                                      atualizarGatilho(indice, {
-                                        condicao: event.target.value as CondicaoGatilho,
-                                      })
-                                    }
-                                  >
-                                    {CONDICOES_GATILHO.map((opcao) => (
-                                      <option key={opcao.valor} value={opcao.valor}>
-                                        {opcao.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className={styles.field}>
-                                  <span>Palavra ou expressão</span>
-                                  <input
-                                    value={gatilho.valor}
-                                    onChange={(event) =>
-                                      atualizarGatilho(indice, { valor: event.target.value })
-                                    }
-                                    placeholder={
-                                      gatilho.condicao === "regex"
-                                        ? "Ex.: ^quero (orçamento|preço)$"
-                                        : "Ex.: quero orçamento"
-                                    }
-                                  />
-                                  <small className={styles.fieldHint}>
-                                    Usada apenas no roteamento inicial. Não é adicionada ao contexto do modelo.
-                                  </small>
-                                </label>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removerGatilho(indice)}
-                              title="Remover palavra-chave"
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          className={styles.secondaryButton}
-                          onClick={adicionarGatilho}
-                        >
-                          <Plus size={16} /> Adicionar palavra-chave
-                        </button>
-                      </>
-                    )}
-                  </section>
+                        </>
+                      )}
+                    </section>
+                  </div>
                 </div>
 
                 <section className={styles.panel}>
