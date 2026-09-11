@@ -291,6 +291,18 @@ async function acordarArbitragemDepoisDaExecucao(params: {
   });
 }
 
+function parametrosIntencoes(input: AutomationEngineInput) {
+  return {
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    contatoId: input.contatoId || null,
+    mensagemId: input.mensagemId || null,
+    mensagemTexto: input.mensagemTexto || "",
+    mensagemTipo: input.mensagemTipo || null,
+    numeroDestino: input.numeroDestino || null,
+  };
+}
+
 async function processarDepoisDasRotinas(
   input: AutomationEngineInput,
   opcoes?: { permitirDiferimento?: boolean }
@@ -300,18 +312,11 @@ async function processarDepoisDasRotinas(
     if (resultadoDiferimento) return resultadoDiferimento;
   }
 
-  const resultadoAgente = await interceptarMensagemAgenteIa(input);
-  if (resultadoAgente) return resultadoAgente;
-
-  const resultadoIntencoes = await processarIntencoesMensagem({
-    empresaId: input.empresaId,
-    conversaId: input.conversaId,
-    contatoId: input.contatoId || null,
-    mensagemId: input.mensagemId || null,
-    mensagemTexto: input.mensagemTexto || "",
-    mensagemTipo: input.mensagemTipo || null,
-    numeroDestino: input.numeroDestino || null,
-  });
+  // Intenções do fluxo têm prioridade sobre o agente Econômico. Se uma
+  // intenção resolver a mensagem, o agente não assume nem cancela o fluxo.
+  const resultadoIntencoes = await processarIntencoesMensagem(
+    parametrosIntencoes(input)
+  );
 
   if (resultadoIntencoes?.interrompeuFluxo || resultadoIntencoes?.somenteIntencao) {
     return {
@@ -322,6 +327,14 @@ async function processarDepoisDasRotinas(
       execucaoId: resultadoIntencoes.execucaoId,
       intencoesExecutadas: resultadoIntencoes.intencoesExecutadas,
     };
+  }
+
+  // Mesmo quando a IA de intenções identifica uma intenção junto com uma
+  // resposta que também deve seguir no fluxo, o atendimento continua no fluxo.
+  // O agente só é elegível quando nenhuma intenção correspondeu.
+  if (!resultadoIntencoes?.correspondeu) {
+    const resultadoAgente = await interceptarMensagemAgenteIa(input);
+    if (resultadoAgente) return resultadoAgente;
   }
 
   const inputPrincipal: AutomationEngineInput =
@@ -355,6 +368,25 @@ async function processarDepoisDasRotinas(
       ? String(resultado.execucaoId || "") || null
       : null;
 
+  // No primeiro contato ainda não existe automacao_execucoes, então a primeira
+  // tentativa de intenção naturalmente não encontra o fluxo. Assim que o motor
+  // cria a execução, reavaliamos a MESMA mensagem uma única vez. A intenção pode
+  // responder, mas a execução recém-criada continua ativa e o agente não assume.
+  let resultadoIntencaoAposInicio: Awaited<
+    ReturnType<typeof processarIntencoesMensagem>
+  > = null;
+  const execucaoCriadaAgora =
+    resultado &&
+    typeof resultado === "object" &&
+    "status" in resultado &&
+    String(resultado.status || "") === "execucao_criada";
+
+  if (!resultadoIntencoes?.correspondeu && execucaoCriadaAgora) {
+    resultadoIntencaoAposInicio = await processarIntencoesMensagem(
+      parametrosIntencoes(input)
+    );
+  }
+
   await continuarNosEspeciaisDepoisDoMotor({
     empresaId: inputPrincipal.empresaId,
     conversaId: inputPrincipal.conversaId,
@@ -367,6 +399,15 @@ async function processarDepoisDasRotinas(
     empresaId: inputPrincipal.empresaId,
     execucaoId: execucaoIdResultado,
   });
+
+  if (resultadoIntencaoAposInicio?.correspondeu) {
+    return {
+      ...(resultado && typeof resultado === "object" ? resultado : { ok: true }),
+      intencaoProcessadaAposInicio: true,
+      intencoesExecutadas: resultadoIntencaoAposInicio.intencoesExecutadas,
+      intencaoInterrompeuFluxo: resultadoIntencaoAposInicio.interrompeuFluxo,
+    };
+  }
 
   return resultado;
 }
