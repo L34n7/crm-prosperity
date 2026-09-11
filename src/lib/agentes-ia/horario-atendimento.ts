@@ -6,6 +6,70 @@ export type HorarioAtendimentoAgente = {
   timezone: string;
 };
 
+export const FUSOS_HORARIOS_AMERICA_LATINA = [
+  { value: "America/Argentina/Buenos_Aires", label: "Argentina — Buenos Aires" },
+  { value: "America/Argentina/Catamarca", label: "Argentina — Catamarca" },
+  { value: "America/Argentina/Cordoba", label: "Argentina — Córdoba" },
+  { value: "America/Argentina/Jujuy", label: "Argentina — Jujuy" },
+  { value: "America/Argentina/La_Rioja", label: "Argentina — La Rioja" },
+  { value: "America/Argentina/Mendoza", label: "Argentina — Mendoza" },
+  { value: "America/Argentina/Rio_Gallegos", label: "Argentina — Río Gallegos" },
+  { value: "America/Argentina/Salta", label: "Argentina — Salta" },
+  { value: "America/Argentina/San_Juan", label: "Argentina — San Juan" },
+  { value: "America/Argentina/San_Luis", label: "Argentina — San Luis" },
+  { value: "America/Argentina/Tucuman", label: "Argentina — Tucumán" },
+  { value: "America/Argentina/Ushuaia", label: "Argentina — Ushuaia" },
+  { value: "America/La_Paz", label: "Bolívia — La Paz" },
+  { value: "America/Belem", label: "Brasil — Belém" },
+  { value: "America/Boa_Vista", label: "Brasil — Boa Vista" },
+  { value: "America/Cuiaba", label: "Brasil — Cuiabá" },
+  { value: "America/Fortaleza", label: "Brasil — Fortaleza" },
+  { value: "America/Maceio", label: "Brasil — Maceió" },
+  { value: "America/Manaus", label: "Brasil — Manaus" },
+  { value: "America/Noronha", label: "Brasil — Fernando de Noronha" },
+  { value: "America/Porto_Velho", label: "Brasil — Porto Velho" },
+  { value: "America/Recife", label: "Brasil — Recife" },
+  { value: "America/Rio_Branco", label: "Brasil — Rio Branco" },
+  { value: "America/Bahia", label: "Brasil — Salvador / Bahia" },
+  { value: "America/Sao_Paulo", label: "Brasil — São Paulo / Brasília" },
+  { value: "America/Santiago", label: "Chile — Santiago" },
+  { value: "America/Punta_Arenas", label: "Chile — Punta Arenas" },
+  { value: "Pacific/Easter", label: "Chile — Ilha de Páscoa" },
+  { value: "America/Bogota", label: "Colômbia — Bogotá" },
+  { value: "America/Costa_Rica", label: "Costa Rica — San José" },
+  { value: "America/Havana", label: "Cuba — Havana" },
+  { value: "America/Santo_Domingo", label: "República Dominicana — Santo Domingo" },
+  { value: "America/Guayaquil", label: "Equador — Guayaquil / Quito" },
+  { value: "Pacific/Galapagos", label: "Equador — Galápagos" },
+  { value: "America/El_Salvador", label: "El Salvador — San Salvador" },
+  { value: "America/Cayenne", label: "Guiana Francesa — Cayenne" },
+  { value: "America/Guatemala", label: "Guatemala — Cidade da Guatemala" },
+  { value: "America/Port-au-Prince", label: "Haiti — Porto Príncipe" },
+  { value: "America/Tegucigalpa", label: "Honduras — Tegucigalpa" },
+  { value: "America/Bahia_Banderas", label: "México — Bahía de Banderas" },
+  { value: "America/Cancun", label: "México — Cancún" },
+  { value: "America/Chihuahua", label: "México — Chihuahua" },
+  { value: "America/Ciudad_Juarez", label: "México — Ciudad Juárez" },
+  { value: "America/Hermosillo", label: "México — Hermosillo" },
+  { value: "America/Matamoros", label: "México — Matamoros" },
+  { value: "America/Mazatlan", label: "México — Mazatlán" },
+  { value: "America/Merida", label: "México — Mérida" },
+  { value: "America/Mexico_City", label: "México — Cidade do México" },
+  { value: "America/Monterrey", label: "México — Monterrey" },
+  { value: "America/Tijuana", label: "México — Tijuana" },
+  { value: "America/Managua", label: "Nicarágua — Manágua" },
+  { value: "America/Panama", label: "Panamá — Cidade do Panamá" },
+  { value: "America/Asuncion", label: "Paraguai — Assunção" },
+  { value: "America/Lima", label: "Peru — Lima" },
+  { value: "America/Puerto_Rico", label: "Porto Rico — San Juan" },
+  { value: "America/Montevideo", label: "Uruguai — Montevidéu" },
+  { value: "America/Caracas", label: "Venezuela — Caracas" },
+] as const;
+
+const FUSOS_PERMITIDOS = new Set<string>(
+  FUSOS_HORARIOS_AMERICA_LATINA.map((item) => item.value)
+);
+
 export const HORARIO_ATENDIMENTO_PADRAO: HorarioAtendimentoAgente = {
   ativo: false,
   dias: [1, 2, 3, 4, 5],
@@ -22,12 +86,9 @@ function horarioValido(valor: unknown, fallback: string) {
 
 function timezoneValido(valor: unknown) {
   const timezone = String(valor || HORARIO_ATENDIMENTO_PADRAO.timezone).trim();
-  try {
-    new Intl.DateTimeFormat("pt-BR", { timeZone: timezone }).format(new Date());
-    return timezone;
-  } catch {
-    return HORARIO_ATENDIMENTO_PADRAO.timezone;
-  }
+  return FUSOS_PERMITIDOS.has(timezone)
+    ? timezone
+    : HORARIO_ATENDIMENTO_PADRAO.timezone;
 }
 
 export function normalizarHorarioAtendimento(valor: unknown): HorarioAtendimentoAgente {

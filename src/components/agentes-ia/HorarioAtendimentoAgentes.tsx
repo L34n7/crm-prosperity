@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  FUSOS_HORARIOS_AMERICA_LATINA,
   HORARIO_ATENDIMENTO_PADRAO,
   normalizarHorarioAtendimento,
   type HorarioAtendimentoAgente,
@@ -161,9 +162,21 @@ export default function HorarioAtendimentoAgentes() {
               Fim
               <input type="time" value={horario.fim} onChange={(event) => setHorario((atual) => ({ ...atual, fim: event.target.value }))} style={campo} />
             </label>
-            <label style={{ display: "grid", gap: 6, fontSize: 13, minWidth: 220 }}>
+            <label style={{ display: "grid", gap: 6, fontSize: 13, minWidth: 280 }}>
               Fuso horário
-              <input value={horario.timezone} onChange={(event) => setHorario((atual) => ({ ...atual, timezone: event.target.value }))} style={campo} />
+              <select
+                value={horario.timezone}
+                onChange={(event) =>
+                  setHorario((atual) => ({ ...atual, timezone: event.target.value }))
+                }
+                style={campo}
+              >
+                {FUSOS_HORARIOS_AMERICA_LATINA.map((fuso) => (
+                  <option key={fuso.value} value={fuso.value}>
+                    {fuso.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </div>
