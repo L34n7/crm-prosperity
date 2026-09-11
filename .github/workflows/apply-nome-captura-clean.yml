@@ -1,0 +1,54 @@
+name: Apply nome captura clean
+
+on:
+  push:
+    branches:
+      - tmp/nome-captura-disparos-clean
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/nome-captura-disparos-clean
+          fetch-depth: 0
+
+      - name: Apply source patch
+        shell: bash
+        run: |
+          curl -fsSL 'https://raw.githubusercontent.com/L34n7/crm-prosperity/feature/variaveis-nome-captura-disparos/.github/workflows/run-capture-patch-v7.yml' -o /tmp/v7.yml
+          python3 <<'PY'
+          from pathlib import Path
+          workflow = Path('/tmp/v7.yml').read_text()
+          lines = workflow.splitlines()
+          start = next(i for i, line in enumerate(lines) if line.strip() == "python3 <<'PY'")
+          end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == 'PY')
+          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines[start + 1:end]) + '\n'
+          exec(compile(code, 'capture-vars-v7', 'exec'))
+          PY
+
+      - name: Validate source patch
+        shell: bash
+        run: |
+          git diff --check
+          test "$(git diff --name-only | grep '^src/' | wc -l)" -eq 6
+          grep -q 'resolverNomeCapturaContato' src/lib/automacoes/variaveis-fixas-contato.ts
+          grep -q 'nome_captura' src/lib/whatsapp/disparo-agendado-variaveis.ts
+          grep -q 'extrairChaveNomeCaptura' src/lib/whatsapp/send-template-disparo.ts
+          grep -q 'extrairChaveNomeCaptura' src/app/api/whatsapp/disparo-individual/route.ts
+          grep -q 'chave: "nome_captura"' 'src/app/(private)/disparos-whatsapp/page.tsx'
+          grep -q 'variaveisFixasDisparoIndividual' 'src/app/(private)/conversas/page.tsx'
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          git config user.name 'CRM Prosperity Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/
+          git commit -m 'feat: adicionar variaveis de nome capturado aos disparos'
+          git push origin HEAD:tmp/nome-captura-disparos-clean
