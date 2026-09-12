@@ -2,7 +2,12 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
+import {
+  buscarSaldoTokensIa,
+  calcularCobrancaTokensIa,
+  extrairUsoTokensIa,
+  registrarUsoTokensIa,
+} from "@/lib/ia/tokens";
 import {
   carregarFerramentasNegocioAtivas,
   contextoPreconsultadoNegocio,
@@ -83,8 +88,8 @@ export async function POST(request: Request) {
     );
     const historico = normalizarHistorico(body.historico, limiteHistorico);
 
-    const saldo = await buscarSaldoTokensIa(empresaId);
-    if (saldo.limite !== null && Number(saldo.restantes || 0) <= 0) {
+    const saldoAntes = await buscarSaldoTokensIa(empresaId);
+    if (saldoAntes.limite !== null && Number(saldoAntes.restantes || 0) <= 0) {
       return NextResponse.json(
         { ok: false, error: "Saldo de tokens de IA esgotado para este período." },
         { status: 402 }
@@ -157,18 +162,16 @@ export async function POST(request: Request) {
       text: { verbosity: "low" },
     } as any);
 
-    const tokensInput = Number(response.usage?.input_tokens || 0);
-    const tokensOutput = Number(response.usage?.output_tokens || 0);
-    const tokensTotal = Number(response.usage?.total_tokens || 0);
+    const uso = extrairUsoTokensIa(response.usage);
+    const cobranca = calcularCobrancaTokensIa(modelo, uso);
+    let saldoApos = saldoAntes;
 
-    if (tokensTotal > 0) {
-      await registrarUsoTokensIa({
+    if (uso.totalTokens > 0) {
+      saldoApos = await registrarUsoTokensIa({
         empresaId,
         origem: "agente_ia_teste",
         modelo,
-        tokensTotal,
-        tokensInput,
-        tokensOutput,
+        uso,
         usuarioId: auth.usuario.id,
         metadata: {
           agente_id: id,
@@ -188,10 +191,12 @@ export async function POST(request: Request) {
       dados_negocio_usados: preconsultaNegocio.resultados,
       acoes_executadas: [],
       historico_usado: historico.length,
+      saldo: saldoApos,
       tokens: {
-        input: tokensInput,
-        output: tokensOutput,
-        total: tokensTotal,
+        input: Number(uso.inputTokens || 0),
+        output: Number(uso.outputTokens || 0),
+        total: cobranca.tokensEquivalentes,
+        fisicos_total: uso.totalTokens,
       },
     });
   } catch (error) {

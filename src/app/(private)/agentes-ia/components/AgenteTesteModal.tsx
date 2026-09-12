@@ -11,6 +11,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import styles from "./AgenteModals.module.css";
 
 type AgenteTeste = {
@@ -26,6 +27,7 @@ type Tokens = {
   input: number;
   output: number;
   total: number;
+  fisicos_total?: number;
 };
 
 type MensagemTeste = {
@@ -61,14 +63,16 @@ function estimarConsumo(agente: AgenteTeste, historico: MensagemTeste[], tamanho
     0
   );
 
-  // É apenas uma estimativa de UX. A chamada real também pode incluir
-  // conhecimentos e dados operacionais recuperados pelo backend.
-  const entradaAproximada = Math.ceil(
+  // Estimativa de UX em tokens Prosperity para o modelo econômico padrão.
+  // O valor real é calculado no backend com o uso devolvido pelo provider e
+  // pode variar por cache, resposta, conhecimentos e dados recuperados.
+  const entradaFisicaAproximada = Math.ceil(
     (contextoFixo + caracteresHistorico + Math.max(20, tamanhoMensagem)) / 4
   ) + 380;
-  const minimo = arredondar50(Math.max(650, entradaAproximada + 100));
+  const custoEntradaAproximado = entradaFisicaAproximada * 0.2;
+  const minimo = arredondar50(Math.max(100, custoEntradaAproximado + 30 * 1.2));
   const maximo = arredondar50(
-    Math.max(minimo + 250, entradaAproximada * 1.3 + 320)
+    Math.max(minimo + 150, custoEntradaAproximado * 1.35 + 180 * 1.2 + 60)
   );
   return { minimo, maximo };
 }
@@ -145,6 +149,10 @@ export default function AgenteTesteModal({ agente, onClose }: Props) {
         throw new Error(json.error || "Erro ao testar agente.");
       }
 
+      if (json.saldo) {
+        solicitarAtualizacaoSaldoTokensIa({ saldo: json.saldo });
+      }
+
       setMensagens((atuais) => [
         ...atuais,
         {
@@ -155,6 +163,7 @@ export default function AgenteTesteModal({ agente, onClose }: Props) {
             input: Number(json.tokens?.input || 0),
             output: Number(json.tokens?.output || 0),
             total: Number(json.tokens?.total || 0),
+            fisicos_total: Number(json.tokens?.fisicos_total || 0),
           },
         },
       ]);
@@ -197,10 +206,10 @@ export default function AgenteTesteModal({ agente, onClose }: Props) {
               <span className={styles.estimateIcon}><Coins size={20} /></span>
               <div>
                 <strong>
-                  Estimativa inicial: {estimativaInicial.minimo.toLocaleString("pt-BR")}–{estimativaInicial.maximo.toLocaleString("pt-BR")} tokens por resposta
+                  Estimativa inicial: {estimativaInicial.minimo.toLocaleString("pt-BR")}–{estimativaInicial.maximo.toLocaleString("pt-BR")} tokens Prosperity por resposta
                 </strong>
                 <p>
-                  A faixa considera a configuração atual do agente. O valor real pode variar conforme histórico, conhecimento recuperado e dados consultados.
+                  A faixa estima o que pode ser debitado do saldo. O valor real varia conforme histórico, resposta, conhecimento recuperado, cache e dados consultados.
                 </p>
               </div>
             </div>
@@ -208,7 +217,7 @@ export default function AgenteTesteModal({ agente, onClose }: Props) {
             <ul className={styles.infoList}>
               <li>cada mensagem enviada no teste pode gerar uma nova chamada de IA;</li>
               <li>quanto maior o histórico da conversa, maior tende a ser o consumo de entrada;</li>
-              <li>depois de cada resposta, o CRM mostra o consumo real daquela chamada e o total da sessão.</li>
+              <li>depois de cada resposta, o CRM mostra os tokens Prosperity realmente debitados e registrados no extrato.</li>
             </ul>
 
             <div className={styles.safeNote}>
@@ -239,7 +248,7 @@ export default function AgenteTesteModal({ agente, onClose }: Props) {
               <p>Conversa de teste · simulação de atendimento no WhatsApp</p>
               <div className={styles.chatHeaderMeta}>
                 <span className={styles.metaBadge}><CheckCircle2 size={12} /> Sem ações no CRM</span>
-                <span className={styles.metaBadge}><Coins size={12} /> {totalSessao.toLocaleString("pt-BR")} tokens na sessão</span>
+                <span className={styles.metaBadge}><Coins size={12} /> {totalSessao.toLocaleString("pt-BR")} tokens Prosperity na sessão</span>
               </div>
             </div>
           </div>
@@ -282,7 +291,7 @@ export default function AgenteTesteModal({ agente, onClose }: Props) {
                 <p>{item.content}</p>
                 <div className={styles.messageMeta}>
                   {item.role === "assistant" && item.tokens?.total ? (
-                    <span>{item.tokens.total.toLocaleString("pt-BR")} tokens</span>
+                    <span>{item.tokens.total.toLocaleString("pt-BR")} tokens cobrados</span>
                   ) : (
                     <span>{item.role === "user" ? "Você" : "IA"}</span>
                   )}
@@ -306,7 +315,7 @@ export default function AgenteTesteModal({ agente, onClose }: Props) {
         <div className={styles.composer}>
           <div className={styles.nextEstimate}>
             <Coins size={13} />
-            Próxima resposta: estimativa de {estimativaProxima.minimo.toLocaleString("pt-BR")}–{estimativaProxima.maximo.toLocaleString("pt-BR")} tokens
+            Próxima resposta: estimativa de {estimativaProxima.minimo.toLocaleString("pt-BR")}–{estimativaProxima.maximo.toLocaleString("pt-BR")} tokens Prosperity
           </div>
           <div className={styles.composerRow}>
             <textarea
