@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { processarPendenciaAgenteIa } from "./processar-pendencia-configurada";
+import { marcarConversaComoAtendimentoAgente } from "./estado-atendimento-conversa";
 import { calcularDebounceAdaptativo } from "./protecao-automacao-externa";
 import {
   calcularProximaAbertura,
@@ -76,33 +77,6 @@ async function protocoloAtivoDaConversa(empresaId: string, conversaId: string) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data?.id || null;
-}
-
-async function marcarConversaComoAtendimentoAgente(params: {
-  empresaId: string;
-  conversaId: string;
-  agenteId: string;
-  protocoloId?: string | null;
-}) {
-  const agora = new Date().toISOString();
-  const { error } = await supabaseAdmin
-    .from("conversas")
-    .update({
-      status: "bot",
-      bot_ativo: true,
-      aguardando_atendente: false,
-      origem_atendimento: "bot",
-      responsavel_id: null,
-      agente_ia_id: params.agenteId,
-      agente_ia_protocolo_id: params.protocoloId || null,
-      agente_ia_fallback_ativo: false,
-      closed_at: null,
-      updated_at: agora,
-    })
-    .eq("id", params.conversaId)
-    .eq("empresa_id", params.empresaId);
-
-  if (error) throw new Error(error.message);
 }
 
 export async function despacharMensagemParaAgente(params: {
