@@ -156,13 +156,6 @@ export async function despacharMensagemParaAgente(params: {
       return null;
     }
 
-    await marcarConversaComoAtendimentoAgente({
-      empresaId: params.input.empresaId,
-      conversaId: params.input.conversaId,
-      agenteId: params.agente.id,
-      protocoloId,
-    });
-
     const pendenciaId = (pendencia as PendenciaRow).id;
     const delayMs = Math.max(1_000, proximaAbertura.getTime() - Date.now());
     const publicou = await publicarPendenciaAgenteIaQstash(pendenciaId, delayMs);
@@ -173,10 +166,9 @@ export async function despacharMensagemParaAgente(params: {
       });
     }
 
-    // Fora do horário o agente fica agendado como fallback, mas não consome a
-    // mensagem agora. O motor de automações pode seguir e iniciar/continuar o
-    // fluxo correspondente. Se o fluxo responder, a política da pendência da
-    // IA cancela o processamento antes da próxima abertura.
+    // Fora do horário o agente fica agendado como fallback, mas não assume a
+    // conversa agora. O motor de automações pode seguir e respeitar também o
+    // horário configurado no fluxo correspondente.
     return null;
   }
 

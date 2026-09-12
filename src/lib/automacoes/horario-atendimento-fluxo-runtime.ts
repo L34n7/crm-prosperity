@@ -65,6 +65,21 @@ async function carregarFluxo(fluxoId: string, empresaId: string) {
   return data;
 }
 
+async function obterIntegracaoWhatsappDaConversa(input: AutomationEngineInput) {
+  const informada = String(input.integracaoWhatsappId || "").trim();
+  if (informada) return informada;
+
+  const { data, error } = await supabaseAdmin
+    .from("conversas")
+    .select("integracao_whatsapp_id")
+    .eq("id", input.conversaId)
+    .eq("empresa_id", input.empresaId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return String(data?.integracao_whatsapp_id || "").trim() || null;
+}
+
 async function resolverFluxoDaMensagem(input: AutomationEngineInput) {
   const { data: execucao, error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
@@ -85,6 +100,8 @@ async function resolverFluxoDaMensagem(input: AutomationEngineInput) {
     }
   }
 
+  const integracaoWhatsappId = await obterIntegracaoWhatsappDaConversa(input);
+
   const { data: fluxos, error: fluxosError } = await supabaseAdmin
     .from("automacao_fluxos")
     .select("id, fluxo_padrao, configuracao_json, status, created_at")
@@ -98,7 +115,7 @@ async function resolverFluxoDaMensagem(input: AutomationEngineInput) {
   const elegiveis = (fluxos || []).filter((fluxo) =>
     fluxoPermiteIntegracaoWhatsapp(
       fluxo.configuracao_json,
-      input.integracaoWhatsappId
+      integracaoWhatsappId
     )
   );
 
@@ -147,7 +164,11 @@ export async function interceptarMensagemForaHorarioFluxo(
   const mensagemId = String(input.mensagemId || "").trim();
   if (!mensagemId) return null;
 
-  const resolucao = await resolverFluxoDaMensagem(input);
+  const integracaoWhatsappId = await obterIntegracaoWhatsappDaConversa(input);
+  const inputResolvido = integracaoWhatsappId
+    ? { ...input, integracaoWhatsappId }
+    : input;
+  const resolucao = await resolverFluxoDaMensagem(inputResolvido);
   if (!resolucao) return null;
 
   const configuracao = resolucao.fluxo.configuracao_json || {};
@@ -206,7 +227,7 @@ export async function interceptarMensagemForaHorarioFluxo(
       executar_em: proximaAbertura.toISOString(),
       status: "pendente",
       payload_json: {
-        input,
+        input: inputResolvido,
         conversa_id: input.conversaId,
         mensagem_id: mensagemId,
         fluxo_id: resolucao.fluxo.id,
