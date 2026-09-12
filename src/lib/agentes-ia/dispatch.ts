@@ -78,6 +78,33 @@ async function protocoloAtivoDaConversa(empresaId: string, conversaId: string) {
   return data?.id || null;
 }
 
+async function marcarConversaComoAtendimentoAgente(params: {
+  empresaId: string;
+  conversaId: string;
+  agenteId: string;
+  protocoloId?: string | null;
+}) {
+  const agora = new Date().toISOString();
+  const { error } = await supabaseAdmin
+    .from("conversas")
+    .update({
+      status: "bot",
+      bot_ativo: true,
+      aguardando_atendente: false,
+      origem_atendimento: "bot",
+      responsavel_id: null,
+      agente_ia_id: params.agenteId,
+      agente_ia_protocolo_id: params.protocoloId || null,
+      agente_ia_fallback_ativo: false,
+      closed_at: null,
+      updated_at: agora,
+    })
+    .eq("id", params.conversaId)
+    .eq("empresa_id", params.empresaId);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function despacharMensagemParaAgente(params: {
   input: AutomationEngineInput;
   agente: AgenteDespacho;
@@ -87,34 +114,10 @@ export async function despacharMensagemParaAgente(params: {
   const mensagemId = String(params.input.mensagemId || "").trim() || null;
   if (!texto || !mensagemId) return null;
 
-  await cancelarFluxosConversacionaisAtivos(
-    params.input.empresaId,
-    params.input.conversaId
-  );
-
   const protocoloId = await protocoloAtivoDaConversa(
     params.input.empresaId,
     params.input.conversaId
   );
-  const agora = new Date().toISOString();
-
-  const { error: conversaError } = await supabaseAdmin
-    .from("conversas")
-    .update({
-      status: "bot",
-      bot_ativo: true,
-      aguardando_atendente: false,
-      origem_atendimento: "bot",
-      responsavel_id: null,
-      agente_ia_id: params.agente.id,
-      agente_ia_protocolo_id: protocoloId,
-      agente_ia_fallback_ativo: false,
-      closed_at: null,
-      updated_at: agora,
-    })
-    .eq("id", params.input.conversaId)
-    .eq("empresa_id", params.input.empresaId);
-  if (conversaError) throw new Error(conversaError.message);
 
   const { data: configuracaoAgente, error: configuracaoError } = await supabaseAdmin
     .from("agentes_ia")
@@ -132,11 +135,7 @@ export async function despacharMensagemParaAgente(params: {
         agenteId: params.agente.id,
         conversaId: params.input.conversaId,
       });
-      return {
-        ok: false,
-        status: "agente_ia_sem_proxima_abertura",
-        agenteId: params.agente.id,
-      };
+      return null;
     }
 
     const { data: pendencia, error: pendenciaError } = await supabaseAdmin.rpc(
@@ -157,6 +156,13 @@ export async function despacharMensagemParaAgente(params: {
       return null;
     }
 
+    await marcarConversaComoAtendimentoAgente({
+      empresaId: params.input.empresaId,
+      conversaId: params.input.conversaId,
+      agenteId: params.agente.id,
+      protocoloId,
+    });
+
     const pendenciaId = (pendencia as PendenciaRow).id;
     const delayMs = Math.max(1_000, proximaAbertura.getTime() - Date.now());
     const publicou = await publicarPendenciaAgenteIaQstash(pendenciaId, delayMs);
@@ -167,14 +173,24 @@ export async function despacharMensagemParaAgente(params: {
       });
     }
 
-    return {
-      ok: true,
-      status: "agente_ia_fora_horario_agendado",
-      agenteId: params.agente.id,
-      pendenciaId,
-      processarEm: proximaAbertura.toISOString(),
-    };
+    // Fora do horário o agente fica agendado como fallback, mas não consome a
+    // mensagem agora. O motor de automações pode seguir e iniciar/continuar o
+    // fluxo correspondente. Se o fluxo responder, a política da pendência da
+    // IA cancela o processamento antes da próxima abertura.
+    return null;
   }
+
+  await cancelarFluxosConversacionaisAtivos(
+    params.input.empresaId,
+    params.input.conversaId
+  );
+
+  await marcarConversaComoAtendimentoAgente({
+    empresaId: params.input.empresaId,
+    conversaId: params.input.conversaId,
+    agenteId: params.agente.id,
+    protocoloId,
+  });
 
   const debounceBaseMs = numeroInteiro(params.agente.debounce_ms, 1200, 250, 10000);
   const debounce = await calcularDebounceAdaptativo({
