@@ -199,12 +199,6 @@ export default function EditFlowModal({
             />
           )}
 
-          <ServiceHoursFields
-            value={horario}
-            onChange={setHorario}
-            disabled={carregandoHorario}
-          />
-
           <label className={styles.switchField}>
             <input
               type="checkbox"
@@ -346,6 +340,12 @@ export default function EditFlowModal({
             onQuantidadeBlur={onQuantidadeInatividadeBlur}
             onUnidadeChange={onUnidadeInatividadeChange}
             onMensagemChange={onMensagemInatividadeChange}
+          />
+
+          <ServiceHoursFields
+            value={horario}
+            onChange={setHorario}
+            disabled={carregandoHorario}
           />
         </div>
 

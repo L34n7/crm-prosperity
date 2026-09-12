@@ -147,8 +147,6 @@ export default function CreateFlowModal({
             />
           )}
 
-          <ServiceHoursFields value={horario} onChange={setHorario} />
-
           <InactivityFields
             quantidade={quantidadeInatividade}
             unidade={unidadeInatividade}
@@ -274,6 +272,8 @@ export default function CreateFlowModal({
               )}
             </div>
           )}
+
+          <ServiceHoursFields value={horario} onChange={setHorario} />
         </div>
 
         {erro && (
