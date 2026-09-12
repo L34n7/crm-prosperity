@@ -14,6 +14,26 @@ const MODELO_PADRAO = "gpt-5.6-luna";
 const MAX_RESULTADOS_CONHECIMENTO = 2;
 const MAX_CARACTERES_TRECHO = 850;
 
+type MensagemHistorico = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+function normalizarHistorico(valor: unknown, limite: number): MensagemHistorico[] {
+  if (!Array.isArray(valor)) return [];
+  return valor
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const obj = item as Record<string, unknown>;
+      const role = String(obj.role || "");
+      const content = String(obj.content || "").trim().slice(0, 1200);
+      if (!content || (role !== "user" && role !== "assistant")) return null;
+      return { role: role as MensagemHistorico["role"], content };
+    })
+    .filter((item): item is MensagemHistorico => Boolean(item))
+    .slice(-limite);
+}
+
 export async function POST(request: Request) {
   try {
     const auth = await getUsuarioContexto();
@@ -28,9 +48,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as { id?: string; mensagem?: string };
+    const body = (await request.json()) as {
+      id?: string;
+      mensagem?: string;
+      historico?: unknown;
+    };
     const id = String(body.id || "").trim();
-    const mensagem = String(body.mensagem || "").trim();
+    const mensagem = String(body.mensagem || "").trim().slice(0, 2000);
     if (!id || !mensagem) {
       return NextResponse.json(
         { ok: false, error: "Agente e mensagem são obrigatórios." },
@@ -38,19 +62,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: agente } = await supabaseAdmin
+    const { data: agente, error: agenteError } = await supabaseAdmin
       .from("agentes_ia")
-      .select("id, nome, modelo, prompt_sistema, tom_voz, instrucoes")
+      .select("id, nome, modelo, prompt_sistema, tom_voz, instrucoes, max_mensagens_contexto")
       .eq("empresa_id", empresaId)
       .eq("id", id)
       .neq("status", "arquivado")
       .maybeSingle();
+    if (agenteError) throw new Error(agenteError.message);
     if (!agente) {
       return NextResponse.json(
         { ok: false, error: "Agente não encontrado." },
         { status: 404 }
       );
     }
+
+    const limiteHistorico = Math.min(
+      40,
+      Math.max(4, Number(agente.max_mensagens_contexto || 6))
+    );
+    const historico = normalizarHistorico(body.historico, limiteHistorico);
 
     const saldo = await buscarSaldoTokensIa(empresaId);
     if (saldo.limite !== null && Number(saldo.restantes || 0) <= 0) {
@@ -92,7 +123,7 @@ export async function POST(request: Request) {
       agenteId: id,
       ferramentas: ferramentasNegocio,
       mensagem,
-      historico: [],
+      historico,
     });
     const contextoNegocio = contextoPreconsultadoNegocio(preconsultaNegocio);
 
@@ -101,7 +132,8 @@ export async function POST(request: Request) {
       agente.prompt_sistema || "",
       agente.tom_voz ? `Tom: ${agente.tom_voz}` : "",
       agente.instrucoes || "",
-      "Responda em português do Brasil, de forma curta.",
+      "Responda em português do Brasil, de forma curta e natural, como em uma conversa de WhatsApp.",
+      "Use o histórico recebido para manter continuidade e não repetir perguntas já respondidas.",
       "MODO DE TESTE: não execute nem prometa ações no CRM. Nunca crie pedido, reserva, agendamento, transferência ou alteração de dados.",
       "Para produto, estoque, preço, serviço ou imóvel, use apenas os dados atuais recuperados abaixo. Não invente valores nem disponibilidade.",
       base ? `Conhecimento recuperado:\n${base}` : "Nenhum conhecimento relevante foi recuperado.",
@@ -117,7 +149,10 @@ export async function POST(request: Request) {
     const response: any = await openai.responses.create({
       model: modelo,
       instructions,
-      input: [{ role: "user", content: mensagem }],
+      input: [
+        ...historico.map((item) => ({ role: item.role, content: item.content })),
+        { role: "user", content: mensagem },
+      ],
       reasoning: { effort: "none" },
       text: { verbosity: "low" },
     } as any);
@@ -141,6 +176,7 @@ export async function POST(request: Request) {
             (item) => item.ferramenta
           ),
           modo_teste_sem_acoes: true,
+          mensagens_contexto_teste: historico.length,
         },
       });
     }
@@ -151,6 +187,7 @@ export async function POST(request: Request) {
       conhecimentos_usados: conhecimentosCompactos,
       dados_negocio_usados: preconsultaNegocio.resultados,
       acoes_executadas: [],
+      historico_usado: historico.length,
       tokens: {
         input: tokensInput,
         output: tokensOutput,

@@ -25,6 +25,8 @@ import {
   type ContextoNichoFerramenta,
 } from "@/lib/agentes-ia/ferramentas-por-nicho";
 import HorarioAtendimentoEditor from "@/components/agentes-ia/HorarioAtendimentoEditor";
+import AgenteTesteModal from "./components/AgenteTesteModal";
+import ConhecimentoEditorModal from "./components/ConhecimentoEditorModal";
 import styles from "./page.module.css";
 
 type ModoAtendimento = "economico" | "geral";
@@ -456,9 +458,8 @@ export default function AgentesIaPage() {
     conteudo: "",
     palavras_chave: "",
   });
-  const [teste, setTeste] = useState("");
-  const [respostaTeste, setRespostaTeste] = useState("");
-  const [testando, setTestando] = useState(false);
+  const [conhecimentoEditando, setConhecimentoEditando] = useState<Conhecimento | null>(null);
+  const [testeAberto, setTesteAberto] = useState(false);
 
   const selecionado = useMemo(
     () => agentes.find((agente) => agente.id === selecionadoId) || null,
@@ -576,8 +577,8 @@ export default function AgentesIaPage() {
   useEffect(() => {
     if (selecionado) {
       setEditor(normalizarAgente(selecionado, integracoes, nichoEmpresa));
-      setRespostaTeste("");
-      setTeste("");
+      setConhecimentoEditando(null);
+      setTesteAberto(false);
       setBuscaCaracteristica("");
       setSeletorCaracteristicasAberto(false);
     }
@@ -1003,25 +1004,26 @@ export default function AgentesIaPage() {
     }
   }
 
-  async function testar() {
-    if (!editor || !teste.trim()) return;
-    setTestando(true);
+  function aplicarConhecimentoAtualizado(conhecimento: Conhecimento) {
+    if (!editor) return;
+    const agenteId = editor.id;
+    const atualizarLista = (itens: Conhecimento[]) =>
+      itens.map((item) => (item.id === conhecimento.id ? conhecimento : item));
+
+    setEditor({
+      ...editor,
+      conhecimentos: atualizarLista(editor.conhecimentos || []),
+    });
+    setAgentes((atuais) =>
+      atuais.map((agente) =>
+        agente.id === agenteId
+          ? { ...agente, conhecimentos: atualizarLista(agente.conhecimentos || []) }
+          : agente
+      )
+    );
+    setConhecimentoEditando(null);
     setErro("");
-    setRespostaTeste("");
-    try {
-      const res = await fetch("/api/agentes-ia/testar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editor.id, mensagem: teste }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || "Erro ao testar agente.");
-      setRespostaTeste(json.resposta || "Sem resposta.");
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao testar agente.");
-    } finally {
-      setTestando(false);
-    }
+    setSucesso("Conhecimento atualizado.");
   }
 
   if (carregando) {
@@ -2110,13 +2112,23 @@ export default function AgentesIaPage() {
                             {item.categoria && <small>{item.categoria}</small>}
                             <p>{item.conteudo}</p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => excluirConhecimento(item.id)}
-                            title="Excluir"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <button
+                              type="button"
+                              onClick={() => setConhecimentoEditando(item)}
+                              title="Editar conhecimento"
+                              style={{ width: "auto", padding: "0 9px", fontSize: 12, fontWeight: 750 }}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => excluirConhecimento(item.id)}
+                              title="Excluir"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </article>
                       ))}
                       {!editor.conhecimentos?.length && (
@@ -2130,35 +2142,20 @@ export default function AgentesIaPage() {
                       <Sparkles size={18} />
                       <div>
                         <h3>Testar agente</h3>
-                        <p>Simula uma resposta sem executar ações no CRM.</p>
+                        <p>Converse com a IA em uma simulação semelhante ao WhatsApp.</p>
                       </div>
                     </div>
                     <div className={styles.testBox}>
-                      <textarea
-                        rows={5}
-                        value={teste}
-                        onChange={(event) => setTeste(event.target.value)}
-                        placeholder="Ex.: Vocês atendem sábado?"
-                      />
+                      <div className={styles.scopeHint}>
+                        O teste mantém o histórico da sessão para validar continuidade, mostra o consumo real de tokens após cada resposta e não executa ações no CRM.
+                      </div>
                       <button
                         type="button"
                         className={styles.secondaryButton}
-                        onClick={testar}
-                        disabled={testando || !teste.trim()}
+                        onClick={() => setTesteAberto(true)}
                       >
-                        {testando ? (
-                          <Loader2 size={16} className={styles.spin} />
-                        ) : (
-                          <Sparkles size={16} />
-                        )}
-                        Testar resposta
+                        <Sparkles size={16} /> Testar conversa
                       </button>
-                      {respostaTeste && (
-                        <div className={styles.testAnswer}>
-                          <span>Resposta do agente</span>
-                          <p>{respostaTeste}</p>
-                        </div>
-                      )}
                     </div>
                   </section>
                 </div>
@@ -2214,6 +2211,29 @@ export default function AgentesIaPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {conhecimentoEditando && editor && (
+        <ConhecimentoEditorModal
+          agenteId={editor.id}
+          conhecimento={conhecimentoEditando}
+          onClose={() => setConhecimentoEditando(null)}
+          onSaved={aplicarConhecimentoAtualizado}
+        />
+      )}
+
+      {testeAberto && editor && (
+        <AgenteTesteModal
+          agente={{
+            id: editor.id,
+            nome: editor.nome,
+            prompt_sistema: editor.prompt_sistema,
+            tom_voz: editor.tom_voz,
+            instrucoes: editor.instrucoes,
+            max_mensagens_contexto: editor.max_mensagens_contexto,
+          }}
+          onClose={() => setTesteAberto(false)}
+        />
       )}
     </>
   );
