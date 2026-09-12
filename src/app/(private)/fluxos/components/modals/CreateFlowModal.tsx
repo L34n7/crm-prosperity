@@ -1,5 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import {
+  HORARIO_ATENDIMENTO_FLUXO_PADRAO,
+  type HorarioAtendimentoFluxo,
+} from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import type {
   EscopoIntegracoesModo,
   GatilhoFluxo,
@@ -7,6 +12,7 @@ import type {
 } from "../../types";
 import InactivityFields from "../flow-settings/InactivityFields";
 import IntegrationScopeFields from "../flow-settings/IntegrationScopeFields";
+import ServiceHoursFields from "../flow-settings/ServiceHoursFields";
 import styles from "../../fluxos.module.css";
 
 type GatilhoNovoFluxo = {
@@ -48,7 +54,7 @@ type CreateFlowModalProps = {
   onAlternarGatilho: (index: number) => void;
   onRemoverGatilho: (index: number) => void;
   onCancelar: () => void;
-  onCriar: () => void;
+  onCriar: (horario: HorarioAtendimentoFluxo) => void;
 };
 
 export default function CreateFlowModal({
@@ -86,6 +92,11 @@ export default function CreateFlowModal({
   onCancelar,
   onCriar,
 }: CreateFlowModalProps) {
+  const [horario, setHorario] = useState<HorarioAtendimentoFluxo>(() => ({
+    ...HORARIO_ATENDIMENTO_FLUXO_PADRAO,
+    dias: [...HORARIO_ATENDIMENTO_FLUXO_PADRAO.dias],
+  }));
+
   return (
     <div className={styles.modalOverlay}>
       <div className={styles.modalCard}>
@@ -135,6 +146,8 @@ export default function CreateFlowModal({
               onAlternarIntegracao={onAlternarIntegracao}
             />
           )}
+
+          <ServiceHoursFields value={horario} onChange={setHorario} />
 
           <InactivityFields
             quantidade={quantidadeInatividade}
@@ -280,7 +293,7 @@ export default function CreateFlowModal({
           <button
             type="button"
             className={styles.primaryButton}
-            onClick={onCriar}
+            onClick={() => onCriar(horario)}
           >
             Criar fluxo
           </button>

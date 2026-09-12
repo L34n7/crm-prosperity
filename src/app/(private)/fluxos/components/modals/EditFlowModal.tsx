@@ -1,5 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  HORARIO_ATENDIMENTO_FLUXO_PADRAO,
+  normalizarHorarioAtendimentoFluxo,
+  type HorarioAtendimentoFluxo,
+} from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import type {
   EscopoIntegracoesModo,
   GatilhoFluxo,
@@ -7,6 +14,7 @@ import type {
 } from "../../types";
 import InactivityFields from "../flow-settings/InactivityFields";
 import IntegrationScopeFields from "../flow-settings/IntegrationScopeFields";
+import ServiceHoursFields from "../flow-settings/ServiceHoursFields";
 import styles from "../../fluxos.module.css";
 
 type EditFlowModalProps = {
@@ -44,7 +52,7 @@ type EditFlowModalProps = {
   onAlternarGatilho: (gatilho: GatilhoFluxo) => void;
   onRemoverGatilho: (gatilhoId: string) => void;
   onCancelar: () => void;
-  onSalvar: () => void;
+  onSalvar: (horario: HorarioAtendimentoFluxo) => void;
 };
 
 export default function EditFlowModal({
@@ -84,6 +92,61 @@ export default function EditFlowModal({
   onCancelar,
   onSalvar,
 }: EditFlowModalProps) {
+  const searchParams = useSearchParams();
+  const fluxoId = searchParams.get("fluxo") || "";
+  const [horario, setHorario] = useState<HorarioAtendimentoFluxo>(() => ({
+    ...HORARIO_ATENDIMENTO_FLUXO_PADRAO,
+    dias: [...HORARIO_ATENDIMENTO_FLUXO_PADRAO.dias],
+  }));
+  const [carregandoHorario, setCarregandoHorario] = useState(true);
+  const [erroHorario, setErroHorario] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function carregarHorario() {
+      if (!fluxoId) {
+        setErroHorario("Não foi possível identificar o fluxo para carregar o horário.");
+        setCarregandoHorario(false);
+        return;
+      }
+
+      setCarregandoHorario(true);
+      setErroHorario("");
+
+      try {
+        const response = await fetch(`/api/automacoes/${fluxoId}`, {
+          signal: controller.signal,
+        });
+        const json = await response.json();
+
+        if (!response.ok || !json.ok) {
+          throw new Error(json.error || "Erro ao carregar horário do fluxo.");
+        }
+
+        setHorario(
+          normalizarHorarioAtendimentoFluxo(
+            json.fluxo?.configuracao_json?.horario_atendimento
+          )
+        );
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setErroHorario(
+          error instanceof Error
+            ? error.message
+            : "Erro ao carregar horário do fluxo."
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setCarregandoHorario(false);
+        }
+      }
+    }
+
+    void carregarHorario();
+    return () => controller.abort();
+  }, [fluxoId]);
+
   return (
     <div className={styles.modalOverlay}>
       <div className={styles.modalCard}>
@@ -104,6 +167,7 @@ export default function EditFlowModal({
 
         <div className={styles.modalBody}>
           {erro && <div className={styles.errorAlert}>{erro}</div>}
+          {erroHorario && <div className={styles.errorAlert}>{erroHorario}</div>}
 
           <label className={styles.field}>
             <span className={styles.label}>Nome</span>
@@ -134,6 +198,12 @@ export default function EditFlowModal({
               onAlternarIntegracao={onAlternarIntegracao}
             />
           )}
+
+          <ServiceHoursFields
+            value={horario}
+            onChange={setHorario}
+            disabled={carregandoHorario}
+          />
 
           <label className={styles.switchField}>
             <input
@@ -292,7 +362,8 @@ export default function EditFlowModal({
             <button
               type="button"
               className={styles.primaryButton}
-              onClick={onSalvar}
+              disabled={carregandoHorario || Boolean(erroHorario)}
+              onClick={() => onSalvar(horario)}
             >
               Salvar alterações
             </button>

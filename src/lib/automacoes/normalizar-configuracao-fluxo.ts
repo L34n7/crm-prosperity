@@ -1,9 +1,28 @@
+import {
+  FUSOS_HORARIOS_AMERICA_LATINA,
+  HORARIO_ATENDIMENTO_PADRAO,
+  calcularProximaAbertura,
+  estaDentroHorarioAtendimento,
+  normalizarHorarioAtendimento,
+  type HorarioAtendimentoAgente,
+} from "@/lib/agentes-ia/horario-atendimento";
+
 type UnidadeEncerramentoInatividade = "minutos" | "horas";
 type ModoEscopoIntegracoesWhatsapp = "todas" | "selecionadas";
+
+export type HorarioAtendimentoFluxo = HorarioAtendimentoAgente;
 
 export type EscopoIntegracoesWhatsappFluxo = {
   modo: ModoEscopoIntegracoesWhatsapp;
   ids: string[];
+};
+
+export const FUSOS_HORARIOS_FLUXO_AMERICA_LATINA =
+  FUSOS_HORARIOS_AMERICA_LATINA;
+
+export const HORARIO_ATENDIMENTO_FLUXO_PADRAO: HorarioAtendimentoFluxo = {
+  ...HORARIO_ATENDIMENTO_PADRAO,
+  dias: [...HORARIO_ATENDIMENTO_PADRAO.dias],
 };
 
 export const MENSAGEM_ENCERRAMENTO_INATIVIDADE_PADRAO =
@@ -32,6 +51,50 @@ function normalizarIdsIntegracoes(valor: unknown) {
       : [];
 
   return Array.from(new Set(ids.filter(Boolean)));
+}
+
+export function normalizarHorarioAtendimentoFluxo(
+  valor: unknown
+): HorarioAtendimentoFluxo {
+  return normalizarHorarioAtendimento(valor);
+}
+
+export function obterHorarioAtendimentoFluxo(
+  configuracao: unknown
+): HorarioAtendimentoFluxo {
+  const config = ehObjetoSimples(configuracao) ? configuracao : {};
+  return normalizarHorarioAtendimentoFluxo(config.horario_atendimento);
+}
+
+export function fluxoEstaDentroHorarioAtendimento(
+  configuracao: unknown,
+  agora = new Date()
+) {
+  const horario = obterHorarioAtendimentoFluxo(configuracao);
+  return !horario.ativo || estaDentroHorarioAtendimento(horario, agora);
+}
+
+export function calcularProximaAberturaFluxo(
+  configuracao: unknown,
+  agora = new Date()
+) {
+  const horario = obterHorarioAtendimentoFluxo(configuracao);
+  if (!horario.ativo) return null;
+  return calcularProximaAbertura(horario, agora);
+}
+
+export function validarHorarioAtendimentoFluxo(valor: unknown) {
+  const horario = normalizarHorarioAtendimentoFluxo(valor);
+
+  if (!horario.ativo) return null;
+  if (!horario.dias.length) {
+    return "Selecione pelo menos um dia de atendimento.";
+  }
+  if (horario.inicio === horario.fim) {
+    return "O horário inicial e final precisam ser diferentes.";
+  }
+
+  return null;
 }
 
 export function normalizarEscopoIntegracoesWhatsappFluxo(
@@ -121,6 +184,9 @@ export function normalizarConfiguracaoFluxo(configuracao: unknown) {
     integracoes_whatsapp: normalizarEscopoIntegracoesWhatsappFluxo(
       configuracaoBase
     ),
+    horario_atendimento: normalizarHorarioAtendimentoFluxo(
+      configuracaoBase.horario_atendimento
+    ),
     encerramento_inatividade: {
       ...encerramentoBase,
       ativo: true,
@@ -135,11 +201,8 @@ export function obterConfiguracaoEncerramentoInatividade(
   configuracao: unknown
 ) {
   const configuracaoNormalizada = normalizarConfiguracaoFluxo(configuracao);
-  const encerramento =
-    configuracaoNormalizada.encerramento_inatividade;
-  const unidade = normalizarUnidadeEncerramento(
-    encerramento.tempo_unidade
-  );
+  const encerramento = configuracaoNormalizada.encerramento_inatividade;
+  const unidade = normalizarUnidadeEncerramento(encerramento.tempo_unidade);
   const quantidade = normalizarQuantidadeEncerramento(
     encerramento.tempo_quantidade,
     unidade

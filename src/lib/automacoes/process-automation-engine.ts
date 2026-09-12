@@ -19,6 +19,15 @@ import {
   deferirMensagemSeFluxoRodando,
   processarJobArbitragemHibrida,
 } from "./arbitragem-hibrida-fila";
+import {
+  finalizarAgendamentoHorarioFluxo,
+  interceptarMensagemForaHorarioFluxo,
+  listarAgendamentosHorarioFluxoVencidos,
+  obterTimeoutSemRespostaPorId,
+  prepararAgendamentoHorarioFluxo,
+  reagendarFilaProcessamentoAutoSeForaHorario,
+  reagendarTimeoutSemRespostaSeForaHorario,
+} from "./horario-atendimento-fluxo-runtime";
 
 export * from "./process-automation-engine-agenda";
 
@@ -67,8 +76,6 @@ async function ignorarMensagemTemporalmenteInvalida(
 ) {
   const mensagemId = String(input.mensagemId || "").trim();
 
-  // Chamadas internas do motor que não vieram de uma mensagem persistida
-  // continuam com o comportamento atual.
   if (!mensagemId) return null;
 
   const { data: mensagem, error: mensagemError } = await supabaseAdmin
@@ -184,8 +191,6 @@ async function tentarPriorizarPreferenciaHorario(input: AutomationEngineInput) {
   );
   const preferencia = interpretacao.preferencia;
 
-  // Expressões completas têm prioridade sobre o horário isolado contido nelas.
-  // Ex.: "depois das 16hr" não pode virar "às 16:00".
   if (
     !preferencia ||
     preferencia.tipo === "exato" ||
@@ -305,15 +310,16 @@ function parametrosIntencoes(input: AutomationEngineInput) {
 
 async function processarDepoisDasRotinas(
   input: AutomationEngineInput,
-  opcoes?: { permitirDiferimento?: boolean }
+  opcoes?: {
+    permitirDiferimento?: boolean;
+    ignorarHorarioFluxo?: boolean;
+  }
 ) {
   if (opcoes?.permitirDiferimento !== false) {
     const resultadoDiferimento = await deferirMensagemSeFluxoRodando(input);
     if (resultadoDiferimento) return resultadoDiferimento;
   }
 
-  // Intenções do fluxo têm prioridade sobre o agente Econômico. Se uma
-  // intenção resolver a mensagem, o agente não assume nem cancela o fluxo.
   const resultadoIntencoes = await processarIntencoesMensagem(
     parametrosIntencoes(input)
   );
@@ -329,9 +335,6 @@ async function processarDepoisDasRotinas(
     };
   }
 
-  // Mesmo quando a IA de intenções identifica uma intenção junto com uma
-  // resposta que também deve seguir no fluxo, o atendimento continua no fluxo.
-  // O agente só é elegível quando nenhuma intenção correspondeu.
   if (!resultadoIntencoes?.correspondeu) {
     const resultadoAgente = await interceptarMensagemAgenteIa(input);
     if (resultadoAgente) return resultadoAgente;
@@ -342,6 +345,13 @@ async function processarDepoisDasRotinas(
     resultadoIntencoes.mensagemFluxo !== String(input.mensagemTexto || "")
       ? { ...input, mensagemTexto: resultadoIntencoes.mensagemFluxo }
       : input;
+
+  if (!opcoes?.ignorarHorarioFluxo) {
+    const resultadoHorario = await interceptarMensagemForaHorarioFluxo(
+      inputPrincipal
+    );
+    if (resultadoHorario) return resultadoHorario;
+  }
 
   const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(inputPrincipal);
 
@@ -368,10 +378,6 @@ async function processarDepoisDasRotinas(
       ? String(resultado.execucaoId || "") || null
       : null;
 
-  // No primeiro contato ainda não existe automacao_execucoes, então a primeira
-  // tentativa de intenção naturalmente não encontra o fluxo. Assim que o motor
-  // cria a execução, reavaliamos a MESMA mensagem uma única vez. A intenção pode
-  // responder, mas a execução recém-criada continua ativa e o agente não assume.
   let resultadoIntencaoAposInicio: Awaited<
     ReturnType<typeof processarIntencoesMensagem>
   > = null;
@@ -446,13 +452,55 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
 }
 
 export async function processarFilaProcessamentoAutoPorId(jobId: string) {
+  const preparacaoHorario = await prepararAgendamentoHorarioFluxo(jobId);
+
+  if (preparacaoHorario.encontrado) {
+    if (!preparacaoHorario.pronto) {
+      return preparacaoHorario.resultado;
+    }
+
+    try {
+      const resultado = await processarDepoisDasRotinas(
+        preparacaoHorario.input,
+        { ignorarHorarioFluxo: true }
+      );
+      await finalizarAgendamentoHorarioFluxo(
+        preparacaoHorario.agendamentoId,
+        true
+      );
+
+      return {
+        ok: true,
+        processado: true,
+        motivo: "fluxo_retomado_no_horario",
+        resultado,
+      };
+    } catch (error) {
+      await finalizarAgendamentoHorarioFluxo(
+        preparacaoHorario.agendamentoId,
+        false,
+        error
+      );
+      throw error;
+    }
+  }
+
+  const timeout = await obterTimeoutSemRespostaPorId(jobId);
+  if (timeout?.status === "pendente") {
+    return processarTimeoutSemRespostaAgendado({
+      empresaId: timeout.empresa_id,
+      agendamentoId: timeout.id,
+    });
+  }
+
+  const reagendadoPorHorario =
+    await reagendarFilaProcessamentoAutoSeForaHorario(jobId);
+  if (reagendadoPorHorario) return reagendadoPorHorario;
+
   const resultadoArbitragem = await processarJobArbitragemHibrida({
     jobId,
     processar: async (inputReavaliado, contexto) => {
       if (contexto.fluxoAindaRodando) {
-        // Nunca permitimos o Agente assumir enquanto o Fluxo ainda esta
-        // executando. A mensagem permanece persistida e a fila reavalia
-        // depois, evitando duas respostas concorrentes.
         return {
           acao: "adiar" as const,
           motivo: "fluxo_ainda_rodando",
@@ -493,13 +541,16 @@ export async function processarFilaProcessamentoAutoPorId(jobId: string) {
 }
 
 export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
-  const { data: jobs, error } = await supabaseAdmin
-    .from("fila_processamento_auto")
-    .select("id")
-    .eq("status", "pendente")
-    .lte("executar_em", new Date().toISOString())
-    .order("executar_em", { ascending: true })
-    .limit(limite);
+  const [{ data: jobs, error }, agendamentosHorario] = await Promise.all([
+    supabaseAdmin
+      .from("fila_processamento_auto")
+      .select("id")
+      .eq("status", "pendente")
+      .lte("executar_em", new Date().toISOString())
+      .order("executar_em", { ascending: true })
+      .limit(limite),
+    listarAgendamentosHorarioFluxoVencidos(limite),
+  ]);
 
   if (error) {
     throw new Error(
@@ -507,13 +558,17 @@ export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
     );
   }
 
+  const ids = Array.from(
+    new Set([...(jobs || []).map((job) => job.id), ...agendamentosHorario.map((item) => item.id)])
+  ).slice(0, limite);
+
   let processados = 0;
   let erros = 0;
   let ignorados = 0;
 
-  for (const job of jobs || []) {
+  for (const jobId of ids) {
     try {
-      const resultado = await processarFilaProcessamentoAutoPorId(job.id);
+      const resultado = await processarFilaProcessamentoAutoPorId(jobId);
       const resumo = resultado as {
         processado?: unknown;
         ignorado?: unknown;
@@ -528,14 +583,14 @@ export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
     } catch (errorJob) {
       erros += 1;
       console.error("[FILA AUTO] Erro no cron fallback:", {
-        jobId: job.id,
+        jobId,
         erro: errorJob,
       });
     }
   }
 
   return {
-    encontrados: jobs?.length || 0,
+    encontrados: ids.length,
     processados,
     ignorados,
     erros,
@@ -545,6 +600,10 @@ export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
 export async function processarTimeoutSemRespostaAgendado(
   params: TimeoutSemRespostaParams
 ) {
+  const reagendadoPorHorario =
+    await reagendarTimeoutSemRespostaSeForaHorario(params);
+  if (reagendadoPorHorario) return reagendadoPorHorario;
+
   const resultado = await processarTimeoutSemRespostaAgendadoBase(params);
 
   const { data: agendamento } = await supabaseAdmin

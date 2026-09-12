@@ -8,6 +8,11 @@ import {
   type SetStateAction,
 } from "react";
 import {
+  normalizarHorarioAtendimentoFluxo,
+  validarHorarioAtendimentoFluxo,
+  type HorarioAtendimentoFluxo,
+} from "@/lib/automacoes/normalizar-configuracao-fluxo";
+import {
   escoposIntegracaoConflitam,
   montarEscopoIntegracoesFluxo,
   normalizarEscopoIntegracoesFluxo,
@@ -221,7 +226,7 @@ export default function useFluxoForm({
     setAbrirCriacao(false);
   }, [onErroCriacao]);
 
-  const criarFluxoRapido = useCallback(async () => {
+  const criarFluxoRapido = useCallback(async (horarioAtendimento: HorarioAtendimentoFluxo) => {
     try {
       onClearError();
       onErroEdicao("");
@@ -232,6 +237,15 @@ export default function useFluxoForm({
 
       if (!nome) {
         onErroCriacao("Informe o nome do fluxo.");
+        return;
+      }
+
+      const horarioNormalizado = normalizarHorarioAtendimentoFluxo(
+        horarioAtendimento
+      );
+      const erroHorario = validarHorarioAtendimentoFluxo(horarioNormalizado);
+      if (erroHorario) {
+        onErroCriacao(erroHorario);
         return;
       }
 
@@ -247,18 +261,13 @@ export default function useFluxoForm({
         return;
       }
 
-      const quantidadeInformada = Number(
-        encerrarInatividadeQuantidade || 0
-      );
+      const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
       const segundosInatividade =
         encerrarInatividadeUnidade === "horas"
           ? quantidadeInformada * 60 * 60
           : quantidadeInformada * 60;
 
-      if (
-        !Number.isFinite(segundosInatividade) ||
-        quantidadeInformada <= 0
-      ) {
+      if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
         onErroCriacao(
           "Informe um tempo válido para o encerramento por inatividade."
         );
@@ -291,9 +300,7 @@ export default function useFluxoForm({
         novoFluxoEscopoIntegracoesModo === "selecionadas" &&
         escopoIntegracoes.ids.length === 0
       ) {
-        onErroCriacao(
-          "Selecione pelo menos uma integração WhatsApp."
-        );
+        onErroCriacao("Selecione pelo menos uma integração WhatsApp.");
         return;
       }
 
@@ -316,6 +323,7 @@ export default function useFluxoForm({
               })),
           configuracao_json: {
             integracoes_whatsapp: escopoIntegracoes,
+            horario_atendimento: horarioNormalizado,
             encerramento_inatividade: {
               ativo: true,
               tempo_quantidade: quantidadeInformada,
@@ -383,16 +391,11 @@ export default function useFluxoForm({
       const fluxoParaEditar = fluxoAlvo || fluxoSelecionado;
       if (!fluxoParaEditar) return;
 
-    if (fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()) {
-      onErroEdicao(
-        "Já existe outro fluxo padrão cadastrado. Desmarque o fluxo padrão atual antes de definir este fluxo como padrão."
-      );
-      return;
-    }
-
       onErroEdicao("");
       onClearError();
       setFluxoEmEdicao(fluxoParaEditar);
+      setFluxoSelecionado(fluxoParaEditar);
+      navegarParaFluxo(fluxoParaEditar.id);
       setEditandoFluxo(true);
       setNomeFluxoEdicao(fluxoParaEditar.nome || "");
       setDescricaoFluxoEdicao(fluxoParaEditar.descricao || "");
@@ -410,9 +413,7 @@ export default function useFluxoForm({
         unidadeEncerramento === "minutos" ? 1380 : 23;
 
       setEncerrarInatividadeQuantidade(
-        String(
-          encerramento.tempo_quantidade || quantidadePadraoEncerramento
-        )
+        String(encerramento.tempo_quantidade || quantidadePadraoEncerramento)
       );
       setEncerrarInatividadeUnidade(unidadeEncerramento);
       setEncerrarInatividadeMensagem(
@@ -430,12 +431,12 @@ export default function useFluxoForm({
     [
       carregarGatilhosFluxo,
       fluxoSelecionado,
+      navegarParaFluxo,
       onClearError,
-      resetarNovoGatilho,
-      setGatilhosFluxo,
-      existeOutroFluxoPadraoNaEmpresa,
-      fluxoPadraoEdicao,
       onErroEdicao,
+      resetarNovoGatilho,
+      setFluxoSelecionado,
+      setGatilhosFluxo,
     ]
   );
 
@@ -445,22 +446,26 @@ export default function useFluxoForm({
     setFluxoEmEdicao(null);
   }, [onErroEdicao]);
 
-  const salvarEdicaoFluxo = useCallback(async () => {
+  const salvarEdicaoFluxo = useCallback(async (horarioAtendimento: HorarioAtendimentoFluxo) => {
     const fluxoParaEditar = obterFluxoAlvoEdicao();
     if (!fluxoParaEditar) return;
 
-    const quantidadeInformada = Number(
-      encerrarInatividadeQuantidade || 0
+    const horarioNormalizado = normalizarHorarioAtendimentoFluxo(
+      horarioAtendimento
     );
+    const erroHorario = validarHorarioAtendimentoFluxo(horarioNormalizado);
+    if (erroHorario) {
+      onErroEdicao(erroHorario);
+      return;
+    }
+
+    const quantidadeInformada = Number(encerrarInatividadeQuantidade || 0);
     const segundosInatividade =
       encerrarInatividadeUnidade === "horas"
         ? quantidadeInformada * 60 * 60
         : quantidadeInformada * 60;
 
-    if (
-      !Number.isFinite(segundosInatividade) ||
-      quantidadeInformada <= 0
-    ) {
+    if (!Number.isFinite(segundosInatividade) || quantidadeInformada <= 0) {
       onErroEdicao(
         "Informe um tempo válido para o encerramento por inatividade."
       );
@@ -495,9 +500,7 @@ export default function useFluxoForm({
       fluxoEscopoIntegracoesModoEdicao === "selecionadas" &&
       escopoIntegracoes.ids.length === 0
     ) {
-      onErroEdicao(
-        "Selecione pelo menos uma integração WhatsApp."
-      );
+      onErroEdicao("Selecione pelo menos uma integração WhatsApp.");
       return;
     }
 
@@ -516,6 +519,7 @@ export default function useFluxoForm({
           configuracao_json: {
             ...(fluxoParaEditar.configuracao_json || {}),
             integracoes_whatsapp: escopoIntegracoes,
+            horario_atendimento: horarioNormalizado,
             encerramento_inatividade: {
               ativo: true,
               tempo_quantidade: quantidadeInformada,
