@@ -30,6 +30,7 @@ import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import { useHeaderUser } from "@/components/header-user-context";
 import { createClient } from "@/lib/supabase/client";
+import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import { solicitarAtualizacaoFeedbackAgendasHeader } from "@/lib/header-summary/events";
 import AgendaAutomationSettings, {
   automationCardsFromRules,
@@ -1007,8 +1008,37 @@ function Page() {
             "Lembrete adicional pelo WhatsApp: confirme o uso do template de Marketing antes de salvar.",
           );
       }
+
+      let telefoneCliente = normalizarTelefoneBrasilParaWhatsApp(
+        form.telefone_cliente,
+      );
+      let contatoId = form.contato_id;
+
+      if (!form.id && telefoneCliente) {
+        const contactResponse = await fetch("/api/agendas/resolver-contato", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            telefone: telefoneCliente,
+            nome: form.nome_cliente,
+            email: form.email_cliente,
+          }),
+        });
+        const contactData = await contactResponse.json();
+        if (!contactResponse.ok || !contactData?.ok || !contactData?.contato?.id) {
+          throw Error(
+            contactData?.error ||
+              "Não foi possível localizar ou criar o contato do agendamento.",
+          );
+        }
+        contatoId = String(contactData.contato.id);
+        telefoneCliente = String(contactData.telefone || telefoneCliente);
+      }
+
       const payload = {
         ...form,
+        contato_id: contatoId || null,
+        telefone_cliente: telefoneCliente || null,
         status: status || form.status,
         inicio_at: iso(form.inicio_at),
         fim_at: iso(form.fim_at),
@@ -2133,8 +2163,18 @@ function Page() {
                     <label>Telefone</label>
                     <input
                       value={form.telefone_cliente}
+                      inputMode="tel"
                       onChange={(e) =>
                         setForm({ ...form, telefone_cliente: e.target.value })
+                      }
+                      onBlur={() =>
+                        setForm((current) => ({
+                          ...current,
+                          telefone_cliente:
+                            normalizarTelefoneBrasilParaWhatsApp(
+                              current.telefone_cliente,
+                            ) || current.telefone_cliente,
+                        }))
                       }
                     />
                   </div>
@@ -2155,7 +2195,7 @@ function Page() {
                       style={{ height: 30 }}
                       target="_blank"
                       rel="noreferrer"
-                      href={`https://wa.me/55${form.telefone_cliente.replace(/\D/g, "")}`}
+                      href={`https://wa.me/${normalizarTelefoneBrasilParaWhatsApp(form.telefone_cliente)}`}
                     >
                       <MessageCircle size={13} />
                       WhatsApp
