@@ -41,7 +41,20 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     .order("capturado_em", { ascending: true });
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, informacoes: data || [] });
+
+  const informacoes = (data || []).map((informacao) => {
+    const metadata = informacao.metadata_json;
+    const tipoRegistro =
+      metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? String((metadata as Record<string, unknown>).tipo_registro || "")
+        : "";
+
+    return tipoRegistro === "resultado_comercial"
+      ? { ...informacao, nome_campo: "Resultado comercial" }
+      : informacao;
+  });
+
+  return NextResponse.json({ ok: true, informacoes });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -54,7 +67,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!informacaoId || !valor) return NextResponse.json({ ok: false, error: "Informe a informação e seu valor." }, { status: 400 });
 
   const { data: atual, error: atualError } = await acesso.supabase
-    .from("contato_informacoes_captura").select("id, tipo").eq("id", informacaoId)
+    .from("contato_informacoes_captura").select("id, tipo, variavel_origem, metadata_json").eq("id", informacaoId)
     .eq("empresa_id", acesso.usuario.empresa_id).eq("contato_id", id).eq("ativo", true).maybeSingle();
   if (atualError) return NextResponse.json({ ok: false, error: atualError.message }, { status: 500 });
   if (!atual) return NextResponse.json({ ok: false, error: "Informação não encontrada." }, { status: 404 });
@@ -62,12 +75,33 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const validacao = validarCaptura(atual.tipo, valor);
   if (!validacao.valido) return NextResponse.json({ ok: false, error: "O valor informado não é válido para este tipo de captura." }, { status: 400 });
 
+  const metadataAtual =
+    atual.metadata_json && typeof atual.metadata_json === "object" && !Array.isArray(atual.metadata_json)
+      ? (atual.metadata_json as Record<string, unknown>)
+      : {};
+  const resultadoComercial = metadataAtual.tipo_registro === "resultado_comercial";
+  const valorNormalizado = resultadoComercial
+    ? `agenda_resultado_comercial:${validacao.valorNormalizado}`
+    : validacao.valorNormalizado;
+  const metadataJson = resultadoComercial
+    ? {
+        ...metadataAtual,
+        valor_formatado: validacao.valorFormatado,
+        formato_data: validacao.formatoData,
+        origem_ultima_edicao: "edicao_manual",
+      }
+    : {
+        valor_formatado: validacao.valorFormatado,
+        formato_data: validacao.formatoData,
+        origem: "edicao_manual",
+      };
+
   const { error } = await acesso.supabase.from("contato_informacoes_captura").update({
     valor: validacao.valorLimpo,
-    valor_normalizado: validacao.valorNormalizado,
+    valor_normalizado: valorNormalizado,
     precisao_data: validacao.precisaoData,
     atualizado_por: acesso.usuario.id,
-    metadata_json: { valor_formatado: validacao.valorFormatado, formato_data: validacao.formatoData, origem: "edicao_manual" },
+    metadata_json: metadataJson,
   }).eq("id", informacaoId).eq("empresa_id", acesso.usuario.empresa_id).eq("contato_id", id);
   if (error) return NextResponse.json({ ok: false, error: error.code === "23505" ? "Esse valor já está salvo nas informações de captura." : error.message }, { status: error.code === "23505" ? 409 : 500 });
   return NextResponse.json({ ok: true, message: "Informação atualizada." });
