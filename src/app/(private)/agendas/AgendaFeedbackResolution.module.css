@@ -1,0 +1,97 @@
+.actionGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cancelButton {
+  height: 31px;
+}
+
+.modal {
+  width: min(720px, calc(100vw - 28px));
+  max-height: min(780px, calc(100vh - 32px));
+  overflow: auto;
+}
+
+.modalIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--crm-accent, #16a085) 14%, transparent);
+  color: var(--crm-accent, #16a085);
+  flex: 0 0 auto;
+}
+
+.commercialSection {
+  margin-top: 12px;
+}
+
+.sectionHint {
+  margin: -2px 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--crm-ui-private-content-hex-718096, #718096);
+}
+
+.moneyField {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--crm-ui-private-border, rgba(148, 163, 184, 0.3));
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--crm-ui-private-surface, transparent);
+}
+
+.moneyField > span {
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.moneyField input {
+  border: 0 !important;
+  border-left: 1px solid var(--crm-ui-private-border, rgba(148, 163, 184, 0.3)) !important;
+  border-radius: 0 !important;
+  flex: 1;
+  min-width: 0;
+}
+
+.saleHint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--crm-ui-private-content-hex-718096, #718096);
+}
+
+.error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(220, 38, 38, 0.09);
+  color: #c32640;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .actionGroup {
+    width: 100%;
+  }
+
+  .actionGroup :global(.btn) {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: center;
+  }
+
+  .modal {
+    width: calc(100vw - 18px);
+    max-height: calc(100vh - 18px);
+  }
+}

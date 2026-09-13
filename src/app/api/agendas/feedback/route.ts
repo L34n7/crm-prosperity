@@ -2,202 +2,280 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  aplicarClassificacaoLeadContato,
+  type ClassificacaoLead,
+} from "@/lib/leads/classificacao";
 
-// CRM_AGENDA_FEEDBACK_DETAILS_V1
-const RESULTADOS_VALIDOS = ["realizado", "faltou", "cancelado"] as const;
-
-type ResultadoFeedback = (typeof RESULTADOS_VALIDOS)[number];
-
-function resultadoValido(valor: string): valor is ResultadoFeedback {
-  return RESULTADOS_VALIDOS.includes(valor as ResultadoFeedback);
-}
+const CLASSIFICACOES_ATENDIMENTO = new Set<ClassificacaoLead>([
+  "qualificado",
+  "convertido",
+  "perdido",
+]);
 
 export async function GET() {
-  const resultado = await getUsuarioContexto({
-    sincronizarAssinatura: false,
-  });
-
-  if (!resultado.ok) {
-    return NextResponse.json(
-      { ok: false, error: resultado.error },
-      { status: resultado.status }
-    );
-  }
-
-  const { usuario } = resultado;
-  const bloqueio = bloquearSemPermissao(usuario, "agendas.visualizar");
-  if (bloqueio) return bloqueio;
-
-  if (!usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Usuário sem empresa vinculada." },
-      { status: 400 }
-    );
-  }
-
-  const { data, error } = await getSupabaseAdmin()
-    .from("agenda_agendamentos")
-    .select(
-      `
-        id,
-        empresa_id,
-        agenda_id,
-        contato_id,
-        conversa_id,
-        titulo,
-        tipo_id,
-        responsavel_id,
-        prioridade,
-        origem,
-        local,
-        link_reuniao,
-        observacoes,
-        nome_cliente,
-        telefone_cliente,
-        email_cliente,
-        inicio_at,
-        fim_at,
-        status,
-        feedback_solicitado_em,
-        agenda_calendarios (
-          id,
-          nome
-        ),
-        contatos (
-          id,
-          nome,
-          telefone,
-          email
-        )
-      `
-    )
-    .eq("empresa_id", usuario.empresa_id)
-    .in("status", ["agendado", "confirmado"])
-    .not("feedback_solicitado_em", "is", null)
-    .is("feedback_respondido_em", null)
-    .order("fim_at", { ascending: true })
-    .limit(100);
-
-  if (error) {
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({
-    ok: true,
-    pendencias: data || [],
-    quantidade: data?.length || 0,
-  });
-}
-
-export async function PATCH(request: Request) {
-  const resultado = await getUsuarioContexto();
-
-  if (!resultado.ok) {
-    return NextResponse.json(
-      { ok: false, error: resultado.error },
-      { status: resultado.status }
-    );
-  }
-
-  const { usuario } = resultado;
-  const bloqueio = bloquearSemPermissao(
-    usuario,
-    "agendas.gerenciar_agendamentos",
-    "Você não tem permissão para gerenciar agendamentos.",
-  );
-  if (bloqueio) return bloqueio;
-
-  if (!usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Usuário sem empresa vinculada." },
-      { status: 400 }
-    );
-  }
-
-  let body: Record<string, unknown>;
-
   try {
-    const valor: unknown = await request.json();
-
-    if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
-      throw new Error("invalid_body");
+    const resultado = await getUsuarioContexto();
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status },
+      );
     }
 
-    body = valor as Record<string, unknown>;
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Corpo da requisição inválido." },
-      { status: 400 }
+    const bloqueio = bloquearSemPermissao(
+      resultado.usuario,
+      "agendas.visualizar",
+      "Você não tem permissão para visualizar os feedbacks da agenda.",
     );
-  }
+    if (bloqueio) return bloqueio;
 
-  const agendamentoId = String(body.agendamento_id || "").trim();
-  const resposta = String(body.resposta || "").trim();
-
-  if (!agendamentoId || !resultadoValido(resposta)) {
-    return NextResponse.json(
-      { ok: false, error: "Informe o agendamento e uma resposta válida." },
-      { status: 400 }
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.rpc(
+      "agenda_etapa1_feedback_pendentes",
+      { p_limite: 15 },
     );
-  }
+    if (error) throw error;
 
-  const supabase = getSupabaseAdmin();
-  const agora = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("agenda_agendamentos")
-    .update({
-      status: resposta,
-      feedback_respondido_em: agora,
-      feedback_resultado: resposta,
-      feedback_respondido_por: usuario.id,
-      updated_at: agora,
-      updated_by: usuario.id,
-    })
-    .eq("id", agendamentoId)
-    .eq("empresa_id", usuario.empresa_id)
-    .in("status", ["agendado", "confirmado"])
-    .not("feedback_solicitado_em", "is", null)
-    .is("feedback_respondido_em", null)
-    .select(
-      "id, agenda_id, contato_id, conversa_id, status, feedback_respondido_em"
-    )
-    .maybeSingle();
-
-  if (error) {
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 }
-    );
-  }
-
-  if (!data) {
+    return NextResponse.json({ ok: true, pendencias: data || [] });
+  } catch (error) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Esta confirmação já foi respondida ou não está mais pendente.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao carregar feedbacks da agenda.",
       },
-      { status: 409 }
+      { status: 500 },
     );
   }
+}
 
-  await supabase
-    .from("notificacoes")
-    .update({ lida: true })
-    .eq("empresa_id", usuario.empresa_id)
-    .eq("metadata_json->>tipo_notificacao", "feedback_agendamento")
-    .eq("metadata_json->>agenda_agendamento_id", agendamentoId);
+export async function PATCH(request: Request) {
+  try {
+    const resultado = await getUsuarioContexto();
+    if (!resultado.ok) {
+      return NextResponse.json(
+        { ok: false, error: resultado.error },
+        { status: resultado.status },
+      );
+    }
 
-  return NextResponse.json({
-    ok: true,
-    agendamento: data,
-    message:
+    const bloqueio = bloquearSemPermissao(
+      resultado.usuario,
+      "agendas.gerenciar_agendamentos",
+      "Você não tem permissão para registrar o resultado do agendamento.",
+    );
+    if (bloqueio) return bloqueio;
+
+    const body = await request.json();
+    const agendamentoId = String(body?.agendamento_id || "").trim();
+    const resposta = String(body?.resposta || "").trim().toLowerCase();
+    const resumoResultado = String(body?.resultado || "").trim();
+    const observacoesInternas = String(body?.observacoes_internas || "").trim();
+    const classificacao = String(body?.classificacao_atendimento || "")
+      .trim()
+      .toLowerCase() as ClassificacaoLead;
+    const valorVendaBruto = body?.valor_venda;
+    const valorVenda =
+      valorVendaBruto === null ||
+      valorVendaBruto === undefined ||
+      valorVendaBruto === ""
+        ? null
+        : Number(valorVendaBruto);
+
+    if (
+      !agendamentoId ||
+      !["realizado", "faltou", "cancelado"].includes(resposta)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Informe um agendamento e um status final válido." },
+        { status: 400 },
+      );
+    }
+
+    if (!CLASSIFICACOES_ATENDIMENTO.has(classificacao)) {
+      return NextResponse.json(
+        { ok: false, error: "Selecione uma classificação válida para o atendimento." },
+        { status: 400 },
+      );
+    }
+
+    if (
+      classificacao === "convertido" &&
+      (valorVenda === null || !Number.isFinite(valorVenda) || valorVenda <= 0)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Informe um valor de venda maior que zero." },
+        { status: 400 },
+      );
+    }
+
+    const empresaId = resultado.usuario.empresa_id;
+    if (!empresaId) {
+      return NextResponse.json(
+        { ok: false, error: "Usuário sem empresa vinculada." },
+        { status: 400 },
+      );
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data: agendamento, error: agendamentoError } = await supabase
+      .from("agenda_agendamentos")
+      .select("id, empresa_id, contato_id, status")
+      .eq("id", agendamentoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (agendamentoError) throw agendamentoError;
+    if (!agendamento) {
+      return NextResponse.json(
+        { ok: false, error: "Agendamento não encontrado." },
+        { status: 404 },
+      );
+    }
+
+    const agora = new Date().toISOString();
+    let data: unknown = null;
+
+    if (resposta === "cancelado") {
+      const { data: cancelado, error: cancelamentoError } = await supabase
+        .from("agenda_agendamentos")
+        .update({
+          status: "cancelado",
+          feedback_resultado: "cancelado",
+          feedback_respondido_em: agora,
+          feedback_respondido_por: resultado.usuario.id,
+          updated_at: agora,
+          updated_by: resultado.usuario.id,
+        })
+        .eq("id", agendamentoId)
+        .eq("empresa_id", empresaId)
+        .select("*")
+        .single();
+
+      if (cancelamentoError) throw cancelamentoError;
+      data = cancelado;
+    } else {
+      const { data: feedbackData, error } = await supabase.rpc(
+        "agenda_etapa1_registrar_feedback",
+        {
+          p_agendamento_id: agendamentoId,
+          p_resposta: resposta,
+        },
+      );
+      if (error) throw error;
+      data = feedbackData;
+    }
+
+    const { error: detalhesError } = await supabase
+      .from("agenda_agendamentos")
+      .update({
+        resultado: resumoResultado || null,
+        observacoes_internas: observacoesInternas || null,
+        updated_at: agora,
+        updated_by: resultado.usuario.id,
+      })
+      .eq("id", agendamentoId)
+      .eq("empresa_id", empresaId);
+    if (detalhesError) throw detalhesError;
+
+    if (agendamento.contato_id) {
+      await aplicarClassificacaoLeadContato({
+        empresaId,
+        contatoId: agendamento.contato_id,
+        classificacao,
+        origem: "agenda_feedback",
+      });
+
+      const detalheChave = `resultado_comercial_agendamento_${agendamentoId}`;
+
+      if (classificacao === "convertido" && valorVenda !== null) {
+        const valorFormatado = new Intl.NumberFormat("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }).format(valorVenda);
+        const detalhePayload = {
+          tipo: "resultado_comercial",
+          chave: detalheChave,
+          titulo: "Resultado comercial",
+          origem: "agenda",
+          valor_texto: `Convertido · ${valorFormatado}`,
+          valor_json: {
+            classificacao: "convertido",
+            valor_venda: valorVenda,
+            agendamento_id: agendamentoId,
+            status_final: resposta,
+            resultado: resumoResultado || null,
+            observacoes_internas: observacoesInternas || null,
+            registrado_em: agora,
+          },
+          updated_at: agora,
+        };
+
+        const { data: detalheExistente, error: detalheBuscaError } = await supabase
+          .from("contato_informacoes_captura")
+          .select("id")
+          .eq("empresa_id", empresaId)
+          .eq("contato_id", agendamento.contato_id)
+          .eq("chave", detalheChave)
+          .limit(1)
+          .maybeSingle();
+        if (detalheBuscaError) throw detalheBuscaError;
+
+        if (detalheExistente?.id) {
+          const { error: detalheAtualizacaoError } = await supabase
+            .from("contato_informacoes_captura")
+            .update(detalhePayload)
+            .eq("id", detalheExistente.id)
+            .eq("empresa_id", empresaId);
+          if (detalheAtualizacaoError) throw detalheAtualizacaoError;
+        } else {
+          const { error: detalheCriacaoError } = await supabase
+            .from("contato_informacoes_captura")
+            .insert({
+              empresa_id: empresaId,
+              contato_id: agendamento.contato_id,
+              ...detalhePayload,
+            });
+          if (detalheCriacaoError) throw detalheCriacaoError;
+        }
+      } else {
+        const { error: detalheRemocaoError } = await supabase
+          .from("contato_informacoes_captura")
+          .delete()
+          .eq("empresa_id", empresaId)
+          .eq("contato_id", agendamento.contato_id)
+          .eq("chave", detalheChave);
+        if (detalheRemocaoError) throw detalheRemocaoError;
+      }
+    }
+
+    const message =
       resposta === "realizado"
         ? "Agendamento marcado como realizado."
-        : resposta === "faltou"
-          ? "Não comparecimento registrado."
-          : "Agendamento marcado como cancelado.",
-  });
+        : resposta === "cancelado"
+          ? "Agendamento cancelado."
+          : "Agendamento marcado como não realizado.";
+
+    return NextResponse.json({
+      ok: true,
+      agendamento: data,
+      classificacao,
+      valor_venda: classificacao === "convertido" ? valorVenda : null,
+      message,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro ao registrar o resultado do agendamento.",
+      },
+      { status: 500 },
+    );
+  }
 }
