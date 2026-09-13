@@ -63,6 +63,7 @@ export default function AgendaFeedbackResolution() {
       if (!response.ok || !data?.ok) return;
       setFeedbacks(Array.isArray(data.pendencias) ? data.pendencias : []);
     } catch {
+      // Mantém a Agenda utilizável mesmo se a consulta de feedback falhar.
     }
   }, []);
 
@@ -76,7 +77,7 @@ export default function AgendaFeedbackResolution() {
       setActionsTarget(target);
       document
         .querySelectorAll<HTMLElement>(
-          ".feedbackActions .feedbackSuccess, .feedbackActions .feedbackMissed",
+          ".feedbackActions .feedbackSuccess:not([data-agenda-feedback-resolution]), .feedbackActions .feedbackMissed:not([data-agenda-feedback-resolution])",
         )
         .forEach((button) => {
           button.style.display = "none";
@@ -171,6 +172,7 @@ export default function AgendaFeedbackResolution() {
               <button
                 type="button"
                 className="btn feedbackSuccess"
+                data-agenda-feedback-resolution="true"
                 onClick={() => abrirModal("realizado")}
               >
                 <Check size={13} />
@@ -179,6 +181,7 @@ export default function AgendaFeedbackResolution() {
               <button
                 type="button"
                 className="btn feedbackMissed"
+                data-agenda-feedback-resolution="true"
                 onClick={() => abrirModal("faltou")}
               >
                 <X size={13} />
@@ -187,6 +190,7 @@ export default function AgendaFeedbackResolution() {
               <button
                 type="button"
                 className={`btn danger ${styles.cancelButton}`}
+                data-agenda-feedback-resolution="true"
                 onClick={() => abrirModal("cancelado")}
               >
                 <Ban size={13} />
