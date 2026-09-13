@@ -431,6 +431,8 @@ function Page() {
     [contact, setContact] = useState<Contato | null>(null),
     [cq, setCq] = useState(""),
     [contacts, setContacts] = useState<Contato[]>([]);
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [participantResults, setParticipantResults] = useState<Contato[]>([]);
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [typeModal, setTypeModal] = useState(false),
     [typeDraft, setTypeDraft] = useState({ nome: "", cor: "#22c55e" }),
@@ -762,6 +764,21 @@ function Page() {
     return () => clearTimeout(t);
   }, [cq, open, sb]);
   useEffect(() => {
+    if (!open || participantQuery.trim().length < 2) {
+      setParticipantResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const { data, error } = await sb.rpc("agenda_etapa1_buscar_contatos", {
+        p_busca: participantQuery,
+        p_limite: 20,
+      });
+      if (error) setErr(error.message);
+      else setParticipantResults(data || []);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [open, participantQuery, sb]);
+  useEffect(() => {
     const s = sp.get("google_calendar");
     if (s) setOk(s.startsWith("conectado") ? "Google Calendar conectado." : "");
   }, [sp]);
@@ -815,6 +832,8 @@ function Page() {
     setViewing(null);
     setForm(blank(d, agenda.duracao_minutos, userId));
     setContact(null);
+    setParticipantQuery("");
+    setParticipantResults([]);
     setOpen(true);
   };
   const edit = (a: Ag) => {
@@ -824,6 +843,8 @@ function Page() {
     }
     setForm(toForm(a));
     setContact(a.contato);
+    setParticipantQuery("");
+    setParticipantResults([]);
     setOpen(true);
   };
   const view = (appointment: Ag) => {
@@ -924,6 +945,40 @@ function Page() {
         },
       ],
     }));
+  const chooseParticipant = (c: Contato) => {
+    const telefone = normalizarTelefoneBrasilParaWhatsApp(c.telefone || "");
+    const email = String(c.email || "").trim().toLowerCase();
+    const jaAdicionado = form.participantes.some((participant) => {
+      const participantTelefone = normalizarTelefoneBrasilParaWhatsApp(
+        participant.telefone,
+      );
+      const participantEmail = participant.email.trim().toLowerCase();
+      return Boolean(
+        (telefone && participantTelefone === telefone) ||
+          (email && participantEmail === email),
+      );
+    });
+    if (jaAdicionado) {
+      setErr("Este contato já foi adicionado como participante.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      participantes: [
+        ...current.participantes,
+        {
+          nome: c.nome || "",
+          email: c.email || "",
+          telefone: c.telefone || "",
+          papel: "",
+          tipo: "convidado",
+          status: "pendente",
+        },
+      ],
+    }));
+    setParticipantQuery("");
+    setParticipantResults([]);
+  };
   const addRem = () =>
     setForm((f) => ({
       ...f,
@@ -2147,47 +2202,47 @@ function Page() {
                         ))}
                       </div>
                     )}
+                    <div className="form" style={{ marginTop: 9 }}>
+                      <div className="field">
+                        <label>Nome*</label>
+                        <input
+                          value={form.nome_cliente}
+                          onChange={(e) =>
+                            setForm({ ...form, nome_cliente: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>Telefone</label>
+                        <input
+                          value={form.telefone_cliente}
+                          inputMode="tel"
+                          onChange={(e) =>
+                            setForm({ ...form, telefone_cliente: e.target.value })
+                          }
+                          onBlur={() =>
+                            setForm((current) => ({
+                              ...current,
+                              telefone_cliente:
+                                normalizarTelefoneBrasilParaWhatsApp(
+                                  current.telefone_cliente,
+                                ) || current.telefone_cliente,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="field full">
+                        <label>E-mail</label>
+                        <input
+                          value={form.email_cliente}
+                          onChange={(e) =>
+                            setForm({ ...form, email_cliente: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
                   </>
                 )}
-                <div className="form" style={{ marginTop: 9 }}>
-                  <div className="field">
-                    <label>Nome*</label>
-                    <input
-                      value={form.nome_cliente}
-                      onChange={(e) =>
-                        setForm({ ...form, nome_cliente: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Telefone</label>
-                    <input
-                      value={form.telefone_cliente}
-                      inputMode="tel"
-                      onChange={(e) =>
-                        setForm({ ...form, telefone_cliente: e.target.value })
-                      }
-                      onBlur={() =>
-                        setForm((current) => ({
-                          ...current,
-                          telefone_cliente:
-                            normalizarTelefoneBrasilParaWhatsApp(
-                              current.telefone_cliente,
-                            ) || current.telefone_cliente,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="field full">
-                    <label>E-mail</label>
-                    <input
-                      value={form.email_cliente}
-                      onChange={(e) =>
-                        setForm({ ...form, email_cliente: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
                 <div className="mini" style={{ marginTop: 8 }}>
                   {form.telefone_cliente && (
                     <a
@@ -2224,30 +2279,59 @@ function Page() {
                 onChange={(vinculos) => setForm((current) => ({ ...current, vinculos }))}
               />
 
-                <section className="section">
-                  <div className={styles.cardHeader}>
-                    <div className={styles.cardHeading}>
-                      <h3 className={styles.cardTitle}>
-                        <UsersRound size={15} />
-                        Participantes
-                      </h3>
+              <section className="section">
+                <div className={styles.cardHeader}>
+                  <div className={styles.cardHeading}>
+                    <h3 className={styles.cardTitle}>
+                      <UsersRound size={15} />
+                      Participantes
+                    </h3>
 
-                      <p className={styles.cardDescription}>
-                        Inclua acompanhantes, responsáveis ou membros da equipe que também
-                        participarão deste compromisso.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ height: 30 }}
-                      onClick={addPart}
-                    >
-                      <Plus size={13} />
-                      Adicionar
-                    </button>
+                    <p className={styles.cardDescription}>
+                      Busque um contato já cadastrado ou adicione alguém manualmente
+                      para participar deste compromisso.
+                    </p>
                   </div>
+
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ height: 30 }}
+                    onClick={addPart}
+                  >
+                    <Plus size={13} />
+                    Adicionar manualmente
+                  </button>
+                </div>
+
+                <div className="search" style={{ marginBottom: 8 }}>
+                  <Search size={14} />
+                  <input
+                    style={{ width: "100%" }}
+                    placeholder="Buscar contato para adicionar participante"
+                    value={participantQuery}
+                    onChange={(e) => setParticipantQuery(e.target.value)}
+                  />
+                </div>
+                {participantResults.length > 0 && (
+                  <div className="results" style={{ marginBottom: 10 }}>
+                    {participantResults.map((c) => (
+                      <button
+                        className="result"
+                        key={c.id}
+                        onClick={() => chooseParticipant(c)}
+                      >
+                        <b>{c.nome || "Sem nome"}</b>
+                        <div>
+                          {c.telefone}
+                          {c.email ? ` · ${c.email}` : ""}
+                          {c.empresa ? ` · ${c.empresa}` : ""}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {form.participantes.map((p, i) => (
                   <div className="repeat" key={i}>
                     <div className="row">
@@ -2313,6 +2397,7 @@ function Page() {
                         <label>Telefone</label>
                         <input
                           value={p.telefone}
+                          inputMode="tel"
                           onChange={(e) =>
                             setForm({
                               ...form,
@@ -2322,6 +2407,22 @@ function Page() {
                                   : x,
                               ),
                             })
+                          }
+                          onBlur={() =>
+                            setForm((current) => ({
+                              ...current,
+                              participantes: current.participantes.map((x, n) =>
+                                n === i
+                                  ? {
+                                      ...x,
+                                      telefone:
+                                        normalizarTelefoneBrasilParaWhatsApp(
+                                          x.telefone,
+                                        ) || x.telefone,
+                                    }
+                                  : x,
+                              ),
+                            }))
                           }
                         />
                       </div>
