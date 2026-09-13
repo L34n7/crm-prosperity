@@ -27,6 +27,7 @@ import {
 import HorarioAtendimentoEditor from "@/components/agentes-ia/HorarioAtendimentoEditor";
 import AgenteTesteModal from "./components/AgenteTesteModal";
 import ConhecimentoEditorModal from "./components/ConhecimentoEditorModal";
+import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerramentaSelect";
 import styles from "./page.module.css";
 
 type ModoAtendimento = "economico" | "geral";
@@ -244,7 +245,7 @@ const FERRAMENTAS = [
   {
     tipo: "criar_agendamento",
     titulo: "Criar agendamento",
-    descricao: "Cria na agenda configurada após revalidar o horário no backend.",
+    descricao: "Cria na agenda configurada após revalidar o horário e aplica o tipo de agendamento selecionado.",
   },
   {
     tipo: "remarcar_agendamento",
@@ -1993,6 +1994,19 @@ export default function AgentesIaPage() {
                           <strong>{ferramenta.titulo}</strong>
                           <p>{ferramenta.descricao}</p>
                         </div>
+                        {ferramenta.tipo === "criar_agendamento" &&
+                          ferramentaAtiva(ferramenta.tipo) && (
+                            <TipoAgendamentoFerramentaSelect
+                              value={String(configFerramenta(ferramenta.tipo).tipo_id || "")}
+                              onChange={(tipoId) =>
+                                atualizarConfigFerramenta(
+                                  ferramenta.tipo,
+                                  "tipo_id",
+                                  tipoId
+                                )
+                              }
+                            />
+                          )}
                         {ferramenta.tipo === "transferir_humano" &&
                           ferramentaAtiva(ferramenta.tipo) && (
                             <select

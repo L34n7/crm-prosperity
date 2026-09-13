@@ -62,6 +62,7 @@ type Ctx = {
   lockToken: string;
   agenda: any;
   agendaId: string;
+  tipoId: string | null;
   estado: Estado;
   ativos: any[];
   slot: Slot | null;
@@ -276,9 +277,27 @@ async function configAgenda(empresaId: string, agenteId: string) {
   if (agendaError) throw new Error(agendaError.message);
   if (!agenda) return null;
 
+  const criarConfig = mapa.get("criar_agendamento") as Record<string, unknown> | undefined;
+  const tipoIdConfigurado = String(criarConfig?.tipo_id || "").trim();
+  let tipoId: string | null = null;
+
+  if (tipoIdConfigurado) {
+    const { data: tipo, error: tipoError } = await db
+      .from("agenda_tipos")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("id", tipoIdConfigurado)
+      .eq("ativo", true)
+      .maybeSingle();
+    if (tipoError) throw new Error(tipoError.message);
+    if (!tipo) return null;
+    tipoId = String(tipo.id);
+  }
+
   return {
     agendaId,
     agenda,
+    tipoId,
     podeRemarcar: mapa.has("remarcar_agendamento"),
   };
 }
@@ -642,6 +661,7 @@ async function criar(ctx: Ctx, slotEscolhido: Slot) {
     .insert({
       empresa_id: ctx.pendencia.empresa_id,
       agenda_id: ctx.agendaId,
+      ...(ctx.tipoId ? { tipo_id: ctx.tipoId } : {}),
       contato_id: ctx.pendencia.contato_id || null,
       conversa_id: ctx.pendencia.conversa_id,
       titulo,
@@ -1239,6 +1259,7 @@ export async function processarPoliticaAgendaPendencia(
     lockToken,
     agenda: configuracao.agenda,
     agendaId: configuracao.agendaId,
+    tipoId: configuracao.tipoId,
     estado,
     ativos: agendamentosAtivos,
     slot,
