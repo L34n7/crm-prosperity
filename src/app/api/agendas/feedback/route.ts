@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
+import { validarCaptura } from "@/lib/automacoes/captura-normalizacao";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   aplicarClassificacaoLeadContato,
@@ -12,6 +13,8 @@ const CLASSIFICACOES_ATENDIMENTO = new Set<ClassificacaoLead>([
   "convertido",
   "perdido",
 ]);
+
+const VARIAVEL_RESULTADO_COMERCIAL = "agenda_resultado_comercial";
 
 export async function GET() {
   try {
@@ -189,47 +192,56 @@ export async function PATCH(request: Request) {
         origem: "agenda_feedback",
       });
 
-      const detalheChave = `resultado_comercial_agendamento_${agendamentoId}`;
+      const { data: detalheExistente, error: detalheBuscaError } = await supabase
+        .from("contato_informacoes_captura")
+        .select("id, ativo")
+        .eq("empresa_id", empresaId)
+        .eq("contato_id", agendamento.contato_id)
+        .eq("variavel_origem", VARIAVEL_RESULTADO_COMERCIAL)
+        .limit(1)
+        .maybeSingle();
+      if (detalheBuscaError) throw detalheBuscaError;
 
       if (classificacao === "convertido" && valorVenda !== null) {
         const valorFormatado = new Intl.NumberFormat("pt-BR", {
           style: "currency",
           currency: "BRL",
         }).format(valorVenda);
-        const detalhePayload = {
-          tipo: "resultado_comercial",
-          chave: detalheChave,
-          titulo: "Resultado comercial",
-          origem: "agenda",
-          valor_texto: `Convertido · ${valorFormatado}`,
-          valor_json: {
-            classificacao: "convertido",
-            valor_venda: valorVenda,
-            agendamento_id: agendamentoId,
-            status_final: resposta,
-            resultado: resumoResultado || null,
-            observacoes_internas: observacoesInternas || null,
-            registrado_em: agora,
-          },
-          updated_at: agora,
-        };
+        const valorExibicao = `Convertido · ${valorFormatado}`;
+        const validacao = validarCaptura("texto", valorExibicao);
 
-        const { data: detalheExistente, error: detalheBuscaError } = await supabase
-          .from("contato_informacoes_captura")
-          .select("id")
-          .eq("empresa_id", empresaId)
-          .eq("contato_id", agendamento.contato_id)
-          .eq("chave", detalheChave)
-          .limit(1)
-          .maybeSingle();
-        if (detalheBuscaError) throw detalheBuscaError;
+        if (!validacao.valido) {
+          throw new Error("Não foi possível normalizar o resultado comercial.");
+        }
+
+        const metadata = {
+          origem: "agenda_feedback",
+          tipo_registro: "resultado_comercial",
+          classificacao: "convertido",
+          valor_venda: valorVenda,
+          valor_formatado: valorFormatado,
+          agendamento_id: agendamentoId,
+          status_final: resposta,
+          resultado: resumoResultado || null,
+          observacoes_internas: observacoesInternas || null,
+          registrado_em: agora,
+        };
+        const detalhePayload = {
+          valor: validacao.valorLimpo,
+          valor_normalizado: `${VARIAVEL_RESULTADO_COMERCIAL}:${validacao.valorNormalizado}`,
+          precisao_data: null,
+          ativo: true,
+          atualizado_por: resultado.usuario.id,
+          metadata_json: metadata,
+        };
 
         if (detalheExistente?.id) {
           const { error: detalheAtualizacaoError } = await supabase
             .from("contato_informacoes_captura")
             .update(detalhePayload)
             .eq("id", detalheExistente.id)
-            .eq("empresa_id", empresaId);
+            .eq("empresa_id", empresaId)
+            .eq("contato_id", agendamento.contato_id);
           if (detalheAtualizacaoError) throw detalheAtualizacaoError;
         } else {
           const { error: detalheCriacaoError } = await supabase
@@ -237,17 +249,25 @@ export async function PATCH(request: Request) {
             .insert({
               empresa_id: empresaId,
               contato_id: agendamento.contato_id,
+              tipo: "texto",
+              nome_campo: "pendente",
+              sequencia: null,
+              variavel_origem: VARIAVEL_RESULTADO_COMERCIAL,
+              criado_por: resultado.usuario.id,
               ...detalhePayload,
             });
           if (detalheCriacaoError) throw detalheCriacaoError;
         }
-      } else {
+      } else if (detalheExistente?.id && detalheExistente.ativo) {
         const { error: detalheRemocaoError } = await supabase
           .from("contato_informacoes_captura")
-          .delete()
+          .update({
+            ativo: false,
+            atualizado_por: resultado.usuario.id,
+          })
+          .eq("id", detalheExistente.id)
           .eq("empresa_id", empresaId)
-          .eq("contato_id", agendamento.contato_id)
-          .eq("chave", detalheChave);
+          .eq("contato_id", agendamento.contato_id);
         if (detalheRemocaoError) throw detalheRemocaoError;
       }
     }
