@@ -5207,12 +5207,12 @@ export default function DisparosWhatsAppPage() {
                       {listaFriaSemOptOut
                         ? "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie-o com a instrução para responder SAIR."
                         : marketingComListaFria
-                        ? "O disparo de marketing para lista fria será liberado após a confirmação dos valores e do termo de responsabilidade."
-                        : "O disparo utility para lista fria exigirá confirmação de responsabilidade após a confirmação dos valores."}
+                        ? "O disparo de marketing para lista fria será liberado após a confirmação dos valores e das orientações de autorização."
+                        : "O disparo Utility para lista fria exigirá confirmação das orientações após a confirmação dos valores."}
                     </p>
                     <span>
                       Contatos sem opt-in permanecem identificados como lista
-                      fria e exigem confirmação de responsabilidade antes do envio.
+                      fria e exigem confirmação das orientações antes do envio.
                     </span>
                   </div>
                 ) : null}
@@ -6453,13 +6453,18 @@ export default function DisparosWhatsAppPage() {
                     id="responsabilidade-lista-fria-titulo"
                     className={styles.modalTitle}
                   >
-                    Confirmar responsabilidade pelo envio
+                    {marketingComListaFria
+                      ? totalContatosListaFria === 1
+                        ? "Confirmar envio para contato sem opt-in registrado"
+                        : "Confirmar envio para contatos sem opt-in registrado"
+                      : "Confirmar orientações do envio"}
                   </h3>
                   <p className={styles.modalSubtitle}>
                     O template{" "}
-                    {marketingComListaFria ? "marketing" : "utility"} será
-                    enviado para {totalContatosListaFria} contato(s) sem
-                    opt-in registrado.
+                    {marketingComListaFria ? "Marketing" : "Utility"} será
+                    enviado para {totalContatosListaFria}{" "}
+                    {totalContatosListaFria === 1 ? "contato" : "contatos"} sem
+                    opt-in registrado no CRM.
                   </p>
                 </div>
 
@@ -6477,25 +6482,37 @@ export default function DisparosWhatsAppPage() {
               </div>
 
               <div className={styles.modalBody}>
-                <div className={styles.modalRiskAlert}>
+                <div className={styles.modalAlert}>
                   <strong>
-                    Este envio possui risco para a conta WhatsApp.
+                    {marketingComListaFria
+                      ? totalContatosListaFria === 1
+                        ? "Atenção: confirme a autorização do contato"
+                        : "Atenção: confirme a autorização dos contatos"
+                      : "Atenção ao uso de templates Utility"}
                   </strong>
                   {marketingComListaFria ? (
                     <p>
-                      Mensagens de marketing para contatos sem opt-in podem
-                      gerar bloqueios, denúncias, redução da qualidade do
-                      número, limitação de envios ou banimento pela Meta.
-                      Utilize somente uma base obtida legalmente e mantenha uma
-                      instrução clara de opt-out.
+                      O CRM não encontrou opt-in registrado para{" "}
+                      {totalContatosListaFria === 1
+                        ? "este contato"
+                        : "estes contatos"}. Templates de Marketing devem ser
+                      enviados para pessoas que autorizaram receber esse tipo de
+                      comunicação. Se essa autorização foi obtida por outro meio
+                      e não está registrada no CRM, você pode continuar. Enviar
+                      mensagens de marketing sem autorização adequada pode
+                      aumentar bloqueios e denúncias e afetar a qualidade ou os
+                      limites da conta WhatsApp.
                     </p>
                   ) : (
                     <p>
-                      Templates utility devem conter somente informações
-                      transacionais ou de serviço solicitadas pelo contato.
-                      Usar esse tipo de template para promoção, prospecção ou
-                      conteúdo de marketing pode causar denúncias, redução da
-                      qualidade, limitação ou banimento pela Meta.
+                      Usar templates Utility para conteúdo promocional, vendas
+                      ou marketing — inclusive tentando inserir esse conteúdo
+                      por variáveis, links ou outros meios para contornar as
+                      diretrizes da Meta — pode gerar denúncias, redução da
+                      qualidade, limitações ou bloqueio da conta WhatsApp.
+                      Utilize esse tipo de template somente para comunicações
+                      transacionais ou de serviço compatíveis com a categoria
+                      aprovada pela Meta.
                     </p>
                   )}
                 </div>
@@ -6504,25 +6521,40 @@ export default function DisparosWhatsAppPage() {
                   <h4 className={styles.modalSectionTitle}>
                     Ao continuar, você declara que:
                   </h4>
-                  <ul className={styles.modalList}>
-                    <li>
-                      {marketingComListaFria
-                        ? "revisou o conteúdo, a origem da lista e a finalidade comercial deste envio;"
-                        : "revisou o conteúdo e confirma que ele é realmente utility, sem oferta ou promoção;"}
-                    </li>
-                    <li>
-                      possui base legal e autorização adequadas para contatar
-                      os destinatários;
-                    </li>
-                    <li>
-                      disponibiliza opt-out e respeitará imediatamente os
-                      pedidos para não receber novas mensagens;
-                    </li>
-                    <li>
-                      assume a responsabilidade por bloqueios, denúncias,
-                      limitações ou banimento aplicados pela Meta.
-                    </li>
-                  </ul>
+                  {marketingComListaFria ? (
+                    <ul className={styles.modalList}>
+                      <li>
+                        revisou o conteúdo, a origem da lista e a finalidade do
+                        envio;
+                      </li>
+                      <li>
+                        possui autorização adequada para enviar comunicações de
+                        marketing aos destinatários;
+                      </li>
+                      <li>
+                        disponibiliza uma forma clara de opt-out e respeitará os
+                        pedidos para não receber novas mensagens.
+                      </li>
+                    </ul>
+                  ) : (
+                    <ul className={styles.modalList}>
+                      <li>
+                        revisou o conteúdo e confirma que ele é compatível com a
+                        categoria Utility, sem oferta ou promoção;
+                      </li>
+                      <li>
+                        possui base adequada para contatar os destinatários;
+                      </li>
+                      <li>
+                        não está utilizando variáveis, links ou outros meios
+                        para contornar as diretrizes da Meta;
+                      </li>
+                      <li>
+                        disponibiliza opt-out e respeitará os pedidos para não
+                        receber novas mensagens.
+                      </li>
+                    </ul>
+                  )}
                 </div>
 
                 <label className={styles.modalCheckbox}>
@@ -6534,11 +6566,9 @@ export default function DisparosWhatsAppPage() {
                     }
                   />
                   <span>
-                    Li e compreendi os riscos. Confirmo que possuo base legal
-                    para este contato e assumo integralmente a responsabilidade
-                    pelo envio do template{" "}
-                    {marketingComListaFria ? "marketing" : "utility"} à lista
-                    fria.
+                    {marketingComListaFria
+                      ? "Li e compreendi as orientações. Confirmo que possuo autorização adequada para enviar esta mensagem de Marketing e assumo a responsabilidade pelo envio."
+                      : "Li e compreendi as orientações. Confirmo que possuo base adequada para contatar os destinatários, que o conteúdo respeita a categoria Utility e que não estou utilizando variáveis, links ou outros meios para contornar as diretrizes da Meta."}
                   </span>
                 </label>
               </div>
@@ -6566,8 +6596,8 @@ export default function DisparosWhatsAppPage() {
                   {disparando
                     ? "Processando..."
                     : agendarDisparo
-                    ? "Assumir e agendar"
-                    : "Assumir e enviar"}
+                    ? "Confirmar e agendar"
+                    : "Confirmar e enviar"}
                 </button>
               </div>
             </div>
