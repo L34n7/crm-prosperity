@@ -2,6 +2,14 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+const ACOES_DISPARO_COM_CONFIRMACAO_COBRANCA_META = new Set([
+  "disparo_em_massa_enfileirado",
+  "disparo_agendado_criado",
+]);
+const CONFIRMACAO_COBRANCA_META_VERSAO = "2026-09-v1";
+const CONFIRMACAO_COBRANCA_META_TEXTO =
+  "Li as informações acima e estou ciente de que este disparo pode gerar cobrança.";
+
 export type CategoriaAuditoria =
   | "automacoes"
   | "permissoes"
@@ -69,12 +77,35 @@ export function getRequestAuditMetadata(request: Request) {
   };
 }
 
+function obterConfirmacaoCobrancaMeta(input: RegistrarLogAuditoriaInput) {
+  const categoria = input.categoria ?? input.entidade;
+
+  if (
+    categoria !== "disparos" ||
+    input.entidade !== "disparo" ||
+    !ACOES_DISPARO_COM_CONFIRMACAO_COBRANCA_META.has(input.acao)
+  ) {
+    return null;
+  }
+
+  return {
+    confirmada: true,
+    confirmada_em: new Date().toISOString(),
+    versao: CONFIRMACAO_COBRANCA_META_VERSAO,
+    texto: CONFIRMACAO_COBRANCA_META_TEXTO,
+  };
+}
+
 export async function registrarLogAuditoria(
   input: RegistrarLogAuditoriaInput
 ) {
+  const confirmacaoCobrancaMeta = obterConfirmacaoCobrancaMeta(input);
   const detalhes = {
     ...(input.detalhes ?? {}),
     ...(input.usuario_email ? { usuario_email: input.usuario_email } : {}),
+    ...(confirmacaoCobrancaMeta
+      ? { confirmacao_cobranca_meta: confirmacaoCobrancaMeta }
+      : {}),
   };
 
   const { error } = await supabaseAdmin.from("logs_auditoria").insert([
