@@ -9,6 +9,7 @@ import type {
   TemplateWhatsappOpcao,
 } from "../../types";
 import styles from "../../fluxos.module.css";
+import AgendaTipoAgendamentoConfig from "./AgendaTipoAgendamentoConfig";
 
 type CustoPreview = {
   categoria: string;
@@ -225,6 +226,10 @@ export default function AgendaConfig(props: AgendaConfigProps) {
             </select>
           </label>
         ))}
+
+      {tipoNode === "agenda_criar_agendamento" && (
+        <AgendaTipoAgendamentoConfig />
+      )}
 
       {tipoNode === "agenda_escolher_horario" && (
         <>
