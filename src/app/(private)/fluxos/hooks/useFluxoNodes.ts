@@ -3,11 +3,15 @@
 import { useCallback, type SetStateAction } from "react";
 import { useNodesState, type Node } from "@xyflow/react";
 import { consumirDraftCheckoutPagamentoParaAplicar } from "../checkout-pagamento-draft";
+import { consumirDraftTipoAgendamentoParaAplicar } from "../agenda-tipo-draft";
 
-function aplicarDraftsCheckoutNosNodes(nodes: Node[]) {
+function aplicarDraftsNosNodes(nodes: Node[]) {
   const normalizados = nodes.map((node) => {
-    const draft = consumirDraftCheckoutPagamentoParaAplicar(node.id);
-    if (!draft) return node;
+    const draftCheckout = consumirDraftCheckoutPagamentoParaAplicar(node.id);
+    const draftTipoAgendamento =
+      consumirDraftTipoAgendamentoParaAplicar(node.id);
+
+    if (!draftCheckout && !draftTipoAgendamento) return node;
 
     const configuracaoAtual =
       node.data?.configuracao_json &&
@@ -22,15 +26,16 @@ function aplicarDraftsCheckoutNosNodes(nodes: Node[]) {
         ...(node.data || {}),
         configuracao_json: {
           ...configuracaoAtual,
-          ...draft,
+          ...(draftCheckout || {}),
+          ...(draftTipoAgendamento || {}),
         },
       },
     } as Node;
   });
 
   // O FluxosEditor salva o mesmo array logo depois de chamar setNodes. A troca
-  // in-place garante que o payload de persistência já carregue mensagem,
-  // expiração e recuperação do checkout, sem depender do próximo render React.
+  // in-place garante que o payload de persistência já carregue os drafts
+  // aplicados, sem depender do próximo render React.
   nodes.splice(0, nodes.length, ...normalizados);
   return nodes;
 }
@@ -45,7 +50,7 @@ export default function useFluxoNodes() {
         return;
       }
 
-      aplicarDraftsCheckoutNosNodes(proximo);
+      aplicarDraftsNosNodes(proximo);
       setNodesBase(proximo);
     },
     [setNodesBase]

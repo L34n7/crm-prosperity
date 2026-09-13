@@ -12,6 +12,7 @@ import {
   limparDraftCheckoutPagamento,
 } from "../../checkout-pagamento-draft";
 import { PropertiesPanelNodeContext } from "../PropertiesPanel";
+import AgendaTipoAgendamentoConfig from "./AgendaTipoAgendamentoConfig";
 import CheckoutPagamentoConfig from "./CheckoutPagamentoConfig";
 import styles from "../../fluxos.module.css";
 
@@ -204,6 +205,10 @@ export default function NodeConfigPanel({
           mensagem={mensagem}
           onMensagemChange={onMensagemChange}
         />
+      )}
+
+      {tipoNode === "agenda_criar_agendamento" && (
+        <AgendaTipoAgendamentoConfig />
       )}
 
       {children}

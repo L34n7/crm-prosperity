@@ -5,6 +5,7 @@ import {
   limparDraftCheckoutPagamento,
   prepararDraftCheckoutPagamentoParaAplicar,
 } from "../../checkout-pagamento-draft";
+import { prepararDraftTipoAgendamentoParaAplicar } from "../../agenda-tipo-draft";
 import { PropertiesPanelNodeContext } from "../PropertiesPanel";
 import styles from "../../fluxos.module.css";
 
@@ -56,6 +57,8 @@ export default function NodeActions({
         setErroCheckout(resultado.error);
         return;
       }
+
+      prepararDraftTipoAgendamentoParaAplicar(nodeEditado.id);
     }
 
     onAplicar();

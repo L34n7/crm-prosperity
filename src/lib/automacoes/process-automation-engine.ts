@@ -13,6 +13,7 @@ import {
   continuarCheckoutPagamentoAutomacao,
   interceptarMensagemCheckoutPendente,
 } from "./process-automation-engine-checkout-runtime";
+import { aplicarTipoAgendamentoFluxo } from "./aplicar-tipo-agendamento-fluxo";
 import { processarIntencoesMensagem } from "./intencoes-runtime";
 import {
   acordarArbitragensHibridasPendentes,
@@ -356,6 +357,11 @@ async function processarDepoisDasRotinas(
   const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(inputPrincipal);
 
   if (resultadoPreferencia) {
+    await aplicarTipoAgendamentoFluxo({
+      empresaId: inputPrincipal.empresaId,
+      execucaoId: resultadoPreferencia.execucaoId,
+    });
+
     await continuarNosEspeciaisDepoisDoMotor({
       empresaId: inputPrincipal.empresaId,
       conversaId: inputPrincipal.conversaId,
@@ -377,6 +383,11 @@ async function processarDepoisDasRotinas(
     resultado && typeof resultado === "object" && "execucaoId" in resultado
       ? String(resultado.execucaoId || "") || null
       : null;
+
+  await aplicarTipoAgendamentoFluxo({
+    empresaId: inputPrincipal.empresaId,
+    execucaoId: execucaoIdResultado,
+  });
 
   let resultadoIntencaoAposInicio: Awaited<
     ReturnType<typeof processarIntencoesMensagem>
@@ -524,6 +535,11 @@ export async function processarFilaProcessamentoAutoPorId(jobId: string) {
     .maybeSingle();
 
   if (job) {
+    await aplicarTipoAgendamentoFluxo({
+      empresaId: job.empresa_id,
+      execucaoId: job.execucao_id,
+    });
+
     const payload = job.payload_json || {};
     await continuarNosEspeciaisDepoisDoMotor({
       empresaId: job.empresa_id,
@@ -614,6 +630,11 @@ export async function processarTimeoutSemRespostaAgendado(
     .maybeSingle();
 
   if (agendamento) {
+    await aplicarTipoAgendamentoFluxo({
+      empresaId: params.empresaId,
+      execucaoId: agendamento.execucao_id,
+    });
+
     const payload = agendamento.payload_json || {};
     const conversaId = String(payload.conversa_id || "").trim();
 
