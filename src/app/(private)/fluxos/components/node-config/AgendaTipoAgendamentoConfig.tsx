@@ -88,40 +88,38 @@ export default function AgendaTipoAgendamentoConfig() {
   }
 
   return (
-    <div className={styles.optionsBox}>
-      <label className={styles.field}>
-        <span className={styles.label}>Tipo do agendamento</span>
-        <select
-          className={styles.input}
-          value={tipoId}
-          disabled={carregando}
-          onChange={(event) => alterarTipo(event.target.value)}
-        >
-          <option value="">
-            {carregando ? "Carregando tipos..." : "Sem tipo específico"}
-          </option>
-          {!tipoAtualDisponivel && tipoId && (
-            <option value={tipoId}>Tipo atual indisponível</option>
-          )}
-          {tipos.map((tipo) => (
-            <option key={tipo.id} value={tipo.id}>
-              {tipo.nome} · {tipo.padrao ? "Fixo" : "Personalizado"}
-            </option>
-          ))}
-        </select>
-        <span className={styles.help}>
-          Define o tipo aplicado ao novo agendamento criado por este bloco. A
-          seleção é opcional e não altera fluxos antigos sem tipo configurado.
-        </span>
-        {erro && (
-          <span
-            className={styles.help}
-            style={{ color: "var(--crm-ui-private-content-hex-dc2626)" }}
-          >
-            {erro}
-          </span>
+    <label className={styles.field}>
+      <span className={styles.label}>Tipo do agendamento</span>
+      <select
+        className={styles.input}
+        value={tipoId}
+        disabled={carregando}
+        onChange={(event) => alterarTipo(event.target.value)}
+      >
+        <option value="">
+          {carregando ? "Carregando tipos..." : "Sem tipo específico"}
+        </option>
+        {!tipoAtualDisponivel && tipoId && (
+          <option value={tipoId}>Tipo atual indisponível</option>
         )}
-      </label>
-    </div>
+        {tipos.map((tipo) => (
+          <option key={tipo.id} value={tipo.id}>
+            {tipo.nome} · {tipo.padrao ? "Fixo" : "Personalizado"}
+          </option>
+        ))}
+      </select>
+      <span className={styles.help}>
+        Define o tipo aplicado ao novo agendamento criado por este bloco. A
+        seleção é opcional e não altera fluxos antigos sem tipo configurado.
+      </span>
+      {erro && (
+        <span
+          className={styles.help}
+          style={{ color: "var(--crm-ui-private-content-hex-dc2626)" }}
+        >
+          {erro}
+        </span>
+      )}
+    </label>
   );
 }
