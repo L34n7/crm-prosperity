@@ -11,8 +11,8 @@
 }
 
 .modal {
-  width: min(720px, calc(100vw - 28px));
-  max-height: min(780px, calc(100vh - 32px));
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(820px, calc(100vh - 32px));
   overflow: auto;
 }
 
@@ -28,6 +28,7 @@
 }
 
 .commercialSection,
+.nextSection,
 .listSection {
   margin-top: 12px;
 }
@@ -37,6 +38,40 @@
   font-size: 12px;
   line-height: 1.45;
   color: var(--crm-ui-private-content-hex-718096, #718096);
+}
+
+.scheduleToggle {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--crm-ui-private-border, rgba(148, 163, 184, 0.3));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--crm-accent, #16a085) 6%, transparent);
+  color: var(--crm-text-strong, #172033);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scheduleToggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--crm-accent, #16a085);
+  flex: 0 0 auto;
+}
+
+.scheduleToggle:has(input:disabled) {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.nextForm {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--crm-ui-private-border, rgba(148, 163, 184, 0.22));
 }
 
 .moneyField {
@@ -95,5 +130,9 @@
   .modal {
     width: calc(100vw - 18px);
     max-height: calc(100vh - 18px);
+  }
+
+  .nextForm {
+    grid-template-columns: 1fr !important;
   }
 }
