@@ -44,7 +44,8 @@ export async function GET() {
       );
     }
 
-    const { data, error } = await getSupabaseAdmin()
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
       .from("agenda_agendamentos")
       .select(
         `
@@ -90,10 +91,19 @@ export async function GET() {
 
     if (error) throw error;
 
+    const { data: listas, error: listasError } = await supabase
+      .from("conversas_listas")
+      .select("id, nome")
+      .eq("empresa_id", usuario.empresa_id)
+      .order("nome", { ascending: true });
+
+    if (listasError) throw listasError;
+
     return NextResponse.json({
       ok: true,
       pendencias: data || [],
       quantidade: data?.length || 0,
+      listas: listas || [],
     });
   } catch (error) {
     return NextResponse.json(
@@ -134,6 +144,7 @@ export async function PATCH(request: Request) {
     const classificacao = String(body?.classificacao_atendimento || "")
       .trim()
       .toLowerCase() as ClassificacaoLead;
+    const listaId = String(body?.lista_id || "").trim() || null;
     const valorVendaBruto = body?.valor_venda;
     const valorVenda =
       valorVendaBruto === null ||
@@ -183,7 +194,7 @@ export async function PATCH(request: Request) {
     const supabase = getSupabaseAdmin();
     const { data: agendamento, error: agendamentoError } = await supabase
       .from("agenda_agendamentos")
-      .select("id, empresa_id, contato_id, status")
+      .select("id, empresa_id, contato_id, conversa_id, status")
       .eq("id", agendamentoId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -194,6 +205,50 @@ export async function PATCH(request: Request) {
         { ok: false, error: "Agendamento não encontrado." },
         { status: 404 },
       );
+    }
+
+    let conversaParaListaId: string | null = agendamento.conversa_id || null;
+
+    if (listaId) {
+      const { data: lista, error: listaError } = await supabase
+        .from("conversas_listas")
+        .select("id")
+        .eq("id", listaId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+      if (listaError) throw listaError;
+      if (!lista) {
+        return NextResponse.json(
+          { ok: false, error: "A lista selecionada não foi encontrada." },
+          { status: 404 },
+        );
+      }
+
+      if (!conversaParaListaId && agendamento.contato_id) {
+        const { data: conversa, error: conversaError } = await supabase
+          .from("conversas")
+          .select("id")
+          .eq("empresa_id", empresaId)
+          .eq("contato_id", agendamento.contato_id)
+          .order("last_message_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (conversaError) throw conversaError;
+        conversaParaListaId = conversa?.id || null;
+      }
+
+      if (!conversaParaListaId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Este contato ainda não possui uma conversa para ser adicionado à lista.",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const agora = new Date().toISOString();
@@ -227,6 +282,22 @@ export async function PATCH(request: Request) {
         },
         { status: 409 },
       );
+    }
+
+    if (listaId && conversaParaListaId) {
+      const { error: listaItemError } = await supabase
+        .from("conversas_listas_itens")
+        .upsert(
+          {
+            empresa_id: empresaId,
+            lista_id: listaId,
+            conversa_id: conversaParaListaId,
+            criado_por: resultado.usuario.id,
+          },
+          { onConflict: "lista_id,conversa_id" },
+        );
+
+      if (listaItemError) throw listaItemError;
     }
 
     if (agendamento.contato_id) {
@@ -336,6 +407,7 @@ export async function PATCH(request: Request) {
       agendamento: data,
       classificacao,
       valor_venda: classificacao === "convertido" ? valorVenda : null,
+      lista_id: listaId,
       message,
     });
   } catch (error) {
