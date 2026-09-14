@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Ban,
+  CalendarPlus,
   Check,
   CircleDollarSign,
   ListPlus,
@@ -21,16 +22,42 @@ type ListaOption = {
   nome: string;
 };
 
+type TipoOption = {
+  id: string;
+  nome: string;
+};
+
+type ResponsavelOption = {
+  id: string;
+  nome: string | null;
+  email?: string | null;
+};
+
 type FeedbackItem = {
   id: string;
   agenda_id?: string | null;
   titulo?: string | null;
+  tipo_id?: string | null;
+  responsavel_id?: string | null;
+  inicio_at?: string | null;
   nome_cliente?: string | null;
   contato_id?: string | null;
   conversa_id?: string | null;
   contatos?:
-    | { id?: string; nome?: string | null; classificacao?: string | null }
-    | Array<{ id?: string; nome?: string | null; classificacao?: string | null }>
+    | {
+        id?: string;
+        nome?: string | null;
+        telefone?: string | null;
+        email?: string | null;
+        classificacao?: string | null;
+      }
+    | Array<{
+        id?: string;
+        nome?: string | null;
+        telefone?: string | null;
+        email?: string | null;
+        classificacao?: string | null;
+      }>
     | null;
 };
 
@@ -44,6 +71,13 @@ type Draft = {
   classificacao: AtendimentoClassificacao;
   valorVenda: string;
   listaId: string;
+  marcarProximo: boolean;
+  proximoTitulo: string;
+  proximoTipoId: string;
+  proximoData: string;
+  proximoHora: string;
+  proximoResponsavelId: string;
+  proximoDescricao: string;
 };
 
 const classificacoes = new Set<AtendimentoClassificacao>([
@@ -56,9 +90,21 @@ function relationOne<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? value[0] || null : value || null;
 }
 
+function horarioDoAgendamento(value?: string | null) {
+  if (!value) return "09:00";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "09:00";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
 export default function AgendaFeedbackResolution() {
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
   const [listas, setListas] = useState<ListaOption[]>([]);
+  const [tipos, setTipos] = useState<TipoOption[]>([]);
+  const [responsaveis, setResponsaveis] = useState<ResponsavelOption[]>([]);
+  const [usuarioAtualId, setUsuarioAtualId] = useState("");
   const [actionsTarget, setActionsTarget] = useState<Element | null>(null);
   const [modalTarget, setModalTarget] = useState<Element | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -74,6 +120,11 @@ export default function AgendaFeedbackResolution() {
       if (!response.ok || !data?.ok) return;
       setFeedbacks(Array.isArray(data.pendencias) ? data.pendencias : []);
       setListas(Array.isArray(data.listas) ? data.listas : []);
+      setTipos(Array.isArray(data.tipos) ? data.tipos : []);
+      setResponsaveis(
+        Array.isArray(data.responsaveis) ? data.responsaveis : [],
+      );
+      setUsuarioAtualId(String(data.usuario_atual_id || ""));
     } catch {
       // Mantém a Agenda utilizável mesmo se a consulta de feedback falhar.
     }
@@ -142,6 +193,14 @@ export default function AgendaFeedbackResolution() {
       classificacao,
       valorVenda: "",
       listaId: "",
+      marcarProximo: false,
+      proximoTitulo: feedbackAtual.titulo || "Próximo atendimento",
+      proximoTipoId: feedbackAtual.tipo_id || "",
+      proximoData: "",
+      proximoHora: horarioDoAgendamento(feedbackAtual.inicio_at),
+      proximoResponsavelId:
+        feedbackAtual.responsavel_id || usuarioAtualId || "",
+      proximoDescricao: "",
     });
   };
 
@@ -155,6 +214,44 @@ export default function AgendaFeedbackResolution() {
     ) {
       setError("Informe um valor de venda maior que zero.");
       return;
+    }
+
+    let proximoAtendimento: Record<string, string | null> | null = null;
+    if (draft.marcarProximo) {
+      if (!draft.contatoId) {
+        setError(
+          "Este agendamento não possui contato vinculado para marcar o próximo atendimento.",
+        );
+        return;
+      }
+      if (!draft.proximoTitulo.trim()) {
+        setError("Informe o título do próximo atendimento.");
+        return;
+      }
+      if (!draft.proximoData || !draft.proximoHora) {
+        setError("Informe a data e hora do próximo atendimento.");
+        return;
+      }
+
+      const dataHora = new Date(
+        `${draft.proximoData}T${draft.proximoHora}:00`,
+      );
+      if (Number.isNaN(dataHora.getTime())) {
+        setError("Informe uma data e hora válidas para o próximo atendimento.");
+        return;
+      }
+      if (dataHora.getTime() <= Date.now()) {
+        setError("O próximo atendimento precisa estar no futuro.");
+        return;
+      }
+
+      proximoAtendimento = {
+        titulo: draft.proximoTitulo.trim(),
+        tipo_id: draft.proximoTipoId || null,
+        inicio_at: dataHora.toISOString(),
+        responsavel_id: draft.proximoResponsavelId || null,
+        descricao: draft.proximoDescricao.trim(),
+      };
     }
 
     try {
@@ -171,6 +268,7 @@ export default function AgendaFeedbackResolution() {
           classificacao_atendimento: draft.classificacao,
           valor_venda: valorVenda,
           lista_id: draft.listaId || null,
+          proximo_atendimento: proximoAtendimento,
         }),
       });
       const data = await response.json();
@@ -272,6 +370,7 @@ export default function AgendaFeedbackResolution() {
                 <label>Observações internas</label>
                 <textarea
                   value={draft.observacoesInternas}
+                  maxLength={600}
                   onChange={(event) =>
                     setDraft((current) =>
                       current
@@ -283,6 +382,10 @@ export default function AgendaFeedbackResolution() {
                     )
                   }
                 />
+                <small className={styles.saleHint}>
+                  Ao salvar, esta observação também será registrada nas notas da
+                  conversa do contato quando houver uma conversa vinculada.
+                </small>
               </div>
             </div>
           </section>
@@ -352,6 +455,151 @@ export default function AgendaFeedbackResolution() {
                 </div>
               ) : null}
             </div>
+          </section>
+
+          <section className={`section ${styles.nextSection}`}>
+            <h3>
+              <CalendarPlus size={15} />
+              Próximo atendimento
+            </h3>
+            <label className={styles.scheduleToggle}>
+              <input
+                type="checkbox"
+                checked={draft.marcarProximo}
+                disabled={!draft.contatoId}
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current
+                      ? { ...current, marcarProximo: event.target.checked }
+                      : current,
+                  )
+                }
+              />
+              <span>Marcar o próximo atendimento?</span>
+            </label>
+
+            {!draft.contatoId ? (
+              <p className={styles.sectionHint}>
+                Este agendamento não possui um contato vinculado, por isso não é
+                possível criar o próximo atendimento automaticamente.
+              </p>
+            ) : null}
+
+            {draft.marcarProximo ? (
+              <div className={`form ${styles.nextForm}`}>
+                <div className="field full">
+                  <label>Título</label>
+                  <input
+                    value={draft.proximoTitulo}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, proximoTitulo: event.target.value }
+                          : current,
+                      )
+                    }
+                    placeholder="Ex.: Reunião de follow-up"
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Tipo</label>
+                  <select
+                    value={draft.proximoTipoId}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, proximoTipoId: event.target.value }
+                          : current,
+                      )
+                    }
+                  >
+                    <option value="">Sem tipo</option>
+                    {tipos.map((tipo) => (
+                      <option key={tipo.id} value={tipo.id}>
+                        {tipo.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Responsável</label>
+                  <select
+                    value={draft.proximoResponsavelId}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              proximoResponsavelId: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    <option value="">Sem responsável</option>
+                    {responsaveis.map((responsavel) => (
+                      <option key={responsavel.id} value={responsavel.id}>
+                        {responsavel.nome || responsavel.email || "Usuário"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>Data</label>
+                  <input
+                    type="date"
+                    value={draft.proximoData}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, proximoData: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Hora</label>
+                  <input
+                    type="time"
+                    value={draft.proximoHora}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, proximoHora: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="field full">
+                  <label>Descrição</label>
+                  <textarea
+                    value={draft.proximoDescricao}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              proximoDescricao: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                    placeholder="Informações para o próximo atendimento"
+                  />
+                  <small className={styles.saleHint}>
+                    O novo agendamento será criado no mesmo calendário e para o
+                    mesmo contato deste atendimento.
+                  </small>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className={`section ${styles.listSection}`}>
