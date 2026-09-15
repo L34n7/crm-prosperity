@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { montarWaMeUrl } from "@/lib/contatos/sistema";
 import styles from "./plano.module.css";
 
 type Plano = {
@@ -83,13 +82,12 @@ export default function PlanoPage() {
     }
   }
 
-  function abrirCotacaoWhatsApp() {
-    const mensagem =
-      "Olá! Quero fazer uma cotação do plano Profissional do CRM Prosperity.";
-
-    const url = montarWaMeUrl(mensagem);
-
-    window.open(url, "_blank", "noopener,noreferrer");
+  function abrirCheckoutCotacao() {
+    window.open(
+      "https://go.atomopay.com.br/oulzq",
+      "_blank",
+      "noopener,noreferrer"
+    );
   }
 
   function togglePlanoExpandido(nomePlano: string) {
@@ -285,7 +283,7 @@ export default function PlanoPage() {
                     <button
                       type="button"
                       className={styles.quoteButton}
-                      onClick={abrirCotacaoWhatsApp}
+                      onClick={abrirCheckoutCotacao}
                     >
                       Fazer cotação
                     </button>
@@ -308,9 +306,8 @@ export default function PlanoPage() {
           <p className={styles.footerText}>
             Os planos <strong>Básico</strong> e <strong>Essencial IA PRO</strong> incluem os 
             principais recursos. A diferença está na quantidade de <strong>usuários</strong>, 
-            <strong>tokens de IA</strong> e volume de operação. Para demandas maiores, solicite 
-            uma cotação do <strong>Profissional Enterprise</strong> pelo WhatsApp.
-
+            <strong>tokens de IA</strong> e volume de operação. Para demandas maiores, confira 
+            a condição do <strong>Profissional Enterprise</strong> em Fazer cotação.
           </p>
         </div>
       </section>
