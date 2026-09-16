@@ -64,11 +64,15 @@ export default function PlanoPage() {
 
   async function iniciarCheckout(
     planoSlug: "basico" | "essencial",
-    gateway: PaymentGateway
+    gateway: PaymentGateway,
+    novaAba?: Window | null
   ) {
     const leadId = obterLeadId();
 
-    if (!leadId) return;
+    if (!leadId) {
+      novaAba?.close();
+      return;
+    }
 
     setCheckoutError("");
     setLoadingCheckout(gateway);
@@ -89,6 +93,7 @@ export default function PlanoPage() {
       const data = (await res.json()) as CheckoutResponse;
 
       if (!res.ok || !data?.checkout_url) {
+        novaAba?.close();
         const mensagem = data?.error || "Não foi possível iniciar o checkout.";
 
         if (planoPagamento) {
@@ -101,8 +106,13 @@ export default function PlanoPage() {
         return;
       }
 
-      window.location.assign(data.checkout_url);
+      if (novaAba) {
+        novaAba.location.href = data.checkout_url;
+      } else {
+        window.location.assign(data.checkout_url);
+      }
     } catch (error) {
+      novaAba?.close();
       console.error("Erro ao buscar checkout:", error);
 
       const mensagem = "Erro inesperado ao iniciar o checkout.";
@@ -136,9 +146,19 @@ export default function PlanoPage() {
   }
 
   function handleGatewaySelect(gateway: PaymentGateway) {
-    if (!planoPagamento) return;
+    if (!planoPagamento || loadingCheckout) return;
 
-    void iniciarCheckout(planoPagamento.slug, gateway);
+    const novaAba = window.open("about:blank", "_blank");
+
+    if (!novaAba) {
+      setCheckoutError(
+        "O navegador bloqueou a nova aba. Permita pop-ups para o CRM e tente novamente."
+      );
+      return;
+    }
+
+    novaAba.opener = null;
+    void iniciarCheckout(planoPagamento.slug, gateway, novaAba);
   }
 
   function fecharModalPagamento() {
