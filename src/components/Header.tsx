@@ -5,6 +5,7 @@ import { ArrowLeft, Moon, Sun } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
+import PaymentGatewayModal from "@/components/PaymentGatewayModal";
 import { useHeaderUser } from "@/components/header-user-context";
 import { useHeaderSummary } from "@/components/header-summary-context";
 import { montarWhatsappUrl } from "@/lib/contatos/sistema";
@@ -64,12 +65,7 @@ type PlanoRenovacao =
       recursos: string[];
     };
 
-type CheckoutPlanoResponse = {
-  ok: boolean;
-  checkout_url?: string;
-  error?: string;
-};
-
+type PlanoCheckout = Extract<PlanoRenovacao, { tipo: "checkout" }>;
 type TemaVisual = "light" | "dark";
 
 const AJUDA_WHATSAPP_MENSAGEM =
@@ -153,10 +149,10 @@ export default function Header({
   const [paginaNotificacoes, setPaginaNotificacoes] = useState(1);
   const [alertaTokensOpen, setAlertaTokensOpen] = useState(false);
   const [modalPlanosOpen, setModalPlanosOpen] = useState(false);
+  const [planoPagamentoSelecionado, setPlanoPagamentoSelecionado] =
+    useState<PlanoCheckout | null>(null);
   const [feedbackAgendaPopup, setFeedbackAgendaPopup] =
     useState<Notificacao | null>(null);
-  const [planoCheckoutLoading, setPlanoCheckoutLoading] =
-    useState<PlanoRenovacaoSlug | null>(null);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
   const [mounted, setMounted] = useState(false);
 
@@ -289,19 +285,10 @@ export default function Header({
 
   function getPlanoActionLabel(
     plano: PlanoRenovacao,
-    planoAtual: boolean,
-    carregando: boolean
+    planoAtual: boolean
   ) {
-    if (carregando) return "Preparando...";
-
-    if (planoAtual && assinaturaEmAberto) {
-      return "Renovar plano";
-    }
-
-    if (planoAtual) return "Plano atual";
-
     if (plano.tipo === "cotacao") return "Solicitar cotação";
-
+    if (planoAtual) return "Renovar plano";
     return "Contratar plano";
   }
 
@@ -485,6 +472,7 @@ export default function Header({
 
       setMenuOpen(false);
       setNotificacoesOpen(false);
+      setPlanoPagamentoSelecionado(null);
       setModalPlanosOpen(true);
     }
 
@@ -574,10 +562,12 @@ export default function Header({
   function abrirModalPlanosAssinatura() {
     setMenuOpen(false);
     setNotificacoesOpen(false);
+    setPlanoPagamentoSelecionado(null);
     setModalPlanosOpen(true);
   }
 
   function fecharModalPlanosAssinatura() {
+    setPlanoPagamentoSelecionado(null);
     setModalPlanosOpen(false);
   }
 
@@ -591,36 +581,13 @@ export default function Header({
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  async function contratarPlanoAssinatura(plano: PlanoRenovacao) {
+  function contratarPlanoAssinatura(plano: PlanoRenovacao) {
     if (plano.tipo === "cotacao") {
       abrirCotacaoPlano();
       return;
     }
 
-    setPlanoCheckoutLoading(plano.slug);
-
-    try {
-      const res = await fetch("/api/assinaturas/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plano_slug: plano.slug,
-          renovar_plano_atual: planoEhAtual(plano),
-        }),
-      });
-      const data = (await res.json()) as CheckoutPlanoResponse;
-
-      if (!res.ok || !data.checkout_url) {
-        alert(data.error || "Não foi possível iniciar o checkout.");
-        return;
-      }
-
-      window.open(data.checkout_url, "_blank", "noopener,noreferrer");
-    } catch {
-      alert("Erro inesperado ao iniciar o checkout.");
-    } finally {
-      setPlanoCheckoutLoading(null);
-    }
+    setPlanoPagamentoSelecionado(plano);
   }
 
   const tokensEmAlerta = saldoTokensEmAlerta(saldoTokensIa);
@@ -1015,9 +982,6 @@ export default function Header({
 
               <div className={styles.planRenewalGrid}>
                 {PLANOS_RENOVACAO.map((plano) => {
-                  const carregando =
-                    plano.tipo === "checkout" &&
-                    planoCheckoutLoading === plano.slug;
                   const planoAtual = planoEhAtual(plano);
 
                   return (
@@ -1056,17 +1020,14 @@ export default function Header({
                       <button
                         type="button"
                         className={
-                          planoAtual && !assinaturaEmAberto
-                            ? styles.planRenewalCurrent
-                            : plano.tipo === "cotacao"
-                              ? styles.planRenewalSecondary
-                              : styles.planRenewalPrimary
+                          plano.tipo === "cotacao"
+                            ? styles.planRenewalSecondary
+                            : styles.planRenewalPrimary
                         }
                         onClick={() => contratarPlanoAssinatura(plano)}
-                        title={getPlanoActionLabel(plano, planoAtual, carregando)}
-                        disabled={(planoAtual && !assinaturaEmAberto) || carregando}
+                        title={getPlanoActionLabel(plano, planoAtual)}
                       >
-                        {getPlanoActionLabel(plano, planoAtual, carregando)}
+                        {getPlanoActionLabel(plano, planoAtual)}
                       </button>
                     </article>
                   );
@@ -1074,6 +1035,17 @@ export default function Header({
               </div>
             </div>
           </div>
+        )}
+
+        {planoPagamentoSelecionado && (
+          <PaymentGatewayModal
+            plano={{
+              slug: planoPagamentoSelecionado.slug,
+              nome: planoPagamentoSelecionado.nome,
+              renovarPlanoAtual: planoEhAtual(planoPagamentoSelecionado),
+            }}
+            onClose={() => setPlanoPagamentoSelecionado(null)}
+          />
         )}
 
         <div className={styles.userMenuWrapper} ref={menuRef}></div>
