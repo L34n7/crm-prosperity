@@ -570,9 +570,9 @@
   line-height: 1.15;
 }
 .scope :global(.agendaSideBadge-agendado) {
-  background: var(--crm-success-bg) !important;
-  border-color: var(--crm-success-border) !important;
-  color: var(--crm-success-text) !important;
+  background: var(--crm-warning-bg) !important;
+  border-color: var(--crm-warning-border) !important;
+  color: var(--crm-warning-text) !important;
 }
 .scope :global(.agendaSideBadge-cancelado) {
   background: var(--crm-danger-bg) !important;
