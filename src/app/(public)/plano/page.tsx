@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import PaymentProviderModal, {
+  type PaymentGateway,
+  type PaymentPlanSummary,
+} from "@/components/payments/PaymentProviderModal";
 import styles from "./plano.module.css";
 
 type Plano = {
@@ -27,11 +31,14 @@ type CheckoutResponse = {
 export default function PlanoPage() {
   const router = useRouter();
   const [planosExpandidos, setPlanosExpandidos] = useState<string[]>([]);
-  const [loadingCheckout, setLoadingCheckout] = useState(false);
+  const [loadingCheckout, setLoadingCheckout] = useState<PaymentGateway | null>(null);
+  const [planoPagamento, setPlanoPagamento] = useState<PaymentPlanSummary | null>(null);
+  const [checkoutError, setCheckoutError] = useState("");
 
   useEffect(() => {
     function resetarLoadingCheckout() {
-      setLoadingCheckout(false);
+      setLoadingCheckout(null);
+      setCheckoutError("");
     }
 
     window.addEventListener("pageshow", resetarLoadingCheckout);
@@ -41,7 +48,7 @@ export default function PlanoPage() {
     };
   }, []);
 
-  async function handleCheckout(planoSlug: "basico" | "essencial") {
+  function obterLeadId() {
     const leadId = localStorage.getItem("lead_id");
 
     if (!leadId) {
@@ -49,10 +56,22 @@ export default function PlanoPage() {
         "Lead não encontrado. Volte para a página inicial e preencha o formulário novamente."
       );
       router.push("/comecar");
-      return;
+      return null;
     }
 
-    setLoadingCheckout(true);
+    return leadId;
+  }
+
+  async function iniciarCheckout(
+    planoSlug: "basico" | "essencial",
+    gateway: PaymentGateway
+  ) {
+    const leadId = obterLeadId();
+
+    if (!leadId) return;
+
+    setCheckoutError("");
+    setLoadingCheckout(gateway);
 
     try {
       const res = await fetch("/api/public/checkout-url", {
@@ -63,23 +82,70 @@ export default function PlanoPage() {
         body: JSON.stringify({
           lead_id: leadId,
           plano_slug: planoSlug,
+          gateway,
         }),
       });
 
       const data = (await res.json()) as CheckoutResponse;
 
       if (!res.ok || !data?.checkout_url) {
-        alert(data?.error || "Não foi possível iniciar o checkout.");
-        setLoadingCheckout(false);
+        const mensagem = data?.error || "Não foi possível iniciar o checkout.";
+
+        if (planoPagamento) {
+          setCheckoutError(mensagem);
+        } else {
+          alert(mensagem);
+        }
+
+        setLoadingCheckout(null);
         return;
       }
 
       window.location.assign(data.checkout_url);
     } catch (error) {
       console.error("Erro ao buscar checkout:", error);
-      alert("Erro inesperado ao iniciar o checkout.");
-      setLoadingCheckout(false);
+
+      const mensagem = "Erro inesperado ao iniciar o checkout.";
+
+      if (planoPagamento) {
+        setCheckoutError(mensagem);
+      } else {
+        alert(mensagem);
+      }
+
+      setLoadingCheckout(null);
     }
+  }
+
+  function handlePlanoCheckout(plano: PaymentPlanSummary) {
+    const leadId = obterLeadId();
+
+    if (!leadId) return;
+
+    const tipoOferta = localStorage.getItem("tipo_oferta") || "normal";
+
+    // Mantém os links especiais existentes (afiliado, VIP, JV e free) na Atomo.
+    // O seletor de gateway é usado no fluxo público padrão.
+    if (tipoOferta !== "normal") {
+      void iniciarCheckout(plano.slug, "atomo");
+      return;
+    }
+
+    setCheckoutError("");
+    setPlanoPagamento(plano);
+  }
+
+  function handleGatewaySelect(gateway: PaymentGateway) {
+    if (!planoPagamento) return;
+
+    void iniciarCheckout(planoPagamento.slug, gateway);
+  }
+
+  function fecharModalPagamento() {
+    if (loadingCheckout) return;
+
+    setPlanoPagamento(null);
+    setCheckoutError("");
   }
 
   function abrirCheckoutCotacao() {
@@ -274,8 +340,14 @@ export default function PlanoPage() {
                   {planoCheckout ? (
                     <button
                       className={styles.primaryButton}
-                      onClick={() => handleCheckout(plano.slug ?? "basico")}
-                      disabled={loadingCheckout}
+                      onClick={() =>
+                        handlePlanoCheckout({
+                          slug: plano.slug ?? "basico",
+                          nome: plano.nome,
+                          preco: plano.preco,
+                        })
+                      }
+                      disabled={loadingCheckout !== null}
                     >
                       {loadingCheckout ? "Carregando..." : "Ir para pagamento"}
                     </button>
@@ -298,7 +370,7 @@ export default function PlanoPage() {
           <button
             className={styles.secondaryButton}
             onClick={() => router.push("/comecar")}
-            disabled={loadingCheckout}
+            disabled={loadingCheckout !== null}
           >
             Voltar
           </button>
@@ -311,6 +383,14 @@ export default function PlanoPage() {
           </p>
         </div>
       </section>
+
+      <PaymentProviderModal
+        plano={planoPagamento}
+        loadingGateway={loadingCheckout}
+        error={checkoutError}
+        onClose={fecharModalPagamento}
+        onSelect={handleGatewaySelect}
+      />
     </main>
   );
 }
