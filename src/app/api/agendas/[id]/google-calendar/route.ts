@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
   criarStateGoogleCalendar,
   criarUrlAutorizacaoGoogleCalendar,
   desvincularGoogleCalendar,
+  processarFilaGoogleCalendar,
   sincronizarAgendaGoogleCalendar,
 } from "@/lib/agendas/google-calendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -141,12 +142,32 @@ export async function POST(
     );
     if (bloqueio) return bloqueio;
 
-    await sincronizarAgendaGoogleCalendar({
-      empresaId: contexto.usuario.empresa_id!,
-      agendaId: id,
+    const empresaId = contexto.usuario.empresa_id!;
+
+    // O salvamento de um agendamento já o inclui na fila de sincronização por trigger.
+    // Processamos essa fila após responder ao navegador para não manter o cadastro
+    // bloqueado por uma sincronização completa do Google Calendar, que pode levar
+    // dezenas de segundos. Quando não houver item pendente, preservamos o
+    // comportamento do botão manual executando uma sincronização completa em background.
+    after(async () => {
+      try {
+        const processados = await processarFilaGoogleCalendar(20);
+
+        if (processados.length === 0) {
+          await sincronizarAgendaGoogleCalendar({
+            empresaId,
+            agendaId: id,
+          });
+        }
+      } catch (error) {
+        console.error("[GOOGLE_CALENDAR] Falha na sincronização em background:", error);
+      }
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(
+      { ok: true, sync_status: "agendado" },
+      { status: 202 }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { ok: false, error: error?.message || "Erro ao sincronizar Google Calendar." },
