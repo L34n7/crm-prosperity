@@ -95,9 +95,6 @@ export default function PaymentProviderModal({
             <span className={styles.providerContent}>
               <span className={styles.providerTitleRow}>
                 <strong>Prosperity Pay</strong>
-                {plano.slug === "basico" ? (
-                  <span className={styles.testBadge}>Teste R$ 5</span>
-                ) : null}
               </span>
               <span className={styles.providerDescription}>
                 Checkout da Prosperity Pay
