@@ -25,7 +25,7 @@ type PaymentGatewayModalProps = {
 };
 
 const PROSPERITY_PAY_CHECKOUTS: Record<PlanoSlug, string> = {
-  basico: "https://prosperity-pay.vercel.app/checkout/248a0b141abf",
+  basico: "https://prosperity-pay.vercel.app/checkout/be3817c7",
   essencial: "https://prosperity-pay.vercel.app/checkout/c7074bf9e18e",
 };
 
@@ -144,16 +144,6 @@ export default function PaymentGatewayModal({
           </button>
         </div>
 
-        {plano.slug === "basico" && (
-          <div className={styles.testNotice}>
-            <strong>Teste oficial do Prosperity Pay</strong>
-            <span>
-              Para o plano Básico, o Prosperity Pay está temporariamente usando
-              o checkout de teste de R$ 5.
-            </span>
-          </div>
-        )}
-
         <div className={styles.gatewayGrid}>
           <button
             type="button"
@@ -163,11 +153,7 @@ export default function PaymentGatewayModal({
           >
             <span className={styles.gatewayBadge}>Prosperity Pay</span>
             <strong>Prosperity Pay</strong>
-            <small>
-              {plano.slug === "basico"
-                ? "Checkout de teste por R$ 5"
-                : "Checkout direto pelo Prosperity Pay"}
-            </small>
+            <small>Checkout direto pelo Prosperity Pay.</small>
             <span className={styles.gatewayAction}>
               {loadingGateway === "prosperity_pay"
                 ? "Preparando checkout..."
