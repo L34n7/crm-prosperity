@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/frontend";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
+import PermitirAcessoCliente from "./PermitirAcessoCliente";
 
 export default async function EmpresasLayout({
   children,
@@ -18,5 +19,15 @@ export default async function EmpresasLayout({
     redirect("/painel");
   }
 
-  return children;
+  const podePermitirAcesso = can(
+    resultado.usuario.permissoes,
+    "empresas.criar"
+  );
+
+  return (
+    <>
+      {children}
+      {podePermitirAcesso && <PermitirAcessoCliente />}
+    </>
+  );
 }
