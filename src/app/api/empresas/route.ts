@@ -47,6 +47,8 @@ export async function GET() {
       created_at,
       updated_at,
       plano_id,
+      limite_integracoes_whatsapp,
+      limite_usuarios,
       nicho_id,
       nichos (
         id,
@@ -56,7 +58,9 @@ export async function GET() {
       planos (
         id,
         nome,
-        slug
+        slug,
+        limite_integracoes_whatsapp,
+        limite_usuarios
       )
     `)
     .order("created_at", { ascending: false });
@@ -193,8 +197,9 @@ export async function POST(request: Request) {
       observacoes,
       created_at,
       updated_at,
-      plano_id
-      ,
+      plano_id,
+      limite_integracoes_whatsapp,
+      limite_usuarios,
       nicho_id,
       nichos (
         id,

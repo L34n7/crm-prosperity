@@ -6,10 +6,14 @@ import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./empresas.module.css";
 
+const OPCOES_LIMITE = Array.from({ length: 10 }, (_, index) => index + 1);
+
 type Plano = {
   id: string;
   nome: string;
   slug: string;
+  limite_usuarios: number | null;
+  limite_integracoes_whatsapp: number | null;
 };
 
 type Nicho = {
@@ -33,12 +37,16 @@ type Empresa = {
   logo_url: string | null;
   observacoes: string | null;
   plano_id: string;
+  limite_integracoes_whatsapp: number | null;
+  limite_usuarios: number | null;
   nicho_id: string;
   nichos?: Nicho | null;
   planos?: {
     id: string;
     nome: string;
     slug: string;
+    limite_usuarios: number | null;
+    limite_integracoes_whatsapp: number | null;
   } | null;
 };
 
@@ -81,6 +89,19 @@ function getIniciais(nome: string) {
   return `${partes[0][0]}${partes[1][0]}`.toUpperCase();
 }
 
+function getOpcaoLimiteLabel(quantidade: number, limitePlano: number) {
+  if (quantidade === limitePlano) {
+    return `${quantidade} (incluído no plano)`;
+  }
+
+  if (quantidade > limitePlano) {
+    const extras = quantidade - limitePlano;
+    return `${quantidade} (${extras} extra${extras > 1 ? "s" : ""})`;
+  }
+
+  return String(quantidade);
+}
+
 export default function EmpresasPage() {
   const { permissoes } = useHeaderUser();
   const podeCriarEmpresas = permissoes.includes("empresas.criar");
@@ -118,6 +139,8 @@ export default function EmpresasPage() {
   const [editTelefone, setEditTelefone] = useState("");
   const [editNomeResponsavel, setEditNomeResponsavel] = useState("");
   const [editPlanoId, setEditPlanoId] = useState("");
+  const [editLimiteWhatsapp, setEditLimiteWhatsapp] = useState("1");
+  const [editLimiteUsuarios, setEditLimiteUsuarios] = useState("2");
   const [editNichoId, setEditNichoId] = useState("");
   const [editTimezone, setEditTimezone] = useState("America/Sao_Paulo");
   const [editLogoUrl, setEditLogoUrl] = useState("");
@@ -229,6 +252,10 @@ export default function EmpresasPage() {
   }
 
   function iniciarEdicao(empresa: Empresa) {
+    const limiteWhatsappPlano =
+      empresa.planos?.limite_integracoes_whatsapp ?? 1;
+    const limiteUsuariosPlano = empresa.planos?.limite_usuarios ?? 2;
+
     setEditandoId(empresa.id);
     setExpandidoId(empresa.id);
     setEditNomeFantasia(empresa.nome_fantasia);
@@ -238,6 +265,12 @@ export default function EmpresasPage() {
     setEditTelefone(empresa.telefone || "");
     setEditNomeResponsavel(empresa.nome_responsavel || "");
     setEditPlanoId(empresa.plano_id);
+    setEditLimiteWhatsapp(
+      String(empresa.limite_integracoes_whatsapp ?? limiteWhatsappPlano)
+    );
+    setEditLimiteUsuarios(
+      String(empresa.limite_usuarios ?? limiteUsuariosPlano)
+    );
     setEditNichoId(empresa.nicho_id);
     setEditTimezone(empresa.timezone || "America/Sao_Paulo");
     setEditLogoUrl(empresa.logo_url || "");
@@ -245,6 +278,20 @@ export default function EmpresasPage() {
     setEditStatus(empresa.status);
     setMensagem("");
     setErro("");
+  }
+
+  function alterarPlanoEdicao(novoPlanoId: string) {
+    const plano = planos.find((item) => item.id === novoPlanoId);
+    const limiteWhatsappPlano = plano?.limite_integracoes_whatsapp ?? 1;
+    const limiteUsuariosPlano = plano?.limite_usuarios ?? 2;
+
+    setEditPlanoId(novoPlanoId);
+    setEditLimiteWhatsapp((atual) =>
+      String(Math.max(Number(atual) || 1, limiteWhatsappPlano))
+    );
+    setEditLimiteUsuarios((atual) =>
+      String(Math.max(Number(atual) || 1, limiteUsuariosPlano))
+    );
   }
 
   function cancelarEdicao() {
@@ -270,6 +317,8 @@ export default function EmpresasPage() {
         telefone: editTelefone,
         nome_responsavel: editNomeResponsavel,
         plano_id: editPlanoId,
+        limite_integracoes_whatsapp: Number(editLimiteWhatsapp),
+        limite_usuarios: Number(editLimiteUsuarios),
         nicho_id: editNichoId,
         timezone: editTimezone,
         logo_url: editLogoUrl,
@@ -308,153 +357,155 @@ export default function EmpresasPage() {
       />
 
       <div className={styles.pageContent}>
-        {podeCriarEmpresas && <section className={styles.card}>
-          <div className={styles.cardHeader}>
-            <div>
-              <p className={styles.eyebrow}>Cadastro</p>
-              <h2 className={styles.cardTitle}>Criar empresa</h2>
-              <p className={styles.cardDescription}>
-                Cadastre uma nova empresa com plano, dados de contato, timezone
-                e observações internas.
-              </p>
-            </div>
-          </div>
-
-          <div className={styles.formGrid}>
-            <div className={styles.field}>
-              <label className={styles.label}>Nome fantasia</label>
-              <input
-                className={styles.input}
-                placeholder="Nome fantasia"
-                value={nomeFantasia}
-                onChange={(e) => setNomeFantasia(e.target.value)}
-              />
+        {podeCriarEmpresas && (
+          <section className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div>
+                <p className={styles.eyebrow}>Cadastro</p>
+                <h2 className={styles.cardTitle}>Criar empresa</h2>
+                <p className={styles.cardDescription}>
+                  Cadastre uma nova empresa com plano, dados de contato, timezone
+                  e observações internas.
+                </p>
+              </div>
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.label}>Razão social</label>
-              <input
-                className={styles.input}
-                placeholder="Razão social"
-                value={razaoSocial}
-                onChange={(e) => setRazaoSocial(e.target.value)}
-              />
+            <div className={styles.formGrid}>
+              <div className={styles.field}>
+                <label className={styles.label}>Nome fantasia</label>
+                <input
+                  className={styles.input}
+                  placeholder="Nome fantasia"
+                  value={nomeFantasia}
+                  onChange={(e) => setNomeFantasia(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Razão social</label>
+                <input
+                  className={styles.input}
+                  placeholder="Razão social"
+                  value={razaoSocial}
+                  onChange={(e) => setRazaoSocial(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Documento</label>
+                <input
+                  className={styles.input}
+                  placeholder="CPF/CNPJ"
+                  value={documento}
+                  onChange={(e) => setDocumento(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Email</label>
+                <input
+                  className={styles.input}
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Telefone</label>
+                <input
+                  className={styles.input}
+                  placeholder="Telefone"
+                  value={telefone}
+                  onChange={(e) => setTelefone(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Nome do responsável</label>
+                <input
+                  className={styles.input}
+                  placeholder="Nome do responsável"
+                  value={nomeResponsavel}
+                  onChange={(e) => setNomeResponsavel(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Plano</label>
+                <select
+                  className={styles.select}
+                  value={planoId}
+                  onChange={(e) => setPlanoId(e.target.value)}
+                >
+                  <option value="">Selecione um plano</option>
+                  {planos.map((plano) => (
+                    <option key={plano.id} value={plano.id}>
+                      {plano.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Segmento</label>
+                <select
+                  className={styles.select}
+                  value={nichoId}
+                  onChange={(e) => setNichoId(e.target.value)}
+                >
+                  <option value="">Selecione um segmento</option>
+                  {nichos.map((nicho) => (
+                    <option key={nicho.id} value={nicho.id}>
+                      {nicho.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Timezone</label>
+                <input
+                  className={styles.input}
+                  placeholder="America/Sao_Paulo"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.fieldFull}>
+                <label className={styles.label}>URL da logo</label>
+                <input
+                  className={styles.input}
+                  placeholder="URL da logo"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.fieldFull}>
+                <label className={styles.label}>Observações</label>
+                <textarea
+                  className={styles.textarea}
+                  placeholder="Observações"
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  rows={4}
+                />
+              </div>
             </div>
 
-            <div className={styles.field}>
-              <label className={styles.label}>Documento</label>
-              <input
-                className={styles.input}
-                placeholder="CPF/CNPJ"
-                value={documento}
-                onChange={(e) => setDocumento(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Email</label>
-              <input
-                className={styles.input}
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Telefone</label>
-              <input
-                className={styles.input}
-                placeholder="Telefone"
-                value={telefone}
-                onChange={(e) => setTelefone(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Nome do responsável</label>
-              <input
-                className={styles.input}
-                placeholder="Nome do responsável"
-                value={nomeResponsavel}
-                onChange={(e) => setNomeResponsavel(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Plano</label>
-              <select
-                className={styles.select}
-                value={planoId}
-                onChange={(e) => setPlanoId(e.target.value)}
+            <div className={styles.actionsRow}>
+              <button
+                onClick={criarEmpresa}
+                disabled={loading}
+                className={styles.primaryButton}
               >
-                <option value="">Selecione um plano</option>
-                {planos.map((plano) => (
-                  <option key={plano.id} value={plano.id}>
-                    {plano.nome}
-                  </option>
-                ))}
-              </select>
+                {loading ? "Criando..." : "Criar empresa"}
+              </button>
             </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Segmento</label>
-              <select
-                className={styles.select}
-                value={nichoId}
-                onChange={(e) => setNichoId(e.target.value)}
-              >
-                <option value="">Selecione um segmento</option>
-                {nichos.map((nicho) => (
-                  <option key={nicho.id} value={nicho.id}>
-                    {nicho.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Timezone</label>
-              <input
-                className={styles.input}
-                placeholder="America/Sao_Paulo"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.fieldFull}>
-              <label className={styles.label}>URL da logo</label>
-              <input
-                className={styles.input}
-                placeholder="URL da logo"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.fieldFull}>
-              <label className={styles.label}>Observações</label>
-              <textarea
-                className={styles.textarea}
-                placeholder="Observações"
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                rows={4}
-              />
-            </div>
-          </div>
-
-          <div className={styles.actionsRow}>
-            <button
-              onClick={criarEmpresa}
-              disabled={loading}
-              className={styles.primaryButton}
-            >
-              {loading ? "Criando..." : "Criar empresa"}
-            </button>
-          </div>
-        </section>}
+          </section>
+        )}
 
         <FeedbackToast
           success={mensagem}
@@ -485,6 +536,29 @@ export default function EmpresasPage() {
               {empresas.map((empresa) => {
                 const expandido = expandidoId === empresa.id;
                 const editando = editandoId === empresa.id;
+                const planoEdicao = planos.find(
+                  (plano) => plano.id === editPlanoId
+                );
+                const limiteWhatsappPlano = Math.max(
+                  1,
+                  planoEdicao?.limite_integracoes_whatsapp ??
+                    empresa.planos?.limite_integracoes_whatsapp ??
+                    1
+                );
+                const limiteUsuariosPlano = Math.max(
+                  1,
+                  planoEdicao?.limite_usuarios ??
+                    empresa.planos?.limite_usuarios ??
+                    2
+                );
+                const limiteWhatsappEfetivo =
+                  empresa.limite_integracoes_whatsapp ??
+                  empresa.planos?.limite_integracoes_whatsapp ??
+                  1;
+                const limiteUsuariosEfetivo =
+                  empresa.limite_usuarios ??
+                  empresa.planos?.limite_usuarios ??
+                  2;
 
                 return (
                   <article key={empresa.id} className={styles.itemCard}>
@@ -539,7 +613,7 @@ export default function EmpresasPage() {
                           </button>
                         )}
 
-                        {!editando && (
+                        {!editando && podeEditarEmpresas && (
                           <button
                             onClick={() => iniciarEdicao(empresa)}
                             className={styles.secondaryButton}
@@ -615,7 +689,7 @@ export default function EmpresasPage() {
                               <select
                                 className={styles.select}
                                 value={editPlanoId}
-                                onChange={(e) => setEditPlanoId(e.target.value)}
+                                onChange={(e) => alterarPlanoEdicao(e.target.value)}
                               >
                                 <option value="">Selecione um plano</option>
                                 {planos.map((plano) => (
@@ -639,6 +713,60 @@ export default function EmpresasPage() {
                                   </option>
                                 ))}
                               </select>
+                            </div>
+
+                            <div className={styles.field}>
+                              <label className={styles.label}>
+                                Números WhatsApp liberados
+                              </label>
+                              <select
+                                className={styles.select}
+                                value={editLimiteWhatsapp}
+                                onChange={(e) => setEditLimiteWhatsapp(e.target.value)}
+                              >
+                                {OPCOES_LIMITE.map((quantidade) => (
+                                  <option
+                                    key={quantidade}
+                                    value={quantidade}
+                                    disabled={quantidade < limiteWhatsappPlano}
+                                  >
+                                    {getOpcaoLimiteLabel(
+                                      quantidade,
+                                      limiteWhatsappPlano
+                                    )}
+                                  </option>
+                                ))}
+                              </select>
+                              <span className={styles.eyebrow}>
+                                Total permitido para a empresa. O plano inclui {limiteWhatsappPlano}.
+                              </span>
+                            </div>
+
+                            <div className={styles.field}>
+                              <label className={styles.label}>
+                                Usuários liberados
+                              </label>
+                              <select
+                                className={styles.select}
+                                value={editLimiteUsuarios}
+                                onChange={(e) => setEditLimiteUsuarios(e.target.value)}
+                              >
+                                {OPCOES_LIMITE.map((quantidade) => (
+                                  <option
+                                    key={quantidade}
+                                    value={quantidade}
+                                    disabled={quantidade < limiteUsuariosPlano}
+                                  >
+                                    {getOpcaoLimiteLabel(
+                                      quantidade,
+                                      limiteUsuariosPlano
+                                    )}
+                                  </option>
+                                ))}
+                              </select>
+                              <span className={styles.eyebrow}>
+                                Total permitido para a empresa. O plano inclui {limiteUsuariosPlano}.
+                              </span>
                             </div>
 
                             <div className={styles.field}>
@@ -730,6 +858,30 @@ export default function EmpresasPage() {
                               <span className={styles.infoLabel}>Plano</span>
                               <span className={styles.infoValue}>
                                 {empresa.planos?.nome ?? "—"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Números WhatsApp
+                              </span>
+                              <span className={styles.infoValue}>
+                                {limiteWhatsappEfetivo}
+                                {empresa.limite_integracoes_whatsapp !== null
+                                  ? " (liberação comercial)"
+                                  : " (plano)"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Usuários liberados
+                              </span>
+                              <span className={styles.infoValue}>
+                                {limiteUsuariosEfetivo}
+                                {empresa.limite_usuarios !== null
+                                  ? " (liberação comercial)"
+                                  : " (plano)"}
                               </span>
                             </div>
 

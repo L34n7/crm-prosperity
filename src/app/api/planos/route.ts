@@ -17,7 +17,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from("planos")
-    .select("id, nome, slug")
+    .select("id, nome, slug, limite_usuarios, limite_integracoes_whatsapp")
     .eq("status", "ativo")
     .order("nome", { ascending: true });
 
@@ -37,7 +37,10 @@ export async function GET() {
 
       return {
         ...plano,
-        limite_usuarios: limites?.limiteUsuarios ?? null,
+        limite_usuarios:
+          plano.limite_usuarios ?? limites?.limiteUsuarios ?? null,
+        limite_integracoes_whatsapp:
+          plano.limite_integracoes_whatsapp ?? 1,
         limite_tokens_ia: limites?.limiteTokensIa ?? null,
       };
     }),
