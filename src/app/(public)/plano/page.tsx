@@ -108,9 +108,12 @@ export default function PlanoPage() {
 
       if (novaAba) {
         novaAba.location.href = data.checkout_url;
-      } else {
-        window.location.assign(data.checkout_url);
+        setLoadingCheckout(null);
+        setCheckoutError("");
+        return;
       }
+
+      window.location.assign(data.checkout_url);
     } catch (error) {
       novaAba?.close();
       console.error("Erro ao buscar checkout:", error);
