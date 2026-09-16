@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import styles from "./FeedbackToast.module.css";
 
 type FeedbackToastProps = {
@@ -18,6 +19,8 @@ export default function FeedbackToast({
   onSuccessDismiss,
   onErrorDismiss,
 }: FeedbackToastProps) {
+  const [inlineErrorHost, setInlineErrorHost] = useState<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!success || !onSuccessDismiss) return;
 
@@ -38,19 +41,58 @@ export default function FeedbackToast({
     };
   }, [duration, error, onErrorDismiss]);
 
+  useEffect(() => {
+    if (!error) {
+      setInlineErrorHost(null);
+      return;
+    }
+
+    const localizarRodapeEditor = () => {
+      setInlineErrorHost(
+        document.querySelector<HTMLElement>(".a2 .overlay .drawer .foot"),
+      );
+    };
+
+    localizarRodapeEditor();
+
+    const observer = new MutationObserver(localizarRodapeEditor);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, [error]);
+
   if (!success && !error) return null;
 
+  const floatingError = Boolean(error && !inlineErrorHost);
+
   return (
-    <div className={styles.toastArea} role="status" aria-live="polite">
-      {success ? (
-        <div className={`${styles.toast} ${styles.toastSuccess}`}>
-          {success}
+    <>
+      {success || floatingError ? (
+        <div className={styles.toastArea} role="status" aria-live="polite">
+          {success ? (
+            <div className={`${styles.toast} ${styles.toastSuccess}`}>
+              {success}
+            </div>
+          ) : null}
+
+          {floatingError ? (
+            <div className={`${styles.toast} ${styles.toastError}`}>{error}</div>
+          ) : null}
         </div>
       ) : null}
 
-      {error ? (
-        <div className={`${styles.toast} ${styles.toastError}`}>{error}</div>
-      ) : null}
-    </div>
+      {error && inlineErrorHost
+        ? createPortal(
+            <div
+              className={`${styles.toast} ${styles.toastError} ${styles.inlineError}`}
+              role="alert"
+              aria-live="assertive"
+            >
+              {error}
+            </div>,
+            inlineErrorHost,
+          )
+        : null}
+    </>
   );
 }
