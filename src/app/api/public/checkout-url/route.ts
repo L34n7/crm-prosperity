@@ -12,8 +12,7 @@ type ProsperityPayOferta = {
 };
 
 const PROSPERITY_PAY_REFERENCIA_POR_PLANO: Record<PlanoSlug, string> = {
-  // Durante a validação, o Básico usa o checkout de teste de R$ 5.
-  basico: "248a0b141abf",
+  basico: "plano-basic-be3817c7",
   essencial: "c7074bf9e18e",
 };
 
