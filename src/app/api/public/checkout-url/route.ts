@@ -5,15 +5,11 @@ const supabase = getSupabaseAdmin();
 
 type PlanoSlug = "basico" | "essencial";
 type CheckoutGateway = "atomo" | "prosperity_pay";
+type TipoOferta = "normal" | "vip" | "jv" | "af" | "free";
 
 type ProsperityPayOferta = {
   referencia: string;
   metadata_json: Record<string, unknown> | null;
-};
-
-const PROSPERITY_PAY_REFERENCIA_POR_PLANO: Record<PlanoSlug, string> = {
-  basico: "plano-basic-be3817c7",
-  essencial: "c7074bf9e18e",
 };
 
 function obterCheckoutUrlAtomo(tipoOferta: string | null, planoSlug: PlanoSlug | null) {
@@ -89,8 +85,58 @@ function obterCheckoutUrlAtomoPorPlano(planoSlug: PlanoSlug | null) {
   return "";
 }
 
-async function obterCheckoutProsperityPay(planoSlug: PlanoSlug) {
-  const referencia = PROSPERITY_PAY_REFERENCIA_POR_PLANO[planoSlug];
+async function buscarOfertaProsperityPay(
+  planoId: string,
+  tipoOferta: TipoOferta
+) {
+  const tiposBusca: TipoOferta[] =
+    tipoOferta === "normal" ? ["normal"] : [tipoOferta, "normal"];
+
+  for (const tipoBusca of tiposBusca) {
+    let query = supabase
+      .from("ia_token_ofertas")
+      .select("referencia, metadata_json")
+      .eq("gateway", "prosperity_pay")
+      .eq("tipo", "mensalidade")
+      .eq("ativa", true)
+      .eq("plano_id", planoId);
+
+    if (tipoBusca === "normal") {
+      query = query.contains("metadata_json", {
+        tipo_oferta: "normal",
+        origem: "prosperity_pay",
+      });
+    } else {
+      query = query.contains("metadata_json", {
+        tipo_oferta: tipoBusca,
+      });
+    }
+
+    const { data, error } = await query
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro ao buscar checkout Prosperity Pay:", error);
+      throw new Error("Erro ao localizar o checkout da Prosperity Pay.");
+    }
+
+    if (data) {
+      return data as ProsperityPayOferta;
+    }
+  }
+
+  return null;
+}
+
+async function obterCheckoutProsperityPay(
+  planoSlug: PlanoSlug,
+  tipoOferta: TipoOferta
+) {
+  if (tipoOferta === "free") {
+    throw new Error("A oferta gratuita não utiliza checkout da Prosperity Pay.");
+  }
 
   const { data: plano, error: planoError } = await supabase
     .from("planos")
@@ -108,25 +154,12 @@ async function obterCheckoutProsperityPay(planoSlug: PlanoSlug) {
     throw new Error("Plano não encontrado.");
   }
 
-  const { data, error } = await supabase
-    .from("ia_token_ofertas")
-    .select("referencia, metadata_json")
-    .eq("gateway", "prosperity_pay")
-    .eq("tipo", "mensalidade")
-    .eq("ativa", true)
-    .eq("plano_id", plano.id)
-    .eq("referencia", referencia)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar checkout Prosperity Pay:", error);
-    throw new Error("Erro ao localizar o checkout da Prosperity Pay.");
-  }
-
-  const oferta = data as ProsperityPayOferta | null;
+  const oferta = await buscarOfertaProsperityPay(plano.id, tipoOferta);
 
   if (!oferta) {
-    throw new Error("Checkout Prosperity Pay não configurado para este plano.");
+    throw new Error(
+      "Checkout Prosperity Pay não configurado para esta oferta e plano."
+    );
   }
 
   const checkoutUrl =
@@ -168,6 +201,16 @@ function normalizarGateway(valor: unknown): CheckoutGateway {
   return "atomo";
 }
 
+function normalizarTipoOferta(valor: unknown): TipoOferta {
+  const tipo = String(valor ?? "normal").trim().toLowerCase();
+
+  if (tipo === "vip" || tipo === "jv" || tipo === "af" || tipo === "free") {
+    return tipo;
+  }
+
+  return "normal";
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -199,6 +242,8 @@ export async function POST(request: Request) {
       throw new Error("Lead não encontrado.");
     }
 
+    const tipoOferta = normalizarTipoOferta(lead.tipo_oferta);
+
     const { error: updateError } = await supabase
       .from("leads_cadastro")
       .update({ plano_slug: planoSlug, updated_at: new Date().toISOString() })
@@ -210,13 +255,7 @@ export async function POST(request: Request) {
     }
 
     if (gateway === "prosperity_pay") {
-      if (lead.tipo_oferta !== "normal") {
-        throw new Error(
-          "Prosperity Pay ainda não está configurado para esta oferta especial."
-        );
-      }
-
-      const checkout = await obterCheckoutProsperityPay(planoSlug);
+      const checkout = await obterCheckoutProsperityPay(planoSlug, tipoOferta);
 
       return NextResponse.json({
         ok: true,
@@ -226,7 +265,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const checkoutUrl = obterCheckoutUrlAtomo(lead.tipo_oferta, planoSlug);
+    const checkoutUrl = obterCheckoutUrlAtomo(tipoOferta, planoSlug);
 
     if (!checkoutUrl) {
       throw new Error("Checkout não configurado.");
