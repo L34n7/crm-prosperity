@@ -1,0 +1,23 @@
+.responsibilityCheck {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  align-items: flex-start;
+  padding: 10px 12px;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.responsibilityCheck input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.responsibilityCheck span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

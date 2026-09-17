@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import modalStyles from "./ExclusaoContatosEmMassa.module.css";
 import styles from "./contatos.module.css";
 
 type AnaliseExclusao = {
@@ -187,7 +188,7 @@ export default function ExclusaoContatosEmMassa({
                     definitivamente.
                   </p>
 
-                  <label className={styles.filterCheck}>
+                  <label className={`${styles.filterCheck} ${modalStyles.responsibilityCheck}`}>
                     <input
                       type="checkbox"
                       checked={assumiuResponsabilidade}
