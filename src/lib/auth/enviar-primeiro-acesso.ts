@@ -1,7 +1,10 @@
+import { createHash, randomBytes } from "crypto";
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
+const DURACAO_PRIMEIRO_ACESSO_MS = 24 * 60 * 60 * 1000;
+const MAX_ABERTURAS_PRIMEIRO_ACESSO = 3;
 
 function escaparHtml(valor: string) {
   return String(valor || "")
@@ -10,6 +13,103 @@ function escaparHtml(valor: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function normalizarEmail(valor: string) {
+  return String(valor || "").trim().toLowerCase();
+}
+
+export function hashTokenPrimeiroAcesso(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export function tokenPrimeiroAcessoValido(token: unknown): token is string {
+  return (
+    typeof token === "string" &&
+    token.length >= 32 &&
+    token.length <= 128 &&
+    /^[A-Za-z0-9_-]+$/.test(token)
+  );
+}
+
+async function buscarAuthUserIdPorEmail(email: string) {
+  const { data, error } = await supabaseAdmin.rpc(
+    "obter_auth_user_id_por_email",
+    { p_email: email }
+  );
+
+  if (error) {
+    throw new Error(`Erro ao localizar usuário de autenticação: ${error.message}`);
+  }
+
+  return typeof data === "string" && data ? data : null;
+}
+
+async function garantirUsuarioAuth(params: {
+  email: string;
+  nome: string;
+  empresaId: string;
+  telefone?: string | null;
+}) {
+  const email = normalizarEmail(params.email);
+  const metadata = {
+    nome: params.nome,
+    empresa_id: params.empresaId,
+    telefone: params.telefone ?? null,
+  };
+
+  let authUserId = await buscarAuthUserIdPorEmail(email);
+
+  if (!authUserId) {
+    const criado = await supabaseAdmin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: metadata,
+    });
+
+    if (!criado.error && criado.data.user) {
+      return criado.data.user.id;
+    }
+
+    const mensagem = String(criado.error?.message || "").toLowerCase();
+    const usuarioJaExiste =
+      mensagem.includes("already been registered") ||
+      mensagem.includes("already registered") ||
+      mensagem.includes("user already") ||
+      mensagem.includes("already exists");
+
+    if (!usuarioJaExiste) {
+      throw new Error(
+        criado.error?.message || "Erro ao criar usuário de autenticação."
+      );
+    }
+
+    authUserId = await buscarAuthUserIdPorEmail(email);
+  }
+
+  if (!authUserId) {
+    throw new Error("Não foi possível localizar o usuário de autenticação.");
+  }
+
+  const atual = await supabaseAdmin.auth.admin.getUserById(authUserId);
+  if (atual.error || !atual.data.user) {
+    throw new Error(
+      atual.error?.message || "Usuário de autenticação não encontrado."
+    );
+  }
+
+  const atualizado = await supabaseAdmin.auth.admin.updateUserById(authUserId, {
+    user_metadata: {
+      ...(atual.data.user.user_metadata || {}),
+      ...metadata,
+    },
+  });
+
+  if (atualizado.error) {
+    throw new Error(atualizado.error.message);
+  }
+
+  return authUserId;
 }
 
 function getPrimeiroAcessoTemplate(params: {
@@ -47,6 +147,7 @@ function getPrimeiroAcessoTemplate(params: {
                 <td style="padding:40px 34px 32px;">
                   <p style="margin:0 0 18px;color:#0f172a;font-size:18px;line-height:1.6;font-weight:700;">Olá, ${nome}!</p>
                   <p style="margin:0 0 18px;color:#475569;font-size:15px;line-height:1.7;">Seu acesso ao <strong>CRM Prosperity</strong> já está pronto.</p>
+                  <p style="margin:0 0 18px;color:#475569;font-size:15px;line-height:1.7;">O link abaixo é válido por <strong>24 horas</strong> e pode ser aberto em até <strong>3 vezes</strong>. A senha poderá ser cadastrada apenas uma vez.</p>
                   <p style="margin:0 0 28px;color:#475569;font-size:15px;line-height:1.7;">Clique no botão abaixo para criar sua senha e fazer o primeiro acesso com segurança.</p>
                   <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
@@ -59,7 +160,7 @@ function getPrimeiroAcessoTemplate(params: {
                     <p style="margin:0;color:#64748b;font-size:13px;line-height:1.6;">Se o botão não funcionar, copie e cole este link no seu navegador:</p>
                     <p style="margin:10px 0 0;color:#0b5ebd;font-size:12px;line-height:1.6;word-break:break-all;">${link}</p>
                   </div>
-                  <p style="margin:0;color:#64748b;font-size:13px;line-height:1.7;">Por segurança, crie uma senha forte e não compartilhe seus dados de acesso.</p>
+                  <p style="margin:0;color:#64748b;font-size:13px;line-height:1.7;">Por segurança, crie uma senha forte e não compartilhe este link nem seus dados de acesso.</p>
                 </td>
               </tr>
               <tr>
@@ -88,62 +189,86 @@ export async function enviarPrimeiroAcesso(params: {
     throw new Error("Envio de email não configurado.");
   }
 
+  const email = normalizarEmail(params.email);
+  if (!email) {
+    throw new Error("Email inválido para primeiro acesso.");
+  }
+
+  const authUserId = await garantirUsuarioAuth({
+    ...params,
+    email,
+  });
+
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = hashTokenPrimeiroAcesso(token);
+  const expiraEm = new Date(
+    Date.now() + DURACAO_PRIMEIRO_ACESSO_MS
+  ).toISOString();
+  const agora = new Date().toISOString();
+
+  const insercao = await supabaseAdmin
+    .from("primeiro_acesso_tokens")
+    .insert({
+      empresa_id: params.empresaId,
+      auth_user_id: authUserId,
+      email,
+      token_hash: tokenHash,
+      expira_em: expiraEm,
+      aberturas: 0,
+      max_aberturas: MAX_ABERTURAS_PRIMEIRO_ACESSO,
+    })
+    .select("id")
+    .single();
+
+  if (insercao.error || !insercao.data) {
+    throw new Error(
+      `Erro ao criar link de primeiro acesso: ${
+        insercao.error?.message || "registro não criado"
+      }`
+    );
+  }
+
   const siteUrl = (
     process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com"
   ).replace(/\/$/, "");
-  const redirectTo = `${siteUrl}/auth/callback?next=/definir-senha`;
-
-  let resultado = await supabaseAdmin.auth.admin.generateLink({
-    type: "invite",
-    email: params.email,
-    options: {
-      redirectTo,
-      data: {
-        nome: params.nome,
-        empresa_id: params.empresaId,
-        telefone: params.telefone ?? null,
-      },
-    },
-  });
-
-  if (resultado.error) {
-    const mensagem = String(resultado.error.message || "").toLowerCase();
-    const usuarioJaExiste =
-      mensagem.includes("already been registered") ||
-      mensagem.includes("already registered") ||
-      mensagem.includes("user already");
-
-    if (!usuarioJaExiste) {
-      throw new Error(resultado.error.message);
-    }
-
-    resultado = await supabaseAdmin.auth.admin.generateLink({
-      type: "recovery",
-      email: params.email,
-      options: { redirectTo },
-    });
-  }
-
-  if (resultado.error) {
-    throw new Error(resultado.error.message);
-  }
-
-  const link = resultado.data.properties?.action_link;
-  if (!link) {
-    throw new Error("Não foi possível gerar o link de primeiro acesso.");
-  }
+  const link = `${siteUrl}/primeiro-acesso?token=${encodeURIComponent(token)}`;
 
   const resend = new Resend(resendApiKey);
   const envio = await resend.emails.send({
     from: "CRM Prosperity <no-reply@crmprosperity.com>",
-    to: params.email,
+    to: email,
     subject: "Seu acesso ao CRM Prosperity foi liberado",
     html: getPrimeiroAcessoTemplate({ nome: params.nome, link }),
   });
 
   if (envio.error) {
-    throw new Error(envio.error.message || "Erro ao enviar email de primeiro acesso.");
+    await supabaseAdmin
+      .from("primeiro_acesso_tokens")
+      .delete()
+      .eq("id", insercao.data.id);
+    throw new Error(
+      envio.error.message || "Erro ao enviar email de primeiro acesso."
+    );
   }
 
-  return { enviado: true as const };
+  const invalidacao = await supabaseAdmin
+    .from("primeiro_acesso_tokens")
+    .update({ invalidado_em: agora, updated_at: agora })
+    .eq("auth_user_id", authUserId)
+    .neq("id", insercao.data.id)
+    .is("senha_definida_em", null)
+    .is("invalidado_em", null);
+
+  if (invalidacao.error) {
+    console.error(
+      "[PRIMEIRO ACESSO] Falha ao invalidar links anteriores:",
+      invalidacao.error
+    );
+  }
+
+  return {
+    enviado: true as const,
+    expira_em: expiraEm,
+    max_aberturas: MAX_ABERTURAS_PRIMEIRO_ACESSO,
+  };
 }
