@@ -305,7 +305,7 @@ export default function AgendaFeedbackResolution() {
       >
         <div className="dhead">
           <div className={styles.modalIcon}>
-            <CircleDollarSign size={19} />
+            <CircleDollarSign size={28} />
           </div>
           <div>
             <h2 id="agenda-feedback-resolution-title">Finalizar atendimento</h2>
