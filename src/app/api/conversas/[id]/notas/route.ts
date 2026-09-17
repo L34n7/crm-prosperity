@@ -6,6 +6,10 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import { podeGerenciarNotasConversas } from "@/lib/auth/authorization";
+import {
+  getRequestAuditMetadata,
+  registrarLogAuditoriaSeguro,
+} from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
 const LIMITE_CARACTERES_NOTA = 600;
@@ -20,6 +24,10 @@ type NotaBase = {
   id: string;
   empresa_id: string;
   conversa_id: string;
+  autor_id: string;
+  conteudo: string;
+  created_at: string;
+  updated_at: string;
 };
 
 async function buscarConversaPermitida(
@@ -98,6 +106,44 @@ function selectNotaComAutor() {
   `;
 }
 
+function obterOrigemAuditoria(request: Request) {
+  return request.headers.get("x-origem-modulo") || "api_conversas_notas";
+}
+
+async function registrarAuditoriaNota(input: {
+  request: Request;
+  usuario: UsuarioContexto;
+  empresaId: string;
+  conversaId: string;
+  notaId: string;
+  acao: "nota_criada" | "nota_editada" | "nota_excluida";
+  descricao: string;
+  antes?: Record<string, unknown> | null;
+  depois?: Record<string, unknown> | null;
+}) {
+  const requestMetadata = getRequestAuditMetadata(input.request);
+
+  await registrarLogAuditoriaSeguro({
+    empresa_id: input.empresaId,
+    categoria: "conversas",
+    entidade: "conversa_nota",
+    entidade_id: input.notaId,
+    acao: input.acao,
+    descricao: input.descricao,
+    usuario_id: input.usuario.id,
+    usuario_nome: input.usuario.nome,
+    usuario_email: input.usuario.email,
+    antes: input.antes ?? null,
+    depois: input.depois ?? null,
+    detalhes: {
+      conversa_id: input.conversaId,
+      nota_id: input.notaId,
+      origem: obterOrigemAuditoria(input.request),
+    },
+    ...requestMetadata,
+  });
+}
+
 async function bloquearSemPermissaoNotas(usuario: UsuarioContexto) {
   if (await podeGerenciarNotasConversas(usuario)) return null;
 
@@ -112,7 +158,6 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-
   const resultado = await getUsuarioContexto();
 
   if (!resultado.ok) {
@@ -125,14 +170,8 @@ export async function GET(
   const bloqueio = await bloquearSemPermissaoNotas(resultado.usuario);
   if (bloqueio) return bloqueio;
 
-  const conversaPermitida = await buscarConversaPermitida(
-    id,
-    resultado.usuario
-  );
-
-  if (!conversaPermitida.ok) {
-    return conversaPermitida.response;
-  }
+  const conversaPermitida = await buscarConversaPermitida(id, resultado.usuario);
+  if (!conversaPermitida.ok) return conversaPermitida.response;
 
   const empresaId = conversaPermitida.conversa.empresa_id;
 
@@ -150,10 +189,7 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({
-    ok: true,
-    notas: data ?? [],
-  });
+  return NextResponse.json({ ok: true, notas: data ?? [] });
 }
 
 export async function POST(
@@ -161,7 +197,6 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-
   const resultado = await getUsuarioContexto();
 
   if (!resultado.ok) {
@@ -194,14 +229,8 @@ export async function POST(
     );
   }
 
-  const conversaPermitida = await buscarConversaPermitida(
-    id,
-    resultado.usuario
-  );
-
-  if (!conversaPermitida.ok) {
-    return conversaPermitida.response;
-  }
+  const conversaPermitida = await buscarConversaPermitida(id, resultado.usuario);
+  if (!conversaPermitida.ok) return conversaPermitida.response;
 
   const empresaId = conversaPermitida.conversa.empresa_id;
 
@@ -223,6 +252,24 @@ export async function POST(
     );
   }
 
+  const notaCriada = data as unknown as NotaBase;
+
+  await registrarAuditoriaNota({
+    request,
+    usuario: resultado.usuario,
+    empresaId,
+    conversaId: id,
+    notaId: notaCriada.id,
+    acao: "nota_criada",
+    descricao: "Nota interna criada na conversa",
+    depois: {
+      conteudo: notaCriada.conteudo,
+      autor_id: notaCriada.autor_id,
+      created_at: notaCriada.created_at,
+      updated_at: notaCriada.updated_at,
+    },
+  });
+
   return NextResponse.json({
     ok: true,
     message: "Nota criada com sucesso",
@@ -235,7 +282,6 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-
   const resultado = await getUsuarioContexto();
 
   if (!resultado.ok) {
@@ -276,20 +322,14 @@ export async function PUT(
     );
   }
 
-  const conversaPermitida = await buscarConversaPermitida(
-    id,
-    resultado.usuario
-  );
-
-  if (!conversaPermitida.ok) {
-    return conversaPermitida.response;
-  }
+  const conversaPermitida = await buscarConversaPermitida(id, resultado.usuario);
+  if (!conversaPermitida.ok) return conversaPermitida.response;
 
   const empresaId = conversaPermitida.conversa.empresa_id;
 
   const { data: nota, error: notaError } = await supabaseAdmin
     .from("conversas_notas")
-    .select("id, empresa_id, conversa_id")
+    .select("id, empresa_id, conversa_id, autor_id, conteudo, created_at, updated_at")
     .eq("id", notaId)
     .eq("empresa_id", empresaId)
     .eq("conversa_id", id)
@@ -327,6 +367,30 @@ export async function PUT(
     );
   }
 
+  const notaAtualizada = data as unknown as NotaBase;
+
+  await registrarAuditoriaNota({
+    request,
+    usuario: resultado.usuario,
+    empresaId,
+    conversaId: id,
+    notaId,
+    acao: "nota_editada",
+    descricao: "Nota interna editada na conversa",
+    antes: {
+      conteudo: nota.conteudo,
+      autor_id: nota.autor_id,
+      created_at: nota.created_at,
+      updated_at: nota.updated_at,
+    },
+    depois: {
+      conteudo: notaAtualizada.conteudo,
+      autor_id: notaAtualizada.autor_id,
+      created_at: notaAtualizada.created_at,
+      updated_at: notaAtualizada.updated_at,
+    },
+  });
+
   return NextResponse.json({
     ok: true,
     message: "Nota atualizada com sucesso",
@@ -339,7 +403,6 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-
   const resultado = await getUsuarioContexto();
 
   if (!resultado.ok) {
@@ -362,20 +425,14 @@ export async function DELETE(
     );
   }
 
-  const conversaPermitida = await buscarConversaPermitida(
-    id,
-    resultado.usuario
-  );
-
-  if (!conversaPermitida.ok) {
-    return conversaPermitida.response;
-  }
+  const conversaPermitida = await buscarConversaPermitida(id, resultado.usuario);
+  if (!conversaPermitida.ok) return conversaPermitida.response;
 
   const empresaId = conversaPermitida.conversa.empresa_id;
 
   const { data: nota, error: notaError } = await supabaseAdmin
     .from("conversas_notas")
-    .select("id, empresa_id, conversa_id")
+    .select("id, empresa_id, conversa_id, autor_id, conteudo, created_at, updated_at")
     .eq("id", notaId)
     .eq("empresa_id", empresaId)
     .eq("conversa_id", id)
@@ -407,6 +464,23 @@ export async function DELETE(
       { status: 500 }
     );
   }
+
+  await registrarAuditoriaNota({
+    request,
+    usuario: resultado.usuario,
+    empresaId,
+    conversaId: id,
+    notaId,
+    acao: "nota_excluida",
+    descricao: "Nota interna excluida da conversa",
+    antes: {
+      conteudo: nota.conteudo,
+      autor_id: nota.autor_id,
+      created_at: nota.created_at,
+      updated_at: nota.updated_at,
+    },
+    depois: null,
+  });
 
   return NextResponse.json({
     ok: true,

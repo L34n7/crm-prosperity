@@ -35,6 +35,7 @@ export type RegistrarLogAuditoriaInput = {
     | "permissao"
     | "politica_empresa"
     | "conversa"
+    | "conversa_nota"
     | "contato"
     | "pessoa"
     | "prontuario"
