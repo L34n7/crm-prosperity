@@ -1,0 +1,12091 @@
+"use client";
+
+import React, {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import FeedbackToast from "@/components/FeedbackToast";
+import Header from "@/components/Header";
+import ContatoCadastroNichoAction from "@/components/conversas/ContatoCadastroNichoAction";
+import { solicitarAtualizacaoConversasNaoLidasHeader } from "@/lib/header-summary/events";
+import { createClient } from "@/lib/supabase/client";
+import { getWhatsAppMessageSpecialState } from "@/lib/whatsapp/message-special-state";
+import { getWhatsAppFlowResponsePresentation } from "@/lib/whatsapp/flow-response-presentation";
+import styles from "./conversas.module.css";
+import AgendarMensagemButton from "./AgendarMensagemButton";
+import TemplateVariableSearchSelect, {
+  type TemplateVariableOption,
+} from "@/components/TemplateVariableSearchSelect";
+import VirtualizedConversationRows from "./VirtualizedConversationRows";
+import { can } from "@/lib/permissoes/frontend";
+import {
+  FileText,
+  MessageSquareText,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Send,
+  Trash2,
+  Variable,
+} from "lucide-react";
+
+import {
+  obterTipoCaptura,
+  formatarLabelCapturaResumo,
+  formatarLabelCapturaDetalhada,
+  compararInformacoesCaptura,
+  TOTAIS_CHIPS_RAPIDOS_INICIAIS,
+  normalizarTotaisChipsRapidos,
+  TEXTO_VARIAVEIS_FIXAS_MACRO,
+  VARIAVEIS_FIXAS_SISTEMA,
+  ETIQUETAS_PADRAO,
+  obterNomeCampanhaContato,
+  limitarTextoCampanha,
+  formatarCampanhaRastreamentoContato,
+  normalizarTelefoneMetaUi,
+  formatarNumeroLimiteMetaUi,
+  normalizarChaveVariavelMacro,
+  limitarPreviewMacro,
+  CLASSIFICACOES_ENCERRAMENTO,
+  RASTREAMENTO_EVENTOS_MANUAIS,
+  getEventoRastreamentoLabel,
+  eventoRastreamentoExigeValor,
+  formatarValorRastreamento,
+  mensagemTemMidiaExpiravel,
+  formatarHora,
+  formatarDataCompleta,
+  formatarDataCurtaDisparo,
+  formatarDataSeparador,
+  getPrioridadeLabel,
+  getCanalLabel,
+  getStatusLabel,
+  isConversaHistoricoImportadoUi,
+  getMensagemConversaEncerrada,
+  getCategoriaLeadProtocoloLabel,
+  getRemetenteLabel,
+  mensagemEhDisparo,
+  mensagemDisparoTemBotoes,
+  getModoDisparo,
+  obterApresentacaoDisparo,
+  getStatusEnvioLabel,
+  getMensagemErroEnvio,
+  mensagemFoiEnviadaPeloSistema,
+  getIniciais,
+  getSlaNivel,
+  getPreviewConversa,
+  getSharedContactName,
+  getSharedContactPhones,
+  getSharedContactEmails,
+  extrairLinksDoTexto,
+  getNomeContatoCompartilhado,
+  getTelefonePrincipalContatoCompartilhado,
+  getEmailPrincipalContatoCompartilhado,
+  getIniciaisContatoCompartilhado,
+  hexToRgba,
+  getUltimaMensagemRecebidaDoContato,
+  isJanela24hMetaAberta,
+  formatarTempoRestanteJanela,
+  normalizarJanela24hConversa,
+  montarUrlMidiaMensagem,
+  type Conversa,
+  type InformacaoCapturaConversa,
+  type IntegracaoWhatsappOpcao,
+  type Mensagem,
+  type Janela24hConversa,
+  type LimiteMetaResumo,
+  type TelefoneMetaLimite,
+  type SetorOpcao,
+  type UsuarioOpcao,
+  type UsuarioLogado,
+  type PoliticaAtendimento,
+  type ListaConversa,
+  type ListaEmpresa,
+  type ChipRapido,
+  type TotaisChipsRapidos,
+  type EtiquetaEmpresa,
+  type EtiquetaForm,
+  type MacroChat,
+  type MacroForm,
+  type VariavelGlobal,
+  type VariavelForm,
+  type AbaPainelDireito,
+  type NotaConversa,
+  type MidiaAgrupadaItem,
+  type MidiaAgrupadaSecao,
+  type AbaMidiaDocsLinks,
+  type StatusLeadContato,
+  type ContatoCompartilhadoMensagem,
+  type ContatoCadastroForm,
+  type CampanhaRastreamentoContato,
+  type ProtocoloConversa,
+  type RastreamentoEventoTipoManual,
+  type ClassificacaoEncerramento,
+  type RastreamentoEventoConversa,
+} from "./conversation-shared";
+import {
+  AudioMessagePlayer,
+  CampoContatoEditavel,
+  CampanhaContatoEditavel,
+  TranscricaoAudioBox,
+  TextoComEmoji,
+  EtiquetaCor,
+} from "./ConversationMessageComponents";
+
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
+  ssr: false,
+  loading: () => <span>Carregando emojis...</span>,
+});
+
+export default function ConversasPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const conversaParam = searchParams.get("id") || searchParams.get("conversaId");
+  const mobileDetailActive = Boolean(conversaParam);
+
+  const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
+  const [politicaAtendimento, setPoliticaAtendimento] =
+    useState<PoliticaAtendimento | null>(null);
+
+  const [conversas, setConversas] = useState<Conversa[]>([]);
+  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [janela24hConversa, setJanela24hConversa] =
+    useState<Janela24hConversa | null>(null);
+
+  const LIMITE_CONVERSAS = 20;
+  const POLL_CONVERSAS_MS = 5 * 60_000;
+  const POLL_MENSAGENS_MS = 5 * 60_000;
+  const REALTIME_MENSAGENS_DEBOUNCE_MS = 800;
+  const REALTIME_CONVERSAS_DEBOUNCE_MS = 8_000;
+  const [temMaisConversas, setTemMaisConversas] = useState(true);
+  const [carregandoMaisConversas, setCarregandoMaisConversas] = useState(false);
+
+  const carregandoMaisConversasRef = useRef(false);
+  const conversasRef = useRef<Conversa[]>([]);
+  const proximoCursorConversasRef = useRef<string | null>(null);
+  const versaoCargaConversasRef = useRef(0);
+  const listaConversasRef = useRef<HTMLDivElement | null>(null);
+  const atualizandoConversasAutomaticamenteRef = useRef(false);
+  const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
+    null
+  );
+  const realtimeConversasTimerRef = useRef<number | null>(null);
+  const realtimeMensagensTimerRef = useRef<number | null>(null);
+  const cargaInicialMensagensConversaRef = useRef<string | null>(null);
+  const atualizacoesMensagensPendentesRef = useRef<Set<string>>(new Set());
+  const versaoCargaMensagensRef = useRef(0);
+  const requisicoesMensagensRef = useRef<Set<AbortController>>(new Set());
+  const marcarLidaAposRealtimeRef = useRef(false);
+  const marcarLidaAoFinalTimerRef = useRef<number | null>(null);
+  const marcandoConversasComoLidasRef = useRef<Set<string>>(new Set());
+  const marcacaoLidaPendenteRef = useRef<Set<string>>(new Set());
+  const [conversaSelecionada, setConversaSelecionada] =
+    useState<Conversa | null>(null);
+  const [mensagensFavoritasPainel, setMensagensFavoritasPainel] = useState<
+    Mensagem[]
+  >([]);
+  const [
+    mensagensFavoritasPainelConversaId,
+    setMensagensFavoritasPainelConversaId,
+  ] = useState<string | null>(null);
+  const [carregandoMensagensFavoritas, setCarregandoMensagensFavoritas] =
+    useState(false);
+  const conversaSelecionadaIdRef = useRef<string | null>(null);
+  const conversaUrlPendenteRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    conversasRef.current = conversas;
+  }, [conversas]);
+
+  useEffect(() => {
+    if (!conversaParam) {
+      conversaUrlPendenteRef.current = null;
+      return;
+    }
+
+    const conversaUrlPendente = conversaUrlPendenteRef.current;
+
+    if (conversaUrlPendente && conversaParam !== conversaUrlPendente) {
+      return;
+    }
+
+    if (conversaUrlPendente === conversaParam) {
+      conversaUrlPendenteRef.current = null;
+    }
+
+    const conversaDaUrl = conversas.find((conversa) => conversa.id === conversaParam);
+
+    if (conversaDaUrl && conversaSelecionada?.id !== conversaDaUrl.id) {
+      selecionarConversa(conversaDaUrl);
+    }
+  }, [conversaParam, conversas, conversaSelecionada?.id]);
+
+  const [setores, setSetores] = useState<SetorOpcao[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
+  const [carregandoUsuariosAtribuicao, setCarregandoUsuariosAtribuicao] =
+    useState(false);
+  const [integracoesWhatsapp, setIntegracoesWhatsapp] = useState<
+    IntegracaoWhatsappOpcao[]
+  >([]);
+
+  const [busca, setBusca] = useState("");
+  const [buscaDebounced, setBuscaDebounced] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState("Todas");
+  const [canalFiltro, setCanalFiltro] = useState("todos");
+  const [setorFiltro, setSetorFiltro] = useState("todos");
+  const [responsavelFiltro, setResponsavelFiltro] = useState("todos");
+  const [integracaoWhatsappFiltro, setIntegracaoWhatsappFiltro] =
+    useState("todos");
+  const [chipRapido, setChipRapido] = useState<ChipRapido>("Todas");
+  const [totaisChipsRapidos, setTotaisChipsRapidos] =
+    useState<TotaisChipsRapidos>(TOTAIS_CHIPS_RAPIDOS_INICIAIS);
+
+  const [conteudo, setConteudo] = useState("");
+  const [loadingConversas, setLoadingConversas] = useState(false);
+  const [atualizandoConversas, setAtualizandoConversas] = useState(false);
+  const [loadingMensagens, setLoadingMensagens] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [inicioJanelaHistorico, setInicioJanelaHistorico] = useState<string | null>(null);
+  const [fimJanelaHistorico, setFimJanelaHistorico] = useState<string | null>(null);
+  const inicioJanelaHistoricoRef = useRef<string | null>(null);
+
+  const [temMaisHistorico, setTemMaisHistorico] = useState(false);
+  const [carregandoMaisHistorico, setCarregandoMaisHistorico] = useState(false);
+
+  const [erro, setErro] = useState("");
+  const [mensagemSucesso, setMensagemSucesso] = useState("");
+  const [assumindo, setAssumindo] = useState(false);
+  const [abrindoNovoProtocolo, setAbrindoNovoProtocolo] =
+    useState(false);
+  const [modalNovoProtocoloAberto, setModalNovoProtocoloAberto] =
+    useState(false);
+  const [modalAtivarBotAberto, setModalAtivarBotAberto] = useState(false);
+    
+  const [infoExpandida, setInfoExpandida] = useState(false);
+
+  const [painelDireitoAberto, setPainelDireitoAberto] = useState(false);
+  const [abaPainelDireito, setAbaPainelDireito] =
+    useState<AbaPainelDireito>("contato");
+  const [informacoesCapturaConversa, setInformacoesCapturaConversa] = useState<
+    InformacaoCapturaConversa[]
+  >([]);
+  const [contatoCapturaId, setContatoCapturaId] = useState("");
+  const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
+    useState(false);
+
+  const informacoesCapturaConversaOrdenadas = useMemo(
+    () =>
+      [...informacoesCapturaConversa]
+        .filter((informacao) => String(informacao.valor || "").trim())
+        .sort(compararInformacoesCaptura),
+    [informacoesCapturaConversa]
+  );
+
+  const informacoesCapturaResumo = useMemo(() => {
+    const tiposExibidos = new Set<string>();
+
+    return informacoesCapturaConversaOrdenadas.filter((informacao) => {
+      const tipo = obterTipoCaptura(informacao);
+      if (tiposExibidos.has(tipo)) return false;
+      tiposExibidos.add(tipo);
+      return true;
+    });
+  }, [informacoesCapturaConversaOrdenadas]);
+
+  const possuiInformacoesCapturaExtras =
+    informacoesCapturaConversaOrdenadas.length > informacoesCapturaResumo.length;
+
+  const [abaMidiaDocsLinks, setAbaMidiaDocsLinks] =
+    useState<AbaMidiaDocsLinks>("midia");
+
+  const [acaoAberta, setAcaoAberta] = useState<
+    null | "transferir" | "atribuir" | "encerrar"
+  >(null);
+  const [novoSetorId, setNovoSetorId] = useState("");
+  const [novoResponsavelId, setNovoResponsavelId] = useState("");
+  const [encerramentoTipoEvento, setEncerramentoTipoEvento] =
+    useState<ClassificacaoEncerramento>("qualificado");
+  const [encerramentoValor, setEncerramentoValor] = useState("");
+  const [encerramentoObservacao, setEncerramentoObservacao] = useState("");
+  const [encerramentoInterrompeAutomacao, setEncerramentoInterrompeAutomacao] =
+    useState(false);
+  const [salvandoAcao, setSalvandoAcao] = useState(false);
+  const [abaVisivel, setAbaVisivel] = useState(true);
+  const abaVisivelRef = useRef(true);
+  const enviandoRef = useRef(false);
+  const editandoCampoRef = useRef<string | null>(null);
+
+  const mensagensRef = useRef<HTMLDivElement | null>(null);
+  const [mostrarBotaoIrFinal, setMostrarBotaoIrFinal] = useState(false);
+  const mensagemMaisAntigaCarregadaRef = useRef<string | null>(null);
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
+  const [menuContatoAberto, setMenuContatoAberto] = useState(false);
+  const menuContatoRef = useRef<HTMLDivElement | null>(null);
+  const menuAnexoRef = useRef<HTMLDivElement | null>(null);
+  const macroCardRef = useRef<HTMLDivElement | null>(null);
+
+  const conteudoRef = useRef("");
+  const legendaArquivoRef = useRef("");
+
+  const mensagensFavoritasCarregadas = useMemo(() => {
+    return mensagens.filter((msg) => msg.favorita);
+  }, [mensagens]);
+
+  const painelFavoritasCarregado =
+    mensagensFavoritasPainelConversaId === conversaSelecionada?.id;
+
+  const mensagensFavoritas = painelFavoritasCarregado
+    ? mensagensFavoritasPainel
+    : mensagensFavoritasCarregadas;
+
+  const integracoesWhatsappPorId = useMemo(() => {
+    return new Map(integracoesWhatsapp.map((item) => [item.id, item]));
+  }, [integracoesWhatsapp]);
+
+  function obterIntegracaoConversa(conversa?: Conversa | null) {
+    if (!conversa?.integracao_whatsapp_id) return null;
+    return integracoesWhatsappPorId.get(conversa.integracao_whatsapp_id) || null;
+  }
+
+  function obterPosicaoIntegracaoConversa(conversa?: Conversa | null) {
+    const integracao = obterIntegracaoConversa(conversa);
+    const posicao = Number(integracao?.posicao || 1);
+    return posicao >= 1 && posicao <= 3 ? posicao : 1;
+  }
+
+  function getClasseCorIntegracao(conversa: Conversa) {
+    const posicao = obterPosicaoIntegracaoConversa(conversa);
+
+    if (posicao === 1) return styles.conversationItemIntegration1;
+    if (posicao === 2) return styles.conversationItemIntegration2;
+    if (posicao === 3) return styles.conversationItemIntegration3;
+
+    return "";
+  }
+
+  function limitarTexto(texto: string, limite = 16) {
+  if (texto.length <= limite) return texto;
+
+  return `${texto.slice(0, limite).trim()}...`;
+}
+  async function carregarInformacoesCapturaConversa(
+    conversaId: string,
+    signal?: AbortSignal
+  ) {
+    if (!conversaId) return;
+
+    setCarregandoInformacoesCaptura(true);
+
+    try {
+      const response = await fetch(
+        `/api/conversas/${encodeURIComponent(
+          conversaId
+        )}/informacoes-captura`,
+        { cache: "no-store", signal }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(
+          data?.error || "Erro ao carregar informações de captura."
+        );
+      }
+
+      if (signal?.aborted || conversaSelecionadaIdRef.current !== conversaId) {
+        return;
+      }
+
+      setContatoCapturaId(String(data?.contato_id || "").trim());
+      setInformacoesCapturaConversa(
+        Array.isArray(data.informacoes)
+          ? data.informacoes.filter(
+              (informacao: InformacaoCapturaConversa) =>
+                Boolean(String(informacao?.valor || "").trim())
+            )
+          : []
+      );
+    } catch (error) {
+      if (signal?.aborted) return;
+      if (conversaSelecionadaIdRef.current !== conversaId) return;
+
+      setContatoCapturaId("");
+      setInformacoesCapturaConversa([]);
+      console.error("[capturas-conversa]", error);
+    } finally {
+      if (!signal?.aborted && conversaSelecionadaIdRef.current === conversaId) {
+        setCarregandoInformacoesCaptura(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    const conversaId = conversaSelecionada?.id || "";
+    const controller = new AbortController();
+
+    setContatoCapturaId("");
+    setInformacoesCapturaConversa([]);
+    setCarregandoInformacoesCaptura(Boolean(conversaId));
+
+    if (conversaId) {
+      void carregarInformacoesCapturaConversa(conversaId, controller.signal);
+    }
+
+    return () => controller.abort();
+  }, [conversaSelecionada?.id]);
+
+  async function salvarInformacaoCaptura(
+    informacao: InformacaoCapturaConversa,
+    valor: string
+  ) {
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
+    const contatoId =
+      contatoCapturaId || String(conversaSelecionada?.contatos?.id || "").trim();
+    const conversaId = conversaSelecionada?.id || "";
+    const valorLimpo = valor.trim();
+
+    if (!contatoId || !conversaId || !valorLimpo) {
+      setErro("Não foi possível identificar a informação de captura para edição.");
+      return;
+    }
+
+    try {
+      setErro("");
+      const response = await fetch(
+        `/api/contatos/${encodeURIComponent(
+          contatoId
+        )}/informacoes-captura`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Origem-Modulo": "conversas",
+          },
+          body: JSON.stringify({ id: informacao.id, valor: valorLimpo }),
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(
+          data?.error || "Erro ao atualizar a informação de captura."
+        );
+      }
+
+      setEditandoCampo(null);
+      setMensagemSucesso("Informação de captura atualizada.");
+      await carregarInformacoesCapturaConversa(conversaId);
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao atualizar a informação de captura."
+      );
+    }
+  }
+
+  function confirmarExclusaoCaptura(nomeCampo: string) {
+    return new Promise<boolean>((resolve) => {
+      const focoAnterior = document.activeElement as HTMLElement | null;
+      const overflowAnterior = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      const overlay = document.createElement("div");
+      overlay.setAttribute("role", "presentation");
+      Object.assign(overlay.style, {
+        position: "fixed",
+        inset: "0",
+        zIndex: "30000",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        background: "var(--crm-ui-private-decoration-rgb-15-23-42-0-58)",
+        backdropFilter: "blur(3px)",
+      });
+
+      const modal = document.createElement("div");
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "captura-delete-title");
+      Object.assign(modal.style, {
+        width: "min(430px, calc(100vw - 32px))",
+        overflow: "hidden",
+        border: "1px solid var(--crm-border, var(--crm-ui-private-decoration-hex-d8e1e7))",
+        borderRadius: "22px",
+        background: "var(--crm-surface, var(--crm-ui-private-decoration-hex-ffffff))",
+        color: "var(--crm-text-strong, var(--crm-ui-private-decoration-hex-0f2635))",
+        boxShadow: "0 24px 70px var(--crm-ui-private-decoration-rgb-15-23-42-0-28)",
+        transform: "translateY(0)",
+      });
+
+      const conteudo = document.createElement("div");
+      Object.assign(conteudo.style, {
+        display: "flex",
+        gap: "14px",
+        padding: "22px 22px 18px",
+      });
+
+      const icone = document.createElement("div");
+      icone.textContent = "!";
+      Object.assign(icone.style, {
+        flex: "0 0 44px",
+        width: "44px",
+        height: "44px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "14px",
+        background: "var(--crm-ui-private-decoration-rgb-220-38-38-0-1)",
+        color: "var(--crm-danger-strong, var(--crm-ui-private-decoration-hex-b91c1c))",
+        fontSize: "22px",
+        fontWeight: "900",
+      });
+
+      const textos = document.createElement("div");
+      Object.assign(textos.style, {
+        minWidth: "0",
+        paddingTop: "1px",
+      });
+
+      const titulo = document.createElement("h2");
+      titulo.id = "captura-delete-title";
+      titulo.textContent = "Excluir informação de captura?";
+      Object.assign(titulo.style, {
+        margin: "0",
+        fontSize: "19px",
+        lineHeight: "1.25",
+        fontWeight: "800",
+      });
+
+      const descricao = document.createElement("p");
+      descricao.textContent = `O campo “${nomeCampo}” será removido permanentemente do contato.`;
+      Object.assign(descricao.style, {
+        margin: "8px 0 0",
+        color: "var(--crm-text-muted, var(--crm-ui-private-decoration-hex-607785))",
+        fontSize: "14px",
+        lineHeight: "1.5",
+      });
+
+      const aviso = document.createElement("p");
+      aviso.textContent = "Esta ação não poderá ser desfeita.";
+      Object.assign(aviso.style, {
+        margin: "8px 0 0",
+        color: "var(--crm-danger-strong, var(--crm-ui-private-decoration-hex-b91c1c))",
+        fontSize: "13px",
+        fontWeight: "700",
+      });
+
+      textos.append(titulo, descricao, aviso);
+      conteudo.append(icone, textos);
+
+      const rodape = document.createElement("div");
+      Object.assign(rodape.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "10px",
+        padding: "16px 22px 20px",
+        borderTop: "1px solid var(--crm-border-soft, var(--crm-ui-private-decoration-hex-e8eef2))",
+        background: "var(--crm-surface-subtle, var(--crm-ui-private-decoration-hex-f8fafb))",
+      });
+
+      const cancelar = document.createElement("button");
+      cancelar.type = "button";
+      cancelar.textContent = "Cancelar";
+      Object.assign(cancelar.style, {
+        minHeight: "40px",
+        padding: "9px 15px",
+        border: "1px solid var(--crm-border, var(--crm-ui-private-decoration-hex-d8e1e7))",
+        borderRadius: "12px",
+        background: "var(--crm-surface, var(--crm-ui-private-decoration-hex-ffffff))",
+        color: "var(--crm-text-strong, var(--crm-ui-private-decoration-hex-0f2635))",
+        font: "inherit",
+        fontSize: "13px",
+        fontWeight: "800",
+        cursor: "pointer",
+      });
+
+      const confirmar = document.createElement("button");
+      confirmar.type = "button";
+      confirmar.textContent = "Excluir campo";
+      Object.assign(confirmar.style, {
+        minHeight: "40px",
+        padding: "9px 16px",
+        border: "1px solid var(--crm-ui-private-decoration-hex-b91c1c)",
+        borderRadius: "12px",
+        background: "var(--crm-ui-private-decoration-hex-b91c1c)",
+        color: "var(--crm-text-inverse)",
+        font: "inherit",
+        fontSize: "13px",
+        fontWeight: "800",
+        cursor: "pointer",
+        boxShadow: "0 6px 16px var(--crm-ui-private-decoration-rgb-185-28-28-0-2)",
+      });
+
+      let finalizado = false;
+      const finalizar = (resultado: boolean) => {
+        if (finalizado) return;
+        finalizado = true;
+        document.removeEventListener("keydown", aoPressionarTecla);
+        document.body.style.overflow = overflowAnterior;
+        overlay.remove();
+        focoAnterior?.focus?.();
+        resolve(resultado);
+      };
+
+      const aoPressionarTecla = (event: KeyboardEvent) => {
+        if (event.key === "Escape") finalizar(false);
+        if (event.key === "Enter") finalizar(true);
+      };
+
+      cancelar.addEventListener("click", () => finalizar(false));
+      confirmar.addEventListener("click", () => finalizar(true));
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) finalizar(false);
+      });
+      document.addEventListener("keydown", aoPressionarTecla);
+
+      rodape.append(cancelar, confirmar);
+      modal.append(conteudo, rodape);
+      overlay.append(modal);
+      document.body.append(overlay);
+      cancelar.focus();
+    });
+  }
+
+  async function excluirInformacaoCaptura(
+    informacao: InformacaoCapturaConversa
+  ) {
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
+    const contatoId =
+      contatoCapturaId || String(conversaSelecionada?.contatos?.id || "").trim();
+    const conversaId = conversaSelecionada?.id || "";
+
+    if (!contatoId || !conversaId) {
+      setErro("Não foi possível identificar a informação de captura para exclusão.");
+      return;
+    }
+
+    const confirmou = await confirmarExclusaoCaptura(
+      formatarLabelCapturaDetalhada(informacao)
+    );
+    if (!confirmou) return;
+
+    try {
+      setErro("");
+      const response = await fetch(
+        `/api/contatos/${encodeURIComponent(
+          contatoId
+        )}/informacoes-captura/${encodeURIComponent(informacao.id)}`,
+        {
+          method: "DELETE",
+          headers: { "X-Origem-Modulo": "conversas" },
+        }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data?.ok === false) {
+        throw new Error(
+          data?.error || "Erro ao excluir a informação de captura."
+        );
+      }
+
+      setEditandoCampo(null);
+      setMensagemSucesso("Informação de captura excluída.");
+      await carregarInformacoesCapturaConversa(conversaId);
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Erro ao excluir a informação de captura."
+      );
+    }
+  }
+
+  function abrirConversa(conversa: Conversa) {
+    setMensagemSucesso("");
+    setErro("");
+    conversaUrlPendenteRef.current = conversa.id;
+    selecionarConversa(conversa);
+    router.push(`/conversas?id=${encodeURIComponent(conversa.id)}`);
+  }
+  const [arquivoEnvio, setArquivoEnvio] = useState<File | null>(null);
+  const [legendaArquivo, setLegendaArquivo] = useState("");
+  const [gravandoAudio, setGravandoAudio] = useState(false);
+  const [duracaoGravacao, setDuracaoGravacao] = useState(0);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const intervaloGravacaoRef = useRef<number | null>(null);
+
+  const [cameraAberta, setCameraAberta] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamCameraRef = useRef<MediaStream | null>(null);
+
+  const [arquivoEnvioPreviewUrl, setArquivoEnvioPreviewUrl] = useState<string | null>(null);
+  const documentoInputRef = useRef<HTMLInputElement | null>(null);
+  const midiaInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const [menuAnexoAberto, setMenuAnexoAberto] = useState(false);
+
+  const [emojiAberto, setEmojiAberto] = useState(false);
+  const [macroCardAberto, setMacroCardAberto] = useState(false);
+
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const legendaEditorRef = useRef<HTMLDivElement | null>(null);
+
+  const conversaLidaRef = useRef<string | null>(null);
+
+  const [editandoCampo, setEditandoCampo] = useState<string | null>(null);
+  const [nomeContatoEditando, setNomeContatoEditando] = useState("");
+
+  const [etiquetasEmpresa, setEtiquetasEmpresa] = useState<EtiquetaEmpresa[]>([]);
+  const [carregandoEtiquetas, setCarregandoEtiquetas] = useState(false);
+  const [salvandoEtiqueta, setSalvandoEtiqueta] = useState(false);
+
+  const [selecionandoEtiqueta, setSelecionandoEtiqueta] = useState(false);
+
+  const [protocolosConversa, setProtocolosConversa] = useState<ProtocoloConversa[]>([]);
+  const [carregandoProtocolos, setCarregandoProtocolos] = useState(false);
+  const PROTOCOLOS_POR_PAGINA = 15;
+
+  const [paginaHistorico, setPaginaHistorico] = useState(1);
+
+  const [protocoloSelecionadoId, setProtocoloSelecionadoId] = useState<string | null>(null);
+  const [protocoloSelecionadoNumero, setProtocoloSelecionadoNumero] = useState<string | null>(null);
+  const protocoloSelecionadoIdRef = useRef<string | null>(null);
+  const [eventosRastreamentoConversa, setEventosRastreamentoConversa] = useState<
+    RastreamentoEventoConversa[]
+  >([]);
+  const [carregandoEventosRastreamento, setCarregandoEventosRastreamento] =
+    useState(false);
+  const [modalEventoRastreamentoAberto, setModalEventoRastreamentoAberto] =
+    useState(false);
+  const [eventoRastreamentoEditandoId, setEventoRastreamentoEditandoId] =
+    useState<string | null>(null);
+  const [eventoRastreamentoTipo, setEventoRastreamentoTipo] =
+    useState<RastreamentoEventoTipoManual>("venda_realizada");
+  const [eventoRastreamentoValor, setEventoRastreamentoValor] = useState("");
+  const [eventoRastreamentoObservacao, setEventoRastreamentoObservacao] =
+    useState("");
+  const [eventoRastreamentoProtocoloId, setEventoRastreamentoProtocoloId] =
+    useState("");
+  const [salvandoEventoRastreamento, setSalvandoEventoRastreamento] =
+    useState(false);
+
+  function conversaEstaSelecionada(conversaId: string) {
+    return conversaSelecionadaIdRef.current === conversaId;
+  }
+
+  function cargaMensagensAindaAtual(
+    conversaId: string,
+    conversaProtocoloId?: string | null,
+    versaoCarga?: number
+  ) {
+    return (
+      conversaEstaSelecionada(conversaId) &&
+      protocoloSelecionadoIdRef.current === (conversaProtocoloId ?? null) &&
+      (versaoCarga === undefined ||
+        versaoCargaMensagensRef.current === versaoCarga)
+    );
+  }
+
+  function definirProtocoloSelecionado(
+    protocoloId: string | null,
+    protocoloNumero: string | null = null
+  ) {
+    protocoloSelecionadoIdRef.current = protocoloId;
+    setProtocoloSelecionadoId(protocoloId);
+    setProtocoloSelecionadoNumero(protocoloNumero);
+  }
+
+  function selecionarConversa(conversa: Conversa | null) {
+    const proximaConversaId = conversa?.id ?? null;
+    const mudouConversa = conversaSelecionadaIdRef.current !== proximaConversaId;
+
+    conversaSelecionadaIdRef.current = proximaConversaId;
+
+    if (mudouConversa) {
+      versaoCargaMensagensRef.current += 1;
+      requisicoesMensagensRef.current.forEach((controller) => {
+        controller.abort();
+      });
+      requisicoesMensagensRef.current.clear();
+      cargaInicialMensagensConversaRef.current = proximaConversaId;
+      atualizacoesMensagensPendentesRef.current.clear();
+      marcarLidaAposRealtimeRef.current = false;
+
+      if (realtimeMensagensTimerRef.current) {
+        window.clearTimeout(realtimeMensagensTimerRef.current);
+        realtimeMensagensTimerRef.current = null;
+      }
+
+      protocoloSelecionadoIdRef.current = null;
+      setProtocoloSelecionadoId(null);
+      setProtocoloSelecionadoNumero(null);
+      setMensagens([]);
+      setJanela24hConversa(null);
+      setLoadingMensagens(Boolean(conversa));
+      setInicioJanelaHistorico(null);
+      setFimJanelaHistorico(null);
+      setTemMaisHistorico(false);
+      setCarregandoMaisHistorico(false);
+      setCarregandoProtocolos(false);
+      setCarregandoEventosRastreamento(false);
+      setMensagensFavoritasPainel([]);
+      setMensagensFavoritasPainelConversaId(null);
+      setCarregandoMensagensFavoritas(false);
+    }
+
+    setConversaSelecionada(conversa);
+  }
+
+  useEffect(() => {
+    conversaSelecionadaIdRef.current = conversaSelecionada?.id ?? null;
+  }, [conversaSelecionada?.id]);
+
+  useEffect(() => {
+    protocoloSelecionadoIdRef.current = protocoloSelecionadoId;
+  }, [protocoloSelecionadoId]);
+
+  useEffect(() => {
+    abaVisivelRef.current = abaVisivel;
+  }, [abaVisivel]);
+
+  useEffect(() => {
+    enviandoRef.current = enviando;
+  }, [enviando]);
+
+  useEffect(() => {
+    editandoCampoRef.current = editandoCampo;
+  }, [editandoCampo]);
+
+  useEffect(() => {
+    inicioJanelaHistoricoRef.current = inicioJanelaHistorico;
+  }, [inicioJanelaHistorico]);
+
+  useEffect(() => {
+    if (!painelDireitoAberto) return;
+    if (abaPainelDireito !== "contato") return;
+    if (!conversaSelecionada?.id) return;
+
+    void carregarMensagensFavoritasPainel(conversaSelecionada.id);
+  }, [
+    painelDireitoAberto,
+    abaPainelDireito,
+    conversaSelecionada?.id,
+    mensagensFavoritasPainelConversaId,
+  ]);
+
+  const [templateDisparoId, setTemplateDisparoId] = useState("");
+  const [templateDisparoNome, setTemplateDisparoNome] = useState("");
+  const [templateDisparoBody1, setTemplateDisparoBody1] = useState("");
+  const [enviandoDisparoIndividual, setEnviandoDisparoIndividual] = useState(false);
+  const [disparoIndividualAberto, setDisparoIndividualAberto] = useState(false);
+  const [limiteMetaDisparoIndividual, setLimiteMetaDisparoIndividual] =
+    useState<LimiteMetaResumo | null>(null);
+  const [
+    telefoneMetaDisparoIndividual,
+    setTelefoneMetaDisparoIndividual,
+  ] = useState<TelefoneMetaLimite | null>(null);
+  const [
+    loadingLimiteMetaDisparoIndividual,
+    setLoadingLimiteMetaDisparoIndividual,
+  ] = useState(false);
+  const [
+    chaveLimiteMetaDisparoIndividual,
+    setChaveLimiteMetaDisparoIndividual,
+  ] = useState("");
+  const [
+    previewDisparoIndividualAberto,
+    setPreviewDisparoIndividualAberto,
+  ] = useState(true);
+  const [
+    detalhesCustoDisparoIndividualAberto,
+    setDetalhesCustoDisparoIndividualAberto,
+  ] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const media = window.matchMedia(
+      "(max-width: 1200px), (max-height: 820px)"
+    );
+
+    const aplicarModoCompacto = (compacto: boolean) => {
+      setPreviewDisparoIndividualAberto(!compacto);
+      setDetalhesCustoDisparoIndividualAberto(false);
+    };
+
+    aplicarModoCompacto(media.matches);
+
+    const listener = (event: MediaQueryListEvent) => {
+      aplicarModoCompacto(event.matches);
+    };
+
+    media.addEventListener("change", listener);
+
+    return () => {
+      media.removeEventListener("change", listener);
+    };
+  }, []);
+
+  const [previewCustoDisparoIndividual, setPreviewCustoDisparoIndividual] = useState<{
+    categoria: string;
+    totalSelecionados: number;
+    totalIsentos: number;
+    totalCobrados: number;
+    valorUnitarioUsd: number;
+    valorTotalUsd: number;
+    cotacaoUsdBrl: number;
+    valorTotalBrlEstimado: number;
+    valorTotalBrlMin: number;
+    valorTotalBrlMax: number;
+    margemMinPercent: number;
+    margemMaxPercent: number;
+    fonteCotacao?: string;
+    cotacaoDataHora?: string | null;
+    cotacaoFallback?: boolean;
+  } | null>(null);
+
+  const [loadingPreviewCustoDisparoIndividual, setLoadingPreviewCustoDisparoIndividual] = useState(false);  
+
+  const [templatesWhatsapp, setTemplatesWhatsapp] = useState<
+    {
+      id: string;
+      nome: string;
+      idioma?: string | null;
+      status?: string | null;
+      categoria?: string | null;
+      integracao_whatsapp_id?: string | null;
+      payload?: {
+        name?: string;
+        language?: string;
+        components?: Array<{
+          type: string;
+          text?: string;
+          format?: string;
+          buttons?: Array<{
+            type?: string;
+            text?: string;
+            url?: string;
+            phone_number?: string;
+          }>;
+        }>;
+      } | null;
+    }[]
+  >([]);
+
+  const [parametros, setParametros] = useState<string[]>([]);
+  const [carregandoTemplatesWhatsapp, setCarregandoTemplatesWhatsapp] = useState(false);
+
+  const [mostrarFormularioEtiqueta, setMostrarFormularioEtiqueta] = useState(false);
+  const [etiquetaEditandoId, setEtiquetaEditandoId] = useState<string | null>(null);
+  const [etiquetaConfirmandoExclusaoId, setEtiquetaConfirmandoExclusaoId] =
+    useState<string | null>(null);
+
+  const [etiquetaForm, setEtiquetaForm] = useState<EtiquetaForm>({
+    nome: "",
+    descricao: "",
+    cor: ETIQUETAS_PADRAO[0],
+  });
+
+  const midiaDocsLinksAgrupados = useMemo<MidiaAgrupadaSecao[]>(() => {
+    const itens: MidiaAgrupadaItem[] = [];
+
+    for (const msg of mensagens) {
+      const mediaId = msg.metadata_json?.media_id || null;
+      const mimeType = msg.metadata_json?.mime_type || "";
+      const caption =
+        msg.metadata_json?.caption ||
+        msg.metadata_json?.legenda ||
+        null;
+      const filename = msg.metadata_json?.filename || null;
+      const urlMidia = montarUrlMidiaMensagem(msg);
+
+      const isImage = msg.tipo_mensagem === "imagem";
+      const isVideo = msg.tipo_mensagem === "video";
+      const isAudio = msg.tipo_mensagem === "audio";
+      const isDocumento = msg.tipo_mensagem === "documento";
+      const isAudioDocumento =
+        isDocumento && mimeType.toLowerCase().startsWith("audio/");
+      const isPdf = isDocumento && mimeType.toLowerCase().includes("pdf");
+
+      const isMidia = isImage || isVideo || isAudio;
+
+      if (urlMidia && (isMidia || isDocumento)) {
+        itens.push({
+          id: msg.id,
+          tipo: isDocumento ? "documento" : "midia",
+          subtipo: msg.tipo_mensagem,
+          nome:
+            filename ||
+            caption ||
+            (isImage
+              ? "Imagem"
+              : isVideo
+              ? "Vídeo"
+              : isAudio
+              ? "Áudio"
+              : isAudioDocumento
+              ? "Áudio"
+              : isPdf
+              ? "PDF"
+              : "Documento"),
+          url: urlMidia,
+          mimeType,
+          caption,
+          createdAt: msg.created_at,
+          dateLabel: formatarDataSeparador(msg.created_at),
+          isImage,
+          isVideo,
+          isAudio: isAudio || isAudioDocumento,
+          isPdf,
+        });
+      }
+
+      const links = extrairLinksDoTexto(msg.conteudo);
+
+      links.forEach((link, index) => {
+        itens.push({
+          id: `${msg.id}-link-${index}`,
+          tipo: "link",
+          subtipo: "link",
+          nome: link,
+          url: link,
+          mimeType: "text/html",
+          caption: null,
+          createdAt: msg.created_at,
+          dateLabel: formatarDataSeparador(msg.created_at),
+          isImage: false,
+          isVideo: false,
+          isAudio: false,
+          isPdf: false,
+        });
+      });
+    }
+
+    const grupos = itens.reduce<Record<string, MidiaAgrupadaItem[]>>((acc, item) => {
+      if (!acc[item.dateLabel]) {
+        acc[item.dateLabel] = [];
+      }
+
+      acc[item.dateLabel].push(item);
+      return acc;
+    }, {});
+
+    return Object.entries(grupos)
+      .map(([data, itens]) => ({
+        data,
+        itens: itens.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+      }))
+      .sort((a, b) => {
+        const aTime = new Date(a.itens[0]?.createdAt || 0).getTime();
+        const bTime = new Date(b.itens[0]?.createdAt || 0).getTime();
+        return bTime - aTime;
+      });
+  }, [mensagens]);
+
+  const midiaDocsLinksFiltrados = useMemo(() => {
+    return midiaDocsLinksAgrupados
+      .map((grupo) => ({
+        ...grupo,
+        itens: grupo.itens.filter((item) => {
+          if (abaMidiaDocsLinks === "midia") {
+            return item.tipo === "midia";
+          }
+
+          if (abaMidiaDocsLinks === "documentos") {
+            return item.tipo === "documento";
+          }
+
+          return item.tipo === "link";
+        }),
+      }))
+      .filter((grupo) => grupo.itens.length > 0);
+  }, [midiaDocsLinksAgrupados, abaMidiaDocsLinks]);
+
+  const totalMidias = useMemo(() => {
+    return midiaDocsLinksAgrupados.reduce(
+      (total, grupo) => total + grupo.itens.filter((item) => item.tipo === "midia").length,
+      0
+    );
+  }, [midiaDocsLinksAgrupados]);
+
+  const totalDocumentos = useMemo(() => {
+    return midiaDocsLinksAgrupados.reduce(
+      (total, grupo) =>
+        total + grupo.itens.filter((item) => item.tipo === "documento").length,
+      0
+    );
+  }, [midiaDocsLinksAgrupados]);
+
+  const totalLinks = useMemo(() => {
+    return midiaDocsLinksAgrupados.reduce(
+      (total, grupo) => total + grupo.itens.filter((item) => item.tipo === "link").length,
+      0
+    );
+  }, [midiaDocsLinksAgrupados]);
+
+
+  const impedirAutoScrollRef = useRef(false);
+  const restaurarScrollHistoricoRef = useRef<{
+    scrollTop: number;
+    scrollHeight: number;
+  } | null>(null);
+
+  const forcarScrollParaFinalRef = useRef(false);
+  const acompanharCrescimentoChatRef = useRef(false);
+
+  const totalMensagensAnteriorRef = useRef(0);
+  const ultimaMensagemIdAnteriorRef = useRef<string | null>(null);
+  const usuarioEstavaNoFinalRef = useRef(true);
+
+  const quantidadeMensagensFavoritas = painelFavoritasCarregado
+    ? mensagensFavoritasPainel.length
+    : mensagensFavoritasCarregadas.length;
+
+  const [listasConversa, setListasConversa] = useState<ListaConversa[]>([]);
+  const [novaListaNome, setNovaListaNome] = useState("");
+  const [salvandoLista, setSalvandoLista] = useState(false);
+
+  const [listasEmpresa, setListasEmpresa] = useState<ListaEmpresa[]>([]);
+
+  const [listaFiltroId, setListaFiltroId] = useState<string | null>(null);
+    
+  const [listaEditandoId, setListaEditandoId] = useState<string | null>(null);
+  const [listaEditandoNome, setListaEditandoNome] = useState("");
+  const [listaConfirmandoExclusaoId, setListaConfirmandoExclusaoId] = useState<string | null>(null);
+
+  const LIMITE_CARACTERES_NOTA = 600;
+
+  const [notaInterna, setNotaInterna] = useState("");
+  const [notasConversa, setNotasConversa] = useState<NotaConversa[]>([]);
+  const [salvandoNota, setSalvandoNota] = useState(false);
+  const [notaEditandoId, setNotaEditandoId] = useState<string | null>(null);
+  const [notaEditandoTexto, setNotaEditandoTexto] = useState("");
+  const [notaConfirmandoExclusaoId, setNotaConfirmandoExclusaoId] = useState<string | null>(null);
+
+  const [macrosChat, setMacrosChat] = useState<MacroChat[]>([]);
+  const [carregandoMacros, setCarregandoMacros] = useState(false);
+  const [modalMacroAberto, setModalMacroAberto] = useState(false);
+  const [macroEditandoId, setMacroEditandoId] = useState<string | null>(null);
+  const [macroForm, setMacroForm] = useState<MacroForm>({
+    titulo: "",
+    conteudo: "",
+  });
+  const [salvandoMacro, setSalvandoMacro] = useState(false);
+  const [excluindoMacroId, setExcluindoMacroId] = useState<string | null>(null);
+
+  const [variaveisGlobais, setVariaveisGlobais] = useState<VariavelGlobal[]>([]);
+  const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
+  const [modalVariavelAberto, setModalVariavelAberto] = useState(false);
+  const [contextoModalVariavel, setContextoModalVariavel] = useState<
+    "macro" | "disparo-individual"
+  >("macro");
+  const [erroVariavelModal, setErroVariavelModal] = useState("");
+  const [variavelForm, setVariavelForm] = useState<VariavelForm>({
+    chave: "",
+    valor: "",
+    descricao: "",
+  });
+  const [salvandoVariavel, setSalvandoVariavel] = useState(false);
+
+  const [imagemModalUrl, setImagemModalUrl] = useState<string | null>(null);
+  const [imagemModalTitulo, setImagemModalTitulo] = useState<string | null>(null);
+  const [imagemZoom, setImagemZoom] = useState(1);
+  
+  const [arquivoPreview, setArquivoPreview] = useState<{
+    url: string;
+    nome: string;
+    mimeType: string;
+  } | null>(null);
+
+
+
+  const [modalAdicionarContatoAberto, setModalAdicionarContatoAberto] = useState(false);
+  const [salvandoContatoCompartilhado, setSalvandoContatoCompartilhado] =
+    useState(false);
+  const [campanhasRastreamentoContato, setCampanhasRastreamentoContato] =
+    useState<CampanhaRastreamentoContato[]>([]);
+
+  const [contatoCadastroForm, setContatoCadastroForm] = useState<ContatoCadastroForm>({
+    nome: "",
+    telefone: "",
+    email: "",
+    origem: "whatsapp_compartilhado",
+    campanha: "",
+    rastreamento_campanha_id: "",
+    status_lead: "novo",
+    observacoes: "",
+  });
+
+  const protocoloAtualConversa = useMemo(() => {
+    return (
+      protocolosConversa.find((protocolo) => protocolo.ativo) ||
+      protocolosConversa.find(
+        (protocolo) =>
+          protocolo.protocolo === conversaSelecionada?.protocolo
+      ) ||
+      null
+    );
+  }, [conversaSelecionada?.protocolo, protocolosConversa]);
+
+  const categoriaLeadProtocoloAtual = useMemo(() => {
+    if (carregandoProtocolos && !protocoloAtualConversa) {
+      return "Carregando...";
+    }
+
+    return getCategoriaLeadProtocoloLabel(protocoloAtualConversa?.resultado);
+  }, [carregandoProtocolos, protocoloAtualConversa]);
+
+  const variaveisMacroDisponiveis = useMemo(() => {
+    const mapa = new Map<string, string>();
+    const contato = conversaSelecionada?.contatos;
+    const protocoloAtual =
+      protocoloAtualConversa?.protocolo ||
+      conversaSelecionada?.protocolo ||
+      "";
+    const ultimoProtocolo = protocolosConversa[0]?.protocolo || protocoloAtual;
+
+    const registrar = (chaves: string[], valor?: string | null) => {
+      const texto = String(valor || "").trim();
+
+      chaves.forEach((chave) => {
+        mapa.set(normalizarChaveVariavelMacro(chave), texto);
+      });
+    };
+
+    variaveisGlobais.forEach((variavel) => {
+      mapa.set(
+        normalizarChaveVariavelMacro(variavel.chave),
+        String(variavel.valor || "")
+      );
+    });
+
+    registrar(
+      ["nome", "nome_contato", "contato_nome"],
+      contato?.nome || "Contato"
+    );
+    registrar(
+      ["nome_whatsapp", "whatsapp_nome", "nome_perfil_whatsapp", "perfil_whatsapp_nome"],
+      contato?.whatsapp_profile_name || contato?.nome || "Contato"
+    );
+    registrar(
+      ["telefone", "numero", "numero_contato", "contato_numero", "telefone_contato", "contato_telefone"],
+      contato?.telefone
+    );
+    registrar(["email", "email_contato", "contato_email"], contato?.email);
+    registrar(["empresa", "empresa_contato", "contato_empresa"], contato?.empresa);
+    registrar(["campanha"], obterNomeCampanhaContato(contato));
+    registrar(["origem"], contato?.origem || conversaSelecionada?.origem_atendimento);
+    registrar(["status", "status_lead"], contato?.status_lead || conversaSelecionada?.status);
+    registrar(["protocolo", "protocolo_atual"], protocoloAtual);
+    registrar(["ultimo_protocolo"], ultimoProtocolo);
+    registrar(["usuario_nome", "nome_usuario"], usuarioLogado?.nome || "Atendente");
+    registrar(["usuario_email", "email_usuario"], usuarioLogado?.email);
+
+    return mapa;
+  }, [
+    conversaSelecionada,
+    protocoloAtualConversa,
+    protocolosConversa,
+    usuarioLogado,
+    variaveisGlobais,
+  ]);
+
+  const variaveisCustomizadasMacro = useMemo(() => {
+    return variaveisGlobais
+      .filter((variavel) => variavel.ativo !== false)
+      .sort((a, b) => a.chave.localeCompare(b.chave));
+  }, [variaveisGlobais]);
+
+  const opcoesVariaveisDisparoIndividual = useMemo<TemplateVariableOption[]>(() => {
+    const chavesAdicionadas = new Set<string>();
+    const opcoes: TemplateVariableOption[] = [];
+
+    const variaveisFixasDisparoIndividual = [
+    ...VARIAVEIS_FIXAS_SISTEMA,
+    {
+      chave: "nome_captura",
+      exemplo: "{{nome_captura}}",
+      descricao:
+        "Último nome confirmado e capturado durante o atendimento/agendamento; se não existir, usa o nome do contato.",
+    },
+    {
+      chave: "primeiro_nome_captura",
+      exemplo: "{{primeiro_nome_captura}}",
+      descricao:
+        "Primeiro nome derivado do último nome confirmado e capturado durante o atendimento/agendamento.",
+    },
+  ];
+
+  for (const variavel of variaveisFixasDisparoIndividual) {
+      const chave = normalizarChaveVariavelMacro(variavel.chave);
+      if (!chave || chavesAdicionadas.has(chave)) continue;
+      chavesAdicionadas.add(chave);
+      opcoes.push({
+        chave,
+        descricao: variavel.descricao,
+        categoria: "Fixa",
+      });
+    }
+
+    for (const variavel of variaveisCustomizadasMacro) {
+      if (variavel.escopo && !["global", "disparos"].includes(variavel.escopo)) continue;
+      const chave = normalizarChaveVariavelMacro(variavel.chave);
+      if (!chave || chavesAdicionadas.has(chave)) continue;
+      chavesAdicionadas.add(chave);
+      opcoes.push({
+        chave,
+        descricao: variavel.descricao || "Variável personalizada cadastrada no CRM.",
+        categoria: "Personalizada",
+      });
+    }
+
+    return opcoes;
+  }, [variaveisCustomizadasMacro]);
+
+  function resolverVariaveisMacro(texto: string) {
+    return texto.replace(/{{\s*([^}]+)\s*}}/g, (_, chaveOriginal) => {
+      const chave = normalizarChaveVariavelMacro(chaveOriginal);
+
+      if (!chave) return "";
+
+      return variaveisMacroDisponiveis.has(chave)
+        ? variaveisMacroDisponiveis.get(chave) ?? ""
+        : `{{${chave}}}`;
+    });
+  }
+
+  async function abrirCamera() {
+    if (!podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+
+      streamCameraRef.current = stream;
+      setCameraAberta(true);
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch {
+      setErro("Não foi possível acessar a câmera.");
+    }
+  }
+
+
+  function focarEditorNoFinal() {
+    const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
+    if (!alvo) return;
+
+    alvo.focus();
+
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    const range = document.createRange();
+    range.selectNodeContents(alvo);
+    range.collapse(false);
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function inserirEmojiNoEditor(emoji: string) {
+    const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
+    if (!alvo) return;
+
+    const textoAtual = alvo.textContent || "";
+    const novoTexto = textoAtual + emoji;
+
+    alvo.textContent = novoTexto;
+
+    if (arquivoEnvio) {
+      legendaArquivoRef.current = novoTexto;
+      setLegendaArquivo(novoTexto);
+    } else {
+      conteudoRef.current = novoTexto;
+      setConteudo(novoTexto);
+    }
+
+    requestAnimationFrame(() => {
+      focarEditorNoFinal();
+    });
+  }
+
+  function atualizarTranscricaoMensagem(mensagemId: string, transcricao: string) {
+  setMensagens((atuais) =>
+    atuais.map((msg) => {
+      if (msg.id !== mensagemId) return msg;
+
+      return {
+        ...msg,
+        conteudo: transcricao || msg.conteudo,
+        metadata_json: {
+          ...(msg.metadata_json || {}),
+          transcricao_audio: transcricao,
+        },
+      };
+    })
+  );
+}
+
+  function renderizarConteudoMensagem(msg: Mensagem) {
+    const flowResponse = getWhatsAppFlowResponsePresentation(msg.metadata_json);
+
+    if (flowResponse) {
+      return (
+        <div className={styles.flowResponseCard}>
+          <div className={styles.flowResponseHeader}>
+            <span className={styles.flowResponseIcon} aria-hidden="true">
+              <FileText size={20} strokeWidth={1.9} />
+            </span>
+            <span className={styles.flowResponseHeading}>
+              <strong className={styles.flowResponseTitle}>
+                {flowResponse.title}
+              </strong>
+              <span className={styles.flowResponseStatus}>
+                {flowResponse.status}
+              </span>
+            </span>
+          </div>
+
+          {flowResponse.fields.length > 0 ? (
+            <details className={styles.flowResponseDetails}>
+              <summary className={styles.flowResponseSummary}>
+                Mostrar resposta
+              </summary>
+              <dl className={styles.flowResponseFields}>
+                {flowResponse.fields.map((field) => (
+                  <div className={styles.flowResponseField} key={field.key}>
+                    <dt>{field.label}</dt>
+                    <dd>{field.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (
+      mensagemEhDisparo(msg) && !mensagemDisparoTemBotoes(msg)
+    ) {
+      const disparo = obterApresentacaoDisparo(msg);
+
+      return (
+        <div className={styles.disparoMessageContent}>
+          <strong className={styles.disparoMessageTitle}>
+            <TextoComEmoji texto={disparo.titulo} />
+          </strong>
+
+          {disparo.conteudo ? (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={disparo.conteudo} />
+            </p>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (mensagemEhDisparo(msg) && mensagemDisparoTemBotoes(msg)) {
+      msg = {
+        ...msg,
+        conteudo: String(msg.conteudo || "")
+          .replace(/^Header:\s*/i, "")
+          .trimStart(),
+      };
+    }
+
+    const url = montarUrlMidiaMensagem(msg);
+
+    const caption =
+      msg.metadata_json?.caption ||
+      msg.metadata_json?.legenda ||
+      null;
+
+    const fileName =
+      msg.metadata_json?.filename ||
+      (msg.tipo_mensagem === "video"
+        ? "video.mp4"
+        : msg.tipo_mensagem === "imagem"
+        ? "imagem"
+        : "documento");
+
+    const mimeType =
+      msg.metadata_json?.mime_type ||
+      (msg.tipo_mensagem === "video"
+        ? "video/mp4"
+        : msg.tipo_mensagem === "imagem"
+        ? "image/jpeg"
+        : "");
+    const contatoNome = getSharedContactName(msg);
+    const contatoTelefones = getSharedContactPhones(msg);
+    const contatoEmails = getSharedContactEmails(msg);
+
+    const latitude = msg.metadata_json?.location?.latitude;
+    const longitude = msg.metadata_json?.location?.longitude;
+    const mapaUrl =
+      latitude != null && longitude != null
+        ? `https://www.google.com/maps?q=${latitude},${longitude}`
+        : null;
+
+    if (msg.tipo_mensagem === "imagem") {
+      return (
+        <div>
+          {url ? (
+            <button
+              type="button"
+              onClick={() => {
+                setImagemModalUrl(url);
+                setImagemModalTitulo(caption || "Imagem");
+                setImagemZoom(1);
+              }}
+              className={styles.mediaImageButton}
+            >
+              <img
+                src={url}
+                alt={caption || "Imagem recebida"}
+                className={styles.messageImage}
+                style={{
+                  maxWidth: "260px",
+                  width: "100%",
+                  borderRadius: "12px",
+                  display: "block",
+                  marginBottom: caption ? "8px" : "0",
+                }}
+              />
+            </button>
+          ) : (
+            <p className={styles.messageText}><TextoComEmoji texto={msg.conteudo} /></p>
+          )}
+
+          {caption && (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={caption} />
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "audio") {
+      const audioFileName =
+        msg.metadata_json?.filename ||
+        (mimeType.includes("ogg")
+          ? "audio.ogg"
+          : mimeType.includes("mpeg")
+          ? "audio.mp3"
+          : mimeType.includes("mp4")
+          ? "audio.m4a"
+          : "audio");
+
+      const transcricaoAudio =
+        msg.metadata_json?.transcricao_audio?.trim() || "";
+
+      return (
+        <div>
+          {url ? (
+            <AudioMessagePlayer
+              src={url}
+              mimeType={mimeType || "audio/ogg"}
+              isOutgoing={msg.origem === "enviada"}
+              isVoice={!!msg.metadata_json?.voice}
+              fileName={audioFileName}
+            />
+          ) : (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto="🎵 Áudio recebido" />
+            </p>
+          )}
+
+          <TranscricaoAudioBox
+            mensagemId={msg.id}
+            textoInicial={transcricaoAudio}
+            isOutgoing={msg.origem === "enviada"}
+            podeGerar={podeTranscreverAudioPermissao}
+            onTranscricaoSalva={atualizarTranscricaoMensagem}
+          />
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "video") {
+      const mensagemErroEnvio = getMensagemErroEnvio(msg);
+      const videoFalhou = msg.status_envio === "falha";
+
+      return (
+        <div>
+          {url ? (
+            <div className={videoFalhou ? styles.failedMediaWrap : ""}>
+              <video
+                controls
+                preload="metadata"
+                className={`${styles.messageVideo} ${
+                  caption ? styles.messageVideoWithCaption : ""
+                } ${videoFalhou ? styles.messageVideoFailed : ""}`}
+              >
+                <source src={url} type={mimeType || "video/mp4"} />
+                Seu navegador não suporta vídeo.
+              </video>
+            </div>
+          ) : (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={msg.conteudo} />
+            </p>
+          )}
+
+          {caption && (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={caption} />
+            </p>
+          )}
+
+          {videoFalhou && (
+            <div className={styles.messageSendErrorBox}>
+              <strong>Vídeo não entregue no WhatsApp</strong>
+              <span>
+                <TextoComEmoji texto={mensagemErroEnvio} />
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "documento") {
+      const ehPdf = mimeType.includes("pdf");
+      const ehAudioArquivo = mimeType.startsWith("audio/");
+
+      return (
+        <div>
+          <p className={styles.messageText}>
+            <TextoComEmoji texto={`📄 ${fileName}`} />
+          </p>
+
+          {caption && (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={caption} />
+            </p>
+          )}
+
+          {ehAudioArquivo && url && (
+            <div className={styles.documentAudioWrap}>
+              <AudioMessagePlayer
+                src={url}
+                mimeType={mimeType}
+                isOutgoing={msg.origem === "enviada"}
+                isVoice={!!msg.metadata_json?.voice}
+                fileName={fileName}
+              />
+            </div>
+          )}
+
+          {ehPdf && url && (
+            <button
+              type="button"
+              className={`${styles.secondaryButton} ${styles.documentActionButton}`}
+              onClick={() =>
+                setArquivoPreview({
+                  url,
+                  nome: fileName,
+                  mimeType,
+                })
+              }
+            >
+              Abrir PDF
+            </button>
+          )}
+
+          {!ehPdf && !ehAudioArquivo && url && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className={styles.messageFileLink}
+            >
+              Baixar arquivo
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "contato") {
+      const contatosCompartilhados = msg.metadata_json?.contacts || [];
+
+      return (
+        <div className={styles.sharedContactList}>
+          {contatosCompartilhados.map((contato, contatoIndex) => {
+            const nome = getNomeContatoCompartilhado(contato);
+            const telefones = contato.phones || [];
+            const emails = contato.emails || [];
+            const empresa = contato.org?.company || null;
+            const cargo = contato.org?.title || null;
+
+            return (
+              <div
+                key={`contato-compartilhado-${contatoIndex}`}
+                className={styles.sharedContactCard}
+              >
+                <div className={styles.sharedContactHeader}>
+                  <div className={styles.sharedContactAvatar}>
+                    {getIniciaisContatoCompartilhado(contato)}
+                  </div>
+
+                  <div className={styles.sharedContactInfo}>
+                    <p className={styles.sharedContactName}>{nome}</p>
+
+                    {telefones.length > 0 ? (
+                      telefones.map((telefone, telIndex) => (
+                        <p
+                          key={`tel-${contatoIndex}-${telIndex}`}
+                          className={styles.sharedContactMeta}
+                        >
+                          {telefone.phone || telefone.wa_id || "Telefone não informado"}
+                          {telefone.type ? ` • ${telefone.type}` : ""}
+                        </p>
+                      ))
+                    ) : (
+                      <p className={styles.sharedContactMeta}>Telefone não informado</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.sharedContactBody}>
+                  {emails.map((email, emailIndex) => (
+                    <p
+                      key={`email-${contatoIndex}-${emailIndex}`}
+                      className={styles.sharedContactDetail}
+                    >
+                      {email.email || "E-mail não informado"}
+                      {email.type ? ` • ${email.type}` : ""}
+                    </p>
+                  ))}
+
+                  {empresa && (
+                    <p className={styles.sharedContactDetail}>Empresa: {empresa}</p>
+                  )}
+
+                  {cargo && (
+                    <p className={styles.sharedContactDetail}>Cargo: {cargo}</p>
+                  )}
+                </div>
+
+                <div className={styles.sharedContactFooter}>
+                  <button
+                    type="button"
+                    className={styles.sharedContactAddButton}
+                    onClick={() => abrirModalAdicionarContato(contato)}
+                  >
+                    Adicionar contato
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "localizacao") {
+      return (
+        <div>
+          <p className={styles.messageText}>
+            <TextoComEmoji texto="📍 Localização compartilhada" />
+          </p>
+
+          {latitude != null && longitude != null && (
+            <p className={styles.messageText}>
+              Lat: {latitude} <br />
+              Lng: {longitude}
+            </p>
+          )}
+
+          {mapaUrl && (
+            <a
+              href={mapaUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                fontSize: "14px",
+                textDecoration: "underline",
+                wordBreak: "break-word",
+              }}
+            >
+              Abrir no Google Maps
+            </a>
+          )}
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "unsupported") {
+      const tipoNaoSuportado = msg.metadata_json?.unsupported?.type || "desconhecido";
+
+      let titulo = "⚠️ Mensagem não suportada pela API do WhatsApp";
+
+      if (tipoNaoSuportado === "poll_creation") {
+        titulo = "📊 Enquete enviada pelo contato";
+      }
+
+      if (tipoNaoSuportado === "unknown") {
+        titulo = "📅 Evento ou conteúdo não reconhecido";
+      }
+
+      return (
+        <div>
+          <p className={styles.messageText}>
+            <TextoComEmoji texto={titulo} />
+          </p>
+
+          <p className={styles.messageText}>
+            <TextoComEmoji texto="Este tipo de conteúdo ainda não é suportado pela API oficial." />
+          </p>
+
+          <p className={styles.messageText}>
+            <TextoComEmoji texto={`Tipo técnico: ${tipoNaoSuportado}`} />
+          </p>
+        </div>
+      );
+    }
+
+    if (msg.tipo_mensagem === "botao") {
+      const botoes = msg.metadata_json?.botoes || [];
+
+      return (
+        <div>
+          <p className={styles.messageText}>
+            <TextoComEmoji texto={msg.conteudo} />
+          </p>
+
+          {botoes.length > 0 && (
+            <div className={styles.buttonMessageOptions}>
+              {botoes.map((botao, index) => {
+                const textoBotao = botao.titulo || botao.id || "Opção";
+                const urlBotao = String(botao.url || "").trim();
+
+                return urlBotao ? (
+                  <a
+                    key={`${botao.id || botao.titulo || "botao"}-${index}`}
+                    className={styles.buttonMessageOption}
+                    href={urlBotao}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <TextoComEmoji texto={textoBotao} />
+                  </a>
+                ) : (
+                  <div
+                    key={`${botao.id || botao.titulo || "botao"}-${index}`}
+                    className={styles.buttonMessageOption}
+                  >
+                    <TextoComEmoji texto={textoBotao} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <p className={styles.messageText}>
+        <TextoComEmoji texto={msg.conteudo} />
+      </p>
+    );
+  }
+
+
+  function capturarFoto() {
+    if (!podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      fecharCamera();
+      return;
+    }
+
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+
+      const file = new File([blob], `foto-${Date.now()}.jpg`, {
+        type: "image/jpeg",
+      });
+
+      selecionarArquivo(file);
+    }, "image/jpeg");
+
+    fecharCamera();
+  }
+
+
+  function fecharCamera() {
+    if (streamCameraRef.current) {
+      streamCameraRef.current.getTracks().forEach((track) => track.stop());
+      streamCameraRef.current = null;
+    }
+
+    setCameraAberta(false);
+  }
+
+  async function iniciarGravacaoAudio() {
+    if (!podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      return;
+    }
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+
+      setArquivoEnvio(null);
+      setArquivoEnvioPreviewUrl(null);
+      setLegendaArquivo("");
+      setConteudo("");
+      if (editorRef.current) {
+        editorRef.current.innerHTML = "";
+      }
+
+      if (legendaEditorRef.current) {
+        legendaEditorRef.current.innerHTML = "";
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      mediaStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      let mimeType = "";
+
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        mimeType = "audio/webm;codecs=opus";
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        mimeType = "audio/webm";
+      }
+
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const tipoFinal =
+          mediaRecorder.mimeType || mimeType || "audio/webm";
+
+        const blob = new Blob(audioChunksRef.current, {
+          type: tipoFinal,
+        });
+
+        const arquivo = new File([blob], `audio-${Date.now()}.webm`, {
+          type: tipoFinal,
+        });
+
+        selecionarArquivo(arquivo);
+
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+      };
+
+      mediaRecorder.start();
+      setGravandoAudio(true);
+      setDuracaoGravacao(0);
+
+      intervaloGravacaoRef.current = window.setInterval(() => {
+        setDuracaoGravacao((atual) => atual + 1);
+      }, 1000);
+    } catch {
+      setErro("Não foi possível acessar o microfone.");
+      setGravandoAudio(false);
+    }
+  }
+
+  function pararGravacaoAudio() {
+    if (intervaloGravacaoRef.current) {
+      window.clearInterval(intervaloGravacaoRef.current);
+      intervaloGravacaoRef.current = null;
+    }
+
+    setGravandoAudio(false);
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    } else if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+  }
+
+  function formatarDuracaoGravacao(segundos: number) {
+    const mins = Math.floor(segundos / 60);
+    const secs = segundos % 60;
+
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  function abrirModalAdicionarContato(contato: ContatoCompartilhadoMensagem) {
+    const nome = getNomeContatoCompartilhado(contato);
+    const telefone = getTelefonePrincipalContatoCompartilhado(contato);
+    const email = getEmailPrincipalContatoCompartilhado(contato);
+    const empresa = contato.org?.company || "";
+    const cargo = contato.org?.title || "";
+
+    setErro("");
+    setMensagemSucesso("");
+
+    setContatoCadastroForm({
+      nome,
+      telefone,
+      email,
+      origem: "whatsapp_compartilhado",
+      campanha: "",
+      rastreamento_campanha_id: "",
+      status_lead: "novo",
+      observacoes:
+        [
+          "Contato adicionado a partir de contato compartilhado no WhatsApp.",
+          empresa ? `Empresa: ${empresa}` : "",
+          cargo ? `Cargo: ${cargo}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+    });
+
+    setModalAdicionarContatoAberto(true);
+  }
+
+  function fecharModalAdicionarContato() {
+    setModalAdicionarContatoAberto(false);
+    setSalvandoContatoCompartilhado(false);
+    setContatoCadastroForm({
+      nome: "",
+      telefone: "",
+      email: "",
+      origem: "whatsapp_compartilhado",
+      campanha: "",
+      rastreamento_campanha_id: "",
+      status_lead: "novo",
+      observacoes: "",
+    });
+  }
+
+  function selecionarCampanhaContatoCompartilhado(campanhaId: string) {
+    const campanhaSelecionada = campanhasRastreamentoContato.find(
+      (campanha) => campanha.id === campanhaId
+    );
+
+    setContatoCadastroForm((atual) => ({
+      ...atual,
+      campanha: campanhaSelecionada?.nome || "",
+      rastreamento_campanha_id: campanhaId,
+      origem:
+        campanhaSelecionada?.rastreamento_origens?.nome ||
+        atual.origem ||
+        "whatsapp_compartilhado",
+    }));
+  }
+
+  async function carregarCampanhasRastreamentoContato() {
+    try {
+      const res = await fetch("/api/contatos/opcoes", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) return;
+
+      setCampanhasRastreamentoContato(
+        Array.isArray(data.campanhas_rastreamento)
+          ? data.campanhas_rastreamento
+          : []
+      );
+    } catch {
+      // opcional para o modal de contato compartilhado
+    }
+  }
+
+  function selecionarArquivo(
+    file: File | null,
+    input?: HTMLInputElement | null
+  ) {
+    if (file && !podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      if (input) input.value = "";
+      return;
+    }
+
+    if (arquivoEnvioPreviewUrl) {
+      URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+    }
+
+    if (!file) {
+      setArquivoEnvio(null);
+      setArquivoEnvioPreviewUrl(null);
+
+      if (input) input.value = "";
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+
+    setArquivoEnvio(file);
+    setArquivoEnvioPreviewUrl(previewUrl);
+    setConteudo("");
+    conteudoRef.current = "";
+    if (editorRef.current) {
+      editorRef.current.textContent = "";
+    }
+
+    if (input) {
+      input.value = "";
+    }
+  }
+
+
+  function atualizarParametro(index: number, valor: string) {
+    setParametros((atual) => {
+      const copia = [...atual];
+      copia[index] = valor;
+      return copia;
+    });
+  }
+
+  async function salvarContatoCompartilhado() {
+    if (!contatoCadastroForm.telefone.trim()) {
+      setErro("Telefone é obrigatório.");
+      return;
+    }
+
+    try {
+      setSalvandoContatoCompartilhado(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/contatos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(contatoCadastroForm),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao criar contato");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Contato criado com sucesso.");
+      fecharModalAdicionarContato();
+    } catch {
+      setErro("Erro ao criar contato");
+    } finally {
+      setSalvandoContatoCompartilhado(false);
+    }
+  }
+
+
+
+  async function carregarUsuarioLogado() {
+    try {
+      const res = await fetch("/api/me", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar usuário logado");
+        return;
+      }
+
+      setUsuarioLogado(data.usuario || null);
+    } catch {
+      setErro("Erro ao carregar usuário logado");
+    }
+  }
+
+  async function carregarMacros() {
+    try {
+      setCarregandoMacros(true);
+
+      const res = await fetch("/api/macros", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar macros");
+        return;
+      }
+
+      setMacrosChat(data.macros || []);
+    } catch {
+      setErro("Erro ao carregar macros");
+    } finally {
+      setCarregandoMacros(false);
+    }
+  }
+
+  async function carregarVariaveisGlobais(
+    options: { erroNoModal?: boolean } = {}
+  ) {
+    try {
+      setCarregandoVariaveis(true);
+
+      const res = await fetch("/api/variaveis", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) {
+        const mensagem = data.error || "Erro ao carregar variáveis";
+
+        if (options.erroNoModal) {
+          setErroVariavelModal(mensagem);
+        } else {
+          setErro(mensagem);
+        }
+
+        return;
+      }
+
+      setVariaveisGlobais(data.variaveis || []);
+    } catch {
+      if (options.erroNoModal) {
+        setErroVariavelModal("Erro ao carregar variáveis");
+      } else {
+        setErro("Erro ao carregar variáveis");
+      }
+    } finally {
+      setCarregandoVariaveis(false);
+    }
+  }
+
+  async function abrirAbaMacros() {
+    setPainelDireitoAberto(true);
+    setAbaPainelDireito("macros");
+    setMenuContatoAberto(false);
+
+    await Promise.all([carregarMacros(), carregarVariaveisGlobais()]);
+  }
+
+  async function alternarMacroCard() {
+    const abrir = !macroCardAberto;
+
+    setMacroCardAberto(abrir);
+    setEmojiAberto(false);
+    setMenuAnexoAberto(false);
+
+    if (abrir) {
+      await Promise.all([carregarMacros(), carregarVariaveisGlobais()]);
+    }
+  }
+
+  function abrirModalNovaMacro() {
+    setMacroCardAberto(false);
+    setMacroEditandoId(null);
+    setMacroForm({
+      titulo: "",
+      conteudo: "",
+    });
+    setModalMacroAberto(true);
+  }
+
+  function abrirModalEditarMacro(macro: MacroChat) {
+    setMacroCardAberto(false);
+    setMacroEditandoId(macro.id);
+    setMacroForm({
+      titulo: macro.titulo,
+      conteudo: macro.conteudo,
+    });
+    setModalMacroAberto(true);
+  }
+
+  function fecharModalMacro() {
+    setModalMacroAberto(false);
+    setMacroEditandoId(null);
+    setMacroForm({
+      titulo: "",
+      conteudo: "",
+    });
+  }
+
+  async function salvarMacro() {
+    setMensagemSucesso("");
+    setErro("");
+
+    const titulo = macroForm.titulo.trim();
+    const conteudoMacro = macroForm.conteudo.trim();
+
+    if (!conteudoMacro) {
+      setErro("Informe o texto da macro.");
+      return;
+    }
+
+    try {
+      setSalvandoMacro(true);
+
+      const res = await fetch("/api/macros", {
+        method: macroEditandoId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          macro_id: macroEditandoId,
+          titulo,
+          conteudo: conteudoMacro,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao salvar macro");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Macro salva com sucesso.");
+      fecharModalMacro();
+      await carregarMacros();
+    } catch {
+      setErro("Erro ao salvar macro");
+    } finally {
+      setSalvandoMacro(false);
+    }
+  }
+
+  async function excluirMacro(macroId: string) {
+    if (!window.confirm("Remover esta macro salva?")) return;
+
+    setMensagemSucesso("");
+    setErro("");
+
+    try {
+      setExcluindoMacroId(macroId);
+
+      const res = await fetch("/api/macros", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          macro_id: macroId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao remover macro");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Macro removida com sucesso.");
+      fecharModalMacro();
+      await carregarMacros();
+    } catch {
+      setErro("Erro ao remover macro");
+    } finally {
+      setExcluindoMacroId(null);
+    }
+  }
+
+  async function abrirModalVariavelNoContexto(
+    contexto: "macro" | "disparo-individual"
+  ) {
+    setContextoModalVariavel(contexto);
+    setMacroCardAberto(false);
+    setVariavelForm({
+      chave: "",
+      valor: "",
+      descricao: "",
+    });
+    setErroVariavelModal("");
+    setModalVariavelAberto(true);
+    await carregarVariaveisGlobais({ erroNoModal: true });
+  }
+
+  function abrirModalVariavel() {
+    return abrirModalVariavelNoContexto("macro");
+  }
+
+  function abrirModalVariavelDisparoIndividual() {
+    return abrirModalVariavelNoContexto("disparo-individual");
+  }
+
+  function fecharModalVariavel() {
+    setModalVariavelAberto(false);
+    setVariavelForm({
+      chave: "",
+      valor: "",
+      descricao: "",
+    });
+    setErroVariavelModal("");
+  }
+
+  async function salvarVariavelGlobal() {
+    setMensagemSucesso("");
+    setErro("");
+    setErroVariavelModal("");
+
+    const chave = normalizarChaveVariavelMacro(variavelForm.chave);
+    const valor = variavelForm.valor.trim();
+
+    if (!chave || !valor) {
+      setErroVariavelModal("Informe o nome e o valor da variável.");
+      return;
+    }
+
+    try {
+      setSalvandoVariavel(true);
+
+      const res = await fetch("/api/variaveis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chave,
+          valor,
+          descricao: variavelForm.descricao.trim(),
+          escopo: "global",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErroVariavelModal(data.error || "Erro ao salvar variável");
+        return;
+      }
+
+      setMensagemSucesso("Variável salva com sucesso.");
+      setVariavelForm({
+        chave: "",
+        valor: "",
+        descricao: "",
+      });
+      await carregarVariaveisGlobais({ erroNoModal: true });
+    } catch {
+      setErroVariavelModal("Erro ao salvar variável");
+    } finally {
+      setSalvandoVariavel(false);
+    }
+  }
+
+  async function removerVariavelGlobal(id: string) {
+    setMensagemSucesso("");
+    setErro("");
+    setErroVariavelModal("");
+
+    try {
+      const res = await fetch("/api/variaveis", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.ok === false) {
+        setErroVariavelModal(data.error || "Erro ao remover variável");
+        return;
+      }
+
+      setMensagemSucesso("Variável removida com sucesso.");
+      await carregarVariaveisGlobais({ erroNoModal: true });
+    } catch {
+      setErroVariavelModal("Erro ao remover variável");
+    }
+  }
+
+  function aplicarVariavelNoTextoMacro(chave: string) {
+    const valor = normalizarChaveVariavelMacro(chave);
+
+    if (!valor) return;
+
+    if (contextoModalVariavel === "disparo-individual") {
+      const limite = Math.max(1, quantidadeParametrosBody);
+
+      setParametros((atuais) => {
+        const proximo = Array.from(
+          { length: limite },
+          (_, index) => atuais[index] || ""
+        );
+        const primeiroVazio = proximo.findIndex((item) => !item.trim());
+        const indice = primeiroVazio >= 0 ? primeiroVazio : 0;
+        proximo[indice] = valor;
+        return proximo;
+      });
+      return;
+    }
+
+    const token = `{{${valor}}}`;
+
+    setMacroForm((atual) => {
+      const conteudo = atual.conteudo.trimEnd();
+
+      return {
+        ...atual,
+        conteudo: conteudo ? `${conteudo} ${token}` : token,
+      };
+    });
+  }
+
+  function acionarEnvioMacro(macro: MacroChat) {
+    setMensagemSucesso("");
+    setErro("");
+
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (!podeEnviarMensagemPermissao) {
+      setErro("Você não tem permissão para enviar mensagens nesta conversa.");
+      return;
+    }
+
+    if (!podeEnviarMidiaPermissao) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      return;
+    }
+
+    if (!podeEnviarMensagem) {
+      setErro("Assuma a conversa antes de enviar mídias e arquivos.");
+      return;
+    }
+
+    const textoResolvido = resolverVariaveisMacro(macro.conteudo).trim();
+
+    if (!textoResolvido) {
+      setErro("O texto da macro ficou vazio depois de aplicar as variáveis.");
+      return;
+    }
+
+    const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
+
+    if (!alvo) {
+      setErro("Não foi possível preencher o campo de mensagem.");
+      return;
+    }
+
+    alvo.textContent = textoResolvido;
+
+    if (arquivoEnvio) {
+      legendaArquivoRef.current = textoResolvido;
+      setLegendaArquivo(textoResolvido);
+    } else {
+      conteudoRef.current = textoResolvido;
+      setConteudo(textoResolvido);
+    }
+
+    setMacroCardAberto(false);
+
+    requestAnimationFrame(() => {
+      focarEditorNoFinal();
+    });
+  }
+
+  async function carregarPoliticaAtendimento() {
+    try {
+      const res = await fetch("/api/me/politica", { cache: "no-store" });
+      const data = await res.json();
+
+      if (!res.ok) return;
+
+      setPoliticaAtendimento(data.politica || null);
+    } catch {}
+  }
+
+  async function carregarIntegracoesWhatsapp() {
+    try {
+      const res = await fetch(
+        "/api/integracoes-whatsapp/listar?contexto=conversas",
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) return;
+
+      setIntegracoesWhatsapp(data.data || []);
+    } catch {}
+  }
+
+  function montarQueryConversas(
+    cursor: string | null,
+    limit: number,
+    incluirTotais: boolean
+  ) {
+    const params = new URLSearchParams();
+
+    params.set("limit", String(limit));
+
+    if (cursor) {
+      params.set("cursor", cursor);
+    }
+
+    if (incluirTotais) {
+      params.set("incluir_totais", "true");
+    }
+
+    if (buscaDebounced) {
+      params.set("busca", buscaDebounced);
+    }
+
+    if (statusFiltro !== "Todas") {
+      params.set("status", statusFiltro);
+    }
+
+    if (canalFiltro !== "todos") {
+      params.set("canal", canalFiltro);
+    }
+
+    if (setorFiltro !== "todos") {
+      params.set("setor_id", setorFiltro);
+    }
+
+    if (responsavelFiltro !== "todos") {
+      params.set("responsavel_id", responsavelFiltro);
+    }
+
+    if (chipRapido !== "Todas") {
+      params.set("chip", chipRapido);
+    }
+
+    if (listaFiltroId) {
+      params.set("lista_id", listaFiltroId);
+    }
+
+    if (integracaoWhatsappFiltro !== "todos") {
+      params.set("integracao_whatsapp_id", integracaoWhatsappFiltro);
+    }
+
+    return params.toString();
+  }
+
+
+    async function carregarConversas(
+      silencioso = false,
+      append = false,
+      limitCustom?: number,
+      incluirTotais = false,
+      preservarExistentes = false
+    ) {
+      const versaoCarga = append
+        ? versaoCargaConversasRef.current
+        : ++versaoCargaConversasRef.current;
+
+      try {
+        if (append && carregandoMaisConversasRef.current) {
+          return conversasRef.current;
+        }
+
+        if (!silencioso && !append) {
+          setLoadingConversas(true);
+        }
+
+        if (append) {
+          carregandoMaisConversasRef.current = true;
+          setCarregandoMaisConversas(true);
+        }
+
+        setErro("");
+
+        const conversasAtuais = conversasRef.current;
+        const limiteBusca = limitCustom || LIMITE_CONVERSAS;
+        const cursor = append ? proximoCursorConversasRef.current : null;
+
+        if (append && !cursor) {
+          setTemMaisConversas(false);
+          return conversasAtuais;
+        }
+
+        const queryString = montarQueryConversas(
+          cursor,
+          limiteBusca,
+          incluirTotais
+        );
+
+        const res = await fetch(`/api/conversas?${queryString}`, {
+          cache: "no-store",
+        });
+
+        const data = await res.json();
+
+        if (versaoCarga !== versaoCargaConversasRef.current) {
+          return conversasRef.current;
+        }
+
+        if (!res.ok) {
+          setErro(data.error || "Erro ao carregar conversas");
+          return conversasAtuais;
+        }
+
+        const listaNova: Conversa[] = data.conversas || [];
+        if (data.totais_chips) {
+          setTotaisChipsRapidos(
+            normalizarTotaisChipsRapidos(
+              data.totais_chips as Partial<TotaisChipsRapidos>
+            )
+          );
+        }
+
+        if (!preservarExistentes) {
+          const proximoCursor = data.pagination?.nextCursor || null;
+          proximoCursorConversasRef.current = proximoCursor;
+          setTemMaisConversas(Boolean(data.pagination?.hasMore));
+        }
+
+        const mapa = new Map<string, Conversa>();
+
+        if (append || preservarExistentes) {
+          conversasAtuais.forEach((item) => mapa.set(item.id, item));
+          listaNova.forEach((item) => mapa.set(item.id, item));
+        } else {
+          listaNova.forEach((item) => mapa.set(item.id, item));
+        }
+
+        const listaFinal = Array.from(mapa.values()).sort((a, b) => {
+          const aTime = a.last_message_at
+            ? new Date(a.last_message_at).getTime()
+            : 0;
+
+          const bTime = b.last_message_at
+            ? new Date(b.last_message_at).getTime()
+            : 0;
+
+          return bTime - aTime;
+        });
+
+        conversasRef.current = listaFinal;
+        setConversas(listaFinal);
+
+        setConversaSelecionada((atual) => {
+          if (!atual) return atual;
+
+          const encontrada = listaFinal.find((c) => c.id === atual.id);
+
+          if (!encontrada) return atual;
+
+          conversaSelecionadaIdRef.current = encontrada.id;
+          return encontrada;
+        });
+
+        return listaFinal;
+      } catch {
+        setErro("Erro ao carregar conversas");
+        return conversasRef.current;
+      } finally {
+        if (!silencioso && !append) {
+          setLoadingConversas(false);
+        }
+
+        if (append) {
+          carregandoMaisConversasRef.current = false;
+          setCarregandoMaisConversas(false);
+        }
+      }
+    }
+
+  async function atualizarConversasCarregadas() {
+    return await carregarConversas(
+      true,
+      false,
+      LIMITE_CONVERSAS,
+      false,
+      true
+    );
+  }
+
+  function getSupabaseRealtime() {
+    if (!supabaseRealtimeRef.current) {
+      supabaseRealtimeRef.current = createClient();
+    }
+
+    return supabaseRealtimeRef.current;
+  }
+
+  function agendarAtualizacaoConversasRealtime() {
+    if (!abaVisivelRef.current) return;
+
+    if (realtimeConversasTimerRef.current) {
+      window.clearTimeout(realtimeConversasTimerRef.current);
+    }
+
+    realtimeConversasTimerRef.current = window.setTimeout(async () => {
+      realtimeConversasTimerRef.current = null;
+
+      if (!abaVisivelRef.current) return;
+      if (carregandoMaisConversasRef.current) return;
+      if (atualizandoConversasAutomaticamenteRef.current) return;
+
+      try {
+        atualizandoConversasAutomaticamenteRef.current = true;
+        await atualizarConversasCarregadas();
+      } finally {
+        atualizandoConversasAutomaticamenteRef.current = false;
+      }
+    }, REALTIME_CONVERSAS_DEBOUNCE_MS);
+  }
+
+  function agendarAtualizacaoMensagensRealtime(
+    conversaId: string,
+    marcarComoLidaDepois = false
+  ) {
+    if (!abaVisivelRef.current) return;
+    if (!conversaEstaSelecionada(conversaId)) return;
+    if (enviandoRef.current) return;
+    if (editandoCampoRef.current) return;
+
+    if (marcarComoLidaDepois) {
+      marcarLidaAposRealtimeRef.current = true;
+    }
+
+    if (cargaInicialMensagensConversaRef.current === conversaId) {
+      atualizacoesMensagensPendentesRef.current.add(conversaId);
+      return;
+    }
+
+    if (realtimeMensagensTimerRef.current) {
+      window.clearTimeout(realtimeMensagensTimerRef.current);
+    }
+
+    realtimeMensagensTimerRef.current = window.setTimeout(async () => {
+      realtimeMensagensTimerRef.current = null;
+
+      if (!abaVisivelRef.current) return;
+      if (!conversaEstaSelecionada(conversaId)) return;
+      if (enviandoRef.current) return;
+      if (editandoCampoRef.current) return;
+
+      if (cargaInicialMensagensConversaRef.current === conversaId) {
+        atualizacoesMensagensPendentesRef.current.add(conversaId);
+        return;
+      }
+
+      const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
+
+      acompanharCrescimentoChatRef.current = estavaNoFinal;
+      impedirAutoScrollRef.current = !estavaNoFinal;
+      forcarScrollParaFinalRef.current = false;
+
+      await carregarMensagens(
+        conversaId,
+        true,
+        protocoloSelecionadoIdRef.current,
+        mensagemMaisAntigaCarregadaRef.current ||
+          inicioJanelaHistoricoRef.current,
+        null,
+        {
+          modoMergeNovas: true,
+        }
+      );
+
+      const deveMarcarComoLida =
+        estavaNoFinal && marcarLidaAposRealtimeRef.current;
+      marcarLidaAposRealtimeRef.current = false;
+
+      if (deveMarcarComoLida && conversaEstaSelecionada(conversaId)) {
+        agendarMarcacaoAutomaticaComoLida(conversaId);
+      }
+
+      agendarAtualizacaoConversasRealtime();
+    }, REALTIME_MENSAGENS_DEBOUNCE_MS);
+  }
+
+  async function atualizarConversasManual() {
+    if (atualizandoConversas) return;
+
+    try {
+      setAtualizandoConversas(true);
+      await carregarConversas(
+        true,
+        false,
+        LIMITE_CONVERSAS,
+        false,
+        true
+      );
+    } finally {
+      setAtualizandoConversas(false);
+    }
+  }
+
+  async function carregarMaisConversas() {
+    if (loadingConversas) return;
+    if (carregandoMaisConversas) return;
+    if (carregandoMaisConversasRef.current) return;
+    if (!temMaisConversas) return;
+
+    await carregarConversas(true, true);
+  }
+
+  function handleScrollListaConversas(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+
+    const chegouPertoDoFim =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - 220;
+
+    if (chegouPertoDoFim) {
+      carregarMaisConversas();
+    }
+  }
+
+  async function carregarMensagens(
+    conversaId: string,
+    silencioso = false,
+    conversaProtocoloId?: string | null,
+    inicioJanela?: string | null,
+    fimJanela?: string | null,
+    opcoes?: {
+      antesDe?: string | null;
+      mensagemAlvoId?: string | null;
+      modoAppendHistorico?: boolean;
+      modoMergeNovas?: boolean;
+    }
+  ) {
+    const protocoloAlvoId = conversaProtocoloId ?? null;
+    const versaoCarga = versaoCargaMensagensRef.current;
+
+    if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
+      return;
+    }
+
+    const controller = new AbortController();
+    requisicoesMensagensRef.current.add(controller);
+
+    try {
+      usuarioEstavaNoFinalRef.current = verificarSeUsuarioEstaNoFinal();
+      if (!silencioso) {
+        setLoadingMensagens(true);
+      }
+
+      let url = `/api/mensagens?conversa_id=${conversaId}`;
+
+      if (conversaProtocoloId) {
+        url += `&conversa_protocolo_id=${conversaProtocoloId}`;
+      }
+
+      if (inicioJanela) {
+        url += `&inicio=${encodeURIComponent(inicioJanela)}`;
+      }
+
+      if (fimJanela) {
+        url += `&fim=${encodeURIComponent(fimJanela)}`;
+      }
+
+      if (opcoes?.antesDe) {
+        url += `&antes_de=${encodeURIComponent(opcoes.antesDe)}`;
+        url += `&limite=30`;
+      }
+
+      if (opcoes?.mensagemAlvoId) {
+        url += `&mensagem_alvo_id=${encodeURIComponent(
+          opcoes.mensagemAlvoId
+        )}`;
+        url += `&limite=100`;
+      }
+
+      const res = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      const data = await res.json();
+
+      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
+        return;
+      }
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar mensagens");
+        return;
+      }
+
+      const janela24hAtualizada = normalizarJanela24hConversa(data.janela_24h);
+
+      if (janela24hAtualizada) {
+        setJanela24hConversa(janela24hAtualizada);
+      }
+
+      const mensagensRecebidas: Mensagem[] = Array.isArray(data.mensagens)
+        ? data.mensagens.filter(
+            (msg: Mensagem) => msg.conversa_id === conversaId
+          )
+        : [];
+
+      if (opcoes?.modoAppendHistorico) {
+        setMensagens((atuais) => {
+          if (
+            !cargaMensagensAindaAtual(
+              conversaId,
+              protocoloAlvoId,
+              versaoCarga
+            )
+          ) {
+            return atuais;
+          }
+
+          const atuaisDaConversa = atuais.filter(
+            (msg) => msg.conversa_id === conversaId
+          );
+          const idsAtuais = new Set(atuaisDaConversa.map((msg) => msg.id));
+
+          const antigasSemDuplicar = mensagensRecebidas.filter(
+            (msg: Mensagem) => !idsAtuais.has(msg.id)
+          );
+
+          const novaLista = [...antigasSemDuplicar, ...atuaisDaConversa];
+
+          const maisAntiga = novaLista[0]?.created_at || null;
+          mensagemMaisAntigaCarregadaRef.current = maisAntiga;
+          setInicioJanelaHistorico(maisAntiga);
+
+          return novaLista;
+        });
+      } else if (opcoes?.modoMergeNovas) {
+        setMensagens((atuais) => {
+          if (
+            !cargaMensagensAindaAtual(
+              conversaId,
+              protocoloAlvoId,
+              versaoCarga
+            )
+          ) {
+            return atuais;
+          }
+
+          const atuaisDaConversa = atuais.filter(
+            (msg) => msg.conversa_id === conversaId
+          );
+          const mapa = new Map<string, Mensagem>();
+
+          [...atuaisDaConversa, ...mensagensRecebidas].forEach((msg) => {
+            mapa.set(msg.id, msg);
+          });
+
+          const novaLista = Array.from(mapa.values()).sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime()
+          );
+
+          const maisAntiga = novaLista[0]?.created_at || null;
+          mensagemMaisAntigaCarregadaRef.current = maisAntiga;
+          setInicioJanelaHistorico(maisAntiga);
+
+          return novaLista;
+        });
+      } else {
+        const lista = mensagensRecebidas;
+
+        setMensagens(lista);
+
+        const maisAntiga = lista[0]?.created_at || null;
+        mensagemMaisAntigaCarregadaRef.current = maisAntiga;
+        setInicioJanelaHistorico(maisAntiga);
+      }
+
+      if (!cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
+        return;
+      }
+
+      setTemMaisHistorico(!!data.temMaisHistorico);
+
+      if (inicioJanela) {
+        setInicioJanelaHistorico(inicioJanela);
+      }
+
+      if (fimJanela) {
+        setFimJanelaHistorico(fimJanela);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      if (cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)) {
+        setErro("Erro ao carregar mensagens");
+      }
+    } finally {
+      requisicoesMensagensRef.current.delete(controller);
+
+      if (
+        !silencioso &&
+        cargaMensagensAindaAtual(conversaId, protocoloAlvoId, versaoCarga)
+      ) {
+        setLoadingMensagens(false);
+      }
+    }
+  }
+
+  async function carregarMensagensFavoritasPainel(
+    conversaId: string,
+    forcar = false
+  ) {
+    if (!conversaId) return;
+    if (!forcar && mensagensFavoritasPainelConversaId === conversaId) return;
+
+    try {
+      setCarregandoMensagensFavoritas(true);
+
+      const url = `/api/mensagens?conversa_id=${encodeURIComponent(
+        conversaId
+      )}&favoritas=true`;
+
+      const res = await fetch(url, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) {
+        return;
+      }
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar mensagens favoritas");
+        return;
+      }
+
+      const favoritas: Mensagem[] = Array.isArray(data.mensagens)
+        ? data.mensagens.filter(
+            (msg: Mensagem) => msg.conversa_id === conversaId
+          )
+        : [];
+
+      setMensagensFavoritasPainel(favoritas);
+      setMensagensFavoritasPainelConversaId(conversaId);
+    } catch {
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar mensagens favoritas");
+      }
+    } finally {
+      if (conversaEstaSelecionada(conversaId)) {
+        setCarregandoMensagensFavoritas(false);
+      }
+    }
+  }
+
+  async function abrirMensagemFavoritaNoChat(mensagem: Mensagem) {
+    const conversaId = conversaSelecionada?.id;
+
+    if (!conversaId) return;
+
+    setErro("");
+
+    const mensagemJaCarregada = mensagens.some((msg) => msg.id === mensagem.id);
+
+    if (!mensagemJaCarregada) {
+      definirProtocoloSelecionado(null);
+      setInicioJanelaHistorico(null);
+      setFimJanelaHistorico(null);
+      setTemMaisHistorico(false);
+
+      await carregarMensagens(conversaId, false, null, null, null, {
+        mensagemAlvoId: mensagem.id,
+      });
+    }
+
+    if (!conversaEstaSelecionada(conversaId)) return;
+
+    window.setTimeout(() => {
+      scrollParaMensagem(mensagem.id);
+    }, mensagemJaCarregada ? 80 : 250);
+  }
+
+  async function marcarConversaComoLida(conversaId: string) {
+    if (marcandoConversasComoLidasRef.current.has(conversaId)) {
+      marcacaoLidaPendenteRef.current.add(conversaId);
+      return false;
+    }
+
+    marcandoConversasComoLidasRef.current.add(conversaId);
+
+    try {
+      const res = await fetch(`/api/conversas/${conversaId}/marcar-lida`, {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        const conversaAtual = conversasRef.current.find(
+          (conversa) => conversa.id === conversaId
+        );
+        const tinhaMensagensNaoLidas =
+          Number(conversaAtual?.unread_count || 0) > 0;
+        const conversasAtualizadas =
+          chipRapido === "nao_lidas"
+            ? conversasRef.current.filter(
+                (conversa) => conversa.id !== conversaId
+              )
+            : conversasRef.current.map((conversa) =>
+                conversa.id === conversaId
+                  ? { ...conversa, unread_count: 0 }
+                  : conversa
+              );
+
+        conversasRef.current = conversasAtualizadas;
+        setConversas(conversasAtualizadas);
+
+        if (tinhaMensagensNaoLidas) {
+          setTotaisChipsRapidos((totais) => ({
+            ...totais,
+            nao_lidas: Math.max(0, totais.nao_lidas - 1),
+          }));
+        }
+
+        solicitarAtualizacaoConversasNaoLidasHeader();
+        conversaLidaRef.current = conversaId;
+        return true;
+      }
+    } catch {
+      return false;
+    } finally {
+      marcandoConversasComoLidasRef.current.delete(conversaId);
+
+      if (marcacaoLidaPendenteRef.current.delete(conversaId)) {
+        agendarMarcacaoAutomaticaComoLida(conversaId);
+      }
+    }
+
+    return false;
+  }
+
+  function agendarMarcacaoAutomaticaComoLida(conversaId: string) {
+    if (!abaVisivelRef.current) return;
+    if (!conversaEstaSelecionada(conversaId)) return;
+
+    if (marcarLidaAoFinalTimerRef.current) {
+      window.clearTimeout(marcarLidaAoFinalTimerRef.current);
+    }
+
+    marcarLidaAoFinalTimerRef.current = window.setTimeout(() => {
+      marcarLidaAoFinalTimerRef.current = null;
+
+      if (!abaVisivelRef.current) return;
+      if (!conversaEstaSelecionada(conversaId)) return;
+      if (!verificarSeUsuarioEstaNoFinal()) return;
+
+      void marcarConversaComoLida(conversaId);
+    }, 300);
+  }
+
+  async function carregarMaisHistorico() {
+    if (
+      !conversaSelecionada?.id ||
+      carregandoMaisHistorico ||
+      mensagens.length === 0
+    ) {
+      return;
+    }
+
+    try {
+      setCarregandoMaisHistorico(true);
+
+      const container = mensagensRef.current;
+
+      if (container) {
+        restaurarScrollHistoricoRef.current = {
+          scrollTop: container.scrollTop,
+          scrollHeight: container.scrollHeight,
+        };
+      }
+
+      impedirAutoScrollRef.current = true;
+      forcarScrollParaFinalRef.current = false;
+
+      const mensagemMaisAntiga = [...mensagens].sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() -
+          new Date(b.created_at).getTime()
+      )[0];
+
+      if (!mensagemMaisAntiga?.created_at) {
+        setTemMaisHistorico(false);
+        return;
+      }
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        null,
+        null,
+        {
+          antesDe: mensagemMaisAntiga.created_at,
+          modoAppendHistorico: true,
+        }
+      );
+    } finally {
+      setCarregandoMaisHistorico(false);
+    }
+  }
+
+  async function carregarSetores() {
+    try {
+      const res = await fetch("/api/setores/opcoes", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) {
+        setSetores(data.setores || []);
+      }
+    } catch {}
+  }
+
+  async function carregarUsuariosPorSetor(setorId: string) {
+    const setorNormalizado = setorId.trim();
+
+    if (!setorNormalizado) {
+      setUsuarios([]);
+      setCarregandoUsuariosAtribuicao(false);
+      return;
+    }
+
+    try {
+      setCarregandoUsuariosAtribuicao(true);
+
+      const res = await fetch(
+        `/api/usuarios/opcoes-atribuicao?setor_id=${encodeURIComponent(
+          setorNormalizado
+        )}`,
+        { cache: "no-store" }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setUsuarios([]);
+        setErro(data.error || "Erro ao carregar usuários do setor.");
+        return;
+      }
+
+      setUsuarios(Array.isArray(data.usuarios) ? data.usuarios : []);
+    } catch {
+      setUsuarios([]);
+      setErro("Erro ao carregar usuários do setor.");
+    } finally {
+      setCarregandoUsuariosAtribuicao(false);
+    }
+  }
+
+  async function assumirConversa() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setAssumindo(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/assumir`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao assumir conversa");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Conversa assumida com sucesso.");
+      setAcaoAberta(null);
+
+      await atualizarConversasCarregadas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setErro("Erro ao assumir conversa");
+    } finally {
+      setAssumindo(false);
+    }
+  }
+
+  async function enviarMensagem() {
+    setMensagemSucesso("");
+    setErro("");
+
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (!podeEnviarMensagem) {
+      setErro("Você não pode enviar mensagem nesta conversa.");
+      return;
+    }
+
+    const textoAtual = conteudoRef.current.trim();
+
+    if (!textoAtual) {
+      setErro("Digite uma mensagem.");
+      return;
+    }
+
+    const conversaId = conversaSelecionada.id;
+    const mensagemOtimistaId =
+      "otimista-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    const mensagemOtimista: Mensagem = {
+      id: mensagemOtimistaId,
+      conversa_id: conversaId,
+      remetente_tipo: "usuario",
+      remetente_id: usuarioLogado?.id || null,
+      conteudo: textoAtual,
+      tipo_mensagem: "texto",
+      origem: "enviada",
+      status_envio: "pendente",
+      created_at: new Date().toISOString(),
+    };
+
+    conteudoRef.current = "";
+    setConteudo("");
+
+    if (editorRef.current) {
+      editorRef.current.textContent = "";
+    }
+
+    forcarScrollParaFinalRef.current = true;
+    acompanharCrescimentoChatRef.current = false;
+    impedirAutoScrollRef.current = false;
+    setMensagens((atuais) => [...atuais, mensagemOtimista]);
+
+    try {
+      const res = await fetch("/api/mensagens", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversa_id: conversaId,
+          conteudo: textoAtual,
+          remetente_tipo: "usuario",
+          tipo_mensagem: "texto",
+          origem: "enviada",
+          status_envio: "enviada",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (conversaEstaSelecionada(conversaId)) {
+          setMensagens((atuais) =>
+            atuais.map((msg) =>
+              msg.id === mensagemOtimistaId
+                ? {
+                    ...msg,
+                    status_envio: "falha",
+                    metadata_json: {
+                      ...(msg.metadata_json || {}),
+                      erro: data.error || "Erro ao enviar mensagem",
+                    },
+                  }
+                : msg
+            )
+          );
+
+          setErro(data.error || "Erro ao enviar mensagem");
+        }
+
+        return;
+      }
+
+      const mensagemConfirmada =
+        data?.mensagem && typeof data.mensagem === "object"
+          ? (data.mensagem as Mensagem)
+          : null;
+
+      if (conversaEstaSelecionada(conversaId)) {
+        setMensagens((atuais) =>
+          atuais.map((msg) =>
+            msg.id === mensagemOtimistaId
+              ? mensagemConfirmada?.id
+                ? mensagemConfirmada
+                : { ...msg, status_envio: "enviada" }
+              : msg
+          )
+        );
+
+        setMensagemSucesso(data.message || "Mensagem enviada com sucesso.");
+      }
+
+      void atualizarConversasCarregadas()
+        .then(async (listaAtualizada) => {
+          if (!conversaEstaSelecionada(conversaId)) return;
+
+          const conversaAtualizada = listaAtualizada.find(
+            (c: Conversa) => c.id === conversaId
+          );
+
+          const novoFimJanela =
+            atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
+            null;
+
+          forcarScrollParaFinalRef.current = false;
+          acompanharCrescimentoChatRef.current = true;
+          impedirAutoScrollRef.current = false;
+
+          await carregarMensagens(
+            conversaId,
+            true,
+            protocoloSelecionadoIdRef.current,
+            mensagemMaisAntigaCarregadaRef.current ||
+              inicioJanelaHistoricoRef.current,
+            novoFimJanela,
+            {
+              modoMergeNovas: true,
+            }
+          );
+        })
+        .catch(() => {});
+    } catch {
+      if (conversaEstaSelecionada(conversaId)) {
+        setMensagens((atuais) =>
+          atuais.map((msg) =>
+            msg.id === mensagemOtimistaId
+              ? {
+                  ...msg,
+                  status_envio: "falha",
+                  metadata_json: {
+                    ...(msg.metadata_json || {}),
+                    erro: "Erro ao enviar mensagem",
+                  },
+                }
+              : msg
+          )
+        );
+
+        setErro("Erro ao enviar mensagem");
+      }
+    }
+  }
+
+  async function atualizarConversa(
+    payload: Record<string, unknown>,
+    sucesso: string
+  ) {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setSalvandoAcao(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar conversa");
+        return;
+      }
+
+      setMensagemSucesso(data.message || sucesso);
+      setAcaoAberta(null);
+
+      await atualizarConversasCarregadas();
+
+      if (conversaSelecionada?.id) {
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          protocoloSelecionadoId,
+          inicioJanelaHistorico,
+          fimJanelaHistorico
+        );
+      }
+    } catch {
+      setErro("Erro ao atualizar conversa");
+    } finally {
+      setSalvandoAcao(false);
+    }
+  }
+
+  async function ativarBotComUltimaMensagem() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setSalvandoAcao(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const conversaId = conversaSelecionada.id;
+
+      const res = await fetch(`/api/conversas/${conversaId}/reset-bot`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setModalAtivarBotAberto(false);
+        setErro(data.error || "Erro ao ativar bot nesta conversa.");
+        return;
+      }
+
+      setModalAtivarBotAberto(false);
+      setMensagemSucesso(
+        data.message ||
+          "Bot ativado e automacao iniciada com a ultima mensagem recebida."
+      );
+      setAcaoAberta(null);
+
+      const listaAtualizada = await atualizarConversasCarregadas();
+      const conversaAtualizada = listaAtualizada.find(
+        (conversa: Conversa) => conversa.id === conversaId
+      );
+
+      if (conversaAtualizada) {
+        selecionarConversa(conversaAtualizada);
+      }
+
+      await carregarMensagens(
+        conversaId,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setModalAtivarBotAberto(false);
+      setErro("Erro ao ativar bot nesta conversa.");
+    } finally {
+      setSalvandoAcao(false);
+    }
+  }
+
+  async function confirmarTransferencia() {
+    if (!conversaSelecionada?.id) return;
+
+    if (!novoSetorId) {
+      setErro("Selecione um setor.");
+      return;
+    }
+
+    try {
+      setSalvandoAcao(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(
+        `/api/conversas/${conversaSelecionada.id}/transferir`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            setor_id: novoSetorId,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao transferir conversa");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Conversa transferida com sucesso.");
+      setAcaoAberta(null);
+
+      await atualizarConversasCarregadas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setErro("Erro ao transferir conversa");
+    } finally {
+      setSalvandoAcao(false);
+    }
+  }
+
+  async function confirmarAtribuicao() {
+    if (!novoSetorId) {
+      setErro("Selecione um setor.");
+      return;
+    }
+
+    if (!novoResponsavelId || !conversaSelecionada?.id) {
+      setErro("Selecione um responsável.");
+      return;
+    }
+
+    try {
+      setSalvandoAcao(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(
+        `/api/conversas/${conversaSelecionada.id}/atribuir`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            setor_id: novoSetorId,
+            responsavel_id: novoResponsavelId,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atribuir responsável");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Responsável atribuído com sucesso.");
+      setAcaoAberta(null);
+
+      await atualizarConversasCarregadas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setErro("Erro ao atribuir responsável");
+    } finally {
+      setSalvandoAcao(false);
+    }
+  }
+
+  async function confirmarEncerramento() {
+    if (
+      encerramentoTipoEvento === "convertido" &&
+      !encerramentoValor.trim()
+    ) {
+      setErro("Informe o valor da venda.");
+      return;
+    }
+
+    if (encerramentoInterrompeAutomacao) {
+      await pararAutomacaoEEncerrar();
+      return;
+    }
+
+    await atualizarConversa(
+      {
+        status: "encerrado_manual",
+        classificacao_resultado: encerramentoTipoEvento,
+        valor_resultado: encerramentoTipoEvento === "convertido"
+          ? encerramentoValor
+          : null,
+        observacao_resultado: encerramentoObservacao.trim() || null,
+      },
+      "Conversa encerrada com sucesso."
+    );
+  }
+
+  async function pararAutomacaoEEncerrar() {
+  if (!conversaSelecionada?.id) return;
+
+  try {
+    setAssumindo(true);
+    setSalvandoAcao(true);
+    setErro("");
+    setMensagemSucesso("");
+
+    const res = await fetch(
+      `/api/conversas/${conversaSelecionada.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: "encerrado_manual",
+          bot_ativo: false,
+          responsavel_id: null,
+          acao: "parar_automacao_encerrar",
+          classificacao_resultado: encerramentoTipoEvento,
+          valor_resultado: encerramentoTipoEvento === "convertido"
+            ? encerramentoValor
+            : null,
+          observacao_resultado: encerramentoObservacao.trim() || null,
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setErro(data.error || "Erro ao parar automação e encerrar conversa.");
+      return;
+    }
+
+    setMensagemSucesso(
+      data.message || "Automação parada e conversa encerrada com sucesso."
+    );
+    setAcaoAberta(null);
+    setEncerramentoInterrompeAutomacao(false);
+
+    const listaAtualizada = await atualizarConversasCarregadas();
+
+    const conversaAtualizada = listaAtualizada.find(
+      (conversa: Conversa) => conversa.id === conversaSelecionada.id
+    );
+
+    if (conversaAtualizada) {
+      selecionarConversa(conversaAtualizada);
+    }
+
+    await carregarMensagens(
+      conversaSelecionada.id,
+      true,
+      protocoloSelecionadoId,
+      inicioJanelaHistorico,
+      fimJanelaHistorico
+    );
+  } catch {
+    setErro("Erro ao parar automação e encerrar conversa.");
+  } finally {
+    setAssumindo(false);
+    setSalvandoAcao(false);
+  }
+}
+
+  async function reabrirConversa() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setAssumindo(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(
+        `/api/conversas/${conversaSelecionada.id}/assumir`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            modo_protocolo: "reabrir",
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao reabrir e assumir conversa.");
+        const listaAtualizada = await atualizarConversasCarregadas();
+
+        const conversaAtualizada = listaAtualizada.find(
+          (c: Conversa) => c.id === conversaSelecionada.id
+        );
+
+        if (conversaAtualizada) {
+          selecionarConversa(conversaAtualizada);
+        }
+
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message || "Conversa reaberta e assumida com sucesso."
+      );
+
+      const listaAtualizada = await atualizarConversasCarregadas();
+
+      const conversaAtualizada = listaAtualizada.find(
+        (c: Conversa) => c.id === conversaSelecionada.id
+      );
+
+      if (conversaAtualizada) {
+        selecionarConversa(conversaAtualizada);
+      }
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+
+      await carregarProtocolosDaConversa();
+    } catch {
+      setErro("Erro ao reabrir e assumir conversa.");
+    } finally {
+      setAssumindo(false);
+    }
+  }
+
+  function abrirModalNovoProtocolo() {
+    setModalNovoProtocoloAberto(true);
+  }
+
+  function fecharModalNovoProtocolo() {
+    if (abrindoNovoProtocolo) return;
+    setModalNovoProtocoloAberto(false);
+  }
+
+  function abrirModalAtivarBot() {
+    setMenuContatoAberto(false);
+    setModalAtivarBotAberto(true);
+  }
+
+  function fecharModalAtivarBot() {
+    if (salvandoAcao) return;
+    setModalAtivarBotAberto(false);
+  }
+
+  async function confirmarAtivarBotComUltimaMensagem() {
+    await ativarBotComUltimaMensagem();
+  }
+
+  async function confirmarAbrirNovoProtocolo() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setAbrindoNovoProtocolo(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const conversaId = conversaSelecionada.id;
+
+      const res = await fetch(
+        `/api/conversas/${conversaId}/assumir`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            modo_protocolo: "novo",
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(
+          data.error ||
+            "Erro ao abrir novo protocolo de atendimento."
+        );
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          "Novo protocolo de atendimento aberto com sucesso."
+      );
+
+      setModalNovoProtocoloAberto(false);
+
+      setProtocoloSelecionadoId(null);
+      setProtocoloSelecionadoNumero(null);
+
+      const listaAtualizada =
+        await atualizarConversasCarregadas();
+
+      const conversaAtualizada = listaAtualizada.find(
+        (conversa: Conversa) =>
+          conversa.id === conversaId
+      );
+
+      if (conversaAtualizada) {
+        setConversaSelecionada(conversaAtualizada);
+      }
+
+      await carregarMensagens(
+        conversaId,
+        true,
+        null,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+
+      await carregarProtocolosDaConversa();
+    } catch {
+      setErro(
+        "Erro ao abrir novo protocolo de atendimento."
+      );
+    } finally {
+      setAbrindoNovoProtocolo(false);
+    }
+  }
+
+  function abrirTransferir() {
+    setErro("");
+    setMensagemSucesso("");
+
+    setNovoSetorId(
+      conversaSelecionada?.setor_id ||
+        conversaSelecionada?.setores?.id ||
+        ""
+    );
+
+    // Fecha o painel de detalhes para exibir o card no chat.
+    setPainelDireitoAberto(false);
+    setMenuContatoAberto(false);
+
+    setAcaoAberta("transferir");
+  }
+
+  async function abrirAtribuir() {
+    setErro("");
+    setMensagemSucesso("");
+
+    const setorAtual =
+      conversaSelecionada?.setor_id || conversaSelecionada?.setores?.id || "";
+
+    setNovoSetorId(setorAtual);
+    setNovoResponsavelId(
+      conversaSelecionada?.responsavel_id ||
+        conversaSelecionada?.responsavel?.id ||
+        ""
+    );
+    setUsuarios([]);
+    setAcaoAberta("atribuir");
+
+    if (setorAtual) {
+      await carregarUsuariosPorSetor(setorAtual);
+    }
+  }
+
+  async function alternarFavorito() {
+    if (!conversaSelecionada?.id) return;
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const favoritaAtual = !!conversaSelecionada.favorita;
+
+      const res = await fetch(
+        `/api/conversas/${conversaSelecionada.id}/favorito`,
+        {
+          method: favoritaAtual ? "DELETE" : "POST",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar favorito");
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          (favoritaAtual
+            ? "Conversa removida dos favoritos."
+            : "Conversa adicionada aos favoritos.")
+      );
+
+      await atualizarConversasCarregadas();
+
+      if (conversaSelecionada?.id) {
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          protocoloSelecionadoId,
+          inicioJanelaHistorico,
+          fimJanelaHistorico
+        );
+      }
+    } catch {
+      setErro("Erro ao atualizar favorito");
+    }
+  }
+
+  async function alternarMensagemFavorita(mensagem: Mensagem) {
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/mensagens/${mensagem.id}/favorito`, {
+        method: mensagem.favorita ? "DELETE" : "POST",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar favorito da mensagem");
+        return;
+      }
+
+      if (conversaSelecionada?.id) {
+        const conversaId = conversaSelecionada.id;
+
+        impedirAutoScrollRef.current = true;
+
+        await carregarMensagens(
+          conversaId,
+          true,
+          protocoloSelecionadoId,
+          inicioJanelaHistorico,
+          fimJanelaHistorico
+        );
+
+        if (mensagensFavoritasPainelConversaId === conversaId) {
+          await carregarMensagensFavoritasPainel(conversaId, true);
+        }
+      }
+    } catch {
+      setErro("Erro ao atualizar favorito da mensagem");
+    }
+  }
+
+  async function carregarListasDaConversa() {
+    if (!conversaSelecionada?.id) return;
+
+    const conversaId = conversaSelecionada.id;
+
+    try {
+      const res = await fetch(`/api/conversas/${conversaId}/listas`, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) return;
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar listas");
+        return;
+      }
+
+      setListasConversa(data.listas || []);
+    } catch {
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar listas");
+      }
+    }
+  }
+
+  async function carregarListasEmpresa() {
+    try {
+      const res = await fetch("/api/conversas/listas", {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar listas");
+        return;
+      }
+
+      setListasEmpresa(data.listas || []);
+    } catch {
+      setErro("Erro ao carregar listas");
+    }
+  }
+
+
+    async function carregarEtiquetasEmpresa() {
+    try {
+      setCarregandoEtiquetas(true);
+
+      const res = await fetch("/api/conversas/etiquetas", {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar etiquetas");
+        return;
+      }
+
+      setEtiquetasEmpresa(data.etiquetas || []);
+    } catch {
+      setErro("Erro ao carregar etiquetas");
+    } finally {
+      setCarregandoEtiquetas(false);
+    }
+  }
+
+  function resetarFormularioEtiqueta() {
+    setEtiquetaForm({
+      nome: "",
+      descricao: "",
+      cor: ETIQUETAS_PADRAO[0],
+    });
+    setEtiquetaEditandoId(null);
+    setEtiquetaConfirmandoExclusaoId(null);
+    setMostrarFormularioEtiqueta(false);
+  }
+
+  function iniciarCriacaoEtiqueta() {
+    setEtiquetaEditandoId(null);
+    setEtiquetaConfirmandoExclusaoId(null);
+    setEtiquetaForm({
+      nome: "",
+      descricao: "",
+      cor: ETIQUETAS_PADRAO[0],
+    });
+    setMostrarFormularioEtiqueta(true);
+  }
+
+  function iniciarEdicaoEtiqueta(etiqueta: EtiquetaEmpresa) {
+    setEtiquetaConfirmandoExclusaoId(null);
+    setEtiquetaEditandoId(etiqueta.id);
+    setEtiquetaForm({
+      nome: etiqueta.nome || "",
+      descricao: etiqueta.descricao || "",
+      cor: etiqueta.cor || ETIQUETAS_PADRAO[0],
+    });
+    setMostrarFormularioEtiqueta(true);
+    setSelecionandoEtiqueta(false);
+  }
+
+function escaparHtml(valor?: string | null) {
+  return String(valor || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getRemetenteExportacao(msg: Mensagem) {
+  switch (msg.remetente_tipo) {
+    case "usuario":
+      return "Você";
+    case "contato":
+      return "Cliente";
+    case "bot":
+      return "Bot";
+    case "ia":
+      return "IA";
+    case "sistema":
+      return "Sistema";
+    default:
+      return msg.remetente_tipo;
+  }
+}
+
+function getConteudoExportacao(msg: Mensagem) {
+  const caption =
+    msg.metadata_json?.caption ||
+    msg.metadata_json?.legenda ||
+    "";
+
+  if (msg.tipo_mensagem === "imagem") {
+    return caption ? `Imagem: ${caption}` : "Imagem recebida/enviada";
+  }
+
+  if (msg.tipo_mensagem === "audio") {
+    const transcricao = msg.metadata_json?.transcricao_audio || "";
+    return transcricao
+      ? `Áudio — transcrição: ${transcricao}`
+      : "Áudio recebido/enviado";
+  }
+
+  if (msg.tipo_mensagem === "video") {
+    return caption ? `Vídeo: ${caption}` : "Vídeo recebido/enviado";
+  }
+
+  if (msg.tipo_mensagem === "documento") {
+    const filename = msg.metadata_json?.filename || "documento";
+    return caption ? `Documento: ${filename} — ${caption}` : `Documento: ${filename}`;
+  }
+
+  if (msg.tipo_mensagem === "localizacao") {
+    const latitude = msg.metadata_json?.location?.latitude;
+    const longitude = msg.metadata_json?.location?.longitude;
+
+    if (latitude != null && longitude != null) {
+      return `Localização compartilhada: ${latitude}, ${longitude}`;
+    }
+
+    return "Localização compartilhada";
+  }
+
+  if (msg.tipo_mensagem === "contato") {
+    return "Contato compartilhado";
+  }
+
+  return msg.conteudo || "";
+}
+
+async function buscarTodasMensagensDaConversa(conversaId: string) {
+  const url = `/api/mensagens?conversa_id=${encodeURIComponent(
+    conversaId
+  )}&exportar=true`;
+
+  const res = await fetch(url, {
+    cache: "no-store",
+  });
+
+  let data: any = null;
+
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error("A API retornou uma resposta inválida ao exportar a conversa.");
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || "Erro ao carregar todas as mensagens.");
+  }
+
+  return Array.isArray(data.mensagens) ? data.mensagens : [];
+}
+
+async function baixarConversaPDF() {
+  if (!podeExportarConversa) {
+    setErro("Sem permissão para exportar conversas.");
+    return;
+  }
+
+  if (!conversaSelecionada?.id) {
+    alert("Nenhuma conversa selecionada.");
+    return;
+  }
+
+  try {
+    setErro("");
+    setMensagemSucesso("");
+
+    const todasMensagens = await buscarTodasMensagensDaConversa(
+      conversaSelecionada.id
+    );
+
+    if (todasMensagens.length === 0) {
+      alert("Nenhuma mensagem encontrada para exportar.");
+      return;
+    }
+
+    const htmlMensagens = todasMensagens
+      .map((msg: Mensagem) => {
+        const remetente = getRemetenteExportacao(msg);
+        const data = new Date(msg.created_at).toLocaleString("pt-BR");
+        const conteudo = getConteudoExportacao(msg);
+
+        return `
+          <div style="margin-bottom:12px; page-break-inside: avoid;">
+            <strong>${escaparHtml(remetente)}</strong><br/>
+            <span style="white-space: pre-wrap;">${escaparHtml(conteudo)}</span><br/>
+            <small style="color:gray;">${escaparHtml(data)}</small>
+          </div>
+        `;
+      })
+      .join("");
+
+    const html = `
+      <html>
+        <head>
+          <title>Conversa - ${escaparHtml(conversaSelecionada.contatos?.nome || "")}</title>
+          <meta charset="utf-8" />
+        </head>
+        <body style="font-family: Arial; padding:20px;">
+          <h2>Conversa com ${escaparHtml(
+            conversaSelecionada.contatos?.nome || "Contato"
+          )}</h2>
+
+          <p><strong>Telefone:</strong> ${escaparHtml(
+            conversaSelecionada.contatos?.telefone || ""
+          )}</p>
+
+          <p><strong>Total de mensagens exportadas:</strong> ${
+            todasMensagens.length
+          }</p>
+
+          <hr/>
+
+          ${htmlMensagens}
+        </body>
+      </html>
+    `;
+
+    const novaJanela = window.open("", "_blank");
+
+    if (!novaJanela) {
+      alert("O navegador bloqueou a abertura da janela de exportação.");
+      return;
+    }
+
+    novaJanela.document.write(html);
+    novaJanela.document.close();
+
+    novaJanela.focus();
+
+    setTimeout(() => {
+      novaJanela.print();
+    }, 500);
+  } catch (error: any) {
+    setErro(error?.message || "Erro ao exportar conversa.");
+  }
+}
+
+  async function salvarEtiquetaEmpresa() {
+    const nome = etiquetaForm.nome.trim();
+    const descricao = etiquetaForm.descricao.trim();
+
+    if (!nome) {
+      setErro("Digite o nome da etiqueta.");
+      return;
+    }
+
+    if (nome.length > 30) {
+      setErro("O nome da etiqueta pode ter no máximo 30 caracteres.");
+      return;
+    }
+
+    if (descricao.length > 120) {
+      setErro("A descrição da etiqueta pode ter no máximo 120 caracteres.");
+      return;
+    }
+
+    try {
+      setSalvandoEtiqueta(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/conversas/etiquetas", {
+        method: etiquetaEditandoId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          etiqueta_id: etiquetaEditandoId,
+          nome,
+          descricao,
+          cor: etiquetaForm.cor,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao salvar etiqueta");
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          (etiquetaEditandoId
+            ? "Etiqueta atualizada com sucesso"
+            : "Etiqueta criada com sucesso")
+      );
+
+      await carregarEtiquetasEmpresa();
+      resetarFormularioEtiqueta();
+    } catch {
+      setErro("Erro ao salvar etiqueta");
+    } finally {
+      setSalvandoEtiqueta(false);
+    }
+  }
+
+  async function excluirEtiquetaEmpresa(etiquetaId: string) {
+    try {
+      setSalvandoEtiqueta(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/conversas/etiquetas", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          etiqueta_id: etiquetaId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao excluir etiqueta");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Etiqueta excluída com sucesso");
+      setEtiquetaConfirmandoExclusaoId(null);
+
+      await carregarEtiquetasEmpresa();
+      await atualizarConversasCarregadas();
+    } catch {
+      setErro("Erro ao excluir etiqueta");
+    } finally {
+      setSalvandoEtiqueta(false);
+    }
+  }
+
+  async function definirEtiquetaDaConversa(etiquetaId: string | null) {
+    if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarEtiquetas) {
+      setErro("Sem permissão para gerenciar etiquetas da conversa.");
+      return;
+    }
+
+    try {
+      setSalvandoEtiqueta(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/etiqueta`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          etiqueta_id: etiquetaId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar etiqueta da conversa");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Etiqueta atualizada com sucesso");
+
+      await atualizarConversasCarregadas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setErro("Erro ao atualizar etiqueta da conversa");
+    } finally {
+      setSalvandoEtiqueta(false);
+    }
+  }
+
+  async function carregarNotasDaConversa() {
+    if (!podeGerenciarNotas) {
+      setNotasConversa([]);
+      return;
+    }
+
+    if (!conversaSelecionada?.id) return;
+
+    const conversaId = conversaSelecionada.id;
+
+    try {
+      const res = await fetch(`/api/conversas/${conversaId}/notas`, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) return;
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar notas");
+        return;
+      }
+
+      setNotasConversa(data.notas || []);
+    } catch {
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar notas");
+      }
+    }
+  }
+
+  async function salvarNovaNota() {
+    if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarNotas) {
+      setErro("Sem permissão para gerenciar notas da conversa.");
+      return;
+    }
+
+    const conteudoNota = notaInterna.trim();
+
+    if (!conteudoNota) {
+      setErro("Digite uma nota.");
+      return;
+    }
+
+    if (conteudoNota.length > LIMITE_CARACTERES_NOTA) {
+      setErro(`A nota pode ter no máximo ${LIMITE_CARACTERES_NOTA} caracteres.`);
+      return;
+    }
+
+    try {
+      setSalvandoNota(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/notas`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conteudo: conteudoNota,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao salvar nota");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Nota salva com sucesso");
+      setNotaInterna("");
+      await carregarNotasDaConversa();
+    } catch {
+      setErro("Erro ao salvar nota");
+    } finally {
+      setSalvandoNota(false);
+    }
+  }
+
+  async function atualizarNota(notaId: string) {
+    if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarNotas) {
+      setErro("Sem permissão para gerenciar notas da conversa.");
+      return;
+    }
+
+    const conteudoNota = notaEditandoTexto.trim();
+
+    if (!conteudoNota) {
+      setErro("Digite o conteúdo da nota.");
+      return;
+    }
+
+    if (conteudoNota.length > LIMITE_CARACTERES_NOTA) {
+      setErro(`A nota pode ter no máximo ${LIMITE_CARACTERES_NOTA} caracteres.`);
+      return;
+    }
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/notas`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nota_id: notaId,
+          conteudo: conteudoNota,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar nota");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Nota atualizada com sucesso");
+      setNotaEditandoId(null);
+      setNotaEditandoTexto("");
+      await carregarNotasDaConversa();
+    } catch {
+      setErro("Erro ao atualizar nota");
+    }
+  }
+
+  async function excluirNota(notaId: string) {
+    if (!conversaSelecionada?.id) return;
+    if (!podeGerenciarNotas) {
+      setErro("Sem permissão para gerenciar notas da conversa.");
+      return;
+    }
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/conversas/${conversaSelecionada.id}/notas`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nota_id: notaId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao excluir nota");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Nota excluída com sucesso");
+      setNotaConfirmandoExclusaoId(null);
+      await carregarNotasDaConversa();
+    } catch {
+      setErro("Erro ao excluir nota");
+    }
+  }
+
+  async function enviarMidia(file?: File | null) {
+    const arquivo = file || arquivoEnvio;
+
+    setMensagemSucesso("");
+    setErro("");
+
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (!podeEnviarMensagem) {
+      setErro("Você não pode enviar mensagem nesta conversa.");
+      return;
+    }
+
+    if (!arquivo) {
+      setErro("Selecione um arquivo.");
+      return;
+    }
+
+    try {
+      setEnviando(true);
+
+      const formData = new FormData();
+      formData.append("conversa_id", conversaSelecionada.id);
+      formData.append("file", arquivo);
+
+      const legendaAtual = legendaArquivoRef.current.trim();
+
+      if (legendaAtual) {
+        formData.append("caption", legendaAtual);
+      }
+
+      const res = await fetch("/api/mensagens/media", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao enviar mídia");
+        return;
+      }
+
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+
+      setArquivoEnvio(null);
+      setArquivoEnvioPreviewUrl(null);
+      setLegendaArquivo("");
+      legendaArquivoRef.current = "";
+      if (legendaEditorRef.current) {
+        legendaEditorRef.current.textContent = "";
+      }
+      setMensagemSucesso(data.message || "Mídia enviada com sucesso.");
+
+      const listaAtualizada = await atualizarConversasCarregadas();
+      const conversaAtualizada = listaAtualizada.find(
+        (c: Conversa) => c.id === conversaSelecionada.id
+      );
+
+      const novoFimJanela =
+        atualizarFimDaJanelaHistorico(conversaAtualizada?.last_message_at) ||
+        fimJanelaHistorico;
+
+      forcarScrollParaFinalRef.current = false;
+      acompanharCrescimentoChatRef.current = true;
+      impedirAutoScrollRef.current = false;
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico,
+        novoFimJanela,
+        {
+          modoMergeNovas: true,
+        }
+      );
+    } catch {
+      setErro("Erro ao enviar mídia");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function salvarContatoCampo(
+    campo: "nome" | "email" | "empresa" | "observacoes",
+    valor: string
+  ) {
+    if (!conversaSelecionada?.contatos?.id) return;
+
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/contatos/${conversaSelecionada.contatos.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Origem-Modulo": "conversas",
+        },
+        body: JSON.stringify({
+          [campo]: valor,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar contato");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Contato atualizado com sucesso.");
+      setEditandoCampo(null);
+
+      setConversaSelecionada((atual) => {
+        if (!atual?.contatos) return atual;
+
+        return {
+          ...atual,
+          contatos: {
+            ...atual.contatos,
+            [campo]: valor,
+          },
+        };
+      });
+
+      await atualizarConversasCarregadas();
+    } catch {
+      setErro("Erro ao atualizar contato");
+    }
+  }
+
+  async function salvarContatoCampanha(campanhaId: string) {
+    if (!conversaSelecionada?.contatos?.id) return;
+
+    if (!podeEditarContatoConversa) {
+      setErro("Sem permissão para editar o contato pela conversa.");
+      return;
+    }
+
+    try {
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch(`/api/contatos/${conversaSelecionada.contatos.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Origem-Modulo": "conversas",
+        },
+        body: JSON.stringify({
+          rastreamento_campanha_id: campanhaId || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao atualizar campanha do contato");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Campanha atualizada com sucesso.");
+      setEditandoCampo(null);
+
+      await atualizarConversasCarregadas();
+    } catch {
+      setErro("Erro ao atualizar campanha do contato");
+    }
+  }
+
+  async function carregarProtocolosDaConversa() {
+    if (!conversaSelecionada?.id) return;
+
+    const conversaId = conversaSelecionada.id;
+
+    try {
+      if (!conversaEstaSelecionada(conversaId)) return;
+
+      setCarregandoProtocolos(true);
+
+      const res = await fetch(`/api/conversas/${conversaId}/protocolos`, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!conversaEstaSelecionada(conversaId)) return;
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar protocolos");
+        return;
+      }
+
+      setProtocolosConversa(data.protocolos || []);
+    } catch {
+      if (conversaEstaSelecionada(conversaId)) {
+        setErro("Erro ao carregar protocolos");
+      }
+    } finally {
+      if (conversaEstaSelecionada(conversaId)) {
+        setCarregandoProtocolos(false);
+      }
+    }
+  }
+
+  function obterProtocoloPadraoEventoRastreamento() {
+    return (
+      protocoloSelecionadoId ||
+      protocolosConversa.find((protocolo) => protocolo.ativo)?.id ||
+      protocolosConversa[0]?.id ||
+      ""
+    );
+  }
+
+  function fecharModalEventoRastreamento() {
+    setModalEventoRastreamentoAberto(false);
+    setEventoRastreamentoEditandoId(null);
+    setEventoRastreamentoTipo("venda_realizada");
+    setEventoRastreamentoValor("");
+    setEventoRastreamentoObservacao("");
+    setEventoRastreamentoProtocoloId("");
+  }
+
+  function abrirModalNovoEventoRastreamento() {
+    setEventoRastreamentoEditandoId(null);
+    setEventoRastreamentoTipo("venda_realizada");
+    setEventoRastreamentoValor("");
+    setEventoRastreamentoObservacao("");
+    setEventoRastreamentoProtocoloId(obterProtocoloPadraoEventoRastreamento());
+    setModalEventoRastreamentoAberto(true);
+  }
+
+  function abrirModalEditarEventoRastreamento(evento: RastreamentoEventoConversa) {
+    setEventoRastreamentoEditandoId(evento.id);
+    setEventoRastreamentoTipo(evento.tipo);
+    setEventoRastreamentoValor(
+      evento.valor === null || evento.valor === undefined ? "" : String(evento.valor)
+    );
+    setEventoRastreamentoObservacao(evento.metadata_json?.observacao || "");
+    setEventoRastreamentoProtocoloId(
+      evento.metadata_json?.conversa_protocolo_id ||
+        obterProtocoloPadraoEventoRastreamento()
+    );
+    setModalEventoRastreamentoAberto(true);
+  }
+
+  async function carregarEventosRastreamentoDaConversa(conversaId?: string) {
+    if (!podeVisualizarRastreamento) {
+      setEventosRastreamentoConversa([]);
+      return;
+    }
+
+    const idConversa = conversaId || conversaSelecionada?.id;
+    if (!idConversa) return;
+
+    try {
+      if (!conversaEstaSelecionada(idConversa)) return;
+
+      setCarregandoEventosRastreamento(true);
+
+      const params = new URLSearchParams({
+        conversa_id: idConversa,
+        origem_registro: "manual",
+        limite: "50",
+      });
+
+      const res = await fetch(`/api/rastreamento/eventos?${params.toString()}`, {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!conversaEstaSelecionada(idConversa)) return;
+
+      if (res.status === 401 || res.status === 403) {
+        setEventosRastreamentoConversa([]);
+        return;
+      }
+
+      if (!res.ok || !data.ok) {
+        setErro(data.error || "Erro ao carregar eventos comerciais");
+        setEventosRastreamentoConversa([]);
+        return;
+      }
+
+      setEventosRastreamentoConversa(data.eventos || []);
+    } catch {
+      if (conversaEstaSelecionada(idConversa)) {
+        setErro("Erro ao carregar eventos comerciais");
+        setEventosRastreamentoConversa([]);
+      }
+    } finally {
+      if (conversaEstaSelecionada(idConversa)) {
+        setCarregandoEventosRastreamento(false);
+      }
+    }
+  }
+
+  async function salvarEventoRastreamento() {
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (
+      eventoRastreamentoExigeValor(eventoRastreamentoTipo) &&
+      !eventoRastreamentoValor.trim()
+    ) {
+      setErro("Informe o valor da venda.");
+      return;
+    }
+
+    try {
+      setSalvandoEventoRastreamento(true);
+      setErro("");
+
+      const payload = {
+        tipo: eventoRastreamentoTipo,
+        conversa_id: conversaSelecionada.id,
+        contato_id: conversaSelecionada.contatos?.id || null,
+        valor: eventoRastreamentoExigeValor(eventoRastreamentoTipo)
+          ? eventoRastreamentoValor
+          : null,
+        conversa_protocolo_id: eventoRastreamentoProtocoloId || null,
+        observacao: eventoRastreamentoObservacao.trim() || null,
+        origem_interface: "conversas",
+      };
+
+      const editando = !!eventoRastreamentoEditandoId;
+      const res = await fetch(
+        editando
+          ? `/api/rastreamento/eventos/${eventoRastreamentoEditandoId}`
+          : "/api/rastreamento/eventos",
+        {
+          method: editando ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setErro(data.error || "Erro ao salvar evento comercial");
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          (editando
+            ? "Evento comercial atualizado com sucesso."
+            : "Evento comercial registrado com sucesso.")
+      );
+      fecharModalEventoRastreamento();
+      await carregarEventosRastreamentoDaConversa(conversaSelecionada.id);
+    } catch {
+      setErro("Erro ao salvar evento comercial");
+    } finally {
+      setSalvandoEventoRastreamento(false);
+    }
+  }
+
+  async function excluirEventoRastreamento(eventoId: string) {
+    const confirmou = window.confirm(
+      "Apagar este evento comercial? Esta acao nao pode ser desfeita."
+    );
+
+    if (!confirmou) return;
+
+    try {
+      setErro("");
+
+      const res = await fetch(`/api/rastreamento/eventos/${eventoId}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setErro(data.error || "Erro ao apagar evento comercial");
+        return;
+      }
+
+      setMensagemSucesso(data.message || "Evento comercial apagado com sucesso.");
+      setEventosRastreamentoConversa((eventos) =>
+        eventos.filter((evento) => evento.id !== eventoId)
+      );
+    } catch {
+      setErro("Erro ao apagar evento comercial");
+    }
+  }
+
+  async function limparFiltroDeProtocolo() {
+    if (!conversaSelecionada?.id) return;
+
+    definirProtocoloSelecionado(null);
+
+    const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
+      conversaSelecionada.last_message_at
+    );
+
+    setProtocoloSelecionadoId(null);
+    setProtocoloSelecionadoNumero(null);
+
+    await carregarMensagens(
+      conversaSelecionada.id,
+      false,
+      null,
+      janelaInicial.inicio,
+      janelaInicial.fim
+    );
+  }
+
+  async function carregarTemplatesWhatsapp() {
+    try {
+      setCarregandoTemplatesWhatsapp(true);
+      setErro("");
+
+      const res = await fetch("/api/whatsapp/templates", {
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao carregar templates do WhatsApp");
+        setTemplatesWhatsapp([]);
+        return;
+      }
+
+      const templatesEmpresa = Array.isArray(data.data) ? data.data : [];
+
+      const templatesAprovados = templatesEmpresa.filter(
+        (item: any) => String(item.status || "").toUpperCase() === "APPROVED"
+      );
+
+      const templatesDaIntegracaoAtual = templatesAprovados.filter(
+        (item: any) =>
+          item.integracao_whatsapp_id === conversaSelecionada?.integracao_whatsapp_id
+      );
+
+      setTemplatesWhatsapp(templatesDaIntegracaoAtual);
+    } catch {
+      setErro("Erro ao carregar templates do WhatsApp");
+      setTemplatesWhatsapp([]);
+    } finally {
+      setCarregandoTemplatesWhatsapp(false);
+    }
+  }
+
+  async function calcularPreviewCustoDisparoIndividual(
+    categoria: string,
+    telefone?: string | null
+  ) {
+    try {
+      const telefoneContato = String(telefone || "").trim();
+
+      if (!categoria || !telefoneContato) {
+        setPreviewCustoDisparoIndividual(null);
+        return;
+      }
+
+      setLoadingPreviewCustoDisparoIndividual(true);
+
+      const res = await fetch("/api/whatsapp/disparos/custo-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          categoria,
+          contatos: [
+            {
+              id: conversaSelecionada?.contatos?.id || conversaSelecionada?.id || "disparo-individual",
+              telefone: telefoneContato,
+            },
+          ],
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao calcular custo do disparo individual.");
+      }
+
+      setPreviewCustoDisparoIndividual({
+        categoria: String(json.categoria || ""),
+        totalSelecionados: Number(json.totalSelecionados || 0),
+        totalIsentos: Number(json.totalIsentos || 0),
+        totalCobrados: Number(json.totalCobrados || 0),
+        valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
+        valorTotalUsd: Number(json.valorTotalUsd || 0),
+        cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
+        valorTotalBrlEstimado: Number(json.valorTotalBrlEstimado || 0),
+        valorTotalBrlMin: Number(json.valorTotalBrlMin || 0),
+        valorTotalBrlMax: Number(json.valorTotalBrlMax || 0),
+        margemMinPercent: Number(json.margemMinPercent || 0),
+        margemMaxPercent: Number(json.margemMaxPercent || 0),
+        fonteCotacao: json.fonteCotacao || "",
+        cotacaoDataHora: json.cotacaoDataHora || null,
+        cotacaoFallback: Boolean(json.cotacaoFallback),
+      });
+    } catch (error: any) {
+      setPreviewCustoDisparoIndividual(null);
+      setErro(error?.message || "Erro ao calcular custo do disparo individual.");
+    } finally {
+      setLoadingPreviewCustoDisparoIndividual(false);
+    }
+  }
+
+  async function carregarLimiteMetaDisparoIndividual() {
+    const integracaoId = conversaSelecionada?.integracao_whatsapp_id;
+    const telefone = conversaSelecionada?.contatos?.telefone || "";
+    const telefoneNormalizado = normalizarTelefoneMetaUi(telefone);
+    const chaveConsulta = integracaoId
+      ? `${integracaoId}:${telefoneNormalizado}`
+      : "";
+
+    if (!integracaoId || telefoneNormalizado.length < 10) {
+      setLimiteMetaDisparoIndividual(null);
+      setTelefoneMetaDisparoIndividual(null);
+      setChaveLimiteMetaDisparoIndividual("");
+      return;
+    }
+
+    try {
+      setLoadingLimiteMetaDisparoIndividual(true);
+      setChaveLimiteMetaDisparoIndividual("");
+
+      const params = new URLSearchParams({
+        integracao_id: integracaoId,
+        telefone,
+      });
+
+      const res = await fetch(`/api/whatsapp/limite-meta?${params}`, {
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Erro ao consultar limite da Meta.");
+      }
+
+      setLimiteMetaDisparoIndividual(json.limite_meta || null);
+      setTelefoneMetaDisparoIndividual(json.telefone_meta_limite || null);
+      setChaveLimiteMetaDisparoIndividual(chaveConsulta);
+    } catch (error) {
+      console.warn("[DISPARO INDIVIDUAL] Erro ao consultar limite Meta:", error);
+      setLimiteMetaDisparoIndividual(null);
+      setTelefoneMetaDisparoIndividual(null);
+      setChaveLimiteMetaDisparoIndividual(chaveConsulta);
+    } finally {
+      setLoadingLimiteMetaDisparoIndividual(false);
+    }
+  }
+
+
+    function montarMensagemErroDisparoIndividual(data: any) {
+      const error = String(data?.error || "").trim();
+      const detalhe = String(data?.detalhe || "").trim();
+      const motivo = String(data?.motivo || "").trim();
+
+      if (motivo === "payment_method_missing") {
+        return (
+          detalhe ||
+          error ||
+          "Não foi possível enviar o disparo porque a conta WhatsApp Business ainda não possui cartão cadastrado na Meta."
+        );
+      }
+
+      if (motivo === "meta_payment_error") {
+        return (
+          detalhe ||
+          error ||
+          "Não foi possível enviar o disparo porque a conta WhatsApp Business possui pendência financeira ou não possui método de pagamento válido na Meta."
+        );
+      }
+
+      const erroMeta =
+        data?.meta?.error?.message ||
+        data?.meta?.error?.error_data?.details ||
+        "";
+
+      if (error && detalhe && detalhe !== error) {
+        return `${error}\n\nDetalhe: ${detalhe}`;
+      }
+
+      if (error) {
+        return error;
+      }
+
+      if (detalhe) {
+        return detalhe;
+      }
+
+      if (erroMeta) {
+        return erroMeta;
+      }
+
+      return "Erro ao enviar disparo individual.";
+    }
+
+
+  async function enviarDisparoIndividual() {
+    if (!conversaSelecionada?.id) {
+      setErro("Selecione uma conversa.");
+      return;
+    }
+
+    if (!templateDisparoNome.trim()) {
+      setErro("Informe o nome do template.");
+      return;
+    }
+
+    if (bloqueioLimiteDisparoIndividual) {
+      setErro(
+        "Este disparo ultrapassaria o limite de novas conversas permitido pela Meta nas ultimas 24 horas. Aguarde liberar saldo ou revise o limite no Gerenciador do WhatsApp."
+      );
+      return;
+    }
+
+    const parametrosSelecionados = Array.from(
+      { length: quantidadeParametrosBody },
+      (_, index) => String(parametros[index] || "").trim()
+    );
+
+    if (parametrosSelecionados.some((item) => !item)) {
+      setErro("Selecione uma variável para cada parâmetro exigido pelo template.");
+      return;
+    }
+
+    const parametrosResolvidos = parametrosSelecionados.map((chave) =>
+      chave === "nome_captura" || chave === "primeiro_nome_captura"
+      ? `{{${chave}}}`
+      : resolverVariaveisMacro(`{{${chave}}}`)
+    );
+
+    try {
+      setEnviandoDisparoIndividual(true);
+      setErro("");
+      setMensagemSucesso("");
+
+      const res = await fetch("/api/whatsapp/disparo-individual", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversa_id: conversaSelecionada.id,
+          template_nome: templateDisparoNome.trim(),
+          body_params: parametrosResolvidos,
+        }),
+      });
+
+      let data: any = null;
+
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok || data?.ok === false) {
+        const mensagemErro = montarMensagemErroDisparoIndividual(data);
+
+        console.error("[DISPARO INDIVIDUAL FRONT] Erro ao enviar disparo:", {
+          status: res.status,
+          data,
+        });
+
+        setErro(mensagemErro);
+        return;
+      }
+
+      setMensagemSucesso(
+        data?.message ||
+          "Disparo enviado para a Meta. Aguardando confirmação de entrega pelo WhatsApp."
+      );
+
+      setTemplateDisparoBody1("");
+      setParametros([]);
+      setDisparoIndividualAberto(false);
+      setPreviewCustoDisparoIndividual(null);
+
+      await atualizarConversasCarregadas();
+
+      await carregarMensagens(
+        conversaSelecionada.id,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch (error: any) {
+      console.error("[DISPARO INDIVIDUAL FRONT] Erro inesperado:", error);
+
+      setErro(
+        error?.message ||
+          "Erro inesperado ao enviar disparo individual. Tente novamente."
+      );
+    } finally {
+      setEnviandoDisparoIndividual(false);
+    }
+  }
+
+  function abrirEncerrar(interromperAutomacao = false) {
+    setErro("");
+    setMensagemSucesso("");
+    setEncerramentoTipoEvento("qualificado");
+    setEncerramentoValor("");
+    setEncerramentoObservacao("");
+    setEncerramentoInterrompeAutomacao(interromperAutomacao);
+
+    // Fecha o painel de detalhes para exibir o card no chat.
+    setPainelDireitoAberto(false);
+    setMenuContatoAberto(false);
+
+    setAcaoAberta("encerrar");
+  }
+
+  function rolarParaFinal(suave = false) {
+    const el = mensagensRef.current;
+    if (!el) return;
+
+    const executarScroll = () => {
+      const container = mensagensRef.current;
+      if (!container) return;
+
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: suave ? "smooth" : "auto",
+      });
+
+      setMostrarBotaoIrFinal(false);
+    };
+
+    requestAnimationFrame(() => {
+      executarScroll();
+
+      window.setTimeout(executarScroll, 80);
+      window.setTimeout(executarScroll, 250);
+      window.setTimeout(executarScroll, 600);
+    });
+  }
+
+  function acompanharCrescimentoChat() {
+    rolarParaFinal(false);
+  }
+
+  function calcularJanelaInicialPorUltimaMensagem(ultimaMensagemAt?: string | null) {
+    if (!ultimaMensagemAt) {
+      return {
+        inicio: null,
+        fim: null,
+      };
+    }
+
+    const fim = new Date(ultimaMensagemAt);
+    const inicio = new Date(fim);
+    inicio.setHours(inicio.getHours() - 4);
+
+    return {
+      inicio: inicio.toISOString(),
+      fim: fim.toISOString(),
+    };
+  }
+
+  function atualizarFimDaJanelaHistorico(ultimaMensagemAt?: string | null) {
+    if (!ultimaMensagemAt) return null;
+    return new Date(ultimaMensagemAt).toISOString();
+  }
+
+  function verificarSeUsuarioEstaNoFinal() {
+    const el = mensagensRef.current;
+    if (!el) return true;
+
+    const margem = 80;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - margem;
+  }
+
+  function handleScrollMensagens() {
+    const el = mensagensRef.current;
+    if (!el) return;
+
+    const margem = 140;
+    const estaNoFinal =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - margem;
+
+    setMostrarBotaoIrFinal(!estaNoFinal);
+
+    if (
+      estaNoFinal &&
+      !loadingMensagens &&
+      conversaSelecionadaIdRef.current
+    ) {
+      agendarMarcacaoAutomaticaComoLida(
+        conversaSelecionadaIdRef.current
+      );
+    }
+  }
+
+  function scrollParaMensagem(mensagemId: string) {
+    const elemento = document.getElementById(`mensagem-${mensagemId}`);
+
+    if (!elemento) return;
+
+    elemento.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+
+    elemento.classList.remove(styles.messageHighlight);
+    void elemento.offsetWidth;
+    elemento.classList.add(styles.messageHighlight);
+
+    window.setTimeout(() => {
+      elemento.classList.remove(styles.messageHighlight);
+    }, 4000);
+  }
+
+  function getTipoArquivoSelecionado(file: File | null) {
+    if (!file) return "";
+
+    if (file.type.startsWith("image/")) return "Imagem";
+    if (file.type.startsWith("video/")) return "Vídeo";
+    if (file.type.startsWith("audio/")) return "Áudio";
+
+    return "Documento";
+  }
+
+  function arquivoSelecionadoEhImagem(file: File | null) {
+    return !!file && file.type.startsWith("image/");
+  }
+
+  function arquivoSelecionadoEhVideo(file: File | null) {
+    return !!file && file.type.startsWith("video/");
+  }
+
+  function arquivoSelecionadoEhAudio(file: File | null) {
+    return !!file && file.type.startsWith("audio/");
+  }
+
+  function arquivoSelecionadoEhDocumento(file: File | null) {
+    if (!file) return false;
+
+    return (
+      !file.type.startsWith("image/") &&
+      !file.type.startsWith("video/") &&
+      !file.type.startsWith("audio/")
+    );
+  }
+
+  function contarParametrosDoTemplate(payload?: {
+    components?: Array<{ type: string; text?: string }>;
+  } | null) {
+    if (!payload?.components?.length) return 0;
+
+    const textos = payload.components.map((item) => item.text || "").join(" ");
+    const matches = textos.match(/\{\{\d+\}\}/g) || [];
+
+    const numeros = matches
+      .map((item) => Number(item.replace(/[{}]/g, "")))
+      .filter((n) => !Number.isNaN(n));
+
+    if (numeros.length === 0) return 0;
+    return Math.max(...numeros);
+  }
+
+  function extrairQuickRepliesTemplate(payload?: {
+    components?: Array<{
+      type: string;
+      buttons?: Array<{ type?: string; text?: string }>;
+    }>;
+  } | null) {
+    const buttons = payload?.components?.find(
+      (item) => String(item.type || "").toUpperCase() === "BUTTONS"
+    );
+
+    return (
+      buttons?.buttons
+        ?.filter(
+          (button) =>
+            String(button?.type || "").toUpperCase() === "QUICK_REPLY" &&
+            button?.text
+        )
+        .map((button) => button.text || "")
+        .filter(Boolean) || []
+    );
+  }
+
+  const conversaSetorId =
+    conversaSelecionada?.setor_id || conversaSelecionada?.setores?.id || null;
+
+  const conversaResponsavelId =
+    conversaSelecionada?.responsavel_id ||
+    conversaSelecionada?.responsavel?.id ||
+    null;
+
+  const permissoes = usuarioLogado?.permissoes || [];
+  const usuarioId = usuarioLogado?.id || null;
+
+  const usuarioSetoresIds = useMemo(() => {
+    if (!usuarioLogado) return [];
+
+    const idsDiretos = Array.isArray(usuarioLogado.setores_ids)
+      ? usuarioLogado.setores_ids
+      : [];
+
+    const idsViaVinculo = Array.isArray(usuarioLogado.usuarios_setores)
+      ? usuarioLogado.usuarios_setores.map((item) => item.setor_id)
+      : [];
+
+    return Array.from(new Set([...idsDiretos, ...idsViaVinculo].filter(Boolean)));
+  }, [usuarioLogado]);
+
+  const nomesPerfisDinamicos = Array.isArray(usuarioLogado?.perfis_dinamicos)
+    ? usuarioLogado.perfis_dinamicos.map((perfil) => perfil.nome)
+    : [];
+
+  const ehAdministrador = nomesPerfisDinamicos.includes("Administrador");
+
+  const podeAssumirPermissao = can(permissoes, "conversas.assumir");
+  const podeTransferirPermissao = can(permissoes, "conversas.transferir");
+  const podeAtribuirPermissao = can(permissoes, "conversas.atribuir");
+  const podeEncerrarPermissao = can(permissoes, "conversas.encerrar");
+  const podeReabrirPermissao = can(permissoes, "conversas.reabrir");
+  const podeEnviarMensagemPermissao = can(permissoes, "mensagens.enviar");
+  const podeEnviarMidiaPermissao = can(
+    permissoes,
+    "mensagens.enviar_midia"
+  );
+  const podeTranscreverAudioPermissao = can(
+    permissoes,
+    "mensagens.transcrever_audio"
+  );
+  const podeExportarConversa = can(permissoes, "conversas.exportar");
+  const podeEditarContatoConversa = can(
+    permissoes,
+    "conversas.editar_contato"
+  );
+  const podeGerenciarEtiquetas = can(
+    permissoes,
+    "conversas.gerenciar_etiquetas"
+  );
+  const podeGerenciarNotas = can(permissoes, "conversas.gerenciar_notas");
+  const podeVisualizarRastreamento = can(
+    permissoes,
+    "rastreamento.visualizar"
+  );
+  const podeGerenciarRastreamento = can(
+    permissoes,
+    "rastreamento.gerenciar"
+  );
+
+  const conversaEhMinha = !!usuarioId && conversaResponsavelId === usuarioId;
+  const conversaEhDeUmDosMeusSetores =
+    !!conversaSetorId && usuarioSetoresIds.includes(conversaSetorId);
+  const STATUS_ENCERRADOS = [
+    "encerrado_manual",
+    "encerrado_24h",
+    "encerrado_aut",
+  ];
+
+  const conversaEncerrada = STATUS_ENCERRADOS.includes(
+    conversaSelecionada?.status || ""
+  );
+
+  const conversaEncerradaManual =
+    conversaSelecionada?.status === "encerrado_manual";
+
+  const conversaEncerrada24h =
+    conversaSelecionada?.status === "encerrado_24h";
+
+  const conversaEncerradaAutomacao =
+    conversaSelecionada?.status === "encerrado_aut";
+
+  const conversaHistoricoImportado =
+    isConversaHistoricoImportadoUi(conversaSelecionada);
+
+  const podeReabrirConversa =
+    podeReabrirPermissao &&
+    !conversaHistoricoImportado &&
+    (conversaSelecionada?.status === "encerrado_manual" ||
+      conversaSelecionada?.status === "encerrado_aut");
+
+  const conversaNaFila = conversaSelecionada?.status === "fila";
+  const conversaSemResponsavel = !conversaResponsavelId;
+  
+  const politicaPodeAssumir = politicaAtendimento?.pode_assumir ?? true;
+  const politicaPermiteAssumirEmFila =
+    politicaAtendimento?.permitir_assumir_conversa_em_fila ?? true;
+  const politicaPermiteAssumirSemResponsavel =
+    politicaAtendimento?.permitir_assumir_conversa_sem_responsavel ?? true;
+  const politicaPermiteAssumirJaAtribuida =
+    politicaAtendimento?.permitir_assumir_conversa_ja_atribuida ?? false;
+
+  const conversaJaAtribuidaParaOutroUsuario =
+    !!conversaResponsavelId && !!usuarioId && conversaResponsavelId !== usuarioId;
+
+  const regraStatusParaAssumir =
+    (conversaNaFila && politicaPermiteAssumirEmFila) ||
+    (!conversaNaFila && politicaPermiteAssumirJaAtribuida);
+
+  const regraResponsavelParaAssumir =
+    (conversaSemResponsavel && politicaPermiteAssumirSemResponsavel) ||
+    conversaJaAtribuidaParaOutroUsuario;
+
+  const podeAssumirConversa =
+    !!conversaSelecionada &&
+    !!usuarioLogado &&
+    !conversaHistoricoImportado &&
+    !conversaEncerrada &&
+    !conversaEhMinha &&
+    politicaPodeAssumir &&
+    (ehAdministrador ||
+      (podeAssumirPermissao &&
+        conversaEhDeUmDosMeusSetores &&
+        regraStatusParaAssumir &&
+        regraResponsavelParaAssumir));
+
+  const podeAtribuir =
+    !!conversaSelecionada &&
+    !!usuarioLogado &&
+    !conversaHistoricoImportado &&
+    !conversaEncerrada &&
+    (ehAdministrador ||
+      (podeAtribuirPermissao && conversaEhDeUmDosMeusSetores));
+
+  const podeTransferir =
+    !!conversaSelecionada &&
+    !!usuarioLogado &&
+    !conversaHistoricoImportado &&
+    !conversaEncerrada &&
+    (ehAdministrador ||
+      (podeTransferirPermissao &&
+        (conversaEhDeUmDosMeusSetores || conversaEhMinha)));
+
+  const podeEncerrar =
+    !!conversaSelecionada &&
+    !!usuarioLogado &&
+    !conversaHistoricoImportado &&
+    !conversaEncerrada &&
+    (ehAdministrador ||
+      (podeEncerrarPermissao &&
+        (conversaEhDeUmDosMeusSetores || conversaEhMinha)));
+
+  const podeEnviarMensagem =
+    !!conversaSelecionada &&
+    !!usuarioLogado &&
+    !conversaHistoricoImportado &&
+    !conversaEncerrada &&
+    podeEnviarMensagemPermissao &&
+    conversaEhMinha &&
+    !conversaNaFila;
+
+  const podeEnviarMidia = podeEnviarMensagem && podeEnviarMidiaPermissao;
+
+  const setoresDisponiveisParaTransferencia = useMemo(() => {
+    if (ehAdministrador) {
+      return setores;
+    }
+
+    return setores.filter((setor) => usuarioSetoresIds.includes(setor.id));
+  }, [setores, ehAdministrador, usuarioSetoresIds]);
+
+  const usuariosFiltradosPorSetor = useMemo(() => {
+    if (acaoAberta !== "atribuir") return [];
+    return usuarios;
+  }, [usuarios, acaoAberta]);
+
+  const setoresUnicos = useMemo(() => {
+    return Array.from(
+      new Map(
+        conversas
+          .filter((c) => c.setores?.id && c.setores?.nome)
+          .map((c) => [c.setores?.id, { id: c.setores!.id!, nome: c.setores!.nome }])
+      ).values()
+    );
+  }, [conversas]);
+
+  const responsaveisUnicos = useMemo(() => {
+    return Array.from(
+      new Map(
+        conversas
+          .filter((c) => c.responsavel?.id && c.responsavel?.nome)
+          .map((c) => [
+            c.responsavel?.id,
+            { id: c.responsavel!.id!, nome: c.responsavel!.nome },
+          ])
+      ).values()
+    );
+  }, [conversas]);
+
+  const totalConversasRobo = totaisChipsRapidos.robo;
+
+  function renderQuickChipCount(
+    total: number,
+    variant: "alert" | "subtle" = "alert"
+  ) {
+    if (total <= 0) return null;
+
+    return (
+      <span
+        className={`${styles.quickChipCountBadge} ${
+          variant === "subtle" ? styles.quickChipCountBadgeSubtle : ""
+        }`}
+      >
+        {total}
+      </span>
+    );
+  }
+
+  const conversasFiltradas = useMemo(() => {
+    const lista = [...conversas];
+
+    lista.sort((a, b) => {
+      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return lista;
+  }, [conversas]);
+
+  const mensagensAgrupadas = useMemo(() => {
+    const grupos: Array<
+      | { tipo: "data"; valor: string }
+      | { tipo: "mensagem"; valor: Mensagem }
+    > = [];
+
+    let ultimaData = "";
+
+    for (const msg of mensagens) {
+      const dataAtual = formatarDataSeparador(msg.created_at);
+
+      if (dataAtual !== ultimaData) {
+        grupos.push({ tipo: "data", valor: dataAtual });
+        ultimaData = dataAtual;
+      }
+
+      grupos.push({ tipo: "mensagem", valor: msg });
+    }
+
+    return grupos;
+  }, [mensagens]);
+
+  const alertaSemResponsavel = !!conversaSelecionada && !conversaResponsavelId;
+  const alertaClienteAguardando =
+    conversaSelecionada?.status === "aguardando_cliente";
+  const alertaPrioridadeAlta =
+    conversaSelecionada?.prioridade === "alta" ||
+    conversaSelecionada?.prioridade === "urgente";
+    
+  const conversaComBotAtivo = !!conversaSelecionada?.bot_ativo;
+
+  const alertaParadaMuitoTempo = useMemo(() => {
+    if (!conversaSelecionada?.last_message_at) return false;
+
+    const diffMin =
+      (Date.now() - new Date(conversaSelecionada.last_message_at).getTime()) / 60000;
+
+    return diffMin >= 120;
+  }, [conversaSelecionada?.last_message_at]);
+
+  const slaNivel = getSlaNivel(conversaSelecionada);
+
+  const quantidadeNotas = notasConversa.length;
+  const conversaTemNotas = quantidadeNotas > 0;
+
+  const ultimaMensagemRecebidaDoContato = useMemo(() => {
+    return getUltimaMensagemRecebidaDoContato(mensagens);
+  }, [mensagens]);
+
+  const ultimaMensagemAtivarBotPreview = useMemo(() => {
+    if (!ultimaMensagemRecebidaDoContato) {
+      return "Nenhuma mensagem recebida encontrada.";
+    }
+
+    const texto = String(ultimaMensagemRecebidaDoContato.conteudo || "").trim();
+
+    if (!texto) {
+      return "Mensagem recebida sem texto.";
+    }
+
+    return texto.length > 140 ? `${texto.slice(0, 137)}...` : texto;
+  }, [ultimaMensagemRecebidaDoContato]);
+
+  const podeAtivarBotComUltimaMensagem =
+    !!conversaSelecionada &&
+    !conversaHistoricoImportado &&
+    !conversaEncerrada &&
+    !conversaComBotAtivo &&
+    !!ultimaMensagemRecebidaDoContato &&
+    (ehAdministrador || conversaEhMinha || conversaEhDeUmDosMeusSetores);
+
+  const referenciaJanela24hComposer = useMemo(() => {
+    if (janela24hConversa?.ultimaMensagemRecebidaEm) {
+      return {
+        created_at: janela24hConversa.ultimaMensagemRecebidaEm,
+      } as Pick<Mensagem, "created_at">;
+    }
+
+    if (protocoloSelecionadoId) {
+      if (!conversaSelecionada?.last_message_at) return null;
+
+      return {
+        created_at: conversaSelecionada.last_message_at,
+      } as Pick<Mensagem, "created_at">;
+    }
+
+    return ultimaMensagemRecebidaDoContato;
+  }, [
+    janela24hConversa?.ultimaMensagemRecebidaEm,
+    protocoloSelecionadoId,
+    conversaSelecionada?.last_message_at,
+    ultimaMensagemRecebidaDoContato,
+  ]);
+
+  const janela24hAberta = useMemo(() => {
+    if (janela24hConversa) {
+      return janela24hConversa.podeEnviarMensagemLivre;
+    }
+
+    return isJanela24hMetaAberta(
+      referenciaJanela24hComposer as Mensagem | null
+    );
+  }, [janela24hConversa, referenciaJanela24hComposer]);
+
+  const tempoRestanteJanela24h = useMemo(() => {
+    return formatarTempoRestanteJanela(referenciaJanela24hComposer?.created_at);
+  }, [referenciaJanela24hComposer]);
+
+  const templateSelecionado = useMemo(() => {
+    return (
+      templatesWhatsapp.find((item) => item.id === templateDisparoId) || null
+    );
+  }, [templatesWhatsapp, templateDisparoId]);
+
+  const quantidadeParametrosBody = useMemo(() => {
+    return contarParametrosDoTemplate(templateSelecionado?.payload);
+  }, [templateSelecionado]);
+
+  const previewTemplateSelecionado = useMemo(() => {
+    if (!templateSelecionado?.payload?.components?.length) {
+      return "Selecione um template para visualizar o conteúdo.";
+    }
+
+    const componentes = templateSelecionado.payload.components;
+
+    const header = componentes.find((item) => item.type === "HEADER");
+    const body = componentes.find((item) => item.type === "BODY");
+    const footer = componentes.find((item) => item.type === "FOOTER");
+
+    const partes = [
+      header?.text ? `CABEÇALHO:\n${header.text}` : "",
+      body?.text ? `CORPO:\n${body.text}` : "",
+      footer?.text ? `RODAPÉ:\n${footer.text}` : "",
+    ].filter(Boolean);
+
+    return partes.join("\n\n") || "Template sem conteúdo textual.";
+  }, [templateSelecionado]);
+
+
+const templateHeaderTexto = useMemo(() => {
+  const componentes = templateSelecionado?.payload?.components || [];
+  const header = componentes.find((item) => item.type === "HEADER");
+  return header?.text || "";
+}, [templateSelecionado]);
+
+const templateBodyTexto = useMemo(() => {
+  const componentes = templateSelecionado?.payload?.components || [];
+  const body = componentes.find((item) => item.type === "BODY");
+  return body?.text || "";
+}, [templateSelecionado]);
+
+const templateFooterTexto = useMemo(() => {
+  const componentes = templateSelecionado?.payload?.components || [];
+  const footer = componentes.find((item) => item.type === "FOOTER");
+  return footer?.text || "";
+}, [templateSelecionado]);
+
+  const mostrarComposerLivre =
+    !!conversaSelecionada &&
+    !conversaHistoricoImportado &&
+    !conversaComBotAtivo &&
+    !conversaEncerrada &&
+    janela24hAberta;
+
+  const mostrarDisparoIndividual =
+    !!conversaSelecionada &&
+    !conversaHistoricoImportado &&
+    !conversaComBotAtivo &&
+    (!janela24hAberta || !!conversaEncerrada);
+
+  const telefoneDisparoIndividualNormalizado = useMemo(
+    () => normalizarTelefoneMetaUi(conversaSelecionada?.contatos?.telefone),
+    [conversaSelecionada?.contatos?.telefone]
+  );
+
+  const chaveLimiteMetaDisparoIndividualAtual = useMemo(() => {
+    if (
+      !conversaSelecionada?.integracao_whatsapp_id ||
+      telefoneDisparoIndividualNormalizado.length < 10
+    ) {
+      return "";
+    }
+
+    return `${conversaSelecionada.integracao_whatsapp_id}:${telefoneDisparoIndividualNormalizado}`;
+  }, [
+    conversaSelecionada?.integracao_whatsapp_id,
+    telefoneDisparoIndividualNormalizado,
+  ]);
+
+  const disparoIndividualConsomeLimiteMeta =
+    disparoIndividualAberto &&
+    !janela24hAberta &&
+    telefoneDisparoIndividualNormalizado.length >= 10;
+
+  const limiteMetaDisparoIndividualCarregado =
+    !disparoIndividualConsomeLimiteMeta ||
+    chaveLimiteMetaDisparoIndividual === chaveLimiteMetaDisparoIndividualAtual;
+
+  const disparoIndividualExcedeLimiteMeta =
+    disparoIndividualConsomeLimiteMeta &&
+    limiteMetaDisparoIndividualCarregado &&
+    Boolean(telefoneMetaDisparoIndividual?.excede_limite);
+
+  const saldoAposDisparoIndividualMeta =
+    telefoneMetaDisparoIndividual?.restantes_apos_envio ??
+    (limiteMetaDisparoIndividual
+      ? Math.max(limiteMetaDisparoIndividual.restantes - 1, 0)
+      : null);
+
+  const bloqueioLimiteDisparoIndividual =
+    disparoIndividualConsomeLimiteMeta &&
+    (!limiteMetaDisparoIndividualCarregado ||
+      loadingLimiteMetaDisparoIndividual ||
+      disparoIndividualExcedeLimiteMeta);
+    
+  const composerPronto =
+    !!conversaSelecionada && !loadingMensagens;
+
+  const mensagemAvisoDisparo = useMemo(() => {
+    if (conversaEncerrada) {
+      return getMensagemConversaEncerrada(conversaSelecionada?.status);
+    }
+
+    if (mostrarDisparoIndividual) {
+      return {
+        titulo: "Janela de 24h encerrada",
+        texto: (
+          <>
+            A janela de atendimento expirou. Para voltar a conversar, envie um
+            template aprovado pelo <strong>Disparo individual</strong> e aguarde a
+            resposta do contato.
+          </>
+        ),
+        icone: "🕒",
+        variante: "danger" as const,
+      };
+    }
+
+    return null;
+  }, [
+    conversaEncerrada,
+    conversaSelecionada?.status,
+    mostrarDisparoIndividual,
+  ]);
+    
+  const totalPaginasHistorico = useMemo(() => {
+    return Math.max(
+      1,
+      Math.ceil(protocolosConversa.length / PROTOCOLOS_POR_PAGINA)
+    );
+  }, [protocolosConversa.length]);
+
+  const protocolosPaginaHistorico = useMemo(() => {
+    const inicio =
+      (paginaHistorico - 1) * PROTOCOLOS_POR_PAGINA;
+
+    const fim = inicio + PROTOCOLOS_POR_PAGINA;
+
+    return protocolosConversa.slice(inicio, fim);
+  }, [protocolosConversa, paginaHistorico]);
+
+  const primeiroRegistroHistorico =
+    protocolosConversa.length === 0
+      ? 0
+      : (paginaHistorico - 1) * PROTOCOLOS_POR_PAGINA + 1;
+
+  const ultimoRegistroHistorico = Math.min(
+    paginaHistorico * PROTOCOLOS_POR_PAGINA,
+    protocolosConversa.length
+  );
+
+  useEffect(() => {
+    carregarUsuarioLogado();
+    carregarPoliticaAtendimento();
+    carregarIntegracoesWhatsapp();
+    carregarSetores();
+    carregarListasEmpresa();
+    carregarEtiquetasEmpresa();
+    carregarCampanhasRastreamentoContato();
+  }, []);
+
+  useEffect(() => {
+    conversasRef.current = [];
+    proximoCursorConversasRef.current = null;
+    setConversas([]);
+    setTemMaisConversas(true);
+    carregarConversas(false, false, undefined, true);
+  }, [
+    buscaDebounced,
+    statusFiltro,
+    canalFiltro,
+    setorFiltro,
+    responsavelFiltro,
+    integracaoWhatsappFiltro,
+    chipRapido,
+    listaFiltroId,
+  ]);
+
+  useEffect(() => {
+    if (!usuarioLogado?.empresa_id) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-conversas:${usuarioLogado.empresa_id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversas",
+          filter: `empresa_id=eq.${usuarioLogado.empresa_id}`,
+        },
+        (payload) => {
+          const conversaNova = payload.new as Partial<Conversa> & {
+            id?: string;
+          };
+          const conversaAntiga = payload.old as Partial<Conversa> & {
+            id?: string;
+          };
+          const conversaId = conversaNova.id || conversaAntiga.id || null;
+
+          if (conversaId) {
+            setConversas((atuais) => {
+              const listaAtualizada =
+                payload.eventType === "DELETE"
+                  ? atuais.filter((conversa) => conversa.id !== conversaId)
+                  : atuais.map((conversa) =>
+                      conversa.id === conversaId
+                        ? { ...conversa, ...conversaNova }
+                        : conversa
+                    );
+
+              conversasRef.current = listaAtualizada;
+              return listaAtualizada;
+            });
+          }
+
+          agendarAtualizacaoConversasRealtime();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [usuarioLogado?.empresa_id]);
+
+  useEffect(() => {
+    if (!conversaSelecionada?.id) return;
+
+    const conversaId = conversaSelecionada.id;
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
+      .channel(`crm-mensagens:${conversaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "mensagens",
+          filter: `conversa_id=eq.${conversaId}`,
+        },
+        (payload) => {
+          const mensagem = payload.new as {
+            origem?: string | null;
+            remetente_tipo?: string | null;
+          };
+          const mensagemRecebida =
+            mensagem.origem === "recebida" ||
+            mensagem.remetente_tipo === "contato";
+
+          agendarAtualizacaoMensagensRealtime(
+            conversaId,
+            mensagemRecebida
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "mensagens",
+          filter: `conversa_id=eq.${conversaId}`,
+        },
+        () => {
+          agendarAtualizacaoMensagensRealtime(conversaId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (realtimeMensagensTimerRef.current) {
+        window.clearTimeout(realtimeMensagensTimerRef.current);
+        realtimeMensagensTimerRef.current = null;
+      }
+
+      if (marcarLidaAoFinalTimerRef.current) {
+        window.clearTimeout(marcarLidaAoFinalTimerRef.current);
+        marcarLidaAoFinalTimerRef.current = null;
+      }
+
+      marcarLidaAposRealtimeRef.current = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [conversaSelecionada?.id]);
+
+  useEffect(() => {
+    const requisicoesMensagens = requisicoesMensagensRef.current;
+
+    return () => {
+      if (realtimeConversasTimerRef.current) {
+        window.clearTimeout(realtimeConversasTimerRef.current);
+      }
+
+      if (realtimeMensagensTimerRef.current) {
+        window.clearTimeout(realtimeMensagensTimerRef.current);
+      }
+
+      if (marcarLidaAoFinalTimerRef.current) {
+        window.clearTimeout(marcarLidaAoFinalTimerRef.current);
+      }
+
+      requisicoesMensagens.forEach((controller) => {
+        controller.abort();
+      });
+      requisicoesMensagens.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!abaVisivel) return;
+
+    if (conversasRef.current.length > 0) {
+      agendarAtualizacaoConversasRealtime();
+    }
+
+    if (conversaSelecionada?.id) {
+      agendarAtualizacaoMensagensRealtime(conversaSelecionada.id);
+    }
+  }, [abaVisivel, conversaSelecionada?.id]);
+
+  useEffect(() => {
+    if (!abaVisivel) return;
+
+    const interval = window.setInterval(async () => {
+      if (carregandoMaisConversasRef.current) return;
+      if (atualizandoConversasAutomaticamenteRef.current) return;
+
+      try {
+        atualizandoConversasAutomaticamenteRef.current = true;
+        await atualizarConversasCarregadas();
+      } finally {
+        atualizandoConversasAutomaticamenteRef.current = false;
+      }
+    }, POLL_CONVERSAS_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    abaVisivel,
+    buscaDebounced,
+    statusFiltro,
+    canalFiltro,
+    setorFiltro,
+    responsavelFiltro,
+    chipRapido,
+    listaFiltroId,
+  ]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setBuscaDebounced(busca.trim());
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [busca]);
+
+
+  useEffect(() => {
+    if (!conversaSelecionada?.id) {
+      setMensagens([]);
+      setJanela24hConversa(null);
+      setMensagensFavoritasPainel([]);
+      setMensagensFavoritasPainelConversaId(null);
+      setCarregandoMensagensFavoritas(false);
+      return;
+    }
+
+    const conversaId = conversaSelecionada.id;
+    const conversaLastMessageAt = conversaSelecionada.last_message_at;
+
+    setMensagens([]);
+    setJanela24hConversa(null);
+    setLoadingMensagens(true);
+    setInfoExpandida(false);
+    setAbaPainelDireito("contato");
+    setMenuContatoAberto(false);
+    setMacroCardAberto(false);
+    setEmojiAberto(false);
+
+    definirProtocoloSelecionado(null);
+    setProtocolosConversa([]);
+    setPaginaHistorico(1);
+    setEventosRastreamentoConversa([]);
+    fecharModalEventoRastreamento();
+
+    setInicioJanelaHistorico(null);
+    setFimJanelaHistorico(null);
+    mensagemMaisAntigaCarregadaRef.current = null;
+
+    setTemMaisHistorico(false);
+    setCarregandoMaisHistorico(false);
+
+    totalMensagensAnteriorRef.current = 0;
+    ultimaMensagemIdAnteriorRef.current = null;
+    usuarioEstavaNoFinalRef.current = true;
+    forcarScrollParaFinalRef.current = true;
+
+    setNotasConversa([]);
+    setNotaInterna("");
+    setNotaEditandoId(null);
+    setNotaEditandoTexto("");
+    resetarFormularioEtiqueta();
+    setSelecionandoEtiqueta(false);
+    setDisparoIndividualAberto(false);
+    setTemplateDisparoId("");
+    setTemplateDisparoNome("");
+    setParametros([]);
+    setPreviewCustoDisparoIndividual(null);
+
+    async function iniciarConversaSelecionada() {
+      const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
+        conversaLastMessageAt
+      );
+
+      await carregarMensagens(
+        conversaId,
+        false,
+        null,
+        janelaInicial.inicio,
+        null
+      );
+
+      if (!conversaEstaSelecionada(conversaId)) return;
+
+      cargaInicialMensagensConversaRef.current = null;
+
+      if (atualizacoesMensagensPendentesRef.current.delete(conversaId)) {
+        agendarAtualizacaoMensagensRealtime(conversaId);
+      }
+
+      if (conversaLidaRef.current !== conversaId) {
+        await marcarConversaComoLida(conversaId);
+
+        if (!conversaEstaSelecionada(conversaId)) return;
+
+        conversaLidaRef.current = conversaId;
+        await atualizarConversasCarregadas();
+      }
+
+      if (!conversaEstaSelecionada(conversaId)) return;
+
+      await carregarProtocolosDaConversa();
+      await carregarNotasDaConversa();
+      await carregarEventosRastreamentoDaConversa(conversaId);
+    }
+
+    iniciarConversaSelecionada();
+    }, [conversaSelecionada?.id]);
+
+    useEffect(() => {
+      if (!conversaSelecionada?.id) return;
+      if (!abaVisivel) return;
+      if (enviando) return;
+      if (editandoCampo) return;
+
+    const interval = window.setInterval(async () => {
+      if (cargaInicialMensagensConversaRef.current === conversaSelecionada.id) {
+        return;
+      }
+
+      const estavaNoFinal = verificarSeUsuarioEstaNoFinal();
+
+    if (estavaNoFinal) {
+      acompanharCrescimentoChatRef.current = true;
+      impedirAutoScrollRef.current = false;
+      forcarScrollParaFinalRef.current = false;
+    } else {
+      acompanharCrescimentoChatRef.current = false;
+      impedirAutoScrollRef.current = true;
+      forcarScrollParaFinalRef.current = false;
+    }
+
+      const inicioHistoricoAtual =
+        mensagemMaisAntigaCarregadaRef.current || inicioJanelaHistorico;
+
+      if (protocoloSelecionadoId) {
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          protocoloSelecionadoId,
+          inicioHistoricoAtual,
+          null,
+          {
+            modoMergeNovas: true,
+          }
+        );
+      } else {
+        await carregarMensagens(
+          conversaSelecionada.id,
+          true,
+          null,
+          inicioHistoricoAtual,
+          null,
+          {
+            modoMergeNovas: true,
+          }
+        );
+      }
+
+      if (
+        estavaNoFinal &&
+        conversaEstaSelecionada(conversaSelecionada.id)
+      ) {
+        agendarMarcacaoAutomaticaComoLida(conversaSelecionada.id);
+      }
+    }, POLL_MENSAGENS_MS);
+
+      return () => {
+        window.clearInterval(interval);
+      };
+    }, [
+      conversaSelecionada?.id,
+      protocoloSelecionadoId,
+      abaVisivel,
+      enviando,
+      editandoCampo,
+      inicioJanelaHistorico,
+      fimJanelaHistorico,
+    ]);
+
+
+  useEffect(() => {
+    if (restaurarScrollHistoricoRef.current) {
+      return;
+    }
+
+    if (forcarScrollParaFinalRef.current) {
+      forcarScrollParaFinalRef.current = false;
+      acompanharCrescimentoChatRef.current = false;
+      rolarParaFinal(false);
+      return;
+    }
+
+    if (acompanharCrescimentoChatRef.current) {
+      acompanharCrescimentoChatRef.current = false;
+      acompanharCrescimentoChat();
+      return;
+    }
+
+    if (impedirAutoScrollRef.current) {
+      impedirAutoScrollRef.current = false;
+      return;
+    }
+  }, [mensagens]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!menuContatoRef.current) return;
+
+      const target = event.target as Node;
+
+      if (!menuContatoRef.current.contains(target)) {
+        setMenuContatoAberto(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    function atualizarVisibilidade() {
+      setAbaVisivel(document.visibilityState === "visible");
+    }
+
+    atualizarVisibilidade();
+
+    document.addEventListener("visibilitychange", atualizarVisibilidade);
+
+    return () => {
+      document.removeEventListener("visibilitychange", atualizarVisibilidade);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+    };
+  }, [arquivoEnvioPreviewUrl]);
+
+  useEffect(() => {
+    function handleClickOutsideMenuAnexo(event: MouseEvent) {
+      if (!menuAnexoRef.current) return;
+
+      const target = event.target as Node;
+
+      if (!menuAnexoRef.current.contains(target)) {
+        setMenuAnexoAberto(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutsideMenuAnexo);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutsideMenuAnexo);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutsideMacroCard(event: MouseEvent) {
+      if (!macroCardRef.current) return;
+
+      const target = event.target as Node;
+
+      if (!macroCardRef.current.contains(target)) {
+        setMacroCardAberto(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutsideMacroCard);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutsideMacroCard);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (intervaloGravacaoRef.current) {
+        window.clearInterval(intervaloGravacaoRef.current);
+      }
+
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+
+  useEffect(() => {
+    if (!arquivoEnvio && editorRef.current && editorRef.current.textContent !== conteudo) {
+      editorRef.current.textContent = conteudo;
+    }
+  }, [conteudo, arquivoEnvio]);
+
+  useEffect(() => {
+    if (arquivoEnvio && legendaEditorRef.current && legendaEditorRef.current.textContent !== legendaArquivo) {
+      legendaEditorRef.current.textContent = legendaArquivo;
+    }
+  }, [legendaArquivo, arquivoEnvio]);
+
+
+  useEffect(() => {
+    if (!conversaEncerrada && !conversaHistoricoImportado) return;
+
+    setMenuAnexoAberto(false);
+    setEmojiAberto(false);
+
+    if (gravandoAudio) {
+      pararGravacaoAudio();
+    }
+
+    if (cameraAberta) {
+      fecharCamera();
+    }
+
+    if (arquivoEnvioPreviewUrl) {
+      URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+    }
+
+    setArquivoEnvio(null);
+    setArquivoEnvioPreviewUrl(null);
+    setLegendaArquivo("");
+    legendaArquivoRef.current = "";
+    setConteudo("");
+    conteudoRef.current = "";
+
+    if (editorRef.current) {
+      editorRef.current.textContent = "";
+    }
+
+    if (legendaEditorRef.current) {
+      legendaEditorRef.current.textContent = "";
+    }
+  }, [conversaEncerrada, conversaHistoricoImportado]);
+
+
+  useEffect(() => {
+    if (!mostrarDisparoIndividual) return;
+    if (!conversaSelecionada?.integracao_whatsapp_id) return;
+
+    carregarTemplatesWhatsapp();
+    void carregarVariaveisGlobais();
+  }, [mostrarDisparoIndividual, conversaSelecionada?.integracao_whatsapp_id]);
+
+  useEffect(() => {
+    setParametros([]);
+  }, [templateDisparoNome]);
+
+  useEffect(() => {
+    const categoria = String(templateSelecionado?.categoria || "").toLowerCase();
+    const telefoneContato = conversaSelecionada?.contatos?.telefone || "";
+
+    if (!disparoIndividualAberto || !categoria || !telefoneContato) {
+      setPreviewCustoDisparoIndividual(null);
+      return;
+    }
+
+    calcularPreviewCustoDisparoIndividual(categoria, telefoneContato);
+  }, [
+    disparoIndividualAberto,
+    templateSelecionado?.id,
+    templateSelecionado?.categoria,
+    conversaSelecionada?.contatos?.telefone,
+  ]);
+
+  useEffect(() => {
+    if (
+      !disparoIndividualAberto ||
+      janela24hAberta ||
+      !conversaSelecionada?.integracao_whatsapp_id ||
+      !conversaSelecionada?.contatos?.telefone
+    ) {
+      setLimiteMetaDisparoIndividual(null);
+      setTelefoneMetaDisparoIndividual(null);
+      setLoadingLimiteMetaDisparoIndividual(false);
+      setChaveLimiteMetaDisparoIndividual("");
+      return;
+    }
+
+    void carregarLimiteMetaDisparoIndividual();
+  }, [
+    disparoIndividualAberto,
+    janela24hAberta,
+    conversaSelecionada?.integracao_whatsapp_id,
+    conversaSelecionada?.contatos?.telefone,
+  ]);
+
+  useEffect(() => {
+    if (!mensagemSucesso && !erro) return;
+
+    const timeout = window.setTimeout(() => {
+      setMensagemSucesso("");
+      setErro("");
+    }, erro ? 15000 : 8000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [mensagemSucesso, erro]);
+
+  useEffect(() => {
+    setPaginaHistorico((paginaAtual) =>
+      Math.min(
+        Math.max(paginaAtual, 1),
+        totalPaginasHistorico
+      )
+    );
+  }, [totalPaginasHistorico]);
+
+  useLayoutEffect(() => {
+    const container = mensagensRef.current;
+    const scrollSalvo = restaurarScrollHistoricoRef.current;
+
+    if (!container || !scrollSalvo) {
+      return;
+    }
+
+    const diferencaAltura = container.scrollHeight - scrollSalvo.scrollHeight;
+    container.scrollTop = scrollSalvo.scrollTop + diferencaAltura;
+
+    restaurarScrollHistoricoRef.current = null;
+  }, [mensagens]);
+  
+  return (
+    <>
+      <Header
+        title="Conversas"
+        mobileBackHref={mobileDetailActive ? "/conversas" : undefined}
+        mobileBackLabel="Voltar para conversas"
+        subtitle="Atendimento ao cliente com interface limpa, focada na operação e no contexto do contato."
+      />
+
+      <div
+        className={`${styles.pageContent} ${
+          mobileDetailActive ? styles.mobileDetailActive : ""
+        }`}
+      >
+        <div
+          className={`${styles.chatLayout} ${
+            painelDireitoAberto ? styles.chatLayoutWithPanel : ""
+          }`}
+        >
+          <aside className={styles.sidebar}>
+            <div className={styles.sidebarHeader}>
+              <div className={styles.sidebarTopRow}>
+                <div>
+                  <h2 className={styles.sidebarTitle}>Conversas</h2>
+                  <p className={styles.sidebarCount}>
+                    {conversasFiltradas.length}
+                    {chipRapido === "Todas" &&
+                    totaisChipsRapidos.Todas > conversasFiltradas.length
+                      ? ` de ${totaisChipsRapidos.Todas}`
+                      : ""}{" "}
+                    conversa(s) carregada(s)
+                  </p>
+                </div>
+
+                <div className={styles.sidebarHeaderActions}>
+                  <button
+                    type="button"
+                    onClick={() => setFiltrosAbertos((prev) => !prev)}
+                    className={styles.iconButton}
+                  >
+                    {filtrosAbertos ? "Ocultar filtros" : "Mostrar filtros"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={atualizarConversasManual}
+                    className={styles.iconButton}
+                    disabled={atualizandoConversas}
+                  >
+                    <RefreshCw
+                      size={16}
+                      className={atualizandoConversas ? styles.spinningIcon : ""}
+                    />
+                    {atualizandoConversas ? "Atualizando..." : "Atualizar"}
+                  </button>
+                </div>
+              </div>
+
+              <input
+                placeholder="Busque por nome, telefone, assunto ou protocolo"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className={styles.searchInput}
+              />
+
+              {filtrosAbertos && (
+                <>
+                  {integracoesWhatsapp.length > 1 && (
+                    <div className={styles.integrationFilterRow}>
+                      <select
+                        className={styles.integrationFilterSelect}
+                        value={integracaoWhatsappFiltro}
+                        onChange={(event) =>
+                          setIntegracaoWhatsappFiltro(event.target.value)
+                        }
+                      >
+                        <option value="todos">Todos os números</option>
+                        {integracoesWhatsapp.map((integracao) => (
+                          <option key={integracao.id} value={integracao.id}>
+                            {integracao.nome_conexao || `Número ${integracao.posicao || ""}`}
+                            {integracao.numero ? ` ${integracao.numero}` : " pendente"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  
+                  <div className={styles.filtersGrid}>
+                    <select
+                      value={statusFiltro}
+                      onChange={(e) => setStatusFiltro(e.target.value)}
+                      className={styles.filterSelect}
+                    >
+                      <option value="Todas">Todas</option>
+                      <option value="aberta">Aberta</option>
+                      <option value="fila">Fila</option>
+                      <option value="bot">Bot</option>
+                      <option value="em_atendimento">Em atendimento</option>
+                      <option value="aguardando_cliente">Aguardando cliente</option>
+                      <option value="encerrado_manual">Encerrada manualmente</option>
+                      <option value="encerrado_24h">Encerrada por 24h</option>
+                      <option value="encerrado_aut">Encerrada por automação</option>
+                    </select>
+
+                    <select
+                      value={canalFiltro}
+                      onChange={(e) => setCanalFiltro(e.target.value)}
+                      className={styles.filterSelect}
+                    >
+                      <option value="todos">Todos os canais</option>
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="facebook">Facebook</option>
+                      <option value="site">Site</option>
+                      <option value="email">E-mail</option>
+                    </select>
+
+                    <select
+                      value={setorFiltro}
+                      onChange={(e) => setSetorFiltro(e.target.value)}
+                      className={styles.filterSelect}
+                    >
+                      <option value="todos">Todos os setores</option>
+                      {setoresUnicos.map((setor) => (
+                        <option key={setor.id} value={setor.id}>
+                          {setor.nome}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={responsavelFiltro}
+                      onChange={(e) => setResponsavelFiltro(e.target.value)}
+                      className={styles.filterSelect}
+                    >
+                      <option value="todos">Todos os responsáveis</option>
+                      {responsaveisUnicos.map((responsavel) => (
+                        <option key={responsavel.id} value={responsavel.id}>
+                          {responsavel.nome}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      className={`${styles.quickChip} ${
+                        chipRapido === "fila" ? styles.quickChipActive : ""
+                      }`}
+                      onClick={() => setChipRapido("fila")}
+                    >
+                      Fila
+                    </button>
+
+                    <button
+                      className={`${styles.quickChip} ${
+                        chipRapido === "nao_lidas" ? styles.quickChipActive : ""
+                      }`}
+                      onClick={() => setChipRapido("nao_lidas")}
+                    >
+                      {renderQuickChipCount(totaisChipsRapidos.nao_lidas)}
+                      Não lidas
+                    </button>    
+                    
+                    <button
+                      className={`${styles.quickChip} ${
+                        chipRapido === "urgentes" ? styles.quickChipActive : ""
+                      }`}
+                      onClick={() => setChipRapido("urgentes")}
+                    >
+                      Urgentes
+                    </button>
+
+                    <button
+                      className={`${styles.quickChip} ${
+                        chipRapido === "favoritos" ? styles.quickChipActive : ""
+                      }`}
+                      onClick={() => setChipRapido("favoritos")}
+                    >
+                      {renderQuickChipCount(totaisChipsRapidos.favoritos, "subtle")}
+                      Favoritas
+                    </button>
+                  </div>
+                </>
+              )}
+
+              <div className={styles.quickFilters}>
+
+                <button
+                  className={`${styles.quickChip} ${
+                    chipRapido === "robo" ? styles.quickChipActive : ""
+                  } ${styles.quickChipRobot}`}
+                  onClick={() => {
+                    setChipRapido("robo");
+                    setListaFiltroId(null);
+                  }}
+                  title="Conversas com atendimento do bot"
+                  type="button"
+                >
+                  <span className={styles.quickChipRobotIconWrap}>
+                    <span className={styles.quickChipRobotIcon}>🤖</span>
+
+                    {totalConversasRobo > 0 && (
+                      <>
+                        <span className={styles.quickChipRobotPulse} />
+                        <span className={styles.quickChipRobotBadge}>
+                          {totalConversasRobo}
+                        </span>
+                      </>
+                    )}
+                  </span>
+
+                  <span>Bot</span>
+                </button>
+
+                <button
+                  className={`${styles.quickChip} ${
+                    chipRapido === "Todas" ? styles.quickChipActive : ""
+                  }`}
+                  onClick={() => {
+                    setChipRapido("Todas");
+                    setListaFiltroId(null);
+                  }}
+                >
+                  {renderQuickChipCount(totaisChipsRapidos.Todas, "subtle")}
+                  Todas
+                </button>
+
+                <button
+                  className={`${styles.quickChip} ${
+                    chipRapido === "minhas" ? styles.quickChipActive : ""
+                  }`}
+                  onClick={() => setChipRapido("minhas")}
+                >
+                  {renderQuickChipCount(totaisChipsRapidos.minhas, "subtle")}
+                  Minhas
+                </button>
+
+                <button
+                  className={`${styles.quickChip} ${
+                    chipRapido === "sem_responsavel" ? styles.quickChipActive : ""
+                  }`}
+                  onClick={() => setChipRapido("sem_responsavel")}
+                >
+                  {renderQuickChipCount(totaisChipsRapidos.sem_responsavel)}
+                  Sem responsável
+                </button>
+
+                {listasEmpresa.map((lista) => (
+                  <button
+                    key={lista.id}
+                    className={`${styles.quickChip} ${
+                      listaFiltroId === lista.id ? styles.quickChipActive : ""
+                    }`}
+                    onClick={() => {
+                      setListaFiltroId((atual) => (atual === lista.id ? null : lista.id));
+                      setChipRapido("Todas");
+                    }}
+                  >
+                    {lista.nome}
+                  </button>
+                ))}          
+              </div>
+            </div>
+
+            <div
+              ref={listaConversasRef}
+              className={styles.sidebarBody}
+              onScroll={handleScrollListaConversas}
+            >
+              {loadingConversas ? (
+                <div className={styles.emptyListState}>Carregando conversas...</div>
+              ) : conversasFiltradas.length === 0 ? (
+                <div className={styles.emptyListState}>Nenhuma conversa encontrada.</div>
+              ) : (
+                <>
+                  <VirtualizedConversationRows
+                    items={conversasFiltradas}
+                    scrollRef={listaConversasRef}
+                    getKey={(conversa) => conversa.id}
+                    listClassName={styles.virtualConversationList}
+                    rowClassName={styles.virtualConversationRow}
+                  >
+                    {(c) => {
+                        const ativo = conversaSelecionada?.id === c.id;
+                        const unreadCount = c.unread_count || 0;
+                        const integracaoConversa = obterIntegracaoConversa(c);
+                        const posicaoIntegracao = Number(obterPosicaoIntegracaoConversa(c));
+
+                        const nomeIntegracao =
+                          integracaoConversa?.nome_conexao || `Número ${posicaoIntegracao}`;
+
+                        return (
+                            <button
+                              onClick={() => abrirConversa(c)}
+                              className={`${styles.conversationItem} ${getClasseCorIntegracao(c)} ${
+                                ativo ? styles.conversationItemActive : ""
+                              }`}
+                    >
+                      <div className={styles.conversationAvatar}>
+                        {getIniciais(c.contatos?.nome)}
+                      </div>
+
+                      <div className={styles.conversationMain}>
+                        <div className={styles.conversationTopLine}>
+                          <div className={styles.contactNameRow}>
+                            <p className={styles.contactName}>
+                              {c.favorita && (
+                                <span className={styles.favoriteStarInline} title="Conversa favorita">
+                                  ★
+                                </span>
+                              )}
+                              {c.contatos?.nome || "Sem nome"}
+                            </p>
+
+                            <EtiquetaCor etiqueta={c.etiquetas} />
+                          </div>
+
+                          <span className={styles.timeLabel}>
+                            {formatarHora(c.last_message_at)}
+                          </span>
+                        </div>
+
+                        <div className={styles.conversationPreviewRow}>
+                          <p className={styles.previewLine}>{getPreviewConversa(c)}</p>
+                            {c.tem_disparo_agendado_pendente && (
+                              <div className={styles.scheduledDisparoMiniBadge}>
+                                ⏰ Disparo 
+                              </div>
+                            )}
+
+                          <div className={styles.unreadSlot}>
+                            {unreadCount > 0 && (
+                              <span className={styles.unreadBadge}>{unreadCount}</span>
+                            )}
+                          </div>
+                          
+                        </div>
+
+                        <div className={styles.conversationBottomLine}>
+                          <span
+                            className={`${styles.statusMiniBadge} ${
+                              ["encerrado_manual", "encerrado_24h", "encerrado_aut"].includes(c.status)
+                                ? styles.statusMiniClosed
+                                : c.status === "fila"
+                                ? styles.statusMiniWaiting
+                                : c.status === "aguardando_cliente"
+                                ? styles.statusMiniWaiting
+                                : c.status === "bot"
+                                ? styles.statusMiniBot
+                                : c.status === "em_atendimento"
+                                ? styles.statusMiniAtendimento
+                                : styles.statusMiniDefault
+                            }`}
+                          >
+                            {getStatusLabel(c.status)}
+                          {c.bot_ativo && (
+                            <span className={styles.robotMiniBadge} title="Bot ativo">
+                              🤖
+                            </span>
+                          )}
+                          </span>
+
+                          {(c.prioridade === "alta" || c.prioridade === "urgente") && (
+                            <span className={styles.priorityMiniBadge}>
+                              {getPrioridadeLabel(c.prioridade)}
+                            </span>
+                          )}
+
+                          {integracoesWhatsapp.length > 1 &&
+                            integracaoConversa && (
+                              <span
+                                className={styles.integrationMiniBadge}
+                                title={nomeIntegracao}
+                              >
+                                {limitarTexto(nomeIntegracao, 15)}
+                              </span>
+                            )}
+                        </div>
+                      </div>
+                            </button>
+                        );
+                    }}
+                  </VirtualizedConversationRows>
+
+                {carregandoMaisConversas && (
+                  <div className={styles.emptyListState}>
+                    Carregando mais conversas...
+                  </div>
+                )}
+
+                {!temMaisConversas && conversas.length > 0 && (
+                  <div className={styles.emptyListState}>
+                    Todas as conversas foram carregadas.
+                  </div>
+                )}
+              </>
+            )}
+            </div>
+          </aside>
+
+          <section className={styles.content}>
+            {conversaSelecionada ? (
+              <div className={styles.chatShell}>
+                <FeedbackToast
+                  success={mensagemSucesso}
+                  error={erro}
+                  onSuccessDismiss={() => setMensagemSucesso("")}
+                  onErrorDismiss={() => setErro("")}
+                />
+                <div
+                  className={`${styles.chatMainColumn} ${
+                    painelDireitoAberto ? styles.chatMainColumnPanelOpen : ""
+                  }`}
+                >
+                  <header className={styles.chatHeader}>
+                    <div className={styles.chatHeaderLeft}>
+                      <button
+                        type="button"
+                        className={styles.chatAvatarButton}
+                        onClick={() => setPainelDireitoAberto((prev) => !prev)}
+                      >
+                        <div className={styles.chatAvatar}>
+                          {getIniciais(conversaSelecionada.contatos?.nome)}
+                        </div>
+                      </button>
+
+                      <div className={styles.chatIdentityWrap}>
+                        <div className={styles.chatIdentityBlock}>
+                          <button
+                            type="button"
+                            className={styles.chatIdentityButton}
+                            onClick={() => setPainelDireitoAberto((prev) => !prev)}
+                          >
+                            <div className={styles.chatIdentity}>
+                              <div className={styles.chatTitleRow}>
+                                <h2 className={styles.chatTitle}>
+                                  {conversaSelecionada.favorita && (
+                                    <span className={styles.favoriteStar} title="Conversa favorita">
+                                      ★
+                                    </span>
+                                  )}
+                                  {conversaSelecionada.contatos?.nome || "Sem nome"}
+                                </h2>
+
+                                {obterNomeCampanhaContato(
+                                  conversaSelecionada.contatos
+                                ) && (
+                                  <span
+                                    className={styles.chatCampaignBadge}
+                                    title={obterNomeCampanhaContato(
+                                      conversaSelecionada.contatos
+                                    )}
+                                  >
+                                    {limitarTextoCampanha(
+                                      obterNomeCampanhaContato(
+                                        conversaSelecionada.contatos
+                                      )
+                                    )}
+                                  </span>
+                                )}
+
+                                <EtiquetaCor etiqueta={conversaSelecionada.etiquetas} />
+                              </div>
+                              <p className={styles.chatSubtitle}>
+                                {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                {obterIntegracaoConversa(conversaSelecionada)
+                                  ? ` - ${
+                                      obterIntegracaoConversa(conversaSelecionada)
+                                        ?.nome_conexao || "WhatsApp"
+                                    }`
+                                  : ""}
+                              </p>
+                            </div>
+                          </button>
+                        </div>
+
+                        <div className={styles.chatHeaderAlerts}>
+                          {conversaSelecionada?.tem_disparo_agendado_pendente && (
+                            <Link
+                              href={`/disparos-agendados`}
+                              className={`${styles.alertChip} ${styles.alertChipSchedule} ${styles.alertChipScheduleLink}`}
+                            >
+                              ⏰ Disparo agendado para{" "}
+                              {formatarDataCurtaDisparo(
+                                conversaSelecionada.disparo_agendado_pendente?.executar_em
+                              )}
+                            </Link>
+                          )}
+
+                          {conversaHistoricoImportado && (
+                            <span className={`${styles.alertChip} ${styles.alertChipInfo}`}>
+                              Histórico importado do WhatsApp Business
+                            </span>
+                          )}
+                          
+                          {alertaSemResponsavel && (
+                            <span className={`${styles.alertChip} ${styles.alertChipWarn}`}>
+                              Sem responsável
+                            </span>
+                          )}
+
+                          {alertaClienteAguardando && (
+                            <span className={`${styles.alertChip} ${styles.alertChipInfo}`}>
+                              Aguardando cliente
+                            </span>
+                          )}
+
+                          {alertaPrioridadeAlta && (
+                            <span className={`${styles.alertChip} ${styles.alertChipDanger}`}>
+                              Alta prioridade
+                            </span>
+                          )}
+
+                          {!painelDireitoAberto && alertaParadaMuitoTempo && (
+                            <span className={`${styles.alertChip} ${styles.alertChipWarn}`}>
+                              Conversa parada há muito tempo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={styles.chatHeaderActions}>
+                        {podeReabrirConversa ? (
+                          <div className={styles.reopenActions}>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={abrirModalNovoProtocolo}
+                              disabled={assumindo || abrindoNovoProtocolo}
+                            >
+                              {abrindoNovoProtocolo
+                                ? "Abrindo..."
+                                : "Abrir novo protocolo"}
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.primaryButton}
+                              onClick={reabrirConversa}
+                              disabled={assumindo || abrindoNovoProtocolo}
+                            >
+                              {assumindo
+                                ? "Reabrindo..."
+                                : "Reabrir protocolo"}
+                            </button>
+                          </div>
+                        ) : conversaEncerrada ? null : (
+                        <>
+
+                          {conversaTemNotas && podeGerenciarNotas && (
+                            <button
+                              type="button"
+                              className={styles.noteShortcutButton}
+                              title="Abrir notas"
+                              onClick={async () => {
+                                setPainelDireitoAberto(true);
+                                setAbaPainelDireito("notas");
+                                await carregarNotasDaConversa();
+                              }}
+                            >
+                              📝
+                            </button>
+                          )}
+
+                          {podeAssumirConversa && (
+                            <button
+                              className={styles.primaryButton}
+                              onClick={assumirConversa}
+                              disabled={assumindo}
+                            >
+                              {assumindo ? "Assumindo..." : "Assumir"}
+                            </button>
+                          )}
+
+                          <div className={styles.headerMenuWrap} ref={menuContatoRef}>
+                            <button
+                              type="button"
+                              className={styles.moreButton}
+                              onClick={() => setMenuContatoAberto((prev) => !prev)}
+                              title="Mais opções"
+                            >
+                              ⋮
+                            </button>
+
+                            {menuContatoAberto && (
+                              <div className={styles.headerDropdownMenu}>
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={() => {
+                                    setAbaPainelDireito("contato");
+                                    setPainelDireitoAberto(true);
+                                    setMenuContatoAberto(false);
+                                  }}
+                                >
+                                  Informações do contato
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={async () => {
+                                    setMenuContatoAberto(false);
+                                    await alternarFavorito();
+                                  }}
+                                >
+                                  {conversaSelecionada?.favorita
+                                    ? "★ Remover dos favoritos"
+                                    : "✰ Adicionar aos favoritos"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={async () => {
+                                    setPainelDireitoAberto(true);
+                                    setAbaPainelDireito("listas");
+                                    setMenuContatoAberto(false);
+                                    await carregarListasDaConversa();
+                                  }}
+                                >
+                                  Adicionar à lista
+                                </button>
+
+                                {podeGerenciarEtiquetas && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={async () => {
+                                      setPainelDireitoAberto(true);
+                                      setAbaPainelDireito("etiquetas");
+                                      setMenuContatoAberto(false);
+                                      await carregarEtiquetasEmpresa();
+                                    }}
+                                  >
+                                    Etiquetas
+                                  </button>
+                                )}
+
+                                <div className={styles.headerDropdownDivider} />
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={() => {
+                                    setAbaPainelDireito("detalhes");
+                                    setPainelDireitoAberto(true);
+                                    setMenuContatoAberto(false);
+                                  }}
+                                >
+                                  Detalhes
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={async () => {
+                                    setAbaPainelDireito("historico");
+                                    setPainelDireitoAberto(true);
+                                    setMenuContatoAberto(false);
+                                    setPaginaHistorico(1);
+
+                                    await carregarProtocolosDaConversa();
+                                  }}
+                                >
+                                  Histórico
+                                </button>
+
+                                {podeGerenciarNotas && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={async () => {
+                                      setAbaPainelDireito("notas");
+                                      setPainelDireitoAberto(true);
+                                      setMenuContatoAberto(false);
+                                      await carregarNotasDaConversa();
+                                    }}
+                                  >
+                                    <span className={styles.dropdownItemContent}>
+                                      <span>Notas</span>
+                                      {quantidadeNotas > 0 && (
+                                        <span className={styles.dropdownBadge}>
+                                          {quantidadeNotas}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={abrirAbaMacros}
+                                >
+                                  <span className={styles.dropdownItemContent}>
+                                    <span>Macros</span>
+                                    {macrosChat.length > 0 && (
+                                      <span className={styles.dropdownBadge}>
+                                        {macrosChat.length}
+                                      </span>
+                                    )}
+                                  </span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.headerDropdownItem}
+                                  onClick={() => {
+                                    setPainelDireitoAberto(true);
+                                    setAbaPainelDireito("mensagens_favoritas");
+                                    if (conversaSelecionada?.id) {
+                                      void carregarMensagensFavoritasPainel(
+                                        conversaSelecionada.id,
+                                        true
+                                      );
+                                    }
+                                    setMenuContatoAberto(false);
+                                  }}
+                                >
+                                  <span className={styles.dropdownItemContent}>
+                                    <span>Mensagens favoritas</span>
+                                    {quantidadeMensagensFavoritas > 0 && (
+                                      <span className={styles.dropdownBadge}>
+                                        {quantidadeMensagensFavoritas}
+                                      </span>
+                                    )}
+                                  </span>
+                                </button>
+
+                                <div className={styles.headerDropdownDivider} />
+
+                                {podeAtivarBotComUltimaMensagem && (
+                                  <button
+                                    type="button"
+                                    className={styles.AtivarBot}
+                                    onClick={abrirModalAtivarBot}
+                                    disabled={salvandoAcao || assumindo}
+                                  >
+                                    {salvandoAcao ? "Ativando..." : "Ativar bot"}
+                                  </button>
+                                )}
+
+                                {podeAtribuir && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={async () => {
+                                      setMenuContatoAberto(false);
+
+                                      if (acaoAberta === "atribuir") {
+                                        setAcaoAberta(null);
+                                        return;
+                                      }
+
+                                      await abrirAtribuir();
+                                    }}
+                                  >
+                                    Atribuir
+                                  </button>
+                                )}
+
+                                {podeTransferir && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={() => {
+                                      setMenuContatoAberto(false);
+
+                                      if (acaoAberta === "transferir") {
+                                        setAcaoAberta(null);
+                                        return;
+                                      }
+
+                                      abrirTransferir();
+                                    }}
+                                  >
+                                    Transferir
+                                  </button>
+                                )}
+
+                                {podeEncerrar && (
+                                  <button
+                                    type="button"
+                                    className={`${styles.headerDropdownItem} ${styles.headerDropdownDanger}`}
+                                    onClick={() => {
+                                      setMenuContatoAberto(false);
+                                      abrirEncerrar();
+                                    }}
+                                  >
+                                    Encerrar
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </header>
+
+                  {acaoAberta && (
+                    <div className={styles.actionPanel}>
+                      {acaoAberta === "transferir" && (
+                        <>
+                          <div className={styles.actionPanelHeader}>
+                            <h3 className={styles.actionPanelTitle}>Transferir conversa</h3>
+                              <button
+                                className={styles.textButton}
+                                onClick={() => setAcaoAberta(null)}
+                              >
+                                ×
+                              </button>
+                          </div>
+
+                          <div className={styles.actionPanelBody}>
+                            <label className={styles.actionLabel}>Novo setor</label>
+                            <select
+                              value={novoSetorId}
+                              onChange={(e) => setNovoSetorId(e.target.value)}
+                              className={styles.actionSelect}
+                            >
+                              <option value="">Selecione um setor</option>
+                              {setoresDisponiveisParaTransferencia.map((setor) => (
+                                <option key={setor.id} value={setor.id}>
+                                  {setor.nome}
+                                </option>
+                              ))}
+                            </select>
+
+                            <div className={styles.actionButtons}>
+                              <button
+                                className={styles.secondaryButton}
+                                onClick={() => setAcaoAberta(null)}
+                                disabled={salvandoAcao}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                className={styles.primaryButton}
+                                onClick={confirmarTransferencia}
+                                disabled={salvandoAcao}
+                              >
+                                {salvandoAcao ? "Salvando..." : "Confirmar"}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {acaoAberta === "atribuir" && (
+                        <>
+                          <div className={styles.actionPanelHeader}>
+                            <h3 className={styles.actionPanelTitle}>Atribuir responsável</h3>
+                            <button
+                              className={styles.textButton}
+                              onClick={() => setAcaoAberta(null)}
+                            >
+                              ×
+                            </button>
+                          </div>
+
+                          <div className={styles.actionPanelBody}>
+                            <label className={styles.actionLabel}>Setor</label>
+                            <select
+                              value={novoSetorId}
+                              onChange={(e) => {
+                                const setorId = e.target.value;
+                                setNovoSetorId(setorId);
+                                setNovoResponsavelId("");
+                                setUsuarios([]);
+
+                                if (setorId) {
+                                  void carregarUsuariosPorSetor(setorId);
+                                } else {
+                                  setCarregandoUsuariosAtribuicao(false);
+                                }
+                              }}
+                              className={styles.actionSelect}
+                            >
+                              <option value="">Selecione um setor</option>
+                              {setoresDisponiveisParaTransferencia.map((setor) => (
+                                <option key={setor.id} value={setor.id}>
+                                  {setor.nome}
+                                </option>
+                              ))}
+                            </select>
+
+                            <label className={styles.actionLabel}>Novo responsável</label>
+                            <select
+                              value={novoResponsavelId}
+                              onChange={(e) => setNovoResponsavelId(e.target.value)}
+                              className={styles.actionSelect}
+                              disabled={!novoSetorId || carregandoUsuariosAtribuicao}
+                            >
+                              <option value="">
+                                {carregandoUsuariosAtribuicao
+                                  ? "Carregando usuários..."
+                                  : !novoSetorId
+                                  ? "Selecione um setor primeiro"
+                                  : usuariosFiltradosPorSetor.length === 0
+                                  ? "Nenhum usuário disponível"
+                                  : "Selecione um responsável"}
+                              </option>
+                              {usuariosFiltradosPorSetor.map((usuario) => (
+                                <option key={usuario.id} value={usuario.id}>
+                                  {usuario.nome}
+                                </option>
+                              ))}
+                            </select>
+
+                            <div className={styles.actionButtons}>
+                              <button
+                                className={styles.secondaryButton}
+                                onClick={() => setAcaoAberta(null)}
+                                disabled={salvandoAcao}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                className={styles.primaryButton}
+                                onClick={confirmarAtribuicao}
+                                disabled={salvandoAcao}
+                              >
+                                {salvandoAcao ? "Salvando..." : "Confirmar"}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {acaoAberta === "encerrar" && (
+                        <>
+                          <div className={styles.actionPanelHeader}>
+                            <h3 className={styles.actionPanelTitle}>
+                              {encerramentoInterrompeAutomacao
+                                ? "Parar automação e encerrar"
+                                : "Encerrar conversa"}
+                            </h3>
+                            <button
+                              className={styles.textButton}
+                              onClick={() => setAcaoAberta(null)}
+                            >
+                              ×
+                            </button>
+                          </div>
+
+                          <div className={styles.actionPanelBody}>
+                            <p className={styles.actionText}>
+                              {encerramentoInterrompeAutomacao
+                                ? "A automação será interrompida e o protocolo será encerrado. Informe o resultado deste atendimento."
+                                : "Tem certeza de que deseja encerrar esta conversa?"}
+                            </p>
+
+                            <label className={styles.actionLabel}>
+                              Classificação do atendimento
+                            </label>
+                            <select
+                              value={encerramentoTipoEvento}
+                              onChange={(event) => {
+                                const novaClassificacao = event.target
+                                  .value as ClassificacaoEncerramento;
+                                setEncerramentoTipoEvento(novaClassificacao);
+
+                                if (novaClassificacao !== "convertido") {
+                                  setEncerramentoValor("");
+                                }
+                              }}
+                              className={styles.actionSelect}
+                            >
+                              {CLASSIFICACOES_ENCERRAMENTO.map((classificacao) => (
+                                <option
+                                  key={classificacao.value}
+                                  value={classificacao.value}
+                                >
+                                  {classificacao.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            {encerramentoTipoEvento === "convertido" && (
+                              <>
+                                <label className={styles.actionLabel}>
+                                  Valor da venda
+                                </label>
+                                <input
+                                  className={styles.messageInput}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={encerramentoValor}
+                                  onChange={(event) =>
+                                    setEncerramentoValor(event.target.value)
+                                  }
+                                  placeholder="497,00"
+                                />
+                              </>
+                            )}
+
+                            <label className={styles.actionLabel}>
+                              Observação
+                            </label>
+                            <textarea
+                              className={styles.noteInput}
+                              rows={3}
+                              value={encerramentoObservacao}
+                              onChange={(event) =>
+                                setEncerramentoObservacao(event.target.value)
+                              }
+                              placeholder="Ex: venda confirmada pelo atendente, cliente escolheu plano anual"
+                            />
+
+                            <div className={styles.actionButtons}>
+                              <button
+                                className={styles.secondaryButton}
+                                onClick={() => setAcaoAberta(null)}
+                                disabled={salvandoAcao}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                className={styles.dangerButton}
+                                onClick={confirmarEncerramento}
+                                disabled={salvandoAcao}
+                              >
+                                {salvandoAcao ? "Encerrando..." : "Confirmar"}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={styles.mainBody}>
+                    <div className={styles.chatCenter}>
+                      <div className={styles.timelineWrapper}>
+                        <div
+                          ref={mensagensRef}
+                          className={styles.timelineArea}
+                          onScroll={handleScrollMensagens}
+                        >
+                          {!loadingMensagens && temMaisHistorico && (
+                            <div className={styles.timelineHistoryMore}>
+                              <button
+                                type="button"
+                                onClick={carregarMaisHistorico}
+                                disabled={carregandoMaisHistorico}
+                                className={`${styles.secondaryButton} ${styles.timelineHistoryMoreButton}`}
+                              >
+                                {carregandoMaisHistorico ? "Carregando..." : "Ver mais"}
+                              </button>
+                            </div>
+                          )}
+                          {loadingMensagens ? (
+                            <div className={styles.timelineInfo}>
+                              Carregando mensagens...
+                            </div>
+                          ) : mensagens.length === 0 ? (
+                            <div className={styles.emptyTimelineCard}>
+                              Nenhuma mensagem registrada nesta conversa ainda.
+                            </div>
+                          ) : (
+                            <div className={styles.messagesStack}>
+                              {mensagensAgrupadas.map((item, index) => {
+                                if (item.tipo === "data") {
+                                  return (
+                                    <div
+                                      key={`data-${item.valor}-${index}`}
+                                      className={styles.dateRow}
+                                    >
+                                      <div className={styles.dateBadge}>{item.valor}</div>
+                                    </div>
+                                  );
+                                }
+
+                                const msg = item.valor;
+                                const isConteudoIndisponivel = msg.tipo_mensagem === "unsupported";
+                                const isDisparo = mensagemEhDisparo(msg);
+                                const disparoModo = getModoDisparo(msg);
+                                const isOutgoing =
+                                  !isDisparo &&
+                                  msg.origem === "enviada" &&
+                                  !isConteudoIndisponivel;
+                                const isAutomatic =
+                                  !isDisparo && msg.origem === "automatica";
+                                const isSystem = msg.remetente_tipo === "sistema";
+                                const isMensagemDoSistema = mensagemFoiEnviadaPeloSistema(msg);
+                                const mensagemErroEnvio = getMensagemErroEnvio(msg);
+                                const eventoWhatsapp =
+                                  getWhatsAppMessageSpecialState(msg);
+
+                                if (isSystem) {
+                                  return (
+                                    <div key={msg.id} className={styles.systemMessageRow}>
+                                      <div className={styles.systemMessageBadge}>
+                                        {msg.conteudo}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                  return (
+                                    <Fragment key={msg.id}>
+                                      <div
+                                        id={`mensagem-${msg.id}`}
+                                        className={`${styles.messageRow} ${
+                                          isOutgoing ? styles.messageRowOutgoing : styles.messageRowIncoming
+                                        }`}
+                                      >
+                                      <div
+                                        className={`${styles.messageBubble} ${
+                                          isDisparo
+                                            ? styles.messageBubbleDisparo
+                                            : isOutgoing
+                                            ? styles.messageBubbleOutgoing
+                                            : isAutomatic
+                                            ? styles.messageBubbleAutomatic
+                                            : styles.messageBubbleIncoming
+                                        }`}
+                                      >
+                                        {(isDisparo ||
+                                          (!isOutgoing &&
+                                            (msg.remetente_tipo === "bot" ||
+                                              msg.remetente_tipo === "ia"))) && (
+                                            <div className={styles.messageMetaTop}>
+                                              <span
+                                                className={[
+                                                  styles.senderLabel,
+                                                  isDisparo ? styles.disparoSenderLabel : "",
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(" ")}
+                                              >
+                                                {isDisparo
+                                                  ? "Disparo"
+                                                  : getRemetenteLabel(msg.remetente_tipo)}
+                                              </span>
+
+                                              {isDisparo ? (
+                                                <span className={styles.disparoModeBadge}>
+                                                  {disparoModo}
+                                                </span>
+                                              ) : isAutomatic ? (
+                                                <span className={styles.automaticBadge}>automática</span>
+                                              ) : null}
+                                            </div>
+                                          )}
+
+                                        <div className={styles.messageContentRow}>
+                                          <div className={styles.messageContentFlex}>
+                                            {eventoWhatsapp.revoked ? (
+                                              <div className={styles.deletedContentCard}>
+                                                <p className={styles.deletedOriginalText}>
+                                                  <TextoComEmoji
+                                                    texto={
+                                                      eventoWhatsapp.deletedContent ||
+                                                      "Conteúdo removido"
+                                                    }
+                                                  />
+                                                </p>
+                                                <span className={styles.deletedBadge}>
+                                                  Apagada pelo contato
+                                                </span>
+                                              </div>
+                                            ) : eventoWhatsapp.edited ? (
+                                              <div className={styles.editedContentCard}>
+                                                <div className={styles.editVersionPrevious}>
+                                                  <span className={styles.editVersionLabel}>
+                                                    Antes
+                                                  </span>
+                                                  <p className={styles.editVersionText}>
+                                                    <TextoComEmoji
+                                                      texto={
+                                                        eventoWhatsapp.previousContent ||
+                                                        "Conteúdo anterior indisponível"
+                                                      }
+                                                    />
+                                                  </p>
+                                                </div>
+                                                <div className={styles.editVersionCurrent}>
+                                                  <span className={styles.editVersionLabel}>
+                                                    Agora
+                                                  </span>
+                                                  <p className={styles.editVersionText}>
+                                                    <TextoComEmoji
+                                                      texto={
+                                                        eventoWhatsapp.currentContent ||
+                                                        "Mensagem editada"
+                                                      }
+                                                    />
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              renderizarConteudoMensagem(msg)
+                                            )}
+                                          </div>
+
+                                          {!msg.id.startsWith("otimista-") &&
+                                            (msg.remetente_tipo === "usuario" ||
+                                              msg.remetente_tipo === "contato") && (
+                                            <button
+                                              type="button"
+                                              className={`${styles.messageFavoriteButton} ${
+                                                msg.favorita ? styles.messageFavoriteButtonActive : ""
+                                              }`}
+                                              onClick={() => alternarMensagemFavorita(msg)}
+                                              title={
+                                                msg.favorita
+                                                  ? "Remover dos favoritos"
+                                                  : "Adicionar aos favoritos"
+                                              }
+                                            >
+                                              ☆
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        <div className={styles.messageMetaBottom}>
+                                          <span>{formatarHora(msg.created_at)}</span>
+
+                                          {(eventoWhatsapp.edited ||
+                                            eventoWhatsapp.revoked) && (
+                                            <span
+                                              className={`${styles.messageMutationState} ${
+                                                eventoWhatsapp.revoked
+                                                  ? styles.messageMutationStateDeleted
+                                                  : ""
+                                              }`}
+                                            >
+                                              {eventoWhatsapp.revoked
+                                                ? "apagada"
+                                                : "editada"}
+                                            </span>
+                                          )}
+
+                                          {isMensagemDoSistema && (
+                                            <span
+                                              className={`${styles.statusIcon} ${
+                                                msg.status_envio === "lida"
+                                                  ? styles.statusIconRead
+                                                  : msg.status_envio === "falha"
+                                                  ? styles.statusIconError
+                                                  : styles.statusIconDefault
+                                              }`}
+                                              title={mensagemErroEnvio || msg.status_envio}
+                                            >
+                                              {getStatusEnvioLabel(msg.status_envio)}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {eventoWhatsapp.reactions.length > 0 && (
+                                          <div
+                                            className={`${styles.reactionList} ${
+                                              isOutgoing
+                                                ? styles.reactionListOutgoing
+                                                : ""
+                                            }`}
+                                            aria-label="Reações da mensagem"
+                                          >
+                                            {eventoWhatsapp.reactions.map(
+                                              (reaction) => (
+                                                <span
+                                                  key={reaction.emoji}
+                                                  className={styles.reactionChip}
+                                                  title={`${reaction.count} reação${
+                                                    reaction.count === 1 ? "" : "ões"
+                                                  } ${reaction.emoji}`}
+                                                >
+                                                  <span className={styles.reactionEmoji}>
+                                                    {reaction.emoji}
+                                                  </span>
+                                                  {reaction.count > 1 && (
+                                                    <span className={styles.reactionCount}>
+                                                      {reaction.count}
+                                                    </span>
+                                                  )}
+                                                </span>
+                                              ),
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {mensagemTemMidiaExpiravel(msg) && (
+                                      <div className={styles.expiringMediaNoticeRow}>
+                                        <div className={styles.expiringMediaNoticeBadge}>
+                                          ~ Esta mídia pode expirar em até 7 dias. Para manter o acesso, baixe enquanto ela estiver disponível.
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Fragment>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {mostrarBotaoIrFinal && (
+                            <button
+                              type="button"
+                              className={styles.scrollToBottomButton}
+                              onClick={() => rolarParaFinal(true)}
+                              title="Ir para a última mensagem"
+                            >
+                              ↓
+                            </button>
+                          )}
+                        </div>
+
+                        <div className={styles.composerArea}>
+                          {!podeEnviarMensagem &&
+                            !conversaEncerrada &&
+                            !conversaHistoricoImportado &&
+                            !conversaComBotAtivo &&
+                            janela24hAberta && (
+                              <div className={styles.timelineInfoSmall}>
+                                {!podeEnviarMensagemPermissao
+                                  ? "Você não tem permissão para enviar mensagens nesta conversa."
+                                  : "Você só poderá responder quando a conversa estiver sob sua responsabilidade."}
+                              </div>
+                            )}
+
+                          {podeEnviarMidia && (
+                            <>
+                              <input
+                                ref={documentoInputRef}
+                                type="file"
+                                className={styles.hiddenFileInput}
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar,.ppt,.pptx"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  selecionarArquivo(file, e.currentTarget);
+                                }}
+                              />
+
+                              <input
+                                ref={midiaInputRef}
+                                type="file"
+                                className={styles.hiddenFileInput}
+                                accept="image/*,video/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  selecionarArquivo(file, e.currentTarget);
+                                }}
+                              />
+
+                              <input
+                                ref={audioInputRef}
+                                type="file"
+                                className={styles.hiddenFileInput}
+                                accept="audio/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  selecionarArquivo(file, e.currentTarget);
+                                }}
+                              />
+                            </>
+                          )}
+
+                          {!conversaEncerrada && arquivoEnvio && (
+                            <div
+                              className={styles.filePreviewCard}
+                              style={{
+                                marginBottom: 10,
+                                border: "1px solid var(--crm-ui-private-decoration-rgb-148-163-184-0-22)",
+                                borderRadius: 14,
+                                padding: 12,
+                                background: "var(--crm-ui-private-decoration-rgb-255-255-255-0-72)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 10,
+                              }}
+                            >
+                              <div className={styles.filePreviewHeader}>
+                                <div className={styles.filePreviewLabel}>
+                                  {getTipoArquivoSelecionado(arquivoEnvio)} selecionado
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className={styles.filePreviewRemoveButton}
+                                  onClick={() => {
+                                    if (arquivoEnvioPreviewUrl) {
+                                      URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+                                    }
+
+                                    setArquivoEnvio(null);
+                                    setArquivoEnvioPreviewUrl(null);
+                                    setLegendaArquivo("");
+                                    legendaArquivoRef.current = "";
+                                    if (legendaEditorRef.current) {
+                                      legendaEditorRef.current.textContent = "";
+                                    }
+                                  }}
+                                >
+                                  Apagar
+                                </button>
+                              </div>
+
+                              {arquivoSelecionadoEhImagem(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div>
+                                  <img
+                                    src={arquivoEnvioPreviewUrl}
+                                    alt={arquivoEnvio.name}
+                                    className={styles.filePreviewImage}
+                                  />
+                                </div>
+                              )}
+
+                              {arquivoSelecionadoEhVideo(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div>
+                                  <video
+                                    controls
+                                    className={styles.filePreviewVideo}
+                                  >
+                                    <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
+                                    Seu navegador não suporta vídeo.
+                                  </video>
+                                </div>
+                              )}
+
+                              {arquivoSelecionadoEhAudio(arquivoEnvio) && arquivoEnvioPreviewUrl && (
+                                <div className={styles.audioPreviewCard}>
+                                  <div className={styles.audioPreviewTop}>
+                                  <div className={styles.audioPreviewBadge}>Áudio</div>
+                                    <span className={styles.audioPreviewFileName}>
+                                      {arquivoEnvio.name}
+                                    </span>
+                                  </div>
+
+                                  <div className={styles.audioPreviewPlayerWrap}>
+                                    <audio controls className={styles.audioPreviewPlayer}>
+                                      <source src={arquivoEnvioPreviewUrl} type={arquivoEnvio.type} />
+                                      Seu navegador não suporta áudio.
+                                    </audio>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: "var(--crm-ui-private-content-hex-64748b)",
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {arquivoEnvio.name}
+                              </div>
+                            </div>
+                          )}
+
+                          {!conversaEncerrada && !conversaHistoricoImportado && cameraAberta && (
+                            <div className={styles.cameraModal}>
+                              <video ref={videoRef} autoPlay playsInline className={styles.cameraVideo} />
+
+                              <div className={styles.cameraActions}>
+                                <button onClick={capturarFoto}>📸 Tirar foto</button>
+                                <button onClick={fecharCamera}>Cancelar</button>
+                              </div>
+
+                              <canvas ref={canvasRef} style={{ display: "none" }} />
+                            </div>
+                          )}
+
+                          {!conversaEncerrada && !conversaHistoricoImportado && gravandoAudio && (
+                            <div className={styles.timelineInfoSmall}>
+                              Gravando áudio... <strong>{formatarDuracaoGravacao(duracaoGravacao)}</strong>
+                            </div>
+                          )}
+
+
+                        {!composerPronto ? (
+                          <div className={styles.timelineInfoSmall}>
+                            Carregando informações da conversa...
+                          </div>
+                          ) : conversaHistoricoImportado ? (
+                            <div className={styles.timelineInfoSmall}>
+                              Histórico importado do WhatsApp Business. Esta conversa está disponível somente para leitura.
+                            </div>
+                          ) : conversaComBotAtivo ? (
+                            <div className={styles.botStopArea}>
+                              <div className={styles.botStopCard}>
+                                <div className={styles.botStopInfo}>
+                                  <div className={styles.botStopIcon}>🤖</div>
+
+                                  <div>
+                                    <strong className={styles.botStopTitle}>
+                                      Automação em andamento
+                                    </strong>
+
+                                    <p className={styles.botStopText}>
+                                      Esta conversa está com o bot ativo. Ao parar a automação, o atendimento
+                                      será encerrado. Depois, você poderá reabrir e assumir a conversa.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className={styles.dangerButton}
+                                  onClick={() => abrirEncerrar(true)}
+                                  disabled={assumindo}
+                                >
+                                  Parar automação
+                                </button>
+                              </div>
+                            </div>
+                          ) : mostrarDisparoIndividual ? (
+                            <div className={styles.disparoCard}>
+                              <div className={styles.disparoCardResumo}>
+                                <div className={styles.disparoCardResumoLeft}>
+                                  {mensagemAvisoDisparo && (
+                                    <div
+                                      className={`${styles.disparoAlertCompact} ${
+                                        mensagemAvisoDisparo.variante === "danger"
+                                          ? styles.disparoAlertCompactDanger
+                                          : styles.disparoAlertCompactWarning
+                                      }`}
+                                    >
+                                      <div className={styles.disparoAlertCompactIcon}>
+                                        {mensagemAvisoDisparo.icone}
+                                      </div>
+
+                                      <div className={styles.disparoAlertCompactContent}>
+                                        <strong className={styles.disparoAlertCompactTitle}>
+                                          {mensagemAvisoDisparo.titulo}
+                                        </strong>
+
+                                        <p className={styles.disparoAlertCompactText}>
+                                          {mensagemAvisoDisparo.texto}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className={styles.disparoCardResumoRight}>
+                                  <button
+                                    type="button"
+                                    className={styles.disparoExpandButton}
+                                    onClick={() => {
+                                      setDisparoIndividualAberto((prev) => {
+                                        const proximo = !prev;
+
+                                        if (!proximo) {
+                                          setPreviewCustoDisparoIndividual(null);
+                                          setDetalhesCustoDisparoIndividualAberto(false);
+                                        } else if (typeof window !== "undefined") {
+                                          const compacto = window.matchMedia(
+                                            "(max-width: 1200px), (max-height: 820px)"
+                                          ).matches;
+                                          setPreviewDisparoIndividualAberto(!compacto);
+                                          setDetalhesCustoDisparoIndividualAberto(false);
+                                        }
+
+                                        return proximo;
+                                      });
+                                    }}
+                                  >
+                                    {disparoIndividualAberto
+                                      ? "Ocultar disparo individual"
+                                      : "Enviar disparo individual"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {disparoIndividualAberto && (
+                                <div className={styles.disparoCardExpandido}>
+                                  <div className={styles.disparoFormCard}>
+                                    <div className={styles.disparoFormHeader}>
+                                      <div>
+                                        <h4 className={styles.disparoFormTitle}>Disparo individual</h4>
+                                        <p className={styles.disparoFormSubtitle}>
+                                          Selecione um template aprovado e envie para este contato.
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className={styles.disparoQuickTopRow}>
+                                      <select
+                                        className={styles.disparoQuickSelect}
+                                        value={templateDisparoId}
+                                        onChange={(e) => {
+                                          const idSelecionado = e.target.value;
+                                          setTemplateDisparoId(idSelecionado);
+
+                                          const template = templatesWhatsapp.find(
+                                            (t) => t.id === idSelecionado
+                                          );
+                                          setTemplateDisparoNome(template?.nome || "");
+                                        }}
+                                      >
+                                        <option value="">
+                                          {carregandoTemplatesWhatsapp
+                                            ? "Carregando templates..."
+                                            : "Selecione um template"}
+                                        </option>
+
+                                        {templatesWhatsapp.map((t) => (
+                                          <option key={t.id} value={t.id}>
+                                            {t.nome}
+                                          </option>
+                                        ))}
+                                      </select>
+
+                                      <button
+                                        type="button"
+                                        className={styles.disparoQuickNewButton}
+                                        onClick={() => {
+                                          window.location.href = "/templates-whatsapp";
+                                        }}
+                                      >
+                                        + Novo
+                                      </button>
+                                    </div>
+
+                                    {quantidadeParametrosBody > 0 && (
+                                      <>
+                                        <div className={styles.disparoParams}>
+                                          {Array.from({ length: quantidadeParametrosBody }).map((_, i) => (
+                                            <TemplateVariableSearchSelect
+                                              key={i}
+                                              label={`Variável ${i + 1}`}
+                                              value={parametros[i] || ""}
+                                              onChange={(chave) => atualizarParametro(i, chave)}
+                                              opcoes={opcoesVariaveisDisparoIndividual}
+                                              carregando={carregandoVariaveis}
+                                            />
+                                          ))}
+                                        </div>
+
+                                        <div className={styles.disparoManageVariablesRow}>
+                                          <button
+                                            type="button"
+                                            className={styles.disparoManageVariablesButton}
+                                            onClick={abrirModalVariavelDisparoIndividual}
+                                          >
+                                            <Variable size={14} />
+                                            Gerenciar variáveis
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+
+                                    <div className={styles.disparoQuickBottomRow}>
+                                      <div className={styles.disparoQuickTarget}>
+                                        <span className={styles.disparoQuickTargetLabel}>Destino</span>
+                                        <strong className={styles.disparoQuickTargetName}>
+                                          {conversaSelecionada.contatos?.nome || "Contato"}
+                                        </strong>
+                                        <span className={styles.disparoQuickTargetPhone}>
+                                          {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                        </span>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        className={styles.disparoQuickSendButton}
+                                        onClick={enviarDisparoIndividual}
+                                        disabled={
+                                          enviandoDisparoIndividual ||
+                                          !templateDisparoId.trim() ||
+                                          !conversaSelecionada?.contatos?.telefone ||
+                                          bloqueioLimiteDisparoIndividual
+                                        }
+                                      >
+                                        {enviandoDisparoIndividual
+                                          ? "Enviando..."
+                                          : disparoIndividualConsomeLimiteMeta &&
+                                            (!limiteMetaDisparoIndividualCarregado ||
+                                              loadingLimiteMetaDisparoIndividual)
+                                          ? "Validando..."
+                                          : "Enviar"}
+                                      </button>
+                                    </div>
+
+                                    {disparoIndividualConsomeLimiteMeta && (
+                                      <div
+                                        className={`${styles.disparoLimiteMetaAviso} ${
+                                          disparoIndividualExcedeLimiteMeta
+                                            ? styles.disparoLimiteMetaAvisoBloqueado
+                                            : ""
+                                        }`}
+                                      >
+                                        <div>
+                                          <strong>Limite Meta 24h</strong>
+                                          <span>
+                                            {!limiteMetaDisparoIndividualCarregado ||
+                                            loadingLimiteMetaDisparoIndividual
+                                              ? "Validando capacidade do contato."
+                                              : disparoIndividualExcedeLimiteMeta
+                                              ? "Bloqueado: limite de novas conversas atingido."
+                                              : telefoneMetaDisparoIndividual?.ja_contabilizado
+                                              ? "Contato ja contabilizado neste periodo."
+                                              : "Consome 1 vaga neste envio."}
+                                          </span>
+                                        </div>
+
+                                        {limiteMetaDisparoIndividual && (
+                                          <div className={styles.disparoLimiteMetaNumeros}>
+                                            <span>
+                                              Capacidade:{" "}
+                                              <strong>
+                                                {formatarNumeroLimiteMetaUi(
+                                                  limiteMetaDisparoIndividual.limite
+                                                )}
+                                              </strong>
+                                            </span>
+                                            <span>
+                                              Disponiveis:{" "}
+                                              <strong>
+                                                {formatarNumeroLimiteMetaUi(
+                                                  limiteMetaDisparoIndividual.restantes
+                                                )}
+                                              </strong>
+                                            </span>
+                                            {saldoAposDisparoIndividualMeta !== null && (
+                                              <span>
+                                                Apos envio:{" "}
+                                                <strong>
+                                                  {formatarNumeroLimiteMetaUi(
+                                                    saldoAposDisparoIndividualMeta
+                                                  )}
+                                                </strong>
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {templateSelecionado && (
+                                      <div className={styles.disparoCustoCompacto}>
+                                        <div className={styles.disparoCustoResumoLinha}>
+                                          <div className={styles.disparoCustoResumoTexto}>
+                                            <span>Estimativa</span>
+                                            <strong>
+                                              {loadingPreviewCustoDisparoIndividual
+                                                ? "Calculando..."
+                                                : `R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMin ?? 0).toFixed(2)} ~ R$ ${(previewCustoDisparoIndividual?.valorTotalBrlMax ?? 0).toFixed(2)}`}
+                                            </strong>
+                                          </div>
+
+                                          <div className={styles.disparoCustoResumoAcoes}>
+                                            <span className={styles.disparoCustoCategoria}>
+                                              {String(previewCustoDisparoIndividual?.categoria || templateSelecionado?.categoria || "-").toUpperCase()}
+                                            </span>
+
+                                            <button
+                                              type="button"
+                                              className={styles.disparoMiniToggleButton}
+                                              onClick={() =>
+                                                setDetalhesCustoDisparoIndividualAberto(
+                                                  (atual) => !atual
+                                                )
+                                              }
+                                              aria-expanded={
+                                                detalhesCustoDisparoIndividualAberto
+                                              }
+                                            >
+                                              {detalhesCustoDisparoIndividualAberto
+                                                ? "Ocultar"
+                                                : "Detalhes"}
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        <div className={styles.disparoCustoMetaLinha}>
+                                          <span>
+                                            <strong>Cobrados:</strong>{" "}
+                                            {previewCustoDisparoIndividual?.totalCobrados ?? 0}
+                                          </span>
+
+                                          <span>
+                                            <strong>Isentos:</strong>{" "}
+                                            {previewCustoDisparoIndividual?.totalIsentos ?? 0}
+                                          </span>
+
+                                          <span>
+                                            <strong>USD:</strong>{" "}
+                                            {`US$ ${(previewCustoDisparoIndividual?.valorTotalUsd ?? 0).toFixed(4)}`}
+                                          </span>
+                                        </div>
+
+                                        {detalhesCustoDisparoIndividualAberto && (
+                                          <div className={styles.disparoCustoAviso}>
+                                            A cobranca pode ser processada pela Meta usando o metodo de pagamento vinculado a conta empresarial.
+                                            O valor final pode variar conforme cambio, impostos, IOF, tarifas e regras de cobranca.
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className={styles.disparoTemplatePreviewCard}>
+                                    <div className={styles.disparoTemplatePreviewHeader}>
+                                      <div>
+                                        <span className={styles.disparoTemplatePreviewEyebrow}>
+                                          Previa do WhatsApp
+                                        </span>
+                                        <h4 className={styles.disparoTemplatePreviewName}>
+                                          {templateSelecionado?.nome || "Template nao selecionado"}
+                                        </h4>
+
+                                        {templateSelecionado && (
+                                          <p className={styles.disparoTemplatePreviewMeta}>
+                                            A mensagem abaixo segue o formato exibido no WhatsApp.
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      <div className={styles.disparoPreviewActions}>
+                                        {templateSelecionado && (
+                                          <span className={styles.disparoTemplateStatusBadge}>
+                                            Aprovado
+                                          </span>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          className={styles.disparoMiniToggleButton}
+                                          onClick={() =>
+                                            setPreviewDisparoIndividualAberto(
+                                              (atual) => !atual
+                                            )
+                                          }
+                                          aria-expanded={previewDisparoIndividualAberto}
+                                        >
+                                          {previewDisparoIndividualAberto
+                                            ? "Ocultar"
+                                            : "Ver previa"}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {templateSelecionado && !previewDisparoIndividualAberto ? (
+                                      <div className={styles.disparoTemplatePreviewCollapsed}>
+                                        Previa recolhida. Abra para conferir o texto final no formato do WhatsApp.
+                                      </div>
+                                    ) : templateSelecionado ? (
+                                      <>
+                                        <div className={styles.disparoWhatsappPreviewArea}>
+                                          <div className={styles.disparoWhatsappBubble}>
+                                            {templateHeaderTexto ? (
+                                              <strong className={styles.disparoWhatsappPreviewTitle}>
+                                                {templateHeaderTexto}
+                                              </strong>
+                                            ) : null}
+
+                                            <p className={styles.disparoWhatsappPreviewText}>
+                                              {templateBodyTexto || "Sem corpo"}
+                                            </p>
+
+                                            <div className={styles.disparoWhatsappPreviewMeta}>
+                                              <span className={styles.disparoWhatsappPreviewFooter}>
+                                                {templateFooterTexto || "Sem rodape"}
+                                              </span>
+
+                                              <span className={styles.disparoWhatsappPreviewTime}>
+                                                {new Date().toLocaleTimeString("pt-BR", {
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                                })}
+                                              </span>
+                                            </div>
+
+                                            {extrairQuickRepliesTemplate(templateSelecionado.payload).map(
+                                              (texto, index) => (
+                                                <div
+                                                  key={`${texto}-${index}`}
+                                                  className={styles.disparoWhatsappPreviewButton}
+                                                >
+                                                  Resposta: {texto}
+                                                </div>
+                                              )
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        <div className={styles.disparoTemplateInfoCompact}>
+                                          <span>
+                                            Categoria:{" "}
+                                            <strong>
+                                              {templateSelecionado.categoria || "Nao informada"}
+                                            </strong>
+                                          </span>
+                                          <span>
+                                            Idioma:{" "}
+                                            <strong>
+                                              {templateSelecionado.idioma ||
+                                                templateSelecionado.payload?.language ||
+                                                "-"}
+                                            </strong>
+                                          </span>
+                                          <span>
+                                            Cabecalho:{" "}
+                                            <strong>
+                                              {templateHeaderTexto ? "Sim" : "Sem cabecalho"}
+                                            </strong>
+                                          </span>
+                                          <span>
+                                            Variaveis:{" "}
+                                            <strong>{quantidadeParametrosBody}</strong>
+                                          </span>
+                                        </div>
+
+                                        <div className={styles.disparoTemplateHintBox}>
+                                          Este template usa{" "}
+                                          <strong>{quantidadeParametrosBody}</strong>{" "}
+                                          variavel(is). O sistema envia os valores preenchidos nos
+                                          parametros acima.
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className={styles.disparoTemplateEmptyState}>
+                                        Selecione um template aprovado para visualizar a mensagem.
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              <div className={styles.composerRow}>
+                                {/* ESQUERDA */}
+                                <div className={styles.composerLeft}>
+                                  {podeEnviarMidia && (
+                                    <div ref={menuAnexoRef} className={styles.attachmentMenuWrap}>
+                                      <button
+                                        type="button"
+                                        className={styles.toolButton}
+                                        onClick={() => {
+                                          setMacroCardAberto(false);
+                                          setEmojiAberto(false);
+                                          setMenuAnexoAberto((prev) => !prev);
+                                        }}
+                                        title="Anexos"
+                                      >
+                                        ＋
+                                      </button>
+
+                                    {menuAnexoAberto && (
+                                      <div className={styles.attachmentMenuDropdown}>
+                                        <button
+                                          type="button"
+                                          className={styles.attachmentMenuItem}
+                                          onClick={() => {
+                                            setMenuAnexoAberto(false);
+                                            documentoInputRef.current?.click();
+                                          }}
+                                        >
+                                          <span className={styles.attachmentMenuIcon}>📎</span>
+                                          <span>Documentos</span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          className={styles.attachmentMenuItem}
+                                          onClick={() => {
+                                            setMenuAnexoAberto(false);
+                                            midiaInputRef.current?.click();
+                                          }}
+                                        >
+                                          <span className={styles.attachmentMenuIcon}>🖼️</span>
+                                          <span>Foto ou vídeo</span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          className={styles.attachmentMenuItem}
+                                          onClick={() => {
+                                            setMenuAnexoAberto(false);
+                                            audioInputRef.current?.click();
+                                          }}
+                                        >
+                                          <span className={styles.attachmentMenuIcon}>🎵</span>
+                                          <span>Áudio</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                    </div>
+                                  )}
+
+                                  <div className={styles.emojiPickerWrap}>
+                                    <button
+                                      type="button"
+                                      className={`${styles.toolButton} ${styles.emojiButton} ${
+                                        emojiAberto ? styles.emojiButtonActive : ""
+                                      }`}
+                                      onClick={() => {
+                                        setMacroCardAberto(false);
+                                        setMenuAnexoAberto(false);
+                                        setEmojiAberto((prev) => !prev);
+                                      }}
+                                      title="Emoji"
+                                      aria-label="Abrir emojis"
+                                    >
+                                      <span className={styles.emojiButtonIcon}>😊</span>
+                                    </button>
+                                  </div>
+
+                                  <div className={styles.macroPickerWrap} ref={macroCardRef}>
+                                    <button
+                                      type="button"
+                                      className={`${styles.toolButton} ${styles.macroButton} ${
+                                        macroCardAberto ? styles.macroButtonActive : ""
+                                      }`}
+                                      onClick={alternarMacroCard}
+                                      title="Macros"
+                                      aria-label="Abrir macros"
+                                    >
+                                      <MessageSquareText size={18} />
+                                    </button>
+
+                                    {macroCardAberto && (
+                                      <div className={styles.macroPopover}>
+                                        <div className={styles.macroPopoverHeader}>
+                                          <strong>Macros</strong>
+                                          <button
+                                            type="button"
+                                            className={styles.macroPopoverNewButton}
+                                            onClick={abrirModalNovaMacro}
+                                          >
+                                            <Plus size={14} />
+                                            Nova
+                                          </button>
+                                        </div>
+
+                                        {carregandoMacros ? (
+                                          <div className={styles.macroPopoverEmpty}>
+                                            Carregando macros...
+                                          </div>
+                                        ) : macrosChat.length === 0 ? (
+                                          <div className={styles.macroPopoverEmpty}>
+                                            Nenhuma macro salva ainda.
+                                          </div>
+                                        ) : (
+                                          <div className={styles.macroPopoverList}>
+                                            {macrosChat.map((macro) => {
+                                              return (
+                                                <div
+                                                  key={macro.id}
+                                                  className={styles.macroPopoverItem}
+                                                >
+                                                  <div className={styles.macroPopoverTextButton}>
+                                                    <strong>{macro.titulo}</strong>
+                                                    <span>
+                                                      {limitarPreviewMacro(macro.conteudo, 80)}
+                                                    </span>
+                                                  </div>
+
+                                                  <button
+                                                    type="button"
+                                                    className={styles.macroSendButton}
+                                                    title="Enviar macro para o campo de mensagem"
+                                                    onClick={() => acionarEnvioMacro(macro)}
+                                                    disabled={enviando || !podeEnviarMensagem}
+                                                  >
+                                                    <Send size={14} />
+                                                    Enviar
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    className={styles.macroIconButton}
+                                                    title="Editar macro"
+                                                    onClick={() => abrirModalEditarMacro(macro)}
+                                                  >
+                                                    <Pencil size={15} />
+                                                  </button>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {emojiAberto && (
+                                  <div className={styles.emojiPicker}>
+                                    <EmojiPicker
+                                      onEmojiClick={(emojiData) => {
+                                        inserirEmojiNoEditor(emojiData.emoji);
+                                      }}
+                                    />
+                                  </div>
+                                )}
+
+                                {/* CAMPO */}
+                                <div className={styles.composerCenter}>
+                                  <div
+                                    ref={arquivoEnvio ? legendaEditorRef : editorRef}
+                                    className={styles.messageEditor}
+                                    contentEditable={
+                                      (arquivoEnvio ? podeEnviarMidia : podeEnviarMensagem) &&
+                                      !enviando &&
+                                      !gravandoAudio
+                                    }
+                                    suppressContentEditableWarning
+                                    data-placeholder={
+                                      !podeEnviarMensagem
+                                        ? "Você não pode responder esta conversa"
+                                        : arquivoEnvio
+                                        ? "Digite uma legenda..."
+                                        : gravandoAudio
+                                        ? "Gravando áudio..."
+                                        : "Digite uma mensagem"
+                                    }
+                                    onInput={(e) => {
+                                      const texto = (e.currentTarget as HTMLDivElement).textContent || "";
+
+                                      if (arquivoEnvio) {
+                                        legendaArquivoRef.current = texto;
+                                        setLegendaArquivo(texto);
+                                      } else {
+                                        conteudoRef.current = texto;
+                                        setConteudo(texto);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+
+                                        if (
+                                          enviando ||
+                                          !(arquivoEnvio ? podeEnviarMidia : podeEnviarMensagem) ||
+                                          gravandoAudio
+                                        ) return;
+
+                                        if (arquivoEnvio) {
+                                          enviarMidia();
+                                          return;
+                                        }
+
+                                        if (!conteudoRef.current.trim()) return;
+
+                                        enviarMensagem();
+                                      }
+                                    }}
+                                    role="textbox"
+                                    aria-multiline="true"
+                                  />
+                                </div>
+
+                                {/* DIREITA */}
+                                <div className={styles.composerRight}>
+                                  <AgendarMensagemButton
+                                    conversaId={conversaSelecionada.id}
+                                    contatoNome={conversaSelecionada.contatos?.nome}
+                                    texto={arquivoEnvio ? legendaArquivo : conteudo}
+                                    arquivo={arquivoEnvio}
+                                    podeAgendar={podeEnviarMensagem && janela24hAberta}
+                                    podeAgendarMidia={podeEnviarMidia}
+                                    gravandoAudio={gravandoAudio}
+                                    janela24h={janela24hConversa}
+                                    onAgendado={(mensagem) => {
+                                      if (arquivoEnvioPreviewUrl) {
+                                        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+                                      }
+                                      setArquivoEnvio(null);
+                                      setArquivoEnvioPreviewUrl(null);
+                                      setLegendaArquivo("");
+                                      legendaArquivoRef.current = "";
+                                      setConteudo("");
+                                      conteudoRef.current = "";
+                                      if (editorRef.current) editorRef.current.textContent = "";
+                                      if (legendaEditorRef.current) legendaEditorRef.current.textContent = "";
+                                      setMensagemSucesso(mensagem);
+                                      void atualizarConversasCarregadas();
+                                    }}
+                                  />
+
+                                  {podeEnviarMidia && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={abrirCamera}
+                                        disabled={!podeEnviarMidia || enviando}
+                                        className={styles.toolButton}
+                                        title="Câmera"
+                                      >
+                                        📷
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (gravandoAudio) {
+                                            pararGravacaoAudio();
+                                            return;
+                                          }
+
+                                          iniciarGravacaoAudio();
+                                        }}
+                                        disabled={!podeEnviarMidia || enviando}
+                                        className={styles.toolButton}
+                                        title={gravandoAudio ? "Parar gravação" : "Gravar áudio"}
+                                      >
+                                        {gravandoAudio ? "⏹" : "🎤"}
+                                      </button>
+                                    </>
+                                  )}
+
+                                  <button
+                                    onClick={() => {
+                                      if (arquivoEnvio) {
+                                        enviarMidia();
+                                        return;
+                                      }
+
+                                      enviarMensagem();
+                                    }}
+                                    disabled={
+                                      enviando ||
+                                      (arquivoEnvio ? !podeEnviarMidia : !podeEnviarMensagem) ||
+                                      gravandoAudio ||
+                                      (!arquivoEnvio && !conteudo.trim())
+                                    }
+                                    className={styles.sendButton}
+                                  >
+                                    {enviando ? "Enviando..." : arquivoEnvio ? "Enviar" : "Enviar"}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <p className={styles.footerHint}>
+                                Enter envia • Shift + Enter quebra linha
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {painelDireitoAberto && (
+                  <aside className={styles.rightPanel}>
+                    <div className={styles.rightPanelHeader}>
+                      <div className={styles.rightPanelHeaderLeft}>
+                        {abaPainelDireito !== "contato" && (
+                          <button
+                            type="button"
+                            className={styles.backButton}
+                            onClick={async () => {
+                              setAbaPainelDireito("contato");
+                              await limparFiltroDeProtocolo();
+                            }}
+                            title="Voltar para o contato"
+                          >
+                            ←
+                          </button>
+                        )}
+
+                        <div className={styles.rightPanelTitleWrap}>
+                          <h3 className={styles.rightPanelTitle}>
+                              {abaPainelDireito === "contato"
+                                ? "Detalhes do contato"
+                                : abaPainelDireito === "detalhes"
+                                ? "Detalhes"
+                                : abaPainelDireito === "historico"
+                                ? "Histórico"
+                                : abaPainelDireito === "notas"
+                                ? "Notas"
+                                : abaPainelDireito === "listas"
+                                ? "Listas"
+                                : abaPainelDireito === "etiquetas"
+                                ? "Etiquetas"
+                                : abaPainelDireito === "macros"
+                                ? "Macros"
+                                : abaPainelDireito === "informacoes_captura"
+                                ? "Informações captura"
+                                : abaPainelDireito === "midia_docs_links"
+                                ? "Mídias, links e documentos"
+                                : "Mensagens favoritas"}
+                          </h3>
+
+                          {abaPainelDireito === "midia_docs_links" && (
+                            <div className={styles.mediaExpiryInfoWrap}>
+                              <button
+                                type="button"
+                                className={styles.mediaExpiryInfoButton}
+                                title="Informações sobre expiração de mídia"
+                              >
+                                i
+                              </button>
+
+                              <div className={styles.mediaExpiryInfoTooltip}>
+                                  Mídias recebidas pelo WhatsApp podem expirar em até 7 dias.
+                                  Para manter acesso a imagens, vídeos, áudios e arquivos após esse período,
+                                  baixe a mídia enquanto ela ainda estiver disponível.
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        className={styles.textButton}
+                        onClick={async () => {
+                          setPainelDireitoAberto(false);
+                          await limparFiltroDeProtocolo();
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className={styles.rightPanelBody}>
+                      {abaPainelDireito === "detalhes" && (
+                        <div className={styles.panelSectionStack}>
+                          <div className={styles.detailCardGrid}>
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Assunto</span>
+                              <strong className={styles.detailValue}>
+                                {conversaSelecionada.assunto || "Sem assunto"}
+                              </strong>
+                            </div>
+
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Canal</span>
+                              <strong className={styles.detailValue}>
+                                {getCanalLabel(conversaSelecionada.canal)}
+                              </strong>
+                            </div>
+
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Status</span>
+                              <strong className={styles.detailValue}>
+                                {getStatusLabel(conversaSelecionada.status)}
+                              </strong>
+                            </div>
+
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Setor</span>
+                              <strong className={styles.detailValue}>
+                                {conversaSelecionada.setores?.nome || "Sem setor"}
+                              </strong>
+                            </div>
+
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Responsável</span>
+                              <strong className={styles.detailValue}>
+                                {conversaSelecionada.responsavel?.nome ||
+                                  "Sem responsável"}
+                              </strong>
+                            </div>
+
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Prioridade</span>
+                              <strong className={styles.detailValue}>
+                                {getPrioridadeLabel(conversaSelecionada.prioridade)}
+                              </strong>
+                            </div>
+
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Origem Atendimento</span>
+                              <strong className={styles.detailValue}>
+                                {conversaSelecionada.origem_atendimento ||
+                                  "Não informada"}
+                              </strong>
+                            </div>
+
+                            <div className={styles.detailCard}>
+                              <span className={styles.detailLabel}>Última atividade</span>
+                              <strong className={styles.detailValue}>
+                                {formatarDataCompleta(conversaSelecionada.last_message_at)}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {podeVisualizarRastreamento && (
+                          <div className={styles.trackingResultCard}>
+                            <div className={styles.trackingResultHeader}>
+                              <div>
+                                <span className={styles.detailLabel}>Resultado comercial</span>
+                                <strong className={styles.trackingResultTitle}>
+                                  Eventos manuais da conversa
+                                </strong>
+                              </div>
+
+                              {podeGerenciarRastreamento && (
+                              <button
+                                type="button"
+                                className={styles.secondaryButton}
+                                onClick={abrirModalNovoEventoRastreamento}
+                              >
+                                Registrar resultado
+                              </button>
+                              )}
+                            </div>
+
+                            {carregandoEventosRastreamento ? (
+                              <div className={styles.infoBoxMuted}>
+                                Carregando eventos comerciais...
+                              </div>
+                            ) : eventosRastreamentoConversa.length === 0 ? (
+                              <div className={styles.infoBoxMuted}>
+                                Nenhum resultado comercial manual registrado nesta conversa.
+                              </div>
+                            ) : (
+                              <div className={styles.trackingEventList}>
+                                {eventosRastreamentoConversa.map((evento) => (
+                                  <div
+                                    key={evento.id}
+                                    className={styles.trackingEventItem}
+                                  >
+                                    <div className={styles.trackingEventInfo}>
+                                      <strong>
+                                        {getEventoRastreamentoLabel(evento.tipo)}
+                                      </strong>
+                                      <span>
+                                        {evento.metadata_json?.protocolo
+                                          ? `Protocolo ${evento.metadata_json.protocolo} | `
+                                          : ""}
+                                        {formatarDataCompleta(evento.ocorrido_em)}
+                                      </span>
+                                      {evento.metadata_json?.observacao && (
+                                        <p>{evento.metadata_json.observacao}</p>
+                                      )}
+                                    </div>
+
+                                    <div className={styles.trackingEventActions}>
+                                      {formatarValorRastreamento(evento.valor) && (
+                                        <b>{formatarValorRastreamento(evento.valor)}</b>
+                                      )}
+
+                                      {podeGerenciarRastreamento && (
+                                      <div className={styles.listaActions}>
+                                        <button
+                                          type="button"
+                                          className={styles.listaIconButton}
+                                          title="Editar evento"
+                                          onClick={() =>
+                                            abrirModalEditarEventoRastreamento(evento)
+                                          }
+                                        >
+                                          Editar
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
+                                          title="Apagar evento"
+                                          onClick={() =>
+                                            excluirEventoRastreamento(evento.id)
+                                          }
+                                        >
+                                          X
+                                        </button>
+                                      </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          )}
+                         </div>
+                      )}
+
+                      {abaPainelDireito === "contato" && (
+                        <div className={styles.whatsContactPanel}>
+                          <div className={styles.whatsContactHero}>
+                            <div className={styles.whatsContactAvatar}>
+                              {getIniciais(conversaSelecionada.contatos?.nome)}
+                            </div>
+
+                            {editandoCampo === "nome" ? (
+                              <div className={styles.whatsContactNameEditBlock}>
+                                <input
+                                  className={styles.whatsContactNameInput}
+                                  value={nomeContatoEditando}
+                                  onChange={(e) => setNomeContatoEditando(e.target.value)}
+                                  autoFocus
+                                  placeholder="Nome do contato"
+                                />
+
+                                <div className={styles.whatsContactNameEditActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.inlineCancelButton}
+                                    onClick={() => {
+                                      setNomeContatoEditando(conversaSelecionada.contatos?.nome || "");
+                                      setEditandoCampo(null);
+                                    }}
+                                  >
+                                    Cancelar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.inlineSaveButton}
+                                    onClick={() => salvarContatoCampo("nome", nomeContatoEditando)}
+                                  >
+                                    Salvar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className={styles.whatsContactNameRow}>
+                                <h4 className={styles.whatsContactName}>
+                                  {conversaSelecionada.contatos?.nome || "Sem nome"}
+                                </h4>
+
+                                {podeEditarContatoConversa && (
+                                  <button
+                                    type="button"
+                                    className={styles.whatsContactNameEditButton}
+                                    onClick={() => {
+                                      setNomeContatoEditando(conversaSelecionada.contatos?.nome || "");
+                                      setEditandoCampo("nome");
+                                    }}
+                                    title="Editar nome"
+                                    aria-label="Editar nome do contato"
+                                  >
+                                    <Pencil size={14} strokeWidth={2} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            <p className={styles.whatsContactPhone}>
+                              {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                            </p>
+
+                            <div className={styles.whatsContactActions}>
+                              <button
+                                type="button"
+                                className={styles.whatsContactActionButton}
+                                onClick={() => {
+                                  setAbaPainelDireito("detalhes");
+                                  setPainelDireitoAberto(true);
+                                }}
+                              >
+                                <span className={styles.whatsContactActionIcon}>◈</span>
+                                <span className={styles.whatsContactActionText}>Detalhes</span>
+                              </button>
+
+                              <ContatoCadastroNichoAction
+                                key={conversaSelecionada.contatos?.id}
+                                contato={conversaSelecionada.contatos}
+                              />
+                            </div>
+                          </div>
+
+                          <div className={styles.whatsContactSection}>
+                            <div className={styles.whatsSectionHeader}>
+                              <span>Informações do contato</span>
+                            </div>
+
+                            <div className={styles.whatsInfoList}>
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>PROTOCOLO</span>
+
+                                <div className={styles.protocolRow}>
+                                  <strong className={styles.whatsInfoValue}>
+                                    {conversaSelecionada.protocolo || "Não gerado"}
+                                  </strong>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      setAbaPainelDireito("historico");
+                                      setPainelDireitoAberto(true);
+                                      setMenuContatoAberto(false);
+                                      setPaginaHistorico(1);
+
+                                      await carregarProtocolosDaConversa();
+                                    }}
+                                    className={styles.protocolSmallButton}
+                                  >
+                                    Ver outros
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>Telefone</span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {conversaSelecionada.contatos?.telefone || "Sem telefone"}
+                                </strong>
+                              </div>
+
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>Nome WhatsApp</span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {conversaSelecionada.contatos?.whatsapp_profile_name ||
+                                    "Sem nome WhatsApp"}
+                                </strong>
+                              </div>
+
+                              <CampoContatoEditavel
+                                label="E-MAIL"
+                                valorInicial={conversaSelecionada.contatos?.email || ""}
+                                editando={editandoCampo === "email"}
+                                onEditar={() => setEditandoCampo("email")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("email", valor)}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
+                              <CampoContatoEditavel
+                                label="EMPRESA"
+                                valorInicial={conversaSelecionada.contatos?.empresa || ""}
+                                editando={editandoCampo === "empresa"}
+                                onEditar={() => setEditandoCampo("empresa")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>
+                                  Categoria do lead
+                                </span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {categoriaLeadProtocoloAtual}
+                                </strong>
+                              </div>
+
+                              <CampanhaContatoEditavel
+                                valorInicial={obterNomeCampanhaContato(
+                                  conversaSelecionada.contatos
+                                )}
+                                campanhaIdInicial={
+                                  conversaSelecionada.contatos
+                                    ?.rastreamento_campanha_id || ""
+                                }
+                                campanhas={campanhasRastreamentoContato}
+                                editando={editandoCampo === "campanha"}
+                                onEditar={() => setEditandoCampo("campanha")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={salvarContatoCampanha}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
+                              <CampoContatoEditavel
+                                label="OBSERVAÇÕES"
+                                valorInicial={conversaSelecionada.contatos?.observacoes || ""}
+                                editando={editandoCampo === "observacoes"}
+                                multiline
+                                onEditar={() => setEditandoCampo("observacoes")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
+                              {informacoesCapturaResumo.map((informacao) => (
+                                <CampoContatoEditavel
+                                  key={informacao.id}
+                                  label={formatarLabelCapturaResumo(
+                                    informacao
+                                  ).toUpperCase()}
+                                  valorInicial={informacao.valor}
+                                  editando={
+                                    editandoCampo === `captura:${informacao.id}`
+                                  }
+                                  multiline={obterTipoCaptura(informacao) === "observacao"}
+                                  onEditar={() =>
+                                    setEditandoCampo(`captura:${informacao.id}`)
+                                  }
+                                  onCancelar={() => setEditandoCampo(null)}
+                                  onSalvar={(valor) =>
+                                    void salvarInformacaoCaptura(informacao, valor)
+                                  }
+                                  onExcluir={() =>
+                                    void excluirInformacaoCaptura(informacao)
+                                  }
+                                  podeEditar={podeEditarContatoConversa}
+                                />
+                              ))}
+
+                              {possuiInformacoesCapturaExtras && (
+                                <div className={styles.whatsInfoRow}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() => {
+                                      setAbaPainelDireito("informacoes_captura");
+                                      setPainelDireitoAberto(true);
+                                      setEditandoCampo(null);
+                                    }}
+                                  >
+                                    Ver mais
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className={styles.whatsDivider} />
+
+                          <div className={styles.whatsLinksSection}>
+                            {/* Mídia */}
+                            <button
+                              type="button"
+                              className={styles.whatsListActionButton}
+                              onClick={() => {
+                                setPainelDireitoAberto(true);
+                                setAbaPainelDireito("midia_docs_links");
+                                setAbaMidiaDocsLinks("midia");
+                              }}
+                            >
+                              <span className={styles.whatsListActionLeft}>
+                                <span className={styles.whatsListActionIcon}>🖼️</span>
+                                <span className={styles.whatsListActionLabel}>
+                                  Mídias, links e documentos
+                                </span>
+                              </span>
+                              <span className={styles.whatsListActionRight}>
+                                {midiaDocsLinksAgrupados.reduce((total, grupo) => total + grupo.itens.length, 0)}
+                              </span>
+                            </button>
+
+                            {/* Favoritas */}
+                            <button
+                              type="button"
+                              className={styles.whatsListActionButton}
+                              onClick={() => {
+                                setAbaPainelDireito("mensagens_favoritas");
+                                setPainelDireitoAberto(true);
+                                if (conversaSelecionada?.id) {
+                                  void carregarMensagensFavoritasPainel(
+                                    conversaSelecionada.id,
+                                    true
+                                  );
+                                }
+                              }}
+                            >
+                              <span className={styles.whatsListActionLeft}>
+                                <span className={styles.whatsListActionIcon}>⭐</span>
+
+                                <span className={styles.whatsListActionLabel}>
+                                  Mensagens favoritas
+                                </span>
+                              </span>
+
+                              {quantidadeMensagensFavoritas > 0 && (
+                                <span className={styles.whatsListActionRight}>
+                                  {quantidadeMensagensFavoritas}
+                                </span>
+                              )}
+                            </button>
+
+                            {/* NOVOS BOTÕES 👇 */}
+
+                            {/* Detalhes */}
+                            <button
+                              type="button"
+                              className={styles.whatsListActionButton}
+                              onClick={() => setAbaPainelDireito("detalhes")}
+                            >
+                              <span className={styles.whatsListActionLeft}>
+                                <span className={styles.whatsListActionIcon}>ℹ️</span>
+                                <span className={styles.whatsListActionLabel}>Detalhes</span>
+                              </span>
+                            </button>
+
+                            {/* Histórico */}
+                            <button
+                              type="button"
+                              className={styles.whatsListActionButton}
+                              onClick={() => setAbaPainelDireito("historico")}
+                            >
+                              <span className={styles.whatsListActionLeft}>
+                                <span className={styles.whatsListActionIcon}>🕓</span>
+                                <span className={styles.whatsListActionLabel}>Histórico</span>
+                              </span>
+                            </button>
+
+                            {/* Notas */}
+                            {podeGerenciarNotas && (
+                            <button
+                              type="button"
+                              className={styles.whatsListActionButton}
+                              onClick={async () => {
+                                setAbaPainelDireito("notas");
+                                setPainelDireitoAberto(true);
+                                await carregarNotasDaConversa();
+                              }}
+                            >
+                              <span className={styles.whatsListActionLeft}>
+                                <span className={styles.whatsListActionIcon}>📝</span>
+                                <span className={styles.whatsListActionLabel}>Notas</span>
+                              </span>
+
+                              {quantidadeNotas > 0 && (
+                                <span className={styles.whatsListActionRight}>
+                                  {quantidadeNotas}
+                                </span>
+                              )}
+                            </button>
+                            )}
+
+                            {podeGerenciarEtiquetas && (
+                            <button
+                              type="button"
+                              className={styles.whatsListActionButton}
+                              onClick={async () => {
+                                setAbaPainelDireito("etiquetas");
+                                setPainelDireitoAberto(true);
+                                await carregarEtiquetasEmpresa();
+                              }}
+                            >
+                              <span className={styles.whatsListActionLeft}>
+                                <span className={styles.whatsListActionIcon}>🏷️</span>
+                                <span className={styles.whatsListActionLabel}>Etiquetas</span>
+                              </span>
+
+                              {conversaSelecionada.etiquetas ? (
+                                <EtiquetaCor 
+                                  etiqueta={conversaSelecionada.etiquetas} 
+                                  className={styles.etiquetaAtualPreview}
+                                  mostrarTooltip={false}
+                                />
+                              ) : (
+                                <span className={styles.whatsListActionRight}>Não</span>
+                              )}
+                            </button>
+                            )}
+                          </div>
+
+                          <div className={styles.whatsContactSection}>
+                            <div className={styles.whatsSectionHeader}>
+                              <span>Ações</span>
+                            </div>
+
+                            <div className={styles.whatsActionList}>
+                              <button
+                                type="button"
+                                className={styles.whatsSecondaryAction}
+                                onClick={async () => {
+                                  setMenuContatoAberto(false);
+                                  await alternarFavorito();
+                                }}
+                              >
+                                {conversaSelecionada?.favorita
+                                      ? "★ Remover dos favoritos"
+                                      : "✰ Adicionar aos favoritos"}
+                              </button>
+
+                              <button
+                                type="button"
+                                className={styles.whatsSecondaryAction}
+                                onClick={async () => {
+                                  setPainelDireitoAberto(true);
+                                  setAbaPainelDireito("listas");
+                                  setMenuContatoAberto(false);
+                                  await carregarListasDaConversa();
+                                }}
+                              >
+                                ⊞ Adicionar à lista
+                              </button>
+
+                              {podeTransferir && (
+                                <button
+                                  type="button"
+                                  className={styles.whatsSecondaryAction}
+                                  onClick={() => {
+                                    setMenuContatoAberto(false);
+                                    abrirTransferir();
+                                  }}
+                                >
+                                  ⇄ Transferir conversa
+                                </button>
+                              )}
+
+                              {podeEncerrar && (
+                                <button
+                                  type="button"
+                                  className={styles.whatsDangerAction}
+                                  onClick={() => {
+                                    setMenuContatoAberto(false);
+                                    abrirEncerrar();
+                                  }}
+                                >
+                                  ⛔ Encerrar conversa
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "informacoes_captura" && (
+                        <div className={styles.whatsContactPanel}>
+                          <div className={styles.whatsContactSection}>
+                            <div className={styles.whatsSectionHeader}>
+                              <span>Todos os campos capturados</span>
+                            </div>
+
+                            {carregandoInformacoesCaptura ? (
+                              <div className={styles.infoBoxMuted}>
+                                Carregando informações de captura...
+                              </div>
+                            ) : informacoesCapturaConversaOrdenadas.length === 0 ? (
+                              <div className={styles.infoBoxMuted}>
+                                Nenhuma informação foi capturada para este contato.
+                              </div>
+                            ) : (
+                              <div className={styles.whatsInfoList}>
+                                {informacoesCapturaConversaOrdenadas.map(
+                                  (informacao) => (
+                                    <CampoContatoEditavel
+                                      key={informacao.id}
+                                      label={formatarLabelCapturaDetalhada(
+                                        informacao
+                                      ).toUpperCase()}
+                                      valorInicial={informacao.valor}
+                                      editando={
+                                        editandoCampo ===
+                                        `captura:${informacao.id}`
+                                      }
+                                      multiline={
+                                        obterTipoCaptura(informacao) ===
+                                        "observacao"
+                                      }
+                                      onEditar={() =>
+                                        setEditandoCampo(
+                                          `captura:${informacao.id}`
+                                        )
+                                      }
+                                      onCancelar={() => setEditandoCampo(null)}
+                                      onSalvar={(valor) =>
+                                        void salvarInformacaoCaptura(
+                                          informacao,
+                                          valor
+                                        )
+                                      }
+                                      onExcluir={() =>
+                                        void excluirInformacaoCaptura(
+                                          informacao
+                                        )
+                                      }
+                                      podeEditar={podeEditarContatoConversa}
+                                    />
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "historico" && (
+                        <div className={styles.panelSectionStack}>
+                          <div className={styles.infoBoxMuted}>
+                            {protocoloSelecionadoId
+                              ? `Visualizando apenas as mensagens do protocolo ${protocoloSelecionadoNumero}.`
+                              : "Visualizando todas as mensagens da conversa."}
+                          </div>
+
+                          <div className={styles.listaInlineActions}>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={async () => {
+                                if (!conversaSelecionada?.id) return;
+
+                                definirProtocoloSelecionado(null);
+                                const janelaInicial = calcularJanelaInicialPorUltimaMensagem(
+                                  conversaSelecionada.last_message_at
+                                );
+
+                                await carregarMensagens(
+                                  conversaSelecionada.id,
+                                  false,
+                                  null,
+                                  janelaInicial.inicio,
+                                  janelaInicial.fim
+                                );
+                              }}
+                            >
+                              Ver conversa completa
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={async () => {
+                                setPaginaHistorico(1);
+                                await carregarProtocolosDaConversa();
+                              }}
+                              disabled={carregandoProtocolos}
+                            >
+                              {carregandoProtocolos
+                                ? "Atualizando..."
+                                : "Atualizar protocolos"}
+                            </button>
+                          </div>
+                          {carregandoProtocolos ? (
+                            <div className={styles.infoBoxMuted}>
+                              Carregando protocolos...
+                            </div>
+                          ) : protocolosConversa.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhum protocolo encontrado para esta conversa.
+                            </div>
+                          ) : (
+                            <div className={styles.historyPaginationLayout}>
+                              <div className={styles.historyPaginationList}>
+                                {protocolosPaginaHistorico.map((protocolo) => (
+                                  <div
+                                    key={protocolo.id}
+                                    className={styles.historyCard}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: 12,
+                                        alignItems: "flex-start",
+                                        marginBottom: 8,
+                                      }}
+                                    >
+                                      <div>
+                                        <h4 className={styles.historyTitle}>
+                                          {protocolo.protocolo}
+                                        </h4>
+
+                                        <p className={styles.historyText}>
+                                          {protocolo.tipo === "abertura"
+                                            ? "Abertura"
+                                            : "Reabertura"}
+
+                                          {protocolo.ativo
+                                            ? " • Ativo"
+                                            : " • Encerrado"}
+                                        </p>
+                                      </div>
+
+                                      {protocolo.ativo && (
+                                        <span className={styles.statusMiniBadge}>
+                                          Atual
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <p className={styles.historyText}>
+                                      Início:{" "}
+                                      {formatarDataCompleta(protocolo.started_at)}
+                                    </p>
+
+                                    <p className={styles.historyText}>
+                                      Encerramento:{" "}
+                                      {protocolo.closed_at
+                                        ? formatarDataCompleta(protocolo.closed_at)
+                                        : "Em aberto"}
+                                    </p>
+
+                                    <div className={styles.listaInlineActions}>
+                                      <button
+                                        type="button"
+                                        className={styles.primaryButton}
+                                        onClick={async () => {
+                                          if (!conversaSelecionada?.id) return;
+
+                                          definirProtocoloSelecionado(
+                                            protocolo.id,
+                                            protocolo.protocolo
+                                          );
+
+                                          setInicioJanelaHistorico(null);
+                                          setFimJanelaHistorico(null);
+                                          setTemMaisHistorico(false);
+
+                                          await carregarMensagens(
+                                            conversaSelecionada.id,
+                                            false,
+                                            protocolo.id,
+                                            null,
+                                            null
+                                          );
+                                        }}
+                                      >
+                                        Ver mensagens deste protocolo
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className={styles.historyPagination}>
+                                <div className={styles.historyPaginationInfo}>
+                                  <strong>
+                                    {primeiroRegistroHistorico}–
+                                    {ultimoRegistroHistorico}
+                                  </strong>
+
+                                  <span>
+                                    de {protocolosConversa.length} protocolos
+                                  </span>
+                                </div>
+
+                                <div className={styles.historyPaginationControls}>
+                                  <button
+                                    type="button"
+                                    className={styles.historyPaginationButton}
+                                    onClick={() => {
+                                      setPaginaHistorico((paginaAtual) =>
+                                        Math.max(1, paginaAtual - 1)
+                                      );
+                                    }}
+                                    disabled={paginaHistorico === 1}
+                                  >
+                                    Anterior
+                                  </button>
+
+                                  <span className={styles.historyPaginationPage}>
+                                    Página {paginaHistorico} de{" "}
+                                    {totalPaginasHistorico}
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    className={styles.historyPaginationButton}
+                                    onClick={() => {
+                                      setPaginaHistorico((paginaAtual) =>
+                                        Math.min(
+                                          totalPaginasHistorico,
+                                          paginaAtual + 1
+                                        )
+                                      );
+                                    }}
+                                    disabled={
+                                      paginaHistorico === totalPaginasHistorico
+                                    }
+                                  >
+                                    Próxima
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "notas" && podeGerenciarNotas && (
+                        <div className={styles.panelSectionStack}>
+                          <div className={styles.noteComposer}>
+                            <div className={styles.noteComposerHeader}>
+                              <label className={styles.actionLabel}>Nova nota interna</label>
+
+                              <span className={styles.noteCharCounter}>
+                                {notaInterna.length}/{LIMITE_CARACTERES_NOTA}
+                              </span>
+                            </div>
+
+                            <textarea
+                              className={styles.noteInput}
+                              rows={4}
+                              value={notaInterna}
+                              onChange={(e) => setNotaInterna(e.target.value)}
+                              placeholder="Digite uma observação interna sobre esta conversa"
+                              maxLength={LIMITE_CARACTERES_NOTA}
+                            />
+
+                            <button
+                              className={styles.primaryButton}
+                              type="button"
+                              disabled={salvandoNota || !notaInterna.trim()}
+                              onClick={salvarNovaNota}
+                            >
+                              {salvandoNota ? "Salvando..." : "Salvar nota"}
+                            </button>
+                            
+                          </div>
+
+                          {notasConversa.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhuma nota cadastrada para esta conversa ainda.
+                            </div>
+                          ) : (
+                            notasConversa.map((nota) => (
+                              <div key={nota.id} className={styles.noteCard}>
+                                {notaEditandoId === nota.id ? (
+                                  <>
+                                    <textarea
+                                      className={styles.noteInput}
+                                      rows={4}
+                                      value={notaEditandoTexto}
+                                      onChange={(e) => setNotaEditandoTexto(e.target.value)}
+                                      maxLength={LIMITE_CARACTERES_NOTA}
+                                    />
+
+
+                                    
+                                    <div className={styles.actionButtons}>
+                                      <button
+                                        type="button"
+                                        className={styles.secondaryButton}
+                                        onClick={() => {
+                                          setNotaEditandoId(null);
+                                          setNotaEditandoTexto("");
+                                        }}
+                                      >
+                                        Cancelar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={styles.primaryButton}
+                                        disabled={salvandoNota || !notaEditandoTexto.trim()}
+                                        onClick={() => atualizarNota(nota.id)}
+                                      >
+                                        Salvar
+                                      </button>
+
+                                      <div className={styles.noteCharCounterEdit}>
+                                        {notaEditandoTexto.length}/{LIMITE_CARACTERES_NOTA}
+                                      </div>
+
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className={styles.noteCardHeader}>
+                                      <div>
+                                        <strong className={styles.noteAuthor}>
+                                          {nota.autor?.nome || "Usuário"}
+                                        </strong>
+                                        <div className={styles.noteDate}>
+                                          {formatarDataCompleta(nota.created_at)}
+                                        </div>
+                                      </div>
+
+                                      <div className={styles.listaActions}>
+                                        <button
+                                          type="button"
+                                          className={styles.listaIconButton}
+                                          title="Editar nota"
+                                          onClick={() => {
+                                            setNotaEditandoId(nota.id);
+                                            setNotaEditandoTexto(nota.conteudo);
+                                          }}
+                                        >
+                                          ✎
+                                        </button>
+
+                                        {notaConfirmandoExclusaoId === nota.id ? (
+                                          <div className={styles.noteDeleteConfirmActions}>
+                                            <button
+                                              type="button"
+                                              className={styles.noteDeleteCancelButton}
+                                              onClick={() => setNotaConfirmandoExclusaoId(null)}
+                                            >
+                                              Cancelar
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              className={styles.noteDeleteConfirmButton}
+                                              onClick={() => excluirNota(nota.id)}
+                                            >
+                                              Excluir
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
+                                            title="Excluir nota"
+                                            onClick={() => setNotaConfirmandoExclusaoId(nota.id)}
+                                          >
+                                            ×
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <p className={styles.noteText}>{nota.conteudo}</p>
+                                  </>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "macros" && (
+                        <div className={styles.macroPanel}>
+                          <div className={styles.macroPanelActions}>
+                            <button
+                              type="button"
+                              className={`${styles.primaryButton} ${styles.macroActionButton}`}
+                              onClick={abrirModalNovaMacro}
+                            >
+                              <Plus size={14} />
+                              Nova macro
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`${styles.secondaryButton} ${styles.macroActionButton}`}
+                              onClick={abrirModalVariavel}
+                            >
+                              <Variable size={14} />
+                              Gerenciar
+                            </button>
+                          </div>
+
+                          <p className={styles.macroFixedVariablesText}>
+                            {TEXTO_VARIAVEIS_FIXAS_MACRO}
+                          </p>
+
+                          {carregandoMacros ? (
+                            <div className={styles.infoBoxMuted}>
+                              Carregando macros...
+                            </div>
+                          ) : macrosChat.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhuma macro salva ainda.
+                            </div>
+                          ) : (
+                            <div className={styles.macroList}>
+                              {macrosChat.map((macro) => {
+                                return (
+                                  <div key={macro.id} className={styles.macroCard}>
+                                    <div className={styles.macroCardText}>
+                                      <strong className={styles.macroCardTitle}>
+                                        {macro.titulo}
+                                      </strong>
+                                      <p className={styles.macroCardPreview}>
+                                        {limitarPreviewMacro(macro.conteudo)}
+                                      </p>
+                                    </div>
+
+                                    <div className={styles.macroCardActions}>
+                                      <button
+                                        type="button"
+                                        className={styles.macroSendButton}
+                                        title="Enviar macro para o campo de mensagem"
+                                        onClick={() => acionarEnvioMacro(macro)}
+                                        disabled={enviando || !podeEnviarMensagem}
+                                      >
+                                        <Send size={15} />
+                                        Enviar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={styles.macroIconButton}
+                                        title="Editar macro"
+                                        onClick={() => abrirModalEditarMacro(macro)}
+                                      >
+                                        <Pencil size={15} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "etiquetas" && podeGerenciarEtiquetas && (
+                        <div className={styles.panelSectionStack}>
+                          <div className={styles.etiquetaAtualCard}>
+                            <div className={styles.etiquetaAtualLabel}>
+                              Etiqueta desta conversa
+                            </div>
+
+                            {conversaSelecionada.etiquetas ? (
+                              <>
+                                <div className={styles.etiquetaAtualInfo}>
+                                  <EtiquetaCor
+                                    etiqueta={conversaSelecionada.etiquetas}
+                                    className={styles.etiquetaAtualPreview}
+                                    mostrarTooltip={false}
+                                  />
+
+                                  <div className={styles.etiquetaAtualTextos}>
+                                    <strong>{conversaSelecionada.etiquetas.nome}</strong>
+
+                                    {conversaSelecionada.etiquetas.descricao && (
+                                      <span>{conversaSelecionada.etiquetas.descricao}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className={styles.listaInlineActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    disabled={salvandoEtiqueta}
+                                    onClick={() => definirEtiquetaDaConversa(null)}
+                                  >
+                                    Remover etiqueta
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={async () => {
+                                      setSelecionandoEtiqueta(true);
+                                      setMostrarFormularioEtiqueta(false);
+                                      setEtiquetaConfirmandoExclusaoId(null);
+                                      await carregarEtiquetasEmpresa();
+                                    }}
+                                  >
+                                    Alterar etiqueta
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() => {
+                                      if (!conversaSelecionada.etiquetas) return;
+
+                                      iniciarEdicaoEtiqueta(conversaSelecionada.etiquetas);
+                                    }}
+                                  >
+                                    Editar etiqueta
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className={styles.infoBoxMuted}>
+                                  Esta conversa está sem etiqueta.
+                                </div>
+
+                                <div className={styles.listaInlineActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.primaryButton}
+                                    onClick={async () => {
+                                      setSelecionandoEtiqueta(true);
+                                      setMostrarFormularioEtiqueta(false);
+                                      setEtiquetaConfirmandoExclusaoId(null);
+                                      await carregarEtiquetasEmpresa();
+                                    }}
+                                  >
+                                    Adicionar etiqueta
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {selecionandoEtiqueta && (
+                            <>
+                              <div className={styles.listaCardWrap}>
+                                {carregandoEtiquetas ? (
+                                  <div className={styles.infoBoxMuted}>
+                                    Carregando etiquetas...
+                                  </div>
+                                ) : etiquetasEmpresa.length === 0 ? (
+                                  <div className={styles.infoBoxMuted}>
+                                    Nenhuma etiqueta criada para esta empresa ainda.
+                                  </div>
+                                ) : (
+                                  etiquetasEmpresa.map((etiqueta) => {
+                                    const estaSelecionada =
+                                      conversaSelecionada.etiqueta_id === etiqueta.id;
+
+                                    return (
+                                      <div key={etiqueta.id} className={styles.listaCardWrap}>
+                                        <div className={styles.listaCard}>
+                                          <button
+                                            type="button"
+                                            className={`${styles.listaMainButton} ${
+                                              estaSelecionada ? styles.etiquetaCardAtiva : ""
+                                            }`}
+                                            onClick={async () => {
+                                              await definirEtiquetaDaConversa(etiqueta.id);
+                                              setSelecionandoEtiqueta(false);
+                                            }}
+                                          >
+                                            <div className={styles.listaMainLeft}>
+                                              <EtiquetaCor
+                                                etiqueta={etiqueta}
+                                                className={styles.etiquetaListaPreview}
+                                                mostrarTooltip={false}
+                                              />
+
+                                              <div className={styles.etiquetaListaTextos}>
+                                                <span className={styles.listaNome}>
+                                                  {etiqueta.nome}
+                                                </span>
+
+                                                <span className={styles.etiquetaDescricaoLinha}>
+                                                  {etiqueta.descricao || "Sem descrição"}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </button>
+
+                                          <div className={styles.listaActions}>
+                                            <button
+                                              type="button"
+                                              className={styles.listaIconButton}
+                                              title="Editar etiqueta"
+                                              onClick={() => iniciarEdicaoEtiqueta(etiqueta)}
+                                            >
+                                              ✎
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
+                                              title="Excluir etiqueta"
+                                              onClick={() =>
+                                                setEtiquetaConfirmandoExclusaoId((atual) =>
+                                                  atual === etiqueta.id ? null : etiqueta.id
+                                                )
+                                              }
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {etiquetaConfirmandoExclusaoId === etiqueta.id && (
+                                          <div className={styles.listaInlinePanelDanger}>
+                                            <p className={styles.listaConfirmText}>
+                                              Deseja excluir a etiqueta{" "}
+                                              <strong>{etiqueta.nome}</strong>?
+                                            </p>
+
+                                            <div className={styles.listaInlineActions}>
+                                              <button
+                                                type="button"
+                                                className={styles.secondaryButton}
+                                                onClick={() =>
+                                                  setEtiquetaConfirmandoExclusaoId(null)
+                                                }
+                                              >
+                                                Cancelar
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                className={styles.dangerButton}
+                                                disabled={salvandoEtiqueta}
+                                                onClick={() => excluirEtiquetaEmpresa(etiqueta.id)}
+                                              >
+                                                {salvandoEtiqueta ? "Excluindo..." : "Excluir"}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+
+                              <div className={styles.listaInlineActions}>
+                                <button
+                                  type="button"
+                                  className={styles.primaryButton}
+                                  onClick={iniciarCriacaoEtiqueta}
+                                >
+                                  Criar nova etiqueta
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() => {
+                                    setSelecionandoEtiqueta(false);
+                                    resetarFormularioEtiqueta();
+                                  }}
+                                >
+                                  Fechar
+                                </button>
+                              </div>
+                            </>
+                          )}
+
+                          {mostrarFormularioEtiqueta && (
+                            <div className={styles.listaInlinePanel}>
+                              <div className={styles.noteComposer}>
+                                <label className={styles.actionLabel}>Nome</label>
+                                <input
+                                  className={styles.searchInput}
+                                  value={etiquetaForm.nome}
+                                  maxLength={30}
+                                  onChange={(e) =>
+                                    setEtiquetaForm((atual) => ({
+                                      ...atual,
+                                      nome: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Ex.: Cliente premium"
+                                />
+                                <div className={styles.etiquetaContador}>
+                                  {etiquetaForm.nome.length}/30
+                                </div>
+
+                                <label className={styles.actionLabel}>Descrição</label>
+                                <textarea
+                                  className={styles.noteInput}
+                                  rows={3}
+                                  value={etiquetaForm.descricao}
+                                  maxLength={120}
+                                  onChange={(e) =>
+                                    setEtiquetaForm((atual) => ({
+                                      ...atual,
+                                      descricao: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Descreva o uso dessa etiqueta"
+                                />
+                                <div className={styles.etiquetaContador}>
+                                  {etiquetaForm.descricao.length}/120
+                                </div>
+
+                                <label className={styles.actionLabel}>Cor</label>
+                                <div className={styles.etiquetaCoresGrid}>
+                                  {ETIQUETAS_PADRAO.map((cor) => {
+                                    const ativa = etiquetaForm.cor === cor;
+
+                                    return (
+                                      <button
+                                        key={cor}
+                                        type="button"
+                                        className={`${styles.etiquetaCorOpcao} ${
+                                          ativa ? styles.etiquetaCorOpcaoAtiva : ""
+                                        }`}
+                                        style={{
+                                          background: hexToRgba(cor, 0.26),
+                                          border: `1px solid ${hexToRgba(cor, 0.56)}`,
+                                        }}
+                                        onClick={() =>
+                                          setEtiquetaForm((atual) => ({
+                                            ...atual,
+                                            cor,
+                                          }))
+                                        }
+                                        title={cor}
+                                      />
+                                    );
+                                  })}
+                                </div>
+
+                                <label className={styles.actionLabel}>Cor personalizada</label>
+                                <input
+                                  type="color"
+                                  className={styles.etiquetaColorInput}
+                                  value={etiquetaForm.cor}
+                                  onChange={(e) =>
+                                    setEtiquetaForm((atual) => ({
+                                      ...atual,
+                                      cor: e.target.value.toUpperCase(),
+                                    }))
+                                  }
+                                />
+
+                                <div className={styles.etiquetaPreviewBox}>
+                                  <span>Prévia:</span>
+                                  <EtiquetaCor
+                                    etiqueta={{
+                                      nome: etiquetaForm.nome || "Etiqueta",
+                                      descricao: etiquetaForm.descricao || "",
+                                      cor: etiquetaForm.cor,
+                                    }}
+                                    className={styles.etiquetaAtualPreview}
+                                    mostrarTooltip={false}
+                                  />
+                                </div>
+
+                                <div className={styles.listaInlineActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={resetarFormularioEtiqueta}
+                                  >
+                                    Cancelar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.primaryButton}
+                                    disabled={salvandoEtiqueta}
+                                    onClick={salvarEtiquetaEmpresa}
+                                  >
+                                    {salvandoEtiqueta
+                                      ? "Salvando..."
+                                      : etiquetaEditandoId
+                                      ? "Salvar alterações"
+                                      : "Salvar etiqueta"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "mensagens_favoritas" && (
+                        <div className={styles.panelSectionStack}>
+                          {carregandoMensagensFavoritas ? (
+                            <div className={styles.infoBoxMuted}>
+                              Carregando mensagens favoritas...
+                            </div>
+                          ) : mensagensFavoritas.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhuma mensagem favorita nesta conversa.
+                            </div>
+                          ) : (
+                            mensagensFavoritas.map((msg) => (
+                              <div
+                                key={msg.id}
+                                className={styles.favoriteMessageCard}
+                                onClick={() => {
+                                  void abrirMensagemFavoritaNoChat(msg);
+                                }}
+                              >
+                                <div className={styles.favoriteMessageHeader}>
+                                  <strong className={styles.favoriteMessageAuthor}>
+                                    {msg.remetente_tipo === "usuario" ? "Você" : "Cliente"}
+                                  </strong>
+                                  <span className={styles.favoriteMessageDate}>
+                                    {formatarDataCompleta(msg.created_at)}
+                                  </span>
+                                </div>
+
+                                <p className={styles.favoriteMessageText}>
+                                  <TextoComEmoji texto={msg.conteudo} />
+                                </p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+
+                      {abaPainelDireito === "midia_docs_links" && (
+                        <div className={styles.mediaBrowserPanel}>
+                          <div className={styles.mediaBrowserTabs}>
+                            <button
+                              type="button"
+                              className={`${styles.mediaBrowserTab} ${
+                                abaMidiaDocsLinks === "midia" ? styles.mediaBrowserTabActive : ""
+                              }`}
+                              onClick={() => setAbaMidiaDocsLinks("midia")}
+                            >
+                              Mídia
+                              <span className={styles.mediaBrowserTabCount}>{totalMidias}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`${styles.mediaBrowserTab} ${
+                                abaMidiaDocsLinks === "documentos" ? styles.mediaBrowserTabActive : ""
+                              }`}
+                              onClick={() => setAbaMidiaDocsLinks("documentos")}
+                            >
+                              Documentos
+                              <span className={styles.mediaBrowserTabCount}>{totalDocumentos}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`${styles.mediaBrowserTab} ${
+                                abaMidiaDocsLinks === "links" ? styles.mediaBrowserTabActive : ""
+                              }`}
+                              onClick={() => setAbaMidiaDocsLinks("links")}
+                            >
+                              Links
+                              <span className={styles.mediaBrowserTabCount}>{totalLinks}</span>
+                            </button>
+                          </div>
+
+                          {midiaDocsLinksFiltrados.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhuma mídia encontrada nesta conversa.
+                            </div>
+                          ) : (
+                            midiaDocsLinksFiltrados.map((grupo) => (
+                              <div key={grupo.data} className={styles.mediaBrowserSection}>
+                                <div className={styles.mediaBrowserSectionTitle}>{grupo.data}</div>
+
+                                {abaMidiaDocsLinks === "midia" ? (
+                                  <div className={styles.mediaBrowserThumbGrid}>
+                                    {grupo.itens.map((item) => {
+                                      if (item.isImage) {
+                                        return (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            className={styles.mediaThumbCardCompact}
+                                            onClick={() => {
+                                              setImagemModalUrl(item.url);
+                                              setImagemModalTitulo(item.nome);
+                                              setImagemZoom(1);
+                                            }}
+                                          >
+                                            <img
+                                              src={item.url}
+                                              alt={item.nome}
+                                              className={styles.mediaThumbImageCompact}
+                                            />
+                                            <div className={styles.mediaThumbOverlay}>
+                                              <span className={styles.mediaThumbOverlayType}>Imagem</span>
+                                              <span className={styles.mediaThumbOverlayTime}>
+                                                {formatarHora(item.createdAt)}
+                                              </span>
+                                            </div>
+                                          </button>
+                                        );
+                                      }
+
+                                    if (item.isAudio) {
+                                      return (
+                                        <div key={item.id} className={styles.mediaAudioCard}>
+                                          <div className={styles.mediaAudioHeader}>
+                                            <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                            <span className={styles.mediaDocMeta}>
+                                              Áudio • {formatarHora(item.createdAt)}
+                                            </span>
+                                          </div>
+
+                                          <AudioMessagePlayer
+                                            src={item.url}
+                                            mimeType={item.mimeType}
+                                            fileName={item.nome}
+                                          />
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <button
+                                        key={item.id}
+                                        type="button"
+                                        className={styles.mediaThumbCardCompact}
+                                        onClick={() =>
+                                          setArquivoPreview({
+                                            url: item.url,
+                                            nome: item.nome,
+                                            mimeType: item.mimeType,
+                                          })
+                                        }
+                                      >
+                                        <div className={styles.mediaThumbPlaceholderCompact}>🎥</div>
+                                        <div className={styles.mediaThumbOverlay}>
+                                          <span className={styles.mediaThumbOverlayType}>Vídeo</span>
+                                          <span className={styles.mediaThumbOverlayTime}>
+                                            {formatarHora(item.createdAt)}
+                                          </span>
+                                        </div>
+                                      </button>
+                                    );
+                                    })}
+                                  </div>
+                                ) : abaMidiaDocsLinks === "documentos" ? (
+                                  <div className={styles.mediaBrowserList}>
+                                    {grupo.itens.map((item) => {
+                                      if (item.isAudio) {
+                                        return (
+                                          <div key={item.id} className={styles.mediaAudioCard}>
+                                            <div className={styles.mediaAudioHeader}>
+                                              <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                              <span className={styles.mediaDocMeta}>
+                                                Áudio • {formatarHora(item.createdAt)}
+                                              </span>
+                                            </div>
+
+                                            <AudioMessagePlayer src={item.url} fileName={item.nome} />
+                                          </div>
+                                        );
+                                      }
+
+                                      if (item.isPdf) {
+                                        return (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            className={styles.mediaDocCard}
+                                            onClick={() =>
+                                              setArquivoPreview({
+                                                url: item.url,
+                                                nome: item.nome,
+                                                mimeType: item.mimeType,
+                                              })
+                                            }
+                                          >
+                                            <div className={styles.mediaDocIcon}>📄</div>
+                                            <div className={styles.mediaDocContent}>
+                                              <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                              <span className={styles.mediaDocMeta}>
+                                                PDF • {formatarHora(item.createdAt)}
+                                              </span>
+                                            </div>
+                                          </button>
+                                        );
+                                      }
+
+                                      return (
+                                        <a
+                                          key={item.id}
+                                          href={item.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className={styles.mediaDocCard}
+                                        >
+                                          <div className={styles.mediaDocIcon}>📎</div>
+                                          <div className={styles.mediaDocContent}>
+                                            <strong className={styles.mediaDocTitle}>{item.nome}</strong>
+                                            <span className={styles.mediaDocMeta}>
+                                              Documento • {formatarHora(item.createdAt)}
+                                            </span>
+                                          </div>
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className={styles.mediaBrowserList}>
+                                    {grupo.itens.map((item) => (
+                                      <a
+                                        key={item.id}
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className={styles.mediaLinkCard}
+                                      >
+                                        <div className={styles.mediaLinkIcon}>🔗</div>
+                                        <div className={styles.mediaLinkContent}>
+                                          <strong className={styles.mediaLinkTitle}>Link</strong>
+                                          <span className={styles.mediaLinkUrl}>{item.url}</span>
+                                          <span className={styles.mediaDocMeta}>
+                                            {formatarHora(item.createdAt)}
+                                          </span>
+                                        </div>
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      {abaPainelDireito === "listas" && (
+                        <div className={styles.panelSectionStack}>
+                          <div className={styles.noteComposer}>
+                            <label className={styles.actionLabel}>Criar nova lista</label>
+                            <input
+                              className={styles.messageInput}
+                              value={novaListaNome}
+                              onChange={(e) => setNovaListaNome(e.target.value)}
+                              placeholder="Ex.: Melhores amigos"
+                            />
+                            <button
+                              className={styles.primaryButton}
+                              type="button"
+                              disabled={salvandoLista || !novaListaNome.trim()}
+                              onClick={async () => {
+                                try {
+                                  setSalvandoLista(true);
+                                  setErro("");
+                                  setMensagemSucesso("");
+
+                                  const res = await fetch("/api/conversas/listas", {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      nome: novaListaNome.trim(),
+                                    }),
+                                  });
+
+                                  const data = await res.json();
+
+                                  if (!res.ok) {
+                                    setErro(data.error || "Erro ao criar lista");
+                                    return;
+                                  }
+
+                                  setNovaListaNome("");
+                                  setMensagemSucesso(data.message || "Lista criada com sucesso");
+                                  await carregarListasDaConversa();
+                                } catch {
+                                  setErro("Erro ao criar lista");
+                                } finally {
+                                  setSalvandoLista(false);
+                                }
+                              }}
+                            >
+                              Criar lista
+                            </button>
+                          </div>
+
+                          {listasConversa.length === 0 ? (
+                            <div className={styles.infoBoxMuted}>
+                              Nenhuma lista criada para esta empresa ainda.
+                            </div>
+                          ) : (
+                            listasConversa.map((lista) => (
+                              <div key={lista.id} className={styles.listaCardWrap}>
+                                <div className={styles.listaCard}>
+                                  <button
+                                    type="button"
+                                    className={styles.listaMainButton}
+                                    onClick={async () => {
+                                      if (!conversaSelecionada?.id) return;
+
+                                      try {
+                                        setErro("");
+                                        setMensagemSucesso("");
+
+                                        const res = await fetch(`/api/conversas/${conversaSelecionada.id}/listas`, {
+                                          method: lista.marcada ? "DELETE" : "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                          },
+                                          body: JSON.stringify({
+                                            lista_id: lista.id,
+                                          }),
+                                        });
+
+                                        const data = await res.json();
+
+                                        if (!res.ok) {
+                                          setErro(data.error || "Erro ao atualizar lista");
+                                          return;
+                                        }
+
+                                        setMensagemSucesso(data.message || "Lista atualizada com sucesso");
+                                        await carregarListasDaConversa();
+                                        await atualizarConversasCarregadas();
+                                      } catch {
+                                        setErro("Erro ao atualizar lista");
+                                      }
+                                    }}
+                                  >
+                                    <span className={styles.listaMainLeft}>
+                                      <span className={styles.listaCheckIcon}>
+                                        {lista.marcada ? "☑" : "☐"}
+                                      </span>
+                                      <span className={styles.listaNome}>{lista.nome}</span>
+                                    </span>
+                                  </button>
+
+                                  <div className={styles.listaActions}>
+                                    <button
+                                      type="button"
+                                      className={styles.listaIconButton}
+                                      title="Editar lista"
+                                      onClick={() => {
+                                        setListaConfirmandoExclusaoId(null);
+
+                                        if (listaEditandoId === lista.id) {
+                                          setListaEditandoId(null);
+                                          setListaEditandoNome("");
+                                          return;
+                                        }
+
+                                        setListaEditandoId(lista.id);
+                                        setListaEditandoNome(lista.nome);
+                                      }}
+                                    >
+                                      ✎
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
+                                      title="Excluir lista"
+                                      onClick={() => {
+                                        setListaEditandoId(null);
+                                        setListaEditandoNome("");
+
+                                        setListaConfirmandoExclusaoId((atual) =>
+                                          atual === lista.id ? null : lista.id
+                                        );
+                                      }}
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {listaEditandoId === lista.id && (
+                                  <div className={styles.listaInlinePanel}>
+                                    <label className={styles.actionLabel}>Editar nome da lista</label>
+
+                                    <input
+                                      className={styles.messageInput}
+                                      value={listaEditandoNome}
+                                      onChange={(e) => setListaEditandoNome(e.target.value)}
+                                      placeholder="Digite o novo nome da lista"
+                                    />
+
+                                    <div className={styles.listaInlineActions}>
+                                      <button
+                                        type="button"
+                                        className={styles.secondaryButton}
+                                        onClick={() => {
+                                          setListaEditandoId(null);
+                                          setListaEditandoNome("");
+                                        }}
+                                      >
+                                        Cancelar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={styles.primaryButton}
+                                        disabled={!listaEditandoNome.trim()}
+                                        onClick={async () => {
+                                          try {
+                                            setErro("");
+                                            setMensagemSucesso("");
+
+                                            const res = await fetch("/api/conversas/listas", {
+                                              method: "PUT",
+                                              headers: {
+                                                "Content-Type": "application/json",
+                                              },
+                                              body: JSON.stringify({
+                                                lista_id: lista.id,
+                                                nome: listaEditandoNome.trim(),
+                                              }),
+                                            });
+
+                                            const data = await res.json();
+
+                                            if (!res.ok) {
+                                              setErro(data.error || "Erro ao atualizar lista");
+                                              return;
+                                            }
+
+                                            setMensagemSucesso(data.message || "Lista atualizada com sucesso");
+                                            setListaEditandoId(null);
+                                            setListaEditandoNome("");
+
+                                            await carregarListasDaConversa();
+                                            await carregarListasEmpresa();
+                                            await atualizarConversasCarregadas();
+                                          } catch {
+                                            setErro("Erro ao atualizar lista");
+                                          }
+                                        }}
+                                      >
+                                        Salvar
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {listaConfirmandoExclusaoId === lista.id && (
+                                  <div className={styles.listaInlinePanelDanger}>
+                                    <p className={styles.listaConfirmText}>
+                                      Deseja excluir a lista <strong>{lista.nome}</strong>?
+                                    </p>
+
+                                    <div className={styles.listaInlineActions}>
+                                      <button
+                                        type="button"
+                                        className={styles.secondaryButton}
+                                        onClick={() => setListaConfirmandoExclusaoId(null)}
+                                      >
+                                        Cancelar
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className={styles.dangerButton}
+                                        onClick={async () => {
+                                          try {
+                                            setErro("");
+                                            setMensagemSucesso("");
+
+                                            const res = await fetch("/api/conversas/listas", {
+                                              method: "DELETE",
+                                              headers: {
+                                                "Content-Type": "application/json",
+                                              },
+                                              body: JSON.stringify({
+                                                lista_id: lista.id,
+                                              }),
+                                            });
+
+                                            const data = await res.json();
+
+                                            if (!res.ok) {
+                                              setErro(data.error || "Erro ao excluir lista");
+                                              return;
+                                            }
+
+                                            setMensagemSucesso(data.message || "Lista excluída com sucesso");
+                                            setListaConfirmandoExclusaoId(null);
+
+                                            await carregarListasDaConversa();
+                                            await carregarListasEmpresa();
+                                            await atualizarConversasCarregadas();
+                                          } catch {
+                                            setErro("Erro ao excluir lista");
+                                          }
+                                        }}
+                                      >
+                                        Excluir
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </aside>
+                )}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                <div className={styles.emptyStateCard}>
+                  <div className={styles.placeholderIcon}>💬</div>
+                  <h2 className={styles.emptyStateTitle}>Selecione uma conversa</h2>
+                  <p className={styles.emptyStateText}>
+                    Escolha uma conversa na lateral para visualizar histórico,
+                    responder e abrir o painel de contexto.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {modalMacroAberto && (
+        <div className={styles.contactModalOverlay} onClick={fecharModalMacro}>
+          <div
+            className={`${styles.contactModalCard} ${styles.macroModalCard}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.contactModalHeader}>
+              <div>
+                <h3 className={styles.contactModalTitle}>
+                  {macroEditandoId ? "Editar macro" : "Nova macro"}
+                </h3>
+                <p className={styles.contactModalSubtitle}>
+                  Use variáveis entre duas chaves, como {"{{nome_contato}}"}.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={fecharModalMacro}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.contactModalBody}>
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Título</label>
+                <input
+                  className={styles.messageInput}
+                  value={macroForm.titulo}
+                  onChange={(e) =>
+                    setMacroForm((atual) => ({
+                      ...atual,
+                      titulo: e.target.value,
+                    }))
+                  }
+                  placeholder="Ex: Boas-vindas"
+                  maxLength={80}
+                />
+              </div>
+
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Texto</label>
+                <textarea
+                  className={`${styles.noteInput} ${styles.macroTextarea}`}
+                  rows={9}
+                  value={macroForm.conteudo}
+                  onChange={(e) =>
+                    setMacroForm((atual) => ({
+                      ...atual,
+                      conteudo: e.target.value,
+                    }))
+                  }
+                  placeholder="Olá {{nome_contato}}, tudo bem?"
+                  maxLength={4000}
+                />
+              </div>
+
+              <div className={styles.macroFixedVariablesRow}>
+                <p className={styles.macroFixedVariablesText}>
+                  {TEXTO_VARIAVEIS_FIXAS_MACRO}
+                </p>
+
+                <button
+                  type="button"
+                  className={`${styles.secondaryButton} ${styles.macroActionButton}`}
+                  onClick={abrirModalVariavel}
+                >
+                  <Variable size={14} />
+                  Gerenciar variáveis
+                </button>
+              </div>
+
+              <div className={styles.macroPreviewBox}>
+                <span>Prévia com variáveis aplicadas</span>
+                <p>
+                  {resolverVariaveisMacro(macroForm.conteudo).trim() ||
+                    "A prévia aparece aqui enquanto você escreve."}
+                </p>
+              </div>
+
+              <div className={styles.macroModalFooter}>
+                <div className={styles.actionButtons}>
+                  {macroEditandoId && (
+                    <button
+                      type="button"
+                      className={`${styles.dangerButton} ${styles.macroActionButton}`}
+                      onClick={() => excluirMacro(macroEditandoId)}
+                      disabled={excluindoMacroId === macroEditandoId}
+                    >
+                      <Trash2 size={14} />
+                      {excluindoMacroId === macroEditandoId ? "Removendo..." : "Remover"}
+                    </button>
+                  )}
+                </div>
+
+                <div className={styles.actionButtons}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={fecharModalMacro}
+                    disabled={salvandoMacro}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={salvarMacro}
+                    disabled={salvandoMacro || !macroForm.conteudo.trim()}
+                  >
+                    {salvandoMacro ? "Salvando..." : "Salvar macro"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalVariavelAberto && (
+        <div className={styles.modalOverlay} onClick={fecharModalVariavel}>
+          <div
+            className={`${styles.modalConfirmacao} ${styles.variableModalCard}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gerenciar-variaveis-titulo"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.modalEyebrow}>Variáveis</p>
+                <h3 id="gerenciar-variaveis-titulo" className={styles.modalTitle}>
+                  Gerenciar variáveis
+                </h3>
+                <p className={styles.modalSubtitle}>
+                  {contextoModalVariavel === "disparo-individual"
+                    ? "Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para disparos e fluxos."
+                    : "Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para macros, disparos e fluxos."}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={fecharModalVariavel}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Cadastrar variável personalizada</h4>
+
+                <div className={styles.variableFormGrid}>
+                  <div className={styles.contactModalField}>
+                    <label className={styles.actionLabel}>Nome da variável</label>
+                    <input
+                      className={styles.messageInput}
+                      value={variavelForm.chave}
+                      onChange={(e) =>
+                        setVariavelForm((atual) => ({
+                          ...atual,
+                          chave: normalizarChaveVariavelMacro(e.target.value),
+                        }))
+                      }
+                      placeholder="ex: link_pagamento"
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Mensagem da variável</label>
+                  <textarea
+                    className={styles.noteInput}
+                    value={variavelForm.valor}
+                    onChange={(e) =>
+                      setVariavelForm((atual) => ({
+                        ...atual,
+                        valor: e.target.value,
+                      }))
+                    }
+                    placeholder="Digite a mensagem da variável..."
+                    rows={4}
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Descrição Interna</label>
+                  <input
+                    className={styles.messageInput}
+                    value={variavelForm.descricao}
+                    onChange={(e) =>
+                      setVariavelForm((atual) => ({
+                        ...atual,
+                        descricao: e.target.value,
+                      }))
+                    }
+                    placeholder="Ajuda para identificar onde usar"
+                  />
+                </div>
+
+                <div className={styles.variablePreviewBox}>
+                  A variável será usada assim:{" "}
+                  <strong>
+                    {"{{"}
+                    {normalizarChaveVariavelMacro(variavelForm.chave) || "nome_variavel"}
+                    {"}}"}
+                  </strong>
+                </div>
+
+                {erroVariavelModal && (
+                  <div className={styles.errorAlert}>{erroVariavelModal}</div>
+                )}
+
+                <div className={styles.variableFormActions}>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={salvarVariavelGlobal}
+                    disabled={salvandoVariavel}
+                  >
+                    {salvandoVariavel ? "Salvando..." : "Salvar variável"}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis cadastradas</h4>
+
+                {carregandoVariaveis ? (
+                  <div className={styles.emptyMiniState}>Carregando variáveis...</div>
+                ) : variaveisCustomizadasMacro.length === 0 ? (
+                  <div className={styles.emptyMiniState}>
+                    Nenhuma variável personalizada cadastrada.
+                  </div>
+                ) : (
+                  <div className={styles.variablesList}>
+                    {variaveisCustomizadasMacro.map((variavel) => (
+                      <div key={variavel.id} className={styles.variableItem}>
+                        <div className={styles.variableMain}>
+                          <strong className={styles.variableCode}>
+                            {"{{"}
+                            {variavel.chave}
+                            {"}}"}
+                          </strong>
+
+                          <p className={styles.variablePerson}>
+                            <strong>Mensagem da variável: </strong>{variavel.valor}
+                          </p>
+
+                          {variavel.descricao ? (
+                            <p className={styles.variablePerson}>
+                            <strong>Descrição Interna: </strong>{variavel.descricao}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className={styles.variableActions}>
+                          <button
+                            type="button"
+                            className={styles.variableUseButton}
+                            onClick={() => aplicarVariavelNoTextoMacro(variavel.chave)}
+                          >
+                            Usar
+                          </button>
+
+                          <button
+                            type="button"
+                            className={styles.variableDeleteButton}
+                            onClick={() => removerVariavelGlobal(variavel.id)}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.modalSection}>
+                <h4 className={styles.modalSectionTitle}>Variáveis fixas do sistema</h4>
+
+                <div className={styles.variablesList}>
+                  {VARIAVEIS_FIXAS_SISTEMA.map((item) => (
+                    <div key={item.chave} className={styles.variableItem}>
+                      <div className={styles.variableMain}>
+                        <strong className={styles.variableCode}>{item.exemplo}</strong>
+                        <p className={styles.variableDescription}>{item.descricao}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={styles.variableUseButton}
+                        onClick={() => aplicarVariavelNoTextoMacro(item.chave)}
+                      >
+                        Usar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={fecharModalVariavel}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalEventoRastreamentoAberto && (
+        <div
+          className={styles.contactModalOverlay}
+          onClick={fecharModalEventoRastreamento}
+        >
+          <div
+            className={styles.contactModalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.contactModalHeader}>
+              <div>
+                <h3 className={styles.contactModalTitle}>
+                  {eventoRastreamentoEditandoId
+                    ? "Editar resultado"
+                    : "Registrar resultado"}
+                </h3>
+                <p className={styles.contactModalSubtitle}>
+                  Informe o evento comercial ligado a esta conversa.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={fecharModalEventoRastreamento}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.contactModalBody}>
+              <div className={styles.contactModalGrid}>
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Tipo de evento</label>
+                  <select
+                    className={styles.actionSelect}
+                    value={eventoRastreamentoTipo}
+                    onChange={(e) => {
+                      const novoTipo = e.target.value as RastreamentoEventoTipoManual;
+                      setEventoRastreamentoTipo(novoTipo);
+
+                      if (!eventoRastreamentoExigeValor(novoTipo)) {
+                        setEventoRastreamentoValor("");
+                      }
+                    }}
+                  >
+                    {RASTREAMENTO_EVENTOS_MANUAIS.map((evento) => (
+                      <option key={evento.value} value={evento.value}>
+                        {evento.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Protocolo</label>
+                  <select
+                    className={styles.actionSelect}
+                    value={eventoRastreamentoProtocoloId}
+                    onChange={(e) =>
+                      setEventoRastreamentoProtocoloId(e.target.value)
+                    }
+                  >
+                    <option value="">Sem protocolo</option>
+                    {protocolosConversa.map((protocolo) => (
+                      <option key={protocolo.id} value={protocolo.id}>
+                        {protocolo.protocolo}
+                        {protocolo.ativo ? " - atual" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {eventoRastreamentoExigeValor(eventoRastreamentoTipo) && (
+                  <div className={styles.contactModalField}>
+                    <label className={styles.actionLabel}>Valor da venda</label>
+                    <input
+                      className={styles.messageInput}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={eventoRastreamentoValor}
+                      onChange={(e) => setEventoRastreamentoValor(e.target.value)}
+                      placeholder="497,00"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Observação</label>
+                <textarea
+                  className={styles.noteInput}
+                  rows={4}
+                  value={eventoRastreamentoObservacao}
+                  onChange={(e) =>
+                    setEventoRastreamentoObservacao(e.target.value)
+                  }
+                  placeholder="Ex: venda confirmada pelo atendente, cliente escolheu plano anual"
+                />
+              </div>
+
+              <div className={styles.actionButtons}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={fecharModalEventoRastreamento}
+                  disabled={salvandoEventoRastreamento}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={salvarEventoRastreamento}
+                  disabled={salvandoEventoRastreamento}
+                >
+                  {salvandoEventoRastreamento ? "Salvando..." : "Salvar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalAdicionarContatoAberto && (
+        <div
+          className={styles.contactModalOverlay}
+          onClick={fecharModalAdicionarContato}
+        >
+          <div
+            className={styles.contactModalCard}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.contactModalHeader}>
+              <div>
+                <h3 className={styles.contactModalTitle}>Adicionar contato</h3>
+                <p className={styles.contactModalSubtitle}>
+                  Revise e complete os dados antes de salvar.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.textButton}
+                onClick={fecharModalAdicionarContato}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.contactModalBody}>
+              <div className={styles.contactModalGrid}>
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Nome</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.nome}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        nome: e.target.value,
+                      }))
+                    }
+                    placeholder="Nome do contato"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Telefone</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.telefone}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        telefone: e.target.value,
+                      }))
+                    }
+                    placeholder="Telefone"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>E-mail</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.email}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        email: e.target.value,
+                      }))
+                    }
+                    placeholder="E-mail"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Origem</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.origem}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        origem: e.target.value,
+                      }))
+                    }
+                    placeholder="Origem"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Campanha</label>
+                  <select
+                    className={styles.actionSelect}
+                    value={contatoCadastroForm.rastreamento_campanha_id}
+                    onChange={(e) =>
+                      selecionarCampanhaContatoCompartilhado(e.target.value)
+                    }
+                  >
+                    <option value="">Sem campanha</option>
+                    {campanhasRastreamentoContato.map((campanha) => (
+                      <option key={campanha.id} value={campanha.id}>
+                        {formatarCampanhaRastreamentoContato(campanha)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Status do lead</label>
+                  <select
+                    className={styles.actionSelect}
+                    value={contatoCadastroForm.status_lead}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        status_lead: e.target.value as StatusLeadContato,
+                      }))
+                    }
+                  >
+                    <option value="novo">Novo</option>
+                    <option value="qualificado">Qualificado</option>
+                    <option value="convertido">Convertido</option>
+                    <option value="perdido">Perdido</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className={styles.contactModalField}>
+                <label className={styles.actionLabel}>Observações</label>
+                <textarea
+                  className={styles.noteInput}
+                  rows={5}
+                  value={contatoCadastroForm.observacoes}
+                  onChange={(e) =>
+                    setContatoCadastroForm((atual) => ({
+                      ...atual,
+                      observacoes: e.target.value,
+                    }))
+                  }
+                  placeholder="Observações"
+                />
+              </div>
+
+              <div className={styles.actionButtons}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={fecharModalAdicionarContato}
+                  disabled={salvandoContatoCompartilhado}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={salvarContatoCompartilhado}
+                  disabled={salvandoContatoCompartilhado}
+                >
+                  {salvandoContatoCompartilhado ? "Salvando..." : "Salvar contato"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imagemModalUrl && (
+        <div
+          onClick={() => {
+            setImagemModalUrl(null);
+            setImagemModalTitulo(null);
+            setImagemZoom(1);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "var(--crm-ui-private-decoration-rgb-0-0-0-0-82)",
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 980,
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                color: "var(--crm-text-inverse)",
+              }}
+            >
+              <strong>{imagemModalTitulo || "Imagem"}</strong>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setImagemZoom((z) => Math.max(0.8, Number((z - 0.1).toFixed(2))))}
+                  className={styles.secondaryButton}
+                >
+                  −
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setImagemZoom(1)}
+                  className={styles.secondaryButton}
+                >
+                  100%
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setImagemZoom((z) => Math.min(2.2, Number((z + 0.1).toFixed(2))))}
+                  className={styles.secondaryButton}
+                >
+                  ＋
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImagemModalUrl(null);
+                    setImagemModalTitulo(null);
+                    setImagemZoom(1);
+                  }}
+                  className={styles.dangerButton}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                overflow: "auto",
+                background: "var(--crm-ui-private-decoration-rgb-255-255-255-0-04)",
+                borderRadius: 16,
+                padding: 12,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                maxHeight: "78vh",
+              }}
+            >
+              <img
+                src={imagemModalUrl}
+                alt={imagemModalTitulo || "Imagem"}
+                style={{
+                  width: "auto",
+                  height: "auto",
+                  maxWidth: "82vw",
+                  maxHeight: "72vh",
+                  objectFit: "contain",
+                  transform: `scale(${imagemZoom})`,
+                  transformOrigin: "center center",
+                  transition: "transform 0.18s ease",
+                  borderRadius: "12px",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {arquivoPreview && (
+        <div
+          onClick={() => setArquivoPreview(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "var(--crm-ui-private-decoration-rgb-0-0-0-0-82)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 1100,
+              height: "88vh",
+              background: "var(--crm-ui-private-decoration-hex-ffffff)",
+              borderRadius: 16,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid var(--crm-ui-private-decoration-hex-e5e7eb)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <strong>{arquivoPreview.nome}</strong>
+
+              <button
+                type="button"
+                className={styles.dangerButton}
+                onClick={() => setArquivoPreview(null)}
+              >
+                Fechar
+              </button>
+            </div>
+
+            <iframe
+              src={arquivoPreview.url}
+              title={arquivoPreview.nome}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {modalAtivarBotAberto && (
+        <div
+          className={styles.novoProtocoloModalOverlay}
+          onMouseDown={fecharModalAtivarBot}
+        >
+          <div
+            className={styles.novoProtocoloModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ativar-bot-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className={styles.novoProtocoloModalHeader}>
+              <div className={styles.novoProtocoloModalIcon}>
+                <span>AI</span>
+              </div>
+
+              <div className={styles.novoProtocoloModalHeading}>
+                <span className={styles.novoProtocoloModalEyebrow}>
+                  Automação
+                </span>
+
+                <h3
+                  id="ativar-bot-modal-title"
+                  className={styles.novoProtocoloModalTitle}
+                >
+                  Ativar bot nesta conversa?
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalClose}
+                onClick={fecharModalAtivarBot}
+                disabled={salvandoAcao}
+                aria-label="Fechar modal"
+                title="Fechar"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className={styles.novoProtocoloModalBody}>
+              <p className={styles.novoProtocoloModalText}>
+                O bot vai assumir este atendimento usando a última mensagem
+                recebida do contato.
+              </p>
+
+              <div className={styles.novoProtocoloModalInfo}>
+                <div className={styles.novoProtocoloModalInfoIcon}>
+                  i
+                </div>
+
+                <div>
+                  <strong>O fluxo começará do início</strong>
+
+                  <p>
+                    Essa mensagem será analisada como uma nova entrada. A
+                    automação vai iniciar pelo primeiro passo do fluxo e seguir
+                    conforme o conteúdo recebido.
+                  </p>
+                </div>
+              </div>
+
+              <div className={styles.novoProtocoloModalContact}>
+                <div className={styles.novoProtocoloModalAvatar}>
+                  {getIniciais(conversaSelecionada?.contatos?.nome)}
+                </div>
+
+                <div className={styles.novoProtocoloModalContactInfo}>
+                  <span>Mensagem considerada</span>
+
+                  <strong>{ultimaMensagemAtivarBotPreview}</strong>
+
+                  <small>
+                    O protocolo atual será mantido e a conversa não será
+                    encerrada.
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.novoProtocoloModalFooter}>
+              <button
+                type="button"
+                className={styles.novoProtocoloModalCancel}
+                onClick={fecharModalAtivarBot}
+                disabled={salvandoAcao}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalConfirm}
+                onClick={confirmarAtivarBotComUltimaMensagem}
+                disabled={salvandoAcao}
+              >
+                {salvandoAcao ? (
+                  <>
+                    <span className={styles.novoProtocoloModalSpinner} />
+                    Ativando bot...
+                  </>
+                ) : (
+                  <>
+                    Ativar bot
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalNovoProtocoloAberto && (
+        <div
+          className={styles.novoProtocoloModalOverlay}
+          onMouseDown={fecharModalNovoProtocolo}
+        >
+          <div
+            className={styles.novoProtocoloModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="novo-protocolo-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className={styles.novoProtocoloModalHeader}>
+              <div className={styles.novoProtocoloModalIcon}>
+                <span>＋</span>
+              </div>
+
+              <div className={styles.novoProtocoloModalHeading}>
+                <span className={styles.novoProtocoloModalEyebrow}>
+                  Novo atendimento
+                </span>
+
+                <h3
+                  id="novo-protocolo-modal-title"
+                  className={styles.novoProtocoloModalTitle}
+                >
+                  Abrir novo protocolo?
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalClose}
+                onClick={fecharModalNovoProtocolo}
+                disabled={abrindoNovoProtocolo}
+                aria-label="Fechar modal"
+                title="Fechar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.novoProtocoloModalBody}>
+              <p className={styles.novoProtocoloModalText}>
+                Um novo ciclo de atendimento será iniciado para este contato.
+              </p>
+
+              <div className={styles.novoProtocoloModalInfo}>
+                <div className={styles.novoProtocoloModalInfoIcon}>
+                  i
+                </div>
+
+                <div>
+                  <strong>O protocolo anterior será preservado</strong>
+
+                  <p>
+                    Ele continuará encerrado e disponível no histórico da
+                    conversa. Um novo número de protocolo será criado para este
+                    atendimento.
+                  </p>
+                </div>
+              </div>
+
+              <div className={styles.novoProtocoloModalContact}>
+                <div className={styles.novoProtocoloModalAvatar}>
+                  {getIniciais(conversaSelecionada?.contatos?.nome)}
+                </div>
+
+                <div className={styles.novoProtocoloModalContactInfo}>
+                  <span>Contato</span>
+
+                  <strong>
+                    {conversaSelecionada?.contatos?.nome || "Sem nome"}
+                  </strong>
+
+                  <small>
+                    {conversaSelecionada?.contatos?.telefone ||
+                      "Telefone não informado"}
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.novoProtocoloModalFooter}>
+              <button
+                type="button"
+                className={styles.novoProtocoloModalCancel}
+                onClick={fecharModalNovoProtocolo}
+                disabled={abrindoNovoProtocolo}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={styles.novoProtocoloModalConfirm}
+                onClick={confirmarAbrirNovoProtocolo}
+                disabled={abrindoNovoProtocolo}
+              >
+                {abrindoNovoProtocolo ? (
+                  <>
+                    <span className={styles.novoProtocoloModalSpinner} />
+                    Abrindo protocolo...
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.novoProtocoloModalConfirmIcon}>
+                      ＋
+                    </span>
+                    Abrir novo protocolo
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </>
+  );
+}
