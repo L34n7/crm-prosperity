@@ -1,23 +1,41 @@
 .responsibilityCheck {
+  display: flex;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 0;
   box-sizing: border-box;
   align-items: flex-start;
+  gap: 8px;
   padding: 10px 12px;
-  white-space: normal;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.4;
+  white-space: normal;
+  cursor: pointer;
+  overflow: hidden;
 }
 
 .responsibilityCheck input {
   flex: 0 0 auto;
-  margin-top: 2px;
+  margin: 2px 0 0;
 }
 
 .responsibilityCheck span {
+  display: block;
   min-width: 0;
-  flex: 1 1 auto;
+  max-width: 100%;
+  flex: 1 1 0;
+  white-space: normal;
   overflow-wrap: anywhere;
-  word-break: break-word;
+  word-break: normal;
+}
+
+.responsibilityCheck:has(input:checked) {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
 }

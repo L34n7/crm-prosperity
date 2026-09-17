@@ -188,7 +188,7 @@ export default function ExclusaoContatosEmMassa({
                     definitivamente.
                   </p>
 
-                  <label className={`${styles.filterCheck} ${modalStyles.responsibilityCheck}`}>
+                  <label className={modalStyles.responsibilityCheck}>
                     <input
                       type="checkbox"
                       checked={assumiuResponsabilidade}
