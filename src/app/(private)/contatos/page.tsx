@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import ExclusaoContatosEmMassa from "./ExclusaoContatosEmMassa";
 import styles from "./contatos.module.css";
 
 type ClassificacaoContato =
@@ -1694,6 +1695,18 @@ export default function ContatosPage() {
                   {atualizandoEmMassa ? "Aplicando..." : "Aplicar alterações"}
                 </button>
 
+                <ExclusaoContatosEmMassa
+                  contatoIds={Array.from(selecionados)}
+                  disabled={atualizandoEmMassa}
+                  onErro={setErro}
+                  onMensagem={setMensagem}
+                  onConcluido={async () => {
+                    limparSelecao();
+                    await carregarContatos();
+                    await carregarOpcoesFiltros();
+                  }}
+                />
+
                 <button
                   type="button"
                   className={styles.bulkClearButton}
@@ -2829,8 +2842,7 @@ export default function ContatosPage() {
 
                                     {item.motivo && (
                                       <span className={styles.metaItem}>
-                                        <strong>Motivo:</strong> {item.motivo}
-                                      </span>
+                                        <strong>Motivo:</strong> {item.motivo}</span>
                                     )}
                                   </div>
                                 </div>
