@@ -39,6 +39,30 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
+      url: `${siteUrl}/termos-de-servico`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.4,
+    },
+    {
+      url: `${siteUrl}/politica-de-privacidade`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.4,
+    },
+    {
+      url: `${siteUrl}/politica-de-mensageria`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.4,
+    },
+    {
+      url: `${siteUrl}/exclusao-de-dados`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.3,
+    },
+    {
       url: `${siteUrl}/recuperar-senha`,
       lastModified,
       changeFrequency: "yearly",
