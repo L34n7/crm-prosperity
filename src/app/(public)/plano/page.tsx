@@ -137,9 +137,9 @@ export default function PlanoPage() {
 
     const tipoOferta = localStorage.getItem("tipo_oferta") || "normal";
 
-    // Mantém os links especiais existentes (afiliado, VIP, JV e free) na Atomo.
-    // O seletor de gateway é usado no fluxo público padrão.
-    if (tipoOferta !== "normal") {
+    // O plano gratuito não possui pagamento e continua no fluxo próprio.
+    // Ofertas pagas (normal, afiliado, VIP e JV) usam o seletor de gateway.
+    if (tipoOferta === "free") {
       void iniciarCheckout(plano.slug, "atomo");
       return;
     }
