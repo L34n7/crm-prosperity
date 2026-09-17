@@ -116,7 +116,7 @@ export default function ComecarPage() {
 
     if (!aceiteContrato) {
       setErro(
-        "Para continuar, confirme que leu e aceitou os termos, a política de privacidade e suas responsabilidades de uso."
+        "Para continuar, confirme que leu e aceitou os Termos de Serviço, a Política de Privacidade e a Política de Mensageria e Uso Aceitável."
       );
       return;
     }
@@ -320,9 +320,18 @@ export default function ComecarPage() {
                 >
                   Política de Privacidade
                 </Link>{" "}
-                e estou ciente de que sou responsável pelos dados, contatos,
-                consentimentos e mensagens enviados pela minha empresa na
-                plataforma.
+                e a{" "}
+                <Link
+                  href="/politica-de-mensageria"
+                  onClick={(event) => abrirDocumentoLegal(event, "mensageria")}
+                >
+                  Política de Mensageria e Uso Aceitável
+                </Link>
+                . Declaro também que sou responsável, na medida da minha atuação,
+                pela origem das bases de contatos, autorizações, opt-ins exigidos
+                pelos canais, conteúdo e finalidade das mensagens enviadas pela
+                minha empresa e pelo cumprimento da legislação e das políticas dos
+                provedores utilizados.
               </span>
             </label>
 
