@@ -34,6 +34,7 @@ const ENTIDADES = [
   "permissao",
   "politica_empresa",
   "conversa",
+  "conversa_nota",
   "contato",
   "disparo",
   "fluxo",

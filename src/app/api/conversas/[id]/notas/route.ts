@@ -8,7 +8,7 @@ import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes
 import { podeGerenciarNotasConversas } from "@/lib/auth/authorization";
 import {
   getRequestAuditMetadata,
-  registrarLogAuditoriaSeguro,
+  registrarLogAuditoria,
 } from "@/lib/auditoria/logs";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -123,7 +123,7 @@ async function registrarAuditoriaNota(input: {
 }) {
   const requestMetadata = getRequestAuditMetadata(input.request);
 
-  await registrarLogAuditoriaSeguro({
+  await registrarLogAuditoria({
     empresa_id: input.empresaId,
     categoria: "conversas",
     entidade: "conversa_nota",
