@@ -1,17 +1,21 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
 import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
+import { enviarPrimeiroAcesso } from "@/lib/auth/enviar-primeiro-acesso";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabase = getSupabaseAdmin();
-const resend = new Resend(process.env.RESEND_API_KEY);
 const MAX_TIMESTAMP_DRIFT_SECONDS = 5 * 60;
 
 type ProsperityPayPayload = {
   event_id?: string;
   version?: string;
-  event?: "payment.approved" | "payment.failed" | "payment.refunded" | "payment.chargeback" | string;
+  event?:
+    | "payment.approved"
+    | "payment.failed"
+    | "payment.refunded"
+    | "payment.chargeback"
+    | string;
   occurred_at?: string;
   payment?: {
     id?: string;
@@ -60,7 +64,9 @@ function statusPagamento(event: string | undefined) {
 }
 
 function transactionId(payload: ProsperityPayPayload) {
-  return String(payload.payment?.external_id || payload.payment?.id || "").trim();
+  return String(
+    payload.payment?.external_id || payload.payment?.id || ""
+  ).trim();
 }
 
 function offerReferences(payload: ProsperityPayPayload) {
@@ -71,46 +77,63 @@ function offerReferences(payload: ProsperityPayPayload) {
 
 function pagoEm(payload: ProsperityPayPayload) {
   const candidates = [payload.payment?.paid_at, payload.occurred_at];
+
   for (const value of candidates) {
     if (!value) continue;
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
   }
+
   return new Date().toISOString();
 }
 
 function verifySignature(rawBody: string, request: Request) {
   const secret = process.env.PROSPERITY_PAY_WEBHOOK_SECRET?.trim();
-  if (!secret) throw new Error("PROSPERITY_PAY_WEBHOOK_SECRET não configurado.");
+  if (!secret) {
+    throw new Error("PROSPERITY_PAY_WEBHOOK_SECRET não configurado.");
+  }
 
   const timestamp = request.headers.get("x-prosperity-timestamp")?.trim() || "";
-  const signatureHeader = request.headers.get("x-prosperity-signature")?.trim() || "";
+  const signatureHeader =
+    request.headers.get("x-prosperity-signature")?.trim() || "";
   const signature = signatureHeader.startsWith("sha256=")
     ? signatureHeader.slice("sha256=".length)
     : "";
   const numericTimestamp = Number(timestamp);
 
-  if (!timestamp || !Number.isFinite(numericTimestamp) || !/^[a-f0-9]{64}$/i.test(signature)) {
+  if (
+    !timestamp ||
+    !Number.isFinite(numericTimestamp) ||
+    !/^[a-f0-9]{64}$/i.test(signature)
+  ) {
     return false;
   }
 
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - numericTimestamp) > MAX_TIMESTAMP_DRIFT_SECONDS) return false;
+  if (Math.abs(now - numericTimestamp) > MAX_TIMESTAMP_DRIFT_SECONDS) {
+    return false;
+  }
 
   const expected = createHmac("sha256", secret)
     .update(`${timestamp}.${rawBody}`)
     .digest();
   const received = Buffer.from(signature, "hex");
+
   return received.length === expected.length && timingSafeEqual(received, expected);
 }
 
-function validatePayload(payload: ProsperityPayPayload, headerEventId: string | null) {
+function validatePayload(
+  payload: ProsperityPayPayload,
+  headerEventId: string | null
+) {
   if (!payload.event_id || !payload.event || !payload.payment?.id) {
     throw new Error("Payload do Prosperity Pay incompleto.");
   }
+
   if (headerEventId && headerEventId !== payload.event_id) {
     throw new Error("Event ID do cabeçalho difere do payload.");
   }
+
   if (!transactionId(payload)) {
     throw new Error("Pagamento sem identificador de transação.");
   }
@@ -141,12 +164,17 @@ async function registerEvent(payload: ProsperityPayPayload) {
     .select("id,status,attempts")
     .eq("event_id", payload.event_id!)
     .single();
-  if (existing.error || !existing.data) throw existing.error ?? new Error("Evento duplicado não encontrado.");
+
+  if (existing.error || !existing.data) {
+    throw existing.error ?? new Error("Evento duplicado não encontrado.");
+  }
 
   const row = existing.data as WebhookEventRow;
+
   if (row.status === "processed" || row.status === "ignored") {
     return { row, duplicate: true };
   }
+
   if (row.status === "processing") {
     return { row, duplicate: true };
   }
@@ -162,12 +190,17 @@ async function registerEvent(payload: ProsperityPayPayload) {
     .eq("status", "failed")
     .select("id,status,attempts")
     .single();
-  if (retry.error || !retry.data) throw retry.error ?? new Error("Falha ao reabrir evento para nova tentativa.");
+
+  if (retry.error || !retry.data) {
+    throw retry.error ?? new Error("Falha ao reabrir evento para nova tentativa.");
+  }
+
   return { row: retry.data as WebhookEventRow, duplicate: false };
 }
 
 async function buscarLead(email: string) {
   if (!email) return null;
+
   const { data, error } = await supabase
     .from("leads_cadastro")
     .select("*")
@@ -175,11 +208,15 @@ async function buscarLead(email: string) {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
   if (error) throw error;
   return data;
 }
 
-async function buscarOferta(payload: ProsperityPayPayload, empresaId?: string | null) {
+async function buscarOferta(
+  payload: ProsperityPayPayload,
+  empresaId?: string | null
+) {
   const referencias = offerReferences(payload);
   if (!referencias.length) return null;
 
@@ -210,29 +247,42 @@ async function buscarOferta(payload: ProsperityPayPayload, empresaId?: string | 
     .order("empresa_id", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
+
   if (error) throw error;
   return data;
 }
 
 function tipoOferta(oferta: any) {
-  const metadata = oferta?.metadata_json && typeof oferta.metadata_json === "object"
-    ? oferta.metadata_json
-    : {};
-  const tipo = String(metadata.tipo_oferta || "normal").trim().toLowerCase();
-  return ["normal", "vip", "jv", "af", "free"].includes(tipo) ? tipo : "normal";
+  const metadata =
+    oferta?.metadata_json && typeof oferta.metadata_json === "object"
+      ? oferta.metadata_json
+      : {};
+  const tipo = String(metadata.tipo_oferta || "normal")
+    .trim()
+    .toLowerCase();
+
+  return ["normal", "vip", "jv", "af", "free"].includes(tipo)
+    ? tipo
+    : "normal";
 }
 
 async function criarLead(payload: ProsperityPayPayload, oferta: any) {
   const plano = normalizarPlanoRelacao(oferta?.planos);
   const email = normalizarEmail(payload.customer?.email);
-  if (!email) throw new Error("Pagamento aprovado sem email do cliente.");
+
+  if (!email) {
+    throw new Error("Pagamento aprovado sem email do cliente.");
+  }
 
   const { data, error } = await supabase
     .from("leads_cadastro")
     .insert({
       nome: payload.customer?.name || "Cliente",
       email,
-      empresa: payload.product?.name || payload.offer?.name || "Cliente Prosperity Pay",
+      empresa:
+        payload.product?.name ||
+        payload.offer?.name ||
+        "Cliente Prosperity Pay",
       status: "novo",
       pago: false,
       plano_slug: plano?.slug || null,
@@ -243,37 +293,59 @@ async function criarLead(payload: ProsperityPayPayload, oferta: any) {
     })
     .select("*")
     .single();
-  if (error || !data) throw error ?? new Error("Falha ao criar lead do pagamento.");
+
+  if (error || !data) {
+    throw error ?? new Error("Falha ao criar lead do pagamento.");
+  }
+
   return data;
 }
 
-async function salvarPagamento(payload: ProsperityPayPayload, leadId: string | null) {
+async function salvarPagamento(
+  payload: ProsperityPayPayload,
+  leadId: string | null
+) {
   const status = statusPagamento(payload.event);
-  if (!status) throw new Error(`Evento não suportado: ${payload.event}`);
+  if (!status) {
+    throw new Error(`Evento não suportado: ${payload.event}`);
+  }
 
   const { data, error } = await supabase
     .from("pagamentos")
-    .upsert({
-      gateway: "prosperity_pay",
-      evento: payload.event,
-      transaction_id: transactionId(payload),
-      status,
-      valor: Math.round(Number(payload.payment?.amount_cents || 0)),
-      customer_id: payload.customer?.id || null,
-      customer_email: normalizarEmail(payload.customer?.email) || null,
-      customer_nome: payload.customer?.name || null,
-      offer_hash: String(payload.offer?.reference || payload.offer?.id || "") || null,
-      offer_titulo: payload.offer?.name || null,
-      offer_preco: Math.round(Number(payload.payment?.amount_cents || 0)),
-      paid_at: status === "paid" ? pagoEm(payload) : null,
-      refunded_at: status === "refunded" ? (payload.payment?.refunded_at || payload.occurred_at || new Date().toISOString()) : null,
-      lead_id: leadId,
-      payload,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "gateway,transaction_id" })
+    .upsert(
+      {
+        gateway: "prosperity_pay",
+        evento: payload.event,
+        transaction_id: transactionId(payload),
+        status,
+        valor: Math.round(Number(payload.payment?.amount_cents || 0)),
+        customer_id: payload.customer?.id || null,
+        customer_email: normalizarEmail(payload.customer?.email) || null,
+        customer_nome: payload.customer?.name || null,
+        offer_hash:
+          String(payload.offer?.reference || payload.offer?.id || "") || null,
+        offer_titulo: payload.offer?.name || null,
+        offer_preco: Math.round(Number(payload.payment?.amount_cents || 0)),
+        paid_at: status === "paid" ? pagoEm(payload) : null,
+        refunded_at:
+          status === "refunded"
+            ? payload.payment?.refunded_at ||
+              payload.occurred_at ||
+              new Date().toISOString()
+            : null,
+        lead_id: leadId,
+        payload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "gateway,transaction_id" }
+    )
     .select("*")
     .single();
-  if (error || !data) throw error ?? new Error("Falha ao salvar pagamento do Prosperity Pay.");
+
+  if (error || !data) {
+    throw error ?? new Error("Falha ao salvar pagamento do Prosperity Pay.");
+  }
+
   return data;
 }
 
@@ -283,13 +355,23 @@ async function obterOuCriarEmpresa(input: {
   planoId: string;
 }) {
   if (input.lead?.empresa_id) {
-    const existing = await supabase.from("empresas").select("*").eq("id", input.lead.empresa_id).maybeSingle();
+    const existing = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", input.lead.empresa_id)
+      .maybeSingle();
+
     if (existing.error) throw existing.error;
     if (existing.data) return existing.data;
   }
 
-  const email = normalizarEmail(input.lead?.email || input.payload.customer?.email);
-  if (!email) throw new Error("Não foi possível identificar o email da empresa.");
+  const email = normalizarEmail(
+    input.lead?.email || input.payload.customer?.email
+  );
+
+  if (!email) {
+    throw new Error("Não foi possível identificar o email da empresa.");
+  }
 
   const byEmail = await supabase
     .from("empresas")
@@ -298,19 +380,28 @@ async function obterOuCriarEmpresa(input: {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
   if (byEmail.error) throw byEmail.error;
   if (byEmail.data) return byEmail.data;
 
-  const nome = String(input.lead?.empresa || input.payload.customer?.name || input.payload.product?.name || "Empresa Cliente").trim();
+  const nome = String(
+    input.lead?.empresa ||
+      input.payload.customer?.name ||
+      input.payload.product?.name ||
+      "Empresa Cliente"
+  ).trim();
+
   const created = await supabase
     .from("empresas")
     .insert({
       plano_id: input.planoId,
-      nicho_id: input.lead?.nicho_id ?? "10000000-0000-4000-8000-000000000001",
+      nicho_id:
+        input.lead?.nicho_id ?? "10000000-0000-4000-8000-000000000001",
       nome_fantasia: nome,
       razao_social: nome,
       email,
-      nome_responsavel: input.payload.customer?.name || input.lead?.nome || null,
+      nome_responsavel:
+        input.payload.customer?.name || input.lead?.nome || null,
       status: "ativa",
       timezone: "America/Sao_Paulo",
       observacoes: "Criada automaticamente via webhook Prosperity Pay",
@@ -319,13 +410,19 @@ async function obterOuCriarEmpresa(input: {
       termo_aceite_ip: input.lead?.termo_aceite_ip ?? null,
       termo_aceite_user_agent: input.lead?.termo_aceite_user_agent ?? null,
       termo_aceite_versao: input.lead?.termo_aceite_versao ?? null,
-      politica_privacidade_versao: input.lead?.politica_privacidade_versao ?? null,
-      contrato_responsabilidades_versao: input.lead?.contrato_responsabilidades_versao ?? null,
+      politica_privacidade_versao:
+        input.lead?.politica_privacidade_versao ?? null,
+      contrato_responsabilidades_versao:
+        input.lead?.contrato_responsabilidades_versao ?? null,
       termo_aceite_texto: input.lead?.termo_aceite_texto ?? null,
     })
     .select("*")
     .single();
-  if (created.error || !created.data) throw created.error ?? new Error("Falha ao criar empresa.");
+
+  if (created.error || !created.data) {
+    throw created.error ?? new Error("Falha ao criar empresa.");
+  }
+
   return created.data;
 }
 
@@ -357,7 +454,11 @@ async function aplicarAssinatura(input: {
         plano_slug: input.planoSlug,
         tipo_oferta: tipoOferta(input.oferta),
         oferta_id: input.oferta?.id || null,
-        oferta_referencia: input.oferta?.referencia || input.payload.offer?.reference || input.payload.offer?.id || null,
+        oferta_referencia:
+          input.oferta?.referencia ||
+          input.payload.offer?.reference ||
+          input.payload.offer?.id ||
+          null,
         prosperity_pay_offer_id: input.payload.offer?.id || null,
         transaction_id: referencia,
       },
@@ -365,6 +466,7 @@ async function aplicarAssinatura(input: {
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.empresaId);
+
   if (update.error) throw update.error;
 
   const tokens = await supabase.rpc("renovar_tokens_assinatura_plano", {
@@ -374,55 +476,47 @@ async function aplicarAssinatura(input: {
     p_metadata_json: {
       origem: "webhook_prosperity_pay",
       event_id: input.payload.event_id,
-      offer_reference: input.payload.offer?.reference || input.payload.offer?.id || null,
+      offer_reference:
+        input.payload.offer?.reference || input.payload.offer?.id || null,
       amount_cents: input.payload.payment?.amount_cents || 0,
     },
   });
-  if (tokens.error) throw new Error(`Erro ao renovar tokens do plano: ${tokens.error.message}`);
-}
 
-async function enviarConvite(input: { email: string; nome: string; empresaId: string }) {
-  if (!process.env.RESEND_API_KEY) return;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
-  const redirectTo = `${siteUrl}/auth/callback?next=/definir-senha`;
-
-  let generated = await supabase.auth.admin.generateLink({
-    type: "invite",
-    email: input.email,
-    options: { redirectTo, data: { nome: input.nome, empresa_id: input.empresaId } },
-  });
-
-  if (generated.error && /already/i.test(generated.error.message || "")) {
-    generated = await supabase.auth.admin.generateLink({ type: "recovery", email: input.email, options: { redirectTo } });
+  if (tokens.error) {
+    throw new Error(`Erro ao renovar tokens do plano: ${tokens.error.message}`);
   }
-  if (generated.error) throw generated.error;
-
-  const link = generated.data.properties?.action_link;
-  if (!link) throw new Error("Não foi possível gerar link de acesso.");
-
-  const result = await resend.emails.send({
-    from: "CRM Prosperity <no-reply@crmprosperity.com>",
-    to: input.email,
-    subject: "Seu acesso ao CRM Prosperity foi liberado",
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:32px"><h2>Olá, ${input.nome}!</h2><p>Seu pagamento foi aprovado e seu acesso ao CRM Prosperity está liberado.</p><p><a href="${link}" style="display:inline-block;padding:14px 22px;border-radius:999px;background:#0b2551;color:white;text-decoration:none;font-weight:700">Criar senha e acessar</a></p></div>`,
-  });
-  if (result.error) throw new Error(result.error.message);
 }
 
-async function processarAprovado(payload: ProsperityPayPayload, leadInicial: any, pagamentoId: string) {
+async function processarAprovado(
+  payload: ProsperityPayPayload,
+  leadInicial: any,
+  pagamentoId: string
+) {
   const oferta = await buscarOferta(payload, leadInicial?.empresa_id ?? null);
+
   if (!oferta) {
-    throw new Error(`Oferta do Prosperity Pay não mapeada no CRM: ${offerReferences(payload).join(", ") || "sem referência"}.`);
+    throw new Error(
+      `Oferta do Prosperity Pay não mapeada no CRM: ${
+        offerReferences(payload).join(", ") || "sem referência"
+      }.`
+    );
   }
 
   const plano = normalizarPlanoRelacao(oferta.planos);
+
   if (!oferta.plano_id || !plano?.slug) {
-    throw new Error("Oferta do Prosperity Pay sem plano mensal vinculado no CRM.");
+    throw new Error(
+      "Oferta do Prosperity Pay sem plano mensal vinculado no CRM."
+    );
   }
 
-  const lead = leadInicial || await criarLead(payload, oferta);
+  const lead = leadInicial || (await criarLead(payload, oferta));
   const primeiroPagamento = lead.pago !== true;
-  const empresa = await obterOuCriarEmpresa({ lead, payload, planoId: oferta.plano_id });
+  const empresa = await obterOuCriarEmpresa({
+    lead,
+    payload,
+    planoId: oferta.plano_id,
+  });
 
   await aplicarAssinatura({
     empresaId: empresa.id,
@@ -434,8 +528,13 @@ async function processarAprovado(payload: ProsperityPayPayload, leadInicial: any
 
   const pagamentoUpdate = await supabase
     .from("pagamentos")
-    .update({ empresa_id: empresa.id, lead_id: lead.id, updated_at: new Date().toISOString() })
+    .update({
+      empresa_id: empresa.id,
+      lead_id: lead.id,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", pagamentoId);
+
   if (pagamentoUpdate.error) throw pagamentoUpdate.error;
 
   const leadUpdate = await supabase
@@ -451,15 +550,25 @@ async function processarAprovado(payload: ProsperityPayPayload, leadInicial: any
       updated_at: new Date().toISOString(),
     })
     .eq("id", lead.id);
+
   if (leadUpdate.error) throw leadUpdate.error;
 
   if (primeiroPagamento) {
     const email = normalizarEmail(lead.email || payload.customer?.email);
+
     if (email) {
       try {
-        await enviarConvite({ email, nome: lead.nome || payload.customer?.name || "Cliente", empresaId: empresa.id });
+        await enviarPrimeiroAcesso({
+          email,
+          nome: lead.nome || payload.customer?.name || "Cliente",
+          empresaId: empresa.id,
+          telefone: lead.telefone ?? null,
+        });
       } catch (error) {
-        console.error("[PROSPERITY PAY] Pagamento ativado, mas convite falhou:", error);
+        console.error(
+          "[PROSPERITY PAY] Pagamento ativado, mas primeiro acesso falhou:",
+          error
+        );
       }
     }
   }
@@ -471,32 +580,61 @@ export async function POST(request: Request) {
   const rawBody = await request.text();
 
   if (!verifySignature(rawBody, request)) {
-    return NextResponse.json({ ok: false, error: "Assinatura inválida ou expirada." }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Assinatura inválida ou expirada." },
+      { status: 401 }
+    );
   }
 
   let payload: ProsperityPayPayload;
+
   try {
     payload = JSON.parse(rawBody) as ProsperityPayPayload;
     validatePayload(payload, request.headers.get("x-prosperity-event-id"));
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Payload inválido." }, { status: 400 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Payload inválido.",
+      },
+      { status: 400 }
+    );
   }
 
-  const supportedEvents = new Set(["payment.approved", "payment.failed", "payment.refunded", "payment.chargeback"]);
+  const supportedEvents = new Set([
+    "payment.approved",
+    "payment.failed",
+    "payment.refunded",
+    "payment.chargeback",
+  ]);
+
   if (!supportedEvents.has(payload.event!)) {
-    return NextResponse.json({ ok: true, ignored: true, event_id: payload.event_id });
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      event_id: payload.event_id,
+    });
   }
 
   let eventRow: WebhookEventRow;
+
   try {
     const registered = await registerEvent(payload);
     eventRow = registered.row;
+
     if (registered.duplicate) {
-      return NextResponse.json({ ok: true, duplicate: true, event_id: payload.event_id });
+      return NextResponse.json({
+        ok: true,
+        duplicate: true,
+        event_id: payload.event_id,
+      });
     }
   } catch (error) {
     console.error("[PROSPERITY PAY] Falha ao registrar evento:", error);
-    return NextResponse.json({ ok: false, error: "Falha ao registrar evento." }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "Falha ao registrar evento." },
+      { status: 500 }
+    );
   }
 
   try {
@@ -505,7 +643,15 @@ export async function POST(request: Request) {
 
     if (!lead && payload.event === "payment.approved") {
       const oferta = await buscarOferta(payload, null);
-      if (!oferta) throw new Error(`Oferta do Prosperity Pay não mapeada no CRM: ${offerReferences(payload).join(", ") || "sem referência"}.`);
+
+      if (!oferta) {
+        throw new Error(
+          `Oferta do Prosperity Pay não mapeada no CRM: ${
+            offerReferences(payload).join(", ") || "sem referência"
+          }.`
+        );
+      }
+
       lead = await criarLead(payload, oferta);
     }
 
@@ -519,7 +665,11 @@ export async function POST(request: Request) {
 
     await supabase
       .from("prosperity_pay_webhook_eventos")
-      .update({ status: "processed", processed_at: new Date().toISOString(), error_message: null })
+      .update({
+        status: "processed",
+        processed_at: new Date().toISOString(),
+        error_message: null,
+      })
       .eq("id", eventRow.id);
 
     return NextResponse.json({
@@ -531,12 +681,16 @@ export async function POST(request: Request) {
       empresa_id: empresaId,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido.";
+    const message =
+      error instanceof Error ? error.message : "Erro desconhecido.";
+
     await supabase
       .from("prosperity_pay_webhook_eventos")
       .update({ status: "failed", error_message: message.slice(0, 1000) })
       .eq("id", eventRow.id);
+
     console.error("[PROSPERITY PAY WEBHOOK]", error);
+
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

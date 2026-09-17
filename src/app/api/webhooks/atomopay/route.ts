@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { Resend } from "resend";
 import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
+import { enviarPrimeiroAcesso } from "@/lib/auth/enviar-primeiro-acesso";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabase = getSupabaseAdmin();
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 /* =========================
    HELPERS GERAIS
@@ -357,7 +356,6 @@ async function obterPlanoPagamento(params: {
   }
 
   const planoSlug = obterPlanoSlugFallback(params.payload, params.lead);
-  
   const planoId = await buscarPlanoIdPorSlug(planoSlug);
 
   if (!planoId) {
@@ -635,7 +633,10 @@ async function salvarPagamento(payload: any, leadId: string | null) {
         offer_hash: obterOfferHash(payload),
         offer_titulo: obterTituloOferta(payload),
         offer_preco: obterPrecoOferta(payload),
-        paid_at: status === "paid" ? obterPagoEm(payload) : somenteDataValida(payload.paid_at),
+        paid_at:
+          status === "paid"
+            ? obterPagoEm(payload)
+            : somenteDataValida(payload.paid_at),
         refunded_at:
           status === "refunded"
             ? somenteDataValida(payload.refunded_at) ?? new Date().toISOString()
@@ -664,7 +665,9 @@ async function aplicarPagamentoTokensIa(params: {
   const referencia = obterTransactionId(payload);
 
   if (!referencia) {
-    throw new Error("Pagamento aprovado sem identificador para aplicar tokens de IA.");
+    throw new Error(
+      "Pagamento aprovado sem identificador para aplicar tokens de IA."
+    );
   }
 
   const pagoEm = obterPagoEm(payload);
@@ -742,94 +745,6 @@ async function renovarTokensPlanoSemOfertaConfigurada(params: {
 }
 
 /* =========================
-   CONVITE AUTH
-========================= */
-
-async function enviarConviteAuth(params: {
-  email: string;
-  nome: string;
-  empresaId: string;
-  telefone?: string | null;
-}) {
-  const { email, nome, empresaId, telefone } = params;
-
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
-  const redirectTo = `${siteUrl}/auth/callback?next=/definir-senha`;
-
-  let inviteLink: string | null = null;
-
-  const { data: inviteData, error: inviteError } =
-    await supabase.auth.admin.generateLink({
-      type: "invite",
-      email,
-      options: {
-        redirectTo,
-        data: {
-          nome,
-          empresa_id: empresaId,
-          telefone: telefone ?? null,
-        },
-      },
-    });
-
-  if (!inviteError) {
-    inviteLink = inviteData.properties?.action_link ?? null;
-  }
-
-  if (inviteError) {
-    const mensagemErro = String(inviteError.message ?? "").toLowerCase();
-
-    const usuarioJaExiste =
-      mensagemErro.includes("already been registered") ||
-      mensagemErro.includes("already registered") ||
-      mensagemErro.includes("user already");
-
-    if (!usuarioJaExiste) {
-      throw new Error(inviteError.message);
-    }
-
-    console.warn(
-      "[WEBHOOK ATOMO] Usuário já existe no Supabase Auth. Enviando recovery link.",
-      email
-    );
-
-    const { data: recoveryData, error: recoveryError } =
-      await supabase.auth.admin.generateLink({
-        type: "recovery",
-        email,
-        options: {
-          redirectTo,
-        },
-      });
-
-    if (recoveryError) {
-      throw new Error(recoveryError.message);
-    }
-
-    inviteLink = recoveryData.properties?.action_link ?? null;
-  }
-
-  if (!inviteLink) {
-    throw new Error("Não foi possível gerar o link de definição de senha.");
-  }
-
-  const { error: resendError } = await resend.emails.send({
-    from: "CRM Prosperity <no-reply@crmprosperity.com>",
-    to: email,
-    subject: "Seu acesso ao CRM Prosperity foi liberado",
-    html: getDefinirSenhaTemplate({
-      nome,
-      link: inviteLink,
-    }),
-  });
-
-  if (resendError) {
-    console.error("[RESEND DEFINIR SENHA ERRO]", resendError);
-    throw new Error("Erro ao enviar email de definição de senha.");
-  }
-}
-
-/* =========================
    PROCESSAR PAGAMENTO
 ========================= */
 
@@ -849,7 +764,6 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
   });
 
   const primeiroPagamento = lead?.pago !== true;
-
   const email = normalizarEmail(lead?.email || payload.customer?.email);
 
   if (!email) {
@@ -861,16 +775,16 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
     payload,
   });
 
-    if (!ehRecargaTokens) {
-      await aplicarAssinaturaPlano({
-        empresaId: empresa.id,
-        planoId: planoPagamento.planoId,
-        planoSlug: planoPagamento.planoSlug,
-        payload,
-        oferta: planoPagamento.oferta,
-        tipoOferta: planoPagamento.tipoOferta,
-      });
-    }
+  if (!ehRecargaTokens) {
+    await aplicarAssinaturaPlano({
+      empresaId: empresa.id,
+      planoId: planoPagamento.planoId,
+      planoSlug: planoPagamento.planoSlug,
+      payload,
+      oferta: planoPagamento.oferta,
+      tipoOferta: planoPagamento.tipoOferta,
+    });
+  }
 
   const resultadoTokens = await aplicarPagamentoTokensIa({
     empresaId: empresa.id,
@@ -899,7 +813,7 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
     .eq("transaction_id", transactionId);
 
   if (primeiroPagamento) {
-    await enviarConviteAuth({
+    await enviarPrimeiroAcesso({
       email,
       nome: lead?.nome || payload.customer?.name || "Cliente",
       empresaId: empresa.id,
@@ -956,7 +870,6 @@ export async function POST(request: Request) {
     }
 
     const pagamento = await salvarPagamento(body, lead?.id ?? null);
-
     const status = normalizarStatusPagamento(body);
 
     if (status === "paid") {
@@ -982,139 +895,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
-
-/* =========================
-   TEMPLATE EMAIL
-========================= */
-
-function getDefinirSenhaTemplate({
-  nome,
-  link,
-}: {
-  nome?: string | null;
-  link: string;
-}) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com";
-  const logoUrl = `${siteUrl}/logo.png`;
-  const nomeCliente = nome?.trim() || "cliente";
-
-  return `
-  <!DOCTYPE html>
-  <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Acesso liberado</title>
-    </head>
-
-    <body style="margin:0; padding:0; background:#eef3ff; font-family:Arial, Helvetica, sans-serif;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3ff; padding:40px 16px;">
-        <tr>
-          <td align="center">
-
-            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px; background:#ffffff; border-radius:24px; overflow:hidden; box-shadow:0 20px 60px rgba(15, 23, 42, 0.14);">
-
-              <tr>
-                <td style="
-                  background: linear-gradient(135deg, #04254d 0%, #0b1526 25%, #0b1526 75%, #082d29 100%);
-                  padding: 40px 32px;
-                  text-align: center;
-                  position: relative;
-                ">
-
-                  <div style="
-                    position:absolute;
-                    inset:0;
-                    background:
-                      radial-gradient(circle at top left, rgba(59,130,246,0.18), transparent 40%),
-                      radial-gradient(circle at bottom right, rgba(16,185,129,0.12), transparent 40%);
-                    opacity:0.6;
-                  "></div>
-
-                  <div style="position:relative; z-index:1;">
-
-                    <img 
-                      src="${logoUrl}" 
-                      alt="CRM Prosperity" 
-                      width="170" 
-                      style="display:block; margin:0 auto 18px auto;"
-                    />
-
-                    <h1 style="margin:0; color:#ffffff; font-size:26px; font-weight:700;">
-                      Seu acesso foi liberado
-                    </h1>
-
-                    <p style="margin:10px 0 0 0; color:#cbd5f5; font-size:15px;">
-                      Bem-vindo ao CRM Prosperity
-                    </p>
-
-                  </div>
-
-                </td>
-              </tr>
-
-              <tr>
-                <td style="padding:40px 34px 32px 34px;">
-                  <p style="margin:0 0 18px 0; color:#0f172a; font-size:18px; line-height:1.6; font-weight:700;">
-                    Olá, ${nomeCliente}!
-                  </p>
-
-                  <p style="margin:0 0 18px 0; color:#475569; font-size:15px; line-height:1.7;">
-                    Seu pagamento foi aprovado e seu acesso ao <strong>CRM Prosperity</strong> já está pronto.
-                  </p>
-
-                  <p style="margin:0 0 28px 0; color:#475569; font-size:15px; line-height:1.7;">
-                    Para começar a usar a plataforma, clique no botão abaixo e crie sua senha de acesso com segurança.
-                  </p>
-
-                  <table width="100%" cellpadding="0" cellspacing="0">
-                    <tr>
-                      <td align="center" style="padding:8px 0 32px 0;">
-                        <a 
-                          href="${link}"
-                          style="display:inline-block; background: linear-gradient(135deg, #0f509a 10%, #0b2551 100%); color:#ffffff; text-decoration:none; padding:16px 30px; border-radius:999px; font-size:15px; font-weight:700; box-shadow:0 10px 24px rgba(37,99,235,0.35);"
-                        >
-                          Criar senha e acessar
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
-
-                  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:18px 20px; margin-bottom:26px;">
-                    <p style="margin:0; color:#64748b; font-size:13px; line-height:1.6;">
-                      Se o botão não funcionar, copie e cole este link no seu navegador:
-                    </p>
-
-                    <p style="margin:10px 0 0 0; color:#0b5ebd; font-size:12px; line-height:1.6; word-break:break-all;">
-                      ${link}
-                    </p>
-                  </div>
-
-                  <p style="margin:0; color:#64748b; font-size:13px; line-height:1.7;">
-                    Por segurança, recomendamos criar uma senha forte e não compartilhar seus dados de acesso com terceiros.
-                  </p>
-                </td>
-              </tr>
-
-              <tr>
-                <td style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:24px 32px; text-align:center;">
-                  <p style="margin:0 0 8px 0; color:#0f172a; font-size:14px; font-weight:700;">
-                    CRM Prosperity
-                  </p>
-
-                  <p style="margin:0; color:#94a3b8; font-size:12px; line-height:1.6;">
-                    © ${new Date().getFullYear()} CRM Prosperity. Todos os direitos reservados.
-                  </p>
-                </td>
-              </tr>
-
-            </table>
-
-          </td>
-        </tr>
-      </table>
-    </body>
-  </html>
-  `;
 }
