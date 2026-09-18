@@ -12,9 +12,13 @@ type ProsperityPayOferta = {
   metadata_json: Record<string, unknown> | null;
 };
 
-const PROSPERITY_PAY_BASICO_TESTE_URL =
+const PROSPERITY_PAY_BASICO_PADRAO_URL =
+  "https://prosperity-pay.vercel.app/checkout/plano-basic-be3817c7";
+const PROSPERITY_PAY_BASICO_PADRAO_REFERENCIA = "plano-basic-be3817c7";
+
+const PROSPERITY_PAY_JV_TESTE_URL =
   "https://prosperity-pay.vercel.app/checkout/248a0b141abf";
-const PROSPERITY_PAY_BASICO_TESTE_REFERENCIA = "248a0b141abf";
+const PROSPERITY_PAY_JV_TESTE_REFERENCIA = "248a0b141abf";
 
 function obterAffiliateRef(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
@@ -173,12 +177,17 @@ async function obterCheckoutProsperityPay(
     throw new Error("A oferta gratuita não utiliza checkout da Prosperity Pay.");
   }
 
-  // Override temporário para o teste ponta a ponta do Plano Básico por R$ 5.
-  // Remover quando o teste financeiro/afiliado for concluído.
-  if (planoSlug === "basico") {
+  if (planoSlug === "basico" && tipoOferta === "jv") {
     return {
-      checkoutUrl: PROSPERITY_PAY_BASICO_TESTE_URL,
-      referencia: PROSPERITY_PAY_BASICO_TESTE_REFERENCIA,
+      checkoutUrl: PROSPERITY_PAY_JV_TESTE_URL,
+      referencia: PROSPERITY_PAY_JV_TESTE_REFERENCIA,
+    };
+  }
+
+  if (planoSlug === "basico" && tipoOferta === "normal") {
+    return {
+      checkoutUrl: PROSPERITY_PAY_BASICO_PADRAO_URL,
+      referencia: PROSPERITY_PAY_BASICO_PADRAO_REFERENCIA,
     };
   }
 
