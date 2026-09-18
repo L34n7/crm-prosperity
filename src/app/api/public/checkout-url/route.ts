@@ -12,6 +12,41 @@ type ProsperityPayOferta = {
   metadata_json: Record<string, unknown> | null;
 };
 
+const PROSPERITY_PAY_BASICO_TESTE_URL =
+  "https://prosperity-pay.vercel.app/checkout/248a0b141abf";
+const PROSPERITY_PAY_BASICO_TESTE_REFERENCIA = "248a0b141abf";
+
+function obterAffiliateRef(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const value = String(
+    (metadata as Record<string, unknown>).affiliate_ref ?? ""
+  ).trim();
+
+  if (!value || value.length > 128 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function adicionarAffiliateRef(checkoutUrl: string, affiliateRef: string | null) {
+  if (!affiliateRef) {
+    return checkoutUrl;
+  }
+
+  try {
+    const url = new URL(checkoutUrl);
+    url.searchParams.set("ref", affiliateRef);
+    return url.toString();
+  } catch {
+    const separador = checkoutUrl.includes("?") ? "&" : "?";
+    return `${checkoutUrl}${separador}ref=${encodeURIComponent(affiliateRef)}`;
+  }
+}
+
 function obterCheckoutUrlAtomo(tipoOferta: string | null, planoSlug: PlanoSlug | null) {
   const checkoutPadrao = process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ?? "";
   const checkoutVip = process.env.ATOMOPAY_CHECKOUT_URL_VIP ?? "";
@@ -138,6 +173,15 @@ async function obterCheckoutProsperityPay(
     throw new Error("A oferta gratuita não utiliza checkout da Prosperity Pay.");
   }
 
+  // Override temporário para o teste ponta a ponta do Plano Básico por R$ 5.
+  // Remover quando o teste financeiro/afiliado for concluído.
+  if (planoSlug === "basico") {
+    return {
+      checkoutUrl: PROSPERITY_PAY_BASICO_TESTE_URL,
+      referencia: PROSPERITY_PAY_BASICO_TESTE_REFERENCIA,
+    };
+  }
+
   const { data: plano, error: planoError } = await supabase
     .from("planos")
     .select("id")
@@ -229,7 +273,7 @@ export async function POST(request: Request) {
 
     const { data: lead, error } = await supabase
       .from("leads_cadastro")
-      .select("id, tipo_oferta")
+      .select("id, tipo_oferta, metadata_json")
       .eq("id", leadId)
       .maybeSingle();
 
@@ -256,12 +300,18 @@ export async function POST(request: Request) {
 
     if (gateway === "prosperity_pay") {
       const checkout = await obterCheckoutProsperityPay(planoSlug, tipoOferta);
+      const affiliateRef = obterAffiliateRef(lead.metadata_json);
+      const checkoutUrl = adicionarAffiliateRef(
+        checkout.checkoutUrl,
+        affiliateRef
+      );
 
       return NextResponse.json({
         ok: true,
         gateway,
-        checkout_url: checkout.checkoutUrl,
+        checkout_url: checkoutUrl,
         checkout_reference: checkout.referencia,
+        affiliate_ref: affiliateRef,
       });
     }
 

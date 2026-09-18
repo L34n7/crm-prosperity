@@ -68,6 +68,22 @@ export default function ComecarPage() {
     setDocumentoLegal(documento);
   }
 
+  function obterAffiliateRefDaUrl() {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const valor = String(
+      new URLSearchParams(window.location.search).get("ref") ?? ""
+    ).trim();
+
+    if (!valor || valor.length > 128 || !/^[A-Za-z0-9_-]+$/.test(valor)) {
+      return null;
+    }
+
+    return valor;
+  }
+
   function obterTipoOfertaDaUrl(): TipoOferta {
     if (typeof window === "undefined") {
       return "normal";
@@ -122,6 +138,7 @@ export default function ComecarPage() {
     }
 
     const tipoOferta = obterTipoOfertaDaUrl();
+    const affiliateRef = obterAffiliateRefDaUrl();
 
     setLoading(true);
 
@@ -138,6 +155,7 @@ export default function ComecarPage() {
           empresa,
           segmento_codigo: segmento,
           tipo_oferta: tipoOferta,
+          affiliate_ref: affiliateRef,
           aceite_contrato: aceiteContrato,
           chave_free:
             tipoOferta === "free"
@@ -156,6 +174,11 @@ export default function ComecarPage() {
 
       localStorage.setItem("lead_id", data.lead_id);
       localStorage.setItem("tipo_oferta", data.tipo_oferta || tipoOferta);
+      if (data.affiliate_ref) {
+        localStorage.setItem("affiliate_ref", data.affiliate_ref);
+      } else {
+        localStorage.removeItem("affiliate_ref");
+      }
 
       router.push("/plano");
     } catch (err) {

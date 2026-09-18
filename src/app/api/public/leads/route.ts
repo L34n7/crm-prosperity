@@ -55,6 +55,13 @@ export async function POST(request: Request) {
     const empresa = String(body?.empresa ?? "").trim();
     const segmento = getSegmentoEmpresa(body?.segmento_codigo);
     const aceiteContrato = body?.aceite_contrato === true;
+    const affiliateRefRaw = String(body?.affiliate_ref ?? "").trim();
+    const affiliateRef =
+      affiliateRefRaw &&
+      affiliateRefRaw.length <= 128 &&
+      /^[A-Za-z0-9_-]+$/.test(affiliateRefRaw)
+        ? affiliateRefRaw
+        : null;
     const tipoOferta = normalizarTipoOferta(
       body?.tipo_oferta,
       body?.chave_free
@@ -87,6 +94,33 @@ export async function POST(request: Request) {
 
     if (nichoError || !nicho) {
       throw new Error("Segmento informado não está disponível.");
+    }
+
+    let affiliate:
+      | {
+          external_membership_id: string;
+          affiliate_ref: string;
+        }
+      | null = null;
+
+    if (affiliateRef) {
+      const { data: affiliateData, error: affiliateError } = await supabase
+        .from("prosperity_pay_afiliados")
+        .select("external_membership_id,affiliate_ref")
+        .eq("affiliate_ref", affiliateRef)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (affiliateError) {
+        console.error("Erro ao validar afiliado Prosperity Pay:", affiliateError);
+        throw new Error("Não foi possível validar o link do afiliado.");
+      }
+
+      if (!affiliateData) {
+        throw new Error("Link de afiliado inválido ou inativo.");
+      }
+
+      affiliate = affiliateData;
     }
 
     // 🔍 verificar se já existe usuário com esse email
@@ -125,6 +159,14 @@ export async function POST(request: Request) {
         politica_privacidade_versao: VERSAO_POLITICA_PRIVACIDADE,
         contrato_responsabilidades_versao: VERSAO_CONTRATO_RESPONSABILIDADES,
         termo_aceite_texto: TEXTO_ACEITE_LGPD,
+        metadata_json: affiliate
+          ? {
+              affiliate_ref: affiliate.affiliate_ref,
+              affiliate_source: "prosperity_pay",
+              affiliate_membership_id: affiliate.external_membership_id,
+              affiliate_attributed_at: new Date().toISOString(),
+            }
+          : null,
       })
       .select("id")
       .single();
@@ -138,6 +180,7 @@ export async function POST(request: Request) {
       ok: true,
       lead_id: data.id,
       tipo_oferta: tipoOferta,
+      affiliate_ref: affiliate?.affiliate_ref ?? null,
     });
   } catch (error) {
     console.error("Erro ao criar cadastro:", error);
