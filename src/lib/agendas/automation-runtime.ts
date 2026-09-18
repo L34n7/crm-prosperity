@@ -61,6 +61,22 @@ function confirmationAdvanceWindowExpiredWhenPlanned(job: Job) {
   return originallyScheduledAt <= plannedAt;
 }
 
+function reminderAdvanceWindowExpiredWhenPlanned(job: Job) {
+  if (!["lembrete", "aviso_responsavel"].includes(job.tipo)) return false;
+
+  const payload = asObject(job.payload_json);
+  const plannedAt = Date.parse(String(payload.planejado_em || ""));
+  const originallyScheduledAt = Date.parse(
+    String(payload.horario_original_programado || job.executar_em || "")
+  );
+
+  if (!Number.isFinite(plannedAt) || !Number.isFinite(originallyScheduledAt)) {
+    return false;
+  }
+
+  return originallyScheduledAt <= plannedAt;
+}
+
 function integrationScopeProblem(context: Context) {
   const allowed = calendarIntegrationIds(context.agenda?.metadata_json);
 
@@ -117,6 +133,14 @@ async function processJob(job: Job) {
     await cancelJob(
       job,
       "Confirmação cancelada porque a antecedência configurada já havia passado quando o agendamento foi planejado."
+    );
+    return "cancelado" as const;
+  }
+
+  if (reminderAdvanceWindowExpiredWhenPlanned(job)) {
+    await cancelJob(
+      job,
+      "Lembrete cancelado porque a antecedência configurada já havia passado quando o agendamento foi planejado."
     );
     return "cancelado" as const;
   }
