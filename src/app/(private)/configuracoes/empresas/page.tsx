@@ -131,6 +131,7 @@ export default function EmpresasPage() {
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
+  const [reenviandoAcessoId, setReenviandoAcessoId] = useState<string | null>(null);
 
   const [editNomeFantasia, setEditNomeFantasia] = useState("");
   const [editRazaoSocial, setEditRazaoSocial] = useState("");
@@ -341,6 +342,40 @@ export default function EmpresasPage() {
 
   function toggleExpandir(empresaId: string) {
     setExpandidoId((atual) => (atual === empresaId ? null : empresaId));
+  }
+
+  async function reenviarPrimeiroAcessoAlternativo(empresa: Empresa) {
+    const confirmado = window.confirm(
+      `Enviar o acesso alternativo para ${empresa.email}? O link de primeiro acesso padrão continuará válido até ser utilizado ou expirar.`
+    );
+
+    if (!confirmado) return;
+
+    setMensagem("");
+    setErro("");
+    setReenviandoAcessoId(empresa.id);
+
+    try {
+      const response = await fetch(
+        `/api/empresas/${empresa.id}/reenviar-primeiro-acesso-alternativo`,
+        { method: "POST" }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setErro(data.error || "Não foi possível enviar o acesso alternativo.");
+        return;
+      }
+
+      setMensagem(
+        data.message ||
+          `Acesso alternativo enviado para ${empresa.email} com sucesso.`
+      );
+    } catch {
+      setErro("Não foi possível enviar o acesso alternativo.");
+    } finally {
+      setReenviandoAcessoId(null);
+    }
   }
 
   useEffect(() => {
@@ -905,6 +940,34 @@ export default function EmpresasPage() {
                                 {empresa.observacoes || "Sem observações"}
                               </span>
                             </div>
+
+                            {podeEditarEmpresas && (
+                              <div className={styles.accessBlock}>
+                                <div>
+                                  <span className={styles.infoLabel}>
+                                    Primeiro acesso
+                                  </span>
+                                  <span className={styles.infoValue}>
+                                    Envie o modelo antigo do Supabase Auth como
+                                    contingência. O link padrão de 24 horas e 3
+                                    aberturas não será invalidado pelo envio.
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className={styles.secondaryButton}
+                                  onClick={() =>
+                                    reenviarPrimeiroAcessoAlternativo(empresa)
+                                  }
+                                  disabled={reenviandoAcessoId === empresa.id}
+                                >
+                                  {reenviandoAcessoId === empresa.id
+                                    ? "Enviando..."
+                                    : "Reenviar primeiro acesso alternativo"}
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

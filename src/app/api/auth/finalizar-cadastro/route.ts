@@ -262,6 +262,42 @@ export async function POST(request: Request) {
       usuarioId: (usuario as UsuarioRow).id,
     });
 
+    // O fluxo legado define a senha diretamente pelo Supabase Auth. Ao concluir,
+    // sincronizamos o estado com o primeiro acesso novo sem invalidar seus links:
+    // eles passam a informar que a senha já foi cadastrada.
+    const senhaDefinidaEm = new Date().toISOString();
+    const [authMetadataResult, tokensResult] = await Promise.all([
+      supabaseAdmin.auth.admin.updateUserById(authUser.id, {
+        app_metadata: {
+          ...(authUser.app_metadata || {}),
+          primeiro_acesso_senha_definida_em: senhaDefinidaEm,
+        },
+      }),
+      supabaseAdmin
+        .from("primeiro_acesso_tokens")
+        .update({
+          senha_definida_em: senhaDefinidaEm,
+          processando_em: null,
+          updated_at: senhaDefinidaEm,
+        })
+        .eq("auth_user_id", authUser.id)
+        .is("senha_definida_em", null),
+    ]);
+
+    if (authMetadataResult.error) {
+      console.error(
+        "[FINALIZAR CADASTRO] Falha ao sincronizar metadata do primeiro acesso:",
+        authMetadataResult.error
+      );
+    }
+
+    if (tokensResult.error) {
+      console.error(
+        "[FINALIZAR CADASTRO] Falha ao sincronizar tokens do primeiro acesso:",
+        tokensResult.error
+      );
+    }
+
     const { data: lead, error: erroLead } = await supabaseAdmin
       .from("leads_cadastro")
       .select("*")

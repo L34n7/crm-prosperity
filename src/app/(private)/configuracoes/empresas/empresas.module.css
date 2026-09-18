@@ -445,3 +445,36 @@
     padding: 0px 10px calc(96px + env(safe-area-inset-bottom));
   }
 }
+
+
+.accessBlock {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.accessBlock > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.accessBlock button {
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .accessBlock {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .accessBlock button {
+    width: 100%;
+  }
+}

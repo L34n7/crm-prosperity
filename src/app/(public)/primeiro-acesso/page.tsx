@@ -34,6 +34,7 @@ export default function PrimeiroAcessoPage() {
   const [mostrarConfirmacao, setMostrarConfirmacao] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
+  const [motivoErro, setMotivoErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
   const requisitos = useMemo(
@@ -64,6 +65,7 @@ export default function PrimeiroAcessoPage() {
 
       if (!tokenUrl) {
         setErro("Link de primeiro acesso inválido.");
+        setMotivoErro("invalido");
         setValidandoLink(false);
         return;
       }
@@ -81,9 +83,11 @@ export default function PrimeiroAcessoPage() {
 
         if (!resposta.ok || !json.ok) {
           setErro(json.error || "Não foi possível validar este link.");
+          setMotivoErro(json.motivo || "invalido");
           return;
         }
 
+        setMotivoErro("");
         setLinkValido(true);
         setEmailUsuario(json.email || "");
         setAberturasRestantes(
@@ -94,6 +98,7 @@ export default function PrimeiroAcessoPage() {
         setExpiraEm(json.expira_em || null);
       } catch {
         setErro("Não foi possível validar este link de primeiro acesso.");
+        setMotivoErro("erro_validacao");
       } finally {
         setValidandoLink(false);
       }
@@ -130,9 +135,16 @@ export default function PrimeiroAcessoPage() {
 
       if (!resposta.ok || !json.ok) {
         setErro(json.error || "Não foi possível cadastrar sua senha.");
+
+        if (json.motivo === "senha_definida") {
+          setMotivoErro("senha_definida");
+          setLinkValido(false);
+        }
+
         return;
       }
 
+      setMotivoErro("");
       setLinkValido(false);
       setSucesso("Senha criada com sucesso. Redirecionando para o login...");
 
@@ -178,8 +190,20 @@ export default function PrimeiroAcessoPage() {
         {validandoLink ? (
           <div className={styles.infoBox}>Validando seu link de acesso...</div>
         ) : !linkValido ? (
-          <div className={erro ? styles.errorBox : styles.infoBox}>
-            {erro || "Este link não está mais disponível."}
+          <div className={styles.unavailableArea}>
+            <div className={erro ? styles.errorBox : styles.infoBox}>
+              {erro || "Este link não está mais disponível."}
+            </div>
+
+            {motivoErro === "senha_definida" ? (
+              <button
+                type="button"
+                className={styles.loginButton}
+                onClick={() => router.push("/login")}
+              >
+                Fazer login
+              </button>
+            ) : null}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className={styles.form}>
