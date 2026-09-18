@@ -39,6 +39,39 @@ type ProsperityPayPayload = {
     name?: string | null;
     email?: string | null;
   };
+  integration?: { key?: string | null };
+  affiliate?: {
+    id?: string;
+    reference?: string;
+    status?: string;
+    user_id?: string | null;
+    name?: string | null;
+    email?: string | null;
+    approved_at?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  };
+  program?: {
+    id?: string;
+    mode?: string;
+    active?: boolean;
+    cookie_days?: number;
+    attribution_model?: string;
+  };
+  offers?: Array<{
+    id?: string;
+    reference?: string | null;
+    name?: string | null;
+    status?: string | null;
+    affiliate_enabled?: boolean;
+    commission_type?: string | null;
+    commission_bps?: number | null;
+    commission_fixed_cents?: number | null;
+  }>;
+  tracking?: {
+    parameter?: string | null;
+    value?: string | null;
+  };
 };
 
 type WebhookEventRow = {
@@ -126,7 +159,7 @@ function validatePayload(
   payload: ProsperityPayPayload,
   headerEventId: string | null
 ) {
-  if (!payload.event_id || !payload.event || !payload.payment?.id) {
+  if (!payload.event_id || !payload.event) {
     throw new Error("Payload do Prosperity Pay incompleto.");
   }
 
@@ -134,8 +167,16 @@ function validatePayload(
     throw new Error("Event ID do cabeçalho difere do payload.");
   }
 
-  if (!transactionId(payload)) {
-    throw new Error("Pagamento sem identificador de transação.");
+  if (payload.event.startsWith("payment.")) {
+    if (!payload.payment?.id || !transactionId(payload)) {
+      throw new Error("Pagamento sem identificador de transação.");
+    }
+  }
+
+  if (payload.event.startsWith("affiliate.")) {
+    if (!payload.affiliate?.id || !payload.affiliate.reference || !payload.product?.id) {
+      throw new Error("Evento de afiliado incompleto.");
+    }
   }
 }
 
@@ -145,7 +186,7 @@ async function registerEvent(payload: ProsperityPayPayload) {
     .insert({
       event_id: payload.event_id,
       event_type: payload.event,
-      payment_id: transactionId(payload),
+      payment_id: transactionId(payload) || null,
       payload,
       status: "processing",
       attempts: 1,
@@ -196,6 +237,60 @@ async function registerEvent(payload: ProsperityPayPayload) {
   }
 
   return { row: retry.data as WebhookEventRow, duplicate: false };
+}
+
+async function sincronizarAfiliado(payload: ProsperityPayPayload, requestOrigin: string) {
+  const affiliate = payload.affiliate;
+  if (!affiliate?.id || !affiliate.reference || !payload.product?.id) {
+    throw new Error("Evento de afiliado sem identificação suficiente.");
+  }
+
+  const status = String(affiliate.status || "pending");
+  const trackingParameter = String(payload.tracking?.parameter || "ref").trim() || "ref";
+  const trackingValue = String(payload.tracking?.value || affiliate.reference).trim();
+  const trackingUrl =
+    status === "active"
+      ? `${requestOrigin}/comecar?${encodeURIComponent(trackingParameter)}=${encodeURIComponent(trackingValue)}`
+      : null;
+
+  const offerReferences = (payload.offers || [])
+    .map((offer) => String(offer.reference || "").trim())
+    .filter(Boolean);
+
+  const { data, error } = await supabase
+    .from("prosperity_pay_afiliados")
+    .upsert(
+      {
+        integration_key: String(payload.integration?.key || "prosperity_pay").trim(),
+        external_membership_id: affiliate.id,
+        external_program_id: payload.program?.id || null,
+        external_user_id: affiliate.user_id || null,
+        affiliate_ref: affiliate.reference,
+        nome: affiliate.name || null,
+        email: normalizarEmail(affiliate.email) || null,
+        status,
+        product_id: payload.product.id,
+        product_name: payload.product.name || null,
+        offer_references: offerReferences,
+        tracking_parameter: trackingParameter,
+        tracking_url: trackingUrl,
+        cookie_days: Number(payload.program?.cookie_days || 30),
+        attribution_model: payload.program?.attribution_model || "last_click",
+        last_event_id: payload.event_id || null,
+        payload,
+        synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "integration_key,external_membership_id" }
+    )
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Falha ao sincronizar afiliado do Prosperity Pay.");
+  }
+
+  return data;
 }
 
 async function buscarLead(email: string) {
@@ -606,6 +701,11 @@ export async function POST(request: Request) {
     "payment.failed",
     "payment.refunded",
     "payment.chargeback",
+    "affiliate.pending",
+    "affiliate.active",
+    "affiliate.blocked",
+    "affiliate.rejected",
+    "affiliate.cancelled",
   ]);
 
   if (!supportedEvents.has(payload.event!)) {
@@ -638,6 +738,29 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (payload.event?.startsWith("affiliate.")) {
+      const afiliado = await sincronizarAfiliado(payload, new URL(request.url).origin);
+
+      await supabase
+        .from("prosperity_pay_webhook_eventos")
+        .update({
+          status: "processed",
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq("id", eventRow.id);
+
+      return NextResponse.json({
+        ok: true,
+        event_id: payload.event_id,
+        event: payload.event,
+        affiliate_id: afiliado.external_membership_id,
+        affiliate_ref: afiliado.affiliate_ref,
+        affiliate_status: afiliado.status,
+        tracking_url: afiliado.tracking_url,
+      });
+    }
+
     const email = normalizarEmail(payload.customer?.email);
     let lead = await buscarLead(email);
 
