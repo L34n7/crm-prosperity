@@ -71,6 +71,8 @@ type ProsperityPayPayload = {
   tracking?: {
     parameter?: string | null;
     value?: string | null;
+    base_url?: string | null;
+    url?: string | null;
   };
 };
 
@@ -248,9 +250,24 @@ async function sincronizarAfiliado(payload: ProsperityPayPayload, requestOrigin:
   const status = String(affiliate.status || "pending");
   const trackingParameter = String(payload.tracking?.parameter || "ref").trim() || "ref";
   const trackingValue = String(payload.tracking?.value || affiliate.reference).trim();
+
+  let providedTrackingUrl: string | null = null;
+  const rawTrackingUrl = String(payload.tracking?.url || "").trim();
+  if (rawTrackingUrl) {
+    try {
+      const parsed = new URL(rawTrackingUrl);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        providedTrackingUrl = rawTrackingUrl;
+      }
+    } catch {
+      providedTrackingUrl = null;
+    }
+  }
+
   const trackingUrl =
     status === "active"
-      ? `${requestOrigin}/comecar?${encodeURIComponent(trackingParameter)}=${encodeURIComponent(trackingValue)}`
+      ? providedTrackingUrl ||
+        `${requestOrigin}/comecar?${encodeURIComponent(trackingParameter)}=${encodeURIComponent(trackingValue)}`
       : null;
 
   const offerReferences = (payload.offers || [])
