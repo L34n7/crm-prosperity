@@ -395,26 +395,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: contatosExistentes, error: contatosError } = await supabaseAdmin
-      .from("contatos")
-      .select("telefone")
-      .eq("empresa_id", usuario.empresa_id);
-
-    if (contatosError) {
-      return NextResponse.json(
-        { ok: false, error: contatosError.message },
-        { status: 500 }
-      );
-    }
-
-    const telefonesBanco = new Set(
-      (contatosExistentes || [])
-        .map((item) => normalizarTelefoneBrasilParaWhatsApp(item.telefone))
-        .filter(Boolean)
-    );
-
     const telefonesArquivo = new Set<string>();
 
+    const candidatos: LinhaPreview[] = [];
     const validos: LinhaPreview[] = [];
     const alertas: LinhaPreview[] = [];
     const duplicadosBanco: LinhaPreview[] = [];
@@ -489,27 +472,55 @@ export async function POST(request: Request) {
         return;
       }
 
-      if (telefonesBanco.has(telefoneNormalizado)) {
+      telefonesArquivo.add(telefoneNormalizado);
+      candidatos.push(base);
+    });
+
+    const telefonesBanco = new Set<string>();
+
+    if (telefonesArquivo.size > 0) {
+      const { data: contatosExistentes, error: contatosError } =
+        await supabaseAdmin.rpc("buscar_telefones_contatos_existentes", {
+          p_empresa_id: usuario.empresa_id,
+          p_telefones: Array.from(telefonesArquivo),
+        });
+
+      if (contatosError) {
+        return NextResponse.json(
+          { ok: false, error: contatosError.message },
+          { status: 500 }
+        );
+      }
+
+      for (const item of contatosExistentes || []) {
+        const telefone = String(item?.telefone_normalizado || "").trim();
+
+        if (telefone) {
+          telefonesBanco.add(telefone);
+        }
+      }
+    }
+
+    for (const base of candidatos) {
+      if (telefonesBanco.has(base.telefone_normalizado)) {
         duplicadosBanco.push({
           ...base,
           motivo: "Telefone já cadastrado no sistema",
         });
-        return;
+        continue;
       }
 
-      telefonesArquivo.add(telefoneNormalizado);
-
-      if (telefonePrecisaRevisao(telefoneNormalizado)) {
+      if (telefonePrecisaRevisao(base.telefone_normalizado)) {
         alertas.push({
           ...base,
           alerta: true,
           motivo: "Telefone importado, mas marcado para revisão.",
         });
-        return;
+        continue;
       }
 
       validos.push(base);
-    });
+    }
 
     return NextResponse.json({
       ok: true,
