@@ -1869,3 +1869,76 @@
     font-size: 10px;
   }
 }
+
+
+.importDuplicateSwitch {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 14px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.importDuplicateSwitch:hover {
+  background: var(--crm-surface-soft);
+}
+
+.importDuplicateSwitchActive {
+  border-color: var(--crm-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--crm-accent) 12%, transparent);
+}
+
+.importDuplicateSwitchTrack {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex: 0 0 44px;
+  border-radius: 999px;
+  background: var(--crm-surface-muted);
+  transition: background 0.2s ease;
+}
+
+.importDuplicateSwitchThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--crm-surface);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22);
+  transition: transform 0.2s ease;
+}
+
+.importDuplicateSwitchActive .importDuplicateSwitchTrack {
+  background: var(--crm-accent);
+}
+
+.importDuplicateSwitchActive .importDuplicateSwitchThumb {
+  transform: translateX(20px);
+}
+
+.importDuplicateSwitchText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.importDuplicateSwitchText strong {
+  font-size: 14px;
+  color: var(--crm-text-strong);
+}
+
+.importDuplicateSwitchText small {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--crm-text-muted);
+}
