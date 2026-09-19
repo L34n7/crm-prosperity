@@ -26,7 +26,7 @@ type ContatoImportacao = {
   origem?: string | null;
   origem_importacao?: string | null;
   campanha?: string | null;
-  variavel_contato?: string | null;
+  campo_contato?: string | null;
   observacoes?: string | null;
   telefone_revisar?: boolean;
 };
@@ -45,7 +45,7 @@ type RegistroImportacao = {
   email: string | null;
   origem: string | null;
   campanha: string | null;
-  variavel_contato: string | null;
+  campo_contato: string | null;
   observacoes: string | null;
   telefone_revisar: boolean;
 };
@@ -247,7 +247,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       email: contato.email?.trim()?.toLowerCase() || null,
       origem: contato.origem?.trim() || null,
       campanha: contato.campanha?.trim() || null,
-      variavel_contato: contato.variavel_contato?.trim() || null,
+      campo_contato: contato.campo_contato?.trim() || null,
       observacoes: contato.observacoes?.trim() || null,
       telefone_revisar:
         Boolean(contato.telefone_revisar) || telefone.length < 10,

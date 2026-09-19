@@ -201,7 +201,7 @@ export async function GET(request: Request) {
         origem,
         origem_exibicao,
         campanha_exibicao,
-        variavel_contato,
+        campo_contato,
         classificacao,
         contato_novo,
         opt_in_whatsapp,
@@ -239,7 +239,7 @@ export async function GET(request: Request) {
         origem,
         origem_exibicao,
         campanha_exibicao,
-        variavel_contato,
+        campo_contato,
         classificacao,
         contato_novo,
         opt_in_whatsapp,
@@ -329,7 +329,7 @@ export async function GET(request: Request) {
 
     if (busca) {
       query = query.or(
-        `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,variavel_contato.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
+        `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,campo_contato.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
       );
     }
 
@@ -375,7 +375,7 @@ export async function GET(request: Request) {
     "email",
     "origem",
     "campanha",
-    "variavel_contato",
+    "campo_contato",
     "classificacao",
     "contato_novo",
     "integracao_whatsapp",
@@ -409,7 +409,7 @@ export async function GET(request: Request) {
       contato.email,
       contato.origem_exibicao,
       contato.campanha_exibicao,
-      contato.variavel_contato,
+      contato.campo_contato,
       contato.classificacao,
       contato.contato_novo ? "sim" : "nao",
       contato.contexto_integracao_nome,

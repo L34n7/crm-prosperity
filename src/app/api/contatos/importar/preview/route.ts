@@ -28,7 +28,7 @@ type LinhaPreview = {
   origem: string | null;
   origem_importacao?: string | null;
   campanha: string | null;
-  variavel_contato: string | null;
+  campo_contato: string | null;
   status_lead: StatusLead;
   observacoes: string | null;
   motivo?: string;
@@ -146,14 +146,16 @@ function obterObservacoesDaLinha(headers: string[], row: string[]) {
   ]);
 }
 
-function obterVariavelContatoDaLinha(headers: string[], row: string[]) {
+function obterCampoContatoDaLinha(headers: string[], row: string[]) {
   return getFirstValueByPossibleHeaders(headers, row, [
+    "campo_contato",
+    "campo do contato",
+    "campo",
+    // Compatibilidade com modelos baixados antes da renomeação.
     "variavel_contato",
     "variável_contato",
     "variavel do contato",
     "variável do contato",
-    "variavel",
-    "variável",
     "informacao_contato",
     "informação_contato",
   ]);
@@ -429,7 +431,7 @@ export async function POST(request: Request) {
       const telefoneOriginal = obterTelefoneDaLinha(headers, row);
       const telefoneNormalizado = normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal);
       const email = obterEmailDaLinha(headers, row) || null;
-      const variavelContato = obterVariavelContatoDaLinha(headers, row) || null;
+      const campoContato = obterCampoContatoDaLinha(headers, row) || null;
       const observacoes = obterObservacoesDaLinha(headers, row) || null;
 
       const origem =
@@ -458,7 +460,7 @@ export async function POST(request: Request) {
         origem,
         origem_importacao: origemImportacaoPadrao,
         campanha,
-        variavel_contato: variavelContato,
+        campo_contato: campoContato,
         status_lead: statusLead,
         observacoes,
         telefone_revisar: telefonePrecisaRevisao(telefoneNormalizado),

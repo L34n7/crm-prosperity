@@ -7,7 +7,7 @@ export async function GET() {
     const headers = [
       "nome",
       "telefone",
-      "variavel_contato",
+      "campo_contato",
       "email",
       "origem",
       "campanha",
