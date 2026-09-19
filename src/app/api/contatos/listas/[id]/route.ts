@@ -82,7 +82,7 @@ async function obterContextoLista(
     .from("contatos_listas")
     .select("id, nome, created_at")
     .eq("id", id)
-    .eq("empresa_id", usuario.empresa_id)
+    .eq("empresa_id", empresaId)
     .maybeSingle();
 
   if (error) {
@@ -108,6 +108,7 @@ async function obterContextoLista(
   return {
     ok: true as const,
     usuario,
+    empresaId: usuario.empresa_id,
     lista,
   };
 }
@@ -124,11 +125,11 @@ export async function GET(
 
   if (!contexto.ok) return contexto.response;
 
-  const { usuario } = contexto;
+  const { empresaId } = contexto;
   const { data, error } = await supabaseAdmin.rpc(
     "analisar_exclusao_lista_contatos",
     {
-      p_empresa_id: usuario.empresa_id,
+      p_empresa_id: empresaId,
       p_lista_id: id,
     }
   );
@@ -167,7 +168,7 @@ export async function PATCH(
 
   if (!contexto.ok) return contexto.response;
 
-  const { usuario, lista } = contexto;
+  const { usuario, empresaId, lista } = contexto;
   const auditMeta = getRequestAuditMetadata(request);
 
   let body: Record<string, unknown>;
@@ -232,7 +233,7 @@ export async function PATCH(
   }
 
   await registrarLogAuditoriaSeguro({
-    empresa_id: usuario.empresa_id,
+    empresa_id: empresaId,
     categoria: "contatos",
     entidade: "contato",
     entidade_id: id,
@@ -266,7 +267,7 @@ export async function DELETE(
 
   if (!contexto.ok) return contexto.response;
 
-  const { usuario, lista } = contexto;
+  const { usuario, empresaId, lista } = contexto;
   const auditMeta = getRequestAuditMetadata(request);
 
   let body: Record<string, unknown>;
@@ -294,7 +295,7 @@ export async function DELETE(
   const { data: analiseData, error: analiseError } = await supabaseAdmin.rpc(
     "analisar_exclusao_lista_contatos",
     {
-      p_empresa_id: usuario.empresa_id,
+      p_empresa_id: empresaId,
       p_lista_id: id,
     }
   );
@@ -330,7 +331,7 @@ export async function DELETE(
   const { data, error } = await supabaseAdmin.rpc(
     "excluir_lista_contatos_com_exclusivos",
     {
-      p_empresa_id: usuario.empresa_id,
+      p_empresa_id: empresaId,
       p_lista_id: id,
       p_confirmar_exclusao: true,
     }
@@ -358,7 +359,7 @@ export async function DELETE(
   }
 
   await registrarLogAuditoriaSeguro({
-    empresa_id: usuario.empresa_id,
+    empresa_id: empresaId,
     categoria: "contatos",
     entidade: "contato",
     entidade_id: id,
