@@ -38,6 +38,16 @@ type ResultadoLote = {
   erro?: string;
 };
 
+type RegistroImportacao = {
+  nome: string | null;
+  telefone: string;
+  email: string | null;
+  origem: string | null;
+  campanha: string | null;
+  observacoes: string | null;
+  telefone_revisar: boolean;
+};
+
 function telefoneImportacaoValido(telefone: string) {
   return telefone.length >= 8;
 }
@@ -203,7 +213,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
   }
 
   const telefonesLote = new Set<string>();
-  const registros: Array<Record<string, unknown>> = [];
+  const registros: RegistroImportacao[] = [];
   const ignorados: Array<{ telefone: string; motivo: string }> = [];
 
   for (const contato of contatos as ContatoImportacao[]) {
