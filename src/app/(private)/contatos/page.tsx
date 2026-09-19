@@ -894,6 +894,19 @@ export default function ContatosPage() {
 
   const itensPreviewPaginados = itensPreviewAtivos.slice(previewInicio, previewFim);
 
+  const quantidadeContatosLista = previewImportacao
+    ? previewImportacao.validos.length +
+      previewImportacao.alertas.length +
+      (permitirContatosExistentes
+        ? previewImportacao.duplicados_banco.length
+        : 0)
+    : 0;
+
+  const listaFicariaVazia =
+    Boolean(previewImportacao) &&
+    quantidadeContatosLista === 0 &&
+    (previewImportacao?.duplicados_banco.length || 0) > 0;
+
   async function salvarEdicao() {
     if (!editandoId) return;
 
@@ -2697,10 +2710,6 @@ export default function ContatosPage() {
               </button>
             </div>
 
-            {erroImportacao && (
-              <div className={styles.alertError}>{erroImportacao}</div>
-            )}
-
             {mensagemImportacao && (
               <FeedbackToast
                 success={mensagemImportacao}
@@ -2708,13 +2717,13 @@ export default function ContatosPage() {
               />
             )}
 
-            <div className={styles.formGrid}>
-              <div className={styles.field}>
+            <div className={`${styles.formGrid} ${styles.importFormGrid}`}>
+              <div className={`${styles.field} ${styles.importFileField}`}>
                 <label className={styles.label}>Arquivo CSV ou Excel</label>
                 <input
                   type="file"
                   accept=".csv,.xls,.xlsx"
-                  className={styles.input}
+                  className={`${styles.input} ${styles.importFileInput}`}
                   onChange={(e) => {
                     const file = e.target.files?.[0] || null;
                     setArquivoImportacao(file);
@@ -2726,11 +2735,11 @@ export default function ContatosPage() {
                 />
               </div>
 
-              <div className={styles.field}>
+              <div className={`${styles.field} ${styles.importNameField}`}>
                 <label className={styles.label}>Nome da lista *</label>
                 <input
                   type="text"
-                  className={styles.input}
+                  className={`${styles.input} ${styles.importNameInput}`}
                   value={nomeListaImportacao}
                   maxLength={160}
                   onChange={(e) => {
@@ -2741,34 +2750,10 @@ export default function ContatosPage() {
                 />
               </div>
 
-              <div className={styles.fieldFull}>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={permitirContatosExistentes}
-                  className={`${styles.importDuplicateSwitch} ${
-                    permitirContatosExistentes ? styles.importDuplicateSwitchActive : ""
-                  }`}
-                  onClick={() =>
-                    setPermitirContatosExistentes((valorAtual) => !valorAtual)
-                  }
-                >
-                  <span className={styles.importDuplicateSwitchTrack} aria-hidden="true">
-                    <span className={styles.importDuplicateSwitchThumb} />
-                  </span>
-                  <span className={styles.importDuplicateSwitchText}>
-                    <strong>Permitir contatos repetidos entre listas</strong>
-                    <small>
-                      {permitirContatosExistentes
-                        ? "Contatos que já existem no CRM também serão vinculados a esta nova lista."
-                        : "Contatos já existentes não serão vinculados; somente novos contatos entrarão nesta lista."}
-                    </small>
-                  </span>
-                </button>
-              </div>
             </div>
 
-            <div className={styles.modalActions}>
+            {!previewImportacao && (
+              <div className={styles.modalActions}>
               <button
                 type="button"
                 onClick={async () => {
@@ -2812,7 +2797,14 @@ export default function ContatosPage() {
               >
                 Fechar
               </button>
-            </div>
+              </div>
+            )}
+
+            {!previewImportacao && erroImportacao && (
+              <div className={`${styles.alertError} ${styles.importInitialError}`}>
+                {erroImportacao}
+              </div>
+            )}
 
             {previewImportacao && (
               <div className={styles.importPreviewWrapper}>
@@ -3027,30 +3019,55 @@ export default function ContatosPage() {
                   )}
                 </div>
 
-                <div className={styles.modalActions}>
+                <div className={styles.importSaveFooter}>
                   <button
                     type="button"
-                    onClick={confirmarImportacaoContatos}
-                    disabled={
-                      confirmandoImportacao ||
-                      !nomeListaImportacao.trim() ||
-                      (previewImportacao.validos.length +
-                        previewImportacao.alertas.length +
-                        previewImportacao.duplicados_banco.length ===
-                        0)
-                    }
-                    className={styles.primaryButton}
+                    role="switch"
+                    aria-checked={permitirContatosExistentes}
+                    className={`${styles.importDuplicateSwitch} ${
+                      permitirContatosExistentes ? styles.importDuplicateSwitchActive : ""
+                    }`}
+                    onClick={() => {
+                      setPermitirContatosExistentes((valorAtual) => !valorAtual);
+                      if (erroImportacao) setErroImportacao("");
+                    }}
                   >
-                    {confirmandoImportacao
-                      ? "Importando..."
-                      : `Salvar lista com ${
-                          previewImportacao.validos.length +
-                          previewImportacao.alertas.length +
-                          (permitirContatosExistentes
-                            ? previewImportacao.duplicados_banco.length
-                            : 0)
-                        } contato(s)`}
+                    <span className={styles.importDuplicateSwitchTrack} aria-hidden="true">
+                      <span className={styles.importDuplicateSwitchThumb} />
+                    </span>
+                    <span className={styles.importDuplicateSwitchText}>
+                      <strong>Permitir contatos repetidos entre listas</strong>
+                      <small>
+                        {permitirContatosExistentes
+                          ? "Contatos que já existem no CRM também serão vinculados a esta nova lista."
+                          : "Contatos já existentes não serão vinculados; somente novos contatos entrarão nesta lista."}
+                      </small>
+                    </span>
                   </button>
+
+                  {(erroImportacao || listaFicariaVazia) && (
+                    <div className={`${styles.alertError} ${styles.importFooterError}`}>
+                      {erroImportacao ||
+                        "Todos os contatos desta lista já existem no CRM. Ative a opção acima para permitir contatos repetidos entre listas."}
+                    </div>
+                  )}
+
+                  <div className={styles.modalActions}>
+                    <button
+                      type="button"
+                      onClick={confirmarImportacaoContatos}
+                      disabled={
+                        confirmandoImportacao ||
+                        !nomeListaImportacao.trim() ||
+                        quantidadeContatosLista === 0
+                      }
+                      className={styles.primaryButton}
+                    >
+                      {confirmandoImportacao
+                        ? "Importando..."
+                        : `Salvar lista com ${quantidadeContatosLista} contato(s)`}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
