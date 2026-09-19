@@ -948,12 +948,7 @@ export default function ContatosPage() {
         return;
       }
 
-      const origens = Array.isArray(data.origens)
-        ? data.origens.filter(
-            (item: unknown): item is string =>
-              typeof item === "string" && !item.startsWith("Importação - ")
-          )
-        : [];
+      const origens = Array.isArray(data.origens) ? data.origens : [];
       const campanhas = Array.isArray(data.campanhas) ? data.campanhas : [];
       const campanhasRastreamento = Array.isArray(data.campanhas_rastreamento)
         ? data.campanhas_rastreamento
@@ -1411,13 +1406,17 @@ export default function ContatosPage() {
                 </optgroup>
               )}
 
-              {opcoesOrigem.length > 0 && (
+              {opcoesOrigem.some(
+                (origem) => !origem.startsWith("Importação - ")
+              ) && (
                 <optgroup label="Outras origens">
-                  {opcoesOrigem.map((origem) => (
-                    <option key={origem} value={origem}>
-                      {origem}
-                    </option>
-                  ))}
+                  {opcoesOrigem
+                    .filter((origem) => !origem.startsWith("Importação - "))
+                    .map((origem) => (
+                      <option key={origem} value={origem}>
+                        {origem}
+                      </option>
+                    ))}
                 </optgroup>
               )}
             </select>
