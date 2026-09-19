@@ -715,7 +715,9 @@ export default function ContatosPage() {
         params.set("busca", busca.trim());
       }
 
-      if (filtroOrigem.trim()) {
+      if (filtroOrigem.startsWith("lista:")) {
+        params.set("lista_id", filtroOrigem.replace("lista:", ""));
+      } else if (filtroOrigem.trim()) {
         params.set("origem", filtroOrigem.trim());
       }
 
