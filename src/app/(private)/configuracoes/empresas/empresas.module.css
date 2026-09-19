@@ -478,3 +478,76 @@
     width: 100%;
   }
 }
+
+
+.filtersPanel {
+  display: grid;
+  grid-template-columns: minmax(280px, 2fr) repeat(3, minmax(150px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  background: var(--crm-surface-subtle);
+}
+
+.searchField,
+.filterField {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.filterLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--crm-text-muted);
+}
+
+.filterActions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.filterActions .secondaryButton {
+  min-height: 46px;
+  white-space: nowrap;
+}
+
+.filterActions .secondaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1040px) {
+  .filtersPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .searchField {
+    grid-column: 1 / -1;
+  }
+
+  .filterActions .secondaryButton {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .filtersPanel {
+    grid-template-columns: 1fr;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .searchField {
+    grid-column: auto;
+  }
+
+  .filterActions,
+  .filterActions .secondaryButton {
+    width: 100%;
+  }
+}

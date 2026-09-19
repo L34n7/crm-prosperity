@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
@@ -104,7 +104,6 @@ function getOpcaoLimiteLabel(quantidade: number, limitePlano: number) {
 
 export default function EmpresasPage() {
   const { permissoes } = useHeaderUser();
-  const podeCriarEmpresas = permissoes.includes("empresas.criar");
   const podeEditarEmpresas = permissoes.includes("empresas.editar");
   const podeAlterarStatusEmpresas = permissoes.includes(
     "empresas.alterar_status"
@@ -112,20 +111,11 @@ export default function EmpresasPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [nichos, setNichos] = useState<Nicho[]>([]);
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<StatusEmpresa | "todos">("todos");
+  const [filtroPlano, setFiltroPlano] = useState("todos");
+  const [filtroNicho, setFiltroNicho] = useState("todos");
 
-  const [nomeFantasia, setNomeFantasia] = useState("");
-  const [razaoSocial, setRazaoSocial] = useState("");
-  const [documento, setDocumento] = useState("");
-  const [email, setEmail] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [nomeResponsavel, setNomeResponsavel] = useState("");
-  const [planoId, setPlanoId] = useState("");
-  const [nichoId, setNichoId] = useState("");
-  const [timezone, setTimezone] = useState("America/Sao_Paulo");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [observacoes, setObservacoes] = useState("");
-
-  const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
 
@@ -176,80 +166,6 @@ export default function EmpresasPage() {
     if (!res.ok) return;
     const data = await res.json();
     setNichos(data.nichos || []);
-  }
-
-  async function criarEmpresa() {
-    setMensagem("");
-    setErro("");
-
-    if (!nomeFantasia.trim()) {
-      setErro("Digite o nome fantasia.");
-      return;
-    }
-
-    if (!email.trim()) {
-      setErro("Digite o email.");
-      return;
-    }
-
-    if (!planoId) {
-      setErro("Selecione um plano.");
-      return;
-    }
-
-    if (!nichoId) {
-      setErro("Selecione um segmento.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/empresas", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          nome_fantasia: nomeFantasia,
-          razao_social: razaoSocial,
-          documento,
-          email,
-          telefone,
-          nome_responsavel: nomeResponsavel,
-          plano_id: planoId,
-          nicho_id: nichoId,
-          timezone,
-          logo_url: logoUrl,
-          observacoes,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErro(data.error || "Erro ao criar empresa");
-        return;
-      }
-
-      setMensagem(data.message || "Empresa criada com sucesso.");
-      setNomeFantasia("");
-      setRazaoSocial("");
-      setDocumento("");
-      setEmail("");
-      setTelefone("");
-      setNomeResponsavel("");
-      setPlanoId("");
-      setNichoId("");
-      setTimezone("America/Sao_Paulo");
-      setLogoUrl("");
-      setObservacoes("");
-      await carregarEmpresas();
-    } catch {
-      setErro("Erro ao criar empresa");
-    } finally {
-      setLoading(false);
-    }
   }
 
   function iniciarEdicao(empresa: Empresa) {
@@ -384,164 +300,64 @@ export default function EmpresasPage() {
     carregarNichos();
   }, []);
 
+  const empresasFiltradas = useMemo(() => {
+    const termo = busca.trim().toLocaleLowerCase("pt-BR");
+
+    return empresas.filter((empresa) => {
+      const correspondeBusca =
+        !termo ||
+        [
+          empresa.nome_fantasia,
+          empresa.razao_social,
+          empresa.documento,
+          empresa.email,
+          empresa.telefone,
+          empresa.nome_responsavel,
+          empresa.planos?.nome,
+          empresa.nichos?.nome,
+        ]
+          .filter(Boolean)
+          .some((valor) =>
+            String(valor).toLocaleLowerCase("pt-BR").includes(termo)
+          );
+
+      const correspondeStatus =
+        filtroStatus === "todos" || empresa.status === filtroStatus;
+      const correspondePlano =
+        filtroPlano === "todos" || empresa.plano_id === filtroPlano;
+      const correspondeNicho =
+        filtroNicho === "todos" || empresa.nicho_id === filtroNicho;
+
+      return (
+        correspondeBusca &&
+        correspondeStatus &&
+        correspondePlano &&
+        correspondeNicho
+      );
+    });
+  }, [busca, empresas, filtroNicho, filtroPlano, filtroStatus]);
+
+  const filtrosAtivos =
+    Boolean(busca.trim()) ||
+    filtroStatus !== "todos" ||
+    filtroPlano !== "todos" ||
+    filtroNicho !== "todos";
+
+  function limparFiltros() {
+    setBusca("");
+    setFiltroStatus("todos");
+    setFiltroPlano("todos");
+    setFiltroNicho("todos");
+  }
+
   return (
     <>
       <Header
         title="Empresas"
-        subtitle="Gerencie empresas, planos, dados cadastrais e status da operação."
+        subtitle="Consulte, filtre e gerencie as empresas cadastradas no CRM."
       />
 
       <div className={styles.pageContent}>
-        {podeCriarEmpresas && (
-          <section className={styles.card}>
-            <div className={styles.cardHeader}>
-              <div>
-                <p className={styles.eyebrow}>Cadastro</p>
-                <h2 className={styles.cardTitle}>Criar empresa</h2>
-                <p className={styles.cardDescription}>
-                  Cadastre uma nova empresa com plano, dados de contato, timezone
-                  e observações internas.
-                </p>
-              </div>
-            </div>
-
-            <div className={styles.formGrid}>
-              <div className={styles.field}>
-                <label className={styles.label}>Nome fantasia</label>
-                <input
-                  className={styles.input}
-                  placeholder="Nome fantasia"
-                  value={nomeFantasia}
-                  onChange={(e) => setNomeFantasia(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Razão social</label>
-                <input
-                  className={styles.input}
-                  placeholder="Razão social"
-                  value={razaoSocial}
-                  onChange={(e) => setRazaoSocial(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Documento</label>
-                <input
-                  className={styles.input}
-                  placeholder="CPF/CNPJ"
-                  value={documento}
-                  onChange={(e) => setDocumento(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Email</label>
-                <input
-                  className={styles.input}
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Telefone</label>
-                <input
-                  className={styles.input}
-                  placeholder="Telefone"
-                  value={telefone}
-                  onChange={(e) => setTelefone(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Nome do responsável</label>
-                <input
-                  className={styles.input}
-                  placeholder="Nome do responsável"
-                  value={nomeResponsavel}
-                  onChange={(e) => setNomeResponsavel(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Plano</label>
-                <select
-                  className={styles.select}
-                  value={planoId}
-                  onChange={(e) => setPlanoId(e.target.value)}
-                >
-                  <option value="">Selecione um plano</option>
-                  {planos.map((plano) => (
-                    <option key={plano.id} value={plano.id}>
-                      {plano.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Segmento</label>
-                <select
-                  className={styles.select}
-                  value={nichoId}
-                  onChange={(e) => setNichoId(e.target.value)}
-                >
-                  <option value="">Selecione um segmento</option>
-                  {nichos.map((nicho) => (
-                    <option key={nicho.id} value={nicho.id}>
-                      {nicho.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Timezone</label>
-                <input
-                  className={styles.input}
-                  placeholder="America/Sao_Paulo"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.fieldFull}>
-                <label className={styles.label}>URL da logo</label>
-                <input
-                  className={styles.input}
-                  placeholder="URL da logo"
-                  value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.fieldFull}>
-                <label className={styles.label}>Observações</label>
-                <textarea
-                  className={styles.textarea}
-                  placeholder="Observações"
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                  rows={4}
-                />
-              </div>
-            </div>
-
-            <div className={styles.actionsRow}>
-              <button
-                onClick={criarEmpresa}
-                disabled={loading}
-                className={styles.primaryButton}
-              >
-                {loading ? "Criando..." : "Criar empresa"}
-              </button>
-            </div>
-          </section>
-        )}
-
         <FeedbackToast
           success={mensagem}
           onSuccessDismiss={() => setMensagem("")}
@@ -554,21 +370,114 @@ export default function EmpresasPage() {
               <p className={styles.eyebrow}>Gestão</p>
               <h2 className={styles.cardTitle}>Empresas cadastradas</h2>
               <p className={styles.cardDescription}>
-                Cards resumidos com expansão sob demanda para manter a tela mais
-                organizada.
+                Use a busca e os filtros para localizar rapidamente uma empresa
+                e expanda o card para visualizar ou editar os dados.
               </p>
             </div>
 
-            <span className={styles.infoBadge}>{empresas.length} empresa(s)</span>
+            <span className={styles.infoBadge}>
+              {empresasFiltradas.length} de {empresas.length} empresa(s)
+            </span>
+          </div>
+
+          <div className={styles.filtersPanel}>
+            <div className={styles.searchField}>
+              <label className={styles.filterLabel} htmlFor="busca-empresa">
+                Buscar empresa
+              </label>
+              <input
+                id="busca-empresa"
+                className={styles.input}
+                type="search"
+                placeholder="Nome, e-mail, documento, telefone ou responsável..."
+                value={busca}
+                onChange={(event) => setBusca(event.target.value)}
+              />
+            </div>
+
+            <div className={styles.filterField}>
+              <label className={styles.filterLabel} htmlFor="filtro-status">
+                Status
+              </label>
+              <select
+                id="filtro-status"
+                className={styles.select}
+                value={filtroStatus}
+                onChange={(event) =>
+                  setFiltroStatus(
+                    event.target.value as StatusEmpresa | "todos"
+                  )
+                }
+              >
+                <option value="todos">Todos</option>
+                <option value="ativa">Ativas</option>
+                <option value="inativa">Inativas</option>
+                <option value="suspensa">Suspensas</option>
+                <option value="cancelada">Canceladas</option>
+              </select>
+            </div>
+
+            <div className={styles.filterField}>
+              <label className={styles.filterLabel} htmlFor="filtro-plano">
+                Plano
+              </label>
+              <select
+                id="filtro-plano"
+                className={styles.select}
+                value={filtroPlano}
+                onChange={(event) => setFiltroPlano(event.target.value)}
+              >
+                <option value="todos">Todos os planos</option>
+                {planos.map((plano) => (
+                  <option key={plano.id} value={plano.id}>
+                    {plano.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.filterField}>
+              <label className={styles.filterLabel} htmlFor="filtro-segmento">
+                Segmento
+              </label>
+              <select
+                id="filtro-segmento"
+                className={styles.select}
+                value={filtroNicho}
+                onChange={(event) => setFiltroNicho(event.target.value)}
+              >
+                <option value="todos">Todos os segmentos</option>
+                {nichos.map((nicho) => (
+                  <option key={nicho.id} value={nicho.id}>
+                    {nicho.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.filterActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={limparFiltros}
+                disabled={!filtrosAtivos}
+              >
+                Limpar filtros
+              </button>
+            </div>
           </div>
 
           {empresas.length === 0 ? (
             <div className={styles.emptyState}>
               Nenhuma empresa cadastrada ainda.
             </div>
+          ) : empresasFiltradas.length === 0 ? (
+            <div className={styles.emptyState}>
+              Nenhuma empresa encontrada com os filtros selecionados.
+            </div>
           ) : (
             <div className={styles.list}>
-              {empresas.map((empresa) => {
+              {empresasFiltradas.map((empresa) => {
                 const expandido = expandidoId === empresa.id;
                 const editando = editandoId === empresa.id;
                 const planoEdicao = planos.find(
