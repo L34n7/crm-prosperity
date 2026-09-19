@@ -331,6 +331,11 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       })
       .eq("id", importacao.id);
 
+    await supabaseAdmin
+      .from("contatos_listas")
+      .delete()
+      .eq("id", lista.id);
+
     return NextResponse.json(
       { ok: false, error: mensagemErro },
       { status: 500 }
@@ -369,7 +374,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       permitir_contatos_existentes: permitirContatosExistentes,
       total: registros.length,
       ignorados,
-      message: `Lista "${nomeLista}" registrada. ${registros.length} contato(s) enviado(s) para processamento.`,
+      message: `Lista "${nomeLista}" registrada e enviada para processamento.`,
     },
     { status: 202 }
   );
