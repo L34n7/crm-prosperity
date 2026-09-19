@@ -91,6 +91,13 @@ type AtendenteFiltro = {
   nome: string;
 };
 
+type ListaContatoFiltro = {
+  id: string;
+  nome: string;
+  created_at: string;
+  permitir_contatos_existentes?: boolean;
+};
+
 type ItemPreviewImportacao = {
   linha?: number;
   nome?: string;
@@ -212,6 +219,30 @@ function getLabelIntegracaoWhatsapp(integracao: IntegracaoWhatsappFiltro) {
   return numero ? `${nome} · ${numero}` : nome;
 }
 
+function getNomeListaPadrao(file: File | null) {
+  if (!file) return "";
+
+  return file.name.replace(/\.(csv|xlsx|xls)$/i, "").trim();
+}
+
+function formatarDataHoraLista(createdAt: string) {
+  const data = new Date(createdAt);
+
+  if (Number.isNaN(data.getTime())) return "";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(data)
+    .replace(",", "");
+}
+
 export default function ContatosPage() {
   const [contatos, setContatos] = useState<Contato[]>([]);
 
@@ -258,6 +289,8 @@ export default function ContatosPage() {
   const [confirmandoImportacao, setConfirmandoImportacao] = useState(false);
   const [erroImportacao, setErroImportacao] = useState("");
   const [mensagemImportacao, setMensagemImportacao] = useState("");
+  const [nomeListaImportacao, setNomeListaImportacao] = useState("");
+  const [permitirContatosExistentes, setPermitirContatosExistentes] = useState(false);
 
   const [opcoesOrigem, setOpcoesOrigem] = useState<string[]>([]);
   const [opcoesCampanha, setOpcoesCampanha] = useState<string[]>([]);
@@ -268,6 +301,7 @@ export default function ContatosPage() {
     IntegracaoWhatsappFiltro[]
   >([]);
   const [atendentes, setAtendentes] = useState<AtendenteFiltro[]>([]);
+  const [listasContatos, setListasContatos] = useState<ListaContatoFiltro[]>([]);
   const [filtroOrigem, setFiltroOrigem] = useState("");
   const [filtroCampanha, setFiltroCampanha] = useState("");
   const [filtroIntegracaoWhatsappId, setFiltroIntegracaoWhatsappId] =
@@ -411,7 +445,9 @@ export default function ContatosPage() {
       params.set("busca", busca.trim());
     }
 
-    if (filtroOrigem.trim()) {
+    if (filtroOrigem.startsWith("lista:")) {
+      params.set("lista_id", filtroOrigem.replace("lista:", ""));
+    } else if (filtroOrigem.trim()) {
       params.set("origem", filtroOrigem.trim());
     }
 
@@ -584,8 +620,36 @@ export default function ContatosPage() {
   }
 
   async function confirmarImportacaoContatos() {
-    if (!previewImportacao?.validos?.length) {
-      setErroImportacao("Nenhum contato válido para importar.");
+    if (!previewImportacao) {
+      setErroImportacao("Analise o arquivo antes de importar.");
+      return;
+    }
+
+    const nomeLista = nomeListaImportacao.trim();
+    const contatosImportaveis = [
+      ...(previewImportacao.validos || []),
+      ...(previewImportacao.alertas || []),
+      ...(previewImportacao.duplicados_banco || []),
+    ];
+
+    if (!nomeLista) {
+      setErroImportacao("Informe um nome para a lista.");
+      return;
+    }
+
+    if (
+      listasContatos.some(
+        (lista) =>
+          lista.nome.trim().toLocaleLowerCase("pt-BR") ===
+          nomeLista.toLocaleLowerCase("pt-BR")
+      )
+    ) {
+      setErroImportacao("Já existe uma lista com esse nome. Escolha outro nome.");
+      return;
+    }
+
+    if (!contatosImportaveis.length) {
+      setErroImportacao("Nenhum contato válido para registrar nesta lista.");
       return;
     }
 
@@ -600,10 +664,10 @@ export default function ContatosPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contatos: [
-            ...(previewImportacao?.validos || []),
-            ...(previewImportacao?.alertas || []),
-          ],
+          nome_lista: nomeLista,
+          arquivo_nome: arquivoImportacao?.name || null,
+          permitir_contatos_existentes: permitirContatosExistentes,
+          contatos: contatosImportaveis,
         }),
       });
 
@@ -615,12 +679,15 @@ export default function ContatosPage() {
       }
 
       setMensagemImportacao(
-        data.message || `${data.importados || 0} contato(s) importado(s) com sucesso.`
+        data.message || `Lista "${nomeLista}" registrada com sucesso.`
       );
 
       setArquivoImportacao(null);
       setPreviewImportacao(null);
+      setNomeListaImportacao("");
+      setPermitirContatosExistentes(false);
       await carregarContatos();
+      await carregarOpcoesFiltros();
     } catch {
       setErroImportacao("Erro ao importar contatos.");
     } finally {
@@ -757,6 +824,8 @@ export default function ContatosPage() {
     setErroImportacao("");
     setMensagemImportacao("");
     setArquivoImportacao(null);
+    setNomeListaImportacao("");
+    setPermitirContatosExistentes(false);
     setPreviewImportacao(null);
     setModalImportarAberto(true);
     setAbaPreviewImportacao("alertas");
@@ -768,6 +837,8 @@ export default function ContatosPage() {
     setErroImportacao("");
     setMensagemImportacao("");
     setArquivoImportacao(null);
+    setNomeListaImportacao("");
+    setPermitirContatosExistentes(false);
     setPreviewImportacao(null);
     setAbaPreviewImportacao("alertas");
     setPaginaPreviewImportacao(1);
@@ -875,7 +946,12 @@ export default function ContatosPage() {
         return;
       }
 
-      const origens = Array.isArray(data.origens) ? data.origens : [];
+      const origens = Array.isArray(data.origens)
+        ? data.origens.filter(
+            (item: unknown): item is string =>
+              typeof item === "string" && !item.startsWith("Importação - ")
+          )
+        : [];
       const campanhas = Array.isArray(data.campanhas) ? data.campanhas : [];
       const campanhasRastreamento = Array.isArray(data.campanhas_rastreamento)
         ? data.campanhas_rastreamento
@@ -884,12 +960,14 @@ export default function ContatosPage() {
         ? data.integracoes_whatsapp
         : [];
       const atendentes = Array.isArray(data.atendentes) ? data.atendentes : [];
+      const listas = Array.isArray(data.listas) ? data.listas : [];
 
       setOpcoesOrigem(origens);
       setOpcoesCampanha(campanhas);
       setCampanhasRastreamento(campanhasRastreamento);
       setIntegracoesWhatsapp(integracoesWhatsapp);
       setAtendentes(atendentes);
+      setListasContatos(listas);
     } catch {
       // pode deixar silencioso
     }
@@ -1320,11 +1398,26 @@ export default function ContatosPage() {
               onChange={(e) => setFiltroOrigem(e.target.value)}
             >
               <option value="">Todas</option>
-              {opcoesOrigem.map((origem) => (
-                <option key={origem} value={origem}>
-                  {origem}
-                </option>
-              ))}
+
+              {listasContatos.length > 0 && (
+                <optgroup label="Listas importadas">
+                  {listasContatos.map((lista) => (
+                    <option key={lista.id} value={`lista:${lista.id}`}>
+                      {lista.nome} · {formatarDataHoraLista(lista.created_at)}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {opcoesOrigem.length > 0 && (
+                <optgroup label="Outras origens">
+                  {opcoesOrigem.map((origem) => (
+                    <option key={origem} value={origem}>
+                      {origem}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 
@@ -2589,7 +2682,7 @@ export default function ContatosPage() {
                 <p className={styles.eyebrow}>Importação</p>
                 <h2 className={styles.modalTitle}>Importar contatos</h2>
                 <p className={styles.cardDescription}>
-                  Envie um arquivo CSV para analisar contatos, identificar duplicados e importar apenas os válidos.
+                  Cada importação fica salva como uma lista e pode ser usada depois como filtro de contatos.
                 </p>
               </div>
 
@@ -2615,7 +2708,7 @@ export default function ContatosPage() {
             )}
 
             <div className={styles.formGrid}>
-              <div className={styles.fieldFull}>
+              <div className={styles.field}>
                 <label className={styles.label}>Arquivo CSV ou Excel</label>
                 <input
                   type="file"
@@ -2624,11 +2717,53 @@ export default function ContatosPage() {
                   onChange={(e) => {
                     const file = e.target.files?.[0] || null;
                     setArquivoImportacao(file);
+                    setNomeListaImportacao(getNomeListaPadrao(file));
                     setErroImportacao("");
                     setMensagemImportacao("");
                     setPreviewImportacao(null);
                   }}
                 />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Nome da lista *</label>
+                <input
+                  type="text"
+                  className={styles.input}
+                  value={nomeListaImportacao}
+                  maxLength={160}
+                  onChange={(e) => {
+                    setNomeListaImportacao(e.target.value);
+                    if (erroImportacao) setErroImportacao("");
+                  }}
+                  placeholder="Ex.: Leads evento setembro"
+                />
+              </div>
+
+              <div className={styles.fieldFull}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={permitirContatosExistentes}
+                  className={`${styles.importDuplicateSwitch} ${
+                    permitirContatosExistentes ? styles.importDuplicateSwitchActive : ""
+                  }`}
+                  onClick={() =>
+                    setPermitirContatosExistentes((valorAtual) => !valorAtual)
+                  }
+                >
+                  <span className={styles.importDuplicateSwitchTrack} aria-hidden="true">
+                    <span className={styles.importDuplicateSwitchThumb} />
+                  </span>
+                  <span className={styles.importDuplicateSwitchText}>
+                    <strong>Permitir contatos repetidos entre listas</strong>
+                    <small>
+                      {permitirContatosExistentes
+                        ? "Contatos que já existem no CRM também serão vinculados a esta nova lista."
+                        : "Contatos já existentes não serão vinculados; somente novos contatos entrarão nesta lista."}
+                    </small>
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -2897,14 +3032,22 @@ export default function ContatosPage() {
                     onClick={confirmarImportacaoContatos}
                     disabled={
                       confirmandoImportacao ||
-                      (previewImportacao.validos.length + previewImportacao.alertas.length === 0)
+                      !nomeListaImportacao.trim() ||
+                      (previewImportacao.validos.length +
+                        previewImportacao.alertas.length +
+                        previewImportacao.duplicados_banco.length ===
+                        0)
                     }
                     className={styles.primaryButton}
                   >
                     {confirmandoImportacao
                       ? "Importando..."
-                      : `Importar ${
-                          previewImportacao.validos.length + previewImportacao.alertas.length
+                      : `Salvar lista com ${
+                          previewImportacao.validos.length +
+                          previewImportacao.alertas.length +
+                          (permitirContatosExistentes
+                            ? previewImportacao.duplicados_banco.length
+                            : 0)
                         } contato(s)`}
                   </button>
                 </div>
