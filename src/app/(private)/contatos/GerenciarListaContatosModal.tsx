@@ -9,6 +9,8 @@ type ListaContato = {
   created_at: string;
 };
 
+type ModoGerenciamentoLista = "editar" | "excluir";
+
 type AnaliseExclusaoLista = {
   total_contatos: number;
   contatos_exclusivos: number;
@@ -22,6 +24,7 @@ type AnaliseExclusaoLista = {
 
 type GerenciarListaContatosModalProps = {
   lista: ListaContato;
+  modo: ModoGerenciamentoLista;
   onClose: () => void;
   onAtualizada: (nome: string) => void | Promise<void>;
   onExcluida: (mensagem: string) => void | Promise<void>;
@@ -29,6 +32,7 @@ type GerenciarListaContatosModalProps = {
 
 export default function GerenciarListaContatosModal({
   lista,
+  modo,
   onClose,
   onAtualizada,
   onExcluida,
@@ -37,16 +41,14 @@ export default function GerenciarListaContatosModal({
   const [salvandoNome, setSalvandoNome] = useState(false);
   const [analisando, setAnalisando] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
-  const [mostrarExclusao, setMostrarExclusao] = useState(false);
   const [analise, setAnalise] = useState<AnaliseExclusaoLista | null>(null);
   const [erro, setErro] = useState("");
 
   useEffect(() => {
     setNome(lista.nome);
-    setMostrarExclusao(false);
     setAnalise(null);
     setErro("");
-  }, [lista.id, lista.nome]);
+  }, [lista.id, lista.nome, modo]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -58,6 +60,65 @@ export default function GerenciarListaContatosModal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [excluindo, onClose, salvandoNome]);
+
+  useEffect(() => {
+    if (modo !== "excluir") return;
+
+    let ativo = true;
+
+    async function carregarAnaliseExclusao() {
+      setAnalisando(true);
+      setErro("");
+
+      try {
+        const response = await fetch(`/api/contatos/listas/${lista.id}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const data = await response.json();
+
+        if (!ativo) return;
+
+        if (!response.ok) {
+          setErro(data.error || "Não foi possível analisar a exclusão da lista.");
+          return;
+        }
+
+        setAnalise({
+          total_contatos: Number(data.analise?.total_contatos || 0),
+          contatos_exclusivos: Number(data.analise?.contatos_exclusivos || 0),
+          contatos_compartilhados: Number(
+            data.analise?.contatos_compartilhados || 0
+          ),
+          contatos_com_conversa: Number(
+            data.analise?.contatos_com_conversa || 0
+          ),
+          conversas: Number(data.analise?.conversas || 0),
+          agendamentos_bloqueadores: Number(
+            data.analise?.agendamentos_bloqueadores || 0
+          ),
+          analises_arquivo_bloqueadoras: Number(
+            data.analise?.analises_arquivo_bloqueadoras || 0
+          ),
+          exclusao_bloqueada: data.analise?.exclusao_bloqueada === true,
+        });
+      } catch {
+        if (ativo) {
+          setErro("Não foi possível analisar a exclusão da lista.");
+        }
+      } finally {
+        if (ativo) {
+          setAnalisando(false);
+        }
+      }
+    }
+
+    carregarAnaliseExclusao();
+
+    return () => {
+      ativo = false;
+    };
+  }, [lista.id, modo]);
 
   async function salvarNome() {
     const nomeNormalizado = nome.trim();
@@ -83,54 +144,14 @@ export default function GerenciarListaContatosModal({
         return;
       }
 
-      setNome(data.lista?.nome || nomeNormalizado);
-      await onAtualizada(data.lista?.nome || nomeNormalizado);
+      const nomeAtualizado = data.lista?.nome || nomeNormalizado;
+      setNome(nomeAtualizado);
+      await onAtualizada(nomeAtualizado);
+      onClose();
     } catch {
       setErro("Não foi possível atualizar o nome da lista.");
     } finally {
       setSalvandoNome(false);
-    }
-  }
-
-  async function prepararExclusao() {
-    setAnalisando(true);
-    setErro("");
-
-    try {
-      const response = await fetch(`/api/contatos/listas/${lista.id}`, {
-        method: "GET",
-        cache: "no-store",
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErro(data.error || "Não foi possível analisar a exclusão da lista.");
-        return;
-      }
-
-      setAnalise({
-        total_contatos: Number(data.analise?.total_contatos || 0),
-        contatos_exclusivos: Number(data.analise?.contatos_exclusivos || 0),
-        contatos_compartilhados: Number(
-          data.analise?.contatos_compartilhados || 0
-        ),
-        contatos_com_conversa: Number(
-          data.analise?.contatos_com_conversa || 0
-        ),
-        conversas: Number(data.analise?.conversas || 0),
-        agendamentos_bloqueadores: Number(
-          data.analise?.agendamentos_bloqueadores || 0
-        ),
-        analises_arquivo_bloqueadoras: Number(
-          data.analise?.analises_arquivo_bloqueadoras || 0
-        ),
-        exclusao_bloqueada: data.analise?.exclusao_bloqueada === true,
-      });
-      setMostrarExclusao(true);
-    } catch {
-      setErro("Não foi possível analisar a exclusão da lista.");
-    } finally {
-      setAnalisando(false);
     }
   }
 
@@ -189,6 +210,12 @@ export default function GerenciarListaContatosModal({
     (analise?.agendamentos_bloqueadores || 0) +
     (analise?.analises_arquivo_bloqueadoras || 0);
 
+  const titulo = modo === "editar" ? "Editar nome da lista" : "Excluir lista";
+  const descricao =
+    modo === "editar"
+      ? "Altere somente o nome usado para identificar esta lista."
+      : "Revise o impacto da exclusão antes de confirmar.";
+
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
       <div
@@ -198,10 +225,8 @@ export default function GerenciarListaContatosModal({
         <div className={styles.modalHeader}>
           <div>
             <p className={styles.eyebrow}>Lista de contatos</p>
-            <h2 className={styles.modalTitle}>Gerenciar lista</h2>
-            <p className={styles.cardDescription}>
-              Altere o nome ou exclua a lista selecionada.
-            </p>
+            <h2 className={styles.modalTitle}>{titulo}</h2>
+            <p className={styles.cardDescription}>{descricao}</p>
           </div>
 
           <button
@@ -217,59 +242,51 @@ export default function GerenciarListaContatosModal({
 
         {erro && <div className={styles.alertError}>{erro}</div>}
 
-        <div className={styles.listManagerSection}>
-          <label className={styles.label}>Nome da lista</label>
-          <div className={styles.listManagerNameRow}>
-            <input
-              type="text"
-              className={styles.input}
-              value={nome}
-              maxLength={160}
-              onChange={(event) => {
-                setNome(event.target.value);
-                if (erro) setErro("");
-              }}
-              disabled={salvandoNome || excluindo}
-            />
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={salvarNome}
-              disabled={
-                salvandoNome ||
-                excluindo ||
-                !nome.trim() ||
-                nome.trim() === lista.nome
-              }
-            >
-              {salvandoNome ? "Salvando..." : "Salvar nome"}
-            </button>
+        {modo === "editar" ? (
+          <div className={styles.listManagerSection}>
+            <label className={styles.label}>Nome da lista</label>
+            <div className={styles.listManagerNameRow}>
+              <input
+                type="text"
+                className={styles.input}
+                value={nome}
+                maxLength={160}
+                autoFocus
+                onChange={(event) => {
+                  setNome(event.target.value);
+                  if (erro) setErro("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && nome.trim() !== lista.nome) {
+                    event.preventDefault();
+                    salvarNome();
+                  }
+                }}
+                disabled={salvandoNome}
+              />
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={salvarNome}
+                disabled={
+                  salvandoNome ||
+                  !nome.trim() ||
+                  nome.trim() === lista.nome
+                }
+              >
+                {salvandoNome ? "Salvando..." : "Salvar nome"}
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className={styles.listManagerSection}>
+            {analisando && (
+              <div className={styles.listDeleteLoading}>
+                Verificando contatos e conversas desta lista...
+              </div>
+            )}
 
-        <div className={styles.listManagerDivider} />
-
-        <div className={styles.listManagerSection}>
-          <div>
-            <strong className={styles.listManagerDangerTitle}>
-              Excluir lista
-            </strong>
-            <p className={styles.cardDescription}>
-              Contatos que também pertencem a outras listas serão preservados.
-            </p>
-          </div>
-
-          {!mostrarExclusao ? (
-            <button
-              type="button"
-              className={styles.dangerButton}
-              onClick={prepararExclusao}
-              disabled={analisando || excluindo}
-            >
-              {analisando ? "Verificando..." : "Excluir lista"}
-            </button>
-          ) : (
-            analise && (
+            {!analisando && analise && (
               <div className={styles.listDeletePanel}>
                 {analise.total_contatos === 0 ? (
                   <p>
@@ -342,20 +359,16 @@ export default function GerenciarListaContatosModal({
                   <button
                     type="button"
                     className={styles.secondaryButton}
-                    onClick={() => {
-                      setMostrarExclusao(false);
-                      setAnalise(null);
-                      setErro("");
-                    }}
+                    onClick={onClose}
                     disabled={excluindo}
                   >
                     Cancelar
                   </button>
                 </div>
               </div>
-            )
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
