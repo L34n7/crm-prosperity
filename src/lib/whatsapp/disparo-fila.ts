@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { normalizarChaveVariavelFluxo } from "@/lib/automacoes/variaveis-fixas-contato";
 import {
   aplicarBloqueioOperacionalWhatsappMeta,
   WHATSAPP_META_BLOCK_DESCRIPTION,
@@ -98,6 +99,50 @@ function objeto(valor: unknown): Record<string, unknown> {
 function normalizarVariaveis(valor: unknown) {
   if (!Array.isArray(valor)) return [];
   return valor.map((item) => String(item || ""));
+}
+
+function obterVariaveisConfigCampanha(campanha: DisparoCampanhaRow) {
+  const metadata = objeto(campanha.metadata_json);
+  if (!Array.isArray(metadata.variaveis_config)) return [];
+
+  return metadata.variaveis_config
+    .map((item) => normalizarChaveVariavelFluxo(item))
+    .filter(Boolean);
+}
+
+async function resolverVariavelContatoNoEnvio(params: {
+  campanha: DisparoCampanhaRow;
+  item: DisparoItemRow;
+  variaveis: string[];
+}) {
+  const config = obterVariaveisConfigCampanha(params.campanha);
+
+  if (!config.includes("variavel_contato")) {
+    return params.variaveis;
+  }
+
+  let valorContato = "";
+
+  if (params.item.contato_id) {
+    const { data, error } = await supabaseAdmin
+      .from("contatos")
+      .select("campo_contato")
+      .eq("id", params.item.contato_id)
+      .eq("empresa_id", params.item.empresa_id)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(
+        `Erro ao resolver variavel_contato do contato: ${error.message}`
+      );
+    }
+
+    valorContato = String(data?.campo_contato ?? "").trim();
+  }
+
+  return params.variaveis.map((valorAtual, index) =>
+    config[index] === "variavel_contato" ? valorContato : valorAtual
+  );
 }
 
 function backoffSegundos(tentativas: number) {
@@ -1331,6 +1376,12 @@ async function processarItemDisparo(item: DisparoItemRow) {
     variaveis = agendado.variaveis;
     nomeContato = agendado.nomeContato || nomeContato;
     origem = "disparo_template_agendado_fila";
+  } else {
+    variaveis = await resolverVariavelContatoNoEnvio({
+      campanha,
+      item,
+      variaveis,
+    });
   }
 
   const resultado = await enviarTemplateDisparo({

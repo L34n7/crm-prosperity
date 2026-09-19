@@ -30,6 +30,7 @@ import {
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
 import { buscarTelefonesEmCooldownDisparo } from "@/lib/whatsapp/disparo-cooldown";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { normalizarChaveVariavelFluxo } from "@/lib/automacoes/variaveis-fixas-contato";
 import {
   listarIntegracoesWhatsappPermitidas,
   usuarioPodeAcessarIntegracaoWhatsapp,
@@ -501,6 +502,12 @@ export async function POST(req: NextRequest) {
     const destinatarios = Array.isArray(body?.destinatarios)
       ? (body.destinatarios as DestinatarioEntrada[])
       : [];
+    const variaveisConfig = Array.isArray(body?.variaveis_config)
+      ? body.variaveis_config
+          .map((item: unknown) => normalizarChaveVariavelFluxo(item))
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
     const responsabilidadeListaFriaConfirmada =
       body?.confirmacao_responsabilidade_lista_fria === true;
 
@@ -917,6 +924,7 @@ export async function POST(req: NextRequest) {
         qstash_publicados: 0,
         metadata_json: {
           template_payload: (template.payload || null) as TemplatePayloadDisparo | null,
+          variaveis_config: variaveisConfig,
           total_consumem_limite_meta: telefonesQueConsomemLimite.length,
           total_contatos_frios: classificacaoLista.totalFrios,
           total_contatos_opt_in: classificacaoLista.totalOptIn,

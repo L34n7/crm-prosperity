@@ -191,6 +191,7 @@ type ContatoOpcao = {
   telefone: string | null;
   telefone_revisar?: boolean;
   email: string | null;
+  campo_contato?: string | null;
   origem: string | null;
   campanha: string | null;
   origem_exibicao?: string | null;
@@ -603,6 +604,12 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     chave: "numero_contato",
     exemplo: "{{numero_contato}}",
     descricao: "Número/telefone salvo no cadastro do contato.",
+  },
+  {
+    chave: "variavel_contato",
+    exemplo: "{{variavel_contato}}",
+    descricao:
+      "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
   },
   {
     chave: "campanha",
@@ -1109,6 +1116,10 @@ function resolverVariavelContato(
 
   if (chave === "email" || chave === "email_contato" || chave === "contato_email") {
     return contato.email || "";
+  }
+
+  if (chave === "variavel_contato") {
+    return contato.campo_contato || "";
   }
 
   if (chave === "campanha") {
@@ -3999,6 +4010,7 @@ export default function DisparosWhatsAppPage() {
           integracao_whatsapp_id: integracaoId,
           template_id: templateId,
           nome_campanha: nomeCampanhaDisparo,
+          variaveis_config: variaveisObrigatorias,
           // CRM_LISTA_FRIA_CONFIRMACAO_DIRETA_V1
           confirmacao_responsabilidade_lista_fria:
             templateComListaFria &&
