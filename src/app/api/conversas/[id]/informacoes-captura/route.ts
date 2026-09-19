@@ -78,19 +78,34 @@ export async function GET(
     );
   }
 
-  const { data, error } = await supabase
-    .from("contato_informacoes_captura")
-    .select(
-      "id, tipo, nome_campo, sequencia, valor, variavel_origem, capturado_em, atualizado_em, automacao_fluxos(nome)"
-    )
-    .eq("empresa_id", usuario.empresa_id)
-    .eq("contato_id", conversa.contato_id)
-    .eq("ativo", true)
-    .order("capturado_em", { ascending: true });
+  const [capturasResultado, contatoResultado] = await Promise.all([
+    supabase
+      .from("contato_informacoes_captura")
+      .select(
+        "id, tipo, nome_campo, sequencia, valor, variavel_origem, capturado_em, atualizado_em, automacao_fluxos(nome)"
+      )
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("contato_id", conversa.contato_id)
+      .eq("ativo", true)
+      .order("capturado_em", { ascending: true }),
+    supabase
+      .from("contatos")
+      .select("campo_contato")
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("id", conversa.contato_id)
+      .maybeSingle(),
+  ]);
 
-  if (error) {
+  if (capturasResultado.error) {
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { ok: false, error: capturasResultado.error.message },
+      { status: 500 }
+    );
+  }
+
+  if (contatoResultado.error) {
+    return NextResponse.json(
+      { ok: false, error: contatoResultado.error.message },
       { status: 500 }
     );
   }
@@ -98,6 +113,7 @@ export async function GET(
   return NextResponse.json({
     ok: true,
     contato_id: conversa.contato_id,
-    informacoes: data || [],
+    campo_contato: String(contatoResultado.data?.campo_contato ?? ""),
+    informacoes: capturasResultado.data || [],
   });
 }

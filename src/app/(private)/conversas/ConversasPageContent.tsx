@@ -276,6 +276,7 @@ export default function ConversasPageContent() {
     InformacaoCapturaConversa[]
   >([]);
   const [contatoCapturaId, setContatoCapturaId] = useState("");
+  const [campoContatoConversa, setCampoContatoConversa] = useState("");
   const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
     useState(false);
 
@@ -402,6 +403,7 @@ export default function ConversasPageContent() {
       }
 
       setContatoCapturaId(String(data?.contato_id || "").trim());
+      setCampoContatoConversa(String(data?.campo_contato || "").trim());
       setInformacoesCapturaConversa(
         Array.isArray(data.informacoes)
           ? data.informacoes.filter(
@@ -415,6 +417,7 @@ export default function ConversasPageContent() {
       if (conversaSelecionadaIdRef.current !== conversaId) return;
 
       setContatoCapturaId("");
+      setCampoContatoConversa("");
       setInformacoesCapturaConversa([]);
       console.error("[capturas-conversa]", error);
     } finally {
@@ -429,6 +432,7 @@ export default function ConversasPageContent() {
     const controller = new AbortController();
 
     setContatoCapturaId("");
+    setCampoContatoConversa("");
     setInformacoesCapturaConversa([]);
     setCarregandoInformacoesCaptura(Boolean(conversaId));
 
@@ -1293,6 +1297,7 @@ export default function ConversasPageContent() {
       contato?.telefone
     );
     registrar(["email", "email_contato", "contato_email"], contato?.email);
+    registrar(["variavel_contato"], campoContatoConversa);
     registrar(["empresa", "empresa_contato", "contato_empresa"], contato?.empresa);
     registrar(["campanha"], obterNomeCampanhaContato(contato));
     registrar(["origem"], contato?.origem || conversaSelecionada?.origem_atendimento);
@@ -1305,6 +1310,7 @@ export default function ConversasPageContent() {
     return mapa;
   }, [
     conversaSelecionada,
+    campoContatoConversa,
     protocoloAtualConversa,
     protocolosConversa,
     usuarioLogado,
@@ -5444,9 +5450,11 @@ async function baixarConversaPDF() {
     }
 
     const parametrosResolvidos = parametrosSelecionados.map((chave) =>
-      chave === "nome_captura" || chave === "primeiro_nome_captura"
-      ? `{{${chave}}}`
-      : resolverVariaveisMacro(`{{${chave}}}`)
+      chave === "nome_captura" ||
+      chave === "primeiro_nome_captura" ||
+      chave === "variavel_contato"
+        ? `{{${chave}}}`
+        : resolverVariaveisMacro(`{{${chave}}}`)
     );
 
     try {

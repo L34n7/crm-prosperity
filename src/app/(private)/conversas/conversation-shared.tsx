@@ -499,7 +499,7 @@ export type VariavelForm = {
 };
 
 export const TEXTO_VARIAVEIS_FIXAS_MACRO =
-  "Variáveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+  "Variáveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{variavel_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
 
 export const VARIAVEIS_FIXAS_SISTEMA = [
   {
@@ -527,6 +527,12 @@ export const VARIAVEIS_FIXAS_SISTEMA = [
     chave: "numero_contato",
     exemplo: "{{numero_contato}}",
     descricao: "Número/telefone salvo no cadastro do contato.",
+  },
+  {
+    chave: "variavel_contato",
+    exemplo: "{{variavel_contato}}",
+    descricao:
+      "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
   },
   {
     chave: "campanha",

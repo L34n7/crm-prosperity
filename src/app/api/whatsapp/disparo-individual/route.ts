@@ -77,6 +77,10 @@ function extrairChaveNomeCaptura(valor: unknown) {
   return match?.[1] || "";
 }
 
+function ehVariavelContato(valor: unknown) {
+  return /^\{\{\s*variavel_contato\s*\}\}$/i.test(String(valor || "").trim());
+}
+
 function gerarCodigoAleatorio(tamanho = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let resultado = "";
@@ -400,7 +404,8 @@ export async function POST(request: Request) {
         contatos (
           id,
           nome,
-          telefone
+          telefone,
+          campo_contato
         )
       `)
       .eq("id", conversaId)
@@ -428,6 +433,13 @@ export async function POST(request: Request) {
     const telefone = limparNumero(contato?.telefone || "");
     const nomeContato = contato?.nome || "Contato";
     const integracaoWhatsappId = conversa.integracao_whatsapp_id;
+
+  if (bodyParams.some((valor: string) => ehVariavelContato(valor))) {
+    const valorCampoContato = String(contato?.campo_contato ?? "").trim();
+    bodyParams = bodyParams.map((valor: string) =>
+      ehVariavelContato(valor) ? valorCampoContato : valor
+    );
+  }
 
   if (bodyParams.some((valor: string) => extrairChaveNomeCaptura(valor))) {
     const nomesCaptura = await resolverNomeCapturaContato({
