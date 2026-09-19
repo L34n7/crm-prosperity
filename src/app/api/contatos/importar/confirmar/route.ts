@@ -269,9 +269,15 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     );
   }
 
+  const contatosExistentesNormalizados = Array.isArray(contatosExistentes)
+    ? (contatosExistentes as Array<{
+        telefone_normalizado?: string | null;
+      }>)
+    : [];
+
   const telefonesExistentes = new Set(
-    (contatosExistentes || [])
-      .map((item) => String(item?.telefone_normalizado || "").trim())
+    contatosExistentesNormalizados
+      .map((item) => String(item.telefone_normalizado || "").trim())
       .filter(Boolean)
   );
 
