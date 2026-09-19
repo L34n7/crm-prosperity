@@ -2028,7 +2028,7 @@
   flex: 1;
 }
 
-.originListManageButton {
+.originListActionButton {
   width: 46px;
   height: 46px;
   flex: 0 0 46px;
@@ -2039,20 +2039,34 @@
   border-radius: 14px;
   background: var(--crm-surface);
   color: var(--crm-text-strong);
-  font-size: 24px;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
 }
 
-.originListManageButton:hover:not(:disabled) {
-  background: var(--crm-surface-soft);
-  border-color: var(--crm-primary);
-}
-
-.originListManageButton:disabled {
+.originListActionButton:disabled {
   cursor: not-allowed;
   opacity: 0.38;
+}
+
+.originListEditButton:hover:not(:disabled) {
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-primary);
+  color: var(--crm-primary);
+}
+
+.originListDeleteButton {
+  font-size: 24px;
+}
+
+.originListDeleteButton:hover:not(:disabled) {
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-border);
+  color: var(--crm-danger-text);
 }
 
 .listManagerModal {
@@ -2142,4 +2156,14 @@
   .listDeleteActions button {
     width: 100%;
   }
+}
+
+
+.listDeleteLoading {
+  padding: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 14px;
 }
