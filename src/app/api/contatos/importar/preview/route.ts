@@ -241,13 +241,17 @@ async function parseSpreadsheetFile(file: File) {
 }
 
 function formatarDataHoraImportacao(data: Date) {
-  const dia = String(data.getDate()).padStart(2, "0");
-  const mes = String(data.getMonth() + 1).padStart(2, "0");
-  const ano = String(data.getFullYear());
-  const hora = String(data.getHours()).padStart(2, "0");
-  const minuto = String(data.getMinutes()).padStart(2, "0");
-
-  return `${dia}/${mes}/${ano} ${hora}:${minuto}`;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(data)
+    .replace(",", "");
 }
 
 function telefoneImportacaoValido(telefone: string) {
