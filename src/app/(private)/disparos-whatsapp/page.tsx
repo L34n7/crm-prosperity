@@ -605,6 +605,11 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     descricao: "Número/telefone salvo no cadastro do contato.",
   },
   {
+    chave: "campo_contato",
+    exemplo: "{{campo_contato}}",
+    descricao: "Campo individual do contato; o valor depende do contato e da lista em contexto.",
+  },
+  {
     chave: "campanha",
     exemplo: "{{campanha}}",
     descricao: "Campanha vinculada ao contato.",

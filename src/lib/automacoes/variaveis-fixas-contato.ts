@@ -7,6 +7,7 @@ type ContatoVariaveisFixas = {
   whatsapp_profile_name?: string | null;
   email?: string | null;
   telefone?: string | null;
+  campo_contato?: string | null;
   campanha?: string | null;
   origem?: string | null;
   status_lead?: string | null;
@@ -23,6 +24,7 @@ type CampoContatoVariavelFixa =
   | "nome"
   | "email"
   | "telefone"
+  | "campo_contato"
   | "campanha"
   | "origem"
   | "status_lead"
@@ -67,6 +69,8 @@ const VARIAVEIS_FIXAS_CONTATO_CAMPOS: Record<
   telefone_contato: "telefone",
   contato_telefone: "telefone",
 
+  campo_contato: "campo_contato",
+
   campanha: "campanha",
   origem: "origem",
 
@@ -86,6 +90,7 @@ export const VARIAVEIS_FIXAS_CONTATO = [
   "nome_perfil_whatsapp",
   "email_contato",
   "numero_contato",
+  "campo_contato",
   "campanha",
   "origem",
   "status_lead",
@@ -271,6 +276,7 @@ export async function montarMapaVariaveisFixasContato(
     nome: String(contato?.nome || "").trim(),
     email: String(contato?.email || "").trim(),
     telefone: String(contato?.telefone || "").trim(),
+    campo_contato: String(contato?.campo_contato || "").trim(),
     campanha: String(contato?.campanha || "").trim(),
     origem: String(contato?.origem || "").trim(),
     status_lead: classificacao,

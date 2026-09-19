@@ -17,6 +17,7 @@ const VARIAVEIS_FIXAS = new Set([
   "numero",
   "numero_contato",
   "contato_numero",
+  "campo_contato",
   "email",
   "email_contato",
   "contato_email",
