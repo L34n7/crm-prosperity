@@ -28,7 +28,7 @@ export async function GET() {
 
     const supabase = getSupabaseAdmin();
 
-    const [opcoesResult, integracoesResult, atendentesResult] =
+    const [opcoesResult, integracoesResult, atendentesResult, listasResult] =
       await Promise.all([
         supabase.rpc("listar_opcoes_filtros_contatos", {
           p_empresa_id: usuario.empresa_id,
@@ -43,6 +43,11 @@ export async function GET() {
           .eq("empresa_id", usuario.empresa_id)
           .eq("status", "ativo")
           .order("nome", { ascending: true }),
+        supabase
+          .from("contatos_listas")
+          .select("id, nome, created_at, permitir_contatos_existentes")
+          .eq("empresa_id", usuario.empresa_id)
+          .order("created_at", { ascending: false }),
       ]);
 
     const { data, error } = opcoesResult;
@@ -60,6 +65,16 @@ export async function GET() {
           ok: false,
           error:
             atendentesResult.error.message || "Erro ao buscar atendentes.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (listasResult.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: listasResult.error.message || "Erro ao buscar listas de contatos.",
         },
         { status: 400 }
       );
@@ -87,6 +102,7 @@ export async function GET() {
         })
       ),
       atendentes: atendentesResult.data || [],
+      listas: listasResult.data || [],
     });
   } catch (error: unknown) {
     return NextResponse.json(
