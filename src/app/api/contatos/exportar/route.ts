@@ -66,6 +66,7 @@ export async function GET(request: Request) {
   const statusLead = searchParams.get("status_lead");
   const busca = searchParams.get("busca")?.trim() || "";
   const origem = searchParams.get("origem")?.trim() || "";
+  const listaId = searchParams.get("lista_id")?.trim() || "";
   const campanha = searchParams.get("campanha")?.trim() || "";
   const rastreamentoCampanhaId =
     searchParams.get("rastreamento_campanha_id")?.trim() || "";
@@ -109,6 +110,13 @@ export async function GET(request: Request) {
   if (integracaoWhatsappId && !UUID_REGEX.test(integracaoWhatsappId)) {
     return NextResponse.json(
       { ok: false, error: "Integração WhatsApp inválida." },
+      { status: 400 }
+    );
+  }
+
+  if (listaId && !UUID_REGEX.test(listaId)) {
+    return NextResponse.json(
+      { ok: false, error: "Lista de contatos inválida." },
       { status: 400 }
     );
   }
@@ -169,16 +177,22 @@ export async function GET(request: Request) {
   }
 
   const carregarPagina = async (inicio: number, fim: number) => {
-    let query = supabaseAdmin
-      .rpc("listar_contatos_operacionais_contexto", {
-        p_empresa_id: usuario.empresa_id,
-        p_integracao_whatsapp_id: integracaoWhatsappId || null,
-        p_mensagem_data_inicio: mensagemDataInicio || null,
-        p_mensagem_data_fim: mensagemDataFim || null,
-        p_ultimo_atendente_id: ultimoAtendenteId || null,
-        p_filtrar_por_integracao: Boolean(integracaoWhatsappId),
-      })
-      .select(`
+    const contextoArgs = {
+      p_empresa_id: usuario.empresa_id,
+      p_integracao_whatsapp_id: integracaoWhatsappId || null,
+      p_mensagem_data_inicio: mensagemDataInicio || null,
+      p_mensagem_data_fim: mensagemDataFim || null,
+      p_ultimo_atendente_id: ultimoAtendenteId || null,
+      p_filtrar_por_integracao: Boolean(integracaoWhatsappId),
+    };
+
+    let query = listaId
+      ? supabaseAdmin
+          .rpc("listar_contatos_operacionais_contexto_lista", {
+            ...contextoArgs,
+            p_lista_id: listaId,
+          })
+          .select(`
         id,
         nome,
         whatsapp_profile_name,
@@ -213,7 +227,45 @@ export async function GET(request: Request) {
         created_at,
         updated_at
       `)
-      .eq("empresa_id", usuario.empresa_id);
+      : supabaseAdmin
+          .rpc("listar_contatos_operacionais_contexto", contextoArgs)
+          .select(`
+        id,
+        nome,
+        whatsapp_profile_name,
+        telefone,
+        email,
+        origem,
+        origem_exibicao,
+        campanha_exibicao,
+        classificacao,
+        contato_novo,
+        opt_in_whatsapp,
+        whatsapp_opt_out,
+        whatsapp_opt_out_geral,
+        whatsapp_opt_out_marketing,
+        whatsapp_opt_out_utility,
+        conversa_status,
+        protocolo_atual,
+        protocolo_resultado,
+        contato_novo_no_inicio,
+        iniciado_com_bot,
+        finalizado_com_bot,
+        finalizado_por_tipo,
+        finalizado_por_usuario_nome,
+        contexto_integracao_whatsapp_id,
+        contexto_integracao_nome,
+        contexto_integracao_numero,
+        ultima_mensagem_contato_em,
+        ultimo_atendente_id,
+        ultimo_atendente_nome,
+        observacoes,
+        telefone_revisar,
+        created_at,
+        updated_at
+      `);
+
+    query = query.eq("empresa_id", usuario.empresa_id);
 
     if (classificacoes.length > 0) {
       query = query.in("classificacao", classificacoes);
