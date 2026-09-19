@@ -244,7 +244,7 @@ async function carregarVariaveisFixasContatoExecucao(params: {
   const { data: contato, error: contatoError } = await supabaseAdmin
     .from("contatos")
     .select(
-      "id, nome, whatsapp_profile_name, email, telefone, campanha, origem, status_lead, classificacao"
+      "id, nome, whatsapp_profile_name, email, telefone, campo_contato, campanha, origem, status_lead, classificacao"
     )
     .eq("id", execucao.contato_id)
     .eq("empresa_id", empresaId)
