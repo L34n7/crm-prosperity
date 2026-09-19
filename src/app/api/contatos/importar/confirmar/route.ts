@@ -177,6 +177,23 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
 
   const body = JSON.parse(bodyText);
   const contatos = Array.isArray(body?.contatos) ? body.contatos : [];
+  const nomeLista = String(body?.nome_lista || "").trim();
+  const arquivoNome = String(body?.arquivo_nome || "").trim() || null;
+  const permitirContatosExistentes = body?.permitir_contatos_existentes === true;
+
+  if (!nomeLista) {
+    return NextResponse.json(
+      { ok: false, error: "Informe um nome para a lista." },
+      { status: 400 }
+    );
+  }
+
+  if (nomeLista.length > 160) {
+    return NextResponse.json(
+      { ok: false, error: "O nome da lista deve ter no máximo 160 caracteres." },
+      { status: 400 }
+    );
+  }
 
   if (!contatos.length) {
     return NextResponse.json(
@@ -216,10 +233,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       nome: contato.nome?.trim() || null,
       telefone,
       email: contato.email?.trim()?.toLowerCase() || null,
-      origem:
-        contato.origem_importacao?.trim() ||
-        contato.origem?.trim() ||
-        null,
+      origem: contato.origem?.trim() || null,
       campanha: contato.campanha?.trim() || null,
       observacoes: contato.observacoes?.trim() || null,
       telefone_revisar:
@@ -238,6 +252,32 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     );
   }
 
+  const { data: lista, error: listaError } = await supabaseAdmin
+    .from("contatos_listas")
+    .insert({
+      empresa_id: usuario.empresa_id,
+      nome: nomeLista,
+      arquivo_nome: arquivoNome,
+      permitir_contatos_existentes: permitirContatosExistentes,
+      usuario_id: usuario.id,
+    })
+    .select("id, nome")
+    .single();
+
+  if (listaError || !lista) {
+    const nomeDuplicado = listaError?.code === "23505";
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: nomeDuplicado
+          ? "Já existe uma lista com esse nome. Escolha outro nome para continuar."
+          : listaError?.message || "Não foi possível registrar a lista.",
+      },
+      { status: nomeDuplicado ? 409 : 500 }
+    );
+  }
+
   const { data: importacao, error: importacaoError } = await supabaseAdmin
     .from("contatos_importacoes")
     .insert({
@@ -246,11 +286,20 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       status: "pendente",
       total: registros.length,
       payload_json: registros,
+      lista_id: lista.id,
+      nome_lista: nomeLista,
+      arquivo_nome: arquivoNome,
+      permitir_contatos_existentes: permitirContatosExistentes,
     })
     .select("id")
     .single();
 
   if (importacaoError || !importacao) {
+    await supabaseAdmin
+      .from("contatos_listas")
+      .delete()
+      .eq("id", lista.id);
+
     return NextResponse.json(
       {
         ok: false,
@@ -294,12 +343,15 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     entidade: "contato",
     entidade_id: importacao.id,
     acao: "importacao_contatos_enfileirada",
-    descricao: `${registros.length} contatos enviados para a fila de importação`,
+    descricao: `${registros.length} contatos enviados para a fila de importação da lista "${nomeLista}"`,
     usuario_id: usuario.id,
     usuario_nome: usuario.nome,
     usuario_email: usuario.email,
     depois: {
       importacao_id: importacao.id,
+      lista_id: lista.id,
+      nome_lista: nomeLista,
+      permitir_contatos_existentes: permitirContatosExistentes,
       total: registros.length,
       ignorados_antes_da_fila: ignorados.length,
     },
@@ -312,9 +364,12 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       ok: true,
       queued: true,
       importacao_id: importacao.id,
+      lista_id: lista.id,
+      nome_lista: nomeLista,
+      permitir_contatos_existentes: permitirContatosExistentes,
       total: registros.length,
       ignorados,
-      message: `${registros.length} contato(s) enviado(s) para a fila de importação.`,
+      message: `Lista "${nomeLista}" registrada. ${registros.length} contato(s) enviado(s) para processamento.`,
     },
     { status: 202 }
   );
