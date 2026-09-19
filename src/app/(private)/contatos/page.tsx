@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import ExclusaoContatosEmMassa from "./ExclusaoContatosEmMassa";
+import GerenciarListaContatosModal from "./GerenciarListaContatosModal";
 import styles from "./contatos.module.css";
 
 type ClassificacaoContato =
@@ -284,6 +285,7 @@ export default function ContatosPage() {
   const [editObservacoes, setEditObservacoes] = useState("");
 
   const [modalImportarAberto, setModalImportarAberto] = useState(false);
+  const [modalGerenciarListaAberto, setModalGerenciarListaAberto] = useState(false);
   const [arquivoImportacao, setArquivoImportacao] = useState<File | null>(null);
   const [importandoPreview, setImportandoPreview] = useState(false);
   const [confirmandoImportacao, setConfirmandoImportacao] = useState(false);
@@ -374,6 +376,13 @@ export default function ContatosPage() {
       (nomeCampanha) => !nomesRastreamento.has(nomeCampanha.trim().toLowerCase())
     );
   }, [campanhasRastreamento, opcoesCampanha]);
+
+  const listaSelecionada = useMemo(() => {
+    if (!filtroOrigem.startsWith("lista:")) return null;
+
+    const listaId = filtroOrigem.replace("lista:", "");
+    return listasContatos.find((lista) => lista.id === listaId) || null;
+  }, [filtroOrigem, listasContatos]);
 
   function selecionarCampanhaCadastro(campanhaId: string) {
     const campanhaSelecionada = campanhasRastreamento.find(
@@ -1402,37 +1411,57 @@ export default function ContatosPage() {
 
           <div className={styles.field}>
             <label className={styles.label}>Origem</label>
-            <select
-              className={styles.select}
-              value={filtroOrigem}
-              onChange={(e) => setFiltroOrigem(e.target.value)}
-            >
-              <option value="">Todas</option>
+            <div className={styles.originFilterRow}>
+              <select
+                className={`${styles.select} ${styles.originFilterSelect}`}
+                value={filtroOrigem}
+                onChange={(e) => {
+                  setFiltroOrigem(e.target.value);
+                  setModalGerenciarListaAberto(false);
+                }}
+              >
+                <option value="">Todas</option>
 
-              {listasContatos.length > 0 && (
-                <optgroup label="Listas importadas">
-                  {listasContatos.map((lista) => (
-                    <option key={lista.id} value={`lista:${lista.id}`}>
-                      {lista.nome} · {formatarDataHoraLista(lista.created_at)}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-
-              {opcoesOrigem.some(
-                (origem) => !origem.startsWith("Importação - ")
-              ) && (
-                <optgroup label="Outras origens">
-                  {opcoesOrigem
-                    .filter((origem) => !origem.startsWith("Importação - "))
-                    .map((origem) => (
-                      <option key={origem} value={origem}>
-                        {origem}
+                {listasContatos.length > 0 && (
+                  <optgroup label="Listas importadas">
+                    {listasContatos.map((lista) => (
+                      <option key={lista.id} value={`lista:${lista.id}`}>
+                        {lista.nome} · {formatarDataHoraLista(lista.created_at)}
                       </option>
                     ))}
-                </optgroup>
-              )}
-            </select>
+                  </optgroup>
+                )}
+
+                {opcoesOrigem.some(
+                  (origem) => !origem.startsWith("Importação - ")
+                ) && (
+                  <optgroup label="Outras origens">
+                    {opcoesOrigem
+                      .filter((origem) => !origem.startsWith("Importação - "))
+                      .map((origem) => (
+                        <option key={origem} value={origem}>
+                          {origem}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+              </select>
+
+              <button
+                type="button"
+                className={styles.originListManageButton}
+                onClick={() => setModalGerenciarListaAberto(true)}
+                disabled={!listaSelecionada}
+                title={
+                  listaSelecionada
+                    ? "Gerenciar lista selecionada"
+                    : "Selecione uma lista importada para gerenciar"
+                }
+                aria-label="Gerenciar lista selecionada"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           <div className={styles.field}>
@@ -2681,6 +2710,24 @@ export default function ContatosPage() {
         </div>
       )}
 
+
+      {modalGerenciarListaAberto && listaSelecionada && (
+        <GerenciarListaContatosModal
+          lista={listaSelecionada}
+          onClose={() => setModalGerenciarListaAberto(false)}
+          onAtualizada={async (nomeAtualizado) => {
+            setMensagem(`Lista "${nomeAtualizado}" atualizada com sucesso.`);
+            await carregarOpcoesFiltros();
+          }}
+          onExcluida={async (mensagemExclusao) => {
+            setModalGerenciarListaAberto(false);
+            setFiltroOrigem("");
+            setPaginaAtual(1);
+            setMensagem(mensagemExclusao);
+            await carregarOpcoesFiltros();
+          }}
+        />
+      )}
 
       {modalImportarAberto && (
         <div
