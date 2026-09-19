@@ -23,7 +23,7 @@ type Contato = {
   email: string | null;
   origem: string | null;
   campanha: string | null;
-  variavel_contato: string | null;
+  campo_contato: string | null;
   origem_exibicao?: string | null;
   observacoes: string | null;
   telefone_revisar: boolean;
@@ -105,7 +105,7 @@ type ItemPreviewImportacao = {
   nome?: string;
   telefone_normalizado?: string;
   telefone_original?: string;
-  variavel_contato?: string | null;
+  campo_contato?: string | null;
   status_lead?: string;
   motivo?: string;
   [campo: string]: unknown;
@@ -252,7 +252,7 @@ export default function ContatosPage() {
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
-  const [variavelContato, setVariavelContato] = useState("");
+  const [campoContato, setCampoContato] = useState("");
   const [origem, setOrigem] = useState("");
   const [campanha, setCampanha] = useState("");
   const [rastreamentoCampanhaId, setRastreamentoCampanhaId] = useState("");
@@ -281,7 +281,7 @@ export default function ContatosPage() {
   const [editNome, setEditNome] = useState("");
   const [editTelefone, setEditTelefone] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editVariavelContato, setEditVariavelContato] = useState("");
+  const [editCampoContato, setEditCampoContato] = useState("");
   const [editOrigem, setEditOrigem] = useState("");
   const [editCampanha, setEditCampanha] = useState("");
   const [editRastreamentoCampanhaId, setEditRastreamentoCampanhaId] =
@@ -421,7 +421,7 @@ export default function ContatosPage() {
     setNome("");
     setTelefone("");
     setEmail("");
-    setVariavelContato("");
+    setCampoContato("");
     setOrigem("");
     setCampanha("");
     setRastreamentoCampanhaId("");
@@ -560,7 +560,7 @@ export default function ContatosPage() {
           nome,
           telefone,
           email,
-          variavel_contato: variavelContato,
+          campo_contato: campoContato,
           origem,
           campanha,
           rastreamento_campanha_id: rastreamentoCampanhaId || null,
@@ -820,7 +820,7 @@ export default function ContatosPage() {
     setEditNome(contato.nome || "");
     setEditTelefone(contato.telefone || "");
     setEditEmail(contato.email || "");
-    setEditVariavelContato(contato.variavel_contato || "");
+    setEditCampoContato(contato.campo_contato || "");
     setEditOrigem(contato.origem || "");
     setEditCampanha(contato.campanha || "");
     setEditRastreamentoCampanhaId(campanhaVinculada);
@@ -834,7 +834,7 @@ export default function ContatosPage() {
     setEditNome("");
     setEditTelefone("");
     setEditEmail("");
-    setEditVariavelContato("");
+    setEditCampoContato("");
     setEditOrigem("");
     setEditCampanha("");
     setEditRastreamentoCampanhaId("");
@@ -941,7 +941,7 @@ export default function ContatosPage() {
       nome: editNome,
       telefone: editTelefone,
       email: editEmail,
-      variavel_contato: editVariavelContato,
+      campo_contato: editCampoContato,
       origem: editOrigem,
       campanha: editCampanha,
       observacoes: editObservacoes,
@@ -1913,7 +1913,7 @@ export default function ContatosPage() {
                   </div>
                   <span>Contato</span>
                   <span>Telefone</span>
-                  <span>Variável</span>
+                  <span>Campo</span>
                   <span>Classificação</span>
                   <span>Conversa</span>
                   <span>Opt-in</span>
@@ -1991,9 +1991,9 @@ export default function ContatosPage() {
 
                           <span
                             className={styles.sheetCell}
-                            title={contato.variavel_contato || ""}
+                            title={contato.campo_contato || ""}
                           >
-                            {contato.variavel_contato || "—"}
+                            {contato.campo_contato || "—"}
                           </span>
 
                           <div className={styles.sheetCell}>
@@ -2139,11 +2139,11 @@ export default function ContatosPage() {
                             </div>
 
                             <div className={styles.field}>
-                              <label className={styles.label}>Variável do contato</label>
+                              <label className={styles.label}>Campo do contato</label>
                               <input
                                 className={styles.input}
-                                value={editVariavelContato}
-                                onChange={(e) => setEditVariavelContato(e.target.value)}
+                                value={editCampoContato}
+                                onChange={(e) => setEditCampoContato(e.target.value)}
                                 placeholder="Ex.: programador, Fiat, CCemig"
                               />
                             </div>
@@ -2372,9 +2372,9 @@ export default function ContatosPage() {
                             </div>
 
                             <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Variável do contato</span>
+                              <span className={styles.infoLabel}>Campo do contato</span>
                               <span className={styles.infoValue}>
-                                {contato.variavel_contato || "Sem valor"}
+                                {contato.campo_contato || "Sem valor"}
                               </span>
                             </div>
 
@@ -2708,11 +2708,11 @@ export default function ContatosPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Variável do contato</label>
+                <label className={styles.label}>Campo do contato</label>
                 <input
                   className={styles.input}
-                  value={variavelContato}
-                  onChange={(e) => setVariavelContato(e.target.value)}
+                  value={campoContato}
+                  onChange={(e) => setCampoContato(e.target.value)}
                   placeholder="Ex.: programador, Fiat, CCemig"
                 />
               </div>
@@ -2819,7 +2819,7 @@ export default function ContatosPage() {
                 <h2 className={styles.modalTitle}>Importar contatos</h2>
                 <p className={styles.cardDescription}>
                   Cada importação fica salva como uma lista e pode ser usada depois como filtro de contatos.
-                  A coluna "variavel_contato" é salva por lista, permitindo que o mesmo contato tenha valores diferentes em listas diferentes. Se vier vazia, o valor efetivo anterior é preservado.
+                  A coluna "campo_contato" é salva por lista, permitindo que o mesmo contato tenha valores diferentes em listas diferentes. Se vier vazia, o valor efetivo anterior é preservado.
                 </p>
               </div>
 
@@ -3077,9 +3077,9 @@ export default function ContatosPage() {
                                       <strong>Linha:</strong> {item.linha}
                                     </span>
 
-                                    {item.variavel_contato && (
+                                    {item.campo_contato && (
                                       <span className={styles.metaItem}>
-                                        <strong>Variável:</strong> {item.variavel_contato}
+                                        <strong>Campo:</strong> {item.campo_contato}
                                       </span>
                                     )}
 
