@@ -78,6 +78,8 @@ async function obterContextoLista(
     };
   }
 
+  const empresaId = usuario.empresa_id;
+
   const { data: lista, error } = await supabaseAdmin
     .from("contatos_listas")
     .select("id, nome, created_at")
@@ -108,7 +110,7 @@ async function obterContextoLista(
   return {
     ok: true as const,
     usuario,
-    empresaId: usuario.empresa_id,
+    empresaId,
     lista,
   };
 }
@@ -214,7 +216,7 @@ export async function PATCH(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("empresa_id", usuario.empresa_id)
+    .eq("empresa_id", empresaId)
     .select("id, nome, created_at")
     .single();
 
