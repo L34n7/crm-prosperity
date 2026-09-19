@@ -285,7 +285,9 @@ export default function ContatosPage() {
   const [editObservacoes, setEditObservacoes] = useState("");
 
   const [modalImportarAberto, setModalImportarAberto] = useState(false);
-  const [modalGerenciarListaAberto, setModalGerenciarListaAberto] = useState(false);
+  const [modoGerenciarLista, setModoGerenciarLista] = useState<
+    "editar" | "excluir" | null
+  >(null);
   const [arquivoImportacao, setArquivoImportacao] = useState<File | null>(null);
   const [importandoPreview, setImportandoPreview] = useState(false);
   const [confirmandoImportacao, setConfirmandoImportacao] = useState(false);
@@ -1417,7 +1419,7 @@ export default function ContatosPage() {
                 value={filtroOrigem}
                 onChange={(e) => {
                   setFiltroOrigem(e.target.value);
-                  setModalGerenciarListaAberto(false);
+                  setModoGerenciarLista(null);
                 }}
               >
                 <option value="">Todas</option>
@@ -1449,15 +1451,43 @@ export default function ContatosPage() {
 
               <button
                 type="button"
-                className={styles.originListManageButton}
-                onClick={() => setModalGerenciarListaAberto(true)}
+                className={`${styles.originListActionButton} ${styles.originListEditButton}`}
+                onClick={() => setModoGerenciarLista("editar")}
                 disabled={!listaSelecionada}
                 title={
                   listaSelecionada
-                    ? "Gerenciar lista selecionada"
-                    : "Selecione uma lista importada para gerenciar"
+                    ? "Editar nome da lista"
+                    : "Selecione uma lista importada para editar"
                 }
-                aria-label="Gerenciar lista selecionada"
+                aria-label="Editar nome da lista selecionada"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                className={`${styles.originListActionButton} ${styles.originListDeleteButton}`}
+                onClick={() => setModoGerenciarLista("excluir")}
+                disabled={!listaSelecionada}
+                title={
+                  listaSelecionada
+                    ? "Excluir lista"
+                    : "Selecione uma lista importada para excluir"
+                }
+                aria-label="Excluir lista selecionada"
               >
                 ×
               </button>
@@ -2711,16 +2741,17 @@ export default function ContatosPage() {
       )}
 
 
-      {modalGerenciarListaAberto && listaSelecionada && (
+      {modoGerenciarLista && listaSelecionada && (
         <GerenciarListaContatosModal
           lista={listaSelecionada}
-          onClose={() => setModalGerenciarListaAberto(false)}
+          modo={modoGerenciarLista}
+          onClose={() => setModoGerenciarLista(null)}
           onAtualizada={async (nomeAtualizado) => {
             setMensagem(`Lista "${nomeAtualizado}" atualizada com sucesso.`);
             await carregarOpcoesFiltros();
           }}
           onExcluida={async (mensagemExclusao) => {
-            setModalGerenciarListaAberto(false);
+            setModoGerenciarLista(null);
             setFiltroOrigem("");
             setPaginaAtual(1);
             setMensagem(mensagemExclusao);
