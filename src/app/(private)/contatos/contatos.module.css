@@ -2014,3 +2014,132 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.originFilterRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.originFilterSelect {
+  min-width: 0;
+  flex: 1;
+}
+
+.originListManageButton {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 14px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.originListManageButton:hover:not(:disabled) {
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-primary);
+}
+
+.originListManageButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.listManagerModal {
+  max-width: 720px;
+}
+
+.listManagerSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.listManagerNameRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.listManagerNameRow .primaryButton {
+  min-height: 46px;
+  white-space: nowrap;
+}
+
+.listManagerDivider {
+  height: 1px;
+  margin: 24px 0;
+  background: var(--crm-border);
+}
+
+.listManagerDangerTitle {
+  display: block;
+  color: var(--crm-danger-text);
+  font-size: 16px;
+}
+
+.listDeletePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 16px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-text);
+}
+
+.listDeletePanel p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.listDeleteConversationWarning,
+.listDeleteBlockedWarning {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+
+.listDeleteConversationWarning {
+  border: 1px solid var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.listDeleteBlockedWarning {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-surface);
+  color: var(--crm-danger-text);
+}
+
+.listDeleteActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .listManagerNameRow {
+    grid-template-columns: 1fr;
+  }
+
+  .listManagerNameRow .primaryButton,
+  .listDeleteActions button {
+    width: 100%;
+  }
+}
