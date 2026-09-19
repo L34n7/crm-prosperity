@@ -858,8 +858,8 @@ export default function EmpresasPage() {
                                   </span>
                                   <span className={styles.infoValue}>
                                     Envie o modelo antigo do Supabase Auth como
-                                    contingência. O link padrão de 24 horas e 3
-                                    aberturas não será invalidado pelo envio.
+                                    contingência. Esse link expira em 1 hora e só
+                                    pode ser acessado uma única vez.
                                   </span>
                                 </div>
 
