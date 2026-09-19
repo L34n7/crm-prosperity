@@ -252,6 +252,47 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     );
   }
 
+  const telefonesRegistros = registros
+    .map((registro) => String(registro.telefone || "").trim())
+    .filter(Boolean);
+
+  const { data: contatosExistentes, error: contatosExistentesError } =
+    await supabaseAdmin.rpc("buscar_telefones_contatos_existentes", {
+      p_empresa_id: usuario.empresa_id,
+      p_telefones: telefonesRegistros,
+    });
+
+  if (contatosExistentesError) {
+    return NextResponse.json(
+      { ok: false, error: contatosExistentesError.message },
+      { status: 500 }
+    );
+  }
+
+  const telefonesExistentes = new Set(
+    (contatosExistentes || [])
+      .map((item) => String(item?.telefone_normalizado || "").trim())
+      .filter(Boolean)
+  );
+
+  const registrosParaProcessar = permitirContatosExistentes
+    ? registros
+    : registros.filter(
+        (registro) =>
+          !telefonesExistentes.has(String(registro.telefone || "").trim())
+      );
+
+  if (!registrosParaProcessar.length) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Todos os contatos desta lista já existem no CRM. Ative a opção para permitir contatos repetidos entre listas ou escolha outro arquivo.",
+      },
+      { status: 409 }
+    );
+  }
+
   const { data: lista, error: listaError } = await supabaseAdmin
     .from("contatos_listas")
     .insert({
@@ -284,8 +325,8 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       empresa_id: usuario.empresa_id,
       usuario_id: usuario.id,
       status: "pendente",
-      total: registros.length,
-      payload_json: registros,
+      total: registrosParaProcessar.length,
+      payload_json: registrosParaProcessar,
       lista_id: lista.id,
       nome_lista: nomeLista,
       arquivo_nome: arquivoNome,
@@ -348,7 +389,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     entidade: "contato",
     entidade_id: importacao.id,
     acao: "importacao_contatos_enfileirada",
-    descricao: `${registros.length} contatos enviados para a fila de importação da lista "${nomeLista}"`,
+    descricao: `${registrosParaProcessar.length} contatos enviados para a fila de importação da lista "${nomeLista}"`,
     usuario_id: usuario.id,
     usuario_nome: usuario.nome,
     usuario_email: usuario.email,
@@ -357,8 +398,9 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       lista_id: lista.id,
       nome_lista: nomeLista,
       permitir_contatos_existentes: permitirContatosExistentes,
-      total: registros.length,
-      ignorados_antes_da_fila: ignorados.length,
+      total: registrosParaProcessar.length,
+      ignorados_antes_da_fila:
+        ignorados.length + (registros.length - registrosParaProcessar.length),
     },
     ip: auditMeta.ip,
     user_agent: auditMeta.user_agent,
@@ -372,7 +414,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       lista_id: lista.id,
       nome_lista: nomeLista,
       permitir_contatos_existentes: permitirContatosExistentes,
-      total: registros.length,
+      total: registrosParaProcessar.length,
       ignorados,
       message: `Lista "${nomeLista}" registrada e enviada para processamento.`,
     },
