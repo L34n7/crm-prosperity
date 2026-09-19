@@ -234,7 +234,7 @@ export async function PATCH(
   await registrarLogAuditoriaSeguro({
     empresa_id: usuario.empresa_id,
     categoria: "contatos",
-    entidade: "contatos_lista",
+    entidade: "contato",
     entidade_id: id,
     acao: "lista_contatos_renomeada",
     descricao: `Lista "${lista.nome}" renomeada para "${nome}"`,
@@ -360,7 +360,7 @@ export async function DELETE(
   await registrarLogAuditoriaSeguro({
     empresa_id: usuario.empresa_id,
     categoria: "contatos",
-    entidade: "contatos_lista",
+    entidade: "contato",
     entidade_id: id,
     acao: "lista_contatos_excluida",
     descricao: `Lista "${lista.nome}" excluída`,
