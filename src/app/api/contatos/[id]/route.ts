@@ -190,6 +190,11 @@ if (body?.email !== undefined) {
   payload.email = body.email?.trim()?.toLowerCase() || null;
 }
 
+// variavel individual do contato
+if (body?.variavel_contato !== undefined) {
+  payload.variavel_contato = String(body.variavel_contato || "").trim() || null;
+}
+
 // empresa
 if (body?.empresa !== undefined) {
   payload.empresa = body.empresa?.trim() || null;

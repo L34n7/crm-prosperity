@@ -254,6 +254,7 @@ export async function GET(request: Request) {
         email,
         origem,
         campanha,
+        variavel_contato,
         rastreamento_origem_id,
         rastreamento_campanha_id,
         rastreamento_link_id,
@@ -420,7 +421,7 @@ export async function GET(request: Request) {
 
   if (busca) {
     query = query.or(
-      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
+      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,variavel_contato.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
     );
   }
 
@@ -546,6 +547,7 @@ export async function POST(request: Request) {
     : "";
     
   const email = body?.email?.trim()?.toLowerCase() || null;
+  const variavelContato = String(body?.variavel_contato || "").trim() || null;
   const rastreamentoCampanhaId =
     String(body?.rastreamento_campanha_id || "").trim() || null;
   const classificacaoEntrada = body?.classificacao ?? body?.status_lead ?? "novo";
@@ -649,6 +651,7 @@ export async function POST(request: Request) {
       email,
       origem,
       campanha,
+      variavel_contato: variavelContato,
       rastreamento_origem_id: campanhaRastreamento?.origem_id || null,
       rastreamento_campanha_id: campanhaRastreamento?.id || null,
       classificacao: classificacaoLead,

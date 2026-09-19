@@ -7,6 +7,7 @@ export async function GET() {
     const headers = [
       "nome",
       "telefone",
+      "variavel_contato",
       "email",
       "origem",
       "campanha",
@@ -18,6 +19,7 @@ export async function GET() {
     const exemplo = [
       "João Silva",
       "31999999999",
+      "programador",
       "joao@email.com",
       "WhatsApp",
       "Campanha Abril",

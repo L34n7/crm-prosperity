@@ -28,6 +28,7 @@ type LinhaPreview = {
   origem: string | null;
   origem_importacao?: string | null;
   campanha: string | null;
+  variavel_contato: string | null;
   status_lead: StatusLead;
   observacoes: string | null;
   motivo?: string;
@@ -142,6 +143,19 @@ function obterObservacoesDaLinha(headers: string[], row: string[]) {
     "notes",
     "anotacoes",
     "anotações",
+  ]);
+}
+
+function obterVariavelContatoDaLinha(headers: string[], row: string[]) {
+  return getFirstValueByPossibleHeaders(headers, row, [
+    "variavel_contato",
+    "variável_contato",
+    "variavel do contato",
+    "variável do contato",
+    "variavel",
+    "variável",
+    "informacao_contato",
+    "informação_contato",
   ]);
 }
 
@@ -415,6 +429,7 @@ export async function POST(request: Request) {
       const telefoneOriginal = obterTelefoneDaLinha(headers, row);
       const telefoneNormalizado = normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal);
       const email = obterEmailDaLinha(headers, row) || null;
+      const variavelContato = obterVariavelContatoDaLinha(headers, row) || null;
       const observacoes = obterObservacoesDaLinha(headers, row) || null;
 
       const origem =
@@ -443,6 +458,7 @@ export async function POST(request: Request) {
         origem,
         origem_importacao: origemImportacaoPadrao,
         campanha,
+        variavel_contato: variavelContato,
         status_lead: statusLead,
         observacoes,
         telefone_revisar: telefonePrecisaRevisao(telefoneNormalizado),
