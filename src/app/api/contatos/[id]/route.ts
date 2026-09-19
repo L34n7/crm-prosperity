@@ -192,7 +192,9 @@ if (body?.email !== undefined) {
 
 // variavel individual do contato
 if (body?.variavel_contato !== undefined) {
-  payload.variavel_contato = String(body.variavel_contato || "").trim() || null;
+  const variavelContato = String(body.variavel_contato || "").trim() || null;
+  payload.variavel_contato = variavelContato;
+  payload.variavel_contato_base = variavelContato;
 }
 
 // empresa

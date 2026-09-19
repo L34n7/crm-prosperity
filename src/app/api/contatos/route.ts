@@ -652,6 +652,7 @@ export async function POST(request: Request) {
       origem,
       campanha,
       variavel_contato: variavelContato,
+      variavel_contato_base: variavelContato,
       rastreamento_origem_id: campanhaRastreamento?.origem_id || null,
       rastreamento_campanha_id: campanhaRastreamento?.id || null,
       classificacao: classificacaoLead,

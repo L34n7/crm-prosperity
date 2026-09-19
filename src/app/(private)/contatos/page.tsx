@@ -2819,7 +2819,7 @@ export default function ContatosPage() {
                 <h2 className={styles.modalTitle}>Importar contatos</h2>
                 <p className={styles.cardDescription}>
                   Cada importação fica salva como uma lista e pode ser usada depois como filtro de contatos.
-                  Use a coluna "variavel_contato" para informar um valor individual para cada contato.
+                  A coluna "variavel_contato" é salva por lista, permitindo que o mesmo contato tenha valores diferentes em listas diferentes. Se vier vazia, o valor efetivo anterior é preservado.
                 </p>
               </div>
 
