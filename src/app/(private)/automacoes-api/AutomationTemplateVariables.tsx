@@ -62,6 +62,12 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     descricao: "Número/telefone salvo no cadastro do contato.",
   },
   {
+    chave: "variavel_contato",
+    exemplo: "{{variavel_contato}}",
+    descricao:
+      "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
+  },
+  {
     chave: "campanha",
     exemplo: "{{campanha}}",
     descricao: "Campanha vinculada ao contato.",

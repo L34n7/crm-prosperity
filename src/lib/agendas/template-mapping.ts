@@ -186,6 +186,15 @@ export const TEMPLATE_SOURCE_OPTIONS: readonly AgendaTemplateSourceOption[] = [
     category: "Fixa",
   },
   {
+    value: "variavel_contato",
+    variable: "{{variavel_contato}}",
+    label: "Campo do contato",
+    description:
+      "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
+    kind: "text",
+    category: "Fixa",
+  },
+  {
     value: "campanha",
     variable: "{{campanha}}",
     label: "Campanha do contato",
@@ -581,6 +590,8 @@ function sourceValue(context: AgendaTemplateContext, source: string) {
       return appointment.telefone_cliente || contact.telefone || "";
     case "email_contato":
       return appointment.email_cliente || contact.email || "";
+    case "variavel_contato":
+      return contact.campo_contato ?? contact.variavel_contato ?? "";
     case "contato.primeiro_nome":
       return firstWord(appointment.nome_cliente || contact.nome || "");
     case "agendamento.titulo":

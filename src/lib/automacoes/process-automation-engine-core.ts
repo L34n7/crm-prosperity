@@ -5340,7 +5340,7 @@ async function obterContatoAutomacao(empresaId: string, execucao: any) {
 
   const { data } = await supabaseAdmin
     .from("contatos")
-    .select("id, nome, telefone, email")
+    .select("id, nome, telefone, email, campo_contato")
     .eq("id", execucao.contato_id)
     .eq("empresa_id", empresaId)
     .maybeSingle();
