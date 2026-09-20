@@ -11,6 +11,7 @@ const supabaseAdmin = getSupabaseAdmin();
 type ConversaBase = {
   id: string;
   empresa_id: string;
+  contato_id: string;
   integracao_whatsapp_id?: string | null;
 };
 
@@ -30,7 +31,7 @@ async function buscarConversaPermitida(
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, integracao_whatsapp_id")
+    .select("id, empresa_id, contato_id, integracao_whatsapp_id")
     .eq("id", conversaId)
     .maybeSingle<ConversaBase>();
 
@@ -111,10 +112,10 @@ export async function GET(
   }
 
   const { data: itens, error: itensError } = await supabaseAdmin
-    .from("conversas_listas_itens")
+    .from("conversas_listas_contatos")
     .select("lista_id")
     .eq("empresa_id", empresaId)
-    .eq("conversa_id", id);
+    .eq("contato_id", conversaPermitida.conversa.contato_id);
 
   if (itensError) {
     return NextResponse.json(
@@ -183,15 +184,15 @@ export async function POST(
   }
 
   const { error } = await supabaseAdmin
-    .from("conversas_listas_itens")
+    .from("conversas_listas_contatos")
     .upsert(
       {
         empresa_id: empresaId,
         lista_id: listaId,
-        conversa_id: id,
+        contato_id: conversaPermitida.conversa.contato_id,
         criado_por: usuario.id,
       },
-      { onConflict: "lista_id,conversa_id" }
+      { onConflict: "lista_id,contato_id" }
     );
 
   if (error) {
@@ -203,7 +204,7 @@ export async function POST(
 
   return NextResponse.json({
     ok: true,
-    message: "Conversa adicionada a lista com sucesso",
+    message: "Contato adicionado à lista com sucesso",
   });
 }
 
@@ -242,10 +243,10 @@ export async function DELETE(
   const empresaId = conversaPermitida.conversa.empresa_id;
 
   const { error } = await supabaseAdmin
-    .from("conversas_listas_itens")
+    .from("conversas_listas_contatos")
     .delete()
     .eq("empresa_id", empresaId)
-    .eq("conversa_id", id)
+    .eq("contato_id", conversaPermitida.conversa.contato_id)
     .eq("lista_id", listaId);
 
   if (error) {
@@ -257,6 +258,6 @@ export async function DELETE(
 
   return NextResponse.json({
     ok: true,
-    message: "Conversa removida da lista com sucesso",
+    message: "Contato removido da lista com sucesso",
   });
 }

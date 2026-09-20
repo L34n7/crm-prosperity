@@ -108,6 +108,8 @@ export async function GET(request: Request) {
   const busca = searchParams.get("busca")?.trim() || "";
   const origem = searchParams.get("origem")?.trim() || "";
   const listaId = searchParams.get("lista_id")?.trim() || "";
+  const listaCompartilhadaId =
+    searchParams.get("lista_compartilhada_id")?.trim() || "";
   const campanha = searchParams.get("campanha")?.trim() || "";
   const rastreamentoCampanhaId =
     searchParams.get("rastreamento_campanha_id")?.trim() || "";
@@ -174,6 +176,23 @@ export async function GET(request: Request) {
   if (listaId && !UUID_REGEX.test(listaId)) {
     return NextResponse.json(
       { ok: false, error: "Lista de contatos inválida." },
+      { status: 400 }
+    );
+  }
+
+  if (listaCompartilhadaId && !UUID_REGEX.test(listaCompartilhadaId)) {
+    return NextResponse.json(
+      { ok: false, error: "Lista compartilhada inválida." },
+      { status: 400 }
+    );
+  }
+
+  if (listaCompartilhadaId && disparoAnteriorId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "O filtro de lista compartilhada não pode ser combinado com disparo anterior.",
+      },
       { status: 400 }
     );
   }
@@ -314,7 +333,18 @@ export async function GET(request: Request) {
 
   let query;
 
-  if (disparoAnteriorId && listaId) {
+  if (listaCompartilhadaId) {
+    query = supabaseAdmin
+      .rpc(
+        "listar_contatos_operacionais_contexto_lista_compartilhada",
+        {
+          ...contextoArgs,
+          p_lista_id: listaCompartilhadaId,
+        },
+        { count: "exact" }
+      )
+      .select(camposContatosContexto);
+  } else if (disparoAnteriorId && listaId) {
     query = supabaseAdmin
       .rpc(
         "listar_contatos_operacionais_contexto_disparo_anterior_lista",
