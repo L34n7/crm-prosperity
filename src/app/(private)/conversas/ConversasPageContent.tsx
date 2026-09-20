@@ -9402,7 +9402,14 @@ const templateFooterTexto = useMemo(() => {
 
                               <ContatoCadastroNichoAction
                                 key={conversaSelecionada.contatos?.id}
-                                contato={conversaSelecionada.contatos}
+                                contato={
+                                  conversaSelecionada.contatos
+                                    ? {
+                                        ...conversaSelecionada.contatos,
+                                        interesse: interesseContatoConversa,
+                                      }
+                                    : null
+                                }
                               />
                             </div>
                           </div>

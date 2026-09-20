@@ -30,6 +30,7 @@ export type PessoaCadastro = {
   cpf_cnpj: string | null;
   data_nascimento: string | null;
   email: string | null;
+  interesse: string | null;
   cep: string | null;
   logradouro: string | null;
   numero: string | null;
@@ -61,6 +62,7 @@ export type ContatoInicialPessoa = {
   whatsapp_profile_name?: string | null;
   telefone?: string | null;
   email?: string | null;
+  interesse?: string | null;
   empresa?: string | null;
   observacoes?: string | null;
 };
@@ -73,6 +75,7 @@ type FormState = {
   cpf_cnpj: string;
   data_nascimento: string;
   email: string;
+  interesse: string;
   cep: string;
   logradouro: string;
   numero: string;
@@ -116,6 +119,7 @@ const FORM_INICIAL: FormState = {
   cpf_cnpj: "",
   data_nascimento: "",
   email: "",
+  interesse: "",
   cep: "",
   logradouro: "",
   numero: "",
@@ -147,6 +151,7 @@ function criarFormPessoa(pessoa?: PessoaCadastro | null): FormState {
     cpf_cnpj: pessoa.cpf_cnpj ?? "",
     data_nascimento: pessoa.data_nascimento ?? "",
     email: pessoa.email ?? "",
+    interesse: pessoa.interesse ?? "",
     cep: pessoa.cep ?? "",
     logradouro: pessoa.logradouro ?? "",
     numero: pessoa.numero ?? "",
@@ -189,6 +194,7 @@ function criarFormContato(contato?: ContatoInicialPessoa | null): FormState {
     nome: String(contato.nome ?? "").trim() || nomeWhatsApp,
     nome_social: nomeWhatsApp,
     email: String(contato.email ?? "").trim(),
+    interesse: String(contato.interesse ?? "").trim(),
     observacoes: observacoes.join("\n\n"),
     telefones: [String(contato.telefone ?? "").trim(), "", ""],
   };
@@ -443,6 +449,14 @@ export default function PessoaCadastroModal({
             <label className={styles.field}>
               <span>E-mail</span>
               <input type="email" value={form.email} onChange={(event) => atualizarForm("email", event.target.value)} />
+            </label>
+            <label className={styles.field}>
+              <span>Interesse</span>
+              <input
+                value={form.interesse}
+                onChange={(event) => atualizarForm("interesse", event.target.value)}
+                placeholder="Ex.: Apartamento Residencial Vista Verde"
+              />
             </label>
             {editandoId ? (
               <label className={styles.field}>

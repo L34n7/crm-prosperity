@@ -329,6 +329,11 @@ export default function CadastrosPage() {
             {pessoa.cpf_cnpj || "Documento não informado"}
             {pessoa.email ? ` · ${pessoa.email}` : ""}
           </p>
+          {pessoa.interesse ? (
+            <p>
+              <strong>Interesse:</strong> {pessoa.interesse}
+            </p>
+          ) : null}
           <div className={styles.contactList}>
             {(pessoa.contatos ?? []).length > 0 ? (
               pessoa.contatos.map((contato) => (

@@ -22,6 +22,7 @@ type ContatoConversa = {
   whatsapp_profile_name?: string | null;
   telefone?: string | null;
   email?: string | null;
+  interesse?: string | null;
   empresa?: string | null;
   origem?: string | null;
   campanha?: string | null;
@@ -66,10 +67,12 @@ export default function ContatoCadastroNichoAction({
       whatsapp_profile_name: contato?.whatsapp_profile_name ?? null,
       telefone: contato?.telefone ?? null,
       email: contato?.email ?? null,
+      interesse: contato?.interesse ?? null,
       empresa: contato?.empresa ?? null,
       observacoes: contato?.observacoes ?? null,
     }), [
       contato?.email,
+      contato?.interesse,
       contato?.empresa,
       contato?.nome,
       contato?.observacoes,
@@ -88,6 +91,7 @@ export default function ContatoCadastroNichoAction({
       whatsapp_profile_name: contato?.whatsapp_profile_name ?? null,
       telefone: String(contato?.telefone ?? ""),
       email: contato?.email ?? null,
+      interesse: contato?.interesse ?? null,
       empresa: contato?.empresa ?? null,
       origem: contato?.origem ?? null,
       campanha: contato?.campanha ?? null,
