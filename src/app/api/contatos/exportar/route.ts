@@ -361,6 +361,37 @@ export async function GET(request: Request) {
         ? [data]
         : []) as Array<Record<string, unknown>>;
 
+    const idsPagina = registros
+      .map((contato) => String(contato.id || "").trim())
+      .filter(Boolean);
+
+    if (idsPagina.length > 0) {
+      const { data: interesses, error: interessesError } = await supabaseAdmin
+        .from("contatos")
+        .select("id, interesse")
+        .eq("empresa_id", usuario.empresa_id)
+        .in("id", idsPagina);
+
+      if (interessesError) {
+        return NextResponse.json(
+          { ok: false, error: interessesError.message },
+          { status: 500 }
+        );
+      }
+
+      const mapaInteresses = new Map(
+        (interesses || []).map((item) => [
+          String(item.id),
+          String(item.interesse || "").trim() || null,
+        ])
+      );
+
+      for (const contato of registros) {
+        contato.interesse =
+          mapaInteresses.get(String(contato.id || "")) ?? null;
+      }
+    }
+
     contatos.push(...registros);
 
     if (registros.length < tamanhoPagina) {
@@ -376,6 +407,7 @@ export async function GET(request: Request) {
     "origem",
     "campanha",
     "campo_contato",
+    "interesse",
     "classificacao",
     "contato_novo",
     "integracao_whatsapp",
@@ -410,6 +442,7 @@ export async function GET(request: Request) {
       contato.origem_exibicao,
       contato.campanha_exibicao,
       contato.campo_contato,
+      contato.interesse,
       contato.classificacao,
       contato.contato_novo ? "sim" : "nao",
       contato.contexto_integracao_nome,
