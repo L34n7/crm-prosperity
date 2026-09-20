@@ -50,6 +50,7 @@ export type Conversa = {
     empresa?: string | null;
     observacoes?: string | null;
     campanha?: string | null;
+    interesse?: string | null;
     rastreamento_campanha_id?: string | null;
     rastreamento_campanhas?: CampanhaRastreamentoContato | null;
   } | null;
@@ -499,7 +500,7 @@ export type VariavelForm = {
 };
 
 export const TEXTO_VARIAVEIS_FIXAS_MACRO =
-  "Variáveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{variavel_contato}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
+  "Variáveis fixas: {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{variavel_contato}}, {{interesse}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}} e {{ultimo_protocolo}}.";
 
 export const VARIAVEIS_FIXAS_SISTEMA = [
   {
@@ -533,6 +534,11 @@ export const VARIAVEIS_FIXAS_SISTEMA = [
     exemplo: "{{variavel_contato}}",
     descricao:
       "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
+  },
+  {
+    chave: "interesse",
+    exemplo: "{{interesse}}",
+    descricao: "Interesse principal informado manualmente no cadastro do contato.",
   },
   {
     chave: "campanha",
@@ -667,6 +673,7 @@ export type ContatoCadastroForm = {
   nome: string;
   telefone: string;
   email: string;
+  interesse: string;
   origem: string;
   campanha: string;
   rastreamento_campanha_id: string;

@@ -81,6 +81,10 @@ function ehVariavelContato(valor: unknown) {
   return /^\{\{\s*variavel_contato\s*\}\}$/i.test(String(valor || "").trim());
 }
 
+function ehInteresseContato(valor: unknown) {
+  return /^\{\{\s*interesse\s*\}\}$/i.test(String(valor || "").trim());
+}
+
 function gerarCodigoAleatorio(tamanho = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let resultado = "";
@@ -405,7 +409,8 @@ export async function POST(request: Request) {
           id,
           nome,
           telefone,
-          campo_contato
+          campo_contato,
+          interesse
         )
       `)
       .eq("id", conversaId)
@@ -438,6 +443,13 @@ export async function POST(request: Request) {
     const valorCampoContato = String(contato?.campo_contato ?? "").trim();
     bodyParams = bodyParams.map((valor: string) =>
       ehVariavelContato(valor) ? valorCampoContato : valor
+    );
+  }
+
+  if (bodyParams.some((valor: string) => ehInteresseContato(valor))) {
+    const interesse = String(contato?.interesse ?? "").trim();
+    bodyParams = bodyParams.map((valor: string) =>
+      ehInteresseContato(valor) ? interesse : valor
     );
   }
 

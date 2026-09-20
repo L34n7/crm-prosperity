@@ -277,6 +277,7 @@ export default function ConversasPageContent() {
   >([]);
   const [contatoCapturaId, setContatoCapturaId] = useState("");
   const [campoContatoConversa, setCampoContatoConversa] = useState("");
+  const [interesseContatoConversa, setInteresseContatoConversa] = useState("");
   const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
     useState(false);
 
@@ -404,6 +405,7 @@ export default function ConversasPageContent() {
 
       setContatoCapturaId(String(data?.contato_id || "").trim());
       setCampoContatoConversa(String(data?.campo_contato || "").trim());
+      setInteresseContatoConversa(String(data?.interesse || "").trim());
       setInformacoesCapturaConversa(
         Array.isArray(data.informacoes)
           ? data.informacoes.filter(
@@ -418,6 +420,7 @@ export default function ConversasPageContent() {
 
       setContatoCapturaId("");
       setCampoContatoConversa("");
+      setInteresseContatoConversa("");
       setInformacoesCapturaConversa([]);
       console.error("[capturas-conversa]", error);
     } finally {
@@ -433,6 +436,7 @@ export default function ConversasPageContent() {
 
     setContatoCapturaId("");
     setCampoContatoConversa("");
+    setInteresseContatoConversa("");
     setInformacoesCapturaConversa([]);
     setCarregandoInformacoesCaptura(Boolean(conversaId));
 
@@ -1234,6 +1238,7 @@ export default function ConversasPageContent() {
     nome: "",
     telefone: "",
     email: "",
+    interesse: "",
     origem: "whatsapp_compartilhado",
     campanha: "",
     rastreamento_campanha_id: "",
@@ -1298,6 +1303,7 @@ export default function ConversasPageContent() {
     );
     registrar(["email", "email_contato", "contato_email"], contato?.email);
     registrar(["variavel_contato"], campoContatoConversa);
+    registrar(["interesse"], interesseContatoConversa);
     registrar(["empresa", "empresa_contato", "contato_empresa"], contato?.empresa);
     registrar(["campanha"], obterNomeCampanhaContato(contato));
     registrar(["origem"], contato?.origem || conversaSelecionada?.origem_atendimento);
@@ -1311,6 +1317,7 @@ export default function ConversasPageContent() {
   }, [
     conversaSelecionada,
     campoContatoConversa,
+    interesseContatoConversa,
     protocoloAtualConversa,
     protocolosConversa,
     usuarioLogado,
@@ -2098,6 +2105,7 @@ export default function ConversasPageContent() {
       nome,
       telefone,
       email,
+      interesse: "",
       origem: "whatsapp_compartilhado",
       campanha: "",
       rastreamento_campanha_id: "",
@@ -2122,6 +2130,7 @@ export default function ConversasPageContent() {
       nome: "",
       telefone: "",
       email: "",
+      interesse: "",
       origem: "whatsapp_compartilhado",
       campanha: "",
       rastreamento_campanha_id: "",
@@ -4894,7 +4903,7 @@ async function baixarConversaPDF() {
   }
 
   async function salvarContatoCampo(
-    campo: "nome" | "email" | "empresa" | "observacoes",
+    campo: "nome" | "email" | "empresa" | "interesse" | "observacoes",
     valor: string
   ) {
     if (!conversaSelecionada?.contatos?.id) return;
@@ -4927,6 +4936,9 @@ async function baixarConversaPDF() {
       }
 
       setMensagemSucesso(data.message || "Contato atualizado com sucesso.");
+      if (campo === "interesse") {
+        setInteresseContatoConversa(valor.trim());
+      }
       setEditandoCampo(null);
 
       setConversaSelecionada((atual) => {
@@ -5452,7 +5464,8 @@ async function baixarConversaPDF() {
     const parametrosResolvidos = parametrosSelecionados.map((chave) =>
       chave === "nome_captura" ||
       chave === "primeiro_nome_captura" ||
-      chave === "variavel_contato"
+      chave === "variavel_contato" ||
+      chave === "interesse"
         ? `{{${chave}}}`
         : resolverVariaveisMacro(`{{${chave}}}`)
     );
@@ -9460,6 +9473,16 @@ const templateFooterTexto = useMemo(() => {
                                 podeEditar={podeEditarContatoConversa}
                               />
 
+                              <CampoContatoEditavel
+                                label="INTERESSE"
+                                valorInicial={interesseContatoConversa}
+                                editando={editandoCampo === "interesse"}
+                                onEditar={() => setEditandoCampo("interesse")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("interesse", valor)}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
                               <div className={styles.whatsInfoRow}>
                                 <span className={styles.whatsInfoLabel}>
                                   Categoria do lead
@@ -11595,6 +11618,21 @@ const templateFooterTexto = useMemo(() => {
                       }))
                     }
                     placeholder="E-mail"
+                  />
+                </div>
+
+                <div className={styles.contactModalField}>
+                  <label className={styles.actionLabel}>Interesse</label>
+                  <input
+                    className={styles.messageInput}
+                    value={contatoCadastroForm.interesse}
+                    onChange={(e) =>
+                      setContatoCadastroForm((atual) => ({
+                        ...atual,
+                        interesse: e.target.value,
+                      }))
+                    }
+                    placeholder="Ex.: Apartamento Residencial Vista Verde"
                   />
                 </div>
 

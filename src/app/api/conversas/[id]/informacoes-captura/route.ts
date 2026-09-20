@@ -90,7 +90,7 @@ export async function GET(
       .order("capturado_em", { ascending: true }),
     supabase
       .from("contatos")
-      .select("campo_contato")
+      .select("campo_contato, interesse")
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", conversa.contato_id)
       .maybeSingle(),
@@ -114,6 +114,7 @@ export async function GET(
     ok: true,
     contato_id: conversa.contato_id,
     campo_contato: String(contatoResultado.data?.campo_contato ?? ""),
+    interesse: String(contatoResultado.data?.interesse ?? ""),
     informacoes: capturasResultado.data || [],
   });
 }
