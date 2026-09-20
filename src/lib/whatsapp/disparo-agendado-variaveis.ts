@@ -17,6 +17,7 @@ type ContatoAgendado = {
   telefone?: string | null;
   email?: string | null;
   campo_contato?: string | null;
+  interesse?: string | null;
   empresa?: string | null;
   origem?: string | null;
   campanha?: string | null;
@@ -196,6 +197,7 @@ async function buscarContatoAgendado(params: {
             telefone,
             email,
             campo_contato,
+            interesse,
             empresa,
             origem,
             campanha,
@@ -225,7 +227,7 @@ async function buscarContatoAgendado(params: {
     const { data, error } = await supabaseAdmin
       .from("contatos")
       .select(
-        "id, nome, whatsapp_profile_name, telefone, email, campo_contato, empresa, origem, campanha, status_lead, classificacao"
+        "id, nome, whatsapp_profile_name, telefone, email, campo_contato, interesse, empresa, origem, campanha, status_lead, classificacao"
       )
       .eq("id", params.contatoId)
       .eq("empresa_id", params.empresaId)

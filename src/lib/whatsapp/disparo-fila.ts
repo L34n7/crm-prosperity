@@ -110,39 +110,45 @@ function obterVariaveisConfigCampanha(campanha: DisparoCampanhaRow) {
     .filter(Boolean);
 }
 
-async function resolverVariavelContatoNoEnvio(params: {
+async function resolverVariaveisContatoNoEnvio(params: {
   campanha: DisparoCampanhaRow;
   item: DisparoItemRow;
   variaveis: string[];
 }) {
   const config = obterVariaveisConfigCampanha(params.campanha);
+  const precisaVariavelContato = config.includes("variavel_contato");
+  const precisaInteresse = config.includes("interesse");
 
-  if (!config.includes("variavel_contato")) {
+  if (!precisaVariavelContato && !precisaInteresse) {
     return params.variaveis;
   }
 
   let valorContato = "";
+  let interesse = "";
 
   if (params.item.contato_id) {
     const { data, error } = await supabaseAdmin
       .from("contatos")
-      .select("campo_contato")
+      .select("campo_contato, interesse")
       .eq("id", params.item.contato_id)
       .eq("empresa_id", params.item.empresa_id)
       .maybeSingle();
 
     if (error) {
       throw new Error(
-        `Erro ao resolver variavel_contato do contato: ${error.message}`
+        `Erro ao resolver variáveis do contato no disparo: ${error.message}`
       );
     }
 
     valorContato = String(data?.campo_contato ?? "").trim();
+    interesse = String(data?.interesse ?? "").trim();
   }
 
-  return params.variaveis.map((valorAtual, index) =>
-    config[index] === "variavel_contato" ? valorContato : valorAtual
-  );
+  return params.variaveis.map((valorAtual, index) => {
+    if (config[index] === "variavel_contato") return valorContato;
+    if (config[index] === "interesse") return interesse;
+    return valorAtual;
+  });
 }
 
 function backoffSegundos(tentativas: number) {
@@ -1377,7 +1383,7 @@ async function processarItemDisparo(item: DisparoItemRow) {
     nomeContato = agendado.nomeContato || nomeContato;
     origem = "disparo_template_agendado_fila";
   } else {
-    variaveis = await resolverVariavelContatoNoEnvio({
+    variaveis = await resolverVariaveisContatoNoEnvio({
       campanha,
       item,
       variaveis,

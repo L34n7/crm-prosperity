@@ -2578,7 +2578,7 @@ function DisparosAgendadosPageContent() {
                             </div>
 
                             <span className={styles.templateVariablesHelp}>
-                                Variáveis fixas: {"{{nome_whatsapp}}"}, {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{variavel_contato}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
+                                Variáveis fixas: {"{{nome_whatsapp}}"}, {"{{nome_contato}}"}, {"{{email_contato}}"}, {"{{numero_contato}}"}, {"{{variavel_contato}}"}, {"{{interesse}}"}, {"{{campanha}}"}, {"{{origem}}"}, {"{{status_lead}}"}, {"{{protocolo_atual}}"} e {"{{ultimo_protocolo}}"}.
                             </span>
                           </div>
                         ) : templateAtual ? (

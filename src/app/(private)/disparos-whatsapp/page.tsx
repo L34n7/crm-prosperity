@@ -192,6 +192,7 @@ type ContatoOpcao = {
   telefone_revisar?: boolean;
   email: string | null;
   campo_contato?: string | null;
+  interesse?: string | null;
   origem: string | null;
   campanha: string | null;
   origem_exibicao?: string | null;
@@ -610,6 +611,11 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     exemplo: "{{variavel_contato}}",
     descricao:
       "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
+  },
+  {
+    chave: "interesse",
+    exemplo: "{{interesse}}",
+    descricao: "Interesse principal informado manualmente no cadastro do contato.",
   },
   {
     chave: "campanha",
@@ -1120,6 +1126,10 @@ function resolverVariavelContato(
 
   if (chave === "variavel_contato") {
     return contato.campo_contato || "";
+  }
+
+  if (chave === "interesse") {
+    return contato.interesse || "";
   }
 
   if (chave === "campanha") {
