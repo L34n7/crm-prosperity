@@ -223,6 +223,8 @@ export async function PUT(
             : [],
         })),
     ];
+    const interesse = String(body?.interesse ?? "").trim();
+
     const dadosPersonalizados = validarDadosPersonalizados({
       valores: body?.dados_personalizados,
       campos: camposPessoa,
@@ -309,8 +311,46 @@ export async function PUT(
       );
     }
 
+    const { error: interesseError } = await supabase
+      .from("pessoas")
+      .update({ interesse: interesse || null })
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("id", id);
+
+    if (interesseError) {
+      throw new Error(
+        `Erro ao sincronizar interesse do cadastro: ${interesseError.message}`
+      );
+    }
+
     const depois = await buscarPessoa(usuario.empresa_id, id);
     const auditMeta = getRequestAuditMetadata(request);
+
+    const interesseAnterior =
+      String((antes as Record<string, unknown>).interesse ?? "").trim() || null;
+    const interesseNovo = interesse || null;
+
+    if (interesseAnterior !== interesseNovo) {
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id,
+        categoria: "pessoas",
+        entidade: "pessoa",
+        entidade_id: id,
+        acao: "interesse_atualizado",
+        descricao: `Interesse de ${nicho.cadastroSingular.toLowerCase()} atualizado.`,
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        antes: { interesse: interesseAnterior },
+        depois: { interesse: interesseNovo },
+        metadata: {
+          origem: "cadastro_pessoa",
+          contatos_sincronizados: telefones.length,
+        },
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+    }
 
     await registrarLogAuditoriaSeguro({
       empresa_id: usuario.empresa_id,

@@ -141,6 +141,7 @@ export async function GET(request: Request) {
           cidade,
           estado,
           observacoes,
+          interesse,
           dados_personalizados,
           status,
           created_at,
@@ -295,6 +296,8 @@ export async function POST(request: Request) {
             : [],
         })),
     ];
+    const interesseInformado = String(body?.interesse ?? "").trim();
+
     const dadosPersonalizados = validarDadosPersonalizados({
       valores: body?.dados_personalizados,
       campos: camposPessoa,
@@ -318,6 +321,28 @@ export async function POST(request: Request) {
         { ok: false, error: "Informe no máximo três contatos." },
         { status: 400 }
       );
+    }
+
+    let interesse = interesseInformado;
+
+    if (!interesse && telefones.length > 0) {
+      const { data: contatosInteresse, error: contatosInteresseError } =
+        await supabase
+          .from("contatos")
+          .select("interesse, updated_at")
+          .eq("empresa_id", usuario.empresa_id)
+          .in("telefone", telefones)
+          .not("interesse", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(1);
+
+      if (contatosInteresseError) {
+        throw new Error(
+          `Erro ao consultar interesse dos contatos: ${contatosInteresseError.message}`
+        );
+      }
+
+      interesse = String(contatosInteresse?.[0]?.interesse ?? "").trim();
     }
 
     const dados = {
@@ -383,6 +408,21 @@ export async function POST(request: Request) {
 
     const rpcResultado = rpcData as SalvarCadastroResult | null;
     const pessoaId = String(rpcResultado?.pessoa_id ?? "");
+
+    if (pessoaId) {
+      const { error: interesseError } = await supabase
+        .from("pessoas")
+        .update({ interesse: interesse || null })
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("id", pessoaId);
+
+      if (interesseError) {
+        throw new Error(
+          `Erro ao sincronizar interesse do cadastro: ${interesseError.message}`
+        );
+      }
+    }
+
     const auditMeta = getRequestAuditMetadata(request);
 
     await registrarLogAuditoriaSeguro({
@@ -399,10 +439,33 @@ export async function POST(request: Request) {
         tipo_cadastro: nicho.grupo === "saude" ? "paciente" : "cliente",
         paciente_id: rpcResultado?.paciente_id ?? null,
         contatos_vinculados: telefones.length,
+        interesse: interesse || null,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
     });
+
+    if (interesse && pessoaId) {
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id,
+        categoria: "pessoas",
+        entidade: "pessoa",
+        entidade_id: pessoaId,
+        acao: "interesse_definido",
+        descricao: `Interesse definido no cadastro de ${nicho.cadastroSingular.toLowerCase()}.`,
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        antes: { interesse: null },
+        depois: { interesse },
+        metadata: {
+          origem: "cadastro_pessoa",
+          contatos_sincronizados: telefones.length,
+        },
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+    }
 
     return NextResponse.json(
       {

@@ -312,6 +312,72 @@ if (Object.keys(payload).length === 0) {
     );
   }
 
+  const interesseAnterior =
+    String(contatoAtual.interesse ?? "").trim() || null;
+  const interesseNovo = String(data.interesse ?? "").trim() || null;
+
+  if (
+    body?.interesse !== undefined &&
+    interesseAnterior !== interesseNovo
+  ) {
+    if (data.pessoa_id) {
+      const [{ data: pessoa }, { count: contatosSincronizados }] =
+        await Promise.all([
+          supabaseAdmin
+            .from("pessoas")
+            .select("id, nome, interesse")
+            .eq("empresa_id", usuario.empresa_id)
+            .eq("id", data.pessoa_id)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("contatos")
+            .select("id", { count: "exact", head: true })
+            .eq("empresa_id", usuario.empresa_id)
+            .eq("pessoa_id", data.pessoa_id),
+        ]);
+
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id,
+        categoria: "pessoas",
+        entidade: "pessoa",
+        entidade_id: data.pessoa_id,
+        acao: "interesse_atualizado_via_contato",
+        descricao: `Interesse atualizado pelo contato ${data.nome || data.telefone || id}.`,
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        antes: { interesse: interesseAnterior },
+        depois: {
+          interesse: String(pessoa?.interesse ?? interesseNovo).trim() || null,
+        },
+        metadata: {
+          origem: "contato",
+          contato_origem_id: id,
+          contatos_sincronizados: contatosSincronizados ?? 0,
+        },
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+    } else {
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id,
+        categoria: "contatos",
+        entidade: "contato",
+        entidade_id: id,
+        acao: "interesse_atualizado",
+        descricao: `Interesse do contato ${data.nome || data.telefone || id} atualizado.`,
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        antes: { interesse: interesseAnterior },
+        depois: { interesse: interesseNovo },
+        metadata: { origem: "contato_sem_pessoa_vinculada" },
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+    }
+  }
+
   await registrarLogAuditoriaSeguro({
     empresa_id: usuario.empresa_id,
     categoria: "contatos",
