@@ -38,6 +38,7 @@ type ContatoVinculado = {
   nome: string | null;
   telefone: string;
   email: string | null;
+  interesse: string | null;
   origem: string | null;
   ultima_interacao_at: string | null;
   updated_at: string | null;
@@ -55,6 +56,7 @@ type PacienteLista = {
     nome: string;
     cpf_cnpj: string | null;
     email: string | null;
+    interesse: string | null;
     data_nascimento: string | null;
   } | null;
   contatos_vinculados?: ContatoVinculado[];
@@ -759,6 +761,7 @@ export default function PacientesPageClient({
                     <dl className={styles.detailList}>
                       <div><dt>Nome</dt><dd>{pacienteSelecionado.pessoa?.nome || "Não informado"}</dd></div>
                       <div><dt>E-mail</dt><dd>{pacienteSelecionado.pessoa?.email || "Não informado"}</dd></div>
+                      <div><dt>Interesse</dt><dd>{pacienteSelecionado.pessoa?.interesse || "Não informado"}</dd></div>
                       <div><dt>Documento</dt><dd>{pacienteSelecionado.pessoa?.cpf_cnpj || "Não informado"}</dd></div>
                       <div><dt>Nascimento</dt><dd>{formatarData(pacienteSelecionado.pessoa?.data_nascimento)}</dd></div>
                       <div><dt>Convênio</dt><dd>{pacienteSelecionado.convenio || "Não informado"}</dd></div>

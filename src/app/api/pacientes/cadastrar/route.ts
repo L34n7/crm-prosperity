@@ -121,12 +121,13 @@ export async function POST(request: Request) {
       telefone: string;
       nome: string | null;
       email: string | null;
+      interesse: string | null;
     } | null = null;
 
     if (contatoId) {
       const { data, error } = await supabase
         .from("contatos")
-        .select("id, pessoa_id, telefone, nome, email")
+        .select("id, pessoa_id, telefone, nome, email, interesse")
         .eq("empresa_id", usuario.empresa_id)
         .eq("id", contatoId)
         .maybeSingle();
@@ -142,7 +143,7 @@ export async function POST(request: Request) {
     } else if (telefoneFormulario) {
       const { data, error } = await supabase
         .from("contatos")
-        .select("id, pessoa_id, telefone, nome, email")
+        .select("id, pessoa_id, telefone, nome, email, interesse")
         .eq("empresa_id", usuario.empresa_id)
         .eq("telefone", telefoneFormulario)
         .order("created_at", { ascending: true })
@@ -154,6 +155,25 @@ export async function POST(request: Request) {
     }
 
     let pessoaIdExistente = texto(contatoSelecionado?.pessoa_id) || null;
+    let interesse =
+      texto(body?.interesse) || texto(contatoSelecionado?.interesse);
+
+    if (!interesse && pessoaIdExistente) {
+      const { data: pessoaExistente, error: pessoaExistenteError } = await supabase
+        .from("pessoas")
+        .select("interesse")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("id", pessoaIdExistente)
+        .maybeSingle();
+
+      if (pessoaExistenteError) {
+        throw new Error(
+          `Erro ao carregar interesse do cadastro: ${pessoaExistenteError.message}`
+        );
+      }
+
+      interesse = texto(pessoaExistente?.interesse);
+    }
 
     if (pessoaIdExistente) {
       const { data: pacienteExistente, error } = await supabase
@@ -265,6 +285,18 @@ export async function POST(request: Request) {
       throw new Error("Cadastro concluído sem os identificadores clínicos esperados.");
     }
 
+    const { error: interesseError } = await supabase
+      .from("pessoas")
+      .update({ interesse: interesse || null })
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("id", pessoaId);
+
+    if (interesseError) {
+      throw new Error(
+        `Erro ao sincronizar interesse do paciente: ${interesseError.message}`
+      );
+    }
+
     const auditMeta = getRequestAuditMetadata(request);
     await registrarLogAuditoriaSeguro({
       empresa_id: usuario.empresa_id,
@@ -281,10 +313,34 @@ export async function POST(request: Request) {
         contato_id_origem: contatoSelecionado?.id ?? null,
         contatos_vinculados: contatosIds.length,
         reutilizou_pessoa: Boolean(pessoaIdExistente),
+        interesse: interesse || null,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
     });
+
+    if (interesse) {
+      await registrarLogAuditoriaSeguro({
+        empresa_id: usuario.empresa_id,
+        categoria: "pessoas",
+        entidade: "pessoa",
+        entidade_id: pessoaId,
+        acao: "interesse_definido",
+        descricao: "Interesse definido no cadastro de paciente.",
+        usuario_id: usuario.id,
+        usuario_nome: usuario.nome,
+        usuario_email: usuario.email,
+        antes: { interesse: null },
+        depois: { interesse },
+        metadata: {
+          origem: "cadastro_paciente",
+          contato_id_origem: contatoSelecionado?.id ?? null,
+          contatos_sincronizados: contatosIds.length,
+        },
+        ip: auditMeta.ip,
+        user_agent: auditMeta.user_agent,
+      });
+    }
 
     return NextResponse.json(
       {

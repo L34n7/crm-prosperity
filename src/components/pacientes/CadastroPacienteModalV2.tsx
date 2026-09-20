@@ -37,6 +37,7 @@ type PessoaContato = {
   cpf_cnpj?: string | null;
   data_nascimento?: string | null;
   email?: string | null;
+  interesse?: string | null;
   cep?: string | null;
   logradouro?: string | null;
   numero?: string | null;
@@ -55,6 +56,7 @@ export type ContatoDisponivelPaciente = {
   whatsapp_profile_name: string | null;
   telefone: string;
   email: string | null;
+  interesse: string | null;
   empresa: string | null;
   origem: string | null;
   campanha: string | null;
@@ -70,6 +72,7 @@ type FormPaciente = {
   nome_social: string;
   telefone: string;
   email: string;
+  interesse: string;
   cpf_cnpj: string;
   data_nascimento: string;
   cep: string;
@@ -102,6 +105,7 @@ const FORM_INICIAL: FormPaciente = {
   nome_social: "",
   telefone: "",
   email: "",
+  interesse: "",
   cpf_cnpj: "",
   data_nascimento: "",
   cep: "",
@@ -219,6 +223,10 @@ export default function CadastroPacienteModalV2({
           pessoa?.email?.trim() ||
           contatoInicial.email?.trim() ||
           atual.email,
+        interesse:
+          pessoa?.interesse?.trim() ||
+          contatoInicial.interesse?.trim() ||
+          atual.interesse,
         cpf_cnpj: pessoa?.cpf_cnpj?.trim() || atual.cpf_cnpj,
         data_nascimento:
           pessoa?.data_nascimento?.trim() || atual.data_nascimento,
@@ -350,6 +358,10 @@ export default function CadastroPacienteModalV2({
       nome_social: pessoa?.nome_social?.trim() || atual.nome_social,
       telefone: contato.telefone || atual.telefone,
       email: pessoa?.email?.trim() || contato.email?.trim() || atual.email,
+      interesse:
+        pessoa?.interesse?.trim() ||
+        contato.interesse?.trim() ||
+        atual.interesse,
       cpf_cnpj: pessoa?.cpf_cnpj?.trim() || atual.cpf_cnpj,
       data_nascimento: pessoa?.data_nascimento?.trim() || atual.data_nascimento,
       cep: pessoa?.cep?.trim() || atual.cep,
@@ -480,6 +492,7 @@ export default function CadastroPacienteModalV2({
           nome_social: form.nome_social,
           telefone: form.telefone,
           email: form.email,
+          interesse: form.interesse,
           cpf_cnpj: form.cpf_cnpj,
           data_nascimento: form.data_nascimento,
           cep: form.cep,
@@ -674,6 +687,17 @@ export default function CadastroPacienteModalV2({
                   <span>E-mail</span>
                   <input type="email" value={form.email} onChange={(event) => setForm((atual) => ({ ...atual, email: event.target.value }))} />
                 </label>
+                <label className={styles.field}>
+                  <span>Interesse</span>
+                  <input
+                    value={form.interesse}
+                    onChange={(event) =>
+                      setForm((atual) => ({ ...atual, interesse: event.target.value }))
+                    }
+                    placeholder="Ex.: Apartamento Residencial Vista Verde"
+                  />
+                </label>
+
                 <label className={styles.field}>
                   <span>CPF / documento</span>
                   <input value={form.cpf_cnpj} onChange={(event) => setForm((atual) => ({ ...atual, cpf_cnpj: event.target.value }))} />

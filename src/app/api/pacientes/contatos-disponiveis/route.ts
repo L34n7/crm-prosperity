@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     const { data: contatosData, error: contatosError } = await supabase
       .from("contatos")
       .select(
-        "id, pessoa_id, nome, whatsapp_profile_name, telefone, email, empresa, origem, campanha, status_lead, classificacao, observacoes, ultima_interacao_at, created_at, updated_at",
+        "id, pessoa_id, nome, whatsapp_profile_name, telefone, email, interesse, empresa, origem, campanha, status_lead, classificacao, observacoes, ultima_interacao_at, created_at, updated_at",
       )
       .eq("empresa_id", usuario.empresa_id)
       .ilike("telefone", `%${busca}%`)
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
         ? supabase
             .from("pessoas")
             .select(
-              "id, tipo_pessoa, nome, nome_social, razao_social, cpf_cnpj, data_nascimento, email, cep, logradouro, numero, complemento, bairro, cidade, estado, observacoes, dados_personalizados, status",
+              "id, tipo_pessoa, nome, nome_social, razao_social, cpf_cnpj, data_nascimento, email, interesse, cep, logradouro, numero, complemento, bairro, cidade, estado, observacoes, dados_personalizados, status",
             )
             .eq("empresa_id", usuario.empresa_id)
             .in("id", pessoaIds)

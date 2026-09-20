@@ -110,7 +110,7 @@ async function carregarPacientes(empresaId: string, buscaOriginal: string, pesso
   if (busca) {
     const { data, error } = await supabase
       .from("pessoas")
-      .select("id, nome, cpf_cnpj, email, data_nascimento, status")
+      .select("id, nome, cpf_cnpj, email, interesse, data_nascimento, status")
       .eq("empresa_id", empresaId)
       .neq("status", "arquivado")
       .or("nome.ilike.%" + busca + "%,cpf_cnpj.ilike.%" + busca + "%,email.ilike.%" + busca + "%")
@@ -141,7 +141,7 @@ async function carregarPacientes(empresaId: string, buscaOriginal: string, pesso
     pessoasPermitidas ??
     ((await supabase
       .from("pessoas")
-      .select("id, nome, cpf_cnpj, email, data_nascimento, status")
+      .select("id, nome, cpf_cnpj, email, interesse, data_nascimento, status")
       .eq("empresa_id", empresaId)
       .in("id", pacientes.map((paciente) => paciente.pessoa_id))
       .neq("status", "arquivado")).data ?? []) as PessoaRow[];
@@ -197,7 +197,7 @@ export async function GET(request: Request) {
       if (pessoaIdContato) {
         const { data: pessoa, error: pessoaError } = await supabase
           .from("pessoas")
-          .select("id, tipo_pessoa, nome, nome_social, razao_social, cpf_cnpj, data_nascimento, email, cep, logradouro, numero, complemento, bairro, cidade, estado, observacoes, dados_personalizados, status")
+          .select("id, tipo_pessoa, nome, nome_social, razao_social, cpf_cnpj, data_nascimento, email, interesse, cep, logradouro, numero, complemento, bairro, cidade, estado, observacoes, dados_personalizados, status")
           .eq("empresa_id", usuario.empresa_id)
           .eq("id", pessoaIdContato)
           .maybeSingle();
