@@ -197,6 +197,10 @@ if (body?.campo_contato !== undefined) {
   payload.campo_contato_base = campoContato;
 }
 
+if (body?.interesse !== undefined) {
+  payload.interesse = String(body.interesse || "").trim() || null;
+}
+
 // empresa
 if (body?.empresa !== undefined) {
   payload.empresa = body.empresa?.trim() || null;

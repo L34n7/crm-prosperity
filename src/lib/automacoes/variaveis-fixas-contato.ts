@@ -9,6 +9,7 @@ type ContatoVariaveisFixas = {
   telefone?: string | null;
   campo_contato?: string | null;
   variavel_contato?: string | null;
+  interesse?: string | null;
   campanha?: string | null;
   origem?: string | null;
   status_lead?: string | null;
@@ -26,6 +27,7 @@ type CampoContatoVariavelFixa =
   | "email"
   | "telefone"
   | "variavel_contato"
+  | "interesse"
   | "campanha"
   | "origem"
   | "status_lead"
@@ -71,6 +73,7 @@ const VARIAVEIS_FIXAS_CONTATO_CAMPOS: Record<
   contato_telefone: "telefone",
 
   variavel_contato: "variavel_contato",
+  interesse: "interesse",
 
   campanha: "campanha",
   origem: "origem",
@@ -92,6 +95,7 @@ export const VARIAVEIS_FIXAS_CONTATO = [
   "email_contato",
   "numero_contato",
   "variavel_contato",
+  "interesse",
   "campanha",
   "origem",
   "status_lead",
@@ -280,6 +284,7 @@ export async function montarMapaVariaveisFixasContato(
     variavel_contato: String(
       contato?.campo_contato ?? contato?.variavel_contato ?? ""
     ).trim(),
+    interesse: String(contato?.interesse || "").trim(),
     campanha: String(contato?.campanha || "").trim(),
     origem: String(contato?.origem || "").trim(),
     status_lead: classificacao,

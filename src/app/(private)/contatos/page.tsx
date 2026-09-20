@@ -24,6 +24,7 @@ type Contato = {
   origem: string | null;
   campanha: string | null;
   campo_contato: string | null;
+  interesse: string | null;
   origem_exibicao?: string | null;
   observacoes: string | null;
   telefone_revisar: boolean;
@@ -253,6 +254,7 @@ export default function ContatosPage() {
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
   const [campoContato, setCampoContato] = useState("");
+  const [interesse, setInteresse] = useState("");
   const [origem, setOrigem] = useState("");
   const [campanha, setCampanha] = useState("");
   const [rastreamentoCampanhaId, setRastreamentoCampanhaId] = useState("");
@@ -282,6 +284,7 @@ export default function ContatosPage() {
   const [editTelefone, setEditTelefone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editCampoContato, setEditCampoContato] = useState("");
+  const [editInteresse, setEditInteresse] = useState("");
   const [editOrigem, setEditOrigem] = useState("");
   const [editCampanha, setEditCampanha] = useState("");
   const [editRastreamentoCampanhaId, setEditRastreamentoCampanhaId] =
@@ -422,6 +425,7 @@ export default function ContatosPage() {
     setTelefone("");
     setEmail("");
     setCampoContato("");
+    setInteresse("");
     setOrigem("");
     setCampanha("");
     setRastreamentoCampanhaId("");
@@ -561,6 +565,7 @@ export default function ContatosPage() {
           telefone,
           email,
           campo_contato: campoContato,
+          interesse,
           origem,
           campanha,
           rastreamento_campanha_id: rastreamentoCampanhaId || null,
@@ -821,6 +826,7 @@ export default function ContatosPage() {
     setEditTelefone(contato.telefone || "");
     setEditEmail(contato.email || "");
     setEditCampoContato(contato.campo_contato || "");
+    setEditInteresse(contato.interesse || "");
     setEditOrigem(contato.origem || "");
     setEditCampanha(contato.campanha || "");
     setEditRastreamentoCampanhaId(campanhaVinculada);
@@ -835,6 +841,7 @@ export default function ContatosPage() {
     setEditTelefone("");
     setEditEmail("");
     setEditCampoContato("");
+    setEditInteresse("");
     setEditOrigem("");
     setEditCampanha("");
     setEditRastreamentoCampanhaId("");
@@ -942,6 +949,7 @@ export default function ContatosPage() {
       telefone: editTelefone,
       email: editEmail,
       campo_contato: editCampoContato,
+      interesse: editInteresse,
       origem: editOrigem,
       campanha: editCampanha,
       observacoes: editObservacoes,
@@ -2149,6 +2157,16 @@ export default function ContatosPage() {
                             </div>
 
                             <div className={styles.field}>
+                              <label className={styles.label}>Interesse</label>
+                              <input
+                                className={styles.input}
+                                value={editInteresse}
+                                onChange={(e) => setEditInteresse(e.target.value)}
+                                placeholder="Ex.: Apartamento Residencial Vista Verde"
+                              />
+                            </div>
+
+                            <div className={styles.field}>
                               <label className={styles.label}>Origem</label>
                               <select
                                 className={styles.select}
@@ -2375,6 +2393,13 @@ export default function ContatosPage() {
                               <span className={styles.infoLabel}>Campo do contato</span>
                               <span className={styles.infoValue}>
                                 {contato.campo_contato || "Sem valor"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Interesse</span>
+                              <span className={styles.infoValue}>
+                                {contato.interesse || "Sem interesse informado"}
                               </span>
                             </div>
 
@@ -2714,6 +2739,16 @@ export default function ContatosPage() {
                   value={campoContato}
                   onChange={(e) => setCampoContato(e.target.value)}
                   placeholder="Ex.: programador, Fiat, CCemig"
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Interesse</label>
+                <input
+                  className={styles.input}
+                  value={interesse}
+                  onChange={(e) => setInteresse(e.target.value)}
+                  placeholder="Ex.: Apartamento Residencial Vista Verde"
                 />
               </div>
 

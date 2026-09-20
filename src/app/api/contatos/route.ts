@@ -449,6 +449,37 @@ export async function GET(request: Request) {
   ) as ContatoLista[];
 
   if (contatos.length > 0) {
+    const contatoIds = contatos
+      .map((contato) => String(contato.id || "").trim())
+      .filter(Boolean);
+
+    const { data: interessesData, error: interessesError } = await supabaseAdmin
+      .from("contatos")
+      .select("id, interesse")
+      .eq("empresa_id", usuario.empresa_id)
+      .in("id", contatoIds);
+
+    if (interessesError) {
+      return NextResponse.json(
+        { ok: false, error: interessesError.message },
+        { status: 500 }
+      );
+    }
+
+    const interessesPorContato = new Map(
+      (interessesData || []).map((item) => [
+        String(item.id),
+        String(item.interesse || "").trim() || null,
+      ])
+    );
+
+    contatos = contatos.map((contato) => ({
+      ...contato,
+      interesse: interessesPorContato.get(String(contato.id || "")) ?? null,
+    }));
+  }
+
+  if (contatos.length > 0) {
     try {
       const cooldownsMarketing = await buscarCooldownsDisparoPorTelefone({
         empresaId: usuario.empresa_id,
@@ -548,6 +579,7 @@ export async function POST(request: Request) {
     
   const email = body?.email?.trim()?.toLowerCase() || null;
   const campoContato = String(body?.campo_contato || "").trim() || null;
+  const interesse = String(body?.interesse || "").trim() || null;
   const rastreamentoCampanhaId =
     String(body?.rastreamento_campanha_id || "").trim() || null;
   const classificacaoEntrada = body?.classificacao ?? body?.status_lead ?? "novo";
@@ -653,6 +685,7 @@ export async function POST(request: Request) {
       campanha,
       campo_contato: campoContato,
       campo_contato_base: campoContato,
+      interesse,
       rastreamento_origem_id: campanhaRastreamento?.origem_id || null,
       rastreamento_campanha_id: campanhaRastreamento?.id || null,
       classificacao: classificacaoLead,

@@ -28,7 +28,7 @@ export const ACCEPT_ARQUIVOS =
   ".pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 export const VARIAVEIS_FIXAS_CONTATO_HELP =
-  "Variáveis do sistema: {{nome_empresa}}, {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{variavel_contato}}, {{calendario_nome}}, {{agendamento_titulo}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}}, {{ultimo_protocolo}} e {{pagamento.pix_pendentes_resumo}}.";
+  "Variáveis do sistema: {{nome_empresa}}, {{nome_contato}}, {{nome_whatsapp}}, {{email_contato}}, {{numero_contato}}, {{variavel_contato}}, {{interesse}}, {{calendario_nome}}, {{agendamento_titulo}}, {{campanha}}, {{origem}}, {{status_lead}}, {{classificacao_lead}}, {{protocolo_atual}}, {{ultimo_protocolo}} e {{pagamento.pix_pendentes_resumo}}.";
 
 export const VARIAVEIS_FIXAS_SISTEMA = [
   {
@@ -82,6 +82,11 @@ export const VARIAVEIS_FIXAS_SISTEMA = [
     exemplo: "{{variavel_contato}}",
     descricao:
       "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
+  },
+  {
+    chave: "interesse",
+    exemplo: "{{interesse}}",
+    descricao: "Interesse principal informado manualmente no cadastro do contato.",
   },
   {
     chave: "campanha",
@@ -144,6 +149,7 @@ export const VARIAVEIS_FIXAS_CONTATO_RESERVADAS = [
   "telefone_contato",
   "contato_telefone",
   "variavel_contato",
+  "interesse",
   "campanha",
   "origem",
   "status",
@@ -200,6 +206,7 @@ export const EXEMPLOS_VARIAVEIS_PREVIA_WHATSAPP: Record<string, string> = {
   email_contato: "ana@email.com",
   numero_contato: "(11) 99999-0000",
   variavel_contato: "Programador",
+  interesse: "Apartamento Residencial Vista Verde",
   campanha: "Campanha principal",
   origem: "Instagram",
   status_lead: "Novo lead",
