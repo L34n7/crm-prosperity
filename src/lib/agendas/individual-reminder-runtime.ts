@@ -146,7 +146,7 @@ async function buildContext(job: Job) {
     appointment.contato_id
       ? supabase
           .from("contatos")
-          .select("id, nome, telefone, email, campo_contato, status_lead, classificacao")
+          .select("id, nome, telefone, email, campo_contato, interesse, status_lead, classificacao")
           .eq("empresa_id", job.empresa_id)
           .eq("id", appointment.contato_id)
           .maybeSingle()

@@ -68,6 +68,11 @@ const VARIAVEIS_FIXAS_SISTEMA = [
       "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
   },
   {
+    chave: "interesse",
+    exemplo: "{{interesse}}",
+    descricao: "Interesse principal informado manualmente no cadastro do contato.",
+  },
+  {
     chave: "campanha",
     exemplo: "{{campanha}}",
     descricao: "Campanha vinculada ao contato.",

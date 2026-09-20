@@ -104,7 +104,7 @@ export async function loadContext(job: Job): Promise<Context | null> {
       ? supabase
           .from("contatos")
           .select(
-            "id, nome, whatsapp_profile_name, telefone, email, campo_contato, origem, campanha, status_lead, classificacao"
+            "id, nome, whatsapp_profile_name, telefone, email, campo_contato, interesse, origem, campanha, status_lead, classificacao"
           )
           .eq("empresa_id", job.empresa_id)
           .eq("id", appointment.contato_id)

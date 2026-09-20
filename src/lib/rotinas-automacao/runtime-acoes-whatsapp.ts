@@ -50,6 +50,7 @@ async function resolverVariaveisTemplateRotina(params: {
     email?: string | null;
     telefone?: string | null;
     campo_contato?: string | null;
+    interesse?: string | null;
     campanha?: string | null;
     origem?: string | null;
     status_lead?: string | null;
@@ -196,7 +197,7 @@ export async function enviarDisparoWhatsappRotina(params: {
     supabase
       .from("contatos")
       .select(
-        "id,nome,whatsapp_profile_name,email,telefone,campo_contato,campanha,origem,status_lead,classificacao",
+        "id,nome,whatsapp_profile_name,email,telefone,campo_contato,interesse,campanha,origem,status_lead,classificacao",
       )
       .eq("empresa_id", params.empresaId)
       .eq("id", conversa.contato_id)
