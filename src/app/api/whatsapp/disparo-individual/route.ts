@@ -41,6 +41,9 @@ type TemplatePayload = {
       url?: string;
       phone_number?: string;
     }>;
+    example?: {
+      header_handle?: string[];
+    };
   }>;
 };
 
@@ -138,24 +141,64 @@ function montarComponentesTemplate(
 ) {
   if (!payloadTemplate?.components?.length) return undefined;
 
+  const componentes: Array<Record<string, unknown>> = [];
+  const header = payloadTemplate.components.find(
+    (item) => String(item.type || "").toUpperCase() === "HEADER"
+  );
+  const formatoHeader = String(header?.format || "").toUpperCase();
+
+  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(formatoHeader)) {
+    const handles = Array.isArray(header?.example?.header_handle)
+      ? header.example.header_handle
+      : [];
+    const link =
+      handles
+        .map((item) => String(item || "").trim())
+        .find((item) => /^https?:\/\//i.test(item)) || "";
+
+    if (!link) {
+      throw new Error(
+        `Template com cabeçalho ${formatoHeader} sem mídia sincronizada da Meta. Sincronize o template novamente antes de disparar.`
+      );
+    }
+
+    const tipo = formatoHeader.toLowerCase() as
+      | "image"
+      | "video"
+      | "document";
+
+    componentes.push({
+      type: "header",
+      parameters: [
+        {
+          type: tipo,
+          [tipo]: {
+            link,
+          },
+        },
+      ],
+    });
+  }
+
   const body = payloadTemplate.components.find(
     (item) => String(item.type || "").toUpperCase() === "BODY"
   );
 
-  if (!body?.text) return undefined;
+  if (body?.text) {
+    const placeholders = body.text.match(/\{\{\d+\}\}/g) || [];
 
-  const placeholders = body.text.match(/\{\{\d+\}\}/g) || [];
-  if (placeholders.length === 0) return undefined;
+    if (placeholders.length > 0) {
+      componentes.push({
+        type: "body",
+        parameters: placeholders.map((_, index) => ({
+          type: "text",
+          text: String(variaveis[index] || "").trim(),
+        })),
+      });
+    }
+  }
 
-  return [
-    {
-      type: "body",
-      parameters: placeholders.map((_, index) => ({
-        type: "text",
-        text: String(variaveis[index] || "").trim(),
-      })),
-    },
-  ];
+  return componentes.length > 0 ? componentes : undefined;
 }
 
 function montarConteudoTextoTemplate(

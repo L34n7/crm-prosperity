@@ -18,6 +18,9 @@ type TemplateComponent = {
   text?: string;
   format?: string;
   buttons?: TemplateButton[];
+  example?: {
+    header_handle?: string[];
+  };
 };
 
 export type TemplatePayloadDisparo = {
@@ -132,6 +135,49 @@ function montarParametrosParaTexto(
   }));
 }
 
+type TemplateHeaderMediaFormat = "IMAGE" | "VIDEO" | "DOCUMENT";
+
+function montarComponenteHeaderMidiaSincronizada(
+  header: TemplateComponent | undefined
+) {
+  const formato = String(header?.format || "").toUpperCase();
+
+  if (!["IMAGE", "VIDEO", "DOCUMENT"].includes(formato)) {
+    return null;
+  }
+
+  const handles = Array.isArray(header?.example?.header_handle)
+    ? header.example.header_handle
+    : [];
+  const link =
+    handles
+      .map((item) => String(item || "").trim())
+      .find((item) => /^https?:\/\//i.test(item)) || "";
+
+  if (!link) {
+    throw new Error(
+      `Template com cabeçalho ${formato} sem mídia sincronizada da Meta. Sincronize o template novamente antes de disparar.`
+    );
+  }
+
+  const tipo = formato.toLowerCase() as
+    | "image"
+    | "video"
+    | "document";
+
+  return {
+    type: "header",
+    parameters: [
+      {
+        type: tipo,
+        [tipo]: {
+          link,
+        },
+      },
+    ],
+  };
+}
+
 export function montarComponentesTemplateDisparo(
   payload: TemplatePayloadDisparo | null,
   variaveis: string[]
@@ -158,7 +204,11 @@ export function montarComponentesTemplateDisparo(
   );
   variavelOffset += headerTotalVariaveis;
 
-  if (headerParams.length > 0) {
+  const headerMidia = montarComponenteHeaderMidiaSincronizada(header);
+
+  if (headerMidia) {
+    componentesMontados.push(headerMidia);
+  } else if (headerParams.length > 0) {
     componentesMontados.push({
       type: "header",
       parameters: headerParams,
