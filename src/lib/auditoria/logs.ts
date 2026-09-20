@@ -37,6 +37,7 @@ export type RegistrarLogAuditoriaInput = {
     | "conversa"
     | "conversa_nota"
     | "contato"
+    | "lista_contatos"
     | "pessoa"
     | "prontuario"
     | "odontograma"
