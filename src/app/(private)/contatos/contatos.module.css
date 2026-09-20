@@ -2170,3 +2170,97 @@
   color: var(--crm-text-muted);
   font-size: 14px;
 }
+
+
+.listPlusIcon {
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.sharedListManagerList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(48vh, 430px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.sharedListManagerItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.sharedListItemInfo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sharedListItemInfo strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sharedListItemInfo span {
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.sharedListItemActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.sharedListEditArea,
+.sharedListDeleteConfirm {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sharedListEditArea .input {
+  min-width: 0;
+  flex: 1;
+}
+
+.sharedListDeleteConfirm {
+  justify-content: space-between;
+}
+
+.sharedListDeleteConfirm p {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 640px) {
+  .sharedListManagerItem,
+  .sharedListEditArea,
+  .sharedListDeleteConfirm {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sharedListItemActions {
+    width: 100%;
+  }
+
+  .sharedListItemActions button {
+    flex: 1;
+  }
+}
