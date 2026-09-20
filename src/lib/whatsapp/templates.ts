@@ -1,15 +1,28 @@
 export type TemplateCategory = "UTILITY" | "MARKETING" | "AUTHENTICATION";
 export type TemplateLanguage = "pt_BR" | "en_US";
 
-export type HeaderComponent = {
+export type TextHeaderComponent = {
   type: "HEADER";
   format: "TEXT";
   text: string;
 };
 
+export type ImageHeaderComponent = {
+  type: "HEADER";
+  format: "IMAGE";
+  example: {
+    header_handle: string[];
+  };
+};
+
+export type HeaderComponent = TextHeaderComponent | ImageHeaderComponent;
+
 export type BodyComponent = {
   type: "BODY";
   text: string;
+  example?: {
+    body_text: string[][];
+  };
 };
 
 export type FooterComponent = {
@@ -74,9 +87,35 @@ export function validateTemplateInput(input: CreateTemplateInput) {
     errors.push("O componente BODY é obrigatório.");
   }
 
-  const header = input.components.find((item) => item.type === "HEADER");
-  if (header && "text" in header && header.text.length > 60) {
-    errors.push("HEADER deve ter no máximo 60 caracteres.");
+  const headers = input.components.filter((item) => item.type === "HEADER");
+  if (headers.length > 1) {
+    errors.push("Informe apenas um HEADER no template.");
+  }
+
+  const header = headers[0];
+  if (header?.format === "TEXT") {
+    if (!header.text?.trim()) {
+      errors.push("O texto do HEADER é obrigatório quando o cabeçalho for Texto.");
+    }
+
+    if (header.text.length > 60) {
+      errors.push("HEADER deve ter no máximo 60 caracteres.");
+    }
+  }
+
+  if (header?.format === "IMAGE") {
+    const handles = Array.isArray(header.example?.header_handle)
+      ? header.example.header_handle
+      : [];
+    const handleValido = handles.some((item) => String(item || "").trim());
+
+    if (!handleValido) {
+      errors.push("O HEADER de imagem precisa da mídia de exemplo enviada à Meta.");
+    }
+  }
+
+  if (body && "text" in body && body.text.length > 1024) {
+    errors.push("BODY deve ter no máximo 1024 caracteres.");
   }
 
   const footer = input.components.find((item) => item.type === "FOOTER");

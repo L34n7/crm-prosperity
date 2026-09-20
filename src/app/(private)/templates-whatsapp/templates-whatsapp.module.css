@@ -188,6 +188,57 @@
   line-height: 1.55;
 }
 
+.fileInput {
+  width: 100%;
+  color: var(--crm-text);
+  font-size: 13px;
+}
+
+.imageUploadBox {
+  border: 1px dashed var(--crm-border-strong);
+  background: var(--crm-surface-soft);
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.imageUploadTitle {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--crm-text-strong);
+  word-break: break-word;
+}
+
+.imageUploadPreview,
+.whatsappPreviewImage,
+.compactHeaderImage {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+}
+
+.imageUploadPreview {
+  max-height: 220px;
+  border-radius: 12px;
+  border: 1px solid var(--crm-border);
+}
+
+.whatsappPreviewImage {
+  max-height: 220px;
+  margin: -14px -14px 12px;
+  width: calc(100% + 28px);
+  border-radius: 0 14px 0 0;
+}
+
+.compactHeaderImage {
+  max-width: 360px;
+  max-height: 220px;
+  border-radius: 12px;
+  border: 1px solid var(--crm-border);
+}
+
 .infoBox {
   border: 1px solid var(--crm-border);
   background: var(--crm-surface-soft);
