@@ -223,7 +223,10 @@ export async function PUT(
             : [],
         })),
     ];
-    const interesse = String(body?.interesse ?? "").trim();
+    const interesse =
+      body?.interesse !== undefined
+        ? String(body.interesse ?? "").trim()
+        : String((antes as Record<string, unknown>).interesse ?? "").trim();
 
     const dadosPersonalizados = validarDadosPersonalizados({
       valores: body?.dados_personalizados,
