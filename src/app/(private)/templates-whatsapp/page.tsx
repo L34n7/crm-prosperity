@@ -785,12 +785,6 @@ export default function TemplatesWhatsAppPage() {
               <div className={styles.creatorGrid}>
                   <div className={styles.formFields}>
                       <div className={styles.field}>
-                        {erroSincronizacao ? (
-                          <div className={styles.integrationErrorAlert}>
-                            {erroSincronizacao}
-                          </div>
-                        ) : null}
-
                         <label className={styles.label}>Integração WhatsApp</label>
                         <select
                           value={integracaoId}
@@ -1337,6 +1331,12 @@ export default function TemplatesWhatsAppPage() {
               <div className={styles.inlineBlock}>
                 <div className={styles.searchRow}>
                   <div className={styles.field}>
+                    {erroSincronizacao ? (
+                      <div className={styles.integrationErrorAlert}>
+                        {erroSincronizacao}
+                      </div>
+                    ) : null}
+
                     <label className={styles.label}>Filtrar por integração</label>
                     <select
                       value={filtroIntegracao}
@@ -1409,56 +1409,6 @@ export default function TemplatesWhatsAppPage() {
 
                       return (
                         <div key={template.id} className={styles.compactTemplateCard}>
-                          <div className={styles.compactTemplateTop}>
-                            <div className={styles.compactTemplateMain}>
-                              <div className={styles.compactTemplateTitleRow}>
-                                <div className={styles.templateNameWithCategory}>
-                                  <h3 className={styles.compactTemplateTitle}>
-                                    {template.nome}
-                                  </h3>
-                                  <span
-                                    className={`${styles.categoryBadge} ${
-                                      categoriaNormalizada === "MARKETING"
-                                        ? styles.categoryBadgeMarketing
-                                        : categoriaNormalizada === "UTILITY"
-                                        ? styles.categoryBadgeUtility
-                                        : styles.categoryBadgeNeutral
-                                    }`}
-                                  >
-                                    {categoriaNormalizada || "SEM CATEGORIA"}
-                                  </span>
-                                </div>
-
-                                <div className={styles.compactTemplateBadges}>
-                                  <span className={getStatusClass(template.status)}>
-                                    {getStatusLabel(template.status)}
-                                  </span>
-                                  <span
-                                    className={`${styles.badge} ${
-                                      template.opt_out_habilitado
-                                        ? styles.badgeGreen
-                                        : categoriaNormalizada === "AUTHENTICATION"
-                                        ? styles.badgeGray
-                                        : styles.badgeYellow
-                                    }`}
-                                  >
-                                    {template.opt_out_habilitado
-                                      ? "Opt-out habilitado"
-                                      : categoriaNormalizada === "AUTHENTICATION"
-                                      ? "Opt-out não aplicável"
-                                      : "Sem opt-out"}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <p className={styles.compactTemplateMeta}>
-                                Idioma: {template.idioma} • ID Meta:{" "}
-                                {template.meta_template_id || "-"} • Criado em:{" "}
-                                {formatarData(template.created_at)}
-                              </p>
-                            </div>
-                          </div>
-
                           <div className={styles.templateListContent}>
                             <div className={styles.templateListPreview}>
                               <div className={styles.templateListPreviewTitle}>

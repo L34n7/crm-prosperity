@@ -849,7 +849,7 @@
 
 .templateListContent {
   display: grid;
-  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -878,32 +878,32 @@
 }
 
 .templateListPreview .whatsappPreviewArea {
-  padding: 14px;
+  padding: 16px;
 }
 
 .templateListPreview .whatsappBubble {
-  max-width: 220px;
-  padding: 11px 11px 7px;
+  max-width: 300px;
+  padding: 14px 14px 8px;
 }
 
 .templateListPreview .whatsappPreviewText {
-  font-size: 12px;
-  line-height: 1.42;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .templateListPreview .whatsappPreviewTitle {
-  font-size: 13px;
-  margin-bottom: 6px;
+  font-size: 14px;
+  margin-bottom: 8px;
 }
 
 .templateListPreview .whatsappPreviewFooter,
 .templateListPreview .whatsappPreviewTime {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .templateListPreview .whatsappPreviewButton {
-  padding: 8px 5px;
-  font-size: 12px;
+  padding: 10px 6px;
+  font-size: 13px;
 }
 
 .templateListDetails {
