@@ -1895,6 +1895,8 @@ export default function DisparosWhatsAppPage() {
   const [templateVariavel1, setTemplateVariavel1] = useState("");
   const [templateVariavel2, setTemplateVariavel2] = useState("");
   const [templateVariavel3, setTemplateVariavel3] = useState("");
+  const [templateVariavel4, setTemplateVariavel4] = useState("");
+  const [templateVariavel5, setTemplateVariavel5] = useState("");
   const [nomeCampanhaDisparo, setNomeCampanhaDisparo] = useState("");
   const [agendarDisparo, setAgendarDisparo] = useState(false);
   const [agendamentoData, setAgendamentoData] = useState("");
@@ -2980,8 +2982,20 @@ export default function DisparosWhatsAppPage() {
   }, [templateSelecionado]);
 
   const variaveisTemplate = useMemo(
-    () => [templateVariavel1, templateVariavel2, templateVariavel3],
-    [templateVariavel1, templateVariavel2, templateVariavel3]
+    () => [
+      templateVariavel1,
+      templateVariavel2,
+      templateVariavel3,
+      templateVariavel4,
+      templateVariavel5,
+    ],
+    [
+      templateVariavel1,
+      templateVariavel2,
+      templateVariavel3,
+      templateVariavel4,
+      templateVariavel5,
+    ]
   );
 
   const opcoesVariaveisTemplate = useMemo<OpcaoVariavelTemplate[]>(() => {
@@ -3732,6 +3746,16 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (totalVariaveis >= 4 && !templateVariavel4.trim()) {
+      setTemplateVariavel4(valor);
+      return;
+    }
+
+    if (totalVariaveis >= 5 && !templateVariavel5.trim()) {
+      setTemplateVariavel5(valor);
+      return;
+    }
+
     setTemplateVariavel1(valor);
   }
 
@@ -3950,8 +3974,8 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    if (totalVariaveis > 3) {
-      setErro("Este template usa mais de 3 variáveis. Use um template com até 3 variáveis para esta tela.");
+    if (totalVariaveis > 5) {
+      setErro("Este template usa mais de 5 variáveis. Use um template com até 5 variáveis para esta tela.");
       return;
     }
 
@@ -3960,7 +3984,7 @@ export default function DisparosWhatsAppPage() {
       .map((item) => normalizarVariavelTemplate(item));
 
     if (variaveisObrigatorias.some((item) => !item)) {
-      setErro("Preencha os campos Variável 1, 2 e 3 exigidos pelo template.");
+      setErro("Preencha todos os campos de variável exigidos pelo template.");
       return;
     }
 
@@ -4627,6 +4651,26 @@ export default function DisparosWhatsAppPage() {
                                 label="Variável 3"
                                 value={templateVariavel3}
                                 onChange={setTemplateVariavel3}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 4 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 4"
+                                value={templateVariavel4}
+                                onChange={setTemplateVariavel4}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 5 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 5"
+                                value={templateVariavel5}
+                                onChange={setTemplateVariavel5}
                                 opcoes={opcoesVariaveisTemplate}
                                 carregando={loadingVariaveis}
                               />

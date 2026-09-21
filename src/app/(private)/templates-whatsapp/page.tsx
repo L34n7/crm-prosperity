@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
@@ -33,6 +33,7 @@ type TemplateComponent = {
 
 const LIMITE_IMAGEM_TEMPLATE_BYTES = 5 * 1024 * 1024;
 const MIME_IMAGENS_TEMPLATE = new Set(["image/jpeg", "image/png"]);
+const TEMPLATE_LANGUAGE = "pt_BR";
 
 type WhatsAppTemplate = {
   id: string;
@@ -217,16 +218,21 @@ export default function TemplatesWhatsAppPage() {
   const [integracaoId, setIntegracaoId] = useState("");
   const [name, setName] = useState("");
   const [category, setCategory] = useState<"UTILITY" | "MARKETING">("UTILITY");
-  const [language, setLanguage] = useState("pt_BR");
   const [headerText, setHeaderText] = useState("");
+  const [headerImageEnabled, setHeaderImageEnabled] = useState(false);
   const [headerImage, setHeaderImage] = useState<File | null>(null);
   const [headerImagePreview, setHeaderImagePreview] = useState("");
   const [bodyText, setBodyText] = useState(
     "Olá {{1}}, seu atendimento foi iniciado com sucesso. O protocolo gerado foi {{2}}. Guarde esta informação."
   );
-  const [bodyExample1, setBodyExample1] = useState("João");
-  const [bodyExample2, setBodyExample2] = useState("ABC-123456");
-  const [bodyExample3, setBodyExample3] = useState("10:00");
+  const [bodyExamples, setBodyExamples] = useState([
+    "João",
+    "ABC-123456",
+    "",
+    "",
+    "",
+  ]);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [footerText, setFooterText] = useState(
     obterFooterOptOut("UTILITY") || ""
   );
@@ -353,9 +359,62 @@ export default function TemplatesWhatsAppPage() {
     .map((item) => item.trim())
     .filter(Boolean);
 
-  const totalVariaveisBody = useMemo(() => contarVariaveisTexto(bodyText), [bodyText]);
-  const exemplosBodyPreview = [bodyExample1, bodyExample2, bodyExample3];
-  const bodyTextPreview = substituirVariaveisTexto(bodyText.trim(), exemplosBodyPreview);
+  const totalVariaveisBody = useMemo(
+    () => contarVariaveisTexto(bodyText),
+    [bodyText]
+  );
+  const quantidadeVariaveisBody = useMemo(() => {
+    const numeros = bodyText
+      .match(/\{\{\d+\}\}/g)
+      ?.map((item) => Number(item.replace(/[{}]/g, "")))
+      .filter((numero) => numero >= 1 && numero <= 5) || [];
+
+    return new Set(numeros).size;
+  }, [bodyText]);
+  const bodyTextPreview = substituirVariaveisTexto(
+    bodyText.trim(),
+    bodyExamples
+  );
+
+  function atualizarExemploBody(index: number, valor: string) {
+    setBodyExamples((atual) =>
+      atual.map((item, itemIndex) => (itemIndex === index ? valor : item))
+    );
+  }
+
+  function adicionarVariavelBody() {
+    const usados = new Set(
+      (bodyText.match(/\{\{\d+\}\}/g) || [])
+        .map((item) => Number(item.replace(/[{}]/g, "")))
+        .filter((numero) => numero >= 1 && numero <= 5)
+    );
+    const proxima = [1, 2, 3, 4, 5].find((numero) => !usados.has(numero));
+
+    if (!proxima) {
+      setErro("O limite é de 5 variáveis por template.");
+      return;
+    }
+
+    const token = `{{${proxima}}}`;
+    const textarea = bodyTextareaRef.current;
+    const inicio = textarea?.selectionStart ?? bodyText.length;
+    const fim = textarea?.selectionEnd ?? inicio;
+    const antes = bodyText.slice(0, inicio);
+    const depois = bodyText.slice(fim);
+    const espacoAntes = antes && !/\s$/.test(antes) ? " " : "";
+    const espacoDepois = depois && !/^\s/.test(depois) ? " " : "";
+    const insercao = `${espacoAntes}${token}${espacoDepois}`;
+    const proximoTexto = `${antes}${insercao}${depois}`;
+    const novaPosicao = inicio + insercao.length;
+
+    setBodyText(proximoTexto);
+    setErro("");
+
+    requestAnimationFrame(() => {
+      bodyTextareaRef.current?.focus();
+      bodyTextareaRef.current?.setSelectionRange(novaPosicao, novaPosicao);
+    });
+  }
 
   const resumoTemplates = useMemo(() => {
     const total = templates.length;
@@ -433,12 +492,21 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
-    if (headerImage && /\{\{\d+\}\}/.test(headerText)) {
+    if (
+      headerImageEnabled &&
+      headerText.trim() &&
+      /\{\{\d+\}\}/.test(headerText)
+    ) {
       setErro("Quando houver imagem, o cabeçalho não deve usar variáveis.");
       return;
     }
 
-    if (headerImage) {
+    if (headerImageEnabled && !headerImage) {
+      setErro("Selecione a imagem do template ou desative a opção de imagem.");
+      return;
+    }
+
+    if (headerImageEnabled && headerImage) {
       if (!MIME_IMAGENS_TEMPLATE.has(headerImage.type)) {
         setErro("A Meta aceita imagem em JPG/JPEG ou PNG.");
         return;
@@ -455,12 +523,29 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
-    if (totalVariaveisBody > 3) {
-      setErro("Use no máximo 3 variáveis no corpo do template.");
+    if (totalVariaveisBody > 5 || quantidadeVariaveisBody > 5) {
+      setErro("Use no máximo 5 variáveis no corpo do template.");
       return;
     }
 
-    const exemplosBody = [bodyExample1.trim(), bodyExample2.trim(), bodyExample3.trim()];
+    const numerosVariaveis = Array.from(
+      new Set(
+        (bodyText.match(/\{\{\d+\}\}/g) || [])
+          .map((item) => Number(item.replace(/[{}]/g, "")))
+          .filter((numero) => Number.isFinite(numero))
+      )
+    ).sort((a, b) => a - b);
+
+    if (
+      numerosVariaveis.some(
+        (numero, index) => numero !== index + 1 || numero > 5
+      )
+    ) {
+      setErro("Use as variáveis em sequência, de {{1}} até no máximo {{5}}.");
+      return;
+    }
+
+    const exemplosBody = bodyExamples.map((item) => item.trim());
     const exemplosObrigatorios = exemplosBody.slice(0, totalVariaveisBody);
 
     if (
@@ -472,7 +557,7 @@ export default function TemplatesWhatsAppPage() {
     }
 
     const bodyTextFinal =
-      headerImage && headerText.trim()
+      headerImageEnabled && headerImage && headerText.trim()
         ? `*${headerText.trim()}*\n\n${bodyText.trim()}`
         : bodyText.trim();
 
@@ -488,7 +573,7 @@ export default function TemplatesWhatsAppPage() {
 
       const components: TemplateComponent[] = [];
 
-      if (headerImage) {
+      if (headerImageEnabled && headerImage) {
         const mediaFormData = new FormData();
         mediaFormData.append("integracao_whatsapp_id", integracaoId);
         mediaFormData.append("file", headerImage, headerImage.name);
@@ -565,7 +650,7 @@ export default function TemplatesWhatsAppPage() {
           integracao_whatsapp_id: integracaoId,
           name,
           category,
-          language,
+          language: TEMPLATE_LANGUAGE,
           components,
         }),
       });
@@ -585,13 +670,12 @@ export default function TemplatesWhatsAppPage() {
 
       setName("");
       setHeaderText("");
+      setHeaderImageEnabled(false);
       setHeaderImage(null);
       setBodyText(
         "Olá {{1}}, seu atendimento foi iniciado com sucesso. O protocolo gerado foi {{2}}. Guarde esta informação."
       );
-      setBodyExample1("João");
-      setBodyExample2("ABC-123456");
-      setBodyExample3("10:00");
+      setBodyExamples(["João", "ABC-123456", "", "", ""]);
       setFooterText(obterFooterOptOut(category) || "");
       setQuickReply1("");
       setQuickReply2("");
@@ -672,39 +756,29 @@ export default function TemplatesWhatsAppPage() {
               >
               <div className={styles.creatorGrid}>
                   <div className={styles.formFields}>
-                      <div className={styles.topGrid}>
-                        <div className={styles.field}>
-                          <label className={styles.label}>Integração WhatsApp</label>
-                          <select
-                            value={integracaoId}
-                            onChange={(e) => setIntegracaoId(e.target.value)}
-                            className={styles.input}
-                            disabled={selectIntegracaoBloqueado}
-                            required
-                          >
-                            <option value="">
-                              {loadingIntegracoes ? "Carregando..." : "Selecione uma integração"}
+                      <div className={styles.field}>
+                        <label className={styles.label}>Integração WhatsApp</label>
+                        <select
+                          value={integracaoId}
+                          onChange={(e) => setIntegracaoId(e.target.value)}
+                          className={styles.input}
+                          disabled={selectIntegracaoBloqueado}
+                          required
+                        >
+                          <option value="">
+                            {loadingIntegracoes ? "Carregando..." : "Selecione uma integração"}
+                          </option>
+
+                          {integracoes.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.nome_conexao}
+                              {item.numero ? ` ${item.numero}` : ""}
                             </option>
-
-                            {integracoes.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.nome_conexao}
-                                {item.numero ? ` ${item.numero}` : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className={styles.field}>
-                          <label className={styles.label}>Idioma</label>
-                          <select
-                            value={language}
-                            onChange={(e) => setLanguage(e.target.value)}
-                            className={styles.input}
-                          >
-                            <option value="pt_BR">Português (Brasil)</option>
-                          </select>
-                        </div>
+                          ))}
+                        </select>
+                        <p className={styles.help}>
+                          Idioma padrão do template: Português (Brasil).
+                        </p>
                       </div>
 
                       <div className={styles.topGrid}>
@@ -738,60 +812,108 @@ export default function TemplatesWhatsAppPage() {
                         </div>
                       </div>
                       
-                      <div className={styles.field}>
-                        <label className={styles.label}>Imagem <span className={styles.optionalLabel}>Opcional</span></label>
-                        <div className={styles.imageUploadBox}>
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png"
-                            className={styles.fileInput}
-                            onChange={(e) => {
-                              setErro("");
-                              const file = e.target.files?.[0] || null;
-
-                              if (!file) {
-                                setHeaderImage(null);
-                                return;
-                              }
-
-                              if (!MIME_IMAGENS_TEMPLATE.has(file.type)) {
-                                setHeaderImage(null);
-                                e.currentTarget.value = "";
-                                setErro("A Meta aceita imagem em JPG/JPEG ou PNG.");
-                                return;
-                              }
-
-                              if (file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
-                                setHeaderImage(null);
-                                e.currentTarget.value = "";
-                                setErro("A imagem do template deve ter no máximo 5 MB.");
-                                return;
-                              }
-
-                              setHeaderImage(file);
-                            }}
-                          />
-
-                          {headerImagePreview ? (
-                            <img
-                              src={headerImagePreview}
-                              alt="Prévia da imagem do template"
-                              className={styles.imageUploadPreview}
-                            />
-                          ) : null}
-
-                          <div>
-                            <strong className={styles.imageUploadTitle}>
-                              {headerImage?.name || "Nenhuma imagem selecionada"}
-                            </strong>
-                            <p className={styles.help}>
-                              JPG/JPEG ou PNG, até 5 MB. A imagem é opcional e é enviada à Meta como amostra de mídia para análise do modelo.
-                            </p>
-                            <p className={styles.mediaWarning}>
-                              Templates com imagem costumam ser classificados como Marketing na maioria dos casos, mas a categoria final depende do conteúdo e da análise da Meta.
-                            </p>
+                      <div className={styles.mediaSection}>
+                        <div className={styles.mediaToggleCard}>
+                          <div className={styles.mediaToggleCopy}>
+                            <span className={styles.mediaEyebrow}>Mídia do template</span>
+                            <strong className={styles.mediaToggleTitle}>Adicionar imagem</strong>
+                            <span className={styles.mediaToggleSubtitle}>
+                              Ative para enviar uma imagem junto ao template.
+                            </span>
                           </div>
+
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={headerImageEnabled}
+                            className={`${styles.premiumSwitch} ${
+                              headerImageEnabled ? styles.premiumSwitchActive : ""
+                            }`}
+                            onClick={() => {
+                              setHeaderImageEnabled((ativo) => {
+                                const proximo = !ativo;
+                                if (!proximo) {
+                                  setHeaderImage(null);
+                                }
+                                return proximo;
+                              });
+                              setErro("");
+                            }}
+                          >
+                            <span className={styles.premiumSwitchThumb} />
+                          </button>
                         </div>
+
+                        <p className={styles.mediaClassificationInfo}>
+                          Templates com imagem costumam ser aprovados como <strong>Marketing</strong> na maioria dos casos. A categoria final depende do conteúdo e da análise da Meta.
+                        </p>
+
+                        {headerImageEnabled ? (
+                          <div className={styles.imageUploadBox}>
+                            <div className={styles.imageUploadHeading}>
+                              <div>
+                                <strong className={styles.imageUploadTitle}>
+                                  Imagem do template
+                                </strong>
+                                <p className={styles.help}>
+                                  JPG/JPEG ou PNG, até 5 MB.
+                                </p>
+                              </div>
+                              {headerImage ? (
+                                <span className={styles.imageReadyBadge}>Pronta</span>
+                              ) : null}
+                            </div>
+
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png"
+                              className={styles.fileInput}
+                              onChange={(e) => {
+                                setErro("");
+                                const file = e.target.files?.[0] || null;
+
+                                if (!file) {
+                                  setHeaderImage(null);
+                                  return;
+                                }
+
+                                if (!MIME_IMAGENS_TEMPLATE.has(file.type)) {
+                                  setHeaderImage(null);
+                                  e.currentTarget.value = "";
+                                  setErro("A Meta aceita imagem em JPG/JPEG ou PNG.");
+                                  return;
+                                }
+
+                                if (file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
+                                  setHeaderImage(null);
+                                  e.currentTarget.value = "";
+                                  setErro("A imagem do template deve ter no máximo 5 MB.");
+                                  return;
+                                }
+
+                                setHeaderImage(file);
+                              }}
+                            />
+
+                            {headerImageEnabled && headerImagePreview ? (
+                              <img
+                                src={headerImagePreview}
+                                alt="Prévia da imagem do template"
+                                className={styles.imageUploadPreview}
+                              />
+                            ) : (
+                              <div className={styles.imageUploadEmpty}>
+                                Nenhuma imagem selecionada.
+                              </div>
+                            )}
+
+                            {headerImage ? (
+                              <span className={styles.imageFileName}>
+                                {headerImage.name}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className={styles.field}>
@@ -809,8 +931,25 @@ export default function TemplatesWhatsAppPage() {
                       </div>
 
                       <div className={styles.field}>
-                        <label className={styles.label}>Corpo</label>
+                        <div className={styles.fieldLabelRow}>
+                          <label className={styles.label}>Corpo</label>
+                          <button
+                            type="button"
+                            className={styles.variableAddButton}
+                            onClick={adicionarVariavelBody}
+                            disabled={quantidadeVariaveisBody >= 5}
+                            title={
+                              quantidadeVariaveisBody >= 5
+                                ? "Limite de 5 variáveis atingido"
+                                : "Adicionar a próxima variável ao corpo"
+                            }
+                          >
+                            + Variável
+                            <span>{quantidadeVariaveisBody}/5</span>
+                          </button>
+                        </div>
                         <textarea
+                          ref={bodyTextareaRef}
                           value={bodyText}
                           onChange={(e) => setBodyText(e.target.value)}
                           rows={7}
@@ -819,63 +958,72 @@ export default function TemplatesWhatsAppPage() {
                           required
                         />
                         <p className={styles.help}>
-                          Use variáveis como {"{{1}}"}, {"{{2}}"} e {"{{3}}"}. Evite deixar variáveis no início ou no fim da frase.
+                          Use variáveis em sequência de {"{{1}}"} até {"{{5}}"}. O botão + Variável insere a próxima variável na posição do cursor.
                         </p>
                       </div>
 
                       {totalVariaveisBody > 0 ? (
-                        <div className={styles.topGrid}>
-                          <div className={styles.field}>
-                            <label className={styles.label}>Exemplo da variável 1</label>
-                            <input
-                              value={bodyExample1}
-                              onChange={(e) => setBodyExample1(e.target.value)}
-                              className={styles.input}
-                              placeholder="Ex.: João"
-                            />
+                        <div className={styles.variableExamplesCard}>
+                          <div className={styles.variableExamplesHeader}>
+                            <div>
+                              <strong>Exemplos das variáveis</strong>
+                              <p>
+                                A Meta usa estes exemplos na análise do template.
+                              </p>
+                            </div>
+                            <span>{Math.min(totalVariaveisBody, 5)} campo(s)</span>
                           </div>
 
-                          {totalVariaveisBody >= 2 ? (
-                            <div className={styles.field}>
-                              <label className={styles.label}>Exemplo da variável 2</label>
-                              <input
-                                value={bodyExample2}
-                                onChange={(e) => setBodyExample2(e.target.value)}
-                                className={styles.input}
-                                placeholder="Ex: ABC-123456"
-                              />
-                            </div>
-                          ) : null}
-
-                          {totalVariaveisBody >= 3 ? (
-                            <div className={styles.field}>
-                              <label className={styles.label}>Exemplo da variável 3</label>
-                              <input
-                                value={bodyExample3}
-                                onChange={(e) => setBodyExample3(e.target.value)}
-                                className={styles.input}
-                                placeholder="Ex.: 10:00"
-                              />
-                            </div>
-                          ) : null}
+                          <div className={styles.variableExamplesGrid}>
+                            {Array.from(
+                              { length: Math.min(totalVariaveisBody, 5) },
+                              (_, index) => (
+                                <div className={styles.field} key={index}>
+                                  <label className={styles.label}>
+                                    Exemplo da variável {index + 1}
+                                  </label>
+                                  <input
+                                    value={bodyExamples[index] || ""}
+                                    onChange={(e) =>
+                                      atualizarExemploBody(index, e.target.value)
+                                    }
+                                    className={styles.input}
+                                    placeholder={
+                                      index === 0
+                                        ? "Ex.: João"
+                                        : index === 1
+                                        ? "Ex.: ABC-123456"
+                                        : `Exemplo para {{${index + 1}}}`
+                                    }
+                                  />
+                                </div>
+                              )
+                            )}
+                          </div>
                         </div>
                       ) : null}
 
-                      <div className={styles.field}>
-                        <label className={styles.label}>Rodapé</label>
+                      <div className={`${styles.field} ${styles.lockedField}`}>
+                        <div className={styles.fieldLabelRow}>
+                          <label className={styles.label}>Rodapé</label>
+                          <span className={styles.lockedBadge}>Bloqueado</span>
+                        </div>
                         <input
                           value={footerText}
                           className={styles.input}
-                          readOnly
+                          disabled
+                          aria-label="Rodapé bloqueado"
                         />
                         <p className={styles.help}>
-                          Rodapé obrigatório para permitir o opt-out automático
-                          de disparos.
+                          Definido automaticamente pelo sistema para garantir o opt-out dos disparos.
                         </p>
                       </div>
 
-                      <div className={styles.field}>
-                        <label className={styles.label}>Respostas rápidas</label>
+                      <div className={`${styles.field} ${styles.responsesField}`}>
+                        <label className={styles.label}>
+                          Botões de respostas{" "}
+                          <span className={styles.secondaryLabel}>(Respostas rápidas)</span>
+                        </label>
 
                         <div className={styles.topGrid}>
                           <input
@@ -971,7 +1119,9 @@ export default function TemplatesWhatsAppPage() {
                           <div className={styles.previewBlock}>
                             <span className={styles.previewLabel}>Imagem</span>
                             <p className={styles.previewText}>
-                              {headerImage ? headerImage.name : "Não informada"}
+                              {headerImageEnabled
+                                ? headerImage?.name || "Ativada, aguardando imagem"
+                                : "Desativada"}
                             </p>
                           </div>
 
@@ -1025,7 +1175,7 @@ export default function TemplatesWhatsAppPage() {
                       <strong>Categoria:</strong> {formatarCategoriaMeta(category)}
                     </span>
                     <span>
-                      <strong>Idioma:</strong> {language}
+                      <strong>Idioma:</strong> Português (Brasil)
                     </span>
                   </div>
 
