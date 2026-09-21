@@ -165,6 +165,30 @@ function extrairQuickReplies(payload: WhatsAppTemplate["payload"]) {
   );
 }
 
+function montarPreviewListaTemplate(payload: WhatsAppTemplate["payload"]) {
+  const headerComponent = getComponent(payload, "HEADER");
+  const headerFormat = String(headerComponent?.format || "").toUpperCase();
+  let titulo =
+    headerFormat === "TEXT" ? String(headerComponent?.text || "").trim() : "";
+  let corpo = extrairBody(payload).trim();
+
+  if (!titulo && headerFormat === "IMAGE") {
+    const tituloNoBody = corpo.match(/^\*([^*\n]+)\*\s*(?:\n+|$)/);
+
+    if (tituloNoBody) {
+      titulo = tituloNoBody[1].trim();
+      corpo = corpo.slice(tituloNoBody[0].length).trim();
+    }
+  }
+
+  return {
+    titulo,
+    corpo: corpo || "Conteúdo não informado.",
+    rodape: extrairFooter(payload),
+    quickReplies: extrairQuickReplies(payload),
+  };
+}
+
 function contarVariaveisTexto(texto: string) {
   const matches = texto.match(/\{\{\d+\}\}/g) || [];
   const numeros = matches
@@ -228,6 +252,7 @@ export default function TemplatesWhatsAppPage() {
   const [bodyExamples, setBodyExamples] = useState([
     "João",
     "ABC-123456",
+    "",
     "",
     "",
     "",
@@ -367,7 +392,7 @@ export default function TemplatesWhatsAppPage() {
     const numeros = bodyText
       .match(/\{\{\d+\}\}/g)
       ?.map((item) => Number(item.replace(/[{}]/g, "")))
-      .filter((numero) => numero >= 1 && numero <= 5) || [];
+      .filter((numero) => numero >= 1 && numero <= 6) || [];
 
     return new Set(numeros).size;
   }, [bodyText]);
@@ -388,10 +413,10 @@ export default function TemplatesWhatsAppPage() {
         .map((item) => Number(item.replace(/[{}]/g, "")))
         .filter((numero) => numero >= 1 && numero <= 5)
     );
-    const proxima = [1, 2, 3, 4, 5].find((numero) => !usados.has(numero));
+    const proxima = [1, 2, 3, 4, 5, 6].find((numero) => !usados.has(numero));
 
     if (!proxima) {
-      setErro("O limite é de 5 variáveis por template.");
+      setErro("O limite é de 6 variáveis por template.");
       return;
     }
 
@@ -523,8 +548,8 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
-    if (totalVariaveisBody > 5 || quantidadeVariaveisBody > 5) {
-      setErro("Use no máximo 5 variáveis no corpo do template.");
+    if (totalVariaveisBody > 6 || quantidadeVariaveisBody > 6) {
+      setErro("Use no máximo 6 variáveis no corpo do template.");
       return;
     }
 
@@ -538,10 +563,10 @@ export default function TemplatesWhatsAppPage() {
 
     if (
       numerosVariaveis.some(
-        (numero, index) => numero !== index + 1 || numero > 5
+        (numero, index) => numero !== index + 1 || numero > 6
       )
     ) {
-      setErro("Use as variáveis em sequência, de {{1}} até no máximo {{5}}.");
+      setErro("Use as variáveis em sequência, de {{1}} até no máximo {{6}}.");
       return;
     }
 
@@ -675,7 +700,7 @@ export default function TemplatesWhatsAppPage() {
       setBodyText(
         "Olá {{1}}, seu atendimento foi iniciado com sucesso. O protocolo gerado foi {{2}}. Guarde esta informação."
       );
-      setBodyExamples(["João", "ABC-123456", "", "", ""]);
+      setBodyExamples(["João", "ABC-123456", "", "", "", ""]);
       setFooterText(obterFooterOptOut(category) || "");
       setQuickReply1("");
       setQuickReply2("");
@@ -777,7 +802,7 @@ export default function TemplatesWhatsAppPage() {
                           ))}
                         </select>
                         <p className={styles.help}>
-                          Idioma padrão do template: Português (Brasil).
+                          Selecione o número do WhatsApp que será usado para enviar este template nos disparos.
                         </p>
                       </div>
 
@@ -916,36 +941,53 @@ export default function TemplatesWhatsAppPage() {
                         ) : null}
                       </div>
 
-                      <div className={styles.field}>
-                        <label className={styles.label}>Cabeçalho <span className={styles.optionalLabel}>Opcional</span></label>
-                        <input
-                          value={headerText}
-                          onChange={(e) => setHeaderText(e.target.value)}
-                          className={styles.input}
-                          placeholder="Adicione uma pequena linha de texto ao cabeçalho"
-                          maxLength={60}
-                        />
-                        <p className={styles.help}>
-                          Máximo de 60 caracteres. Quando houver imagem, o CRM mantém este texto como título visual logo abaixo da mídia.
-                        </p>
+                      <div className={styles.contentSectionCard}>
+                        <div className={styles.contentSectionHeader}>
+                          <div>
+                            <strong>Cabeçalho</strong>
+                            <p>Opcional. Uma linha curta de destaque para o template.</p>
+                          </div>
+                          <span className={styles.contentSectionBadge}>Opcional</span>
+                        </div>
+
+                        <div className={styles.field}>
+                          <input
+                            value={headerText}
+                            onChange={(e) => setHeaderText(e.target.value)}
+                            className={styles.input}
+                            placeholder="Adicione uma pequena linha de texto ao cabeçalho"
+                            maxLength={60}
+                          />
+                          <p className={styles.help}>
+                            Máximo de 60 caracteres. Quando houver imagem, o CRM mantém este texto como título visual logo abaixo da mídia.
+                          </p>
+                        </div>
                       </div>
 
-                      <div className={styles.field}>
+                      <div className={styles.contentSectionCard}>
+                        <div className={styles.contentSectionHeader}>
+                          <div>
+                            <strong>Corpo</strong>
+                            <p>Conteúdo principal exibido na mensagem do WhatsApp.</p>
+                          </div>
+                        </div>
+
+                        <div className={styles.field}>
                         <div className={styles.fieldLabelRow}>
                           <label className={styles.label}>Corpo</label>
                           <button
                             type="button"
                             className={styles.variableAddButton}
                             onClick={adicionarVariavelBody}
-                            disabled={quantidadeVariaveisBody >= 5}
+                            disabled={quantidadeVariaveisBody >= 6}
                             title={
-                              quantidadeVariaveisBody >= 5
-                                ? "Limite de 5 variáveis atingido"
+                              quantidadeVariaveisBody >= 6
+                                ? "Limite de 6 variáveis atingido"
                                 : "Adicionar a próxima variável ao corpo"
                             }
                           >
                             + Variável
-                            <span>{quantidadeVariaveisBody}/5</span>
+                            <span>{quantidadeVariaveisBody}/6</span>
                           </button>
                         </div>
                         <textarea
@@ -958,8 +1000,9 @@ export default function TemplatesWhatsAppPage() {
                           required
                         />
                         <p className={styles.help}>
-                          Use variáveis em sequência de {"{{1}}"} até {"{{5}}"}. O botão + Variável insere a próxima variável na posição do cursor.
+                          Use variáveis em sequência de {"{{1}}"} até {"{{6}}"}. O botão + Variável insere a próxima variável na posição do cursor.
                         </p>
+                        </div>
                       </div>
 
                       {totalVariaveisBody > 0 ? (
@@ -971,12 +1014,12 @@ export default function TemplatesWhatsAppPage() {
                                 A Meta usa estes exemplos na análise do template.
                               </p>
                             </div>
-                            <span>{Math.min(totalVariaveisBody, 5)} campo(s)</span>
+                            <span>{Math.min(totalVariaveisBody, 6)} campo(s)</span>
                           </div>
 
                           <div className={styles.variableExamplesGrid}>
                             {Array.from(
-                              { length: Math.min(totalVariaveisBody, 5) },
+                              { length: Math.min(totalVariaveisBody, 6) },
                               (_, index) => (
                                 <div className={styles.field} key={index}>
                                   <label className={styles.label}>
@@ -1019,13 +1062,20 @@ export default function TemplatesWhatsAppPage() {
                         </p>
                       </div>
 
-                      <div className={`${styles.field} ${styles.responsesField}`}>
-                        <label className={styles.label}>
-                          Botões de respostas{" "}
-                          <span className={styles.secondaryLabel}>(Respostas rápidas)</span>
-                        </label>
+                      <div className={`${styles.contentSectionCard} ${styles.responsesField}`}>
+                        <div className={styles.contentSectionHeader}>
+                          <div>
+                            <strong>
+                              Botões de respostas{" "}
+                              <span className={styles.secondaryLabel}>(Respostas rápidas)</span>
+                            </strong>
+                            <p>Adicione atalhos para o contato responder com um toque.</p>
+                          </div>
+                          <span className={styles.contentSectionBadge}>Opcional</span>
+                        </div>
 
-                        <div className={styles.topGrid}>
+                        <div className={styles.field}>
+                                                <div className={styles.topGrid}>
                           <input
                             value={quickReply1}
                             onChange={(e) => setQuickReply1(e.target.value)}
@@ -1051,6 +1101,7 @@ export default function TemplatesWhatsAppPage() {
                         <p className={styles.help}>
                             Opcional. Você pode adicionar até 3 respostas rápidas.
                         </p>
+                        </div>
                       </div>
                     </div>
 
@@ -1334,105 +1385,184 @@ export default function TemplatesWhatsAppPage() {
                       const body = extrairBody(template.payload);
                       const footer = extrairFooter(template.payload);
                       const quickReplies = extrairQuickReplies(template.payload);
+                      const previewLista = montarPreviewListaTemplate(template.payload);
+                      const categoriaNormalizada = String(
+                        template.categoria || ""
+                      ).toUpperCase();
 
                       return (
                         <div key={template.id} className={styles.compactTemplateCard}>
-                          <div className={styles.compactTemplateTop}>
-                            <div className={styles.compactTemplateMain}>
-                              <div className={styles.compactTemplateTitleRow}>
-                                <h3 className={styles.compactTemplateTitle}>{template.nome}</h3>
-                                <div className={styles.compactTemplateBadges}>
-                                  <span className={getStatusClass(template.status)}>
-                                    {getStatusLabel(template.status)}
-                                  </span>
-                                  <span
-                                    className={`${styles.badge} ${
-                                      template.opt_out_habilitado
-                                        ? styles.badgeGreen
-                                        : String(template.categoria).toUpperCase() ===
-                                          "AUTHENTICATION"
-                                        ? styles.badgeGray
-                                        : styles.badgeYellow
-                                    }`}
-                                  >
-                                    {template.opt_out_habilitado
-                                      ? "Opt-out habilitado"
-                                      : String(template.categoria).toUpperCase() ===
-                                        "AUTHENTICATION"
-                                      ? "Opt-out não aplicável"
-                                      : "Sem opt-out"}
-                                  </span>
+                          <div className={styles.templateListSplit}>
+                            <div className={styles.templateListPreview}>
+                              <div className={styles.templateListPreviewTitle}>
+                                Prévia WhatsApp
+                              </div>
+
+                              <div className={styles.whatsappPreviewArea}>
+                                <div className={styles.whatsappBubble}>
+                                  {headerImageUrl ? (
+                                    <img
+                                      src={headerImageUrl}
+                                      alt={`Imagem do template ${template.nome}`}
+                                      className={styles.whatsappPreviewImage}
+                                    />
+                                  ) : headerFormat === "IMAGE" ? (
+                                    <div className={styles.templateImageFallback}>
+                                      Imagem vinculada ao template
+                                    </div>
+                                  ) : null}
+
+                                  {previewLista.titulo ? (
+                                    <strong className={styles.whatsappPreviewTitle}>
+                                      {previewLista.titulo}
+                                    </strong>
+                                  ) : null}
+
+                                  <p className={styles.whatsappPreviewText}>
+                                    {previewLista.corpo}
+                                  </p>
+
+                                  <div className={styles.whatsappPreviewMeta}>
+                                    <span className={styles.whatsappPreviewFooter}>
+                                      {previewLista.rodape || "Equipe de atendimento"}
+                                    </span>
+                                    <span className={styles.whatsappPreviewTime}>
+                                      {new Date().toLocaleTimeString("pt-BR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                  </div>
+
+                                  {previewLista.quickReplies.map((texto, index) => (
+                                    <div
+                                      key={`${texto}-preview-${index}`}
+                                      className={styles.whatsappPreviewButton}
+                                    >
+                                      ↩ {texto}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className={styles.templateListDetails}>
+                              <div className={styles.compactTemplateTop}>
+                                <div className={styles.compactTemplateMain}>
+                                  <div className={styles.compactTemplateTitleRow}>
+                                    <div className={styles.templateNameWithCategory}>
+                                      <h3 className={styles.compactTemplateTitle}>
+                                        {template.nome}
+                                      </h3>
+                                      <span
+                                        className={`${styles.categoryBadge} ${
+                                          categoriaNormalizada === "MARKETING"
+                                            ? styles.categoryBadgeMarketing
+                                            : categoriaNormalizada === "UTILITY"
+                                            ? styles.categoryBadgeUtility
+                                            : styles.categoryBadgeNeutral
+                                        }`}
+                                      >
+                                        {categoriaNormalizada || "SEM CATEGORIA"}
+                                      </span>
+                                    </div>
+
+                                    <div className={styles.compactTemplateBadges}>
+                                      <span className={getStatusClass(template.status)}>
+                                        {getStatusLabel(template.status)}
+                                      </span>
+                                      <span
+                                        className={`${styles.badge} ${
+                                          template.opt_out_habilitado
+                                            ? styles.badgeGreen
+                                            : categoriaNormalizada === "AUTHENTICATION"
+                                            ? styles.badgeGray
+                                            : styles.badgeYellow
+                                        }`}
+                                      >
+                                        {template.opt_out_habilitado
+                                          ? "Opt-out habilitado"
+                                          : categoriaNormalizada === "AUTHENTICATION"
+                                          ? "Opt-out não aplicável"
+                                          : "Sem opt-out"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <p className={styles.compactTemplateMeta}>
+                                    Idioma: {template.idioma} • ID Meta:{" "}
+                                    {template.meta_template_id || "-"} • Criado em:{" "}
+                                    {formatarData(template.created_at)}
+                                  </p>
                                 </div>
                               </div>
 
-                              <p className={styles.compactTemplateMeta}>
-                                Categoria: {formatarCategoriaMeta(template.categoria)} • Idioma: {template.idioma} • ID Meta:{" "}
-                                {template.meta_template_id || "-"} • Criado em:{" "}
-                                {formatarData(template.created_at)}
-                              </p>
-                            </div>
-                          </div>
+                              {header || headerFormat === "IMAGE" ? (
+                                <div className={styles.compactBlock}>
+                                  <span className={styles.compactLabel}>Cabeçalho</span>
+                                  {headerImageUrl ? (
+                                    <div className={styles.compactMediaReference}>
+                                      <span>Imagem vinculada</span>
+                                      <span>{header || "Mídia aprovada pela Meta"}</span>
+                                    </div>
+                                  ) : (
+                                    <p className={styles.compactText}>
+                                      {header || "Imagem vinculada ao template"}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : null}
 
-                          {header || headerFormat === "IMAGE" ? (
-                            <div className={styles.compactBlock}>
-                              <span className={styles.compactLabel}>Cabeçalho</span>
-                              {headerImageUrl ? (
-                                <img
-                                  src={headerImageUrl}
-                                  alt={`Cabeçalho do template ${template.nome}`}
-                                  className={styles.compactHeaderImage}
-                                />
-                              ) : (
+                              <div className={styles.compactBlock}>
+                                <span className={styles.compactLabel}>Corpo</span>
                                 <p className={styles.compactText}>
-                                  {header || "Imagem vinculada ao template"}
+                                  {body || "Não informado"}
                                 </p>
-                              )}
-                            </div>
-                          ) : null}
+                              </div>
 
-                          <div className={styles.compactBlock}>
-                            <span className={styles.compactLabel}>Corpo</span>
-                            <p className={styles.compactText}>{body || "Não informado"}</p>
-                          </div>
+                              {(footer || quickReplies.length > 0) && (
+                                <div className={styles.compactFooterRow}>
+                                  {footer ? (
+                                    <div className={styles.compactMiniBlock}>
+                                      <span className={styles.compactLabel}>Rodapé</span>
+                                      <p className={styles.compactText}>{footer}</p>
+                                    </div>
+                                  ) : null}
 
-                          {(footer || quickReplies.length > 0) && (
-                            <div className={styles.compactFooterRow}>
-                              {footer ? (
-                                <div className={styles.compactMiniBlock}>
-                                  <span className={styles.compactLabel}>Rodapé</span>
-                                  <p className={styles.compactText}>{footer}</p>
-                                </div>
-                              ) : null}
-
-                              {quickReplies.length > 0 ? (
-                                <div className={styles.compactMiniBlock}>
-                                  <span className={styles.compactLabel}>Respostas rápidas</span>
-                                  <div className={styles.quickRepliesList}>
-                                    {quickReplies.map((item, index) => (
-                                      <span
-                                        key={`${item}-${index}`}
-                                        className={`${styles.badge} ${styles.badgeGray}`}
-                                      >
-                                        {item}
+                                  {quickReplies.length > 0 ? (
+                                    <div className={styles.compactMiniBlock}>
+                                      <span className={styles.compactLabel}>
+                                        Botões de respostas
                                       </span>
-                                    ))}
-                                  </div>
+                                      <div className={styles.quickRepliesList}>
+                                        {quickReplies.map((item, index) => (
+                                          <span
+                                            key={`${item}-detail-${index}`}
+                                            className={`${styles.badge} ${styles.badgeGray}`}
+                                          >
+                                            {item}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : null}
                                 </div>
+                              )}
+
+                              {template.quality_rating ? (
+                                <p className={styles.resultText}>
+                                  <strong>Qualidade:</strong> {template.quality_rating}
+                                </p>
+                              ) : null}
+
+                              {template.rejeicao_motivo ? (
+                                <p className={styles.resultCompactError}>
+                                  <strong>Motivo da rejeição:</strong>{" "}
+                                  {template.rejeicao_motivo}
+                                </p>
                               ) : null}
                             </div>
-                          )}
-
-                          {template.quality_rating ? (
-                            <p className={styles.resultText}>
-                              <strong>Qualidade:</strong> {template.quality_rating}
-                            </p>
-                          ) : null}
-
-                          {template.rejeicao_motivo ? (
-                            <p className={styles.resultCompactError}>
-                              <strong>Motivo da rejeição:</strong> {template.rejeicao_motivo}
-                            </p>
-                          ) : null}
+                          </div>
                         </div>
                       );
                     })}

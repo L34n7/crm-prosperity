@@ -362,6 +362,46 @@
   cursor: not-allowed;
 }
 
+.contentSectionCard {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  border-radius: 16px;
+  padding: 13px;
+  display: grid;
+  gap: 12px;
+}
+
+.contentSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.contentSectionHeader strong {
+  display: block;
+  font-size: 13px;
+  color: var(--crm-text-strong);
+}
+
+.contentSectionHeader p {
+  margin: 3px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.contentSectionBadge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--crm-text-soft);
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
 .variableExamplesCard {
   border: 1px solid var(--crm-border);
   background: var(--crm-surface-soft);
@@ -785,13 +825,125 @@
 }
 
 .compactTemplateCard {
-  border-radius: 18px;
+  border-radius: 20px;
   padding: 14px;
   border: 1px solid var(--crm-border);
   background: var(--crm-surface);
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
+}
+
+.templateListSplit {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.templateListPreview {
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface-soft);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.templateListPreviewTitle {
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--crm-border);
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.templateListPreview .whatsappPreviewArea {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.templateListPreview .whatsappBubble {
+  max-width: 360px;
+}
+
+.templateListDetails {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.templateImageFallback {
+  width: calc(100% + 28px);
+  min-height: 150px;
+  margin: -14px -14px 12px;
+  background: var(--crm-surface-soft);
+  border-bottom: 1px solid var(--crm-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  box-sizing: border-box;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.templateNameWithCategory {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.categoryBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.categoryBadgeUtility {
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  border-color: var(--crm-primary-border);
+}
+
+.categoryBadgeMarketing {
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border-color: var(--crm-success-border);
+}
+
+.categoryBadgeNeutral {
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  border-color: var(--crm-border);
+}
+
+.compactMediaReference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--crm-text);
+}
+
+.compactMediaReference span:first-child {
+  font-weight: 800;
+  color: var(--crm-text-strong);
 }
 
 .compactTemplateTop {
@@ -1023,7 +1175,8 @@
   .topGrid,
   .resultsSummary,
   .searchRow,
-  .compactFooterRow {
+  .compactFooterRow,
+  .templateListSplit {
     grid-template-columns: 1fr;
   }
 

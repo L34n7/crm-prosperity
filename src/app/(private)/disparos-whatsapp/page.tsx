@@ -1897,6 +1897,7 @@ export default function DisparosWhatsAppPage() {
   const [templateVariavel3, setTemplateVariavel3] = useState("");
   const [templateVariavel4, setTemplateVariavel4] = useState("");
   const [templateVariavel5, setTemplateVariavel5] = useState("");
+  const [templateVariavel6, setTemplateVariavel6] = useState("");
   const [nomeCampanhaDisparo, setNomeCampanhaDisparo] = useState("");
   const [agendarDisparo, setAgendarDisparo] = useState(false);
   const [agendamentoData, setAgendamentoData] = useState("");
@@ -2988,6 +2989,7 @@ export default function DisparosWhatsAppPage() {
       templateVariavel3,
       templateVariavel4,
       templateVariavel5,
+      templateVariavel6,
     ],
     [
       templateVariavel1,
@@ -2995,6 +2997,7 @@ export default function DisparosWhatsAppPage() {
       templateVariavel3,
       templateVariavel4,
       templateVariavel5,
+      templateVariavel6,
     ]
   );
 
@@ -3756,6 +3759,11 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (totalVariaveis >= 6 && !templateVariavel6.trim()) {
+      setTemplateVariavel6(valor);
+      return;
+    }
+
     setTemplateVariavel1(valor);
   }
 
@@ -3974,8 +3982,8 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    if (totalVariaveis > 5) {
-      setErro("Este template usa mais de 5 variáveis. Use um template com até 5 variáveis para esta tela.");
+    if (totalVariaveis > 6) {
+      setErro("Este template usa mais de 6 variáveis. Use um template com até 6 variáveis para esta tela.");
       return;
     }
 
@@ -4671,6 +4679,16 @@ export default function DisparosWhatsAppPage() {
                                 label="Variável 5"
                                 value={templateVariavel5}
                                 onChange={setTemplateVariavel5}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 6 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 6"
+                                value={templateVariavel6}
+                                onChange={setTemplateVariavel6}
                                 opcoes={opcoesVariaveisTemplate}
                                 carregando={loadingVariaveis}
                               />
