@@ -978,11 +978,7 @@ export default function TemplatesWhatsAppPage() {
                             <strong>Corpo</strong>
                             <p>Conteúdo principal exibido na mensagem do WhatsApp.</p>
                           </div>
-                        </div>
 
-                        <div className={styles.field}>
-                        <div className={styles.fieldLabelRow}>
-                          <label className={styles.label}>Corpo</label>
                           <button
                             type="button"
                             className={styles.variableAddButton}
@@ -998,6 +994,8 @@ export default function TemplatesWhatsAppPage() {
                             <span>{quantidadeVariaveisBody}/6</span>
                           </button>
                         </div>
+
+                        <div className={styles.field}>
                         <textarea
                           ref={bodyTextareaRef}
                           value={bodyText}
