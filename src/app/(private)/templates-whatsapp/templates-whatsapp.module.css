@@ -817,6 +817,18 @@
   border: 1px solid var(--crm-danger-border);
 }
 
+.integrationErrorAlert {
+  margin-bottom: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  border: 1px solid var(--crm-danger-border);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .resultsList {
   padding: 18px;
   display: flex;
@@ -835,11 +847,11 @@
   box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
 }
 
-.templateListSplit {
+.templateListContent {
   display: grid;
-  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .templateListPreview {
@@ -865,8 +877,33 @@
   align-items: center;
 }
 
+.templateListPreview .whatsappPreviewArea {
+  padding: 14px;
+}
+
 .templateListPreview .whatsappBubble {
-  max-width: 360px;
+  max-width: 220px;
+  padding: 11px 11px 7px;
+}
+
+.templateListPreview .whatsappPreviewText {
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.templateListPreview .whatsappPreviewTitle {
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.templateListPreview .whatsappPreviewFooter,
+.templateListPreview .whatsappPreviewTime {
+  font-size: 10px;
+}
+
+.templateListPreview .whatsappPreviewButton {
+  padding: 8px 5px;
+  font-size: 12px;
 }
 
 .templateListDetails {
@@ -1176,7 +1213,7 @@
   .resultsSummary,
   .searchRow,
   .compactFooterRow,
-  .templateListSplit {
+  .templateListContent {
     grid-template-columns: 1fr;
   }
 

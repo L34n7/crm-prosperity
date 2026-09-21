@@ -236,6 +236,7 @@ export default function TemplatesWhatsAppPage() {
 
   const [mensagem, setMensagem] = useState("");
   const [erro, setErro] = useState("");
+  const [erroSincronizacao, setErroSincronizacao] = useState("");
 
   const [filtroIntegracao, setFiltroIntegracao] = useState("");
 
@@ -411,7 +412,7 @@ export default function TemplatesWhatsAppPage() {
     const usados = new Set(
       (bodyText.match(/\{\{\d+\}\}/g) || [])
         .map((item) => Number(item.replace(/[{}]/g, "")))
-        .filter((numero) => numero >= 1 && numero <= 5)
+        .filter((numero) => numero >= 1 && numero <= 6)
     );
     const proxima = [1, 2, 3, 4, 5, 6].find((numero) => !usados.has(numero));
 
@@ -717,10 +718,10 @@ export default function TemplatesWhatsAppPage() {
   async function sincronizarTemplatesMeta() {
     try {
       setMensagem("");
-      setErro("");
+      setErroSincronizacao("");
 
       if (!filtroIntegracao && !integracaoId) {
-        setErro("Selecione uma integração para sincronizar.");
+        setErroSincronizacao("Selecione uma integração para sincronizar.");
         return;
       }
 
@@ -750,7 +751,9 @@ export default function TemplatesWhatsAppPage() {
 
       await carregarTemplates(filtroIntegracao);
     } catch (error: any) {
-      setErro(error?.message || "Erro ao sincronizar templates.");
+      setErroSincronizacao(
+        error?.message || "Erro ao sincronizar templates."
+      );
     } finally {
       setSincronizando(false);
     }
@@ -782,10 +785,21 @@ export default function TemplatesWhatsAppPage() {
               <div className={styles.creatorGrid}>
                   <div className={styles.formFields}>
                       <div className={styles.field}>
+                        {erroSincronizacao ? (
+                          <div className={styles.integrationErrorAlert}>
+                            {erroSincronizacao}
+                          </div>
+                        ) : null}
+
                         <label className={styles.label}>Integração WhatsApp</label>
                         <select
                           value={integracaoId}
-                          onChange={(e) => setIntegracaoId(e.target.value)}
+                          onChange={(e) => {
+                            setIntegracaoId(e.target.value);
+                            if (e.target.value) {
+                              setErroSincronizacao("");
+                            }
+                          }}
                           className={styles.input}
                           disabled={selectIntegracaoBloqueado}
                           required
@@ -1329,6 +1343,9 @@ export default function TemplatesWhatsAppPage() {
                       onChange={(e) => {
                         setFiltroIntegracao(e.target.value);
                         setPaginaAtual(1);
+                        if (e.target.value) {
+                          setErroSincronizacao("");
+                        }
                       }}
                       className={styles.input}
                       disabled={selectIntegracaoBloqueado}
@@ -1392,7 +1409,57 @@ export default function TemplatesWhatsAppPage() {
 
                       return (
                         <div key={template.id} className={styles.compactTemplateCard}>
-                          <div className={styles.templateListSplit}>
+                          <div className={styles.compactTemplateTop}>
+                            <div className={styles.compactTemplateMain}>
+                              <div className={styles.compactTemplateTitleRow}>
+                                <div className={styles.templateNameWithCategory}>
+                                  <h3 className={styles.compactTemplateTitle}>
+                                    {template.nome}
+                                  </h3>
+                                  <span
+                                    className={`${styles.categoryBadge} ${
+                                      categoriaNormalizada === "MARKETING"
+                                        ? styles.categoryBadgeMarketing
+                                        : categoriaNormalizada === "UTILITY"
+                                        ? styles.categoryBadgeUtility
+                                        : styles.categoryBadgeNeutral
+                                    }`}
+                                  >
+                                    {categoriaNormalizada || "SEM CATEGORIA"}
+                                  </span>
+                                </div>
+
+                                <div className={styles.compactTemplateBadges}>
+                                  <span className={getStatusClass(template.status)}>
+                                    {getStatusLabel(template.status)}
+                                  </span>
+                                  <span
+                                    className={`${styles.badge} ${
+                                      template.opt_out_habilitado
+                                        ? styles.badgeGreen
+                                        : categoriaNormalizada === "AUTHENTICATION"
+                                        ? styles.badgeGray
+                                        : styles.badgeYellow
+                                    }`}
+                                  >
+                                    {template.opt_out_habilitado
+                                      ? "Opt-out habilitado"
+                                      : categoriaNormalizada === "AUTHENTICATION"
+                                      ? "Opt-out não aplicável"
+                                      : "Sem opt-out"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <p className={styles.compactTemplateMeta}>
+                                Idioma: {template.idioma} • ID Meta:{" "}
+                                {template.meta_template_id || "-"} • Criado em:{" "}
+                                {formatarData(template.created_at)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className={styles.templateListContent}>
                             <div className={styles.templateListPreview}>
                               <div className={styles.templateListPreviewTitle}>
                                 Prévia WhatsApp
@@ -1431,6 +1498,91 @@ export default function TemplatesWhatsAppPage() {
                                         hour: "2-digit",
                                         minute: "2-digit",
                                       })}
+                                    </span>
+                                  </div>
+
+                                  {previewLista.quickReplies.map((texto, index) => (
+                                    <div
+                                      key={`${texto}-preview-${index}`}
+                                      className={styles.whatsappPreviewButton}
+                                    >
+                                      ↩ {texto}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className={styles.templateListDetails}>
+                              {header || headerFormat === "IMAGE" ? (
+                                <div className={styles.compactBlock}>
+                                  <span className={styles.compactLabel}>Cabeçalho</span>
+                                  {headerImageUrl ? (
+                                    <div className={styles.compactMediaReference}>
+                                      <span>Imagem vinculada</span>
+                                      <span>{header || "Mídia aprovada pela Meta"}</span>
+                                    </div>
+                                  ) : (
+                                    <p className={styles.compactText}>
+                                      {header || "Imagem vinculada ao template"}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : null}
+
+                              <div className={styles.compactBlock}>
+                                <span className={styles.compactLabel}>Corpo</span>
+                                <p className={styles.compactText}>
+                                  {body || "Não informado"}
+                                </p>
+                              </div>
+
+                              {(footer || quickReplies.length > 0) && (
+                                <div className={styles.compactFooterRow}>
+                                  {footer ? (
+                                    <div className={styles.compactMiniBlock}>
+                                      <span className={styles.compactLabel}>Rodapé</span>
+                                      <p className={styles.compactText}>{footer}</p>
+                                    </div>
+                                  ) : null}
+
+                                  {quickReplies.length > 0 ? (
+                                    <div className={styles.compactMiniBlock}>
+                                      <span className={styles.compactLabel}>
+                                        Botões de respostas
+                                      </span>
+                                      <div className={styles.quickRepliesList}>
+                                        {quickReplies.map((item, index) => (
+                                          <span
+                                            key={`${item}-detail-${index}`}
+                                            className={`${styles.badge} ${styles.badgeGray}`}
+                                          >
+                                            {item}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              )}
+
+                              {template.quality_rating ? (
+                                <p className={styles.resultText}>
+                                  <strong>Qualidade:</strong> {template.quality_rating}
+                                </p>
+                              ) : null}
+
+                              {template.rejeicao_motivo ? (
+                                <p className={styles.resultCompactError}>
+                                  <strong>Motivo da rejeição:</strong>{" "}
+                                  {template.rejeicao_motivo}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                                     </span>
                                   </div>
 
