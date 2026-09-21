@@ -188,6 +188,24 @@
   line-height: 1.55;
 }
 
+.optionalLabel {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--crm-text-muted);
+}
+
+.mediaWarning {
+  margin: 8px 0 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--crm-warning-bg);
+  border: 1px solid var(--crm-warning-border);
+  color: var(--crm-warning-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .fileInput {
   width: 100%;
   color: var(--crm-text);

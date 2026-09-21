@@ -31,8 +31,6 @@ type TemplateComponent = {
   };
 };
 
-type HeaderType = "NONE" | "TEXT" | "IMAGE";
-
 const LIMITE_IMAGEM_TEMPLATE_BYTES = 5 * 1024 * 1024;
 const MIME_IMAGENS_TEMPLATE = new Set(["image/jpeg", "image/png"]);
 
@@ -220,7 +218,6 @@ export default function TemplatesWhatsAppPage() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<"UTILITY" | "MARKETING">("UTILITY");
   const [language, setLanguage] = useState("pt_BR");
-  const [headerType, setHeaderType] = useState<HeaderType>("NONE");
   const [headerText, setHeaderText] = useState("");
   const [headerImage, setHeaderImage] = useState<File | null>(null);
   const [headerImagePreview, setHeaderImagePreview] = useState("");
@@ -431,31 +428,19 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
-    if (
-      (headerType === "TEXT" || headerType === "IMAGE") &&
-      headerText.trim().length > 60
-    ) {
-      setErro(
-        headerType === "IMAGE"
-          ? "O título abaixo da imagem deve ter no máximo 60 caracteres."
-          : "O cabeçalho de texto deve ter no máximo 60 caracteres."
-      );
+    if (headerText.trim().length > 60) {
+      setErro("O cabeçalho deve ter no máximo 60 caracteres.");
       return;
     }
 
-    if (headerType === "IMAGE" && /\{\{\d+\}\}/.test(headerText)) {
-      setErro("O título abaixo da imagem não deve usar variáveis.");
+    if (headerImage && /\{\{\d+\}\}/.test(headerText)) {
+      setErro("Quando houver imagem, o cabeçalho não deve usar variáveis.");
       return;
     }
 
-    if (headerType === "IMAGE") {
-      if (!headerImage) {
-        setErro("Selecione a imagem que será usada no cabeçalho do template.");
-        return;
-      }
-
+    if (headerImage) {
       if (!MIME_IMAGENS_TEMPLATE.has(headerImage.type)) {
-        setErro("A Meta aceita imagem de cabeçalho em JPG/JPEG ou PNG.");
+        setErro("A Meta aceita imagem em JPG/JPEG ou PNG.");
         return;
       }
 
@@ -487,7 +472,7 @@ export default function TemplatesWhatsAppPage() {
     }
 
     const bodyTextFinal =
-      headerType === "IMAGE" && headerText.trim()
+      headerImage && headerText.trim()
         ? `*${headerText.trim()}*\n\n${bodyText.trim()}`
         : bodyText.trim();
 
@@ -503,7 +488,7 @@ export default function TemplatesWhatsAppPage() {
 
       const components: TemplateComponent[] = [];
 
-      if (headerType === "IMAGE" && headerImage) {
+      if (headerImage) {
         const mediaFormData = new FormData();
         mediaFormData.append("integracao_whatsapp_id", integracaoId);
         mediaFormData.append("file", headerImage, headerImage.name);
@@ -531,7 +516,7 @@ export default function TemplatesWhatsAppPage() {
             header_handle: [String(mediaJson.handle)],
           },
         });
-      } else if (headerType === "TEXT" && headerText.trim()) {
+      } else if (headerText.trim()) {
         components.push({
           type: "HEADER",
           format: "TEXT",
@@ -599,7 +584,6 @@ export default function TemplatesWhatsAppPage() {
       setMensagem("Template criado com sucesso e enviado para análise do Meta.");
 
       setName("");
-      setHeaderType("NONE");
       setHeaderText("");
       setHeaderImage(null);
       setBodyText(
@@ -749,130 +733,80 @@ export default function TemplatesWhatsAppPage() {
                             <option value="MARKETING">MARKETING</option>
                           </select>
                           <p className={styles.help}>
-                            {headerType === "IMAGE"
-                              ? "Com imagem, o CRM sugere MARKETING. A mídia por si só não define a categoria: a Meta avalia o objetivo e o conteúdo e pode reclassificar o template."
-                              : "UTILIDADE para comunicações operacionais. MARKETING para campanhas e promoções."}
+                            UTILIDADE para comunicações operacionais. MARKETING para campanhas e promoções. A Meta pode reclassificar o modelo durante a análise.
                           </p>
                         </div>
                       </div>
                       
                       <div className={styles.field}>
-                        <label className={styles.label}>Cabeçalho</label>
-                        <select
-                          value={headerType}
-                          onChange={(e) => {
-                            const nextType = e.target.value as HeaderType;
-                            setHeaderType(nextType);
-
-                            if (nextType === "NONE") {
-                              setHeaderText("");
-                            }
-
-                            if (nextType === "IMAGE" && category !== "MARKETING") {
-                              setCategory("MARKETING");
-                            }
-
-                            if (nextType !== "IMAGE") {
-                              setHeaderImage(null);
-                            }
-                          }}
-                          className={styles.input}
-                        >
-                          <option value="NONE">Sem cabeçalho</option>
-                          <option value="TEXT">Texto</option>
-                          <option value="IMAGE">Imagem</option>
-                        </select>
-                        <p className={styles.help}>
-                          O tipo do cabeçalho faz parte da estrutura analisada e aprovada pela Meta.
-                        </p>
-                      </div>
-
-                      {headerType === "TEXT" ? (
-                        <div className={styles.field}>
-                          <label className={styles.label}>Texto do cabeçalho</label>
+                        <label className={styles.label}>Imagem <span className={styles.optionalLabel}>Opcional</span></label>
+                        <div className={styles.imageUploadBox}>
                           <input
-                            value={headerText}
-                            onChange={(e) => setHeaderText(e.target.value)}
-                            className={styles.input}
-                            placeholder="Opcional"
-                            maxLength={60}
+                            type="file"
+                            accept="image/jpeg,image/png"
+                            className={styles.fileInput}
+                            onChange={(e) => {
+                              setErro("");
+                              const file = e.target.files?.[0] || null;
+
+                              if (!file) {
+                                setHeaderImage(null);
+                                return;
+                              }
+
+                              if (!MIME_IMAGENS_TEMPLATE.has(file.type)) {
+                                setHeaderImage(null);
+                                e.currentTarget.value = "";
+                                setErro("A Meta aceita imagem em JPG/JPEG ou PNG.");
+                                return;
+                              }
+
+                              if (file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
+                                setHeaderImage(null);
+                                e.currentTarget.value = "";
+                                setErro("A imagem do template deve ter no máximo 5 MB.");
+                                return;
+                              }
+
+                              setHeaderImage(file);
+                            }}
                           />
-                          <p className={styles.help}>Máximo de 60 caracteres.</p>
-                        </div>
-                      ) : null}
 
-                      {headerType === "IMAGE" ? (
-                        <div className={styles.field}>
-                          <label className={styles.label}>Imagem do cabeçalho</label>
-                          <div className={styles.imageUploadBox}>
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png"
-                              className={styles.fileInput}
-                              onChange={(e) => {
-                                setErro("");
-                                const file = e.target.files?.[0] || null;
-
-                                if (!file) {
-                                  setHeaderImage(null);
-                                  return;
-                                }
-
-                                if (!MIME_IMAGENS_TEMPLATE.has(file.type)) {
-                                  setHeaderImage(null);
-                                  e.currentTarget.value = "";
-                                  setErro("A Meta aceita imagem de cabeçalho em JPG/JPEG ou PNG.");
-                                  return;
-                                }
-
-                                if (file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
-                                  setHeaderImage(null);
-                                  e.currentTarget.value = "";
-                                  setErro("A imagem do template deve ter no máximo 5 MB.");
-                                  return;
-                                }
-
-                                setHeaderImage(file);
-                              }}
+                          {headerImagePreview ? (
+                            <img
+                              src={headerImagePreview}
+                              alt="Prévia da imagem do template"
+                              className={styles.imageUploadPreview}
                             />
+                          ) : null}
 
-                            {headerImagePreview ? (
-                              <img
-                                src={headerImagePreview}
-                                alt="Prévia da imagem do cabeçalho"
-                                className={styles.imageUploadPreview}
-                              />
-                            ) : null}
-
-                            <div>
-                              <strong className={styles.imageUploadTitle}>
-                                {headerImage?.name || "Selecione uma imagem"}
-                              </strong>
-                              <p className={styles.help}>
-                                JPG/JPEG ou PNG, até 5 MB. A imagem é enviada à Meta como mídia de exemplo para análise do template.
-                              </p>
-                            </div>
+                          <div>
+                            <strong className={styles.imageUploadTitle}>
+                              {headerImage?.name || "Nenhuma imagem selecionada"}
+                            </strong>
+                            <p className={styles.help}>
+                              JPG/JPEG ou PNG, até 5 MB. A imagem é opcional e é enviada à Meta como amostra de mídia para análise do modelo.
+                            </p>
+                            <p className={styles.mediaWarning}>
+                              Templates com imagem costumam ser classificados como Marketing na maioria dos casos, mas a categoria final depende do conteúdo e da análise da Meta.
+                            </p>
                           </div>
                         </div>
-                      ) : null}
+                      </div>
 
-                      {headerType === "IMAGE" ? (
-                        <div className={styles.field}>
-                          <label className={styles.label}>
-                            Título abaixo da imagem
-                          </label>
-                          <input
-                            value={headerText}
-                            onChange={(e) => setHeaderText(e.target.value)}
-                            className={styles.input}
-                            placeholder="Opcional. Ex.: Atualização importante"
-                            maxLength={60}
-                          />
-                          <p className={styles.help}>
-                            A Meta permite apenas um HEADER por template. Com imagem, este título é enviado como a primeira linha em negrito do corpo, aparecendo logo abaixo da imagem.
-                          </p>
-                        </div>
-                      ) : null}
+                      <div className={styles.field}>
+                        <label className={styles.label}>Cabeçalho <span className={styles.optionalLabel}>Opcional</span></label>
+                        <input
+                          value={headerText}
+                          onChange={(e) => setHeaderText(e.target.value)}
+                          className={styles.input}
+                          placeholder="Adicione uma pequena linha de texto ao cabeçalho"
+                          maxLength={60}
+                        />
+                        <p className={styles.help}>
+                          Máximo de 60 caracteres. Quando houver imagem, o CRM mantém este texto como título visual logo abaixo da mídia.
+                        </p>
+                      </div>
 
                       <div className={styles.field}>
                         <label className={styles.label}>Corpo</label>
@@ -980,16 +914,15 @@ export default function TemplatesWhatsAppPage() {
 
                         <div className={styles.whatsappPreviewArea}>
                           <div className={styles.whatsappBubble}>
-                            {headerType === "IMAGE" && headerImagePreview ? (
+                            {headerImagePreview ? (
                               <img
                                 src={headerImagePreview}
-                                alt="Imagem do cabeçalho"
+                                alt="Imagem do template"
                                 className={styles.whatsappPreviewImage}
                               />
                             ) : null}
 
-                            {(headerType === "TEXT" || headerType === "IMAGE") &&
-                            headerText.trim() ? (
+                            {headerText.trim() ? (
                               <strong className={styles.whatsappPreviewTitle}>
                                 {headerText.trim()}
                               </strong>
@@ -1036,15 +969,16 @@ export default function TemplatesWhatsAppPage() {
 
                         <div className={styles.previewGrid}>
                           <div className={styles.previewBlock}>
+                            <span className={styles.previewLabel}>Imagem</span>
+                            <p className={styles.previewText}>
+                              {headerImage ? headerImage.name : "Não informada"}
+                            </p>
+                          </div>
+
+                          <div className={styles.previewBlock}>
                             <span className={styles.previewLabel}>Cabeçalho</span>
                             <p className={styles.previewText}>
-                              {headerType === "IMAGE"
-                                ? headerImage
-                                  ? `Imagem: ${headerImage.name}${headerText.trim() ? ` • título: ${headerText.trim()}` : ""}`
-                                  : "Imagem não selecionada"
-                                : headerType === "TEXT"
-                                ? headerText.trim() || "Texto não informado"
-                                : "Sem cabeçalho"}
+                              {headerText.trim() || "Não informado"}
                             </p>
                           </div>
 
