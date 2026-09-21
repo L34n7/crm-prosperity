@@ -50,6 +50,9 @@ type TemplateComponent = {
   text?: string;
   format?: string;
   buttons?: TemplateButton[];
+  example?: {
+    header_handle?: string[];
+  };
 };
 
 type WhatsAppTemplate = {
@@ -737,13 +740,25 @@ function montarPreviewTemplateDisparo(
   const footer = components.find(
     (item) => String(item.type || "").toUpperCase() === "FOOTER"
   );
+  const headerFormat = String(header?.format || "").toUpperCase();
+
+  const imagemUrl =
+    headerFormat === "IMAGE"
+      ? (header?.example?.header_handle || [])
+          .map((item) => String(item || "").trim())
+          .find((item) => /^https?:\/\//i.test(item)) || ""
+      : "";
 
   let offset = 0;
-  const headerTexto = substituirPreviewSequencial(
-    header?.text || "",
-    variaveis,
-    offset
-  ).trim();
+  const headerTexto =
+    headerFormat === "TEXT"
+      ? substituirPreviewSequencial(
+          header?.text || "",
+          variaveis,
+          offset
+        ).trim()
+      : "";
+
   offset += contarVariaveisTemplate({
     ...template,
     payload: {
@@ -752,16 +767,28 @@ function montarPreviewTemplateDisparo(
     },
   });
 
-  const bodyTexto = substituirPreviewSequencial(
+  let bodyTexto = substituirPreviewSequencial(
     body?.text || "",
     variaveis,
     offset
   ).trim();
 
+  let tituloVisual = headerTexto;
+  if (!tituloVisual && headerFormat === "IMAGE") {
+    const tituloNoBody = bodyTexto.match(/^\*([^*\n]+)\*\s*(?:\n+|$)/);
+
+    if (tituloNoBody) {
+      tituloVisual = tituloNoBody[1].trim();
+      bodyTexto = bodyTexto.slice(tituloNoBody[0].length).trim();
+    }
+  }
+
   return {
-    titulo: headerTexto || template.nome || "Template WhatsApp",
+    titulo: tituloVisual,
     corpo: bodyTexto || "Template sem conteúdo para prévia.",
     rodape: String(footer?.text || "").trim() || "Equipe de atendimento",
+    imagemUrl,
+    possuiImagem: headerFormat === "IMAGE",
   };
 }
 
@@ -4625,9 +4652,23 @@ export default function DisparosWhatsAppPage() {
                       <>
                         <div className={styles.whatsappPreviewArea}>
                           <div className={styles.whatsappBubble}>
-                            <strong className={styles.whatsappPreviewTitle}>
-                              {previewTemplateSelecionado?.titulo || templateSelecionado.nome}
-                            </strong>
+                            {previewTemplateSelecionado?.imagemUrl ? (
+                              <img
+                                src={previewTemplateSelecionado.imagemUrl}
+                                alt="Imagem do template"
+                                className={styles.whatsappPreviewImage}
+                              />
+                            ) : previewTemplateSelecionado?.possuiImagem ? (
+                              <div className={styles.whatsappPreviewImageFallback}>
+                                Imagem vinculada ao template
+                              </div>
+                            ) : null}
+
+                            {previewTemplateSelecionado?.titulo ? (
+                              <strong className={styles.whatsappPreviewTitle}>
+                                {previewTemplateSelecionado.titulo}
+                              </strong>
+                            ) : null}
 
                             <p className={styles.whatsappPreviewText}>
                               {previewTemplateSelecionado?.corpo || extrairBody(templateSelecionado.payload)}

@@ -431,8 +431,20 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
-    if (headerType === "TEXT" && headerText.trim().length > 60) {
-      setErro("O cabeçalho de texto deve ter no máximo 60 caracteres.");
+    if (
+      (headerType === "TEXT" || headerType === "IMAGE") &&
+      headerText.trim().length > 60
+    ) {
+      setErro(
+        headerType === "IMAGE"
+          ? "O título abaixo da imagem deve ter no máximo 60 caracteres."
+          : "O cabeçalho de texto deve ter no máximo 60 caracteres."
+      );
+      return;
+    }
+
+    if (headerType === "IMAGE" && /\{\{\d+\}\}/.test(headerText)) {
+      setErro("O título abaixo da imagem não deve usar variáveis.");
       return;
     }
 
@@ -471,6 +483,18 @@ export default function TemplatesWhatsAppPage() {
       exemplosObrigatorios.some((exemplo) => !exemplo.trim())
     ) {
       setErro("Informe os exemplos das variáveis usadas no corpo do template.");
+      return;
+    }
+
+    const bodyTextFinal =
+      headerType === "IMAGE" && headerText.trim()
+        ? `*${headerText.trim()}*\n\n${bodyText.trim()}`
+        : bodyText.trim();
+
+    if (bodyTextFinal.length > 1024) {
+      setErro(
+        "O corpo do template, incluindo o título abaixo da imagem, deve ter no máximo 1024 caracteres."
+      );
       return;
     }
 
@@ -517,7 +541,7 @@ export default function TemplatesWhatsAppPage() {
 
       const bodyComponent: TemplateComponent = {
         type: "BODY",
-        text: bodyText.trim(),
+        text: bodyTextFinal,
       };
 
       const exemplos = exemplosBody.slice(0, totalVariaveisBody).filter(Boolean);
@@ -725,7 +749,9 @@ export default function TemplatesWhatsAppPage() {
                             <option value="MARKETING">MARKETING</option>
                           </select>
                           <p className={styles.help}>
-                            UTILIDADE para comunicações operacionais. MARKETING para campanhas e promoções.
+                            {headerType === "IMAGE"
+                              ? "Com imagem, o CRM sugere MARKETING. A mídia por si só não define a categoria: a Meta avalia o objetivo e o conteúdo e pode reclassificar o template."
+                              : "UTILIDADE para comunicações operacionais. MARKETING para campanhas e promoções."}
                           </p>
                         </div>
                       </div>
@@ -738,8 +764,12 @@ export default function TemplatesWhatsAppPage() {
                             const nextType = e.target.value as HeaderType;
                             setHeaderType(nextType);
 
-                            if (nextType !== "TEXT") {
+                            if (nextType === "NONE") {
                               setHeaderText("");
+                            }
+
+                            if (nextType === "IMAGE" && category !== "MARKETING") {
+                              setCategory("MARKETING");
                             }
 
                             if (nextType !== "IMAGE") {
@@ -823,6 +853,24 @@ export default function TemplatesWhatsAppPage() {
                               </p>
                             </div>
                           </div>
+                        </div>
+                      ) : null}
+
+                      {headerType === "IMAGE" ? (
+                        <div className={styles.field}>
+                          <label className={styles.label}>
+                            Título abaixo da imagem
+                          </label>
+                          <input
+                            value={headerText}
+                            onChange={(e) => setHeaderText(e.target.value)}
+                            className={styles.input}
+                            placeholder="Opcional. Ex.: Atualização importante"
+                            maxLength={60}
+                          />
+                          <p className={styles.help}>
+                            A Meta permite apenas um HEADER por template. Com imagem, este título é enviado como a primeira linha em negrito do corpo, aparecendo logo abaixo da imagem.
+                          </p>
                         </div>
                       ) : null}
 
@@ -938,7 +986,10 @@ export default function TemplatesWhatsAppPage() {
                                 alt="Imagem do cabeçalho"
                                 className={styles.whatsappPreviewImage}
                               />
-                            ) : headerType === "TEXT" && headerText.trim() ? (
+                            ) : null}
+
+                            {(headerType === "TEXT" || headerType === "IMAGE") &&
+                            headerText.trim() ? (
                               <strong className={styles.whatsappPreviewTitle}>
                                 {headerText.trim()}
                               </strong>
@@ -989,7 +1040,7 @@ export default function TemplatesWhatsAppPage() {
                             <p className={styles.previewText}>
                               {headerType === "IMAGE"
                                 ? headerImage
-                                  ? `Imagem: ${headerImage.name}`
+                                  ? `Imagem: ${headerImage.name}${headerText.trim() ? ` • título: ${headerText.trim()}` : ""}`
                                   : "Imagem não selecionada"
                                 : headerType === "TEXT"
                                 ? headerText.trim() || "Texto não informado"
