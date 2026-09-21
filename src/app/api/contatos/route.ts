@@ -107,6 +107,7 @@ export async function GET(request: Request) {
   const statusLead = searchParams.get("status_lead");
   const busca = searchParams.get("busca")?.trim() || "";
   const origem = searchParams.get("origem")?.trim() || "";
+  const interesse = searchParams.get("interesse")?.trim() || "";
   const listaId = searchParams.get("lista_id")?.trim() || "";
   const listaCompartilhadaId =
     searchParams.get("lista_compartilhada_id")?.trim() || "";
@@ -154,7 +155,7 @@ export async function GET(request: Request) {
   const apenasNovos = searchParams.get("contato_novo") === "true";
 
   const pagina = Math.max(1, Number(searchParams.get("pagina") || "1"));
-  const limiteMaximo = disparoAnteriorId ? 2000 : 500;
+  const limiteMaximo = disparoAnteriorId || listaId ? 2000 : 500;
 
   const limite = Math.max(
     1,
@@ -274,6 +275,7 @@ export async function GET(request: Request) {
         origem,
         campanha,
         campo_contato,
+        interesse,
         rastreamento_origem_id,
         rastreamento_campanha_id,
         rastreamento_link_id,
@@ -331,64 +333,24 @@ export async function GET(request: Request) {
       Boolean(integracaoWhatsappId) && filtrarPorIntegracao,
   };
 
-  let query;
-
-  if (listaCompartilhadaId) {
-    query = supabaseAdmin
-      .rpc(
-        "listar_contatos_operacionais_contexto_lista_compartilhada",
-        {
-          ...contextoArgs,
-          p_lista_id: listaCompartilhadaId,
-        },
-        { count: "exact" }
-      )
-      .select(camposContatosContexto);
-  } else if (disparoAnteriorId && listaId) {
-    query = supabaseAdmin
-      .rpc(
-        "listar_contatos_operacionais_contexto_disparo_anterior_lista",
-        {
-          ...contextoArgs,
-          p_campanha_id: disparoAnteriorId,
-          p_lista_id: listaId,
-        },
-        { count: "exact" }
-      )
-      .select(camposContatosContexto);
-  } else if (disparoAnteriorId) {
-    query = supabaseAdmin
-      .rpc(
-        "listar_contatos_operacionais_contexto_disparo_anterior",
-        {
-          ...contextoArgs,
-          p_campanha_id: disparoAnteriorId,
-        },
-        { count: "exact" }
-      )
-      .select(camposContatosContexto);
-  } else if (listaId) {
-    query = supabaseAdmin
-      .rpc(
-        "listar_contatos_operacionais_contexto_lista",
-        {
-          ...contextoArgs,
-          p_lista_id: listaId,
-        },
-        { count: "exact" }
-      )
-      .select(camposContatosContexto);
-  } else {
-    query = supabaseAdmin
-      .rpc(
-        "listar_contatos_operacionais_contexto",
-        contextoArgs,
-        { count: "exact" }
-      )
-      .select(camposContatosContexto);
-  }
+  let query = supabaseAdmin
+    .rpc(
+      "listar_contatos_operacionais_contexto_filtros_disparo",
+      {
+        ...contextoArgs,
+        p_lista_id: listaId || null,
+        p_lista_compartilhada_id: listaCompartilhadaId || null,
+        p_campanha_id: disparoAnteriorId || null,
+      },
+      { count: "exact" }
+    )
+    .select(camposContatosContexto);
 
   query = query.eq("empresa_id", usuario.empresa_id);
+
+  if (interesse) {
+    query = query.eq("interesse", interesse);
+  }
 
   if (classificacoes.length > 0) {
     query = query.in("classificacao", classificacoes);
@@ -451,7 +413,7 @@ export async function GET(request: Request) {
 
   if (busca) {
     query = query.or(
-      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,campo_contato.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
+      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,campo_contato.ilike.%${busca}%,interesse.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
     );
   }
 

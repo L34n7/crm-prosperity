@@ -176,12 +176,7 @@
 
 .searchFilters {
   display: grid;
-  grid-template-columns:
-    minmax(210px, 1.25fr)
-    minmax(145px, 0.75fr)
-    minmax(155px, 0.8fr)
-    minmax(170px, 0.9fr)
-    minmax(140px, 0.7fr);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
   min-width: 0;
   align-items: end;
@@ -2537,6 +2532,12 @@
   color: var(--crm-ui-private-content-hex-00826c);
   font-size: 11px;
   font-weight: 900;
+}
+
+.previewCategoryBadgeMarketing {
+  background: var(--crm-success-bg);
+  border-color: var(--crm-success-border);
+  color: var(--crm-success-text);
 }
 
 

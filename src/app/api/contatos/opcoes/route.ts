@@ -89,6 +89,7 @@ export async function GET() {
       ok: true,
       origens: Array.isArray(opcoes.origens) ? opcoes.origens : [],
       campanhas: Array.isArray(opcoes.campanhas) ? opcoes.campanhas : [],
+      interesses: Array.isArray(opcoes.interesses) ? opcoes.interesses : [],
       campanhas_rastreamento: Array.isArray(opcoes.campanhas_rastreamento)
         ? opcoes.campanhas_rastreamento
         : [],

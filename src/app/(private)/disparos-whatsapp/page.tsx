@@ -196,6 +196,7 @@ type ContatoOpcao = {
   email: string | null;
   campo_contato?: string | null;
   interesse?: string | null;
+  classificacao?: string | null;
   origem: string | null;
   campanha: string | null;
   origem_exibicao?: string | null;
@@ -226,10 +227,20 @@ type AtendenteFiltro = {
   nome: string;
 };
 
+type ListaContatoFiltro = {
+  id: string;
+  nome: string;
+  created_at?: string | null;
+  permitir_contatos_existentes?: boolean | null;
+};
+
 type FiltrosConsultaContatos = {
   busca?: string;
   origem?: string;
   campanha?: string;
+  listaId?: string;
+  interesse?: string;
+  classificacao?: string;
   disparoAnteriorId?: string;
   telefoneRevisar?: string;
   mensagemDataInicio?: string;
@@ -1215,29 +1226,6 @@ function formatarStatusIntegracao(status?: string | null) {
   }
 }
 
-function getTemplateStatusLabel(status: string | null | undefined) {
-  if (!status) return "Sem status";
-
-  switch (status.toUpperCase()) {
-    case "PENDING":
-      return "Em análise";
-    case "APPROVED":
-      return "Aprovado";
-    case "REJECTED":
-      return "Rejeitado";
-    case "PAUSED":
-      return "Pausado";
-    case "DISABLED":
-      return "Desativado";
-    case "ARCHIVED":
-      return "Arquivado";
-    case "ERRO_ENVIO":
-      return "Erro no envio";
-    default:
-      return status;
-  }
-}
-
 function formatarCategoriaMeta(categoria: string | null | undefined) {
   switch (String(categoria || "").toUpperCase()) {
     case "UTILITY":
@@ -1908,6 +1896,11 @@ export default function DisparosWhatsAppPage() {
 
   const [campanhaFiltro, setCampanhaFiltro] = useState("");
   const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
+  const [listaFiltro, setListaFiltro] = useState("");
+  const [listasDisponiveis, setListasDisponiveis] = useState<ListaContatoFiltro[]>([]);
+  const [interesseFiltro, setInteresseFiltro] = useState("");
+  const [interessesDisponiveis, setInteressesDisponiveis] = useState<string[]>([]);
+  const [classificacaoFiltro, setClassificacaoFiltro] = useState("");
   const [disparoAnteriorFiltroContatos, setDisparoAnteriorFiltroContatos] =
     useState("");
   const [telefoneRevisarFiltro, setTelefoneRevisarFiltro] = useState("");
@@ -2159,6 +2152,9 @@ export default function DisparosWhatsAppPage() {
         busca = "",
         origem = "",
         campanha = "",
+        listaId = "",
+        interesse = "",
+        classificacao = "",
         disparoAnteriorId = "",
         telefoneRevisar = "",
         mensagemDataInicio = "",
@@ -2185,6 +2181,18 @@ export default function DisparosWhatsAppPage() {
 
         if (campanha.trim()) {
           params.set("campanha", campanha.trim());
+        }
+
+        if (listaId.trim()) {
+          params.set("lista_id", listaId.trim());
+        }
+
+        if (interesse.trim()) {
+          params.set("interesse", interesse.trim());
+        }
+
+        if (classificacao.trim()) {
+          params.set("classificacoes", classificacao.trim());
         }
 
         if (disparoAnteriorId.trim()) {
@@ -2274,6 +2282,12 @@ export default function DisparosWhatsAppPage() {
       );
       setCampanhasDisponiveis(
         Array.isArray(json.campanhas) ? json.campanhas : []
+      );
+      setListasDisponiveis(
+        Array.isArray(json.listas) ? json.listas : []
+      );
+      setInteressesDisponiveis(
+        Array.isArray(json.interesses) ? json.interesses : []
       );
       setAtendentesDisponiveis(
         Array.isArray(json.atendentes) ? json.atendentes : []
@@ -2697,6 +2711,9 @@ export default function DisparosWhatsAppPage() {
         busca: buscaContato,
         origem: origemFiltro,
         campanha: campanhaFiltro,
+        listaId: listaFiltro,
+        interesse: interesseFiltro,
+        classificacao: classificacaoFiltro,
         disparoAnteriorId: disparoAnteriorFiltroContatos,
         telefoneRevisar: telefoneRevisarFiltro,
         mensagemDataInicio: mensagemDataInicioFiltro,
@@ -2713,6 +2730,9 @@ export default function DisparosWhatsAppPage() {
     buscaContato,
     origemFiltro,
     campanhaFiltro,
+    listaFiltro,
+    interesseFiltro,
+    classificacaoFiltro,
     disparoAnteriorFiltroContatos,
     telefoneRevisarFiltro,
     integracaoId,
@@ -3050,13 +3070,17 @@ export default function DisparosWhatsAppPage() {
     buscaContato ||
       origemFiltro ||
       campanhaFiltro ||
+      listaFiltro ||
+      interesseFiltro ||
+      classificacaoFiltro ||
       disparoAnteriorFiltroContatos ||
       telefoneRevisarFiltro ||
       quantidadeFiltrosAvancadosAtivos > 0
   );
 
   const filtrosServidorContatosAtivos = Boolean(
-    disparoAnteriorFiltroContatos ||
+    listaFiltro ||
+      disparoAnteriorFiltroContatos ||
       mensagemDataInicioFiltro ||
       mensagemDataFimFiltro ||
       ultimoAtendenteFiltro ||
@@ -3136,6 +3160,21 @@ export default function DisparosWhatsAppPage() {
         return false;
       }
 
+      if (
+        interesseFiltro &&
+        String(contato.interesse || "").trim() !== interesseFiltro
+      ) {
+        return false;
+      }
+
+      if (
+        classificacaoFiltro &&
+        String(contato.classificacao || "").trim().toLowerCase() !==
+          classificacaoFiltro
+      ) {
+        return false;
+      }
+
       if (telefoneRevisarFiltro === "true" && contato.telefone_revisar !== true) return false;
       if (telefoneRevisarFiltro === "false" && contato.telefone_revisar === true) return false;
 
@@ -3144,8 +3183,10 @@ export default function DisparosWhatsAppPage() {
     [
       buscaContato,
       campanhaFiltro,
+      classificacaoFiltro,
       filtrosServidorContatosAtivos,
       idsContatosConsulta,
+      interesseFiltro,
       obterHistoricoDisparosDoContato,
       origemFiltro,
       telefoneRevisarFiltro,
@@ -3368,6 +3409,9 @@ export default function DisparosWhatsAppPage() {
     if (buscaContato.trim()) params.set("busca", buscaContato.trim());
     if (origemFiltro.trim()) params.set("origem", origemFiltro.trim());
     if (campanhaFiltro.trim()) params.set("campanha", campanhaFiltro.trim());
+    if (listaFiltro.trim()) params.set("lista_id", listaFiltro.trim());
+    if (interesseFiltro.trim()) params.set("interesse", interesseFiltro.trim());
+    if (classificacaoFiltro.trim()) params.set("classificacoes", classificacaoFiltro.trim());
     if (disparoAnteriorFiltroContatos.trim()) params.set("disparo_anterior_id", disparoAnteriorFiltroContatos.trim());
     if (telefoneRevisarFiltro === "true" || telefoneRevisarFiltro === "false") params.set("telefone_revisar", telefoneRevisarFiltro);
     if (integracaoId) params.set("integracao_whatsapp_id", integracaoId);
@@ -4521,7 +4565,7 @@ export default function DisparosWhatsAppPage() {
 
                           {templates.map((item) => (
                             <option key={item.id} value={item.id}>
-                              {item.nome} - {getTemplateStatusLabel(item.status)}
+                              {item.nome} - ({formatarCategoriaMeta(item.categoria)})
                             </option>
                           ))}
                         </select>
@@ -4701,7 +4745,14 @@ export default function DisparosWhatsAppPage() {
                   <aside className={styles.previewSideCard}>
                     <div className={styles.previewTopLine}>
                       {templateSelecionado ? (
-                        <span className={styles.previewCategoryBadge}>
+                        <span
+                          className={`${styles.previewCategoryBadge} ${
+                            String(templateSelecionado.categoria || "").toUpperCase() ===
+                            "MARKETING"
+                              ? styles.previewCategoryBadgeMarketing
+                              : ""
+                          }`}
+                        >
                           {formatarCategoriaMeta(
                             templateSelecionado.categoria
                           )}
@@ -4796,6 +4847,9 @@ export default function DisparosWhatsAppPage() {
                           setBuscaContato("");
                           setOrigemFiltro("");
                           setCampanhaFiltro("");
+                          setListaFiltro("");
+                          setInteresseFiltro("");
+                          setClassificacaoFiltro("");
                           setDisparoAnteriorFiltroContatos("");
                           setTelefoneRevisarFiltro("");
                           setMensagemDataInicioFiltro("");
@@ -4866,6 +4920,58 @@ export default function DisparosWhatsAppPage() {
                         ) : (
                           <option value="">Nenhuma campanha encontrada</option>
                         )}
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Filtrar por lista</label>
+                      <select
+                        value={listaFiltro}
+                        onChange={(e) => {
+                          contatosConsultaAtivaRef.current += 1;
+                          setListaFiltro(e.target.value);
+                          setContatos([]);
+                          setTotalContatosDisponiveis(0);
+                          setLoadingContatos(true);
+                        }}
+                        className={styles.input}
+                      >
+                        <option value="">Todas as listas</option>
+                        {listasDisponiveis.map((lista) => (
+                          <option key={lista.id} value={lista.id}>
+                            {lista.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Interesse</label>
+                      <select
+                        value={interesseFiltro}
+                        onChange={(e) => setInteresseFiltro(e.target.value)}
+                        className={styles.input}
+                      >
+                        <option value="">Todos os interesses</option>
+                        {interessesDisponiveis.map((interesse) => (
+                          <option key={interesse} value={interesse}>
+                            {interesse}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Classificação</label>
+                      <select
+                        value={classificacaoFiltro}
+                        onChange={(e) => setClassificacaoFiltro(e.target.value)}
+                        className={styles.input}
+                      >
+                        <option value="">Todas as classificações</option>
+                        <option value="qualificado">Qualificado</option>
+                        <option value="perdido">Perdido</option>
+                        <option value="convertido">Convertido</option>
                       </select>
                     </div>
 
