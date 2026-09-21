@@ -621,8 +621,8 @@ const VARIAVEIS_FIXAS_SISTEMA = [
     descricao: "Número/telefone salvo no cadastro do contato.",
   },
   {
-    chave: "variavel_contato",
-    exemplo: "{{variavel_contato}}",
+    chave: "campo_contato",
+    exemplo: "{{campo_contato}}",
     descricao:
       "Valor individual salvo no campo do contato, como profissão, veículo, código, plano, unidade, produto, vendedor ou link.",
   },
@@ -1162,7 +1162,7 @@ function resolverVariavelContato(
     return contato.email || "";
   }
 
-  if (chave === "variavel_contato") {
+  if (chave === "campo_contato" || chave === "variavel_contato") {
     return contato.campo_contato || "";
   }
 

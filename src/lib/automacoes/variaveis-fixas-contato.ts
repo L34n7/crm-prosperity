@@ -26,7 +26,7 @@ type CampoContatoVariavelFixa =
   | "nome"
   | "email"
   | "telefone"
-  | "variavel_contato"
+  | "campo_contato"
   | "interesse"
   | "campanha"
   | "origem"
@@ -72,7 +72,8 @@ const VARIAVEIS_FIXAS_CONTATO_CAMPOS: Record<
   telefone_contato: "telefone",
   contato_telefone: "telefone",
 
-  variavel_contato: "variavel_contato",
+  campo_contato: "campo_contato",
+  variavel_contato: "campo_contato",
   interesse: "interesse",
 
   campanha: "campanha",
@@ -94,7 +95,7 @@ export const VARIAVEIS_FIXAS_CONTATO = [
   "nome_perfil_whatsapp",
   "email_contato",
   "numero_contato",
-  "variavel_contato",
+  "campo_contato",
   "interesse",
   "campanha",
   "origem",
@@ -106,13 +107,15 @@ export const VARIAVEIS_FIXAS_CONTATO = [
 ] as const;
 
 export function normalizarChaveVariavelFluxo(valor: unknown) {
-  return String(valor || "")
+  const chave = String(valor || "")
     .trim()
     .replace(/^\{\{\s*/, "")
     .replace(/\s*\}\}$/, "")
     .replace(/^variaveis\./, "")
     .trim()
     .toLowerCase();
+
+  return chave === "variavel_contato" ? "campo_contato" : chave;
 }
 
 export function chaveEhVariavelFixaContato(chave: unknown) {
@@ -281,7 +284,7 @@ export async function montarMapaVariaveisFixasContato(
     nome: String(contato?.nome || "").trim(),
     email: String(contato?.email || "").trim(),
     telefone: String(contato?.telefone || "").trim(),
-    variavel_contato: String(
+    campo_contato: String(
       contato?.campo_contato ?? contato?.variavel_contato ?? ""
     ).trim(),
     interesse: String(contato?.interesse || "").trim(),

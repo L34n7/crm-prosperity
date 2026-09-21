@@ -20,6 +20,7 @@ const VARIAVEIS_FIXAS = new Set([
   "email",
   "email_contato",
   "contato_email",
+  "campo_contato",
   "variavel_contato",
   "interesse",
   "campanha",

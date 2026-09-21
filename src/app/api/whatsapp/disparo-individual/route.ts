@@ -80,8 +80,10 @@ function extrairChaveNomeCaptura(valor: unknown) {
   return match?.[1] || "";
 }
 
-function ehVariavelContato(valor: unknown) {
-  return /^\{\{\s*variavel_contato\s*\}\}$/i.test(String(valor || "").trim());
+function ehCampoContato(valor: unknown) {
+  return /^\{\{\s*(campo_contato|variavel_contato)\s*\}\}$/i.test(
+    String(valor || "").trim()
+  );
 }
 
 function ehInteresseContato(valor: unknown) {
@@ -488,10 +490,10 @@ export async function POST(request: Request) {
     const nomeContato = contato?.nome || "Contato";
     const integracaoWhatsappId = conversa.integracao_whatsapp_id;
 
-  if (bodyParams.some((valor: string) => ehVariavelContato(valor))) {
+  if (bodyParams.some((valor: string) => ehCampoContato(valor))) {
     const valorCampoContato = String(contato?.campo_contato ?? "").trim();
     bodyParams = bodyParams.map((valor: string) =>
-      ehVariavelContato(valor) ? valorCampoContato : valor
+      ehCampoContato(valor) ? valorCampoContato : valor
     );
   }
 

@@ -116,10 +116,11 @@ async function resolverVariaveisContatoNoEnvio(params: {
   variaveis: string[];
 }) {
   const config = obterVariaveisConfigCampanha(params.campanha);
-  const precisaVariavelContato = config.includes("variavel_contato");
+  const precisaCampoContato =
+    config.includes("campo_contato") || config.includes("variavel_contato");
   const precisaInteresse = config.includes("interesse");
 
-  if (!precisaVariavelContato && !precisaInteresse) {
+  if (!precisaCampoContato && !precisaInteresse) {
     return params.variaveis;
   }
 
@@ -145,7 +146,12 @@ async function resolverVariaveisContatoNoEnvio(params: {
   }
 
   return params.variaveis.map((valorAtual, index) => {
-    if (config[index] === "variavel_contato") return valorContato;
+    if (
+      config[index] === "campo_contato" ||
+      config[index] === "variavel_contato"
+    ) {
+      return valorContato;
+    }
     if (config[index] === "interesse") return interesse;
     return valorAtual;
   });
