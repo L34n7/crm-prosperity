@@ -160,6 +160,12 @@ function montarComponenteHeaderMidiaSincronizada(
     );
   }
 
+  if (/^https:\/\/scontent\.whatsapp\.net\//i.test(link)) {
+    throw new Error(
+      "A imagem deste template ainda usa uma URL temporária da Meta. Sincronize o template novamente para armazenar a mídia permanente antes de disparar."
+    );
+  }
+
   const tipo = formato.toLowerCase() as
     | "image"
     | "video"

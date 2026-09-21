@@ -16,6 +16,125 @@ type UsuarioSistema = {
   status: "ativo" | "inativo" | "bloqueado";
 };
 
+const TEMPLATE_MEDIA_BUCKET = "midias";
+const TEMPLATE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+function extensaoImagemPorMime(mimeType: string) {
+  const mime = String(mimeType || "").split(";")[0].trim().toLowerCase();
+
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  return "jpg";
+}
+
+async function armazenarImagemTemplateSincronizado(params: {
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
+  empresaId: string;
+  integracaoId: string;
+  metaTemplateId: string;
+  components: any[];
+}) {
+  const components = JSON.parse(JSON.stringify(params.components || [])) as any[];
+  const header = components.find(
+    (item) =>
+      String(item?.type || "").toUpperCase() === "HEADER" &&
+      String(item?.format || "").toUpperCase() === "IMAGE"
+  );
+
+  if (!header) {
+    return { components, armazenada: false };
+  }
+
+  const handles = Array.isArray(header?.example?.header_handle)
+    ? header.example.header_handle
+    : [];
+  const origem =
+    handles
+      .map((item: unknown) => String(item || "").trim())
+      .find((item: string) => /^https?:\/\//i.test(item)) || "";
+
+  if (!origem) {
+    return { components, armazenada: false };
+  }
+
+  const resposta = await fetch(origem, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "image/*",
+    },
+  });
+
+  if (!resposta.ok) {
+    throw new Error(
+      `Não foi possível baixar a imagem do template na Meta (HTTP ${resposta.status}).`
+    );
+  }
+
+  const contentType = String(
+    resposta.headers.get("content-type") || "image/jpeg"
+  )
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+
+  if (!contentType.startsWith("image/")) {
+    throw new Error("A mídia retornada pela Meta não é uma imagem válida.");
+  }
+
+  const arquivo = new Uint8Array(await resposta.arrayBuffer());
+
+  if (arquivo.byteLength <= 0) {
+    throw new Error("A imagem retornada pela Meta está vazia.");
+  }
+
+  if (arquivo.byteLength > TEMPLATE_IMAGE_MAX_BYTES) {
+    throw new Error("A imagem do template excede o limite de 5 MB.");
+  }
+
+  const extensao = extensaoImagemPorMime(contentType);
+  const caminho = [
+    "whatsapp-templates",
+    params.empresaId,
+    params.integracaoId,
+    `${params.metaTemplateId}.${extensao}`,
+  ].join("/");
+
+  const { error: uploadError } = await params.supabaseAdmin.storage
+    .from(TEMPLATE_MEDIA_BUCKET)
+    .upload(caminho, arquivo, {
+      contentType,
+      upsert: true,
+      cacheControl: "3600",
+    });
+
+  if (uploadError) {
+    throw new Error(
+      `Não foi possível armazenar a imagem do template: ${uploadError.message}`
+    );
+  }
+
+  const { data: publicUrlData } = params.supabaseAdmin.storage
+    .from(TEMPLATE_MEDIA_BUCKET)
+    .getPublicUrl(caminho);
+
+  const publicUrl = String(publicUrlData?.publicUrl || "").trim();
+
+  if (!publicUrl) {
+    throw new Error("Não foi possível gerar a URL permanente da imagem.");
+  }
+
+  header.example = {
+    ...(header.example || {}),
+    header_handle: [publicUrl],
+  };
+
+  return {
+    components,
+    armazenada: true,
+  };
+}
+
 async function getUsuarioLogado() {
   const supabase = await createClient();
 
@@ -168,6 +287,8 @@ export async function POST(req: NextRequest) {
 
     let inseridos = 0;
     let atualizados = 0;
+    let midiasArmazenadas = 0;
+    let falhasMidia = 0;
 
     for (const item of templates) {
       const metaTemplateId = String(item.id || "");
@@ -176,11 +297,41 @@ export async function POST(req: NextRequest) {
       const idioma = String(item.language || "pt_BR");
       const status = String(item.status || "desconhecido");
 
+      let components = Array.isArray(item.components)
+        ? item.components
+        : [];
+
+      try {
+        const cacheMidia = await armazenarImagemTemplateSincronizado({
+          supabaseAdmin,
+          empresaId: usuario.empresa_id,
+          integracaoId: integracao.id,
+          metaTemplateId,
+          components,
+        });
+
+        components = cacheMidia.components;
+
+        if (cacheMidia.armazenada) {
+          midiasArmazenadas += 1;
+        }
+      } catch (mediaError) {
+        falhasMidia += 1;
+        console.error("Erro ao armazenar mídia do template sincronizado:", {
+          template: nome,
+          idioma,
+          error:
+            mediaError instanceof Error
+              ? mediaError.message
+              : String(mediaError),
+        });
+      }
+
       const payload = {
         name: item.name ?? null,
         category: item.category ?? null,
         language: item.language ?? null,
-        components: Array.isArray(item.components) ? item.components : [],
+        components,
       };
 
       const resultadoSalvar = await salvarTemplateWhatsappLocalIdempotente({
@@ -228,6 +379,8 @@ export async function POST(req: NextRequest) {
       total_meta: templates.length,
       inseridos,
       atualizados,
+      midias_armazenadas: midiasArmazenadas,
+      falhas_midia: falhasMidia,
     });
   } catch (error) {
     console.error("Erro ao sincronizar templates:", error);
