@@ -97,39 +97,38 @@ export default function PaymentProviderModal({
                 <strong>Prosperity Pay</strong>
               </span>
               <span className={styles.providerDescription}>
-                Checkout da Prosperity Pay
+                Checkout principal do CRM Prosperity
               </span>
             </span>
             <span className={styles.providerAction}>
-              {loadingGateway === "prosperity_pay" ? "Abrindo..." : "Continuar"}
+              {loadingGateway === "prosperity_pay"
+                ? "Abrindo..."
+                : "Continuar com Prosperity Pay"}
             </span>
           </button>
 
-          <button
-            type="button"
-            className={styles.providerButton}
-            onClick={() => onSelect("atomo")}
-            disabled={busy}
-          >
-            <span className={`${styles.providerIcon} ${styles.atomoIcon}`}>A</span>
-            <span className={styles.providerContent}>
-              <span className={styles.providerTitleRow}>
-                <strong>Atomo</strong>
-              </span>
-              <span className={styles.providerDescription}>
-                Continuar pelo checkout atual da Atomo
-              </span>
+          <div className={styles.fallbackOption}>
+            <span>
+              Está com dificuldade para concluir pela Prosperity Pay?
             </span>
-            <span className={styles.providerAction}>
-              {loadingGateway === "atomo" ? "Abrindo..." : "Continuar"}
-            </span>
-          </button>
+            <button
+              type="button"
+              className={styles.fallbackLink}
+              onClick={() => onSelect("atomo")}
+              disabled={busy}
+            >
+              {loadingGateway === "atomo"
+                ? "Abrindo alternativa..."
+                : "Usar Átomo como alternativa"}
+            </button>
+          </div>
         </div>
 
         {error ? <p className={styles.error}>{error}</p> : null}
 
         <p className={styles.helper}>
-          A escolha altera apenas o checkout. O plano contratado continua o mesmo.
+          A Prosperity Pay é a forma principal de pagamento. A Átomo fica disponível
+          somente como alternativa de contingência.
         </p>
       </section>
     </div>
