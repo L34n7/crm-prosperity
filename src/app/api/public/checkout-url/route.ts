@@ -13,11 +13,11 @@ type ProsperityPayOferta = {
 };
 
 const PROSPERITY_PAY_BASICO_PADRAO_URL =
-  "https://prosperity-pay.vercel.app/checkout/plano-basic-be3817c7";
+  "https://prosperitypay.com.br/checkout/plano-basic-be3817c7";
 const PROSPERITY_PAY_BASICO_PADRAO_REFERENCIA = "plano-basic-be3817c7";
 
 const PROSPERITY_PAY_JV_TESTE_URL =
-  "https://prosperity-pay.vercel.app/checkout/248a0b141abf";
+  "https://prosperitypay.com.br/checkout/248a0b141abf";
 const PROSPERITY_PAY_JV_TESTE_REFERENCIA = "248a0b141abf";
 
 function obterAffiliateRef(metadata: unknown) {
@@ -229,7 +229,7 @@ async function obterCheckoutProsperityPay(
 
   const baseUrl = (
     process.env.PROSPERITY_PAY_CHECKOUT_BASE_URL ||
-    "https://prosperity-pay.vercel.app/checkout"
+    "https://prosperitypay.com.br/checkout"
   ).replace(/\/$/, "");
 
   return {
