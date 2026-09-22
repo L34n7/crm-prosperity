@@ -11,6 +11,7 @@ type ProsperityPayPayload = {
   event_id?: string;
   version?: string;
   event?:
+    | "payment.pending"
     | "payment.approved"
     | "payment.failed"
     | "payment.refunded"
@@ -25,6 +26,15 @@ type ProsperityPayPayload = {
     currency?: string;
     paid_at?: string | null;
     refunded_at?: string | null;
+    method?: string | null;
+    pix_code?: string | null;
+    pix_ticket_url?: string | null;
+  };
+  transaction?: {
+    pix?: {
+      code?: string | null;
+      ticket_url?: string | null;
+    };
   };
   order?: { id?: string };
   offer?: {
@@ -91,10 +101,18 @@ function normalizarPlanoRelacao(plano: any) {
 }
 
 function statusPagamento(event: string | undefined) {
+  if (event === "payment.pending") return "waiting_payment";
   if (event === "payment.approved") return "paid";
   if (event === "payment.refunded") return "refunded";
   if (event === "payment.chargeback") return "chargeback";
   if (event === "payment.failed") return "failed";
+  return null;
+}
+
+function metodoPagamento(payload: ProsperityPayPayload) {
+  const explicito = String(payload.payment?.method || "").trim().toLowerCase();
+  if (explicito === "pix" || explicito === "card") return explicito;
+  if (String(payload.transaction?.pix?.code || "").trim()) return "pix";
   return null;
 }
 
@@ -430,6 +448,7 @@ async function salvarPagamento(
         evento: payload.event,
         transaction_id: transactionId(payload),
         status,
+        metodo: metodoPagamento(payload),
         valor: Math.round(Number(payload.payment?.amount_cents || 0)),
         customer_id: payload.customer?.id || null,
         customer_email: normalizarEmail(payload.customer?.email) || null,
@@ -714,6 +733,7 @@ export async function POST(request: Request) {
   }
 
   const supportedEvents = new Set([
+    "payment.pending",
     "payment.approved",
     "payment.failed",
     "payment.refunded",
