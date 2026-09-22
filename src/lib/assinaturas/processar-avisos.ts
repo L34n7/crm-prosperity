@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { sendAssinaturaAvisoEmail, type TipoAvisoAssinatura } from "@/lib/email/send-assinatura-aviso-email";\nimport { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
+import { sendAssinaturaAvisoEmail, type TipoAvisoAssinatura } from "@/lib/email/send-assinatura-aviso-email";
+import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
 
 const supabase = getSupabaseAdmin();
 const COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
