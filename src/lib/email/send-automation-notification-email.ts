@@ -117,14 +117,14 @@ export async function sendAutomationNotificationEmail({
       to: destinatarios,
       subject: `${tituloPrincipal} • ${titulo || "Nova notificação"}`,
       html: `
-        <div style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+        <div style="margin:0;padding:0;background:#eef4f2;font-family:Arial,Helvetica,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef4f2;padding:32px 16px;">
             <tr>
               <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 18px 45px rgba(15,23,42,0.10);">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #dce7e4;box-shadow:0 18px 45px rgba(7,19,26,0.10);">
                   
                   <tr>
-                    <td style="background:linear-gradient(135deg,#0f509a,#0f172a);padding:28px 32px;color:#ffffff;">
+                    <td style="background:linear-gradient(135deg,#20b486,#17322f);padding:28px 32px;color:#ffffff;">
                       <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                         <tr>
                           <td style="padding:0;vertical-align:middle;">
@@ -142,14 +142,14 @@ export async function sendAutomationNotificationEmail({
 
                   <tr>
                     <td style="padding:30px 32px 18px;">
-                      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:16px;padding:18px 20px;">
-                        <div style="font-size:12px;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.06em;">
+                      <div style="background:#edf8f4;border:1px solid #cde8df;border-radius:16px;padding:18px 20px;">
+                        <div style="font-size:12px;font-weight:800;color:#13825f;text-transform:uppercase;letter-spacing:0.06em;">
                           Alerta
                         </div>
-                        <h2 style="margin:8px 0 8px;color:#0f172a;font-size:20px;line-height:1.3;">
+                        <h2 style="margin:8px 0 8px;color:#17322f;font-size:20px;line-height:1.3;">
                           ${tituloSeguro}
                         </h2>
-                        <p style="margin:0;color:#475569;font-size:15px;line-height:1.6;">
+                        <p style="margin:0;color:#506862;font-size:15px;line-height:1.6;">
                           ${mensagemSegura}
                         </p>
                       </div>
@@ -160,8 +160,8 @@ export async function sendAutomationNotificationEmail({
                     <td style="padding:0 32px 0;">
                       <div
                         style="
-                          background:#f8fafc;
-                          border:1px solid #e2e8f0;
+                          background:#f6f9f8;
+                          border:1px solid #dce7e4;
                           border-radius:16px;
                           padding:18px 20px;
                         "
@@ -170,7 +170,7 @@ export async function sendAutomationNotificationEmail({
                           style="
                             font-size:12px;
                             font-weight:800;
-                            color:#0f509a;
+                            color:#20b486;
                             text-transform:uppercase;
                             letter-spacing:0.06em;
                             margin-bottom:12px;
@@ -181,11 +181,11 @@ export async function sendAutomationNotificationEmail({
 
                         <table width="100%" cellpadding="0" cellspacing="0">
                           <tr>
-                            <td style="width:120px;color:#64748b;font-size:13px;">
+                            <td style="width:120px;color:#68827d;font-size:13px;">
                               Nome
                             </td>
 
-                            <td style="color:#0f172a;font-size:14px;font-weight:700;">
+                            <td style="color:#17322f;font-size:14px;font-weight:700;">
                               ${contatoNomeSeguro}
                             </td>
                           </tr>
@@ -194,7 +194,7 @@ export async function sendAutomationNotificationEmail({
                             <td
                               style="
                                 width:120px;
-                                color:#64748b;
+                                color:#68827d;
                                 font-size:13px;
                                 padding-top:10px;
                               "
@@ -204,7 +204,7 @@ export async function sendAutomationNotificationEmail({
 
                             <td
                               style="
-                                color:#0f172a;
+                                color:#17322f;
                                 font-size:14px;
                                 font-weight:700;
                                 padding-top:10px;
@@ -217,7 +217,7 @@ export async function sendAutomationNotificationEmail({
                             <td
                               style="
                                 width:120px;
-                                color:#64748b;
+                                color:#68827d;
                                 font-size:13px;
                                 padding-top:10px;
                               "
@@ -227,7 +227,7 @@ export async function sendAutomationNotificationEmail({
 
                             <td
                               style="
-                                color:#0f172a;
+                                color:#17322f;
                                 font-size:14px;
                                 font-weight:700;
                                 padding-top:10px;
@@ -244,20 +244,20 @@ export async function sendAutomationNotificationEmail({
                     <td style="padding:8px 32px 0;">
                       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 10px;">
                         <tr>
-                          <td style="width:160px;color:#64748b;font-size:13px;">Fluxo</td>
-                          <td style="color:#0f172a;font-size:14px;font-weight:700;">${fluxoSeguro}</td>
+                          <td style="width:160px;color:#68827d;font-size:13px;">Fluxo</td>
+                          <td style="color:#17322f;font-size:14px;font-weight:700;">${fluxoSeguro}</td>
                         </tr>
                         <tr>
-                          <td style="width:160px;color:#64748b;font-size:13px;">Bloco</td>
-                          <td style="color:#0f172a;font-size:14px;font-weight:700;">${blocoSeguro}</td>
+                          <td style="width:160px;color:#68827d;font-size:13px;">Bloco</td>
+                          <td style="color:#17322f;font-size:14px;font-weight:700;">${blocoSeguro}</td>
                         </tr>
                         <tr>
-                          <td style="width:160px;color:#64748b;font-size:13px;">Tipo do bloco</td>
-                          <td style="color:#0f172a;font-size:14px;font-weight:700;">${tipoSeguro}</td>
+                          <td style="width:160px;color:#68827d;font-size:13px;">Tipo do bloco</td>
+                          <td style="color:#17322f;font-size:14px;font-weight:700;">${tipoSeguro}</td>
                         </tr>
                         <tr>
-                          <td style="width:160px;color:#64748b;font-size:13px;">Data e hora</td>
-                          <td style="color:#0f172a;font-size:14px;font-weight:700;">${dataSeguro}</td>
+                          <td style="width:160px;color:#68827d;font-size:13px;">Data e hora</td>
+                          <td style="color:#17322f;font-size:14px;font-weight:700;">${dataSeguro}</td>
                         </tr>
                       </table>
                     </td>
@@ -267,20 +267,20 @@ export async function sendAutomationNotificationEmail({
                     <td style="padding:26px 32px 34px;">
                       <a
                         href="${linkConversa}"
-                        style="display:inline-block;background:#0f509a;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:999px;font-size:14px;font-weight:800;"
+                        style="display:inline-block;background:#20b486;color:#ffffff;text-decoration:none;padding:14px 24px;border-radius:999px;font-size:14px;font-weight:800;"
                       >
                         Abrir conversa no CRM
                       </a>
 
-                      <p style="margin:18px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
+                      <p style="margin:18px 0 0;color:#68827d;font-size:13px;line-height:1.6;">
                         Ao clicar no botão, você será direcionado para a conversa relacionada a essa notificação.
                       </p>
                     </td>
                   </tr>
 
                   <tr>
-                    <td style="background:#f8fafc;padding:18px 32px;border-top:1px solid #e2e8f0;">
-                      <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
+                    <td style="background:#f6f9f8;padding:18px 32px;border-top:1px solid #dce7e4;">
+                      <p style="margin:0;color:#8ca09b;font-size:12px;line-height:1.5;">
                         Este email foi enviado automaticamente pelo CRM Prosperity porque um bloco do fluxo foi configurado para gerar notificação.
                       </p>
                     </td>
