@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
-import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import styles from "./whatsapp-perfil.module.css";
 
 type Integracao = {
@@ -87,9 +86,8 @@ const categorias = [
   { value: "OTHER", label: "Outro" },
 ];
 
-const CONTRATAR_NUMERO_ADICIONAL_URL = montarWhatsappUrl(
-  "Olá! Quero contratar um número adicional de WhatsApp no CRM Prosperity pelo valor recorrente de R$ 60 por mês."
-);
+const CONTRATAR_NUMERO_ADICIONAL_URL =
+  "https://prosperity-pay.vercel.app/checkout/52ba63312a9e";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -1784,8 +1782,8 @@ export default function WhatsappPerfilPage() {
           </div>
 
           <p className={styles.upgradeCheckoutNotice}>
-            A contratação online estará disponível em breve. Por enquanto,
-            solicite a ativação pelo nosso WhatsApp.
+            Finalize a contratação online pela Prosperity Pay. Após a confirmação
+            do pagamento, continue a configuração do novo número no CRM.
           </p>
 
           <div className={styles.modalActions}>
