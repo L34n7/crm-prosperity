@@ -310,6 +310,259 @@
   box-shadow: 0 18px 34px var(--crm-ui-private-shadow-rgb-15-118-110-0-28);
 }
 
+
+.essentialCard {
+  border-color: var(--crm-primary-border);
+  background:
+    linear-gradient(145deg, var(--crm-primary-soft), transparent 42%),
+    var(--crm-surface);
+}
+
+.essentialPrice {
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.essentialPrice small {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: line-through;
+}
+
+.essentialPrice strong {
+  color: var(--crm-primary-text);
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.essentialBenefits {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  flex: 1;
+}
+
+.essentialBenefits li {
+  position: relative;
+  padding-left: 22px;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.essentialBenefits li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--crm-success-text);
+  font-weight: 900;
+}
+
+.paymentOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 8, 12, 0.76);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.paymentModal {
+  position: relative;
+  width: min(100%, 540px);
+  padding: 28px;
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.paymentClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.paymentClose:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.paymentEyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.paymentModal h2 {
+  margin: 0;
+  padding-right: 46px;
+  color: var(--crm-text-strong);
+  font-size: 27px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.paymentSubtitle {
+  margin: 12px 0 0;
+  color: var(--crm-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.paymentSubtitle strong {
+  color: var(--crm-text-strong);
+}
+
+.paymentDescription {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.prosperityPayButton {
+  width: 100%;
+  min-height: 84px;
+  margin-top: 22px;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, var(--crm-primary-soft), transparent 70%),
+    var(--crm-surface);
+  color: var(--crm-text-strong);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.prosperityPayButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--crm-shadow-md);
+}
+
+.prosperityPayButton:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.paymentProviderIcon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--crm-primary-strong), var(--crm-accent));
+  color: var(--crm-text-inverse);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.paymentProviderText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.paymentProviderText small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.paymentProviderText strong {
+  color: var(--crm-text-strong);
+  font-size: 17px;
+}
+
+.paymentProviderAction {
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.paymentFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  margin-top: 15px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.paymentFallback button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--crm-text);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.paymentFallback button:hover:not(:disabled) {
+  color: var(--crm-primary-text);
+}
+
+.paymentFallback button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.paymentHelper {
+  margin: 16px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 @media (max-width: 1080px) {
   .hero,
   .packagesGrid,
@@ -349,5 +602,32 @@
   .packageHeader h3,
   .planCard h3 {
     font-size: 26px;
+  }
+
+  .paymentOverlay {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .paymentModal {
+    padding: 24px 18px 20px;
+    border-radius: 22px;
+  }
+
+  .paymentModal h2 {
+    font-size: 23px;
+  }
+
+  .prosperityPayButton {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .paymentProviderIcon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .paymentProviderAction {
+    grid-column: 2;
   }
 }
