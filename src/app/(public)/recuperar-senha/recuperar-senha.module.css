@@ -4,9 +4,9 @@
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(circle at top left, var(--crm-ui-public-surface-rgb-37-99-235-0-18), transparent 34%),
-    radial-gradient(circle at bottom right, var(--crm-ui-public-surface-rgb-14-165-233-0-13), transparent 30%),
-    var(--crm-ui-public-surface-hex-f8fafc);
+    radial-gradient(circle at top left, var(--crm-ui-public-surface-rgb-32-180-134-0-14), transparent 34%),
+    radial-gradient(circle at bottom right, var(--crm-ui-public-surface-rgb-201-168-106-0-055), transparent 30%),
+    var(--crm-ui-public-surface-hex-07131a);
   padding: 24px;
 }
 
@@ -15,8 +15,8 @@
   max-width: 480px;
   background: var(--crm-ui-public-surface-hex-ffffff);
   border-radius: 28px;
-  border: 1px solid var(--crm-ui-public-border-hex-e2e8f0);
-  box-shadow: 0 24px 70px var(--crm-ui-public-shadow-rgb-15-23-42-0-1);
+  border: 1px solid var(--crm-ui-public-border-hex-dce7e4);
+  box-shadow: 0 24px 70px var(--crm-ui-public-shadow-rgb-0-0-0-0-32);
   padding: 34px;
 }
 
@@ -28,8 +28,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--crm-ui-public-surface-hex-eff6ff);
-  color: var(--crm-ui-public-content-hex-2563eb);
+  background: var(--crm-ui-public-surface-hex-edf8f4);
+  color: var(--crm-ui-public-content-hex-13825f);
 }
 
 .header {
@@ -41,13 +41,13 @@
   margin: 0;
   font-size: 30px;
   font-weight: 850;
-  color: var(--crm-ui-public-content-hex-0f172a);
+  color: var(--crm-ui-public-content-hex-17322f);
   letter-spacing: -0.04em;
 }
 
 .header p {
   margin: 10px 0 0;
-  color: var(--crm-ui-public-content-hex-475569);
+  color: var(--crm-ui-public-content-hex-506862);
   font-size: 15px;
   line-height: 1.6;
 }
@@ -62,7 +62,7 @@
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 750;
-  color: var(--crm-ui-public-content-hex-0f172a);
+  color: var(--crm-ui-public-content-hex-17322f);
 }
 
 .inputWrapper {
@@ -74,17 +74,17 @@
 .inputWrapper svg {
   position: absolute;
   left: 14px;
-  color: var(--crm-ui-public-content-hex-64748b);
+  color: var(--crm-ui-public-content-hex-68827d);
 }
 
 .inputWrapper input {
   width: 100%;
   height: 50px;
   border-radius: 15px;
-  border: 1px solid var(--crm-ui-public-border-hex-cbd5e1);
+  border: 1px solid var(--crm-ui-public-border-hex-d5e3de);
   padding: 0 14px 0 46px;
   font-size: 15px;
-  color: var(--crm-ui-public-content-hex-0f172a);
+  color: var(--crm-ui-public-content-hex-17322f);
   outline: none;
   box-sizing: border-box;
   transition:
@@ -93,8 +93,8 @@
 }
 
 .inputWrapper input:focus {
-  border-color: var(--crm-ui-public-border-hex-2563eb);
-  box-shadow: 0 0 0 4px var(--crm-ui-public-shadow-rgb-37-99-235-0-12);
+  border-color: var(--crm-ui-public-border-rgb-78-225-173-0-3);
+  box-shadow: 0 0 0 4px var(--crm-ui-public-shadow-rgb-11-132-96-0-25);
 }
 
 .inputHint,
@@ -104,7 +104,7 @@
 }
 
 .inputHint {
-  color: var(--crm-ui-public-content-hex-64748b);
+  color: var(--crm-ui-public-content-hex-68827d);
 }
 
 .inputHintError {
@@ -124,8 +124,8 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background: var(--crm-ui-public-surface-hex-eff6ff);
-  color: var(--crm-ui-public-content-hex-1d4ed8);
+  background: var(--crm-ui-public-surface-hex-edf8f4);
+  color: var(--crm-ui-public-content-hex-13825f);
 }
 
 .infoBox svg {
@@ -134,8 +134,8 @@
 }
 
 .successBox {
-  background: var(--crm-ui-public-surface-hex-f0fdf4);
-  color: var(--crm-ui-public-content-hex-166534);
+  background: var(--crm-ui-public-surface-hex-edf8f4);
+  color: var(--crm-ui-public-content-hex-13825f);
 }
 
 .errorBox {
@@ -147,7 +147,7 @@
   height: 52px;
   border: none;
   border-radius: 15px;
-  background: var(--crm-ui-public-surface-hex-0f172a);
+  background: var(--crm-ui-public-surface-hex-159b71);
   color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 15px;
   font-weight: 850;
@@ -160,7 +160,7 @@
 
 .submitButton:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: var(--crm-ui-public-surface-hex-020617);
+  background: var(--crm-ui-public-surface-hex-0d8666);
 }
 
 .submitButton:disabled {
@@ -173,7 +173,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--crm-ui-public-content-hex-2563eb);
+  color: var(--crm-ui-public-content-hex-13825f);
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
