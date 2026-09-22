@@ -173,13 +173,13 @@ export async function sendAppointmentCreatedEmail({
           }
         : {}),
       html: `
-        <div style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+        <div style="margin:0;padding:0;background:#eef4f2;font-family:Arial,Helvetica,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef4f2;padding:32px 16px;">
             <tr>
               <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #dce7e4;">
                   <tr>
-                    <td style="background:linear-gradient(135deg,#0f509a,#0f172a);padding:28px 32px;color:#ffffff;">
+                    <td style="background:linear-gradient(135deg,#20b486,#17322f);padding:28px 32px;color:#ffffff;">
                       <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                         <td style="padding:0;vertical-align:middle;">
                           <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">${empresaSeguro}</div>
@@ -195,28 +195,28 @@ export async function sendAppointmentCreatedEmail({
 
                   <tr>
                     <td style="padding:28px 30px;">
-                      <p style="margin:0;color:#334155;font-size:15px;line-height:1.6;">
+                      <p style="margin:0;color:#3f5752;font-size:15px;line-height:1.6;">
                         Ola, ${contatoSeguro}.
                       </p>
-                      <p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.6;">
+                      <p style="margin:10px 0 0;color:#3f5752;font-size:15px;line-height:1.6;">
                         ${textoConfirmacao} com <strong>${empresaSeguro}</strong>.
                       </p>
 
-                      <div style="margin-top:20px;overflow:hidden;border:1px solid #dbe4ee;border-radius:14px;">
+                      <div style="margin-top:20px;overflow:hidden;border:1px solid #d5e3de;border-radius:14px;">
                         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                           <tr>
-                            <td style="width:96px;background:#f8fafc;color:#64748b;font-size:13px;padding:16px;border-bottom:1px solid #e7edf5;">
+                            <td style="width:96px;background:#f6f9f8;color:#68827d;font-size:13px;padding:16px;border-bottom:1px solid #dce7e4;">
                               Data
                             </td>
-                            <td style="color:#0f172a;font-size:17px;font-weight:800;padding:16px;border-bottom:1px solid #e7edf5;">
+                            <td style="color:#17322f;font-size:17px;font-weight:800;padding:16px;border-bottom:1px solid #dce7e4;">
                               ${dataSeguro}
                             </td>
                           </tr>
                           <tr>
-                            <td style="width:96px;background:#f8fafc;color:#64748b;font-size:13px;padding:16px;">
+                            <td style="width:96px;background:#f6f9f8;color:#68827d;font-size:13px;padding:16px;">
                               Horario
                             </td>
-                            <td style="color:#0f172a;font-size:17px;font-weight:800;padding:16px;">
+                            <td style="color:#17322f;font-size:17px;font-weight:800;padding:16px;">
                               ${horaSeguro}
                             </td>
                           </tr>
@@ -225,7 +225,7 @@ export async function sendAppointmentCreatedEmail({
 
                       ${
                         conviteCalendario
-                          ? `<p style="display:inline-block;margin:18px 0 0;padding:9px 12px;color:#0f509a;background:#eef6ff;border:1px solid #cfe5ff;border-radius:999px;font-size:13px;font-weight:700;line-height:1.2;">
+                          ? `<p style="display:inline-block;margin:18px 0 0;padding:9px 12px;color:#20b486;background:#edf8f4;border:1px solid #cde8df;border-radius:999px;font-size:13px;font-weight:700;line-height:1.2;">
                               ${
                                 ehCancelamento
                                   ? "Atualizacao de calendario anexada"
@@ -235,15 +235,15 @@ export async function sendAppointmentCreatedEmail({
                           : ""
                       }
 
-                      <p style="margin:22px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
+                      <p style="margin:22px 0 0;color:#68827d;font-size:13px;line-height:1.6;">
                         ${textoAcao}
                       </p>
                     </td>
                   </tr>
 
                   <tr>
-                    <td style="background:#f8fafc;padding:16px 30px;border-top:1px solid #e2e8f0;">
-                      <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
+                    <td style="background:#f6f9f8;padding:16px 30px;border-top:1px solid #dce7e4;">
+                      <p style="margin:0;color:#8ca09b;font-size:12px;line-height:1.5;">
                         Este email foi enviado automaticamente porque ${rodapeMotivo} no CRM Prosperity.
                       </p>
                     </td>
