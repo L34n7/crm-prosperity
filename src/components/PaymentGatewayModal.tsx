@@ -153,39 +153,39 @@ export default function PaymentGatewayModal({
             onClick={() => abrirCheckout("prosperity_pay")}
             disabled={Boolean(loadingGateway)}
           >
-            <span className={styles.gatewayBadge}>Prosperity Pay</span>
+            <span className={styles.gatewayBadge}>Recomendado</span>
             <strong>Prosperity Pay</strong>
-            <small>Checkout direto pelo Prosperity Pay.</small>
+            <small>Continue pelo checkout principal da Prosperity Pay.</small>
             <span className={styles.gatewayAction}>
               {loadingGateway === "prosperity_pay"
                 ? "Preparando checkout..."
-                : "Pagar com Prosperity Pay ↗"}
+                : "Continuar com Prosperity Pay ↗"}
             </span>
           </button>
 
-          <button
-            type="button"
-            className={styles.gatewayCard}
-            onClick={() => abrirCheckout("atomo")}
-            disabled={Boolean(loadingGateway)}
-          >
-            <span className={styles.gatewayBadge}>Átomo</span>
-            <strong>Átomo</strong>
-            <small>Checkout alternativo já utilizado pelo CRM Prosperity.</small>
-            <span className={styles.gatewayAction}>
-              {loadingGateway === "atomo"
-                ? "Preparando checkout..."
-                : "Pagar com Átomo ↗"}
+          <div className={styles.fallbackOption}>
+            <span>
+              Está com dificuldade para concluir pela Prosperity Pay?
             </span>
-          </button>
+            <button
+              type="button"
+              className={styles.fallbackLink}
+              onClick={() => abrirCheckout("atomo")}
+              disabled={Boolean(loadingGateway)}
+            >
+              {loadingGateway === "atomo"
+                ? "Abrindo alternativa..."
+                : "Usar Átomo como alternativa"}
+            </button>
+          </div>
         </div>
 
         {message && <p className={styles.successMessage}>{message}</p>}
         {error && <p className={styles.errorMessage}>{error}</p>}
 
         <p className={styles.footnote}>
-          Se ocorrer qualquer eventualidade no checkout, volte para esta aba do
-          CRM e escolha o outro gateway de pagamento.
+          A Prosperity Pay é o checkout principal. A Átomo permanece disponível
+          apenas como alternativa de contingência.
         </p>
       </div>
     </div>,
