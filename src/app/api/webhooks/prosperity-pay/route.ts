@@ -96,6 +96,30 @@ function normalizarEmail(value: string | null | undefined) {
   return String(value || "").trim().toLowerCase();
 }
 
+function metadataObjeto(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
+
+function affiliateRefPersistido(payload: ProsperityPayPayload, metadata: unknown) {
+  const candidates = [
+    metadataObjeto(metadata).affiliate_ref,
+    payload.affiliate?.reference,
+    payload.tracking?.value,
+  ];
+
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+
+    if (value && value.length <= 128 && /^[A-Za-z0-9_-]+$/.test(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
 function normalizarPlanoRelacao(plano: any) {
   return Array.isArray(plano) ? plano[0] ?? null : plano ?? null;
 }
@@ -677,7 +701,19 @@ async function processarAprovado(
       empresa_id: empresa.id,
       plano_slug: plano.slug,
       tipo_oferta: tipoOferta(oferta),
-      metadata_json: payload,
+      metadata_json: {
+        ...metadataObjeto(lead.metadata_json),
+        prosperity_pay_last_event: payload,
+        ...(affiliateRefPersistido(payload, lead.metadata_json)
+          ? {
+              affiliate_ref: affiliateRefPersistido(
+                payload,
+                lead.metadata_json
+              ),
+              affiliate_source: "prosperity_pay",
+            }
+          : {}),
+      },
       updated_at: new Date().toISOString(),
     })
     .eq("id", lead.id);
