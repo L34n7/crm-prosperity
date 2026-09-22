@@ -190,7 +190,7 @@ export async function sendAgendaAutomationEmail(
         <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
           <tr><td align="center">
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#fff;border:1px solid #dce7e4;border-radius:20px;overflow:hidden;box-shadow:0 18px 45px rgba(7,19,26,.10);">
-              <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#20b486,#17322f);color:#fff;">
+              <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#20b486,#07131a);color:#fff;">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                   <td style="padding:0;vertical-align:middle;">
                     <div style="font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;opacity:.86;">CRM Prosperity · ${escapeHtml(company)}</div>
