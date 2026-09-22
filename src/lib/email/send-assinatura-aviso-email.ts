@@ -53,7 +53,7 @@ export async function sendAssinaturaAvisoEmail(params: {
     pre_vencimento: {
       etiqueta: "Aviso de renovação",
       titulo: "Sua mensalidade vence em 3 dias",
-      cor: "#0f509a",
+      cor: "#20b486",
       texto: "Este é um aviso para você se programar e renovar sua assinatura antes da data de vencimento.",
       acao: "Antecipar pagamento",
       pontos: [
@@ -67,7 +67,7 @@ export async function sendAssinaturaAvisoEmail(params: {
     vencida: {
       etiqueta: "Mensalidade em aberto",
       titulo: "Sua assinatura está vencida",
-      cor: "#c26a00",
+      cor: "#c9a86a",
       texto: "A mensalidade não foi renovada até a data de vencimento e sua assinatura agora está com o status vencida.",
       acao: "Regularizar mensalidade",
       pontos: [
@@ -120,11 +120,11 @@ export async function sendAssinaturaAvisoEmail(params: {
       subject: `${conteudo.titulo} • CRM Prosperity`,
       text: [conteudo.titulo, conteudo.texto, "", "O que acontece:", pontosTexto].join("\n"),
       html: `
-        <div style="margin:0;padding:32px 16px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif">
+        <div style="margin:0;padding:32px 16px;background:#eef4f2;font-family:Arial,Helvetica,sans-serif">
           <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
             <tr><td align="center">
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:620px;background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,.10)">
-                <tr><td style="padding:30px 32px;background:linear-gradient(135deg,${conteudo.cor},#0f172a);color:#fff">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:620px;background:#fff;border:1px solid #dce7e4;border-radius:20px;overflow:hidden;box-shadow:0 18px 45px rgba(7,19,26,.10)">
+                <tr><td style="padding:30px 32px;background:linear-gradient(135deg,${conteudo.cor},#17322f);color:#fff">
                   <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                     <td style="padding:0;vertical-align:middle">
                       <div style="font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.85">CRM Prosperity · ${conteudo.etiqueta}</div>
@@ -133,16 +133,16 @@ export async function sendAssinaturaAvisoEmail(params: {
                     <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle"><img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none" /></td>
                   </tr></table>
                 </td></tr>
-                <tr><td style="padding:30px 32px;color:#334155;font-size:15px;line-height:1.65">
+                <tr><td style="padding:30px 32px;color:#3f5752;font-size:15px;line-height:1.65">
                   <p style="margin:0 0 14px">Olá, <strong>${nome}</strong>.</p>
                   <p style="margin:0">${escaparHtml(conteudo.texto)}</p>
-                  <div style="margin:22px 0;padding:19px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${conteudo.cor};border-radius:10px">
-                    <div style="margin:0 0 12px;color:#0f172a;font-size:15px;font-weight:800">Entenda o que acontece</div>
-                    <ul style="margin:0;padding-left:20px;color:#475569;font-size:14px;line-height:1.55">${pontosHtml}</ul>
+                  <div style="margin:22px 0;padding:19px 20px;background:#f6f9f8;border:1px solid #dce7e4;border-left:4px solid ${conteudo.cor};border-radius:10px">
+                    <div style="margin:0 0 12px;color:#17322f;font-size:15px;font-weight:800">Entenda o que acontece</div>
+                    <ul style="margin:0;padding-left:20px;color:#506862;font-size:14px;line-height:1.55">${pontosHtml}</ul>
                   </div>
                   <div style="text-align:center;margin-top:26px">${cta}</div>
                 </td></tr>
-                <tr><td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;line-height:1.5">Este é um aviso automático sobre sua assinatura do CRM Prosperity.</td></tr>
+                <tr><td style="padding:16px 32px;background:#f6f9f8;border-top:1px solid #dce7e4;color:#8ca09b;font-size:12px;line-height:1.5">Este é um aviso automático sobre sua assinatura do CRM Prosperity.</td></tr>
               </table>
             </td></tr>
           </table>
