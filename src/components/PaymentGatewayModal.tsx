@@ -25,8 +25,8 @@ type PaymentGatewayModalProps = {
 };
 
 const PROSPERITY_PAY_CHECKOUTS: Record<PlanoSlug, string> = {
-  basico: "https://prosperity-pay.vercel.app/checkout/be3817c7",
-  essencial: "https://prosperity-pay.vercel.app/checkout/c7074bf9e18e",
+  basico: "https://prosperitypay.com.br/checkout/plano-basic-be3817c7",
+  essencial: "https://prosperitypay.com.br/checkout/c7074bf9e18e",
 };
 
 function nomeGateway(gateway: GatewayPagamento) {
@@ -76,6 +76,7 @@ export default function PaymentGatewayModal({
         body: JSON.stringify({
           plano_slug: plano.slug,
           renovar_plano_atual: plano.renovarPlanoAtual,
+          gateway,
         }),
       });
 
@@ -87,8 +88,9 @@ export default function PaymentGatewayModal({
         return;
       }
 
-      const checkoutUrl =
-        gateway === "prosperity_pay"
+      const checkoutUrl = plano.renovarPlanoAtual
+        ? data.checkout_url
+        : gateway === "prosperity_pay"
           ? PROSPERITY_PAY_CHECKOUTS[plano.slug]
           : data.checkout_url;
 
