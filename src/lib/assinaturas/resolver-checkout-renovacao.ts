@@ -11,6 +11,7 @@ export type CheckoutRenovacaoResolvido = {
   ofertaReferencia: string | null;
   affiliateRef: string | null;
   valorOriginalCentavos: number | null;
+  valorRenovacaoCentavos: number | null;
   origemResolucao: string;
   motivoBloqueio: string | null;
 };
@@ -145,6 +146,8 @@ export async function resolverCheckoutRenovacao(params: {
       ofertaReferencia: String(fixo.offer_reference || "").trim() || null,
       affiliateRef: affiliate(fixo.affiliate_ref),
       valorOriginalCentavos: Number(fixo.original_amount_cents) || null,
+      valorRenovacaoCentavos:
+        Number(fixo.renewal_amount_cents || fixo.original_amount_cents) || null,
       origemResolucao: "metadata_preco_pendente",
       motivoBloqueio: "preco_original_sem_checkout_correspondente",
     };
@@ -161,6 +164,8 @@ export async function resolverCheckoutRenovacao(params: {
       ofertaReferencia: String(fixo.offer_reference || "").trim() || null,
       affiliateRef: ref,
       valorOriginalCentavos: Number(fixo.original_amount_cents) || null,
+      valorRenovacaoCentavos:
+        Number(fixo.renewal_amount_cents || fixo.original_amount_cents) || null,
       origemResolucao: "metadata_empresa",
       motivoBloqueio: null,
     };
@@ -194,6 +199,7 @@ export async function resolverCheckoutRenovacao(params: {
       ofertaReferencia: null,
       affiliateRef: null,
       valorOriginalCentavos: null,
+      valorRenovacaoCentavos: null,
       origemResolucao: "fallback_sem_pagamento",
       motivoBloqueio: null,
     };
@@ -212,6 +218,7 @@ export async function resolverCheckoutRenovacao(params: {
       ofertaReferencia: hash,
       affiliateRef: null,
       valorOriginalCentavos: valor,
+      valorRenovacaoCentavos: valor,
       origemResolucao: "primeira_compra_atomo_afiliado",
       motivoBloqueio: null,
     };
@@ -236,6 +243,7 @@ export async function resolverCheckoutRenovacao(params: {
         ofertaReferencia: referencia,
         affiliateRef: refAfiliado,
         valorOriginalCentavos: valor,
+        valorRenovacaoCentavos: valor,
         origemResolucao: hash === referencia
           ? "primeira_compra_referencia_exata"
           : "primeira_compra_plano_valor",
@@ -252,6 +260,7 @@ export async function resolverCheckoutRenovacao(params: {
     ofertaReferencia: hash || null,
     affiliateRef: refAfiliado,
     valorOriginalCentavos: valor,
+    valorRenovacaoCentavos: valor,
     origemResolucao: "fallback_checkout_legado",
     motivoBloqueio: null,
   };
