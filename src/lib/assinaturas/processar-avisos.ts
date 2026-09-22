@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { sendAssinaturaAvisoEmail, type TipoAvisoAssinatura } from "@/lib/email/send-assinatura-aviso-email";
+import { sendAssinaturaAvisoEmail, type TipoAvisoAssinatura } from "@/lib/email/send-assinatura-aviso-email";\nimport { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
 
 const supabase = getSupabaseAdmin();
 const COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000;
@@ -57,7 +57,32 @@ export async function processarAvisosAssinatura(agora = new Date()) {
       const { data: reserva, error: reservaErro } = await supabase.from("assinatura_avisos_email").insert({ empresa_id: empresa.id, tipo, vencimento_em: vencimento.toISOString(), tentativa, destinatario: emails.join(", ") }).select("id").maybeSingle();
       if (reservaErro || !reserva) { resultado.ignorados += 1; continue; }
       const plano = Array.isArray(empresa.planos) ? empresa.planos[0] : empresa.planos;
-      const enviado = await sendAssinaturaAvisoEmail({ to: emails, nome: String(empresa.nome_fantasia || empresa.razao_social || "Cliente"), vencimentoEm: vencimento.toISOString(), tipo, checkoutUrl: checkoutUrl(plano?.slug || null) });
+      let linkRenovacao = checkoutUrl(plano?.slug || null);
+
+      try {
+        const renovacao = await resolverCheckoutRenovacao({
+          empresaId: empresa.id,
+          planoSlugFallback: plano?.slug || null,
+        });
+
+        linkRenovacao = renovacao.motivoBloqueio
+          ? null
+          : renovacao.checkoutUrl || linkRenovacao;
+      } catch (erroCheckout) {
+        console.error(
+          "[ASSINATURA_AVISOS] Erro ao resolver checkout de renovação",
+          empresa.id,
+          erroCheckout
+        );
+      }
+
+      const enviado = await sendAssinaturaAvisoEmail({
+        to: emails,
+        nome: String(empresa.nome_fantasia || empresa.razao_social || "Cliente"),
+        vencimentoEm: vencimento.toISOString(),
+        tipo,
+        checkoutUrl: linkRenovacao,
+      });
       if (!enviado) { await supabase.from("assinatura_avisos_email").delete().eq("id", reserva.id); resultado.erros += 1; continue; }
       await supabase.from("assinatura_avisos_email").update({ enviado_em: agora.toISOString(), updated_at: agora.toISOString() }).eq("id", reserva.id);
       resultado.enviados += 1;
