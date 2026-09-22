@@ -95,13 +95,13 @@ export async function sendAppointmentReminderEmail({
         "Para remarcar ou cancelar, responda pelo mesmo canal em que realizou o agendamento.",
       ].join("\n"),
       html: `
-        <div style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+        <div style="margin:0;padding:0;background:#eef4f2;font-family:Arial,Helvetica,sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef4f2;padding:32px 16px;">
             <tr>
               <td align="center">
-                <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #dce7e4;">
                   <tr>
-                    <td style="background:#0f509a;padding:26px 30px;color:#ffffff;">
+                    <td style="background:#20b486;padding:26px 30px;color:#ffffff;">
                       <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">
                         ${empresaSeguro}
                       </div>
@@ -116,43 +116,43 @@ export async function sendAppointmentReminderEmail({
 
                   <tr>
                     <td style="padding:28px 30px;">
-                      <p style="margin:0;color:#334155;font-size:15px;line-height:1.6;">
+                      <p style="margin:0;color:#3f5752;font-size:15px;line-height:1.6;">
                         Ola, ${contatoSeguro}.
                       </p>
-                      <p style="margin:10px 0 0;color:#334155;font-size:15px;line-height:1.6;">
+                      <p style="margin:10px 0 0;color:#3f5752;font-size:15px;line-height:1.6;">
                         Este e um lembrete do seu agendamento com <strong>${empresaSeguro}</strong>.
                       </p>
 
-                      <div style="margin-top:20px;overflow:hidden;border:1px solid #dbe4ee;border-radius:14px;">
+                      <div style="margin-top:20px;overflow:hidden;border:1px solid #d5e3de;border-radius:14px;">
                         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
                           <tr>
-                            <td style="width:96px;background:#f8fafc;color:#64748b;font-size:13px;padding:16px;border-bottom:1px solid #e7edf5;">
+                            <td style="width:96px;background:#f6f9f8;color:#68827d;font-size:13px;padding:16px;border-bottom:1px solid #dce7e4;">
                               Data
                             </td>
-                            <td style="color:#0f172a;font-size:17px;font-weight:800;padding:16px;border-bottom:1px solid #e7edf5;">
+                            <td style="color:#17322f;font-size:17px;font-weight:800;padding:16px;border-bottom:1px solid #dce7e4;">
                               ${dataSeguro}
                             </td>
                           </tr>
                           <tr>
-                            <td style="width:96px;background:#f8fafc;color:#64748b;font-size:13px;padding:16px;">
+                            <td style="width:96px;background:#f6f9f8;color:#68827d;font-size:13px;padding:16px;">
                               Horario
                             </td>
-                            <td style="color:#0f172a;font-size:17px;font-weight:800;padding:16px;">
+                            <td style="color:#17322f;font-size:17px;font-weight:800;padding:16px;">
                               ${horaSeguro}
                             </td>
                           </tr>
                         </table>
                       </div>
 
-                      <p style="margin:22px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
+                      <p style="margin:22px 0 0;color:#68827d;font-size:13px;line-height:1.6;">
                         Para remarcar ou cancelar, responda pelo mesmo canal em que realizou o agendamento.
                       </p>
                     </td>
                   </tr>
 
                   <tr>
-                    <td style="background:#f8fafc;padding:16px 30px;border-top:1px solid #e2e8f0;">
-                      <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
+                    <td style="background:#f6f9f8;padding:16px 30px;border-top:1px solid #dce7e4;">
+                      <p style="margin:0;color:#8ca09b;font-size:12px;line-height:1.5;">
                         Este email foi enviado automaticamente como lembrete de um agendamento criado no CRM Prosperity.
                       </p>
                     </td>
