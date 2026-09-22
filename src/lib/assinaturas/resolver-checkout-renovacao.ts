@@ -166,7 +166,7 @@ export async function resolverCheckoutRenovacao(params: {
     };
   }
 
-  const { data: pag, error: pagError } = await supabase
+  const { data: pagamentos, error: pagError } = await supabase
     .from("pagamentos")
     .select("lead_id,gateway,offer_hash,offer_preco,valor,paid_at,created_at,payload")
     .eq("empresa_id", params.empresaId)
@@ -174,10 +174,16 @@ export async function resolverCheckoutRenovacao(params: {
     .in("gateway", ["prosperity_pay", "atomo", "manual"])
     .order("paid_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(50);
 
   if (pagError) throw new Error("Erro ao buscar a primeira compra da empresa.");
+
+  const pag =
+    (pagamentos || []).find(
+      (item) => Number(item.offer_preco || item.valor || 0) > 0
+    ) ||
+    (pagamentos || [])[0] ||
+    null;
 
   if (!pag) {
     return {
