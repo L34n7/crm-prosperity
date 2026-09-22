@@ -6,7 +6,7 @@
   background:
     radial-gradient(circle at top left, var(--crm-ui-public-surface-rgb-32-180-134-0-14), transparent 40%),
     radial-gradient(circle at bottom right, var(--crm-ui-public-surface-rgb-201-168-106-0-055), transparent 35%),
-    linear-gradient(135deg, var(--crm-ui-public-surface-hex-159b71) 0%, var(--crm-ui-public-surface-hex-0a1820) 45%, var(--crm-ui-public-surface-hex-0d2028) 100%);
+    linear-gradient(135deg, var(--crm-ui-public-surface-hex-07131a) 0%, var(--crm-ui-public-surface-hex-0a1820) 45%, var(--crm-ui-public-surface-hex-0d2028) 100%);
 }
 
 .card {
@@ -132,7 +132,7 @@
   width: 100%;
   height: 9px;
   border-radius: 999px;
-  background: var(--crm-ui-public-surface-hex-e2e8f0);
+  background: var(--crm-ui-public-border-hex-dce7e4);
   overflow: hidden;
 }
 
