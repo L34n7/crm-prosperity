@@ -642,6 +642,77 @@ async function aplicarAssinatura(input: {
   }
 }
 
+async function buscarEmpresaRecarga(
+  payload: ProsperityPayPayload,
+  leadInicial: any
+) {
+  if (leadInicial?.empresa_id) {
+    const porId = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", leadInicial.empresa_id)
+      .maybeSingle();
+
+    if (porId.error) throw porId.error;
+    if (porId.data) return porId.data;
+  }
+
+  const email = normalizarEmail(
+    leadInicial?.email || payload.customer?.email
+  );
+
+  if (!email) return null;
+
+  const porEmail = await supabase
+    .from("empresas")
+    .select("*")
+    .ilike("email", email)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (porEmail.error) throw porEmail.error;
+  return porEmail.data ?? null;
+}
+
+async function aplicarRecargaTokensProsperityPay(input: {
+  empresaId: string;
+  oferta: any;
+  payload: ProsperityPayPayload;
+}) {
+  const referencia = transactionId(input.payload);
+
+  const { data, error } = await supabase.rpc("aplicar_pagamento_tokens_ia", {
+    p_empresa_id: input.empresaId,
+    p_referencia: referencia,
+    p_oferta_referencias: offerReferences(input.payload),
+    p_pago_em: pagoEm(input.payload),
+    p_metadata_json: {
+      gateway: "prosperity_pay",
+      origem: "webhook_prosperity_pay_recarga",
+      event_id: input.payload.event_id,
+      offer_reference:
+        input.payload.offer?.reference || input.payload.offer?.id || null,
+      offer_id: input.oferta?.id || null,
+      amount_cents: input.payload.payment?.amount_cents || 0,
+    },
+  });
+
+  if (error) {
+    throw new Error(
+      `Erro ao creditar pacote de tokens: ${error.message}`
+    );
+  }
+
+  if (!data?.aplicado && data?.motivo !== "pagamento_ja_processado") {
+    throw new Error(
+      `Pacote de tokens não aplicado: ${data?.motivo || "motivo desconhecido"}`
+    );
+  }
+
+  return data;
+}
+
 async function processarAprovado(
   payload: ProsperityPayPayload,
   leadInicial: any,
@@ -655,6 +726,41 @@ async function processarAprovado(
         offerReferences(payload).join(", ") || "sem referência"
       }.`
     );
+  }
+
+  if (oferta.tipo === "recarga") {
+    const empresa = await buscarEmpresaRecarga(payload, leadInicial);
+
+    if (!empresa) {
+      throw new Error(
+        "Não foi possível vincular a compra de tokens a uma empresa. Use no checkout o mesmo email cadastrado no CRM."
+      );
+    }
+
+    await aplicarRecargaTokensProsperityPay({
+      empresaId: empresa.id,
+      oferta,
+      payload,
+    });
+
+    const pagamentoUpdate = await supabase
+      .from("pagamentos")
+      .update({
+        empresa_id: empresa.id,
+        lead_id: leadInicial?.id ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", pagamentoId);
+
+    if (pagamentoUpdate.error) throw pagamentoUpdate.error;
+
+    return {
+      lead: leadInicial,
+      empresa,
+      oferta,
+      plano: null,
+      recarga: true,
+    };
   }
 
   const plano = normalizarPlanoRelacao(oferta.planos);
@@ -848,7 +954,9 @@ export async function POST(request: Request) {
         );
       }
 
-      lead = await criarLead(payload, oferta);
+      if (oferta.tipo !== "recarga") {
+        lead = await criarLead(payload, oferta);
+      }
     }
 
     const pagamento = await salvarPagamento(payload, lead?.id ?? null);
