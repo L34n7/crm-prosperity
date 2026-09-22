@@ -644,10 +644,12 @@ export async function POST(request: Request) {
 
         checkoutUrl = renovacao.checkoutUrl;
       } else {
-        checkoutUrl = await buscarCheckoutAtomoPorValor({
-          planoSlug: renovacao.planoSlug,
-          valorCentavos: renovacao.valorRenovacaoCentavos,
-        });
+        checkoutUrl =
+          renovacao.atomoCheckoutUrl ||
+          (await buscarCheckoutAtomoPorValor({
+            planoSlug: renovacao.planoSlug,
+            valorCentavos: renovacao.valorRenovacaoCentavos,
+          }));
 
         if (!checkoutUrl) {
           return NextResponse.json(
@@ -696,6 +698,8 @@ export async function POST(request: Request) {
         valor_original_centavos: renovacao.valorOriginalCentavos,
         valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
         origem_resolucao: renovacao.origemResolucao,
+        preserva_origem_comercial:
+          Boolean(renovacao.affiliateRef || renovacao.atomoCheckoutUrl),
       });
     }
 
