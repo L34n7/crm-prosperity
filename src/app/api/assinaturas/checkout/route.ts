@@ -5,6 +5,7 @@ import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-r
 
 type PlanoSlug = "basico" | "essencial";
 type TipoOfertaCheckout = "normal" | "vip" | "jv" | "af" | "free";
+type GatewayCheckout = "prosperity_pay" | "atomo";
 
 const supabase = getSupabaseAdmin();
 
@@ -44,6 +45,71 @@ function normalizarTipoOferta(valor: unknown): TipoOfertaCheckout {
   }
 
   return "normal";
+}
+
+function normalizarGatewayCheckout(valor: unknown): GatewayCheckout {
+  return valor === "prosperity_pay" ? "prosperity_pay" : "atomo";
+}
+
+async function buscarCheckoutAtomoPorValor(params: {
+  planoSlug: PlanoSlug;
+  valorCentavos: number | null;
+}) {
+  const { planoSlug, valorCentavos } = params;
+
+  if (valorCentavos === 13700 && planoSlug === "basico") {
+    return obterCheckoutNormalPorPlano("basico") || null;
+  }
+
+  if (valorCentavos === 26700 && planoSlug === "essencial") {
+    return obterCheckoutNormalPorPlano("essencial") || null;
+  }
+
+  if (valorCentavos === 6000 && planoSlug === "basico") {
+    return (
+      process.env.ATOMOPAY_CHECKOUT_URL_VIP ||
+      "https://go.atomopay.com.br/2psef"
+    );
+  }
+
+  if (valorCentavos === 500 && planoSlug === "basico") {
+    return process.env.ATOMOPAY_CHECKOUT_URL_JV || null;
+  }
+
+  if (!valorCentavos) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("ia_token_ofertas")
+    .select("referencia,metadata_json")
+    .eq("gateway", "atomo")
+    .eq("tipo", "mensalidade")
+    .eq("ativa", true)
+    .contains("metadata_json", {
+      plano_slug: planoSlug,
+      valor_oferta_centavos: valorCentavos,
+    })
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("Erro ao buscar checkout equivalente da Átomo.");
+  }
+
+  const metadata = extrairMetadataJson(data?.metadata_json);
+  const checkoutUrl = String(metadata.checkout_url || "").trim();
+
+  if (checkoutUrl) {
+    return checkoutUrl;
+  }
+
+  const referencia = String(data?.referencia || "").trim();
+
+  return referencia
+    ? `https://go.atomopay.com.br/${encodeURIComponent(referencia)}`
+    : null;
 }
 
 function obterCheckoutNormalPorPlano(planoSlug: PlanoSlug) {
@@ -543,6 +609,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const planoSlugSolicitado = normalizarPlanoSlug(body?.plano_slug);
     const renovarPlanoAtual = body?.renovar_plano_atual === true;
+    const gatewaySolicitado = normalizarGatewayCheckout(body?.gateway);
 
     if (!planoSlugSolicitado) {
       return NextResponse.json(
@@ -557,26 +624,52 @@ export async function POST(request: Request) {
         planoSlugFallback: planoSlugSolicitado,
       });
 
-      if (renovacao.motivoBloqueio) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "Ainda não existe um checkout com o mesmo valor da primeira compra para esta assinatura.",
-            motivo: renovacao.motivoBloqueio,
-            valor_original_centavos: renovacao.valorOriginalCentavos,
-            oferta_referencia: renovacao.ofertaReferencia,
-          },
-          { status: 409 }
-        );
+      let checkoutUrl: string | null = null;
+
+      if (gatewaySolicitado === "prosperity_pay") {
+        if (renovacao.motivoBloqueio) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                "Ainda não existe um checkout da Prosperity Pay com o valor correto para esta assinatura.",
+              motivo: renovacao.motivoBloqueio,
+              valor_original_centavos: renovacao.valorOriginalCentavos,
+              valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
+              oferta_referencia: renovacao.ofertaReferencia,
+            },
+            { status: 409 }
+          );
+        }
+
+        checkoutUrl = renovacao.checkoutUrl;
+      } else {
+        checkoutUrl = await buscarCheckoutAtomoPorValor({
+          planoSlug: renovacao.planoSlug,
+          valorCentavos: renovacao.valorRenovacaoCentavos,
+        });
+
+        if (!checkoutUrl) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                "A oferta equivalente na Átomo ainda não está disponível para este valor.",
+              gateway: "atomo",
+              valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
+            },
+            { status: 409 }
+          );
+        }
       }
 
-      if (!renovacao.checkoutUrl) {
+      if (!checkoutUrl) {
         return NextResponse.json(
           {
             ok: false,
             error: "Checkout de renovação não configurado.",
             plano_slug: renovacao.planoSlug,
+            gateway: gatewaySolicitado,
           },
           { status: 400 }
         );
@@ -594,13 +687,14 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         lead_id: leadId,
-        checkout_url: renovacao.checkoutUrl,
-        gateway: renovacao.gateway,
+        checkout_url: checkoutUrl,
+        gateway: gatewaySolicitado,
         plano_slug: renovacao.planoSlug,
         tipo_oferta: renovacao.tipoOferta,
         oferta_referencia: renovacao.ofertaReferencia,
         affiliate_ref: renovacao.affiliateRef,
         valor_original_centavos: renovacao.valorOriginalCentavos,
+        valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
         origem_resolucao: renovacao.origemResolucao,
       });
     }
