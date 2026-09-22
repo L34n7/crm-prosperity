@@ -179,7 +179,7 @@ export async function sendAppointmentCreatedEmail({
               <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #dce7e4;">
                   <tr>
-                    <td style="background:linear-gradient(135deg,#20b486,#17322f);padding:28px 32px;color:#ffffff;">
+                    <td style="background:linear-gradient(135deg,#20b486,#07131a);padding:28px 32px;color:#ffffff;">
                       <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                         <td style="padding:0;vertical-align:middle;">
                           <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">${empresaSeguro}</div>
