@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";\nimport { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
 
 type PlanoSlug = "basico" | "essencial";
 type TipoOfertaCheckout = "normal" | "vip" | "jv" | "af" | "free";
@@ -548,6 +548,60 @@ export async function POST(request: Request) {
         { ok: false, error: "Plano inválido para checkout." },
         { status: 400 }
       );
+    }
+
+    if (renovarPlanoAtual) {
+      const renovacao = await resolverCheckoutRenovacao({
+        empresaId: usuario.empresa_id,
+        planoSlugFallback: planoSlugSolicitado,
+      });
+
+      if (renovacao.motivoBloqueio) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Ainda não existe um checkout com o mesmo valor da primeira compra para esta assinatura.",
+            motivo: renovacao.motivoBloqueio,
+            valor_original_centavos: renovacao.valorOriginalCentavos,
+            oferta_referencia: renovacao.ofertaReferencia,
+          },
+          { status: 409 }
+        );
+      }
+
+      if (!renovacao.checkoutUrl) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Checkout de renovação não configurado.",
+            plano_slug: renovacao.planoSlug,
+          },
+          { status: 400 }
+        );
+      }
+
+      const leadId = await buscarOuCriarLeadCheckout({
+        planoSlug: renovacao.planoSlug,
+        tipoOferta: renovacao.tipoOferta,
+        empresaId: usuario.empresa_id,
+        usuarioId: usuario.id,
+        usuarioNome: usuario.nome,
+        usuarioEmail: usuario.email,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        lead_id: leadId,
+        checkout_url: renovacao.checkoutUrl,
+        gateway: renovacao.gateway,
+        plano_slug: renovacao.planoSlug,
+        tipo_oferta: renovacao.tipoOferta,
+        oferta_referencia: renovacao.ofertaReferencia,
+        affiliate_ref: renovacao.affiliateRef,
+        valor_original_centavos: renovacao.valorOriginalCentavos,
+        origem_resolucao: renovacao.origemResolucao,
+      });
     }
 
     const contextoCheckout = await resolverCheckoutEmpresa({
