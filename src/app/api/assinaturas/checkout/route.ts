@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";\nimport { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
 
 type PlanoSlug = "basico" | "essencial";
 type TipoOfertaCheckout = "normal" | "vip" | "jv" | "af" | "free";
