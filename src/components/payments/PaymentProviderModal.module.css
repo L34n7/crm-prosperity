@@ -150,6 +150,40 @@
   box-shadow: 0 8px 18px rgba(51, 65, 85, 0.16);
 }
 
+.fallbackOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  padding: 2px 2px 0;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.fallbackLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.fallbackLink:hover:not(:disabled) {
+  color: #047857;
+}
+
+.fallbackLink:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .providerContent {
   min-width: 0;
   display: flex;
