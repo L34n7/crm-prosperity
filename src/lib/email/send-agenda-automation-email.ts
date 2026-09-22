@@ -134,7 +134,7 @@ export async function sendAgendaAutomationEmail(
     params.agendaId
   )}&agendamento=${encodeURIComponent(params.appointmentId)}`;
   const locationRow = content.location
-    ? `<tr><td style="width:100px;background:#f8fafc;color:#64748b;padding:14px;border-top:1px solid #e2e8f0;">Local</td><td style="color:#0f172a;font-weight:700;padding:14px;border-top:1px solid #e2e8f0;">${escapeHtml(content.location)}</td></tr>`
+    ? `<tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;border-top:1px solid #dce7e4;">Local</td><td style="color:#17322f;font-weight:700;padding:14px;border-top:1px solid #dce7e4;">${escapeHtml(content.location)}</td></tr>`
     : "";
   const shouldAttachInvite = ["confirmacao", "lembrete"].includes(params.kind);
   const calendarInvite = shouldAttachInvite
@@ -186,11 +186,11 @@ export async function sendAgendaAutomationEmail(
       .filter(Boolean)
       .join("\n"),
     html: `
-      <div style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
+      <div style="margin:0;padding:0;background:#eef4f2;font-family:Arial,Helvetica,sans-serif;">
         <table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
           <tr><td align="center">
-            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;box-shadow:0 18px 45px rgba(15,23,42,.10);">
-              <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#0f509a,#0f172a);color:#fff;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#fff;border:1px solid #dce7e4;border-radius:20px;overflow:hidden;box-shadow:0 18px 45px rgba(7,19,26,.10);">
+              <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#20b486,#17322f);color:#fff;">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                   <td style="padding:0;vertical-align:middle;">
                     <div style="font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;opacity:.86;">CRM Prosperity · ${escapeHtml(company)}</div>
@@ -202,24 +202,24 @@ export async function sendAgendaAutomationEmail(
                   </td>
                 </tr></table>
               </td></tr>
-              <tr><td style="padding:28px 30px;color:#334155;font-size:15px;line-height:1.6;">
+              <tr><td style="padding:28px 30px;color:#3f5752;font-size:15px;line-height:1.6;">
                 <p style="margin:0;">Olá, ${escapeHtml(content.name)}.</p>
                 <p style="margin:10px 0 18px;">${escapeHtml(content.intro)}</p>
-                <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:13px;overflow:hidden;border-collapse:separate;border-spacing:0;">
-                  <tr><td style="width:100px;background:#f8fafc;color:#64748b;padding:14px;">Compromisso</td><td style="color:#0f172a;font-weight:800;padding:14px;">${escapeHtml(params.appointmentTitle)}</td></tr>
-                  <tr><td style="width:100px;background:#f8fafc;color:#64748b;padding:14px;border-top:1px solid #e2e8f0;">Data</td><td style="color:#0f172a;font-weight:700;padding:14px;border-top:1px solid #e2e8f0;">${escapeHtml(params.dateLabel)}</td></tr>
-                  <tr><td style="width:100px;background:#f8fafc;color:#64748b;padding:14px;border-top:1px solid #e2e8f0;">Horário</td><td style="color:#0f172a;font-weight:700;padding:14px;border-top:1px solid #e2e8f0;">${escapeHtml(params.timeLabel)}</td></tr>
+                <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #dce7e4;border-radius:13px;overflow:hidden;border-collapse:separate;border-spacing:0;">
+                  <tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;">Compromisso</td><td style="color:#17322f;font-weight:800;padding:14px;">${escapeHtml(params.appointmentTitle)}</td></tr>
+                  <tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;border-top:1px solid #dce7e4;">Data</td><td style="color:#17322f;font-weight:700;padding:14px;border-top:1px solid #dce7e4;">${escapeHtml(params.dateLabel)}</td></tr>
+                  <tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;border-top:1px solid #dce7e4;">Horário</td><td style="color:#17322f;font-weight:700;padding:14px;border-top:1px solid #dce7e4;">${escapeHtml(params.timeLabel)}</td></tr>
                   ${locationRow}
                 </table>
-                ${calendarInvite ? '<p style="display:inline-block;margin:18px 0 0;padding:9px 12px;color:#0f509a;background:#eef6ff;border:1px solid #cfe5ff;border-radius:999px;font-size:13px;font-weight:700;line-height:1.2;">Convite de calendário anexado</p>' : ""}
-                <p style="margin:20px 0 0;color:#64748b;font-size:13px;">${escapeHtml(content.closing)}</p>
+                ${calendarInvite ? '<p style="display:inline-block;margin:18px 0 0;padding:9px 12px;color:#20b486;background:#edf8f4;border:1px solid #cde8df;border-radius:999px;font-size:13px;font-weight:700;line-height:1.2;">Convite de calendário anexado</p>' : ""}
+                <p style="margin:20px 0 0;color:#68827d;font-size:13px;">${escapeHtml(content.closing)}</p>
                 ${
                   params.kind === "aviso_responsavel"
-                    ? `<p style="margin:20px 0 0;"><a href="${agendaUrl}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#0f509a;color:#fff;text-decoration:none;font-weight:800;font-size:13px;">Abrir calendário</a></p>`
+                    ? `<p style="margin:20px 0 0;"><a href="${agendaUrl}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#20b486;color:#fff;text-decoration:none;font-weight:800;font-size:13px;">Abrir calendário</a></p>`
                     : ""
                 }
               </td></tr>
-              <tr><td style="padding:16px 30px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:11px;">Mensagem automática enviada pelo CRM Prosperity.</td></tr>
+              <tr><td style="padding:16px 30px;background:#f6f9f8;border-top:1px solid #dce7e4;color:#8ca09b;font-size:11px;">Mensagem automática enviada pelo CRM Prosperity.</td></tr>
             </table>
           </td></tr>
         </table>
