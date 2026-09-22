@@ -260,6 +260,50 @@ function normalizarPlanoRelacao(plano: any) {
   return plano ?? null;
 }
 
+const EMERSON_AFFILIATE_REF = "EMERSONLUI8FA7B4AF2A44F7C3";
+
+const COPRODUCAO_EMERSON_ATOMO: Record<
+  string,
+  {
+    atomoCheckoutUrl: string;
+    prosperityPayOffer: string;
+    prosperityPayCheckoutUrl: string;
+  }
+> = {
+  ubtga: {
+    atomoCheckoutUrl: "https://go.atomopay.com.br/ubtga",
+    prosperityPayOffer: "plano-basic-be3817c7",
+    prosperityPayCheckoutUrl:
+      "https://prosperitypay.com.br/checkout/plano-basic-be3817c7",
+  },
+  uqddy: {
+    atomoCheckoutUrl: "https://go.atomopay.com.br/uqddy",
+    prosperityPayOffer: "c7074bf9e18e",
+    prosperityPayCheckoutUrl:
+      "https://prosperitypay.com.br/checkout/c7074bf9e18e",
+  },
+};
+
+function obterRenovacaoCoprodutorEmerson(referencia: string | null | undefined) {
+  const ref = String(referencia || "").trim();
+  const config = COPRODUCAO_EMERSON_ATOMO[ref];
+
+  if (!config) return null;
+
+  return {
+    source: "atomo_coproducer",
+    original_gateway: "atomo",
+    original_offer_reference: ref,
+    offer_reference: config.prosperityPayOffer,
+    checkout_url: config.prosperityPayCheckoutUrl,
+    atomo_checkout_url: config.atomoCheckoutUrl,
+    affiliate_ref: EMERSON_AFFILIATE_REF,
+    original_amount_cents: ref === "ubtga" ? 13700 : 26700,
+    renewal_amount_cents: ref === "ubtga" ? 13700 : 26700,
+    requires_price_match: false,
+  };
+}
+
 /* =========================
    OFERTA / PLANO
 ========================= */
@@ -585,6 +629,15 @@ async function aplicarAssinaturaPlano(params: {
       offer_hash: obterOfferHash(params.payload),
       offer_title: obterTituloOferta(params.payload),
       transaction_id: referencia,
+      ...(obterRenovacaoCoprodutorEmerson(
+        params.oferta?.referencia ?? obterOfferHash(params.payload)
+      )
+        ? {
+            renovacao_checkout: obterRenovacaoCoprodutorEmerson(
+              params.oferta?.referencia ?? obterOfferHash(params.payload)
+            ),
+          }
+        : {}),
     },
     assinatura_fluxos_pausados_em: null,
     updated_at: new Date().toISOString(),
@@ -802,11 +855,29 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
     });
   }
 
+  const renovacaoCoprodutor = obterRenovacaoCoprodutorEmerson(
+    planoPagamento.oferta?.referencia ?? obterOfferHash(payload)
+  );
+
   await supabase
     .from("pagamentos")
     .update({
       empresa_id: empresa.id,
       lead_id: lead?.id ?? null,
+      ...(renovacaoCoprodutor
+        ? {
+            payload: {
+              ...payload,
+              renewal_affiliate_ref: renovacaoCoprodutor.affiliate_ref,
+              renewal_atomo_checkout_url:
+                renovacaoCoprodutor.atomo_checkout_url,
+              renewal_prosperity_pay_offer:
+                renovacaoCoprodutor.offer_reference,
+              renewal_prosperity_pay_checkout_url:
+                `${renovacaoCoprodutor.checkout_url}?ref=${renovacaoCoprodutor.affiliate_ref}`,
+            },
+          }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("gateway", "atomo")
@@ -839,7 +910,26 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
         obterTipoOferta(payload, lead),
       atomopay_checkout_id: transactionId,
       atomopay_customer_id: payload.customer?.id ?? null,
-      metadata_json: payload,
+      metadata_json: {
+        ...(lead?.metadata_json &&
+        typeof lead.metadata_json === "object" &&
+        !Array.isArray(lead.metadata_json)
+          ? lead.metadata_json
+          : {}),
+        atomopay_last_event: payload,
+        ...(renovacaoCoprodutor
+          ? {
+              affiliate_ref: renovacaoCoprodutor.affiliate_ref,
+              affiliate_source: "atomo_coproducer",
+              renewal_origin_offer:
+                planoPagamento.oferta?.referencia ?? obterOfferHash(payload),
+              renewal_atomo_checkout_url:
+                renovacaoCoprodutor.atomo_checkout_url,
+              renewal_prosperity_pay_checkout_url:
+                `${renovacaoCoprodutor.checkout_url}?ref=${renovacaoCoprodutor.affiliate_ref}`,
+            }
+          : {}),
+      },
       updated_at: new Date().toISOString(),
     })
     .eq("id", lead.id);
