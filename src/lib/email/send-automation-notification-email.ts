@@ -124,7 +124,7 @@ export async function sendAutomationNotificationEmail({
                 <table width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #dce7e4;box-shadow:0 18px 45px rgba(7,19,26,0.10);">
                   
                   <tr>
-                    <td style="background:linear-gradient(135deg,#20b486,#17322f);padding:28px 32px;color:#ffffff;">
+                    <td style="background:linear-gradient(135deg,#20b486,#07131a);padding:28px 32px;color:#ffffff;">
                       <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                         <tr>
                           <td style="padding:0;vertical-align:middle;">
