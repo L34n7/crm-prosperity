@@ -5,6 +5,7 @@ export type TipoOfertaRenovacao = "normal" | "vip" | "jv" | "af" | "free";
 
 export type CheckoutRenovacaoResolvido = {
   checkoutUrl: string | null;
+  atomoCheckoutUrl: string | null;
   gateway: "prosperity_pay" | "atomo" | "manual";
   planoSlug: PlanoSlugRenovacao;
   tipoOferta: TipoOfertaRenovacao;
@@ -17,6 +18,26 @@ export type CheckoutRenovacaoResolvido = {
 };
 
 const supabase = getSupabaseAdmin();
+
+const EMERSON_AFFILIATE_REF = "EMERSONLUI8FA7B4AF2A44F7C3";
+
+const COPRODUCAO_ATOMO: Record<
+  string,
+  { atomoUrl: string; prosperityPayRef: string; prosperityPayUrl: string }
+> = {
+  ubtga: {
+    atomoUrl: "https://go.atomopay.com.br/ubtga",
+    prosperityPayRef: "plano-basic-be3817c7",
+    prosperityPayUrl:
+      "https://prosperitypay.com.br/checkout/plano-basic-be3817c7",
+  },
+  uqddy: {
+    atomoUrl: "https://go.atomopay.com.br/uqddy",
+    prosperityPayRef: "c7074bf9e18e",
+    prosperityPayUrl:
+      "https://prosperitypay.com.br/checkout/c7074bf9e18e",
+  },
+};
 
 const REF_POR_VALOR: Record<string, string> = {
   "basico:500": "248a0b141abf",
@@ -140,6 +161,8 @@ export async function resolverCheckoutRenovacao(params: {
   if (fixo.requires_price_match === true) {
     return {
       checkoutUrl: null,
+      atomoCheckoutUrl:
+        String(fixo.atomo_checkout_url || "").trim() || null,
       gateway: "prosperity_pay",
       planoSlug,
       tipoOferta: tipo(metadata.tipo_oferta),
@@ -158,6 +181,8 @@ export async function resolverCheckoutRenovacao(params: {
     const ref = affiliate(fixo.affiliate_ref);
     return {
       checkoutUrl: comRef(urlFixa, ref),
+      atomoCheckoutUrl:
+        String(fixo.atomo_checkout_url || "").trim() || null,
       gateway: "prosperity_pay",
       planoSlug,
       tipoOferta: tipo(metadata.tipo_oferta),
@@ -193,6 +218,7 @@ export async function resolverCheckoutRenovacao(params: {
   if (!pag) {
     return {
       checkoutUrl: atomo(planoSlug) || null,
+      atomoCheckoutUrl: atomo(planoSlug) || null,
       gateway: "atomo",
       planoSlug,
       tipoOferta: tipo(metadata.tipo_oferta),
@@ -209,17 +235,24 @@ export async function resolverCheckoutRenovacao(params: {
   const hash = String(pag.offer_hash || "").trim();
   const refAfiliado = affiliatePayload(pag.payload) || await affiliateLead(pag.lead_id);
 
-  if (pag.gateway === "atomo" && (hash === "ubtga" || hash === "uqddy")) {
+  const coproducaoAtomo =
+    pag.gateway === "atomo" ? COPRODUCAO_ATOMO[hash] : null;
+
+  if (coproducaoAtomo) {
     return {
-      checkoutUrl: atomo(planoSlug, true) || atomo(planoSlug) || null,
-      gateway: "atomo",
+      checkoutUrl: comRef(
+        coproducaoAtomo.prosperityPayUrl,
+        EMERSON_AFFILIATE_REF
+      ),
+      atomoCheckoutUrl: coproducaoAtomo.atomoUrl,
+      gateway: "prosperity_pay",
       planoSlug,
       tipoOferta: "af",
-      ofertaReferencia: hash,
-      affiliateRef: null,
+      ofertaReferencia: coproducaoAtomo.prosperityPayRef,
+      affiliateRef: EMERSON_AFFILIATE_REF,
       valorOriginalCentavos: valor,
       valorRenovacaoCentavos: valor,
-      origemResolucao: "primeira_compra_atomo_afiliado",
+      origemResolucao: "primeira_compra_atomo_coprodutor_emerson",
       motivoBloqueio: null,
     };
   }
@@ -237,6 +270,7 @@ export async function resolverCheckoutRenovacao(params: {
 
       return {
         checkoutUrl: comRef(base, refAfiliado),
+        atomoCheckoutUrl: null,
         gateway: "prosperity_pay",
         planoSlug: planoRelacao((o as any).planos) || planoSlug,
         tipoOferta: tipo(om.tipo_oferta),
@@ -254,6 +288,7 @@ export async function resolverCheckoutRenovacao(params: {
 
   return {
     checkoutUrl: atomo(planoSlug) || null,
+    atomoCheckoutUrl: atomo(planoSlug) || null,
     gateway: pag.gateway === "manual" ? "manual" : "atomo",
     planoSlug,
     tipoOferta: tipo(metadata.tipo_oferta),
