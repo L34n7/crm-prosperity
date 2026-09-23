@@ -26,9 +26,9 @@ const whatsappComercial =
   process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
 
 const PACOTE_50_PROSPERITY_PAY =
-  "https://prosperity-pay.vercel.app/checkout/22203982607a";
+  "https://www.prosperitypay.com.br/checkout/22203982607a";
 const PACOTE_200_PROSPERITY_PAY =
-  "https://prosperity-pay.vercel.app/checkout/a66f9a1dc10e";
+  "https://www.prosperitypay.com.br/checkout/a66f9a1dc10e";
 
 const PACOTE_50_ATOMO =
   process.env.NEXT_PUBLIC_TOKEN_PACKAGE_1M_URL ||
@@ -38,7 +38,7 @@ const PACOTE_200_ATOMO =
   "https://go.atomopay.com.br/8vyyj";
 
 const ESSENCIAL_PROSPERITY_PAY =
-  "https://prosperitypay.com.br/checkout/c7074bf9e18e";
+  "https://www.prosperitypay.com.br/checkout/c7074bf9e18e";
 const ESSENCIAL_ATOMO =
   process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
   "https://go.atomopay.com.br/7ibzm";
