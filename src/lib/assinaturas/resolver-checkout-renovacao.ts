@@ -29,13 +29,13 @@ const COPRODUCAO_ATOMO: Record<
     atomoUrl: "https://go.atomopay.com.br/ubtga",
     prosperityPayRef: "plano-basic-be3817c7",
     prosperityPayUrl:
-      "https://prosperitypay.com.br/checkout/plano-basic-be3817c7",
+      "https://www.prosperitypay.com.br/checkout/plano-basic-be3817c7",
   },
   uqddy: {
     atomoUrl: "https://go.atomopay.com.br/uqddy",
     prosperityPayRef: "c7074bf9e18e",
     prosperityPayUrl:
-      "https://prosperitypay.com.br/checkout/c7074bf9e18e",
+      "https://www.prosperitypay.com.br/checkout/c7074bf9e18e",
   },
 };
 
@@ -266,7 +266,7 @@ export async function resolverCheckoutRenovacao(params: {
     if (o) {
       const om = obj((o as any).metadata_json);
       const base = String(om.checkout_url || "").trim() ||
-        `https://prosperitypay.com.br/checkout/${encodeURIComponent(referencia)}`;
+        `https://www.prosperitypay.com.br/checkout/${encodeURIComponent(referencia)}`;
 
       return {
         checkoutUrl: comRef(base, refAfiliado),
