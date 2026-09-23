@@ -75,60 +75,54 @@ export default function PaymentProviderModal({
           ×
         </button>
 
-        <div className={styles.eyebrow}>Forma de pagamento</div>
+        <span className={styles.eyebrow}>Forma de pagamento</span>
         <h2 id="payment-provider-title" className={styles.title}>
-          Como deseja pagar?
+          Finalizar com Prosperity Pay
         </h2>
+
         <p className={styles.subtitle}>
-          Você escolheu o plano <strong>{plano.nome}</strong> por {plano.preco}.
-          Selecione o checkout para continuar.
+          <strong>Plano {plano.nome}</strong> — {plano.preco}
         </p>
 
-        <div className={styles.options}>
+        <p className={styles.description}>
+          Contratação do plano pelo checkout principal do CRM Prosperity.
+        </p>
+
+        <button
+          type="button"
+          className={styles.prosperityPayButton}
+          onClick={() => onSelect("prosperity_pay")}
+          disabled={busy}
+        >
+          <span className={styles.providerIcon}>P</span>
+          <span className={styles.providerContent}>
+            <small>Checkout principal</small>
+            <strong>Prosperity Pay</strong>
+          </span>
+          <span className={styles.providerAction}>
+            {loadingGateway === "prosperity_pay" ? "Abrindo..." : "Continuar →"}
+          </span>
+        </button>
+
+        <div className={styles.fallbackOption}>
+          <span>Está com dificuldade para concluir pela Prosperity Pay?</span>
           <button
             type="button"
-            className={`${styles.providerButton} ${styles.prosperityButton}`}
-            onClick={() => onSelect("prosperity_pay")}
+            className={styles.fallbackLink}
+            onClick={() => onSelect("atomo")}
             disabled={busy}
           >
-            <span className={styles.providerIcon}>P</span>
-            <span className={styles.providerContent}>
-              <span className={styles.providerTitleRow}>
-                <strong>Prosperity Pay</strong>
-              </span>
-              <span className={styles.providerDescription}>
-                Checkout principal do CRM Prosperity
-              </span>
-            </span>
-            <span className={styles.providerAction}>
-              {loadingGateway === "prosperity_pay"
-                ? "Abrindo..."
-                : "Continuar com Prosperity Pay"}
-            </span>
+            {loadingGateway === "atomo"
+              ? "Abrindo alternativa..."
+              : "Usar Átomo como alternativa"}
           </button>
-
-          <div className={styles.fallbackOption}>
-            <span>
-              Está com dificuldade para concluir pela Prosperity Pay?
-            </span>
-            <button
-              type="button"
-              className={styles.fallbackLink}
-              onClick={() => onSelect("atomo")}
-              disabled={busy}
-            >
-              {loadingGateway === "atomo"
-                ? "Abrindo alternativa..."
-                : "Usar Átomo como alternativa"}
-            </button>
-          </div>
         </div>
 
         {error ? <p className={styles.error}>{error}</p> : null}
 
         <p className={styles.helper}>
-          A Prosperity Pay é a forma principal de pagamento. A Átomo fica disponível
-          somente como alternativa de contingência.
+          A Prosperity Pay é a forma principal de pagamento. A Átomo fica
+          disponível apenas como contingência.
         </p>
       </section>
     </div>
