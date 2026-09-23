@@ -1,75 +1,51 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 290;
+  z-index: 2100;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: var(--crm-overlay);
-  backdrop-filter: blur(3px);
+  background: rgba(2, 8, 12, 0.76);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .modal {
-  width: min(680px, 100%);
-  max-height: min(760px, 92vh);
+  position: relative;
+  width: min(100%, 540px);
+  max-height: 92vh;
   overflow-y: auto;
+  padding: 28px;
   border: 1px solid var(--crm-border);
-  border-radius: 12px;
-  background: var(--header);
+  border-radius: 24px;
+  background: var(--crm-surface);
   box-shadow: var(--crm-shadow-lg);
 }
 
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 20px;
-  border-bottom: 1px solid var(--crm-border);
-}
-
-.header h2 {
-  margin: 4px 0 7px;
-  color: var(--crm-text-strong);
-  font-size: 24px;
-  font-weight: 900;
-}
-
-.header p {
-  margin: 0;
-  color: var(--crm-text);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.header p strong {
-  color: var(--crm-text-strong);
-}
-
-.eyebrow {
-  color: var(--crm-primary-text);
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
 .closeButton {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--crm-border);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--crm-surface);
   color: var(--crm-text);
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 24px;
   line-height: 1;
   cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .closeButton:hover:not(:disabled) {
-  background: var(--crm-surface-soft);
+  transform: translateY(-1px);
   border-color: var(--crm-border-strong);
 }
 
@@ -78,70 +54,124 @@
   opacity: 0.55;
 }
 
-.testNotice {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 4px;
-  margin: 18px 20px 0;
-  padding: 12px 14px;
-  border: 1px solid var(--crm-warning-border);
-  border-radius: 9px;
-  background: var(--crm-warning-bg);
-  color: var(--crm-warning-text);
-}
-
-.testNotice strong {
-  font-size: 12px;
+.eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 10px;
   font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.testNotice span {
-  font-size: 12px;
-  line-height: 1.45;
+.title,
+.modal h2 {
+  margin: 0;
+  padding-right: 46px;
+  color: var(--crm-text-strong);
+  font-size: 27px;
+  line-height: 1.15;
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
-.gatewayGrid {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 20px;
-}
-
-.gatewayCard {
-  min-width: 0;
-  min-height: 176px;
-  padding: 17px;
-  border: 1px solid var(--crm-border);
-  border-radius: 10px;
-  background: var(--crm-surface);
+.subtitle {
+  margin: 12px 0 0;
   color: var(--crm-text);
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 9px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.subtitle strong {
+  color: var(--crm-text-strong);
+}
+
+.description {
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.prosperityPayButton {
+  width: 100%;
+  min-height: 84px;
+  margin-top: 22px;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, var(--crm-primary-soft), transparent 70%),
+    var(--crm-surface);
+  color: var(--crm-text-strong);
   text-align: left;
   cursor: pointer;
   transition:
     transform 0.18s ease,
     border-color 0.18s ease,
-    background 0.18s ease;
+    box-shadow 0.18s ease;
 }
 
-.gatewayCard:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: var(--crm-border-strong);
-  background: var(--crm-surface-soft);
+.prosperityPayButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--crm-shadow-md);
 }
 
-.gatewayCard:disabled {
+.prosperityPayButton:disabled {
   cursor: wait;
-  opacity: 0.62;
+  opacity: 0.7;
 }
 
-.gatewayCardPrimary {
-  border-color: var(--crm-primary-border);
-  box-shadow: inset 0 0 0 1px var(--crm-primary-border);
+.providerIcon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    var(--crm-primary-strong),
+    var(--crm-accent)
+  );
+  color: var(--crm-text-inverse);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.providerContent {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.providerContent small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.providerContent strong {
+  color: var(--crm-text-strong);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.providerAction {
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .fallbackOption {
@@ -150,7 +180,7 @@
   justify-content: center;
   flex-wrap: wrap;
   gap: 5px 8px;
-  padding: 2px 4px 0;
+  margin-top: 15px;
   color: var(--crm-text-muted);
   font-size: 13px;
   line-height: 1.45;
@@ -178,104 +208,65 @@
   opacity: 0.58;
 }
 
-.gatewayBadge {
-  width: fit-content;
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: var(--crm-primary-soft);
-  color: var(--crm-primary-text);
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.gatewayCard strong {
-  color: var(--crm-text-strong);
-  font-size: 20px;
-  font-weight: 900;
-}
-
-.gatewayCard small {
-  color: var(--crm-text-muted);
+.successMessage,
+.errorMessage,
+.error {
+  margin: 14px 0 0;
+  padding: 11px 12px;
+  border-radius: 12px;
   font-size: 12px;
   line-height: 1.5;
-}
-
-.gatewayAction {
-  width: 100%;
-  min-height: 40px;
-  margin-top: auto;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: var(--crm-primary-strong);
-  color: var(--crm-text-inverse);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 900;
-  text-align: center;
-}
-
-.successMessage,
-.errorMessage {
-  margin: 0 20px 14px;
-  padding: 11px 13px;
-  border-radius: 8px;
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .successMessage {
-  background: var(--crm-success-bg-strong);
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
   color: var(--crm-success-text);
 }
 
-.errorMessage {
+.errorMessage,
+.error {
   border: 1px solid var(--crm-danger-border);
-  background: var(--crm-danger-bg-strong);
+  background: var(--crm-danger-bg);
   color: var(--crm-danger-text);
 }
 
-.footnote {
-  margin: 0;
-  padding: 0 20px 20px;
+.footnote,
+.helper {
+  margin: 16px 0 0;
+  padding: 0;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.5;
+  text-align: center;
 }
 
 @media (max-width: 640px) {
   .overlay {
+    align-items: flex-end;
     padding: 12px;
   }
 
-  .header {
-    padding: 17px;
+  .modal {
+    padding: 24px 18px 20px;
+    border-radius: 22px;
   }
 
-  .header h2 {
-    font-size: 21px;
+  .title,
+  .modal h2 {
+    font-size: 23px;
   }
 
-  .gatewayGrid {
-    padding: 16px;
+  .prosperityPayButton {
+    grid-template-columns: 42px minmax(0, 1fr);
   }
 
-  .gatewayCard {
-    min-height: 160px;
+  .providerIcon {
+    width: 42px;
+    height: 42px;
   }
 
-  .testNotice {
-    margin: 16px 16px 0;
-  }
-
-  .successMessage,
-  .errorMessage {
-    margin-inline: 16px;
-  }
-
-  .footnote {
-    padding: 0 16px 18px;
+  .providerAction {
+    grid-column: 2;
   }
 }
