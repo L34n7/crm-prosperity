@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AcessoTemporarioEmpresaContexto } from "@/lib/auth/get-usuario-contexto";
 import styles from "./AcessoTemporarioEmpresaBanner.module.css";
 
@@ -11,6 +11,7 @@ export default function AcessoTemporarioEmpresaBanner({
 }) {
   const [encerrando, setEncerrando] = useState(false);
   const [erro, setErro] = useState("");
+  const encerramentoEmAndamento = useRef(false);
 
   const expiraLabel = useMemo(() => {
     const data = new Date(acesso.expira_em);
@@ -28,39 +29,47 @@ export default function AcessoTemporarioEmpresaBanner({
 
     if (!Number.isFinite(restante)) return;
 
-    if (restante <= 0) {
-      window.location.assign("/configuracoes/empresas");
-      return;
-    }
-
     const timer = window.setTimeout(() => {
-      window.location.assign("/configuracoes/empresas");
-    }, restante + 500);
+      void encerrar("expiracao");
+    }, Math.max(restante + 250, 0));
 
     return () => window.clearTimeout(timer);
-  }, [acesso.expira_em]);
+  }, [acesso.expira_em, acesso.sessao_id]);
 
-  async function encerrar() {
-    if (encerrando) return;
+  async function encerrar(motivo: "manual" | "expiracao" = "manual") {
+    if (encerramentoEmAndamento.current) return;
 
+    encerramentoEmAndamento.current = true;
     setEncerrando(true);
     setErro("");
 
     try {
       const response = await fetch("/api/empresas/acesso-temporario", {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
         cache: "no-store",
+        body: JSON.stringify({
+          sessao_id: acesso.sessao_id,
+          motivo,
+        }),
       });
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
         setErro(data.error || "Não foi possível encerrar a sessão.");
+        encerramentoEmAndamento.current = false;
         return;
       }
 
-      window.location.assign("/configuracoes/empresas");
+      if (data.sessao_substituida) {
+        window.location.reload();
+        return;
+      }
+
+      window.location.replace("/configuracoes/empresas");
     } catch {
       setErro("Não foi possível encerrar a sessão.");
+      encerramentoEmAndamento.current = false;
     } finally {
       setEncerrando(false);
     }
@@ -85,7 +94,7 @@ export default function AcessoTemporarioEmpresaBanner({
       <button
         type="button"
         className={styles.exitButton}
-        onClick={encerrar}
+        onClick={() => void encerrar("manual")}
         disabled={encerrando}
       >
         {encerrando ? "Encerrando..." : "Encerrar acesso"}

@@ -257,30 +257,75 @@ export async function DELETE(request: Request) {
   if (!operador.ok) return operador.response;
 
   try {
-    const acesso = await encerrarAcessoTemporarioEmpresaAtual({
+    let sessaoIdEsperada = "";
+    let motivo: "manual" | "expiracao" = "manual";
+
+    try {
+      const body = await request.json();
+      sessaoIdEsperada = String(body?.sessao_id || "").trim();
+      motivo = body?.motivo === "expiracao" ? "expiracao" : "manual";
+    } catch {
+      // Compatibilidade com chamadas antigas sem body.
+    }
+
+    const acessoAtual = await obterAcessoTemporarioEmpresaAtual({
       authUserId: operador.usuario.auth_user_id,
       operadorUsuarioId: operador.usuario.id,
     });
 
+    if (
+      sessaoIdEsperada &&
+      acessoAtual &&
+      acessoAtual.sessao_id !== sessaoIdEsperada
+    ) {
+      return NextResponse.json({
+        ok: true,
+        sessao_substituida: true,
+        message:
+          "Esta aba pertence a uma sessão de suporte anterior. A sessão atual foi preservada.",
+      });
+    }
+
+    const acesso = acessoAtual
+      ? await encerrarAcessoTemporarioEmpresaAtual({
+          authUserId: operador.usuario.auth_user_id,
+          operadorUsuarioId: operador.usuario.id,
+        })
+      : null;
+
     if (acesso) {
       const auditMeta = getRequestAuditMetadata(request);
+      const operadorLabel =
+        operador.usuario.nome ||
+        operador.usuario.email ||
+        "Administrador interno";
+      const acaoDescricao =
+        motivo === "expiracao"
+          ? "teve a sessão temporária expirada"
+          : "encerrou a sessão temporária de suporte";
 
       await registrarLogAuditoriaSeguro({
         empresa_id: acesso.empresa_id,
         categoria: "sistema",
         entidade: "empresa",
         entidade_id: acesso.empresa_id,
-        acao: "acesso_temporario_administrativo_encerrado",
-        descricao: `${
-          operador.usuario.nome ||
-          operador.usuario.email ||
-          "Administrador interno"
-        } encerrou a sessão temporária de suporte em ${acesso.empresa_nome}.`,
+        acao:
+          motivo === "expiracao"
+            ? "acesso_temporario_administrativo_expirado"
+            : "acesso_temporario_administrativo_encerrado",
+        descricao:
+          operadorLabel +
+          " " +
+          acaoDescricao +
+          " em " +
+          acesso.empresa_nome +
+          ".",
         usuario_id: operador.usuario.id,
         usuario_nome: operador.usuario.nome,
         usuario_email: operador.usuario.email,
         detalhes: {
           sessao_suporte_id: acesso.sessao_id,
+          motivo,
           iniciado_em: acesso.criado_em,
           encerrado_em: new Date().toISOString(),
           expiraria_em: acesso.expira_em,
@@ -291,7 +336,11 @@ export async function DELETE(request: Request) {
 
     const response = NextResponse.json({
       ok: true,
-      message: "Sessão temporária encerrada.",
+      sessao_substituida: false,
+      message:
+        motivo === "expiracao"
+          ? "Sessão temporária expirada."
+          : "Sessão temporária encerrada.",
     });
 
     response.cookies.set(ACESSO_TEMPORARIO_EMPRESA_COOKIE, "", {
