@@ -106,14 +106,17 @@ export default function PlanoPage() {
         return;
       }
 
-      if (novaAba) {
-        novaAba.location.href = data.checkout_url;
+      if (!novaAba) {
+        setCheckoutError(
+          "O navegador bloqueou a nova aba. Permita pop-ups para continuar o pagamento."
+        );
         setLoadingCheckout(null);
-        setCheckoutError("");
         return;
       }
 
-      window.location.assign(data.checkout_url);
+      novaAba.location.href = data.checkout_url;
+      setLoadingCheckout(null);
+      setCheckoutError("");
     } catch (error) {
       novaAba?.close();
       console.error("Erro ao buscar checkout:", error);
@@ -140,7 +143,17 @@ export default function PlanoPage() {
     // O plano gratuito não possui pagamento e continua no fluxo próprio.
     // Ofertas pagas (normal, afiliado, VIP e JV) usam o seletor de gateway.
     if (tipoOferta === "free") {
-      void iniciarCheckout(plano.slug, "atomo");
+      const novaAba = window.open("about:blank", "_blank");
+
+      if (!novaAba) {
+        setCheckoutError(
+          "O navegador bloqueou a nova aba. Permita pop-ups para continuar."
+        );
+        return;
+      }
+
+      novaAba.opener = null;
+      void iniciarCheckout(plano.slug, "atomo", novaAba);
       return;
     }
 
