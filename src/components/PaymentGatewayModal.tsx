@@ -25,8 +25,8 @@ type PaymentGatewayModalProps = {
 };
 
 const PROSPERITY_PAY_CHECKOUTS: Record<PlanoSlug, string> = {
-  basico: "https://prosperitypay.com.br/checkout/plano-basic-be3817c7",
-  essencial: "https://prosperitypay.com.br/checkout/c7074bf9e18e",
+  basico: "https://www.prosperitypay.com.br/checkout/plano-basic-be3817c7",
+  essencial: "https://www.prosperitypay.com.br/checkout/c7074bf9e18e",
 };
 
 function nomeGateway(gateway: GatewayPagamento) {
