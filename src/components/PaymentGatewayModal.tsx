@@ -125,67 +125,69 @@ export default function PaymentGatewayModal({
       }}
     >
       <div className={styles.modal} onClick={(event) => event.stopPropagation()}>
-        <div className={styles.header}>
-          <div>
-            <span className={styles.eyebrow}>Forma de pagamento</span>
-            <h2 id="payment-gateway-title">Escolha como pagar</h2>
-            <p>
-              Plano <strong>{plano.nome}</strong>. O checkout será aberto em uma
-              nova aba e o CRM continuará disponível nesta tela.
-            </p>
-          </div>
+        <button
+          type="button"
+          className={styles.closeButton}
+          onClick={onClose}
+          disabled={Boolean(loadingGateway)}
+          aria-label="Fechar opções de pagamento"
+        >
+          ×
+        </button>
 
-          <button
-            type="button"
-            className={styles.closeButton}
-            onClick={onClose}
-            disabled={Boolean(loadingGateway)}
-            aria-label="Fechar opções de pagamento"
-          >
-            ×
-          </button>
-        </div>
+        <span className={styles.eyebrow}>Forma de pagamento</span>
+        <h2 id="payment-gateway-title">Finalizar com Prosperity Pay</h2>
 
-        <div className={styles.gatewayGrid}>
-          <button
-            type="button"
-            className={`${styles.gatewayCard} ${styles.gatewayCardPrimary}`}
-            onClick={() => abrirCheckout("prosperity_pay")}
-            disabled={Boolean(loadingGateway)}
-          >
-            <span className={styles.gatewayBadge}>Recomendado</span>
+        <p className={styles.subtitle}>
+          <strong>
+            {plano.renovarPlanoAtual ? "Renovação" : "Plano"} {plano.nome}
+          </strong>
+        </p>
+
+        <p className={styles.description}>
+          {plano.renovarPlanoAtual
+            ? "Renove sua assinatura pelo checkout principal da Prosperity Pay."
+            : "Continue a contratação pelo checkout principal da Prosperity Pay."}
+        </p>
+
+        <button
+          type="button"
+          className={styles.prosperityPayButton}
+          onClick={() => abrirCheckout("prosperity_pay")}
+          disabled={Boolean(loadingGateway)}
+        >
+          <span className={styles.providerIcon}>P</span>
+          <span className={styles.providerContent}>
+            <small>Checkout principal</small>
             <strong>Prosperity Pay</strong>
-            <small>Continue pelo checkout principal da Prosperity Pay.</small>
-            <span className={styles.gatewayAction}>
-              {loadingGateway === "prosperity_pay"
-                ? "Preparando checkout..."
-                : "Continuar com Prosperity Pay ↗"}
-            </span>
-          </button>
+          </span>
+          <span className={styles.providerAction}>
+            {loadingGateway === "prosperity_pay"
+              ? "Abrindo..."
+              : "Continuar →"}
+          </span>
+        </button>
 
-          <div className={styles.fallbackOption}>
-            <span>
-              Está com dificuldade para concluir pela Prosperity Pay?
-            </span>
-            <button
-              type="button"
-              className={styles.fallbackLink}
-              onClick={() => abrirCheckout("atomo")}
-              disabled={Boolean(loadingGateway)}
-            >
-              {loadingGateway === "atomo"
-                ? "Abrindo alternativa..."
-                : "Usar Átomo como alternativa"}
-            </button>
-          </div>
+        <div className={styles.fallbackOption}>
+          <span>Está com dificuldade para concluir pela Prosperity Pay?</span>
+          <button
+            type="button"
+            className={styles.fallbackLink}
+            onClick={() => abrirCheckout("atomo")}
+            disabled={Boolean(loadingGateway)}
+          >
+            {loadingGateway === "atomo"
+              ? "Abrindo alternativa..."
+              : "Usar Átomo como alternativa"}
+          </button>
         </div>
 
         {message && <p className={styles.successMessage}>{message}</p>}
         {error && <p className={styles.errorMessage}>{error}</p>}
 
         <p className={styles.footnote}>
-          A Prosperity Pay é o checkout principal. A Átomo permanece disponível
-          apenas como alternativa de contingência.
+          A Prosperity Pay é a forma principal de pagamento. A Átomo fica
+          disponível apenas como contingência.
         </p>
       </div>
     </div>,
