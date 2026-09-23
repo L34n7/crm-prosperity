@@ -87,7 +87,7 @@ const categorias = [
 ];
 
 const CONTRATAR_NUMERO_ADICIONAL_URL =
-  "https://prosperity-pay.vercel.app/checkout/52ba63312a9e";
+  "https://www.prosperitypay.com.br/checkout/52ba63312a9e";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
