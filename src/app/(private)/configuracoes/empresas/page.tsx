@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
+import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 import styles from "./empresas.module.css";
 
 const OPCOES_LIMITE = Array.from({ length: 10 }, (_, index) => index + 1);
@@ -108,6 +109,9 @@ export default function EmpresasPage() {
   const podeAlterarStatusEmpresas = permissoes.includes(
     "empresas.alterar_status"
   );
+  const podeAcessarTemporariamente = permissoes.includes(
+    PERMISSAO_INTERNA_EMPRESAS
+  );
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [nichos, setNichos] = useState<Nicho[]>([]);
@@ -122,6 +126,7 @@ export default function EmpresasPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [reenviandoAcessoId, setReenviandoAcessoId] = useState<string | null>(null);
+  const [acessandoEmpresaId, setAcessandoEmpresaId] = useState<string | null>(null);
 
   const [editNomeFantasia, setEditNomeFantasia] = useState("");
   const [editRazaoSocial, setEditRazaoSocial] = useState("");
@@ -291,6 +296,38 @@ export default function EmpresasPage() {
       setErro("Não foi possível enviar o acesso alternativo.");
     } finally {
       setReenviandoAcessoId(null);
+    }
+  }
+
+  async function acessarTemporariamente(empresa: Empresa) {
+    const confirmado = window.confirm(
+      `Iniciar uma sessão administrativa temporária para ${empresa.nome_fantasia}? A sessão dura 30 minutos, não altera a senha do cliente e fica registrada na auditoria.`
+    );
+
+    if (!confirmado) return;
+
+    setMensagem("");
+    setErro("");
+    setAcessandoEmpresaId(empresa.id);
+
+    try {
+      const response = await fetch("/api/empresas/acesso-temporario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresa_id: empresa.id }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setErro(data.error || "Não foi possível iniciar a sessão temporária.");
+        return;
+      }
+
+      window.location.assign(data.redirect || "/painel/ao-vivo");
+    } catch {
+      setErro("Não foi possível iniciar a sessão temporária.");
+    } finally {
+      setAcessandoEmpresaId(null);
     }
   }
 
@@ -548,6 +585,19 @@ export default function EmpresasPage() {
                       </div>
 
                       <div className={styles.itemRight}>
+                        {!editando && podeAcessarTemporariamente && (
+                          <button
+                            type="button"
+                            onClick={() => acessarTemporariamente(empresa)}
+                            className={styles.supportButton}
+                            disabled={acessandoEmpresaId === empresa.id}
+                          >
+                            {acessandoEmpresaId === empresa.id
+                              ? "Acessando..."
+                              : "Acessar ambiente"}
+                          </button>
+                        )}
+
                         {!editando && podeEditarEmpresas && (
                           <button
                             onClick={() => toggleExpandir(empresa.id)}

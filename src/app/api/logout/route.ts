@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { registrarEventoSessaoUsuario } from "@/lib/auth/session-events";
+import {
+  ACESSO_TEMPORARIO_EMPRESA_COOKIE,
+  encerrarAcessoTemporarioEmpresaAtual,
+  getAcessoTemporarioEmpresaCookieOptions,
+} from "@/lib/auth/acesso-temporario-empresa";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -38,10 +43,28 @@ export async function POST(request: Request) {
     }
   }
 
+  if (user) {
+    try {
+      await encerrarAcessoTemporarioEmpresaAtual({
+        authUserId: user.id,
+      });
+    } catch (error) {
+      console.error("[LOGOUT] Falha ao encerrar sessão de suporte:", error);
+    }
+  }
+
   await supabase.auth.signOut();
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
     message: "Logout realizado com sucesso",
   });
+
+  response.cookies.set(ACESSO_TEMPORARIO_EMPRESA_COOKIE, "", {
+    ...getAcessoTemporarioEmpresaCookieOptions(),
+    maxAge: 0,
+    expires: new Date(0),
+  });
+
+  return response;
 }

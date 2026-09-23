@@ -4,6 +4,7 @@ import CrmShell from "@/components/CrmShell";
 import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
 import MobileEmpresaMenuLink from "@/components/MobileEmpresaMenuLink";
 import AgendaMenuLabel from "@/components/AgendaMenuLabel";
+import AcessoTemporarioEmpresaBanner from "@/components/AcessoTemporarioEmpresaBanner";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
@@ -35,8 +36,12 @@ export default async function PrivateLayout({
     redirect("/conta-incompleta");
   }
 
-  profileName = resultado.usuario.nome || "Usuario";
-  avatarUrl = resultado.usuario.avatar_url || "";
+  const acessoTemporario = resultado.usuario.acesso_temporario ?? null;
+
+  profileName =
+    acessoTemporario?.operador.nome || resultado.usuario.nome || "Usuario";
+  avatarUrl =
+    acessoTemporario?.operador.avatar_url || resultado.usuario.avatar_url || "";
   permissoes = resultado.usuario.permissoes;
   assinatura = resultado.usuario.assinatura;
   isAdmin = resultado.usuario.is_admin;
@@ -60,6 +65,9 @@ export default async function PrivateLayout({
       isAdmin={isAdmin}
       nichoCodigo={nichoCodigo}
     >
+      {acessoTemporario && (
+        <AcessoTemporarioEmpresaBanner acesso={acessoTemporario} />
+      )}
       {children}
       <AmbienteObrigatorioGuard />
       <MobileEmpresaMenuLink isAdmin={isAdmin} />

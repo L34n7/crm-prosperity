@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterAcessoTemporarioEmpresaAtual } from "@/lib/auth/acesso-temporario-empresa";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -101,10 +102,43 @@ function obterConfirmacaoCobrancaMeta(input: RegistrarLogAuditoriaInput) {
 export async function registrarLogAuditoria(
   input: RegistrarLogAuditoriaInput
 ) {
+  const acessoTemporario = await obterAcessoTemporarioEmpresaAtual();
+  const acessoNesteAmbiente =
+    acessoTemporario?.empresa_id === input.empresa_id
+      ? acessoTemporario
+      : null;
+
+  const usuarioId =
+    acessoNesteAmbiente?.operador_usuario_id ?? input.usuario_id ?? null;
+  const usuarioNome =
+    acessoNesteAmbiente?.operador_nome ?? input.usuario_nome ?? null;
+  const usuarioEmail =
+    acessoNesteAmbiente?.operador_email ?? input.usuario_email ?? null;
+
   const confirmacaoCobrancaMeta = obterConfirmacaoCobrancaMeta(input);
   const detalhes = {
     ...(input.detalhes ?? {}),
-    ...(input.usuario_email ? { usuario_email: input.usuario_email } : {}),
+    ...(usuarioEmail ? { usuario_email: usuarioEmail } : {}),
+    ...(acessoNesteAmbiente
+      ? {
+          acesso_temporario_administrativo: {
+            sessao_id: acessoNesteAmbiente.sessao_id,
+            operador_usuario_id: acessoNesteAmbiente.operador_usuario_id,
+            operador_nome: acessoNesteAmbiente.operador_nome,
+            operador_email: acessoNesteAmbiente.operador_email,
+            empresa_id: acessoNesteAmbiente.empresa_id,
+            empresa_nome: acessoNesteAmbiente.empresa_nome,
+            usuario_administrador_alvo_id:
+              acessoNesteAmbiente.usuario_alvo_id,
+            usuario_administrador_alvo_nome:
+              acessoNesteAmbiente.usuario_alvo_nome,
+            usuario_administrador_alvo_email:
+              acessoNesteAmbiente.usuario_alvo_email,
+            iniciado_em: acessoNesteAmbiente.criado_em,
+            expira_em: acessoNesteAmbiente.expira_em,
+          },
+        }
+      : {}),
     ...(confirmacaoCobrancaMeta
       ? { confirmacao_cobranca_meta: confirmacaoCobrancaMeta }
       : {}),
@@ -118,8 +152,8 @@ export async function registrarLogAuditoria(
       entidade_id: input.entidade_id,
       acao: input.acao,
       descricao: input.descricao ?? null,
-      usuario_id: input.usuario_id ?? null,
-      usuario_nome: input.usuario_nome ?? null,
+      usuario_id: usuarioId,
+      usuario_nome: usuarioNome,
       detalhes,
       antes: input.antes ?? null,
       depois: input.depois ?? null,

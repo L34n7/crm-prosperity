@@ -6,6 +6,9 @@ import {
   invalidateTtlCache,
 } from "@/lib/cache/ttl-cache";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterAcessoTemporarioEmpresaAtual } from "@/lib/auth/acesso-temporario-empresa";
+import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 import { listarSetoresDoUsuario } from "@/lib/usuarios/setores";
 import {
   listarPermissoesDoUsuario,
@@ -41,6 +44,27 @@ export type PerfilDinamicoContexto = {
   updated_at?: string;
 };
 
+export type AcessoTemporarioEmpresaContexto = {
+  ativo: true;
+  sessao_id: string;
+  empresa_id: string;
+  empresa_nome: string;
+  usuario_alvo: {
+    id: string;
+    nome: string | null;
+    email: string | null;
+  };
+  operador: {
+    id: string;
+    auth_user_id: string;
+    nome: string | null;
+    email: string | null;
+    avatar_url?: string | null;
+  };
+  criado_em: string;
+  expira_em: string;
+};
+
 export type UsuarioContexto = {
   id: string;
   auth_user_id: string;
@@ -65,6 +89,7 @@ export type UsuarioContexto = {
     created_at?: string;
   }>;
   setor_principal_id: string | null;
+  acesso_temporario?: AcessoTemporarioEmpresaContexto | null;
 };
 
 export type ResultadoUsuarioContexto =
@@ -80,6 +105,7 @@ export type ResultadoUsuarioContexto =
 
 export type GetUsuarioContextoOptions = {
   sincronizarAssinatura?: boolean;
+  ignorarAcessoTemporario?: boolean;
 };
 
 export type ResultadoUsuarioBasico =
@@ -285,12 +311,12 @@ export async function getUsuarioContexto(
       };
     }
 
-    const usuarioBase = await buscarOuRecuperarUsuarioBase(
+    const operadorBase = await buscarOuRecuperarUsuarioBase(
       supabase,
       usuarioAutenticado.id
     );
 
-    if (!usuarioBase) {
+    if (!operadorBase) {
       return {
         ok: false,
         error: "Usuario nao encontrado na tabela usuarios",
@@ -298,12 +324,90 @@ export async function getUsuarioContexto(
       };
     }
 
-    if (usuarioBase.status !== "ativo") {
+    if (operadorBase.status !== "ativo") {
       return {
         ok: false,
         error: "Usuario inativo ou bloqueado",
         status: 403,
       };
+    }
+
+    let usuarioBase = operadorBase;
+    let acessoTemporario: AcessoTemporarioEmpresaContexto | null = null;
+
+    if (!options.ignorarAcessoTemporario) {
+      const acesso = await obterAcessoTemporarioEmpresaAtual({
+        authUserId: usuarioAutenticado.id,
+        operadorUsuarioId: operadorBase.id,
+      });
+
+      if (acesso) {
+        const permissoesOperador = await listarPermissoesDoUsuario(
+          operadorBase.id,
+          { empresaId: operadorBase.empresa_id }
+        );
+
+        if (permissoesOperador.includes(PERMISSAO_INTERNA_EMPRESAS)) {
+          const supabaseAdmin = getSupabaseAdmin();
+
+          const [{ data: usuarioAlvo }, { data: empresaAlvo }] =
+            await Promise.all([
+              supabaseAdmin
+                .from("usuarios")
+                .select(
+                  "id, auth_user_id, nome, email, avatar_url, assinatura_whatsapp, empresa_id, status"
+                )
+                .eq("id", acesso.usuario_alvo_id)
+                .eq("empresa_id", acesso.empresa_id)
+                .eq("status", "ativo")
+                .maybeSingle<UsuarioBase>(),
+              supabaseAdmin
+                .from("empresas")
+                .select("id, nome_fantasia")
+                .eq("id", acesso.empresa_id)
+                .maybeSingle<{ id: string; nome_fantasia: string }>(),
+            ]);
+
+          if (usuarioAlvo && empresaAlvo) {
+            const perfisAlvo = await listarPerfisDoUsuario(usuarioAlvo.id);
+            const alvoEhAdministrador = (perfisAlvo ?? []).some((item) => {
+              const perfil = Array.isArray(item.perfis_empresa)
+                ? item.perfis_empresa[0]
+                : item.perfis_empresa;
+
+              return (
+                perfil?.ativo !== false &&
+                perfil?.nome?.trim().toLocaleLowerCase("pt-BR") ===
+                  "administrador"
+              );
+            });
+
+            if (alvoEhAdministrador) {
+              usuarioBase = usuarioAlvo;
+              acessoTemporario = {
+                ativo: true,
+                sessao_id: acesso.sessao_id,
+                empresa_id: empresaAlvo.id,
+                empresa_nome: empresaAlvo.nome_fantasia,
+                usuario_alvo: {
+                  id: usuarioAlvo.id,
+                  nome: usuarioAlvo.nome,
+                  email: usuarioAlvo.email,
+                },
+                operador: {
+                  id: operadorBase.id,
+                  auth_user_id: operadorBase.auth_user_id,
+                  nome: operadorBase.nome,
+                  email: operadorBase.email,
+                  avatar_url: operadorBase.avatar_url,
+                },
+                criado_em: acesso.criado_em,
+                expira_em: acesso.expira_em,
+              };
+            }
+          }
+        }
+      }
     }
 
     const [perfisRaw, vinculosSetores, assinatura] = await Promise.all([
@@ -369,6 +473,7 @@ export async function getUsuarioContexto(
         setores_ids: setoresIds,
         usuarios_setores: vinculosSetores,
         setor_principal_id: setorPrincipal,
+        acesso_temporario: acessoTemporario,
       },
     };
   } catch (error) {
