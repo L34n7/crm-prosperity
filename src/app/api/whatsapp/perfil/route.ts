@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   diagnosticarErroMetaWhatsapp,
@@ -237,7 +236,7 @@ async function buscarIntegracao(
   empresaId: string,
   integracaoId?: string | null
 ) {
-  const supabase = await createClient();
+  const supabase = supabaseAdmin;
 
   let query = supabase
     .from("integracoes_whatsapp")
@@ -263,7 +262,7 @@ async function buscarIntegracao(
 }
 
 async function buscarAdministradorEmpresa(empresaId: string) {
-  const supabase = await createClient();
+  const supabase = supabaseAdmin;
   const { data, error } = await supabase
     .from("usuarios")
     .select("id, nome, email, created_at")
@@ -354,7 +353,7 @@ async function marcarIntegracaoComDiagnosticoMeta(params: {
   metaResponse: unknown;
 }) {
   const { integracao, empresaId, diagnostico, metaResponse } = params;
-  const supabase = await createClient();
+  const supabase = supabaseAdmin;
   const agora = new Date().toISOString();
   const configAtual = objetoConfig(integracao.config_json);
   const payload: Record<string, unknown> = {
@@ -437,7 +436,7 @@ async function marcarIntegracaoRecuperadaSeNecessario(params: {
     return null;
   }
 
-  const supabase = await createClient();
+  const supabase = supabaseAdmin;
   const agora = new Date().toISOString();
   const payload = {
     status: "ativa",
@@ -483,7 +482,7 @@ async function salvarSaudeMetaIntegracao(params: {
   const { integracao, empresaId, phoneJson } = params;
   if (!phoneJson) return null;
 
-  const supabase = await createClient();
+  const supabase = supabaseAdmin;
   const agora = new Date().toISOString();
   const configAtual = objetoConfig(integracao.config_json);
   const phoneNumberStatus =
@@ -1009,7 +1008,7 @@ async function marcarIntegracaoSincronizada(
   integracaoId: string,
   empresaId: string
 ) {
-  const supabase = await createClient();
+  const supabase = supabaseAdmin;
   const agora = new Date().toISOString();
   await supabase
     .from("integracoes_whatsapp")
