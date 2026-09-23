@@ -274,13 +274,13 @@ const COPRODUCAO_EMERSON_ATOMO: Record<
     atomoCheckoutUrl: "https://go.atomopay.com.br/ubtga",
     prosperityPayOffer: "plano-basic-be3817c7",
     prosperityPayCheckoutUrl:
-      "https://prosperitypay.com.br/checkout/plano-basic-be3817c7",
+      "https://www.prosperitypay.com.br/checkout/plano-basic-be3817c7",
   },
   uqddy: {
     atomoCheckoutUrl: "https://go.atomopay.com.br/uqddy",
     prosperityPayOffer: "c7074bf9e18e",
     prosperityPayCheckoutUrl:
-      "https://prosperitypay.com.br/checkout/c7074bf9e18e",
+      "https://www.prosperitypay.com.br/checkout/c7074bf9e18e",
   },
 };
 
