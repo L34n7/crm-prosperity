@@ -152,8 +152,19 @@ export default function PacotesTokensPage() {
       return;
     }
 
+    const novaAba = window.open("about:blank", "_blank");
+
+    if (!novaAba) {
+      abrirWhatsApp(
+        `Olá! Preciso de ajuda para concluir a compra de ${compraSelecionada.nome}.`
+      );
+      return;
+    }
+
+    novaAba.opener = null;
     setGatewayAbrindo(gateway);
-    window.location.assign(url);
+    novaAba.location.href = url;
+    setGatewayAbrindo(null);
   }
 
   return (
