@@ -177,6 +177,97 @@ function normalizarSaldoTokensIa(data: Omit<SaldoTokensIa, "limite" | "restantes
   } as SaldoTokensIa;
 }
 
+function objeto(valor: unknown): Record<string, any> {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, any>)
+    : {};
+}
+
+async function aplicarRenovacaoTokensPrePagaPendente(
+  empresaId: string,
+  agora = new Date()
+) {
+  const { data: empresa, error: empresaError } = await supabaseAdmin
+    .from("empresas")
+    .select("assinatura_metadata_json")
+    .eq("id", empresaId)
+    .maybeSingle();
+
+  if (empresaError || !empresa) {
+    if (empresaError) throw new Error(empresaError.message);
+    return false;
+  }
+
+  const metadata = objeto(empresa.assinatura_metadata_json);
+  const pendente = objeto(metadata.prepaid_tokens_pending);
+  const referencia = String(pendente.reference || "").trim();
+  const inicio = pendente.starts_at ? new Date(String(pendente.starts_at)) : null;
+
+  if (
+    !referencia ||
+    !inicio ||
+    !Number.isFinite(inicio.getTime()) ||
+    inicio.getTime() > agora.getTime()
+  ) {
+    return false;
+  }
+
+  const { data: renovacaoExistente, error: renovacaoExistenteError } =
+    await supabaseAdmin
+      .from("ia_token_renovacoes")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("referencia", referencia)
+      .maybeSingle();
+
+  if (renovacaoExistenteError) {
+    throw new Error(renovacaoExistenteError.message);
+  }
+
+  if (!renovacaoExistente) {
+    const { error: renovacaoError } = await supabaseAdmin.rpc(
+      "renovar_tokens_assinatura_plano",
+      {
+        p_empresa_id: empresaId,
+        p_referencia: referencia,
+        p_pago_em: inicio.toISOString(),
+        p_metadata_json: {
+          origem: "prosperity_pay_subscription_renewal_prepaid",
+          subscription_id: pendente.subscription_id || null,
+          event_id: pendente.event_id || null,
+        },
+      }
+    );
+
+    if (renovacaoError) {
+      throw new Error(renovacaoError.message);
+    }
+  }
+
+  const { error: limparError } = await supabaseAdmin
+    .from("empresas")
+    .update({
+      assinatura_metadata_json: {
+        ...metadata,
+        prepaid_tokens_pending: null,
+        prepaid_tokens_applied_at: agora.toISOString(),
+        prepaid_tokens_applied_reference: referencia,
+      },
+      updated_at: agora.toISOString(),
+    })
+    .eq("id", empresaId);
+
+  if (limparError) {
+    console.error(
+      "[IA_TOKENS] Falha ao limpar renovação pré-paga pendente",
+      empresaId,
+      limparError
+    );
+  }
+
+  return true;
+}
+
 export function extrairUsoTokensIa(usage: any): UsoTokensIa {
   const inputTokens = numeroOuNull(
     usage?.input_tokens ?? usage?.prompt_tokens
@@ -258,6 +349,8 @@ export function calcularCobrancaTokensIa(modelo: string, uso: UsoTokensIa): Cobr
 }
 
 export async function buscarSaldoTokensIa(empresaId: string) {
+  await aplicarRenovacaoTokensPrePagaPendente(empresaId);
+
   const { data, error } = await supabaseAdmin.rpc(
     "sincronizar_empresa_tokens_ia",
     {
@@ -307,6 +400,8 @@ export async function registrarUsoTokensIa(params: {
   usuarioId?: string | null;
   metadata?: Record<string, any>;
 }) {
+  await aplicarRenovacaoTokensPrePagaPendente(params.empresaId);
+
   const modelo = modeloEfetivo(params);
   const uso: UsoTokensIa = params.uso ?? {
     totalTokens: Math.max(Number(params.tokensTotal || 0), 0),
