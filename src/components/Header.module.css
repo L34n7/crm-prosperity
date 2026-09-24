@@ -1689,6 +1689,462 @@
   cursor: pointer;
 }
 
+
+/* Plano e assinatura — tratamento visual premium */
+.planRenewalOverlay {
+  padding: 28px;
+  backdrop-filter: blur(10px) saturate(115%);
+  -webkit-backdrop-filter: blur(10px) saturate(115%);
+}
+
+.planRenewalModal {
+  position: relative;
+  isolation: isolate;
+  width: min(1120px, 100%);
+  max-height: min(880px, 94vh);
+  border-radius: 24px;
+  border-color: var(--crm-border-strong);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.planRenewalModal::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 26px;
+  right: 26px;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: linear-gradient(
+    90deg,
+    var(--crm-primary-strong),
+    var(--crm-primary-hover),
+    var(--crm-success-strong)
+  );
+  pointer-events: none;
+}
+
+.planRenewalHeader {
+  position: relative;
+  padding: 27px 30px 23px;
+  background: linear-gradient(
+    135deg,
+    var(--crm-surface) 0%,
+    var(--crm-on-strong-soft-plan) 100%
+  );
+}
+
+.planRenewalHeader h2 {
+  margin-top: 6px;
+  font-size: 28px;
+  letter-spacing: -0.025em;
+}
+
+.planRenewalHeader p {
+  max-width: 700px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.planRenewalEyebrow {
+  letter-spacing: 0.08em;
+}
+
+.planRenewalClose {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 24px;
+}
+
+.planCurrentSummary {
+  margin: 18px 20px 0;
+  padding: 18px 20px;
+  border: 1px solid var(--crm-border);
+  border-radius: 18px;
+  background: linear-gradient(
+    135deg,
+    var(--crm-on-strong-soft-plan) 0%,
+    var(--crm-surface) 72%
+  );
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.planCurrentMain {
+  min-width: 250px;
+  flex-direction: row;
+  align-items: center;
+  gap: 13px;
+}
+
+.planCurrentBrandIcon {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 14px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.planCurrentIdentity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planCurrentIdentity span {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.planCurrentIdentity strong {
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.planCurrentIdentity small {
+  color: var(--crm-text-muted);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.planCurrentMeta {
+  gap: 9px;
+}
+
+.planCurrentMeta div {
+  min-width: 130px;
+  padding: 11px 13px;
+  border-radius: 13px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.planManagementScroll {
+  padding-bottom: 22px;
+  background: linear-gradient(
+    180deg,
+    var(--crm-surface-soft) 0%,
+    var(--crm-surface) 100%
+  );
+}
+
+.subscriptionPrepaidNotice {
+  margin: 18px 20px 0;
+  padding: 17px 18px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 17px;
+  background: linear-gradient(
+    135deg,
+    var(--crm-success-bg) 0%,
+    var(--crm-surface) 100%
+  );
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.subscriptionPrepaidIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: var(--crm-success-bg-strong);
+  color: var(--crm-success-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subscriptionPrepaidContent {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.subscriptionPrepaidContent > span,
+.subscriptionPrepaidUntil > span {
+  color: var(--crm-success-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.subscriptionPrepaidContent > strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.subscriptionPrepaidContent > p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.subscriptionPrepaidUntil {
+  min-width: 116px;
+  padding: 10px 12px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.subscriptionPrepaidUntil > strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.subscriptionComposition {
+  margin: 18px 20px;
+  padding: 20px;
+  border-radius: 18px;
+  gap: 14px;
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.subscriptionSectionHeader {
+  padding-bottom: 3px;
+}
+
+.subscriptionSectionHeader h3,
+.planChangeHeader h3 {
+  font-size: 19px;
+  letter-spacing: -0.015em;
+}
+
+.subscriptionPayButton,
+.subscriptionPayButtonFull,
+.subscriptionAddButton {
+  min-height: 44px;
+  border-radius: 12px;
+  padding: 0 17px;
+}
+
+.subscriptionPayButton:not(:disabled),
+.subscriptionPayButtonFull:not(:disabled) {
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.subscriptionItem {
+  padding: 16px;
+  border-radius: 14px;
+  gap: 14px;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.subscriptionItem:hover {
+  transform: translateY(-1px);
+  border-color: var(--crm-border-strong);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.subscriptionItemPending {
+  border-color: var(--crm-warning-border);
+}
+
+.subscriptionItemIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  border: 1px solid var(--crm-primary-border);
+  background: linear-gradient(
+    145deg,
+    var(--crm-primary-soft),
+    var(--crm-surface)
+  );
+}
+
+.subscriptionItemMain > strong {
+  font-size: 14.5px;
+}
+
+.subscriptionItemPrice {
+  min-width: 205px;
+}
+
+.subscriptionItemPrice > strong {
+  font-size: 16px;
+}
+
+.subscriptionActiveBadge,
+.subscriptionPendingBadge,
+.subscriptionSetupBadge {
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.subscriptionSetupBadge {
+  width: fit-content;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-muted);
+  color: var(--crm-text-muted);
+}
+
+.subscriptionCancelButton,
+.subscriptionCancelConfirm,
+.subscriptionCancelBack {
+  min-height: 35px;
+  border-radius: 9px;
+}
+
+.subscriptionAddButton {
+  border-style: dashed;
+}
+
+.subscriptionRenewalSummary {
+  padding: 17px;
+  border: 1px solid var(--crm-border);
+  border-radius: 15px;
+  background: linear-gradient(
+    135deg,
+    var(--crm-on-strong-soft-plan),
+    var(--crm-surface)
+  );
+}
+
+.subscriptionSummaryTotal {
+  padding-top: 12px;
+}
+
+.planChangeHeader {
+  margin: 4px 20px 0;
+  padding: 20px 18px 2px;
+}
+
+.planRenewalGrid {
+  padding: 18px 20px 2px;
+  gap: 16px;
+}
+
+.planRenewalCard {
+  padding: 20px;
+  border-radius: 18px;
+  gap: 16px;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.planRenewalCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--crm-border-strong);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.planRenewalCardFeatured {
+  border-color: var(--crm-primary-border);
+  background: linear-gradient(
+    150deg,
+    var(--crm-primary-soft) 0%,
+    var(--crm-surface) 42%
+  );
+}
+
+.planRenewalBadge {
+  padding: 6px 10px;
+}
+
+.planRenewalPrimary,
+.planRenewalSecondary,
+.planRenewalCurrent {
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+@media (max-width: 768px) {
+  .planRenewalOverlay {
+    padding: 8px;
+  }
+
+  .planRenewalModal {
+    max-height: calc(100vh - 16px);
+    border-radius: 18px;
+  }
+
+  .planRenewalModal::before {
+    left: 18px;
+    right: 18px;
+  }
+
+  .planRenewalHeader {
+    padding: 21px 18px 17px;
+  }
+
+  .planRenewalHeader h2 {
+    font-size: 23px;
+  }
+
+  .planCurrentSummary {
+    margin: 12px 12px 0;
+    border-radius: 15px;
+  }
+
+  .planCurrentMain {
+    min-width: 0;
+  }
+
+  .planCurrentIdentity strong {
+    font-size: 18px;
+  }
+
+  .subscriptionPrepaidNotice {
+    margin: 12px 12px 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    border-radius: 15px;
+  }
+
+  .subscriptionPrepaidUntil {
+    grid-column: 1 / -1;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: flex-start;
+  }
+
+  .subscriptionComposition {
+    margin: 12px;
+    padding: 14px;
+    border-radius: 15px;
+  }
+
+  .subscriptionItem {
+    border-radius: 13px;
+  }
+
+  .planRenewalCard {
+    border-radius: 15px;
+  }
+}
+
 @media (max-width: 768px) {
   .feedbackAgendaPopup {
     right: 16px;
