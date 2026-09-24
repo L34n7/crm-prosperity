@@ -230,6 +230,10 @@ function montarConteudoTextoTemplate(
       (item) => String(item.type || "").toUpperCase() === "FOOTER"
     )?.text || "";
 
+  const buttons = payloadTemplate.components.find(
+    (item) => String(item.type || "").toUpperCase() === "BUTTONS"
+  );
+
   const substituir = (texto: string) =>
     texto.replace(/\{\{(\d+)\}\}/g, (_, grupo) => {
       const indice = Number(grupo) - 1;
@@ -241,6 +245,21 @@ function montarConteudoTextoTemplate(
     body ? substituir(body) : "",
     footer ? substituir(footer) : "",
   ].filter(Boolean);
+
+  const redirects =
+    buttons?.buttons
+      ?.filter(
+        (button) =>
+          String(button?.type || "").toUpperCase() === "URL" &&
+          button?.text &&
+          button?.url
+      )
+      .map((button) => `${button.text}: ${button.url}`)
+      .filter(Boolean) || [];
+
+  if (redirects.length > 0) {
+    partes.push(["Links:", ...redirects].join("\n"));
+  }
 
   return partes.join("\n\n").trim();
 }
