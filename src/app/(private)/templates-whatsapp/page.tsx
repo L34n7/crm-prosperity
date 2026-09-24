@@ -422,20 +422,6 @@ export default function TemplatesWhatsAppPage() {
     ];
   }, [templateButtonsDraft]);
 
-  const quickRepliesPreview = templateButtonsPreview
-    .filter((button) => button.type === "QUICK_REPLY")
-    .map((button) => button.text.trim());
-
-  const redirectButtonsPreview = templateButtonsPreview
-    .filter(
-      (button) =>
-        button.type === "URL" && button.text.trim() && button.url.trim()
-    )
-    .map((button) => ({
-      text: button.text.trim(),
-      url: button.url.trim(),
-    }));
-
   const totalRedirectButtons = templateButtonsDraft.filter(
     (button) => button.type === "URL"
   ).length;
@@ -1391,7 +1377,6 @@ export default function TemplatesWhatsAppPage() {
                           O sistema organiza Texto e Redirect em grupos compatíveis
                           com a Meta antes de enviar o template para aprovação.
                         </p>
-                      </div>
                       </div>
                     </div>
 
