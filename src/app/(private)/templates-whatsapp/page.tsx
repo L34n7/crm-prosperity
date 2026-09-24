@@ -1335,7 +1335,7 @@ export default function TemplatesWhatsAppPage() {
                           {adicionandoTipoBotao &&
                           templateButtonsDraft.length < 3 ? (
                             <select
-                              className={styles.select}
+                              className={styles.input}
                               defaultValue=""
                               onChange={(e) => {
                                 const tipo = e.target.value as
