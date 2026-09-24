@@ -35,9 +35,17 @@ export type QuickReplyButton = {
   text: string;
 };
 
+export type UrlButton = {
+  type: "URL";
+  text: string;
+  url: string;
+};
+
+export type TemplateButton = QuickReplyButton | UrlButton;
+
 export type ButtonsComponent = {
   type: "BUTTONS";
-  buttons: QuickReplyButton[];
+  buttons: TemplateButton[];
 };
 
 export type TemplateComponent =
@@ -129,8 +137,19 @@ export function validateTemplateInput(input: CreateTemplateInput) {
       errors.push("BUTTONS deve ter ao menos um botão.");
     }
 
-    if (buttons.buttons.length > 3) {
+    const quickReplyButtons = buttons.buttons.filter(
+      (button) => button.type === "QUICK_REPLY"
+    );
+    const urlButtons = buttons.buttons.filter(
+      (button) => button.type === "URL"
+    );
+
+    if (quickReplyButtons.length > 3) {
       errors.push("BUTTONS pode ter no máximo 3 botões QUICK_REPLY.");
+    }
+
+    if (urlButtons.length > 1) {
+      errors.push("BUTTONS pode ter no máximo 1 botão Redirect.");
     }
 
     const invalidButton = buttons.buttons.find(
@@ -139,6 +158,36 @@ export function validateTemplateInput(input: CreateTemplateInput) {
 
     if (invalidButton) {
       errors.push("Cada botão deve ter texto entre 1 e 25 caracteres.");
+    }
+
+    for (const button of urlButtons) {
+      const url = String(button.url || "").trim();
+
+      if (!url) {
+        errors.push("O botão Redirect precisa de uma URL.");
+        continue;
+      }
+
+      if (url.length > 2000) {
+        errors.push("A URL do botão Redirect deve ter no máximo 2000 caracteres.");
+        continue;
+      }
+
+      if (/\{\{\d+\}\}/.test(url)) {
+        errors.push(
+          "O botão Redirect criado pelo CRM usa URL fixa. Remova variáveis da URL."
+        );
+        continue;
+      }
+
+      try {
+        const parsed = new URL(url);
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+          errors.push("A URL do botão Redirect deve começar com http:// ou https://.");
+        }
+      } catch {
+        errors.push("Informe uma URL válida para o botão Redirect.");
+      }
     }
   }
 
