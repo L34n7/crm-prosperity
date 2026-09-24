@@ -54,7 +54,19 @@ function aguardar(ms: number) {
 }
 
 function erroTransitorioDesconexao(error: ErroBanco | null | undefined) {
-  return ERROS_TRANSITORIOS_DESCONEXAO.has(String(error?.code || ""));
+  if (ERROS_TRANSITORIOS_DESCONEXAO.has(String(error?.code || ""))) {
+    return true;
+  }
+
+  const texto = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+
+  return (
+    texto.includes("fetch failed") ||
+    texto.includes("econnreset") ||
+    texto.includes("etimedout") ||
+    texto.includes("socket hang up") ||
+    texto.includes("und_err_socket")
+  );
 }
 
 function objetoJson(value: unknown): Record<string, unknown> {
