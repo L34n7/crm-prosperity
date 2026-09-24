@@ -545,7 +545,7 @@
   flex-wrap: wrap;
 }
 
-.templateButtonAddArea .select {
+.templateButtonAddArea .input {
   min-width: min(100%, 260px);
   flex: 1 1 220px;
 }
