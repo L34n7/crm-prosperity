@@ -229,6 +229,13 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   const periodStart = validDate(subscription?.current_period_start);
   const periodEnd = validDate(subscription?.current_period_end);
   const nextDueAt = validDate(subscription?.next_due_at) || periodEnd;
+  const renewalReference = String(
+    payload.order?.id || payload.event_id || subscriptionId
+  );
+  const renewalStartsInFuture =
+    payload.event === "subscription.renewed" &&
+    Boolean(periodStart) &&
+    new Date(String(periodStart)).getTime() > Date.now() + 60_000;
   const additionalNumbers = addonWhatsappQuantity(payload);
   const baseWhatsappLimit = Math.max(1, Number((plan as any)?.limite_integracoes_whatsapp || 1));
   const whatsappLimit = Math.min(10, baseWhatsappLimit + additionalNumbers);
@@ -294,6 +301,18 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
       whatsapp_addon_quantity: additionalNumbers,
       last_subscription_event: payload.event,
       last_subscription_event_id: payload.event_id,
+      ...(payload.event === "subscription.renewed"
+        ? {
+            prepaid_tokens_pending: renewalStartsInFuture
+              ? {
+                  reference: renewalReference,
+                  starts_at: periodStart,
+                  subscription_id: subscriptionId,
+                  event_id: payload.event_id || null,
+                }
+              : null,
+          }
+        : {}),
     },
     assinatura_fluxos_pausados_em: null,
     updated_at: new Date().toISOString(),
@@ -303,17 +322,23 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   if (payload.event === "subscription.renewed") {
     await aplicarCancelamentosWhatsappAgendados(empresaId, payload);
 
-    const renewal = await supabase.rpc("renovar_tokens_assinatura_plano", {
-      p_empresa_id: empresaId,
-      p_referencia: String(payload.order?.id || payload.event_id || subscriptionId),
-      p_pago_em: periodStart || payload.occurred_at || new Date().toISOString(),
-      p_metadata_json: {
-        origem: "prosperity_pay_subscription_renewal",
-        subscription_id: subscriptionId,
-        event_id: payload.event_id || null,
-      },
-    });
-    if (renewal.error) throw renewal.error;
+    // Em pagamento antecipado o próximo ciclo ainda não começou. A franquia
+    // mensal de IA é renovada de forma preguiçosa em lib/ia/tokens.ts somente
+    // quando current_period_start chega, evitando liberar dois meses de tokens
+    // dentro do mesmo período.
+    if (!renewalStartsInFuture) {
+      const renewal = await supabase.rpc("renovar_tokens_assinatura_plano", {
+        p_empresa_id: empresaId,
+        p_referencia: renewalReference,
+        p_pago_em: periodStart || payload.occurred_at || new Date().toISOString(),
+        p_metadata_json: {
+          origem: "prosperity_pay_subscription_renewal",
+          subscription_id: subscriptionId,
+          event_id: payload.event_id || null,
+        },
+      });
+      if (renewal.error) throw renewal.error;
+    }
   } else if (payload.event === "subscription.changed") {
     await preserveTokenUsageOnPlanChange(empresaId, planTokenLimit);
   }
