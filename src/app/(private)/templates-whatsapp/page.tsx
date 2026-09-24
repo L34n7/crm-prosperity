@@ -18,6 +18,7 @@ type IntegracaoWhatsApp = {
 type TemplateButton = {
   type: string;
   text: string;
+  url?: string;
 };
 
 type TemplateComponent = {
@@ -165,6 +166,25 @@ function extrairQuickReplies(payload: WhatsAppTemplate["payload"]) {
   );
 }
 
+function extrairRedirectButtons(payload: WhatsAppTemplate["payload"]) {
+  const buttons = getComponent(payload, "BUTTONS");
+
+  return (
+    buttons?.buttons
+      ?.filter(
+        (button) =>
+          String(button?.type || "").toUpperCase() === "URL" &&
+          button?.text &&
+          button?.url
+      )
+      .map((button) => ({
+        text: String(button.text || "").trim(),
+        url: String(button.url || "").trim(),
+      }))
+      .filter((button) => button.text && button.url) || []
+  );
+}
+
 function montarPreviewListaTemplate(payload: WhatsAppTemplate["payload"]) {
   const headerComponent = getComponent(payload, "HEADER");
   const headerFormat = String(headerComponent?.format || "").toUpperCase();
@@ -186,6 +206,7 @@ function montarPreviewListaTemplate(payload: WhatsAppTemplate["payload"]) {
     corpo: corpo || "Conteúdo não informado.",
     rodape: extrairFooter(payload),
     quickReplies: extrairQuickReplies(payload),
+    redirectButtons: extrairRedirectButtons(payload),
   };
 }
 
@@ -265,6 +286,8 @@ export default function TemplatesWhatsAppPage() {
   const [quickReply1, setQuickReply1] = useState("");
   const [quickReply2, setQuickReply2] = useState("");
   const [quickReply3, setQuickReply3] = useState("");
+  const [redirectText, setRedirectText] = useState("");
+  const [redirectUrl, setRedirectUrl] = useState("");
 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const ITENS_POR_PAGINA = 7;
@@ -384,6 +407,13 @@ export default function TemplatesWhatsAppPage() {
   const quickRepliesPreview = [quickReply1, quickReply2, quickReply3]
     .map((item) => item.trim())
     .filter(Boolean);
+  const redirectPreview =
+    redirectText.trim() && redirectUrl.trim()
+      ? {
+          text: redirectText.trim(),
+          url: redirectUrl.trim(),
+        }
+      : null;
 
   const totalVariaveisBody = useMemo(
     () => contarVariaveisTexto(bodyText),
@@ -594,6 +624,38 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
+    const redirectTextFinal = redirectText.trim();
+    const redirectUrlFinal = redirectUrl.trim();
+    const redirectParcial = Boolean(redirectTextFinal || redirectUrlFinal);
+
+    if (redirectParcial && (!redirectTextFinal || !redirectUrlFinal)) {
+      setErro("Informe o texto e a URL do botão Redirect.");
+      return;
+    }
+
+    if (redirectTextFinal.length > 25) {
+      setErro("O texto do botão Redirect deve ter no máximo 25 caracteres.");
+      return;
+    }
+
+    if (redirectUrlFinal) {
+      if (/\{\{\d+\}\}/.test(redirectUrlFinal)) {
+        setErro("O botão Redirect deve usar uma URL fixa, sem variáveis.");
+        return;
+      }
+
+      try {
+        const url = new URL(redirectUrlFinal);
+        if (!["http:", "https:"].includes(url.protocol)) {
+          setErro("A URL do botão Redirect deve começar com http:// ou https://.");
+          return;
+        }
+      } catch {
+        setErro("Informe uma URL válida para o botão Redirect.");
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
 
@@ -657,13 +719,27 @@ export default function TemplatesWhatsAppPage() {
         });
       }
 
-      if (quickRepliesPreview.length > 0) {
+      const templateButtons: TemplateButton[] = [];
+
+      if (redirectTextFinal && redirectUrlFinal) {
+        templateButtons.push({
+          type: "URL",
+          text: redirectTextFinal,
+          url: redirectUrlFinal,
+        });
+      }
+
+      templateButtons.push(
+        ...quickRepliesPreview.map((text) => ({
+          type: "QUICK_REPLY",
+          text,
+        }))
+      );
+
+      if (templateButtons.length > 0) {
         components.push({
           type: "BUTTONS",
-          buttons: quickRepliesPreview.map((text) => ({
-            type: "QUICK_REPLY",
-            text,
-          })),
+          buttons: templateButtons,
         });
       }
 
@@ -706,6 +782,8 @@ export default function TemplatesWhatsAppPage() {
       setQuickReply1("");
       setQuickReply2("");
       setQuickReply3("");
+      setRedirectText("");
+      setRedirectUrl("");
 
       await carregarTemplates(filtroIntegracao);
     } catch (error: any) {
@@ -1072,6 +1150,43 @@ export default function TemplatesWhatsAppPage() {
                         <div className={styles.contentSectionHeader}>
                           <div>
                             <strong>
+                              Botão Redirect{" "}
+                              <span className={styles.secondaryLabel}>(Abrir link)</span>
+                            </strong>
+                            <p>Adicione um botão que direciona o contato para uma página externa.</p>
+                          </div>
+                          <span className={styles.contentSectionBadge}>Opcional</span>
+                        </div>
+
+                        <div className={styles.field}>
+                          <div className={styles.topGrid}>
+                            <input
+                              value={redirectText}
+                              onChange={(e) => setRedirectText(e.target.value)}
+                              className={styles.input}
+                              placeholder="Texto do botão. Ex.: Acessar site"
+                              maxLength={25}
+                            />
+
+                            <input
+                              value={redirectUrl}
+                              onChange={(e) => setRedirectUrl(e.target.value)}
+                              className={styles.input}
+                              placeholder="https://seusite.com.br/pagina"
+                              inputMode="url"
+                            />
+                          </div>
+
+                          <p className={styles.help}>
+                            A URL é fixa e será aberta quando o contato tocar no botão do template.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className={`${styles.contentSectionCard} ${styles.responsesField}`}>
+                        <div className={styles.contentSectionHeader}>
+                          <div>
+                            <strong>
                               Botões de respostas{" "}
                               <span className={styles.secondaryLabel}>(Respostas rápidas)</span>
                             </strong>
@@ -1150,6 +1265,12 @@ export default function TemplatesWhatsAppPage() {
                               </span>
                             </div>
 
+                            {redirectPreview ? (
+                              <div className={styles.whatsappPreviewButton}>
+                                ↗ {redirectPreview.text}
+                              </div>
+                            ) : null}
+
                             {quickRepliesPreview.map((texto, index) => (
                               <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
                                 ↩ {texto}
@@ -1197,6 +1318,18 @@ export default function TemplatesWhatsAppPage() {
                           <div className={styles.previewBlock}>
                             <span className={styles.previewLabel}>Rodapé</span>
                             <p className={styles.previewText}>{footerText.trim() || "Não informado"}</p>
+                          </div>
+
+                          <div className={styles.previewBlock}>
+                            <span className={styles.previewLabel}>Redirect</span>
+                            {redirectPreview ? (
+                              <>
+                                <p className={styles.previewText}>{redirectPreview.text}</p>
+                                <p className={styles.help}>{redirectPreview.url}</p>
+                              </>
+                            ) : (
+                              <p className={styles.previewText}>Nenhum botão Redirect adicionado.</p>
+                            )}
                           </div>
 
                           <div className={styles.previewBlock}>
@@ -1400,6 +1533,7 @@ export default function TemplatesWhatsAppPage() {
                       const body = extrairBody(template.payload);
                       const footer = extrairFooter(template.payload);
                       const quickReplies = extrairQuickReplies(template.payload);
+                      const redirectButtons = extrairRedirectButtons(template.payload);
                       const previewLista = montarPreviewListaTemplate(template.payload);
                       const categoriaNormalizada = String(
                         template.categoria || ""
@@ -1448,6 +1582,15 @@ export default function TemplatesWhatsAppPage() {
                                       })}
                                     </span>
                                   </div>
+
+                                  {previewLista.redirectButtons.map((button, index) => (
+                                    <div
+                                      key={`${button.url}-redirect-preview-${index}`}
+                                      className={styles.whatsappPreviewButton}
+                                    >
+                                      ↗ {button.text}
+                                    </div>
+                                  ))}
 
                                   {previewLista.quickReplies.map((texto, index) => (
                                     <div
@@ -1535,12 +1678,28 @@ export default function TemplatesWhatsAppPage() {
                                 </p>
                               </div>
 
-                              {(footer || quickReplies.length > 0) && (
+                              {(footer || redirectButtons.length > 0 || quickReplies.length > 0) && (
                                 <div className={styles.compactFooterRow}>
                                   {footer ? (
                                     <div className={styles.compactMiniBlock}>
                                       <span className={styles.compactLabel}>Rodapé</span>
                                       <p className={styles.compactText}>{footer}</p>
+                                    </div>
+                                  ) : null}
+
+                                  {redirectButtons.length > 0 ? (
+                                    <div className={styles.compactMiniBlock}>
+                                      <span className={styles.compactLabel}>
+                                        Botão Redirect
+                                      </span>
+                                      {redirectButtons.map((button, index) => (
+                                        <p
+                                          key={`${button.url}-detail-${index}`}
+                                          className={styles.compactText}
+                                        >
+                                          {button.text} · {button.url}
+                                        </p>
+                                      ))}
                                     </div>
                                   ) : null}
 
