@@ -40,7 +40,9 @@ export async function GET() {
         limite_usuarios:
           plano.limite_usuarios ?? limites?.limiteUsuarios ?? null,
         limite_integracoes_whatsapp:
-          plano.limite_integracoes_whatsapp ?? 1,
+          plano.limite_integracoes_whatsapp ??
+          limites?.limiteIntegracoesWhatsapp ??
+          1,
         limite_tokens_ia: limites?.limiteTokensIa ?? null,
       };
     }),
