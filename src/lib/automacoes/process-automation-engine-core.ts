@@ -4039,6 +4039,68 @@ export async function executarNo(params: {
       },
     });
 
+    const timeoutSemRespostaAgendado =
+      await agendarTimeoutSemRespostaSeExistir({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        numeroDestino,
+      });
+
+    if (timeoutSemRespostaAgendado) {
+      const { error: aguardarError } = await supabaseAdmin
+        .from("automacao_execucoes")
+        .update({
+          no_atual_id: no.id,
+          status: "aguardando",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", execucaoId)
+        .eq("empresa_id", empresaId);
+
+      if (aguardarError) {
+        await cancelarAgendamentosTimeoutPendentes({
+          empresaId,
+          execucaoId,
+          noId: no.id,
+        });
+
+        throw new Error(
+          `Erro ao colocar botão redirect em espera: ${aguardarError.message}`
+        );
+      }
+
+      await agendarEncerramentoInatividadeFluxoSeAtivo({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        numeroDestino,
+      });
+
+      await registrarLog({
+        empresaId,
+        execucaoId,
+        fluxoId,
+        noId: no.id,
+        tipoEvento: "botao_redirect_aguardando_timeout",
+        descricao:
+          "Botão redirect enviado; execução aguardando resposta ou timeout configurado.",
+        entrada: {
+          url,
+          botao_texto: botaoTexto,
+        },
+        saida: {
+          status_execucao: "aguardando",
+        },
+      });
+
+      return;
+    }
+
     await seguirParaProximoNo({
       empresaId,
       conversaId,
@@ -9245,7 +9307,7 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
 
   if (error) {
     console.error("[AUTOMATION_ENGINE] Erro ao buscar conexão timeout:", error);
-    return;
+    return false;
   }
 
   console.log("[AUTOMATION_TIMEOUT] Conexões encontradas", {
@@ -9254,7 +9316,7 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
   });
 
   if (!conexoesTimeout || conexoesTimeout.length === 0) {
-    return;
+    return false;
   }
 
   await cancelarAgendamentosTimeoutPendentes({
@@ -9262,6 +9324,8 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
     execucaoId,
     noId,
   });
+
+  let timeoutAgendado = false;
 
   for (const conexaoTimeout of conexoesTimeout) {
     const timeoutSegundos = Number(
@@ -9327,6 +9391,8 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
       continue;
     }
 
+    timeoutAgendado = true;
+
     await registrarLog({
       empresaId,
       execucaoId,
@@ -9342,6 +9408,8 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
       },
     });
   }
+
+  return timeoutAgendado;
 }
 
 
