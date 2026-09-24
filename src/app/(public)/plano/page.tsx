@@ -237,7 +237,7 @@ export default function PlanoPage() {
       recursos: [
         "6 usuários inclusos",
         "400 mil de tokens de IA",
-        "API Oficial do WhatsApp inclusa",
+        "2 números na API Oficial do WhatsApp",
         "Atendimento automatizado avançado com IA",
         "IA treinável para responder clientes",
         "Respostas automáticas humanizadas",
@@ -302,7 +302,7 @@ export default function PlanoPage() {
 
           <p className={styles.subtitle}>
             Básico e Essencial possuem os mesmos recursos principais. A diferença
-            está nos usuários inclusos e no volume de tokens de IA.
+            está nos usuários, tokens de IA e números de WhatsApp inclusos.
           </p>
         </div>
 
@@ -414,7 +414,7 @@ export default function PlanoPage() {
           <p className={styles.footerText}>
             Os planos <strong>Básico</strong> e <strong>Essencial IA PRO</strong> incluem os 
             principais recursos. A diferença está na quantidade de <strong>usuários</strong>, 
-            <strong>tokens de IA</strong> e volume de operação. Para demandas maiores, confira 
+            <strong>tokens de IA</strong>, <strong>números de WhatsApp inclusos</strong> e volume de operação. Para demandas maiores, confira 
             a condição do <strong>Profissional Enterprise</strong> em Fazer cotação.
           </p>
         </div>
