@@ -144,12 +144,29 @@ export function validateTemplateInput(input: CreateTemplateInput) {
       (button) => button.type === "URL"
     );
 
-    if (quickReplyButtons.length > 3) {
-      errors.push("BUTTONS pode ter no máximo 3 botões QUICK_REPLY.");
+    if (buttons.buttons.length > 3) {
+      errors.push("BUTTONS pode ter no máximo 3 botões no CRM.");
     }
 
-    if (urlButtons.length > 1) {
-      errors.push("BUTTONS pode ter no máximo 1 botão Redirect.");
+    if (quickReplyButtons.length > 3) {
+      errors.push("BUTTONS pode ter no máximo 3 botões de texto.");
+    }
+
+    if (urlButtons.length > 2) {
+      errors.push("BUTTONS pode ter no máximo 2 botões Redirect.");
+    }
+
+    const tipos = buttons.buttons.map((button) => button.type);
+    const transicoes = tipos.reduce(
+      (total, tipo, index) =>
+        index > 0 && tipo !== tipos[index - 1] ? total + 1 : total,
+      0
+    );
+
+    if (transicoes > 1) {
+      errors.push(
+        "Agrupe os botões do mesmo tipo: textos juntos e redirects juntos."
+      );
     }
 
     const invalidButton = buttons.buttons.find(
