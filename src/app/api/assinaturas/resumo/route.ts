@@ -65,6 +65,9 @@ export async function GET() {
           base_amount_cents: 0,
           current_amount_cents: 0,
           next_amount_cents: 0,
+          paid_ahead: false,
+          paid_ahead_starts_at: null,
+          paid_until: null,
           is_free: true,
         },
         plan: {
@@ -171,6 +174,7 @@ export async function GET() {
               numero: integracao.numero || null,
               status: integracao.status || null,
               posicao: integracao.posicao || null,
+              configured: Boolean(String(integracao.numero || "").trim()),
             }
           : null,
         cancellation: pending
@@ -238,6 +242,13 @@ export async function GET() {
       nextWhatsappQuantity * addonUnitCents +
       genericAddonsTotal;
 
+    const currentPeriodStartMs = assinatura.current_period_start
+      ? new Date(assinatura.current_period_start).getTime()
+      : Number.NaN;
+    const paidAhead =
+      Number.isFinite(currentPeriodStartMs) &&
+      currentPeriodStartMs > Date.now() + 60_000;
+
     return NextResponse.json({
       ok: true,
       subscription: {
@@ -250,6 +261,9 @@ export async function GET() {
         base_amount_cents: baseAmountCents,
         current_amount_cents: Number(assinatura.current_amount_cents || nextAmountCents),
         next_amount_cents: nextAmountCents,
+        paid_ahead: paidAhead,
+        paid_ahead_starts_at: paidAhead ? assinatura.current_period_start : null,
+        paid_until: paidAhead ? assinatura.current_period_end : null,
         is_free: false,
       },
       plan: {
