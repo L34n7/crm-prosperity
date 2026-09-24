@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
 import { enviarPrimeiroAcesso } from "@/lib/auth/enviar-primeiro-acesso";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sincronizarAssinaturaProsperityPay } from "@/lib/prosperity-pay/sync-subscription";
 
 const supabase = getSupabaseAdmin();
 const MAX_TIMESTAMP_DRIFT_SECONDS = 5 * 60;
@@ -36,7 +37,36 @@ type ProsperityPayPayload = {
       ticket_url?: string | null;
     };
   };
-  order?: { id?: string };
+  order?: {
+    id?: string;
+    billing_reason?: string | null;
+    subscription_id?: string | null;
+    subscription_change_id?: string | null;
+  };
+  subscription?: {
+    id?: string;
+    status?: string;
+    billing_model?: string;
+    base_amount_cents?: number;
+    current_amount_cents?: number;
+    currency?: string;
+    current_period_start?: string | null;
+    current_period_end?: string | null;
+    next_due_at?: string | null;
+    cycle_number?: number;
+    items?: Array<{
+      id?: string;
+      type?: string;
+      code?: string;
+      description?: string;
+      unit_amount_cents?: number;
+      quantity?: number;
+      total_amount_cents?: number;
+      offer_id?: string | null;
+      addon_id?: string | null;
+    }>;
+  };
+  change?: Record<string, unknown> | null;
   offer?: {
     id?: string;
     reference?: string | null;
@@ -221,6 +251,10 @@ function validatePayload(
     if (!payload.affiliate?.id || !payload.affiliate.reference || !payload.product?.id) {
       throw new Error("Evento de afiliado incompleto.");
     }
+  }
+
+  if (payload.event.startsWith("subscription.") && !payload.subscription?.id) {
+    throw new Error("Evento de assinatura sem identificador.");
   }
 }
 
@@ -885,6 +919,9 @@ export async function POST(request: Request) {
     "affiliate.blocked",
     "affiliate.rejected",
     "affiliate.cancelled",
+    "subscription.started",
+    "subscription.renewed",
+    "subscription.changed",
   ]);
 
   if (!supportedEvents.has(payload.event!)) {
@@ -917,6 +954,28 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (payload.event?.startsWith("subscription.")) {
+      const resultado = await sincronizarAssinaturaProsperityPay(payload as any);
+
+      await supabase
+        .from("prosperity_pay_webhook_eventos")
+        .update({
+          status: "processed",
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq("id", eventRow.id);
+
+      return NextResponse.json({
+        ok: true,
+        event_id: payload.event_id,
+        event: payload.event,
+        empresa_id: resultado.empresaId,
+        subscription_id: resultado.subscriptionId,
+        limite_integracoes_whatsapp: resultado.whatsappLimit,
+      });
+    }
+
     if (payload.event?.startsWith("affiliate.")) {
       const afiliado = await sincronizarAfiliado(payload, new URL(request.url).origin);
 
@@ -963,8 +1022,16 @@ export async function POST(request: Request) {
     let empresaId: string | null = lead?.empresa_id ?? null;
 
     if (payload.event === "payment.approved") {
-      const resultado = await processarAprovado(payload, lead, pagamento.id);
-      empresaId = resultado.empresa.id;
+      const billingReason = String(payload.order?.billing_reason || "");
+      const processarComoPagamentoLegado =
+        !billingReason ||
+        billingReason === "one_time" ||
+        billingReason === "subscription_initial";
+
+      if (processarComoPagamentoLegado) {
+        const resultado = await processarAprovado(payload, lead, pagamento.id);
+        empresaId = resultado.empresa.id;
+      }
     }
 
     await supabase
