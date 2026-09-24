@@ -36,8 +36,32 @@ export async function processarAvisosAssinatura(agora = new Date()) {
   if (error) throw new Error(`Erro ao buscar assinaturas: ${error.message}`);
   const resultado = { analisadas: empresas?.length || 0, atualizadas: 0, enviados: 0, ignorados: 0, erros: 0 };
 
+  const { data: assinaturasPrePagas, error: assinaturasPrePagasError } =
+    await supabase
+      .from("prosperity_pay_assinaturas")
+      .select("empresa_id")
+      .not("empresa_id", "is", null)
+      .gt("current_period_start", agora.toISOString());
+
+  if (assinaturasPrePagasError) {
+    throw new Error(
+      `Erro ao verificar mensalidades antecipadas: ${assinaturasPrePagasError.message}`
+    );
+  }
+
+  const empresasComMensalidadeFuturaPaga = new Set(
+    (assinaturasPrePagas || [])
+      .map((item) => String(item.empresa_id || ""))
+      .filter(Boolean)
+  );
+
   for (const empresa of empresas || []) {
     try {
+      if (empresasComMensalidadeFuturaPaga.has(empresa.id)) {
+        resultado.ignorados += 1;
+        continue;
+      }
+
       const { data: status, error: syncError } = await supabase.rpc("sincronizar_assinatura_empresa", { p_empresa_id: empresa.id });
       if (syncError) throw new Error(syncError.message);
       resultado.atualizadas += 1;
