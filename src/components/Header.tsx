@@ -393,27 +393,40 @@ export default function Header({
     return "Contratar plano";
   }
 
-  function saldoTokensEmAlerta(saldo: SaldoTokensIa | null) {
-    if (!saldo?.limite_mensal || saldo.tokens_restantes === null) return false;
+  function tokensDisponiveis(saldo: SaldoTokensIa | null) {
+    if (!saldo) return 0;
+    if (saldo.limite_mensal === null || saldo.saldo_mensal_restante === null) {
+      return null;
+    }
+
     return (
-      saldo.tokens_restantes <
-      saldo.limite_mensal * LIMITE_ALERTA_TOKENS_AMARELO
+      Math.max(Number(saldo.saldo_mensal_restante || 0), 0) +
+      Math.max(Number(saldo.saldo_avulso_restante || 0), 0)
     );
+  }
+
+  function saldoTokensEmAlerta(saldo: SaldoTokensIa | null) {
+    const disponiveis = tokensDisponiveis(saldo);
+    if (!saldo?.limite_mensal || disponiveis === null) return false;
+
+    return disponiveis < saldo.limite_mensal * LIMITE_ALERTA_TOKENS_AMARELO;
   }
 
   function saldoTokensCritico(saldo: SaldoTokensIa | null) {
-    if (!saldo?.limite_mensal || saldo.tokens_restantes === null) return false;
-    return (
-      saldo.tokens_restantes <
-      saldo.limite_mensal * LIMITE_ALERTA_TOKENS_VERMELHO
-    );
+    const disponiveis = tokensDisponiveis(saldo);
+    if (!saldo?.limite_mensal || disponiveis === null) return false;
+
+    return disponiveis < saldo.limite_mensal * LIMITE_ALERTA_TOKENS_VERMELHO;
   }
 
   function saldoTokensZerado(saldo: SaldoTokensIa | null) {
+    const disponiveis = tokensDisponiveis(saldo);
+
     return (
       !!saldo &&
       saldo.limite_mensal !== null &&
-      Number(saldo.tokens_restantes ?? 0) <= 0
+      disponiveis !== null &&
+      disponiveis <= 0
     );
   }
 
@@ -427,7 +440,7 @@ export default function Header({
       );
       window.sessionStorage.setItem(
         `${chaveBase}:lastRemaining`,
-        String(Number(saldoTokensIa.tokens_restantes ?? 0))
+        String(Number(tokensDisponiveis(saldoTokensIa) ?? 0))
       );
     }
 
@@ -615,7 +628,7 @@ export default function Header({
 
     const periodo = saldoTokensIa?.periodo_inicio || "atual";
     const chaveBase = `tokens-low-warning:${periodo}`;
-    const tokensRestantes = Number(saldoTokensIa?.tokens_restantes ?? 0);
+    const tokensRestantes = Number(tokensDisponiveis(saldoTokensIa) ?? 0);
     const ultimoSaldoRegistrado = Number(
       window.sessionStorage.getItem(`${chaveBase}:lastRemaining`) ?? ""
     );
@@ -836,6 +849,7 @@ export default function Header({
     setPlanoPagamentoSelecionado(plano);
   }
 
+  const tokensDisponiveisHeader = tokensDisponiveis(saldoTokensIa);
   const tokensEmAlerta = saldoTokensEmAlerta(saldoTokensIa);
   const tokensCriticos = saldoTokensCritico(saldoTokensIa);
   const tokensZerados = saldoTokensZerado(saldoTokensIa);
@@ -965,7 +979,7 @@ export default function Header({
             <span className={styles.tokensLabel}>IA</span>
 
             <strong>
-              {formatarTokens(saldoTokensIa.tokens_restantes)}
+              {formatarTokens(tokensDisponiveisHeader)}
             </strong>
 
             {tokensEmAlerta && (
@@ -989,7 +1003,7 @@ export default function Header({
             <span className={styles.tokensLabel}>IA</span>
 
             <strong>
-              {formatarTokens(saldoTokensIa.tokens_restantes)}
+              {formatarTokens(tokensDisponiveisHeader)}
             </strong>
 
             {tokensEmAlerta && (
@@ -1838,7 +1852,7 @@ export default function Header({
                 <p>
                   Restam{" "}
                   <strong>
-                    {formatarTokens(saldoTokensIa.tokens_restantes)}
+                    {formatarTokens(tokensDisponiveisHeader)}
                   </strong>{" "}
                   tokens disponíveis, incluindo pacotes avulsos. Sem tokens,
                   automações podem deixar de interpretar respostas, analisar arquivos
