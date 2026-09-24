@@ -254,7 +254,7 @@ const PLANS = [
     features: [
       "6 usuários inclusos",
       "400 mil tokens de IA",
-      "API Oficial do WhatsApp inclusa",
+      "2 números na API Oficial do WhatsApp",
       "IA treinável e automações avançadas",
       "Segmentação e relatórios completos",
     ],
@@ -898,7 +898,7 @@ export default function SitePage() {
                 <em>para o momento da sua operação.</em>
               </>
             }
-            description="Os planos Básico e Essencial incluem os principais recursos. A diferença está nos usuários, tokens de IA e capacidade da operação."
+            description="Os planos Básico e Essencial incluem os principais recursos. A diferença está nos usuários, tokens de IA, números de WhatsApp inclusos e capacidade da operação."
           />
 
           <div className={styles.pricingGrid}>
