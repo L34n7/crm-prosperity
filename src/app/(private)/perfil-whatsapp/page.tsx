@@ -842,7 +842,7 @@ export default function WhatsappPerfilPage() {
       setErroDesconexao("");
 
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 135_000);
+      const timeoutId = window.setTimeout(() => controller.abort(), 265_000);
 
       let response: Response;
 

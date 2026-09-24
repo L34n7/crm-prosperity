@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 300;
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
@@ -366,6 +368,7 @@ export async function DELETE(
 
     if (resultadoExclusao.error) {
       const transitorio = erroTransitorioDesconexao(resultadoExclusao.error);
+      const codigoErro = String(resultadoExclusao.error.code || "");
 
       console.error(
         "[WHATSAPP] Erro ao criar backup e excluir integração:",
@@ -377,14 +380,19 @@ export async function DELETE(
         }
       );
 
-      return NextResponse.json(
-        {
-          ok: false,
-          error: transitorio
+      const mensagemErro =
+        codigoErro === "57014"
+          ? "A limpeza desta integração possui um histórico grande e excedeu o tempo limite de processamento. Nenhum dado foi excluído parcialmente."
+          : transitorio
             ? metaJaDesconectado
               ? "A Meta já desconectou este número, mas o CRM ainda está finalizando a limpeza local. Tente novamente em alguns segundos."
               : "A integração está sendo atualizada por outro processo. Aguarde alguns segundos e tente novamente."
-            : "Não foi possível desconectar a integração. Nenhum dado foi excluído.",
+            : "Não foi possível desconectar a integração. Nenhum dado foi excluído.";
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: mensagemErro,
           retryable: transitorio,
           meta_already_disconnected: metaJaDesconectado,
         },
