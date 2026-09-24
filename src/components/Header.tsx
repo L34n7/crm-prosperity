@@ -178,8 +178,9 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
       "Para equipes que precisam de mais automação, IA e volume para escalar vendas e atendimento.",
     precoOriginal: "R$ 367/mês",
     preco: "R$ 267/mês",
-    observacao: "6 usuários e 400 mil tokens de IA.",
+    observacao: "6 usuários, 400 mil tokens de IA e 2 números de WhatsApp.",
     recursos: [
+      "2 números na API Oficial do WhatsApp",
       "Atendimento automatizado avançado",
       "IA treinável para responder clientes",
       "Disparo inteligente de mensagens",
