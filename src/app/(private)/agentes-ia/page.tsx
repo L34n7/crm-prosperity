@@ -6,6 +6,7 @@ import {
   Bot,
   BookOpen,
   CheckCircle2,
+  Copy,
   Loader2,
   MessageCircle,
   Pause,
@@ -92,7 +93,7 @@ type Agente = {
   id: string;
   nome: string;
   descricao?: string | null;
-  status: "ativo" | "inativo";
+  status: "ativo" | "inativo" | "rascunho";
   modelo: string;
   prompt_sistema: string;
   tom_voz?: string | null;
@@ -446,6 +447,7 @@ export default function AgentesIaPage() {
   const [atendentes, setAtendentes] = useState<OpcaoAtendente[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
   const [alterandoStatus, setAlterandoStatus] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false);
@@ -600,6 +602,36 @@ export default function AgentesIaPage() {
       setSucesso("Agente criado pausado. Configure o modo, o roteamento e a contingência antes de ativar.");
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao criar agente.");
+    }
+  }
+
+  async function duplicarAgente() {
+    if (!editor || duplicando) return;
+
+    setDuplicando(true);
+    setErro("");
+    setSucesso("");
+
+    try {
+      const res = await fetch("/api/agentes-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ duplicar_id: editor.id }),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao duplicar agente.");
+      }
+
+      await carregar(json.agente.id);
+      setSucesso(
+        `Agente “${json.agente.nome}” duplicado como rascunho. Revise a configuração antes de ativar.`
+      );
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao duplicar agente.");
+    } finally {
+      setDuplicando(false);
     }
   }
 
@@ -1077,6 +1109,7 @@ export default function AgentesIaPage() {
             ) : (
               agentes.map((agente) => {
                 const ativo = agente.status === "ativo";
+                const rascunho = agente.status === "rascunho";
                 return (
                   <button
                     key={agente.id}
@@ -1092,12 +1125,16 @@ export default function AgentesIaPage() {
                     <span className={styles.agentCardText}>
                       <strong>{agente.nome}</strong>
                       <small>
-                        {agente.modo_atendimento === "economico" ? "Econômico" : "Geral"} · {ativo ? "Ativo" : "Pausado"}
+                        {agente.modo_atendimento === "economico" ? "Econômico" : "Geral"} · {ativo ? "Ativo" : rascunho ? "Rascunho" : "Pausado"}
                       </small>
                     </span>
                     <span
                       className={`${styles.statusDot} ${
-                        ativo ? styles.status_ativo : styles.status_inativo
+                        ativo
+                          ? styles.status_ativo
+                          : rascunho
+                            ? styles.status_rascunho
+                            : styles.status_inativo
                       }`}
                     />
                   </button>
@@ -1119,10 +1156,19 @@ export default function AgentesIaPage() {
                   <div>
                     <span
                       className={`${styles.badge} ${
-                        editor.status === "ativo" ? styles.badgeActive : styles.badgePaused
+                        editor.status === "ativo"
+                          ? styles.badgeActive
+                          : editor.status === "rascunho"
+                            ? styles.badgeDraft
+                            : styles.badgePaused
                       }`}
                     >
-                      <Zap size={13} /> {editor.status === "ativo" ? "Ativo" : "Pausado"}
+                      <Zap size={13} />{" "}
+                      {editor.status === "ativo"
+                        ? "Ativo"
+                        : editor.status === "rascunho"
+                          ? "Rascunho"
+                          : "Pausado"}
                     </span>
                     <h2>{editor.nome}</h2>
                   </div>
@@ -1135,6 +1181,19 @@ export default function AgentesIaPage() {
                     >
                       {salvando ? <Loader2 size={17} className={styles.spin} /> : <Save size={17} />}
                       Salvar
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={duplicarAgente}
+                      disabled={duplicando || salvando || alterandoStatus}
+                    >
+                      {duplicando ? (
+                        <Loader2 size={17} className={styles.spin} />
+                      ) : (
+                        <Copy size={17} />
+                      )}
+                      {duplicando ? "Duplicando..." : "Duplicar"}
                     </button>
                     <span className={styles.actionDivider} aria-hidden="true" />
                     {editor.status === "ativo" ? (

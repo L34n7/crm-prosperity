@@ -370,7 +370,12 @@ async function carregarAgentes(empresaId: string) {
   return (agentes || []).map((agente) => ({
     ...agente,
     modelo: MODELO_PADRAO,
-    status: agente.status === "ativo" ? "ativo" : "inativo",
+    status:
+      agente.status === "ativo"
+        ? "ativo"
+        : agente.status === "rascunho"
+          ? "rascunho"
+          : "inativo",
     modo_atendimento: normalizarModo(agente.modo_atendimento),
     fallback_tipo: normalizarFallbackTipo(agente.fallback_tipo),
     ferramentas: (ferramentas || []).filter((item) => item.agente_id === agente.id),
@@ -642,6 +647,46 @@ export async function POST(request: Request) {
     const contexto = await contextoEmpresa();
     if (!contexto.ok) return contexto.response;
     const body = (await request.json()) as Record<string, unknown>;
+    const duplicarId = String(body.duplicar_id || "").trim();
+
+    if (duplicarId) {
+      const { data: novoAgenteId, error: duplicarError } = await supabaseAdmin.rpc(
+        "duplicar_agente_ia",
+        {
+          p_empresa_id: contexto.empresaId,
+          p_agente_id: duplicarId,
+          p_usuario_id: contexto.usuario.id,
+        }
+      );
+
+      if (duplicarError) {
+        if (duplicarError.code === "P0002") {
+          return NextResponse.json(
+            { ok: false, error: "Agente original não encontrado." },
+            { status: 404 }
+          );
+        }
+        throw new Error(duplicarError.message);
+      }
+
+      const agentesDuplicados = await carregarAgentes(contexto.empresaId);
+      const agenteDuplicado = agentesDuplicados.find(
+        (item) => item.id === String(novoAgenteId || "")
+      );
+
+      if (!agenteDuplicado) {
+        throw new Error("O agente foi duplicado, mas não pôde ser recarregado.");
+      }
+
+      return NextResponse.json(
+        {
+          ok: true,
+          agente: agenteDuplicado,
+        },
+        { status: 201 }
+      );
+    }
+
     const nome = String(body.nome || "Novo agente").trim() || "Novo agente";
 
     const { data: agente, error } = await supabaseAdmin
