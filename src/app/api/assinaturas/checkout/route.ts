@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
+import {
+  criarCheckoutAssinaturaProsperityPay,
+  referenciaProsperityPayPorPlanoSlug,
+} from "@/lib/prosperity-pay/subscriptions";
 
 type PlanoSlug = "basico" | "essencial";
 type TipoOfertaCheckout = "normal" | "vip" | "jv" | "af" | "free";
@@ -618,51 +622,65 @@ export async function POST(request: Request) {
       );
     }
 
+    if (gatewaySolicitado === "prosperity_pay") {
+      const intent = renovarPlanoAtual
+        ? await criarCheckoutAssinaturaProsperityPay(usuario.empresa_id, { type: "renew" })
+        : await criarCheckoutAssinaturaProsperityPay(usuario.empresa_id, {
+            type: "change_plan",
+            offerReference: await referenciaProsperityPayPorPlanoSlug(planoSlugSolicitado),
+          });
+
+      if (intent.status === "scheduled") {
+        return NextResponse.json({
+          ok: true,
+          gateway: "prosperity_pay",
+          scheduled: true,
+          plano_slug: planoSlugSolicitado,
+          effective_at: intent.effectiveAt ?? null,
+          target_amount_cents: intent.targetAmountCents ?? null,
+          message: "A alteração foi agendada para o próximo ciclo da assinatura.",
+        });
+      }
+
+      if (!intent.checkoutUrl) {
+        throw new Error("A Prosperity Pay não retornou o checkout da assinatura.");
+      }
+
+      return NextResponse.json({
+        ok: true,
+        gateway: "prosperity_pay",
+        checkout_url: intent.checkoutUrl,
+        plano_slug: planoSlugSolicitado,
+        valor_cobrado_agora_centavos: intent.amountCents,
+        valor_proximo_ciclo_centavos: intent.targetAmountCents ?? null,
+        expires_at: intent.expiresAt ?? null,
+      });
+    }
+
     if (renovarPlanoAtual) {
       const renovacao = await resolverCheckoutRenovacao({
         empresaId: usuario.empresa_id,
         planoSlugFallback: planoSlugSolicitado,
       });
 
-      let checkoutUrl: string | null = null;
+      const checkoutUrl =
+        renovacao.atomoCheckoutUrl ||
+        (await buscarCheckoutAtomoPorValor({
+          planoSlug: renovacao.planoSlug,
+          valorCentavos: renovacao.valorRenovacaoCentavos,
+        }));
 
-      if (gatewaySolicitado === "prosperity_pay") {
-        if (renovacao.motivoBloqueio) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error:
-                "Ainda não existe um checkout da Prosperity Pay com o valor correto para esta assinatura.",
-              motivo: renovacao.motivoBloqueio,
-              valor_original_centavos: renovacao.valorOriginalCentavos,
-              valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
-              oferta_referencia: renovacao.ofertaReferencia,
-            },
-            { status: 409 }
-          );
-        }
-
-        checkoutUrl = renovacao.checkoutUrl;
-      } else {
-        checkoutUrl =
-          renovacao.atomoCheckoutUrl ||
-          (await buscarCheckoutAtomoPorValor({
-            planoSlug: renovacao.planoSlug,
-            valorCentavos: renovacao.valorRenovacaoCentavos,
-          }));
-
-        if (!checkoutUrl) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error:
-                "A oferta equivalente na Átomo ainda não está disponível para este valor.",
-              gateway: "atomo",
-              valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
-            },
-            { status: 409 }
-          );
-        }
+      if (!checkoutUrl) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "A oferta equivalente na Átomo ainda não está disponível para este valor.",
+            gateway: "atomo",
+            valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
+          },
+          { status: 409 }
+        );
       }
 
       if (!checkoutUrl) {

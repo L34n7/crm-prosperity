@@ -16,17 +16,15 @@ type PlanoPagamento = {
 type CheckoutPlanoResponse = {
   ok: boolean;
   checkout_url?: string;
+  scheduled?: boolean;
+  message?: string;
+  effective_at?: string | null;
   error?: string;
 };
 
 type PaymentGatewayModalProps = {
   plano: PlanoPagamento;
   onClose: () => void;
-};
-
-const PROSPERITY_PAY_CHECKOUTS: Record<PlanoSlug, string> = {
-  basico: "https://www.prosperitypay.com.br/checkout/plano-basic-be3817c7",
-  essencial: "https://www.prosperitypay.com.br/checkout/c7074bf9e18e",
 };
 
 function nomeGateway(gateway: GatewayPagamento) {
@@ -88,11 +86,16 @@ export default function PaymentGatewayModal({
         return;
       }
 
-      const checkoutUrl = plano.renovarPlanoAtual
-        ? data.checkout_url
-        : gateway === "prosperity_pay"
-          ? PROSPERITY_PAY_CHECKOUTS[plano.slug]
-          : data.checkout_url;
+      if (data.scheduled) {
+        novaAba.close();
+        setMessage(
+          data.message ||
+            "A alteração foi agendada e será aplicada no próximo ciclo após o pagamento da renovação."
+        );
+        return;
+      }
+
+      const checkoutUrl = data.checkout_url;
 
       if (!checkoutUrl) {
         novaAba.close();
