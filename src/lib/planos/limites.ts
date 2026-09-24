@@ -2,6 +2,7 @@ export type PlanoLimites = {
   slugs: string[];
   limiteUsuarios: number | null;
   limiteTokensIa: number | null;
+  limiteIntegracoesWhatsapp: number;
 };
 
 export const PLANOS_LIMITES: Record<"basico" | "essencial", PlanoLimites> = {
@@ -9,11 +10,13 @@ export const PLANOS_LIMITES: Record<"basico" | "essencial", PlanoLimites> = {
     slugs: ["basic", "basico"],
     limiteUsuarios: 2,
     limiteTokensIa: 1_000_000,
+    limiteIntegracoesWhatsapp: 1,
   },
   essencial: {
     slugs: ["essencial"],
     limiteUsuarios: 6,
     limiteTokensIa: 5_000_000,
+    limiteIntegracoesWhatsapp: 2,
   },
 };
 
