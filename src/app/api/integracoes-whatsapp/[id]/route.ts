@@ -11,7 +11,7 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const MAX_TENTATIVAS_DESCONEXAO = 3;
-const MAX_TENTATIVAS_DESCONEXAO_META_JA_REMOVIDA = 5;
+const MAX_TENTATIVAS_DESCONEXAO_META_JA_REMOVIDA = 3;
 const ERROS_TRANSITORIOS_DESCONEXAO = new Set([
   "55P03",
   "57014",
@@ -42,6 +42,8 @@ type IntegracaoParaDesconexao = {
   waba_id?: string | null;
   modo_integracao?: string | null;
   coex_status?: string | null;
+  setup_completed_at?: string | null;
+  coex_sync_completed_at?: string | null;
   config_json?: Record<string, unknown> | null;
 };
 
@@ -58,18 +60,54 @@ function objetoJson(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function timestampMs(valor: unknown) {
+  const data = new Date(String(valor || ""));
+  const timestamp = data.getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 function metaJaRemoveuIntegracao(integracao: IntegracaoParaDesconexao) {
   if (integracao.modo_integracao !== "coexistence") return false;
+
+  if (
+    String(integracao.status || "").toLowerCase() === "desconectada" ||
+    String(integracao.coex_status || "").toLowerCase() === "desconectado"
+  ) {
+    return true;
+  }
 
   const config = objetoJson(integracao.config_json);
   const ultimaDesconexao = objetoJson(config.coex_last_disconnection);
   const evento = String(ultimaDesconexao.event || "").toUpperCase();
 
-  return (
-    String(integracao.status || "").toLowerCase() === "desconectada" ||
-    String(integracao.coex_status || "").toLowerCase() === "desconectado" ||
-    evento === "PARTNER_REMOVED"
+  if (evento !== "PARTNER_REMOVED") {
+    return false;
+  }
+
+  const desconectadoEm = timestampMs(config.coex_last_disconnection_at);
+  const saude = objetoJson(config.whatsapp_meta_health);
+  const saudeRaw = objetoJson(saude.raw);
+  const saudeConectada =
+    String(saudeRaw.status || saude.phone_number_status || "").toUpperCase() ===
+    "CONNECTED";
+  const saudeConectadaEm = saudeConectada
+    ? timestampMs(saude.checked_at)
+    : 0;
+
+  const conexaoConfirmadaEm = Math.max(
+    timestampMs(integracao.setup_completed_at),
+    timestampMs(integracao.coex_sync_completed_at),
+    saudeConectadaEm
   );
+
+  // PARTNER_REMOVED fica armazenado no config_json como histórico. Se houve
+  // conclusão/sincronização ou uma checagem CONNECTED depois desse evento,
+  // ele não representa mais o estado atual da integração.
+  if (conexaoConfirmadaEm > 0 && (!desconectadoEm || conexaoConfirmadaEm > desconectadoEm)) {
+    return false;
+  }
+
+  return true;
 }
 
 async function integracaoAindaExiste(params: {
@@ -164,6 +202,18 @@ async function executarDesconexaoComRetentativa(params: {
       break;
     }
 
+    // Statement timeout indica que a limpeza foi grande demais para a janela
+    // atual. Repetir imediatamente a mesma transação só prolonga a requisição
+    // e pode estourar o limite da Vercel.
+    if (String(error.code || "") === "57014") {
+      console.warn("[WHATSAPP] Limpeza excedeu statement_timeout; sem retentativa imediata", {
+        integracaoId: params.integracaoId,
+        tentativa,
+        duracaoMs: Date.now() - inicioTotal,
+      });
+      break;
+    }
+
     const aindaExiste = await integracaoAindaExiste(params);
     if (aindaExiste === false) {
       return {
@@ -250,7 +300,7 @@ export async function DELETE(
     const { data: integracao, error: integracaoError } = await supabase
       .from("integracoes_whatsapp")
       .select(
-        "id, empresa_id, nome_conexao, numero, provider, status, phone_number_id, waba_id, modo_integracao, coex_status, config_json"
+        "id, empresa_id, nome_conexao, numero, provider, status, phone_number_id, waba_id, modo_integracao, coex_status, setup_completed_at, coex_sync_completed_at, config_json"
       )
       .eq("id", id)
       .eq("empresa_id", usuario.empresa_id)

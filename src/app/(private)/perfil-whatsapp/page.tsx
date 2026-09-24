@@ -841,22 +841,32 @@ export default function WhatsappPerfilPage() {
       setDesconectando(true);
       setErroDesconexao("");
 
-      const response = await fetch(
-        `/api/integracoes-whatsapp/${encodeURIComponent(alvoIntegracaoId)}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            confirmar_desconexao: true,
-            confirmar_desconexao_coex_no_app:
-              integracaoAlvo?.modo_integracao ===
-                "coexistence" &&
-              confirmouDesconexaoCoexNoApp,
-          }),
-        }
-      );
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 135_000);
+
+      let response: Response;
+
+      try {
+        response = await fetch(
+          `/api/integracoes-whatsapp/${encodeURIComponent(alvoIntegracaoId)}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+              confirmar_desconexao: true,
+              confirmar_desconexao_coex_no_app:
+                integracaoAlvo?.modo_integracao ===
+                  "coexistence" &&
+                confirmouDesconexaoCoexNoApp,
+            }),
+          }
+        );
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
 
       const data = await response.json().catch(() => null);
 
@@ -869,9 +879,15 @@ export default function WhatsappPerfilPage() {
       redirecionando = true;
       window.location.replace(data.redirect_to || "/configurar-ambiente");
     } catch (error: unknown) {
-      setErroDesconexao(
-        getErrorMessage(error, "Não foi possível desconectar a integração.")
-      );
+      const mensagem =
+        error instanceof DOMException && error.name === "AbortError"
+          ? "A desconexão demorou mais que o esperado. Nenhum dado foi excluído parcialmente. Tente novamente em alguns instantes."
+          : getErrorMessage(
+              error,
+              "Não foi possível desconectar a integração."
+            );
+
+      setErroDesconexao(mensagem);
     } finally {
       if (!redirecionando) {
         setDesconectando(false);
