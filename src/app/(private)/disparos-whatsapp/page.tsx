@@ -689,6 +689,25 @@ function extrairQuickReplies(payload: WhatsAppTemplate["payload"]) {
   );
 }
 
+function extrairRedirectButtons(payload: WhatsAppTemplate["payload"]) {
+  const buttons = payload?.components?.find((item) => item.type === "BUTTONS");
+
+  return (
+    buttons?.buttons
+      ?.filter(
+        (button) =>
+          String(button?.type || "").toUpperCase() === "URL" &&
+          button?.text &&
+          button?.url
+      )
+      .map((button) => ({
+        text: String(button.text || "").trim(),
+        url: String(button.url || "").trim(),
+      }))
+      .filter((button) => button.text && button.url) || []
+  );
+}
+
 function contarVariaveisTemplate(template: WhatsAppTemplate | null) {
   if (!template?.payload?.components?.length) return 0;
 
@@ -800,6 +819,7 @@ function montarPreviewTemplateDisparo(
     rodape: String(footer?.text || "").trim() || "Equipe de atendimento",
     imagemUrl,
     possuiImagem: headerFormat === "IMAGE",
+    redirectButtons: extrairRedirectButtons(template.payload),
   };
 }
 
@@ -4801,6 +4821,15 @@ export default function DisparosWhatsAppPage() {
                                     })}
                               </span>
                             </div>
+
+                            {previewTemplateSelecionado?.redirectButtons?.map((button, index) => (
+                              <div
+                                key={`${button.url}-redirect-${index}`}
+                                className={styles.whatsappPreviewButton}
+                              >
+                                ↗ {button.text}
+                              </div>
+                            ))}
 
                             {extrairQuickReplies(templateSelecionado.payload).map((texto, index) => (
                               <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
