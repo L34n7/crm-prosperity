@@ -68,6 +68,68 @@ type PlanoRenovacao =
 type PlanoCheckout = Extract<PlanoRenovacao, { tipo: "checkout" }>;
 type TemaVisual = "light" | "dark";
 
+type AssinaturaResumo = {
+  subscription: {
+    id: string | null;
+    status: string;
+    billing_model: string;
+    current_period_start: string | null;
+    current_period_end: string | null;
+    next_due_at: string | null;
+    base_amount_cents: number;
+    current_amount_cents: number;
+    next_amount_cents: number;
+    is_free: boolean;
+  };
+  plan: {
+    id: string;
+    name: string;
+    slug: string | null;
+    price_cents: number;
+    catalog_price_cents: number;
+    users_limit: number | null;
+    tokens_limit: number | null;
+    whatsapp_included: number;
+    is_free: boolean;
+  };
+  addons: {
+    whatsapp: Array<{
+      code: "whatsapp_number";
+      index: number;
+      unit_amount_cents: number;
+      integration: {
+        id: string;
+        nome: string;
+        numero: string | null;
+        status: string | null;
+        posicao: number | null;
+      } | null;
+      cancellation: {
+        id: string;
+        effective_at: string | null;
+      } | null;
+    }>;
+    others: Array<{
+      code: string;
+      description: string;
+      quantity: number;
+      unit_amount_cents: number;
+      total_amount_cents: number;
+    }>;
+  };
+  pending: {
+    whatsapp_cancellations: number;
+    plan_change: {
+      plan_id: string;
+      plan_name: string;
+      plan_slug: string;
+      plan_price_cents: number;
+      effective_at: string | null;
+      target_amount_cents: number;
+    } | null;
+  };
+};
+
 const AJUDA_WHATSAPP_MENSAGEM =
   "Olá! Preciso de ajuda com o CRM Prosperity. Pode me auxiliar?";
 
@@ -151,6 +213,15 @@ export default function Header({
   const [modalPlanosOpen, setModalPlanosOpen] = useState(false);
   const [planoPagamentoSelecionado, setPlanoPagamentoSelecionado] =
     useState<PlanoCheckout | null>(null);
+  const [assinaturaResumo, setAssinaturaResumo] =
+    useState<AssinaturaResumo | null>(null);
+  const [carregandoAssinaturaResumo, setCarregandoAssinaturaResumo] =
+    useState(false);
+  const [erroAssinaturaResumo, setErroAssinaturaResumo] = useState("");
+  const [confirmandoCancelamentoAddonId, setConfirmandoCancelamentoAddonId] =
+    useState<string | null>(null);
+  const [cancelandoAddonId, setCancelandoAddonId] = useState<string | null>(null);
+  const [abrindoCheckoutAddon, setAbrindoCheckoutAddon] = useState(false);
   const [feedbackAgendaPopup, setFeedbackAgendaPopup] =
     useState<Notificacao | null>(null);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
@@ -230,6 +301,23 @@ export default function Header({
     }
 
     return String(valor);
+  }
+
+  function formatarMoedaCentavos(valor: number | null | undefined) {
+    const centavos = Number(valor || 0);
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+    }).format(centavos / 100);
+  }
+
+  function formatarQuantidadeCompacta(valor: number | null | undefined) {
+    if (valor === null || valor === undefined) return null;
+    return new Intl.NumberFormat("pt-BR", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(valor);
   }
 
   function formatarDataAssinatura(valor: string | null | undefined) {
@@ -490,6 +578,23 @@ export default function Header({
   }, []);
 
   useEffect(() => {
+    if (!modalPlanosOpen) return;
+    void carregarResumoAssinatura();
+  }, [modalPlanosOpen]);
+
+  useEffect(() => {
+    function atualizarAssinatura() {
+      if (modalPlanosOpen) {
+        void carregarResumoAssinatura();
+      }
+    }
+
+    window.addEventListener("assinatura:atualizada", atualizarAssinatura);
+    return () =>
+      window.removeEventListener("assinatura:atualizada", atualizarAssinatura);
+  }, [modalPlanosOpen]);
+
+  useEffect(() => {
     if (assinaturaEmAberto || !saldoTokensEmAlerta(saldoTokensIa)) {
       setAlertaTokensOpen(false);
       return;
@@ -559,10 +664,138 @@ export default function Header({
     setMenuOpen(false);
   }
 
+  async function carregarResumoAssinatura() {
+    setCarregandoAssinaturaResumo(true);
+    setErroAssinaturaResumo("");
+
+    try {
+      const response = await fetch("/api/assinaturas/resumo", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível carregar a assinatura.");
+      }
+
+      setAssinaturaResumo({
+        subscription: data.subscription,
+        plan: data.plan,
+        addons: data.addons,
+        pending: data.pending,
+      });
+    } catch (error) {
+      setErroAssinaturaResumo(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar a assinatura."
+      );
+    } finally {
+      setCarregandoAssinaturaResumo(false);
+    }
+  }
+
+  function obterPlanoAtualCheckout() {
+    if (assinaturaResumo?.plan.is_free) return null;
+
+    return (
+      PLANOS_RENOVACAO.find(
+        (plano): plano is PlanoCheckout =>
+          plano.tipo === "checkout" && planoEhAtual(plano)
+      ) || null
+    );
+  }
+
+  function pagarProximaRenovacao() {
+    const planoAtual = obterPlanoAtualCheckout();
+    if (!planoAtual) return;
+    setPlanoPagamentoSelecionado(planoAtual);
+  }
+
+  async function adicionarNumeroAssinatura() {
+    if (abrindoCheckoutAddon) return;
+
+    const novaAba = window.open("about:blank", "_blank");
+    if (!novaAba) {
+      setErroAssinaturaResumo(
+        "O navegador bloqueou a nova aba. Permita pop-ups e tente novamente."
+      );
+      return;
+    }
+
+    novaAba.opener = null;
+    setAbrindoCheckoutAddon(true);
+    setErroAssinaturaResumo("");
+
+    try {
+      const response = await fetch(
+        "/api/assinaturas/adicionais/whatsapp/checkout",
+        { method: "POST" }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok || !data?.checkout_url) {
+        novaAba.close();
+        throw new Error(
+          data?.error || "Não foi possível gerar o checkout do adicional."
+        );
+      }
+
+      novaAba.location.href = data.checkout_url;
+    } catch (error) {
+      novaAba.close();
+      setErroAssinaturaResumo(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o checkout do adicional."
+      );
+    } finally {
+      setAbrindoCheckoutAddon(false);
+    }
+  }
+
+  async function cancelarNumeroAdicional(integrationId: string) {
+    if (cancelandoAddonId) return;
+
+    setCancelandoAddonId(integrationId);
+    setErroAssinaturaResumo("");
+
+    try {
+      const response = await fetch(
+        "/api/assinaturas/adicionais/whatsapp/cancelar",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ integration_id: integrationId }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(
+          data?.error || "Não foi possível cancelar o adicional."
+        );
+      }
+
+      setConfirmandoCancelamentoAddonId(null);
+      await carregarResumoAssinatura();
+    } catch (error) {
+      setErroAssinaturaResumo(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível cancelar o adicional."
+      );
+    } finally {
+      setCancelandoAddonId(null);
+    }
+  }
+
   function abrirModalPlanosAssinatura() {
     setMenuOpen(false);
     setNotificacoesOpen(false);
     setPlanoPagamentoSelecionado(null);
+    setConfirmandoCancelamentoAddonId(null);
     setModalPlanosOpen(true);
   }
 
@@ -620,6 +853,20 @@ export default function Header({
   const assinaturaBloqueada = assinaturaStatus === "bloqueada";
   const assinaturaPlanoNome = headerUser.assinatura?.plano_nome || "Plano atual";
   const assinaturaStatusLabel = formatarStatusAssinatura(assinaturaStatus);
+  const assinaturaRenovacaoEm = assinaturaResumo?.plan.is_free
+    ? null
+    : assinaturaResumo?.subscription.next_due_at ||
+      assinaturaResumo?.subscription.current_period_end ||
+      headerUser.assinatura?.vencimento_em ||
+      null;
+  const assinaturaRenovacaoTimestamp = assinaturaRenovacaoEm
+    ? new Date(assinaturaRenovacaoEm).getTime()
+    : Number.NaN;
+  const assinaturaPodeRenovar =
+    !assinaturaResumo?.plan.is_free &&
+    (assinaturaStatus !== "ativa" ||
+    !Number.isFinite(assinaturaRenovacaoTimestamp) ||
+    Date.now() >= assinaturaRenovacaoTimestamp);
   const assinaturaStatusBadgeClassName = `${styles.planCurrentStatus} ${
     assinaturaBloqueada
       ? styles.planCurrentStatusDanger
@@ -931,8 +1178,8 @@ export default function Header({
                   </span>
                   <h2 id="plan-renewal-title">Gerenciar plano</h2>
                   <p>
-                    Veja o plano atual da empresa, renove ou escolha outro.
-                    A liberação acontece automaticamente após a confirmação do pagamento.
+                    Veja a composição atual, adicionais, próxima cobrança e
+                    altere seu plano quando precisar.
                   </p>
                 </div>
 
@@ -949,7 +1196,14 @@ export default function Header({
               <div className={styles.planCurrentSummary}>
                 <div className={styles.planCurrentMain}>
                   <span>Plano atual</span>
-                  <strong>{assinaturaPlanoNome}</strong>
+                  <strong>
+                    {assinaturaResumo?.plan.name || assinaturaPlanoNome}
+                  </strong>
+                  <small>
+                    {assinaturaResumo?.plan.is_free
+                      ? "Plano gratuito"
+                      : "Assinatura pré-paga"}
+                  </small>
                 </div>
 
                 <div className={styles.planCurrentMeta}>
@@ -961,77 +1215,425 @@ export default function Header({
                   </div>
 
                   <div>
-                    <span>Vencimento</span>
+                    <span>Próxima renovação</span>
                     <strong>
-                      {formatarDataAssinatura(
-                        headerUser.assinatura?.vencimento_em
-                      )}
+                      {assinaturaResumo?.plan.is_free
+                        ? "Não se aplica"
+                        : formatarDataAssinatura(
+                            assinaturaResumo?.subscription.next_due_at ||
+                              assinaturaResumo?.subscription.current_period_end ||
+                              headerUser.assinatura?.vencimento_em
+                          )}
                     </strong>
                   </div>
 
                   <div>
-                    <span>Bloqueio</span>
+                    <span>Próxima cobrança</span>
                     <strong>
-                      {formatarDataAssinatura(
-                        headerUser.assinatura?.bloqueio_em
-                      )}
+                      {assinaturaResumo?.plan.is_free
+                        ? "Sem cobrança"
+                        : assinaturaResumo
+                          ? formatarMoedaCentavos(
+                              assinaturaResumo.subscription.next_amount_cents
+                            )
+                          : "-"}
                     </strong>
                   </div>
                 </div>
               </div>
 
-              <div className={styles.planRenewalGrid}>
-                {PLANOS_RENOVACAO.map((plano) => {
-                  const planoAtual = planoEhAtual(plano);
+              <div className={styles.planManagementScroll}>
+                <section className={styles.subscriptionComposition}>
+                  <div className={styles.subscriptionSectionHeader}>
+                    <div>
+                      <span className={styles.planRenewalEyebrow}>
+                        Sua assinatura
+                      </span>
+                      <h3>Composição atual</h3>
+                    </div>
 
-                  return (
-                    <article
-                      key={plano.nome}
-                      className={`${styles.planRenewalCard} ${
-                        plano.nome === "Essencial IA PRO"
-                          ? styles.planRenewalCardFeatured
-                          : ""
-                      }`}
-                    >
-                      <div className={styles.planRenewalCardTop}>
-                        <span className={styles.planRenewalBadge}>
-                          {plano.badge}
-                        </span>
-                        <h3>{plano.nome}</h3>
-                        <p>{plano.descricao}</p>
-                      </div>
-
-                      <div className={styles.planRenewalPriceBlock}>
-                        {"precoOriginal" in plano && plano.precoOriginal && (
-                          <span className={styles.planRenewalOldPrice}>
-                            {plano.precoOriginal}
-                          </span>
-                        )}
-                        <strong>{plano.preco}</strong>
-                        <small>{plano.observacao}</small>
-                      </div>
-
-                      <ul className={styles.planRenewalFeatures}>
-                        {plano.recursos.map((recurso) => (
-                          <li key={recurso}>{recurso}</li>
-                        ))}
-                      </ul>
-
+                    {obterPlanoAtualCheckout() && (
                       <button
                         type="button"
-                        className={
-                          plano.tipo === "cotacao"
-                            ? styles.planRenewalSecondary
-                            : styles.planRenewalPrimary
+                        className={styles.subscriptionPayButton}
+                        onClick={pagarProximaRenovacao}
+                        disabled={
+                          carregandoAssinaturaResumo || !assinaturaPodeRenovar
                         }
-                        onClick={() => contratarPlanoAssinatura(plano)}
-                        title={getPlanoActionLabel(plano, planoAtual)}
                       >
-                        {getPlanoActionLabel(plano, planoAtual)}
+                        {!assinaturaPodeRenovar
+                          ? `Pagamento disponível em ${formatarDataAssinatura(
+                              assinaturaRenovacaoEm
+                            )}`
+                          : assinaturaResumo
+                            ? `Pagar / renovar — ${formatarMoedaCentavos(
+                                assinaturaResumo.subscription.next_amount_cents
+                              )}`
+                            : "Pagar / renovar"}
                       </button>
-                    </article>
-                  );
-                })}
+                    )}
+                  </div>
+
+                  {carregandoAssinaturaResumo && !assinaturaResumo ? (
+                    <div className={styles.subscriptionLoading}>
+                      Carregando assinatura...
+                    </div>
+                  ) : (
+                    <>
+                      <div className={styles.subscriptionItem}>
+                        <div className={styles.subscriptionItemIcon}>▰</div>
+                        <div className={styles.subscriptionItemMain}>
+                          <span>Plano base</span>
+                          <strong>
+                            {assinaturaResumo?.plan.name || assinaturaPlanoNome}
+                          </strong>
+                          <small>
+                            {assinaturaResumo?.plan.users_limit
+                              ? `${assinaturaResumo.plan.users_limit} usuários`
+                              : "Plano contratado"}
+                            {assinaturaResumo?.plan.tokens_limit
+                              ? ` · ${formatarQuantidadeCompacta(
+                                  assinaturaResumo.plan.tokens_limit
+                                )} tokens de IA`
+                              : ""}
+                          </small>
+                        </div>
+                        <div className={styles.subscriptionItemPrice}>
+                          <strong>
+                            {assinaturaResumo?.plan.is_free
+                              ? "Gratuito"
+                              : assinaturaResumo
+                                ? formatarMoedaCentavos(
+                                    assinaturaResumo.plan.price_cents
+                                  )
+                                : "-"}
+                            {!assinaturaResumo?.plan.is_free && (
+                              <small>/mês</small>
+                            )}
+                          </strong>
+                          <span className={styles.subscriptionActiveBadge}>
+                            Ativo
+                          </span>
+                        </div>
+                      </div>
+
+                      {assinaturaResumo?.pending.plan_change && (
+                        <div className={styles.subscriptionPendingPlan}>
+                          <div>
+                            <span>Alteração de plano agendada</span>
+                            <strong>
+                              {assinaturaResumo.plan.name} →{" "}
+                              {assinaturaResumo.pending.plan_change.plan_name}
+                            </strong>
+                            <small>
+                              A mudança será aplicada na próxima renovação após
+                              a confirmação do pagamento.
+                            </small>
+                          </div>
+                          <div>
+                            <span>Próximo plano</span>
+                            <strong>
+                              {formatarMoedaCentavos(
+                                assinaturaResumo.pending.plan_change
+                                  .plan_price_cents
+                              )}
+                              /mês
+                            </strong>
+                          </div>
+                        </div>
+                      )}
+
+                      {(assinaturaResumo?.addons.whatsapp || []).map((addon) => {
+                        const integrationId = addon.integration?.id || null;
+                        const confirmando =
+                          integrationId === confirmandoCancelamentoAddonId;
+                        const cancelando = integrationId === cancelandoAddonId;
+
+                        return (
+                          <div
+                            className={`${styles.subscriptionItem} ${
+                              addon.cancellation
+                                ? styles.subscriptionItemPending
+                                : ""
+                            }`}
+                            key={integrationId || `whatsapp-${addon.index}`}
+                          >
+                            <div className={styles.subscriptionItemIcon}>☎</div>
+                            <div className={styles.subscriptionItemMain}>
+                              <span>Adicional</span>
+                              <strong>Número WhatsApp adicional</strong>
+                              <small>
+                                {addon.integration?.numero ||
+                                  addon.integration?.nome ||
+                                  "Número ainda não configurado"}
+                              </small>
+                              {addon.cancellation && (
+                                <em>
+                                  Cancelamento agendado para{" "}
+                                  {formatarDataAssinatura(
+                                    addon.cancellation.effective_at
+                                  )}
+                                </em>
+                              )}
+                            </div>
+                            <div className={styles.subscriptionItemPrice}>
+                              <strong>
+                                {formatarMoedaCentavos(addon.unit_amount_cents)}
+                                <small>/mês</small>
+                              </strong>
+
+                              {addon.cancellation ? (
+                                <span className={styles.subscriptionPendingBadge}>
+                                  Sai na próxima renovação
+                                </span>
+                              ) : integrationId ? (
+                                <div className={styles.subscriptionCancelActions}>
+                                  {confirmando ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className={styles.subscriptionCancelConfirm}
+                                        onClick={() =>
+                                          cancelarNumeroAdicional(integrationId)
+                                        }
+                                        disabled={cancelando}
+                                      >
+                                        {cancelando
+                                          ? "Agendando..."
+                                          : "Confirmar cancelamento"}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={styles.subscriptionCancelBack}
+                                        onClick={() =>
+                                          setConfirmandoCancelamentoAddonId(null)
+                                        }
+                                        disabled={cancelando}
+                                      >
+                                        Voltar
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className={styles.subscriptionCancelButton}
+                                      onClick={() =>
+                                        setConfirmandoCancelamentoAddonId(
+                                          integrationId
+                                        )
+                                      }
+                                    >
+                                      Cancelar na próxima renovação
+                                    </button>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {(assinaturaResumo?.addons.others || []).map((addon) => (
+                        <div
+                          className={styles.subscriptionItem}
+                          key={addon.code}
+                        >
+                          <div className={styles.subscriptionItemIcon}>＋</div>
+                          <div className={styles.subscriptionItemMain}>
+                            <span>Adicional</span>
+                            <strong>{addon.description}</strong>
+                            <small>Quantidade: {addon.quantity}</small>
+                          </div>
+                          <div className={styles.subscriptionItemPrice}>
+                            <strong>
+                              {formatarMoedaCentavos(
+                                addon.total_amount_cents ||
+                                  addon.unit_amount_cents * addon.quantity
+                              )}
+                              <small>/mês</small>
+                            </strong>
+                          </div>
+                        </div>
+                      ))}
+
+                      {!assinaturaResumo?.plan.is_free && (
+                        <button
+                          type="button"
+                          className={styles.subscriptionAddButton}
+                          onClick={adicionarNumeroAssinatura}
+                          disabled={abrindoCheckoutAddon}
+                        >
+                          {abrindoCheckoutAddon
+                            ? "Calculando valor proporcional..."
+                            : "+ Adicionar número WhatsApp"}
+                        </button>
+                      )}
+
+                      {erroAssinaturaResumo && (
+                        <div className={styles.subscriptionError} role="alert">
+                          {erroAssinaturaResumo}
+                        </div>
+                      )}
+
+                      {assinaturaResumo && !assinaturaResumo.plan.is_free && (
+                        <div className={styles.subscriptionRenewalSummary}>
+                          <div className={styles.subscriptionSummaryHeader}>
+                            <strong>Resumo da próxima renovação</strong>
+                            <span>
+                              {formatarDataAssinatura(
+                                assinaturaResumo.subscription.next_due_at ||
+                                  assinaturaResumo.subscription.current_period_end
+                              )}
+                            </span>
+                          </div>
+
+                          <div className={styles.subscriptionSummaryLine}>
+                            <span>
+                              {assinaturaResumo.pending.plan_change?.plan_name ||
+                                assinaturaResumo.plan.name}
+                            </span>
+                            <strong>
+                              {formatarMoedaCentavos(
+                                assinaturaResumo.pending.plan_change
+                                  ?.plan_price_cents ||
+                                  assinaturaResumo.plan.price_cents
+                              )}
+                            </strong>
+                          </div>
+
+                          {assinaturaResumo.addons.whatsapp.length > 0 && (
+                            <div className={styles.subscriptionSummaryLine}>
+                              <span>
+                                {Math.max(
+                                  0,
+                                  assinaturaResumo.addons.whatsapp.length -
+                                    assinaturaResumo.pending
+                                      .whatsapp_cancellations
+                                )}{" "}
+                                número(s) adicional(is)
+                              </span>
+                              <strong>
+                                {formatarMoedaCentavos(
+                                  Math.max(
+                                    0,
+                                    assinaturaResumo.addons.whatsapp.length -
+                                      assinaturaResumo.pending
+                                        .whatsapp_cancellations
+                                  ) *
+                                    (assinaturaResumo.addons.whatsapp[0]
+                                      ?.unit_amount_cents || 0)
+                                )}
+                              </strong>
+                            </div>
+                          )}
+
+                          <div
+                            className={`${styles.subscriptionSummaryLine} ${styles.subscriptionSummaryTotal}`}
+                          >
+                            <span>Total</span>
+                            <strong>
+                              {formatarMoedaCentavos(
+                                assinaturaResumo.subscription.next_amount_cents
+                              )}
+                            </strong>
+                          </div>
+
+                          {obterPlanoAtualCheckout() && (
+                            <button
+                              type="button"
+                              className={styles.subscriptionPayButtonFull}
+                              onClick={pagarProximaRenovacao}
+                              disabled={!assinaturaPodeRenovar}
+                            >
+                              {assinaturaPodeRenovar
+                                ? `Pagar / renovar — ${formatarMoedaCentavos(
+                                    assinaturaResumo.subscription.next_amount_cents
+                                  )}`
+                                : `Pagamento disponível em ${formatarDataAssinatura(
+                                    assinaturaRenovacaoEm
+                                  )}`}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+
+                <div className={styles.planChangeHeader}>
+                  <span className={styles.planRenewalEyebrow}>Alterar plano</span>
+                  <h3>Escolha outro plano</h3>
+                  <p>
+                    Em upgrades, a Prosperity Pay calcula somente a diferença
+                    proporcional do ciclo atual. Downgrades passam a valer na
+                    próxima renovação.
+                  </p>
+                </div>
+
+                <div className={styles.planRenewalGrid}>
+                  {PLANOS_RENOVACAO.map((plano) => {
+                    const planoAtual =
+                      !assinaturaResumo?.plan.is_free && planoEhAtual(plano);
+
+                    return (
+                      <article
+                        key={plano.nome}
+                        className={`${styles.planRenewalCard} ${
+                          plano.nome === "Essencial IA PRO"
+                            ? styles.planRenewalCardFeatured
+                            : ""
+                        }`}
+                      >
+                        <div className={styles.planRenewalCardTop}>
+                          <span className={styles.planRenewalBadge}>
+                            {plano.badge}
+                          </span>
+                          <h3>{plano.nome}</h3>
+                          <p>{plano.descricao}</p>
+                        </div>
+
+                        <div className={styles.planRenewalPriceBlock}>
+                          {"precoOriginal" in plano &&
+                            plano.precoOriginal && (
+                              <span className={styles.planRenewalOldPrice}>
+                                {plano.precoOriginal}
+                              </span>
+                            )}
+                          <strong>{plano.preco}</strong>
+                          <small>{plano.observacao}</small>
+                        </div>
+
+                        <ul className={styles.planRenewalFeatures}>
+                          {plano.recursos.map((recurso) => (
+                            <li key={recurso}>{recurso}</li>
+                          ))}
+                        </ul>
+
+                        <button
+                          type="button"
+                          className={
+                            plano.tipo === "cotacao"
+                              ? styles.planRenewalSecondary
+                              : planoAtual
+                                ? styles.planRenewalCurrent
+                                : styles.planRenewalPrimary
+                          }
+                          onClick={() => contratarPlanoAssinatura(plano)}
+                          title={
+                            planoAtual
+                              ? "Este é o plano atual"
+                              : getPlanoActionLabel(plano, planoAtual)
+                          }
+                          disabled={planoAtual}
+                        >
+                          {planoAtual
+                            ? "Plano atual"
+                            : getPlanoActionLabel(plano, planoAtual)}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -1042,7 +1644,9 @@ export default function Header({
             plano={{
               slug: planoPagamentoSelecionado.slug,
               nome: planoPagamentoSelecionado.nome,
-              renovarPlanoAtual: planoEhAtual(planoPagamentoSelecionado),
+              renovarPlanoAtual:
+                !assinaturaResumo?.plan.is_free &&
+                planoEhAtual(planoPagamentoSelecionado),
             }}
             onClose={() => setPlanoPagamentoSelecionado(null)}
           />

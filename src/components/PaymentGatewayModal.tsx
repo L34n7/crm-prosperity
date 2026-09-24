@@ -88,6 +88,7 @@ export default function PaymentGatewayModal({
 
       if (data.scheduled) {
         novaAba.close();
+        window.dispatchEvent(new CustomEvent("assinatura:atualizada"));
         setMessage(
           data.message ||
             "A alteração foi agendada e será aplicada no próximo ciclo após o pagamento da renovação."

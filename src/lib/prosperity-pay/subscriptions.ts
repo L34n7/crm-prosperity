@@ -158,10 +158,22 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
   if (mirror.data?.external_subscription_id) return mirror.data;
 
   const { data: empresa, error } = await supabase.from("empresas")
-    .select("id,nome_fantasia,nome_responsavel,email,plano_id,assinatura_inicio_em,assinatura_vencimento_em,assinatura_metadata_json,planos:plano_id(slug)")
+    .select("id,nome_fantasia,nome_responsavel,email,plano_id,assinatura_gateway,assinatura_inicio_em,assinatura_vencimento_em,assinatura_metadata_json,planos:plano_id(slug)")
     .eq("id", empresaId)
     .single();
   if (error || !empresa) throw error ?? new Error("Empresa não encontrada.");
+
+  const metadataEmpresa = obj(empresa.assinatura_metadata_json);
+  const assinaturaGratuita =
+    String(empresa.assinatura_gateway || "") === "CRM_FREE_CHECKOUT_KEY" ||
+    metadataEmpresa.free_vitalicio === true ||
+    String(metadataEmpresa.tipo_oferta || "") === "free";
+
+  if (assinaturaGratuita) {
+    throw new Error(
+      "Este é um plano gratuito. Contrate um plano pago antes de usar recursos recorrentes da Prosperity Pay."
+    );
+  }
 
   const inicio = empresa.assinatura_inicio_em ? new Date(empresa.assinatura_inicio_em) : new Date();
   const fim = empresa.assinatura_vencimento_em ? new Date(empresa.assinatura_vencimento_em) : new Date(inicio.getTime() + 30 * 24 * 60 * 60 * 1000);

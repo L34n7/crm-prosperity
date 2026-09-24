@@ -623,6 +623,41 @@ export async function POST(request: Request) {
     }
 
     if (gatewaySolicitado === "prosperity_pay") {
+      const { data: empresaAssinatura, error: empresaAssinaturaError } =
+        await supabase
+          .from("empresas")
+          .select("assinatura_gateway,assinatura_metadata_json")
+          .eq("id", usuario.empresa_id)
+          .single();
+
+      if (empresaAssinaturaError || !empresaAssinatura) {
+        throw empresaAssinaturaError ?? new Error("Empresa não encontrada.");
+      }
+
+      const metadataAssinatura = extrairMetadataJson(
+        empresaAssinatura.assinatura_metadata_json
+      );
+      const assinaturaGratuita =
+        String(empresaAssinatura.assinatura_gateway || "") ===
+          "CRM_FREE_CHECKOUT_KEY" ||
+        metadataAssinatura.free_vitalicio === true ||
+        String(metadataAssinatura.tipo_oferta || "") === "free";
+
+      if (assinaturaGratuita) {
+        const referencia =
+          await referenciaProsperityPayPorPlanoSlug(planoSlugSolicitado);
+
+        return NextResponse.json({
+          ok: true,
+          gateway: "prosperity_pay",
+          checkout_url: `https://www.prosperitypay.com.br/checkout/${encodeURIComponent(
+            referencia
+          )}`,
+          plano_slug: planoSlugSolicitado,
+          conversao_plano_gratuito: true,
+        });
+      }
+
       const intent = renovarPlanoAtual
         ? await criarCheckoutAssinaturaProsperityPay(usuario.empresa_id, { type: "renew" })
         : await criarCheckoutAssinaturaProsperityPay(usuario.empresa_id, {
@@ -631,6 +666,22 @@ export async function POST(request: Request) {
           });
 
       if (intent.status === "scheduled") {
+        const { error: espelhoError } = await supabase
+          .from("prosperity_pay_assinaturas")
+          .update({
+            pending_change: {
+              type: "change_plan",
+              plano_slug: planoSlugSolicitado,
+              effective_at: intent.effectiveAt ?? null,
+              target_amount_cents: intent.targetAmountCents ?? null,
+              change_id: intent.changeId ?? null,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("empresa_id", usuario.empresa_id);
+
+        if (espelhoError) throw espelhoError;
+
         return NextResponse.json({
           ok: true,
           gateway: "prosperity_pay",

@@ -142,6 +142,79 @@ async function preserveTokenUsageOnPlanChange(empresaId: string, newLimit: numbe
   if (update.error) throw update.error;
 }
 
+async function aplicarCancelamentosWhatsappAgendados(
+  empresaId: string,
+  payload: SubscriptionEventPayload,
+) {
+  if (payload.event !== "subscription.renewed") return;
+
+  const inicioNovoCiclo = validDate(payload.subscription?.current_period_start);
+  const referenciaTempo = inicioNovoCiclo || validDate(payload.occurred_at) || new Date().toISOString();
+
+  const { data: agendados, error } = await supabase
+    .from("prosperity_pay_recursos_agendados")
+    .select("id,recurso_id,effective_at,metadata_json")
+    .eq("empresa_id", empresaId)
+    .eq("addon_code", "whatsapp_number")
+    .eq("recurso_tipo", "whatsapp_integration")
+    .eq("acao", "remove")
+    .eq("status", "scheduled")
+    .lte("effective_at", referenciaTempo);
+
+  if (error) throw error;
+
+  for (const agendado of agendados || []) {
+    if (agendado.recurso_id) {
+      const { data: integracao, error: integracaoError } = await supabase
+        .from("integracoes_whatsapp")
+        .select("id,status,config_json")
+        .eq("id", agendado.recurso_id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+      if (integracaoError) throw integracaoError;
+
+      if (integracao) {
+        const configAtual =
+          integracao.config_json &&
+          typeof integracao.config_json === "object" &&
+          !Array.isArray(integracao.config_json)
+            ? (integracao.config_json as Record<string, unknown>)
+            : {};
+
+        const updateIntegracao = await supabase
+          .from("integracoes_whatsapp")
+          .update({
+            status: "desconectada",
+            config_json: {
+              ...configAtual,
+              subscription_access_disabled: true,
+              subscription_access_disabled_at: referenciaTempo,
+              subscription_access_disabled_reason: "whatsapp_addon_cancelled",
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", integracao.id)
+          .eq("empresa_id", empresaId);
+
+        if (updateIntegracao.error) throw updateIntegracao.error;
+      }
+    }
+
+    const applied = await supabase
+      .from("prosperity_pay_recursos_agendados")
+      .update({
+        status: "applied",
+        applied_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", agendado.id)
+      .eq("status", "scheduled");
+
+    if (applied.error) throw applied.error;
+  }
+}
+
 export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEventPayload) {
   const subscription = payload.subscription;
   const subscriptionId = String(subscription?.id || "").trim();
@@ -228,6 +301,8 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   if (companyUpdate.error) throw companyUpdate.error;
 
   if (payload.event === "subscription.renewed") {
+    await aplicarCancelamentosWhatsappAgendados(empresaId, payload);
+
     const renewal = await supabase.rpc("renovar_tokens_assinatura_plano", {
       p_empresa_id: empresaId,
       p_referencia: String(payload.order?.id || payload.event_id || subscriptionId),
