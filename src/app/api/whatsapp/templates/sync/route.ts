@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { listarPermissoesDoUsuario } from "@/lib/permissoes/can";
 import { can } from "@/lib/permissoes/frontend";
 import { listMetaTemplates } from "@/lib/whatsapp/templates";
 import { salvarTemplateWhatsappLocalIdempotente } from "@/lib/whatsapp/templates-local";
@@ -9,12 +7,6 @@ import { templatePossuiInstrucaoOptOut } from "@/lib/whatsapp/opt-out-policy";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
-
-type UsuarioSistema = {
-  id: string;
-  empresa_id: string | null;
-  status: "ativo" | "inativo" | "bloqueado";
-};
 
 const TEMPLATE_MEDIA_BUCKET = "midias";
 const TEMPLATE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -135,49 +127,21 @@ async function armazenarImagemTemplateSincronizado(params: {
   };
 }
 
-async function getUsuarioLogado() {
-  const supabase = await createClient();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, status")
-    .eq("auth_user_id", user.id)
-    .single<UsuarioSistema>();
-
-  if (usuarioError || !usuario) {
-    return { error: "Usuário do sistema não encontrado.", status: 404 as const };
-  }
-
-  if (usuario.status !== "ativo") {
-    return { error: "Usuário inativo.", status: 403 as const };
-  }
-
-  const permissoes = await listarPermissoesDoUsuario(usuario.id);
-
-  return { usuario, permissoes };
-}
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await getUsuarioLogado();
+    const auth = await getUsuarioContexto();
 
-    if ("error" in auth) {
+    if (!auth.ok) {
       return NextResponse.json(
         { ok: false, error: auth.error },
         { status: auth.status }
       );
     }
 
-    const { usuario, permissoes } = auth;
+    const { usuario } = auth;
+    const permissoes = usuario.permissoes;
 
     if (!can(permissoes, "whatsapp_templates.sincronizar")) {
       return NextResponse.json(
@@ -204,17 +168,9 @@ export async function POST(req: NextRequest) {
     }
 
     const supabaseAdmin = getSupabaseAdmin();
-    const contexto = await getUsuarioContexto();
-
-    if (!contexto.ok) {
-      return NextResponse.json(
-        { ok: false, error: contexto.error },
-        { status: contexto.status }
-      );
-    }
 
     const podeUsarIntegracao = await usuarioPodeAcessarIntegracaoWhatsapp({
-      usuario: contexto.usuario,
+      usuario,
       empresaId: usuario.empresa_id,
       integracaoId: integracaoWhatsAppId,
     });

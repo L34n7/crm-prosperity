@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   normalizarTelefoneMetaLimite,
@@ -9,7 +9,7 @@ import {
 const supabaseAdmin = getSupabaseAdmin();
 
 export async function GET(req: NextRequest) {
-  const resultado = await getUsuarioBasico();
+  const resultado = await getUsuarioContexto();
 
   if (!resultado.ok) {
     return NextResponse.json(
