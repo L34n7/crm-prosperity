@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Moon, Sun } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CreditCard,
+  Moon,
+  Smartphone,
+  Sparkles,
+  Sun,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
@@ -79,6 +87,9 @@ type AssinaturaResumo = {
     base_amount_cents: number;
     current_amount_cents: number;
     next_amount_cents: number;
+    paid_ahead: boolean;
+    paid_ahead_starts_at: string | null;
+    paid_until: string | null;
     is_free: boolean;
   };
   plan: {
@@ -103,6 +114,7 @@ type AssinaturaResumo = {
         numero: string | null;
         status: string | null;
         posicao: number | null;
+        configured: boolean;
       } | null;
       cancellation: {
         id: string;
@@ -859,14 +871,14 @@ export default function Header({
       assinaturaResumo?.subscription.current_period_end ||
       headerUser.assinatura?.vencimento_em ||
       null;
-  const assinaturaRenovacaoTimestamp = assinaturaRenovacaoEm
-    ? new Date(assinaturaRenovacaoEm).getTime()
-    : Number.NaN;
+  const assinaturaPagaAntecipadamente =
+    assinaturaResumo?.subscription.paid_ahead === true;
   const assinaturaPodeRenovar =
-    !assinaturaResumo?.plan.is_free &&
-    (assinaturaStatus !== "ativa" ||
-    !Number.isFinite(assinaturaRenovacaoTimestamp) ||
-    Date.now() >= assinaturaRenovacaoTimestamp);
+    !assinaturaResumo?.plan.is_free && !assinaturaPagaAntecipadamente;
+  const assinaturaAcaoPagamento =
+    assinaturaStatus === "ativa"
+      ? "Adiantar próxima mensalidade"
+      : "Pagar / renovar";
   const assinaturaStatusBadgeClassName = `${styles.planCurrentStatus} ${
     assinaturaBloqueada
       ? styles.planCurrentStatusDanger
@@ -1178,8 +1190,8 @@ export default function Header({
                   </span>
                   <h2 id="plan-renewal-title">Gerenciar plano</h2>
                   <p>
-                    Veja a composição atual, adicionais, próxima cobrança e
-                    altere seu plano quando precisar.
+                    Controle sua assinatura, adicionais e pagamentos em um só
+                    lugar, com total transparência sobre o próximo ciclo.
                   </p>
                 </div>
 
@@ -1195,15 +1207,20 @@ export default function Header({
 
               <div className={styles.planCurrentSummary}>
                 <div className={styles.planCurrentMain}>
-                  <span>Plano atual</span>
-                  <strong>
-                    {assinaturaResumo?.plan.name || assinaturaPlanoNome}
-                  </strong>
-                  <small>
-                    {assinaturaResumo?.plan.is_free
-                      ? "Plano gratuito"
-                      : "Assinatura pré-paga"}
-                  </small>
+                  <div className={styles.planCurrentBrandIcon}>
+                    <Sparkles size={20} strokeWidth={2.1} />
+                  </div>
+                  <div className={styles.planCurrentIdentity}>
+                    <span>Plano atual</span>
+                    <strong>
+                      {assinaturaResumo?.plan.name || assinaturaPlanoNome}
+                    </strong>
+                    <small>
+                      {assinaturaResumo?.plan.is_free
+                        ? "Plano gratuito"
+                        : "Assinatura pré-paga · sem renovação automática via PIX"}
+                    </small>
+                  </div>
                 </div>
 
                 <div className={styles.planCurrentMeta}>
@@ -1243,6 +1260,34 @@ export default function Header({
               </div>
 
               <div className={styles.planManagementScroll}>
+                {assinaturaResumo?.subscription.paid_ahead && (
+                  <div className={styles.subscriptionPrepaidNotice}>
+                    <div className={styles.subscriptionPrepaidIcon}>
+                      <CheckCircle2 size={22} strokeWidth={2.3} />
+                    </div>
+                    <div className={styles.subscriptionPrepaidContent}>
+                      <span>Mensalidade futura quitada</span>
+                      <strong>O próximo ciclo já está pago</strong>
+                      <p>
+                        O período a partir de{" "}
+                        {formatarDataAssinatura(
+                          assinaturaResumo.subscription.paid_ahead_starts_at
+                        )}{" "}
+                        já está garantido. Os avisos de vencimento desse ciclo
+                        não serão enviados.
+                      </p>
+                    </div>
+                    <div className={styles.subscriptionPrepaidUntil}>
+                      <span>Coberto até</span>
+                      <strong>
+                        {formatarDataAssinatura(
+                          assinaturaResumo.subscription.paid_until
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+
                 <section className={styles.subscriptionComposition}>
                   <div className={styles.subscriptionSectionHeader}>
                     <div>
@@ -1261,15 +1306,13 @@ export default function Header({
                           carregandoAssinaturaResumo || !assinaturaPodeRenovar
                         }
                       >
-                        {!assinaturaPodeRenovar
-                          ? `Pagamento disponível em ${formatarDataAssinatura(
-                              assinaturaRenovacaoEm
-                            )}`
+                        {assinaturaPagaAntecipadamente
+                          ? "Próxima mensalidade já paga"
                           : assinaturaResumo
-                            ? `Pagar / renovar — ${formatarMoedaCentavos(
+                            ? `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
                                 assinaturaResumo.subscription.next_amount_cents
                               )}`
-                            : "Pagar / renovar"}
+                            : assinaturaAcaoPagamento}
                       </button>
                     )}
                   </div>
@@ -1281,7 +1324,9 @@ export default function Header({
                   ) : (
                     <>
                       <div className={styles.subscriptionItem}>
-                        <div className={styles.subscriptionItemIcon}>▰</div>
+                        <div className={styles.subscriptionItemIcon}>
+                          <CreditCard size={19} strokeWidth={2.1} />
+                        </div>
                         <div className={styles.subscriptionItemMain}>
                           <span>Plano base</span>
                           <strong>
@@ -1358,7 +1403,9 @@ export default function Header({
                             }`}
                             key={integrationId || `whatsapp-${addon.index}`}
                           >
-                            <div className={styles.subscriptionItemIcon}>☎</div>
+                            <div className={styles.subscriptionItemIcon}>
+                              <Smartphone size={19} strokeWidth={2.1} />
+                            </div>
                             <div className={styles.subscriptionItemMain}>
                               <span>Adicional</span>
                               <strong>Número WhatsApp adicional</strong>
@@ -1386,7 +1433,8 @@ export default function Header({
                                 <span className={styles.subscriptionPendingBadge}>
                                   Sai na próxima renovação
                                 </span>
-                              ) : integrationId ? (
+                              ) : integrationId &&
+                                addon.integration?.configured ? (
                                 <div className={styles.subscriptionCancelActions}>
                                   {confirmando ? (
                                     <>
@@ -1427,7 +1475,11 @@ export default function Header({
                                     </button>
                                   )}
                                 </div>
-                              ) : null}
+                              ) : (
+                                <span className={styles.subscriptionSetupBadge}>
+                                  Aguardando configuração
+                                </span>
+                              )}
                             </div>
                           </div>
                         );
@@ -1545,12 +1597,10 @@ export default function Header({
                               onClick={pagarProximaRenovacao}
                               disabled={!assinaturaPodeRenovar}
                             >
-                              {assinaturaPodeRenovar
-                                ? `Pagar / renovar — ${formatarMoedaCentavos(
+                              {assinaturaPagaAntecipadamente
+                                ? "Próxima mensalidade já paga"
+                                : `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
                                     assinaturaResumo.subscription.next_amount_cents
-                                  )}`
-                                : `Pagamento disponível em ${formatarDataAssinatura(
-                                    assinaturaRenovacaoEm
                                   )}`}
                             </button>
                           )}
