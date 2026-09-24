@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
 
 export async function POST(request: NextRequest) {
   try {
-    const contexto = await getUsuarioBasico();
+    const contexto = await getUsuarioContexto();
 
     if (!contexto.ok) {
       return NextResponse.json(

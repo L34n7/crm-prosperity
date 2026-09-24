@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   isAmbienteConfigurado,
@@ -48,7 +48,7 @@ const CAMPOS_STATUS = `
 `;
 
 export async function GET(request: NextRequest) {
-  const resultado = await getUsuarioBasico();
+  const resultado = await getUsuarioContexto();
 
   if (!resultado.ok) {
     return NextResponse.json(

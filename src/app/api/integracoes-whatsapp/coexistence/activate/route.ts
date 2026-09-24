@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getWhatsAppAccessToken,
@@ -507,7 +507,7 @@ async function solicitarSincronizacao(params: {
 
 export async function POST(request: NextRequest) {
   try {
-    const contexto = await getUsuarioBasico();
+    const contexto = await getUsuarioContexto();
 
     if (!contexto.ok) {
       return NextResponse.json(

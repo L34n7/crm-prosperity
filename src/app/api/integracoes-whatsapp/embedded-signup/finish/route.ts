@@ -1,43 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sanitizeWhatsAppIntegrationForClient } from "@/lib/whatsapp/access-token";
 import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
-
-type UsuarioSistema = {
-  id: string;
-  empresa_id: string | null;
-  status: "ativo" | "inativo" | "bloqueado";
-};
-
-async function getUsuarioLogado() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return { error: "Não autenticado", status: 401 as const };
-  }
-
-  const { data: usuario } = await supabase
-    .from("usuarios")
-    .select("id, empresa_id, status")
-    .eq("auth_user_id", user.id)
-    .single<UsuarioSistema>();
-
-  if (!usuario) {
-    return { error: "Usuário do sistema não encontrado.", status: 404 as const };
-  }
-
-  if (usuario.status !== "ativo") {
-    return { error: "Usuário inativo.", status: 403 as const };
-  }
-
-  return { usuario };
-}
 
 type FinishPayload = {
   integracao_id?: string | null;
@@ -51,16 +16,16 @@ type FinishPayload = {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await getUsuarioLogado();
+    const contexto = await getUsuarioContexto();
 
-    if ("error" in auth) {
+    if (!contexto.ok) {
       return NextResponse.json(
-        { ok: false, error: auth.error },
-        { status: auth.status }
+        { ok: false, error: contexto.error },
+        { status: contexto.status }
       );
     }
 
-    const { usuario } = auth;
+    const { usuario } = contexto;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(
