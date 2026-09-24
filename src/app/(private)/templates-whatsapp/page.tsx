@@ -21,6 +21,13 @@ type TemplateButton = {
   url?: string;
 };
 
+type TemplateButtonDraft = {
+  id: number;
+  type: "QUICK_REPLY" | "URL";
+  text: string;
+  url: string;
+};
+
 type TemplateComponent = {
   type: string;
   text?: string;
@@ -283,11 +290,11 @@ export default function TemplatesWhatsAppPage() {
   const [footerText, setFooterText] = useState(
     obterFooterOptOut("UTILITY") || ""
   );
-  const [quickReply1, setQuickReply1] = useState("");
-  const [quickReply2, setQuickReply2] = useState("");
-  const [quickReply3, setQuickReply3] = useState("");
-  const [redirectText, setRedirectText] = useState("");
-  const [redirectUrl, setRedirectUrl] = useState("");
+  const [templateButtonsDraft, setTemplateButtonsDraft] = useState<
+    TemplateButtonDraft[]
+  >([]);
+  const [adicionandoTipoBotao, setAdicionandoTipoBotao] = useState(false);
+  const nextTemplateButtonIdRef = useRef(1);
 
   const [paginaAtual, setPaginaAtual] = useState(1);
   const ITENS_POR_PAGINA = 7;
@@ -404,16 +411,34 @@ export default function TemplatesWhatsAppPage() {
   const selectIntegracaoBloqueado =
     loadingIntegracoes || integracoes.length <= 1;
 
-  const quickRepliesPreview = [quickReply1, quickReply2, quickReply3]
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const redirectPreview =
-    redirectText.trim() && redirectUrl.trim()
-      ? {
-          text: redirectText.trim(),
-          url: redirectUrl.trim(),
-        }
-      : null;
+  const templateButtonsPreview = useMemo(() => {
+    const preenchidos = templateButtonsDraft.filter((button) =>
+      button.text.trim()
+    );
+
+    return [
+      ...preenchidos.filter((button) => button.type === "QUICK_REPLY"),
+      ...preenchidos.filter((button) => button.type === "URL"),
+    ];
+  }, [templateButtonsDraft]);
+
+  const quickRepliesPreview = templateButtonsPreview
+    .filter((button) => button.type === "QUICK_REPLY")
+    .map((button) => button.text.trim());
+
+  const redirectButtonsPreview = templateButtonsPreview
+    .filter(
+      (button) =>
+        button.type === "URL" && button.text.trim() && button.url.trim()
+    )
+    .map((button) => ({
+      text: button.text.trim(),
+      url: button.url.trim(),
+    }));
+
+  const totalRedirectButtons = templateButtonsDraft.filter(
+    (button) => button.type === "URL"
+  ).length;
 
   const totalVariaveisBody = useMemo(
     () => contarVariaveisTexto(bodyText),
@@ -470,6 +495,52 @@ export default function TemplatesWhatsAppPage() {
       bodyTextareaRef.current?.focus();
       bodyTextareaRef.current?.setSelectionRange(novaPosicao, novaPosicao);
     });
+  }
+
+  function iniciarAdicaoBotao() {
+    if (templateButtonsDraft.length >= 3) return;
+    setAdicionandoTipoBotao(true);
+  }
+
+  function adicionarBotao(tipo: "QUICK_REPLY" | "URL") {
+    if (templateButtonsDraft.length >= 3) return;
+
+    if (tipo === "URL" && totalRedirectButtons >= 2) {
+      setErro("A Meta permite no máximo 2 botões Redirect neste modelo.");
+      setAdicionandoTipoBotao(false);
+      return;
+    }
+
+    setTemplateButtonsDraft((atual) => [
+      ...atual,
+      {
+        id: nextTemplateButtonIdRef.current++,
+        type: tipo,
+        text: "",
+        url: "",
+      },
+    ]);
+    setAdicionandoTipoBotao(false);
+    setErro("");
+  }
+
+  function atualizarBotao(
+    id: number,
+    campo: "text" | "url",
+    valor: string
+  ) {
+    setTemplateButtonsDraft((atual) =>
+      atual.map((button) =>
+        button.id === id ? { ...button, [campo]: valor } : button
+      )
+    );
+  }
+
+  function removerBotao(id: number) {
+    setTemplateButtonsDraft((atual) =>
+      atual.filter((button) => button.id !== id)
+    );
+    setAdicionandoTipoBotao(false);
   }
 
   const resumoTemplates = useMemo(() => {
@@ -624,34 +695,51 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
-    const redirectTextFinal = redirectText.trim();
-    const redirectUrlFinal = redirectUrl.trim();
-    const redirectParcial = Boolean(redirectTextFinal || redirectUrlFinal);
-
-    if (redirectParcial && (!redirectTextFinal || !redirectUrlFinal)) {
-      setErro("Informe o texto e a URL do botão Redirect.");
+    if (templateButtonsDraft.length > 3) {
+      setErro("Adicione no máximo 3 botões ao template.");
       return;
     }
 
-    if (redirectTextFinal.length > 25) {
-      setErro("O texto do botão Redirect deve ter no máximo 25 caracteres.");
+    if (totalRedirectButtons > 2) {
+      setErro("Adicione no máximo 2 botões Redirect.");
       return;
     }
 
-    if (redirectUrlFinal) {
-      if (/\{\{\d+\}\}/.test(redirectUrlFinal)) {
+    for (const [index, button] of templateButtonsDraft.entries()) {
+      const textoBotao = button.text.trim();
+
+      if (!textoBotao) {
+        setErro(`Informe o texto do botão ${index + 1}.`);
+        return;
+      }
+
+      if (textoBotao.length > 25) {
+        setErro(`O texto do botão ${index + 1} deve ter no máximo 25 caracteres.`);
+        return;
+      }
+
+      if (button.type !== "URL") continue;
+
+      const urlBotao = button.url.trim();
+
+      if (!urlBotao) {
+        setErro(`Informe a URL do botão Redirect ${index + 1}.`);
+        return;
+      }
+
+      if (/\{\{\d+\}\}/.test(urlBotao)) {
         setErro("O botão Redirect deve usar uma URL fixa, sem variáveis.");
         return;
       }
 
       try {
-        const url = new URL(redirectUrlFinal);
+        const url = new URL(urlBotao);
         if (!["http:", "https:"].includes(url.protocol)) {
           setErro("A URL do botão Redirect deve começar com http:// ou https://.");
           return;
         }
       } catch {
-        setErro("Informe uma URL válida para o botão Redirect.");
+        setErro(`Informe uma URL válida no botão Redirect ${index + 1}.`);
         return;
       }
     }
@@ -719,22 +807,21 @@ export default function TemplatesWhatsAppPage() {
         });
       }
 
-      const templateButtons: TemplateButton[] = [];
-
-      if (redirectTextFinal && redirectUrlFinal) {
-        templateButtons.push({
-          type: "URL",
-          text: redirectTextFinal,
-          url: redirectUrlFinal,
-        });
-      }
-
-      templateButtons.push(
-        ...quickRepliesPreview.map((text) => ({
-          type: "QUICK_REPLY",
-          text,
-        }))
-      );
+      const templateButtons: TemplateButton[] = [
+        ...templateButtonsDraft
+          .filter((button) => button.type === "QUICK_REPLY")
+          .map((button) => ({
+            type: "QUICK_REPLY",
+            text: button.text.trim(),
+          })),
+        ...templateButtonsDraft
+          .filter((button) => button.type === "URL")
+          .map((button) => ({
+            type: "URL",
+            text: button.text.trim(),
+            url: button.url.trim(),
+          })),
+      ];
 
       if (templateButtons.length > 0) {
         components.push({
@@ -779,11 +866,9 @@ export default function TemplatesWhatsAppPage() {
       );
       setBodyExamples(["João", "ABC-123456", "", "", "", ""]);
       setFooterText(obterFooterOptOut(category) || "");
-      setQuickReply1("");
-      setQuickReply2("");
-      setQuickReply3("");
-      setRedirectText("");
-      setRedirectUrl("");
+      setTemplateButtonsDraft([]);
+      setAdicionandoTipoBotao(false);
+      nextTemplateButtonIdRef.current = 1;
 
       await carregarTemplates(filtroIntegracao);
     } catch (error: any) {
@@ -1150,79 +1235,163 @@ export default function TemplatesWhatsAppPage() {
                         <div className={styles.contentSectionHeader}>
                           <div>
                             <strong>
-                              Botão Redirect{" "}
-                              <span className={styles.secondaryLabel}>(Abrir link)</span>
-                            </strong>
-                            <p>Adicione um botão que direciona o contato para uma página externa.</p>
-                          </div>
-                          <span className={styles.contentSectionBadge}>Opcional</span>
-                        </div>
-
-                        <div className={styles.field}>
-                          <div className={styles.topGrid}>
-                            <input
-                              value={redirectText}
-                              onChange={(e) => setRedirectText(e.target.value)}
-                              className={styles.input}
-                              placeholder="Texto do botão. Ex.: Acessar site"
-                              maxLength={25}
-                            />
-
-                            <input
-                              value={redirectUrl}
-                              onChange={(e) => setRedirectUrl(e.target.value)}
-                              className={styles.input}
-                              placeholder="https://seusite.com.br/pagina"
-                              inputMode="url"
-                            />
-                          </div>
-
-                          <p className={styles.help}>
-                            A URL é fixa e será aberta quando o contato tocar no botão do template.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className={`${styles.contentSectionCard} ${styles.responsesField}`}>
-                        <div className={styles.contentSectionHeader}>
-                          <div>
-                            <strong>
                               Botões de respostas{" "}
-                              <span className={styles.secondaryLabel}>(Respostas rápidas)</span>
+                              <span className={styles.secondaryLabel}>
+                                (Texto ou Redirect)
+                              </span>
                             </strong>
-                            <p>Adicione atalhos para o contato responder com um toque.</p>
+                            <p>
+                              Adicione até 3 botões. Texto envia uma resposta rápida;
+                              Redirect abre um link externo.
+                            </p>
                           </div>
-                          <span className={styles.contentSectionBadge}>Opcional</span>
+                          <span className={styles.contentSectionBadge}>
+                            {templateButtonsDraft.length}/3
+                          </span>
                         </div>
 
-                        <div className={styles.field}>
-                                                <div className={styles.topGrid}>
-                          <input
-                            value={quickReply1}
-                            onChange={(e) => setQuickReply1(e.target.value)}
-                            className={styles.input}
-                            placeholder="Resposta rápida 1"
-                          />
+                        {templateButtonsDraft.length > 0 ? (
+                          <div className={styles.templateButtonBuilderList}>
+                            {templateButtonsDraft.map((button, index) => (
+                              <div
+                                key={button.id}
+                                className={styles.templateButtonBuilderItem}
+                              >
+                                <div className={styles.templateButtonBuilderHeader}>
+                                  <div>
+                                    <strong>Botão {index + 1}</strong>
+                                    <span
+                                      className={`${styles.badge} ${styles.badgeGray}`}
+                                    >
+                                      {button.type === "URL" ? "Redirect" : "Texto"}
+                                    </span>
+                                  </div>
 
-                          <input
-                            value={quickReply2}
-                            onChange={(e) => setQuickReply2(e.target.value)}
-                            className={styles.input}
-                            placeholder="Resposta rápida 2"
-                          />
+                                  <button
+                                    type="button"
+                                    className={styles.templateButtonRemove}
+                                    onClick={() => removerBotao(button.id)}
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+
+                                {button.type === "QUICK_REPLY" ? (
+                                  <div className={styles.field}>
+                                    <label className={styles.label}>
+                                      Texto da resposta
+                                    </label>
+                                    <input
+                                      value={button.text}
+                                      onChange={(e) =>
+                                        atualizarBotao(
+                                          button.id,
+                                          "text",
+                                          e.target.value
+                                        )
+                                      }
+                                      className={styles.input}
+                                      placeholder="Ex.: Quero saber mais"
+                                      maxLength={25}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className={styles.topGrid}>
+                                    <div className={styles.field}>
+                                      <label className={styles.label}>
+                                        Texto do botão
+                                      </label>
+                                      <input
+                                        value={button.text}
+                                        onChange={(e) =>
+                                          atualizarBotao(
+                                            button.id,
+                                            "text",
+                                            e.target.value
+                                          )
+                                        }
+                                        className={styles.input}
+                                        placeholder="Ex.: Acessar site"
+                                        maxLength={25}
+                                      />
+                                    </div>
+
+                                    <div className={styles.field}>
+                                      <label className={styles.label}>
+                                        URL de destino
+                                      </label>
+                                      <input
+                                        value={button.url}
+                                        onChange={(e) =>
+                                          atualizarBotao(
+                                            button.id,
+                                            "url",
+                                            e.target.value
+                                          )
+                                        }
+                                        className={styles.input}
+                                        placeholder="https://seusite.com.br"
+                                        inputMode="url"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={styles.templateButtonEmpty}>
+                            Nenhum botão adicionado.
+                          </div>
+                        )}
+
+                        <div className={styles.templateButtonAddArea}>
+                          {adicionandoTipoBotao &&
+                          templateButtonsDraft.length < 3 ? (
+                            <select
+                              className={styles.select}
+                              defaultValue=""
+                              onChange={(e) => {
+                                const tipo = e.target.value as
+                                  | "QUICK_REPLY"
+                                  | "URL";
+                                if (tipo) adicionarBotao(tipo);
+                              }}
+                            >
+                              <option value="" disabled>
+                                Selecione o tipo do botão
+                              </option>
+                              <option value="QUICK_REPLY">
+                                Texto — resposta rápida
+                              </option>
+                              <option
+                                value="URL"
+                                disabled={totalRedirectButtons >= 2}
+                              >
+                                Redirect — abrir link
+                              </option>
+                            </select>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            className={styles.variableAddButton}
+                            onClick={iniciarAdicaoBotao}
+                            disabled={
+                              templateButtonsDraft.length >= 3 ||
+                              adicionandoTipoBotao
+                            }
+                          >
+                            + Adicionar botão
+                            <span>{templateButtonsDraft.length}/3</span>
+                          </button>
                         </div>
-
-                        <input
-                          value={quickReply3}
-                          onChange={(e) => setQuickReply3(e.target.value)}
-                          className={styles.input}
-                          placeholder="Resposta rápida 3"
-                        />
 
                         <p className={styles.help}>
-                            Opcional. Você pode adicionar até 3 respostas rápidas.
+                          O sistema organiza Texto e Redirect em grupos compatíveis
+                          com a Meta antes de enviar o template para aprovação.
                         </p>
-                        </div>
+                      </div>
                       </div>
                     </div>
 
@@ -1265,15 +1434,13 @@ export default function TemplatesWhatsAppPage() {
                               </span>
                             </div>
 
-                            {redirectPreview ? (
-                              <div className={styles.whatsappPreviewButton}>
-                                ↗ {redirectPreview.text}
-                              </div>
-                            ) : null}
-
-                            {quickRepliesPreview.map((texto, index) => (
-                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
-                                ↩ {texto}
+                            {templateButtonsPreview.map((button, index) => (
+                              <div
+                                key={`${button.id}-preview-${index}`}
+                                className={styles.whatsappPreviewButton}
+                              >
+                                {button.type === "URL" ? "↗" : "↩"}{" "}
+                                {button.text.trim()}
                               </div>
                             ))}
                           </div>
@@ -1321,33 +1488,32 @@ export default function TemplatesWhatsAppPage() {
                           </div>
 
                           <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Redirect</span>
-                            {redirectPreview ? (
-                              <>
-                                <p className={styles.previewText}>{redirectPreview.text}</p>
-                                <p className={styles.help}>{redirectPreview.url}</p>
-                              </>
-                            ) : (
-                              <p className={styles.previewText}>Nenhum botão Redirect adicionado.</p>
-                            )}
-                          </div>
+                            <span className={styles.previewLabel}>Botões</span>
 
-                          <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Respostas rápidas</span>
-
-                            {quickRepliesPreview.length > 0 ? (
-                              <div className={styles.quickRepliesList}>
-                                {quickRepliesPreview.map((item, index) => (
-                                  <span
-                                    key={`${item}-${index}`}
-                                    className={`${styles.badge} ${styles.badgeGray}`}
+                            {templateButtonsPreview.length > 0 ? (
+                              <div className={styles.templateButtonsPreviewList}>
+                                {templateButtonsPreview.map((button, index) => (
+                                  <div
+                                    key={`${button.id}-structure-${index}`}
+                                    className={styles.templateButtonsPreviewItem}
                                   >
-                                    {item}
-                                  </span>
+                                    <strong>
+                                      {button.type === "URL"
+                                        ? "Redirect"
+                                        : "Texto"}
+                                    </strong>
+                                    <span>{button.text.trim()}</span>
+                                    {button.type === "URL" &&
+                                    button.url.trim() ? (
+                                      <small>{button.url.trim()}</small>
+                                    ) : null}
+                                  </div>
                                 ))}
                               </div>
                             ) : (
-                              <p className={styles.previewText}>Nenhuma resposta rápida adicionada.</p>
+                              <p className={styles.previewText}>
+                                Nenhum botão adicionado.
+                              </p>
                             )}
                           </div>
                         </div>
