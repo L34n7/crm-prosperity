@@ -319,6 +319,31 @@ export function montarConteudoTextoTemplateDisparo(
       )
       .filter(Boolean) || [];
 
+  const redirects =
+    buttons?.buttons
+      ?.filter(
+        (button) =>
+          String(button?.type || "").toUpperCase() === "URL" &&
+          button?.text &&
+          button?.url
+      )
+      .map((button) => ({
+        text: substituirVariaveisTexto(button.text || "", variaveis).trim(),
+        url: substituirComOffset(button.url || "").trim(),
+      }))
+      .filter((button) => button.text && button.url) || [];
+
+  if (redirects.length > 0) {
+    partes.push(
+      [
+        "Links:",
+        ...redirects.map(
+          (button, index) => `${index + 1}. ${button.text}: ${button.url}`
+        ),
+      ].join("\n")
+    );
+  }
+
   if (quickReplies.length > 0) {
     partes.push(
       [
