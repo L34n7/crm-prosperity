@@ -525,7 +525,7 @@
 }
 
 .templateButtonRemove:hover {
-  background: var(--crm-danger-soft);
+  background: var(--crm-danger-bg);
 }
 
 .templateButtonEmpty {
