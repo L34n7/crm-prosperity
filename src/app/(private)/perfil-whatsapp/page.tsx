@@ -86,9 +86,6 @@ const categorias = [
   { value: "OTHER", label: "Outro" },
 ];
 
-const CONTRATAR_NUMERO_ADICIONAL_URL =
-  "https://www.prosperitypay.com.br/checkout/52ba63312a9e";
-
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -297,6 +294,8 @@ export default function WhatsappPerfilPage() {
     useState(false);
   const [cadastrandoIntegracao, setCadastrandoIntegracao] = useState(false);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
+  const [abrindoCheckoutAdicional, setAbrindoCheckoutAdicional] = useState(false);
+  const [erroCheckoutAdicional, setErroCheckoutAdicional] = useState("");
 
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
@@ -315,6 +314,58 @@ export default function WhatsappPerfilPage() {
     confirmouDesconexaoCoexNoApp,
     setConfirmouDesconexaoCoexNoApp,
   ] = useState(false);
+
+  async function contratarNumeroAdicional() {
+    if (abrindoCheckoutAdicional) return;
+
+    const novaAba = window.open("about:blank", "_blank");
+    if (!novaAba) {
+      setErroCheckoutAdicional(
+        "O navegador bloqueou a nova aba. Permita pop-ups para o CRM e tente novamente."
+      );
+      return;
+    }
+
+    novaAba.opener = null;
+    setAbrindoCheckoutAdicional(true);
+    setErroCheckoutAdicional("");
+
+    try {
+      const response = await fetch("/api/assinaturas/adicionais/whatsapp/checkout", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        novaAba.close();
+        setErroCheckoutAdicional(
+          data?.error || "Não foi possível preparar o checkout do número adicional."
+        );
+        return;
+      }
+
+      if (data.scheduled) {
+        novaAba.close();
+        setErroCheckoutAdicional(
+          "A alteração foi agendada para o próximo ciclo da assinatura."
+        );
+        return;
+      }
+
+      if (!data.checkout_url) {
+        novaAba.close();
+        setErroCheckoutAdicional("A Prosperity Pay não retornou o checkout.");
+        return;
+      }
+
+      novaAba.location.href = data.checkout_url;
+    } catch {
+      novaAba.close();
+      setErroCheckoutAdicional("Erro inesperado ao preparar o checkout.");
+    } finally {
+      setAbrindoCheckoutAdicional(false);
+    }
+  }
 
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
@@ -1782,9 +1833,15 @@ export default function WhatsappPerfilPage() {
           </div>
 
           <p className={styles.upgradeCheckoutNotice}>
-            Finalize a contratação online pela Prosperity Pay. Após a confirmação
-            do pagamento, continue a configuração do novo número no CRM.
+            A Prosperity Pay calcula automaticamente apenas o valor proporcional
+            até o próximo vencimento. Depois, os R$ 60 entram na mensalidade.
           </p>
+
+          {erroCheckoutAdicional && (
+            <p className={styles.upgradeCheckoutNotice} role="alert">
+              {erroCheckoutAdicional}
+            </p>
+          )}
 
           <div className={styles.modalActions}>
             <button
@@ -1795,14 +1852,16 @@ export default function WhatsappPerfilPage() {
               Agora não
             </button>
 
-            <a
+            <button
+              type="button"
               className={`${styles.primaryButton} ${styles.upgradeCta}`}
-              href={CONTRATAR_NUMERO_ADICIONAL_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={contratarNumeroAdicional}
+              disabled={abrindoCheckoutAdicional}
             >
-              Contratar número adicional — R$ 60/mês
-            </a>
+              {abrindoCheckoutAdicional
+                ? "Calculando valor proporcional..."
+                : "Contratar número adicional — R$ 60/mês"}
+            </button>
           </div>
         </div>
       </div>
