@@ -254,6 +254,9 @@ export default function TemplatesWhatsAppPage() {
   const podeCriarTemplate = headerUser.permissoes.includes(
     "whatsapp_templates.criar"
   );
+  const podeSincronizarTemplates = headerUser.permissoes.includes(
+    "whatsapp_templates.sincronizar"
+  );
   const [integracoes, setIntegracoes] = useState<IntegracaoWhatsApp[]>([]);
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
 
@@ -287,6 +290,7 @@ export default function TemplatesWhatsAppPage() {
     "",
   ]);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const sincronizacaoAutomaticaExecutadaRef = useRef(false);
   const [footerText, setFooterText] = useState(
     obterFooterOptOut("UTILITY") || ""
   );
@@ -403,6 +407,49 @@ export default function TemplatesWhatsAppPage() {
   useEffect(() => {
     carregarTemplates(filtroIntegracao);
   }, [filtroIntegracao]);
+
+  useEffect(() => {
+    if (
+      sincronizacaoAutomaticaExecutadaRef.current ||
+      loadingIntegracoes ||
+      loadingTemplates
+    ) {
+      return;
+    }
+
+    sincronizacaoAutomaticaExecutadaRef.current = true;
+
+    if (!podeSincronizarTemplates) {
+      return;
+    }
+
+    const integracoesComTemplatePendente = Array.from(
+      new Set(
+        templates
+          .filter(
+            (template) =>
+              normalizarStatus(template.status) === "PENDING" &&
+              !!template.integracao_whatsapp_id
+          )
+          .map((template) => template.integracao_whatsapp_id)
+      )
+    );
+
+    if (integracoesComTemplatePendente.length === 0) {
+      return;
+    }
+
+    void sincronizarIntegracoesPendentesAoAbrir(
+      integracoesComTemplatePendente
+    );
+    // A verificacao automatica deve acontecer apenas uma vez por abertura da pagina.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    loadingIntegracoes,
+    loadingTemplates,
+    podeSincronizarTemplates,
+    templates,
+  ]);
 
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
@@ -864,6 +911,77 @@ export default function TemplatesWhatsAppPage() {
     }
   }
 
+  async function sincronizarIntegracaoTemplatesMeta(
+    integracaoWhatsAppId: string
+  ) {
+    const res = await fetch("/api/whatsapp/templates/sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        integracao_whatsapp_id: integracaoWhatsAppId,
+      }),
+    });
+
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok || !json?.ok) {
+      throw new Error(json?.error || "Erro ao sincronizar templates.");
+    }
+
+    return json;
+  }
+
+  async function sincronizarIntegracoesPendentesAoAbrir(
+    integracoesIds: string[]
+  ) {
+    if (integracoesIds.length === 0 || sincronizando) return;
+
+    setSincronizando(true);
+    setErroSincronizacao("");
+
+    const falhas: string[] = [];
+    let sincronizadas = 0;
+
+    try {
+      for (const integracaoPendenteId of integracoesIds) {
+        try {
+          await sincronizarIntegracaoTemplatesMeta(integracaoPendenteId);
+          sincronizadas += 1;
+        } catch (error: any) {
+          const nomeIntegracao =
+            integracoes.find((item) => item.id === integracaoPendenteId)
+              ?.nome_conexao || "Integração";
+
+          falhas.push(
+            `${nomeIntegracao}: ${
+              error?.message || "não foi possível sincronizar"
+            }`
+          );
+        }
+      }
+
+      await carregarTemplates(filtroIntegracao);
+
+      if (sincronizadas > 0) {
+        setMensagem(
+          `Verificação automática na Meta concluída para ${sincronizadas} ${
+            sincronizadas === 1 ? "integração" : "integrações"
+          } com template pendente.`
+        );
+      }
+
+      if (falhas.length > 0) {
+        setErroSincronizacao(
+          `Não foi possível verificar automaticamente: ${falhas.join(" | ")}`
+        );
+      }
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
   async function sincronizarTemplatesMeta() {
     try {
       setMensagem("");
@@ -878,21 +996,9 @@ export default function TemplatesWhatsAppPage() {
 
       setSincronizando(true);
 
-      const res = await fetch("/api/whatsapp/templates/sync", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          integracao_whatsapp_id: integracaoParaSync,
-        }),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Erro ao sincronizar templates.");
-      }
+      const json = await sincronizarIntegracaoTemplatesMeta(
+        integracaoParaSync
+      );
 
       setMensagem(
         `Sincronização concluída. Meta: ${json.total_meta}, inseridos: ${json.inseridos}, atualizados: ${json.atualizados}.`
