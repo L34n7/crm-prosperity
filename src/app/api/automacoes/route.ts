@@ -308,12 +308,34 @@ function respostaWhatsappMetaBloqueado(detalhe?: string | null) {
       code: "WHATSAPP_META_BLOQUEADO",
       motivo: "whatsapp_meta_bloqueado",
       error:
-        "A conta WhatsApp Business esta desativada ou bloqueada pela Meta. Não é possível ativar fluxos WhatsApp enquanto o bloqueio estiver ativo.",
+        "Não há nenhuma conta WhatsApp Business disponível para este fluxo. As integrações do escopo estão desativadas ou bloqueadas pela Meta.",
       detalhe: detalhe || WHATSAPP_META_BLOCK_DESCRIPTION,
       meta_manager_url: WHATSAPP_META_MANAGER_URL,
       help_whatsapp_url: WHATSAPP_META_BLOCK_HELP_URL,
     },
     { status: 423 }
+  );
+}
+
+function integracaoWhatsappMetaEstaBloqueada(
+  integracao: IntegracaoWhatsappMetaRow
+) {
+  const config =
+    integracao.config_json &&
+    typeof integracao.config_json === "object" &&
+    !Array.isArray(integracao.config_json)
+      ? (integracao.config_json as Record<string, unknown>)
+      : {};
+  const diagnostico = config.whatsapp_meta_diagnostic;
+  const motivoDiagnostico =
+    diagnostico && typeof diagnostico === "object"
+      ? String((diagnostico as Record<string, unknown>).motivo || "")
+      : "";
+
+  return (
+    statusWhatsappMetaBloqueado(integracao.status) ||
+    statusWhatsappMetaBloqueado(integracao.phone_number_status) ||
+    motivoDiagnostico === "business_account_locked"
   );
 }
 
@@ -339,25 +361,24 @@ async function buscarBloqueioWhatsappMeta(
     );
   }
 
-  return ((data || []) as IntegracaoWhatsappMetaRow[]).find((integracao) => {
-    const config =
-      integracao.config_json &&
-      typeof integracao.config_json === "object" &&
-      !Array.isArray(integracao.config_json)
-        ? (integracao.config_json as Record<string, unknown>)
-        : {};
-    const diagnostico = config.whatsapp_meta_diagnostic;
-    const motivoDiagnostico =
-      diagnostico && typeof diagnostico === "object"
-        ? String((diagnostico as Record<string, unknown>).motivo || "")
-        : "";
+  const integracoes = (data || []) as IntegracaoWhatsappMetaRow[];
 
-    return (
-      statusWhatsappMetaBloqueado(integracao.status) ||
-      statusWhatsappMetaBloqueado(integracao.phone_number_status) ||
-      motivoDiagnostico === "business_account_locked"
-    );
-  });
+  if (integracoes.length === 0) {
+    return null;
+  }
+
+  const integracoesBloqueadas = integracoes.filter(
+    integracaoWhatsappMetaEstaBloqueada
+  );
+
+  // Uma conta bloqueada não deve impedir os fluxos das demais contas
+  // da empresa. Só bloqueamos a ativação quando todo o escopo do fluxo
+  // está indisponível na Meta.
+  if (integracoesBloqueadas.length !== integracoes.length) {
+    return null;
+  }
+
+  return integracoesBloqueadas[0] || null;
 }
 
 function configuracaoComoObjeto(valor: unknown): Record<string, unknown> {
