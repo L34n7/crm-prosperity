@@ -43,6 +43,11 @@ const CAMPOS_STATUS = `
   meta_messaging_limit_tier,
   meta_account_mode,
   meta_saude_ultima_verificacao_em,
+  payment_method_added,
+  meta_payment_status,
+  meta_primary_funding_id,
+  meta_payment_checked_at,
+  meta_payment_check_error,
   created_at,
   updated_at
 `;

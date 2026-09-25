@@ -46,6 +46,11 @@ type IntegracaoWhatsapp = {
   meta_messaging_limit: number | null;
   meta_account_mode: string | null;
   meta_saude_ultima_verificacao_em: string | null;
+  payment_method_added: boolean;
+  meta_payment_status: string | null;
+  meta_primary_funding_id: string | null;
+  meta_payment_checked_at: string | null;
+  meta_payment_check_error: string | null;
   setup_completed_at: string | null;
   onboarding_status: string | null;
   onboarding_erro: string | null;
@@ -241,7 +246,7 @@ async function buscarIntegracao(
   let query = supabase
     .from("integracoes_whatsapp")
     .select(
-      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, setup_completed_at, onboarding_status, onboarding_erro, modo_integracao, coex_status, posicao, config_json, token_ref"
+      "id, empresa_id, nome_conexao, numero, status, phone_number_id, waba_id, business_account_id, meta_business_id, verified_name, phone_number_display_name, phone_number_status, quality_rating, meta_messaging_limit_tier, meta_messaging_limit, meta_account_mode, meta_saude_ultima_verificacao_em, payment_method_added, meta_payment_status, meta_primary_funding_id, meta_payment_checked_at, meta_payment_check_error, setup_completed_at, onboarding_status, onboarding_erro, modo_integracao, coex_status, posicao, config_json, token_ref"
     )
     .eq("empresa_id", empresaId)
     .eq("provider", "meta_official")
@@ -331,6 +336,22 @@ function montarIntegracaoResposta(
     meta_saude_ultima_verificacao_em:
       overrides.meta_saude_ultima_verificacao_em ??
       integracao.meta_saude_ultima_verificacao_em ??
+      null,
+    payment_method_added:
+      overrides.payment_method_added ?? integracao.payment_method_added ?? false,
+    meta_payment_status:
+      overrides.meta_payment_status ?? integracao.meta_payment_status ?? "nao_verificado",
+    meta_primary_funding_id:
+      overrides.meta_primary_funding_id ??
+      integracao.meta_primary_funding_id ??
+      null,
+    meta_payment_checked_at:
+      overrides.meta_payment_checked_at ??
+      integracao.meta_payment_checked_at ??
+      null,
+    meta_payment_check_error:
+      overrides.meta_payment_check_error ??
+      integracao.meta_payment_check_error ??
       null,
     setup_completed_at:
       overrides.setup_completed_at ?? integracao.setup_completed_at ?? null,

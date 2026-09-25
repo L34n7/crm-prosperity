@@ -587,6 +587,129 @@
   min-height: 44px;
 }
 
+.paymentCard {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface-subtle);
+}
+
+.paymentCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paymentCardHeader > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.paymentCardHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.paymentEyebrow {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.paymentStatusBadge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.paymentStatusOk {
+  color: var(--crm-ui-private-content-hex-047857);
+  background: var(--crm-ui-private-surface-hex-dcfce7);
+  border-color: var(--crm-ui-private-border-hex-86efac);
+}
+
+.paymentStatusMissing {
+  color: var(--crm-ui-private-content-hex-b91c1c);
+  background: var(--crm-ui-private-surface-hex-fee2e2);
+  border-color: var(--crm-ui-private-border-hex-fecaca);
+}
+
+.paymentStatusWarning {
+  color: var(--crm-ui-private-content-hex-92400e);
+  background: var(--crm-warning-bg-strong);
+  border-color: var(--crm-ui-private-border-hex-facc15);
+}
+
+.paymentStatusNeutral {
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-soft);
+  border-color: var(--crm-border);
+}
+
+.paymentDescription {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.paymentCardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.paymentCardFooter strong {
+  color: var(--crm-text);
+}
+
+.paymentRefreshButton {
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.paymentRefreshButton:hover:not(:disabled) {
+  background: var(--crm-surface-soft);
+}
+
+.paymentRefreshButton:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.paymentError {
+  padding: 9px 10px;
+  border: 1px solid var(--crm-ui-private-border-hex-fecaca);
+  border-radius: 10px;
+  background: var(--crm-ui-private-surface-hex-fee2e2);
+  color: var(--crm-ui-private-content-hex-b91c1c);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .summaryConnectionActions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
