@@ -288,7 +288,9 @@ export async function GET() {
               change_id:
                 typeof pendingChange.change_id === "string"
                   ? pendingChange.change_id
-                  : null,
+                  : typeof pendingChange.id === "string"
+                    ? pendingChange.id
+                    : null,
               plan_id: pendingPlan.id,
               plan_name: pendingPlan.nome,
               plan_slug: pendingPlan.slug,
