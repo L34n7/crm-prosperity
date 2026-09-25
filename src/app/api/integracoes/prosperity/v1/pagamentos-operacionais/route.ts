@@ -34,6 +34,59 @@ function formatarNomePlano(valor: unknown) {
   return /^plano\s+/i.test(nome) ? nome : `Plano ${nome}`;
 }
 
+function origemGeracaoPix(params: {
+  gateway: string;
+  metodo: unknown;
+  tipoCobranca: string;
+  payload: Record<string, any>;
+  createdAt: unknown;
+}) {
+  const metodo = String(params.metodo || "").trim().toLowerCase();
+  if (metodo !== "pix") return null;
+
+  const gateway = String(params.gateway || "").trim().toLowerCase();
+
+  if (gateway === "prosperity_pay") {
+    const payment = objetoSeguro(params.payload.payment);
+    const origem = String(payment.generation_source || "")
+      .trim()
+      .toLowerCase();
+
+    if (origem === "platform_automatic") {
+      return "plataforma_automatica";
+    }
+
+    // Eventos antigos da Prosperity Pay não carregavam generation_source.
+    // Eles eram originados pelo checkout do cliente.
+    return "cliente";
+  }
+
+  if (gateway === "atomo") {
+    const criadoBruto =
+      textoOuNull(params.payload.created_at) ||
+      textoOuNull(params.createdAt);
+    const criado = criadoBruto ? new Date(criadoBruto) : null;
+
+    // A Átomo não informa explicitamente a origem. No histórico operacional,
+    // a cobrança automática de renovação é gerada pela rotina diária por volta
+    // de 09:00 UTC (06:00 BRT). Limitamos a heurística a renovações + essa
+    // janela estreita para não classificar checkout manual comum como automático.
+    if (
+      params.tipoCobranca === "renovacao" &&
+      criado &&
+      !Number.isNaN(criado.getTime()) &&
+      criado.getUTCHours() === 9 &&
+      criado.getUTCMinutes() <= 5
+    ) {
+      return "plataforma_automatica";
+    }
+
+    return "cliente";
+  }
+
+  return "cliente";
+}
+
 function referenciasOfertaPagamento(payload: Record<string, any>, offerHash: unknown) {
   const offer = objetoSeguro(payload.offer);
   const cart = Array.isArray(payload.cart) ? payload.cart : [];
@@ -183,6 +236,13 @@ export async function GET(request: NextRequest) {
         : empresaId && clienteJaPagou && !transacaoPaga
           ? "renovacao"
           : "contratacao";
+      const origemGeracao = origemGeracaoPix({
+        gateway,
+        metodo: item.metodo,
+        tipoCobranca,
+        payload,
+        createdAt: item.created_at,
+      });
 
       return {
         id: item.id,
@@ -199,6 +259,7 @@ export async function GET(request: NextRequest) {
         pago_atualmente: transacaoPaga,
         cliente_ja_pagou: clienteJaPagou,
         tipo_cobranca: tipoCobranca,
+        origem_geracao: origemGeracao,
         item_cobranca: itemCobranca,
         pago_em: item.paid_at,
         reembolsado_em: item.refunded_at,
@@ -247,6 +308,7 @@ export async function GET(request: NextRequest) {
         cliente_ja_pagou: "Indica se o cliente possui algum pagamento aprovado no histórico.",
         assinatura_em_dia: "Indica se a assinatura atual está ativa e ainda não venceu.",
         item_cobranca: "Nome amigável do plano ou pacote de tokens associado à cobrança atual.",
+        origem_geracao: "Indica se o PIX foi gerado pelo cliente ou automaticamente pela plataforma.",
       },
     });
   } catch (error) {
