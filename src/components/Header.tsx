@@ -784,10 +784,14 @@ export default function Header({
     }
   }
 
-  async function cancelarNumeroAdicional(integrationId: string) {
+  async function cancelarNumeroAdicional(
+    integrationId: string | null,
+    addonIndex: number
+  ) {
     if (cancelandoAddonId) return;
 
-    setCancelandoAddonId(integrationId);
+    const addonKey = integrationId || `slot:${addonIndex}`;
+    setCancelandoAddonId(addonKey);
     setErroAssinaturaResumo("");
 
     try {
@@ -796,7 +800,10 @@ export default function Header({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ integration_id: integrationId }),
+          body: JSON.stringify({
+            integration_id: integrationId || null,
+            addon_index: addonIndex,
+          }),
         }
       );
       const data = await response.json();
@@ -1467,9 +1474,13 @@ export default function Header({
 
                       {(assinaturaResumo?.addons.whatsapp || []).map((addon) => {
                         const integrationId = addon.integration?.id || null;
+                        const addonKey =
+                          integrationId || `slot:${addon.index}`;
                         const confirmando =
-                          integrationId === confirmandoCancelamentoAddonId;
-                        const cancelando = integrationId === cancelandoAddonId;
+                          addonKey === confirmandoCancelamentoAddonId;
+                        const cancelando = addonKey === cancelandoAddonId;
+                        const configurado =
+                          addon.integration?.configured === true;
 
                         return (
                           <div
@@ -1478,7 +1489,7 @@ export default function Header({
                                 ? styles.subscriptionItemPending
                                 : ""
                             }`}
-                            key={integrationId || `whatsapp-${addon.index}`}
+                            key={addonKey}
                           >
                             <div className={styles.subscriptionItemIcon}>
                               <Smartphone size={19} strokeWidth={2.1} />
@@ -1510,52 +1521,58 @@ export default function Header({
                                 <span className={styles.subscriptionPendingBadge}>
                                   Sai na próxima renovação
                                 </span>
-                              ) : integrationId &&
-                                addon.integration?.configured ? (
-                                <div className={styles.subscriptionCancelActions}>
-                                  {confirmando ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        className={styles.subscriptionCancelConfirm}
-                                        onClick={() =>
-                                          cancelarNumeroAdicional(integrationId)
-                                        }
-                                        disabled={cancelando}
-                                      >
-                                        {cancelando
-                                          ? "Agendando..."
-                                          : "Confirmar cancelamento"}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className={styles.subscriptionCancelBack}
-                                        onClick={() =>
-                                          setConfirmandoCancelamentoAddonId(null)
-                                        }
-                                        disabled={cancelando}
-                                      >
-                                        Voltar
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className={styles.subscriptionCancelButton}
-                                      onClick={() =>
-                                        setConfirmandoCancelamentoAddonId(
-                                          integrationId
-                                        )
-                                      }
-                                    >
-                                      Cancelar na próxima renovação
-                                    </button>
-                                  )}
-                                </div>
                               ) : (
-                                <span className={styles.subscriptionSetupBadge}>
-                                  Aguardando configuração
-                                </span>
+                                <>
+                                  {!configurado && (
+                                    <span className={styles.subscriptionSetupBadge}>
+                                      Aguardando configuração
+                                    </span>
+                                  )}
+
+                                  <div className={styles.subscriptionCancelActions}>
+                                    {confirmando ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className={styles.subscriptionCancelConfirm}
+                                          onClick={() =>
+                                            cancelarNumeroAdicional(
+                                              integrationId,
+                                              addon.index
+                                            )
+                                          }
+                                          disabled={cancelando}
+                                        >
+                                          {cancelando
+                                            ? "Agendando..."
+                                            : "Confirmar cancelamento"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={styles.subscriptionCancelBack}
+                                          onClick={() =>
+                                            setConfirmandoCancelamentoAddonId(null)
+                                          }
+                                          disabled={cancelando}
+                                        >
+                                          Voltar
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className={styles.subscriptionCancelButton}
+                                        onClick={() =>
+                                          setConfirmandoCancelamentoAddonId(
+                                            addonKey
+                                          )
+                                        }
+                                      >
+                                        Cancelar na próxima renovação
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
                               )}
                             </div>
                           </div>
