@@ -153,7 +153,7 @@ async function aplicarCancelamentosWhatsappAgendados(
 
   const { data: agendados, error } = await supabase
     .from("prosperity_pay_recursos_agendados")
-    .select("id,recurso_id,effective_at,metadata_json")
+    .select("id,recurso_id,recurso_tipo,effective_at,metadata_json")
     .eq("empresa_id", empresaId)
     .eq("addon_code", "whatsapp_number")
     .in("recurso_tipo", ["whatsapp_integration", "whatsapp_addon_slot"])
@@ -164,11 +164,60 @@ async function aplicarCancelamentosWhatsappAgendados(
   if (error) throw error;
 
   for (const agendado of agendados || []) {
-    if (agendado.recurso_id) {
+    let recursoId = agendado.recurso_id || null;
+
+    if (
+      !recursoId &&
+      agendado.recurso_tipo === "whatsapp_addon_slot"
+    ) {
+      const metadata =
+        agendado.metadata_json &&
+        typeof agendado.metadata_json === "object" &&
+        !Array.isArray(agendado.metadata_json)
+          ? (agendado.metadata_json as Record<string, unknown>)
+          : {};
+      const addonIndex = Math.max(
+        0,
+        Number(metadata.addon_index || 0),
+      );
+
+      if (addonIndex > 0) {
+        const { data: empresa, error: empresaError } = await supabase
+          .from("empresas")
+          .select("plano_id,planos:plano_id(limite_integracoes_whatsapp)")
+          .eq("id", empresaId)
+          .single();
+
+        if (empresaError) throw empresaError;
+
+        const plano = Array.isArray(empresa?.planos)
+          ? empresa.planos[0]
+          : empresa?.planos;
+        const limiteBase = Math.max(
+          1,
+          Number(plano?.limite_integracoes_whatsapp || 1),
+        );
+        const posicaoAlvo = limiteBase + addonIndex;
+
+        const { data: integracaoSlot, error: integracaoSlotError } =
+          await supabase
+            .from("integracoes_whatsapp")
+            .select("id")
+            .eq("empresa_id", empresaId)
+            .eq("provider", "meta_official")
+            .eq("posicao", posicaoAlvo)
+            .maybeSingle();
+
+        if (integracaoSlotError) throw integracaoSlotError;
+        recursoId = integracaoSlot?.id || null;
+      }
+    }
+
+    if (recursoId) {
       const { data: integracao, error: integracaoError } = await supabase
         .from("integracoes_whatsapp")
         .select("id,status,config_json")
-        .eq("id", agendado.recurso_id)
+        .eq("id", recursoId)
         .eq("empresa_id", empresaId)
         .maybeSingle();
 
