@@ -156,7 +156,7 @@ async function aplicarCancelamentosWhatsappAgendados(
     .select("id,recurso_id,effective_at,metadata_json")
     .eq("empresa_id", empresaId)
     .eq("addon_code", "whatsapp_number")
-    .eq("recurso_tipo", "whatsapp_integration")
+    .in("recurso_tipo", ["whatsapp_integration", "whatsapp_addon_slot"])
     .eq("acao", "remove")
     .eq("status", "scheduled")
     .lte("effective_at", referenciaTempo);
