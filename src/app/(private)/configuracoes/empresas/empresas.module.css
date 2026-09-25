@@ -580,3 +580,304 @@
     width: 100%;
   }
 }
+
+
+.tokensManagementBlock {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, var(--crm-primary-soft), transparent 60%),
+    var(--crm-surface);
+}
+
+.tokensManagementHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.tokensManagementHeader > div {
+  min-width: 0;
+}
+
+.tokensManagementTitle {
+  display: block;
+  margin-top: 5px;
+  color: var(--crm-text-strong);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.tokensManagementDescription {
+  max-width: 720px;
+  margin: 5px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tokensTotalBadge {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 999px;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tokensStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.tokensStatsGrid > div {
+  padding: 12px 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface);
+}
+
+.tokensStatsGrid span {
+  display: block;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tokensStatsGrid strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.tokensManagementActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.tokenModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 8, 12, 0.76);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.tokenModal {
+  position: relative;
+  width: min(100%, 560px);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.tokenModalClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tokenModalClose:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.tokenModalEyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tokenModal h2 {
+  margin: 0;
+  padding-right: 46px;
+  color: var(--crm-text-strong);
+  font-size: 27px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.tokenModalCompany {
+  margin: 8px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.tokenActionTabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 20px;
+  padding: 5px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.tokenActionTab,
+.tokenActionTabActive {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.tokenActionTab {
+  background: transparent;
+  color: var(--crm-text-muted);
+}
+
+.tokenActionTabActive {
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.tokenRestorePanel,
+.tokenAmountPanel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface-subtle);
+}
+
+.tokenRestorePanel > span {
+  display: block;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tokenRestorePanel > strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--crm-primary-text);
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.tokenRestorePanel p,
+.tokenAmountPanel p {
+  margin: 9px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.tokenQuickAmounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.tokenQuickAmounts button {
+  padding: 7px 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tokenQuickAmounts button:hover:not(:disabled) {
+  border-color: var(--crm-primary-border);
+  color: var(--crm-primary-text);
+}
+
+.tokenReasonField {
+  margin-top: 16px;
+}
+
+.tokenReasonField .label span {
+  color: var(--crm-text-soft);
+  font-weight: 500;
+}
+
+.tokenModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .tokensManagementHeader {
+    flex-direction: column;
+  }
+
+  .tokensStatsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tokensManagementActions,
+  .tokenModalActions {
+    flex-direction: column-reverse;
+  }
+
+  .tokensManagementActions button,
+  .tokenModalActions button {
+    width: 100%;
+  }
+
+  .tokenModalOverlay {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .tokenModal {
+    padding: 24px 18px 20px;
+    border-radius: 22px;
+  }
+
+  .tokenModal h2 {
+    font-size: 24px;
+  }
+}
