@@ -371,6 +371,61 @@ type TotaisHistorico = {
   falha: number;
 };
 
+type LinhaRelatorioCampanha = {
+  numero?: string | null;
+  nome_contato?: string | null;
+  status_disparo?: string | null;
+  status_final?: string | null;
+  status_label?: string | null;
+  situacao?: string | null;
+  primeira_resposta?: string | null;
+  enviado_em?: string | null;
+  lido_em?: string | null;
+  resposta_em?: string | null;
+  status_mensagem?: string | null;
+  erro?: string | null;
+};
+
+type RelatorioCampanhaDetalhado = {
+  campanha: {
+    id: string;
+    nome: string;
+    template_nome?: string | null;
+    template_categoria?: string | null;
+    status?: string | null;
+    total_itens: number;
+    total_enviados: number;
+    total_falhas: number;
+    total_cancelados: number;
+    created_at?: string | null;
+    finished_at?: string | null;
+  };
+  totais: {
+    total: number;
+    enviado: number;
+    entregue: number;
+    lido: number;
+    falha: number;
+    cancelado: number;
+    pendente: number;
+    respondido: number;
+  };
+  custo_estimado: {
+    disponivel: boolean;
+    categoria?: string | null;
+    quantidadeCobravelEstimada: number;
+    valorUnitarioUsd: number;
+    valorTotalUsd: number;
+    cotacaoUsdBrl: number;
+    valorTotalBrlEstimado: number;
+    fonteCotacao?: string | null;
+    cotacaoDataHora?: string | null;
+    cotacaoFallback?: boolean;
+    criterio?: string | null;
+  };
+  linhas: LinhaRelatorioCampanha[];
+};
+
 type PaginaHistoricoCache = {
   resultados: ResultadoDisparo[];
   temMais: boolean;
@@ -1864,6 +1919,7 @@ function disparoTeveFalha(item: ResultadoDisparo) {
 
 
 const ITENS_HISTORICO_POR_PAGINA = 7;
+const ITENS_RELATORIO_CAMPANHA_POR_PAGINA = 50;
 
 export default function DisparosWhatsAppPage() {
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
