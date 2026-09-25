@@ -2010,6 +2010,11 @@ export default function DisparosWhatsAppPage() {
   const [historicoTemMais, setHistoricoTemMais] = useState(false);
   const [exportandoRelatorioCampanha, setExportandoRelatorioCampanha] =
     useState(false);
+  const [loadingRelatorioCampanhaDetalhado, setLoadingRelatorioCampanhaDetalhado] =
+    useState(false);
+  const [relatorioCampanhaDetalhado, setRelatorioCampanhaDetalhado] =
+    useState<RelatorioCampanhaDetalhado | null>(null);
+  const [paginaRelatorioCampanha, setPaginaRelatorioCampanha] = useState(1);
   const [campanhasHistorico, setCampanhasHistorico] = useState<
     CampanhaHistoricoFiltro[]
   >([]);
@@ -2137,6 +2142,54 @@ export default function DisparosWhatsAppPage() {
       }
     },
     [aplicarCampanhaPagina]
+  );
+
+  const carregarRelatorioCampanhaDetalhado = useCallback(
+    async (campanhaId: string) => {
+      const id = campanhaId.trim();
+
+      if (!id) {
+        setRelatorioCampanhaDetalhado(null);
+        return;
+      }
+
+      try {
+        setLoadingRelatorioCampanhaDetalhado(true);
+
+        const params = new URLSearchParams({
+          campanha_id: id,
+          formato: "json",
+        });
+        const res = await fetch(
+          `/api/whatsapp/disparos/relatorio?${params.toString()}`,
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          throw new Error(
+            json?.error || "Não foi possível carregar o relatório da campanha."
+          );
+        }
+
+        setRelatorioCampanhaDetalhado({
+          campanha: json.campanha,
+          totais: json.totais,
+          custo_estimado: json.custo_estimado,
+          linhas: Array.isArray(json.linhas) ? json.linhas : [],
+        });
+      } catch (error) {
+        setRelatorioCampanhaDetalhado(null);
+        setErro(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar o relatório da campanha."
+        );
+      } finally {
+        setLoadingRelatorioCampanhaDetalhado(false);
+      }
+    },
+    []
   );
 
   async function gerarRelatorioExcelCampanha() {
@@ -2838,6 +2891,17 @@ export default function DisparosWhatsAppPage() {
   }, [carregarCampanhaPagina]);
 
   useEffect(() => {
+    setPaginaRelatorioCampanha(1);
+
+    if (!filtroHistoricoCampanha) {
+      setRelatorioCampanhaDetalhado(null);
+      return;
+    }
+
+    void carregarRelatorioCampanhaDetalhado(filtroHistoricoCampanha);
+  }, [filtroHistoricoCampanha, carregarRelatorioCampanhaDetalhado]);
+
+  useEffect(() => {
     const handleAndamento = (event: Event) => {
       const detalhe = (event as CustomEvent<DisparoAndamentoPayload>).detail;
       setDisparoEmMassaProcessando(detalhe?.bloquear_disparos === true);
@@ -3463,6 +3527,64 @@ export default function DisparosWhatsAppPage() {
   }, [totalResultadosFiltroAtivo]);
 
   const resultadoHistoricoPaginado = resultadoFiltrado;
+
+  const linhasRelatorioCampanhaFiltradas = useMemo(() => {
+    const linhas = relatorioCampanhaDetalhado?.linhas || [];
+    const termo = buscaHistorico.trim().toLocaleLowerCase("pt-BR");
+
+    if (!termo) return linhas;
+
+    return linhas.filter((linha) =>
+      [
+        linha.numero,
+        linha.nome_contato,
+        linha.status_label,
+        linha.situacao,
+        linha.primeira_resposta,
+      ].some((valor) =>
+        String(valor || "")
+          .toLocaleLowerCase("pt-BR")
+          .includes(termo)
+      )
+    );
+  }, [relatorioCampanhaDetalhado, buscaHistorico]);
+
+  const totalPaginasRelatorioCampanha = Math.max(
+    1,
+    Math.ceil(
+      linhasRelatorioCampanhaFiltradas.length /
+        ITENS_RELATORIO_CAMPANHA_POR_PAGINA
+    )
+  );
+  const paginaRelatorioCampanhaSegura = Math.min(
+    paginaRelatorioCampanha,
+    totalPaginasRelatorioCampanha
+  );
+  const linhasRelatorioCampanhaPaginadas = useMemo(() => {
+    const inicio =
+      (paginaRelatorioCampanhaSegura - 1) *
+      ITENS_RELATORIO_CAMPANHA_POR_PAGINA;
+
+    return linhasRelatorioCampanhaFiltradas.slice(
+      inicio,
+      inicio + ITENS_RELATORIO_CAMPANHA_POR_PAGINA
+    );
+  }, [
+    linhasRelatorioCampanhaFiltradas,
+    paginaRelatorioCampanhaSegura,
+  ]);
+  const primeiroItemRelatorioCampanha =
+    linhasRelatorioCampanhaFiltradas.length === 0
+      ? 0
+      : (paginaRelatorioCampanhaSegura - 1) *
+          ITENS_RELATORIO_CAMPANHA_POR_PAGINA +
+        1;
+  const ultimoItemRelatorioCampanha = Math.min(
+    primeiroItemRelatorioCampanha +
+      linhasRelatorioCampanhaPaginadas.length -
+      1,
+    linhasRelatorioCampanhaFiltradas.length
+  );
 
   const primeiroItemHistorico =
     totalResultadosFiltroAtivo === 0
