@@ -3401,3 +3401,270 @@
   cursor: help;
   white-space: nowrap;
 }
+
+
+/* CRM_CAMPAIGN_DETAILED_REPORT_V1 */
+.campaignReport {
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.campaignReportHeader {
+  border: 1px solid var(--crm-border);
+  border-radius: 18px;
+  background: var(--crm-surface-soft);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.campaignReportHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.campaignReportEyebrow {
+  margin: 0 0 4px;
+  color: var(--crm-primary-strong);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.campaignReportTitle {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.campaignReportMeta {
+  margin: 7px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.campaignReportCost {
+  min-width: 190px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 14px;
+  background: var(--crm-surface);
+  padding: 12px 14px;
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.campaignReportCost span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.campaignReportCost strong {
+  color: var(--crm-text-strong);
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.campaignReportCost small {
+  color: var(--crm-text-soft);
+  font-size: 11px;
+}
+
+.campaignReportMetrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.campaignReportMetric {
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface);
+  padding: 10px 12px;
+  display: grid;
+  gap: 5px;
+}
+
+.campaignReportMetric span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.campaignReportMetric strong {
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.campaignReportCostNote {
+  margin: 0;
+  color: var(--crm-text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.campaignReportTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+}
+
+.campaignReportTable {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.campaignReportTable th {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  text-align: left;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.campaignReportTable td {
+  padding: 12px;
+  border-bottom: 1px solid var(--crm-border);
+  color: var(--crm-text);
+  vertical-align: top;
+  line-height: 1.45;
+}
+
+.campaignReportTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.campaignReportTable tbody tr:hover {
+  background: var(--crm-surface-soft);
+}
+
+.campaignReportPhone {
+  color: var(--crm-text-strong) !important;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.campaignReportName {
+  min-width: 170px;
+  color: var(--crm-text-strong) !important;
+  font-weight: 700;
+}
+
+.campaignReportReply {
+  min-width: 250px;
+  max-width: 380px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.campaignReportStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--crm-border);
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.campaignReportStatusRead {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.campaignReportStatusDelivered {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-strong);
+}
+
+.campaignReportStatusSent {
+  border-color: var(--crm-border-strong);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
+}
+
+.campaignReportStatusFailed,
+.campaignReportStatusCancelled {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.campaignReportStatusPending {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.campaignReportError {
+  display: block;
+  max-width: 180px;
+  margin-top: 6px;
+  color: var(--crm-danger-text);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .campaignReportMetrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .campaignReport {
+    padding: 14px 16px 16px;
+  }
+
+  .campaignReportHeading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .campaignReportCost {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .campaignReportMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .campaignReportTitle {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .campaignReportMetrics {
+    grid-template-columns: 1fr 1fr;
+  }
+}
