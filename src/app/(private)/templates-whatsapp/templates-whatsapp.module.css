@@ -235,9 +235,9 @@
 }
 
 .mediaToggleSubtitle {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--crm-text-muted);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .premiumSwitch {
@@ -385,10 +385,10 @@
 }
 
 .contentSectionHeader p {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   color: var(--crm-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .contentSectionBadge {
@@ -425,10 +425,10 @@
 }
 
 .variableExamplesHeader p {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   color: var(--crm-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .variableExamplesHeader > span {
@@ -762,7 +762,8 @@
 
 .previewSubtitle {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--crm-text-muted);
 }
 
