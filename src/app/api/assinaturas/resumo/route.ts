@@ -121,7 +121,7 @@ export async function GET() {
           .order("created_at", { ascending: true }),
         supabase
           .from("prosperity_pay_recursos_agendados")
-          .select("id,recurso_id,addon_code,acao,status,effective_at")
+          .select("id,recurso_id,recurso_tipo,addon_code,acao,status,effective_at,metadata_json")
           .eq("empresa_id", empresaId)
           .eq("status", "scheduled"),
       ]);
@@ -155,9 +155,19 @@ export async function GET() {
 
     const whatsappAddons = Array.from({ length: addonQuantity }, (_, index) => {
       const integracao = integracoesExtras[index] || null;
+      const addonIndex = index + 1;
       const pending = integracao
-        ? agendadosWhatsapp.find((item: any) => item.recurso_id === integracao.id) || null
-        : null;
+        ? agendadosWhatsapp.find(
+            (item: any) =>
+              item.recurso_tipo === "whatsapp_integration" &&
+              item.recurso_id === integracao.id
+          ) || null
+        : agendadosWhatsapp.find(
+            (item: any) =>
+              item.recurso_tipo === "whatsapp_addon_slot" &&
+              !item.recurso_id &&
+              Number(item?.metadata_json?.addon_index || 0) === addonIndex
+          ) || null;
 
       return {
         code: "whatsapp_number",
