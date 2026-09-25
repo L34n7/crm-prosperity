@@ -373,12 +373,20 @@ export async function cancelarMudancaPlanoAgendadaProsperityPay(
 
 export async function referenciaProsperityPayPorPlanoSlug(slug: "basico" | "essencial") {
   const { data: plano, error } = await supabase.from("planos")
-    .select("id")
+    .select("id,preco_mensal_centavos")
     .eq("slug", slug)
     .eq("status", "ativo")
     .single();
   if (error || !plano) throw error ?? new Error("Plano não encontrado.");
 
-  const oferta = await ofertaProsperityPorPlanoValor(plano.id, null, {});
+  const precoCatalogo = Math.max(
+    1,
+    Number(plano.preco_mensal_centavos || 0),
+  );
+  const oferta = await ofertaProsperityPorPlanoValor(
+    plano.id,
+    precoCatalogo,
+    {},
+  );
   return oferta.referencia;
 }
