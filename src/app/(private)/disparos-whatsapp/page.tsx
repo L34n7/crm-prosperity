@@ -6139,7 +6139,8 @@ export default function DisparosWhatsAppPage() {
           </div>
         </div>
 
-          <div className={styles.resultsSummary}>
+          {!filtroHistoricoCampanha ? (
+<div className={styles.resultsSummary}>
             <button
               type="button"
               className={
@@ -6194,26 +6195,35 @@ export default function DisparosWhatsAppPage() {
               <strong className={styles.summaryValue}>{totalFalha}</strong>
             </button>
           </div>
+          ) : null}
 
           <div className={styles.historySearchBar}>
             <div className={styles.historySearchField}>
               <label className={styles.label}>Busca</label>
               <input
                 value={buscaHistorico}
-                onChange={(e) => setBuscaHistorico(e.target.value)}
+                onChange={(e) => {
+                  setBuscaHistorico(e.target.value);
+                  if (filtroHistoricoCampanha) {
+                    setPaginaRelatorioCampanha(1);
+                  }
+                }}
                 className={styles.input}
                 placeholder="Busque por número, nome ou template..."
               />
             </div>
 
             <div className={styles.historyMassFilter}>
-              <label className={styles.label}>Disparo em massa</label>
+              <label className={styles.label}>Campanha do relatório</label>
               <select
                 value={filtroHistoricoCampanha}
-                onChange={(e) => setFiltroHistoricoCampanha(e.target.value)}
+                onChange={(e) => {
+                  setFiltroHistoricoCampanha(e.target.value);
+                  setPaginaRelatorioCampanha(1);
+                }}
                 className={styles.input}
               >
-                <option value="">Todos os disparos em massa</option>
+                <option value="">Histórico geral de disparos</option>
                 {campanhasHistorico.map((campanha) => (
                   <option key={campanha.id} value={campanha.id}>
                     {nomeCampanhaHistorico(campanha)}
@@ -6244,7 +6254,240 @@ export default function DisparosWhatsAppPage() {
             </div>
           </div>
 
-            {loadingHistorico ? (
+            {filtroHistoricoCampanha ? (
+              <div className={styles.campaignReport}>
+                {loadingRelatorioCampanhaDetalhado ? (
+                  <div className={styles.emptyState}>
+                    Carregando relatório detalhado da campanha...
+                  </div>
+                ) : !relatorioCampanhaDetalhado ? (
+                  <div className={styles.emptyState}>
+                    Não foi possível carregar os detalhes desta campanha.
+                  </div>
+                ) : (
+                  <>
+                    <div className={styles.campaignReportHeader}>
+                      <div className={styles.campaignReportHeading}>
+                        <div>
+                          <p className={styles.campaignReportEyebrow}>
+                            Relatório por campanha
+                          </p>
+                          <h3 className={styles.campaignReportTitle}>
+                            {relatorioCampanhaDetalhado.campanha.nome}
+                          </h3>
+                          <p className={styles.campaignReportMeta}>
+                            Template:{" "}
+                            {relatorioCampanhaDetalhado.campanha.template_nome || "-"}
+                            {" • "}
+                            Categoria:{" "}
+                            {formatarCategoriaMeta(
+                              relatorioCampanhaDetalhado.campanha.template_categoria
+                            )}
+                            {" • "}
+                            Criada em:{" "}
+                            {formatarDataHora(
+                              relatorioCampanhaDetalhado.campanha.created_at
+                            ) || "-"}
+                          </p>
+                        </div>
+
+                        <div className={styles.campaignReportCost}>
+                          <span>Custo estimado</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.custo_estimado.disponivel
+                              ? formatarMoedaBRL(
+                                  relatorioCampanhaDetalhado.custo_estimado
+                                    .valorTotalBrlEstimado
+                                )
+                              : "Não disponível"}
+                          </strong>
+                          <small>
+                            {relatorioCampanhaDetalhado.custo_estimado
+                              .quantidadeCobravelEstimada}{" "}
+                            envios considerados
+                          </small>
+                        </div>
+                      </div>
+
+                      <div className={styles.campaignReportMetrics}>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Total</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.total}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Enviados</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.enviado}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Entregues</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.entregue}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Lidos</span>
+                          <strong>{relatorioCampanhaDetalhado.totais.lido}</strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Respondidos</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.respondido}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Falhas</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.falha}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <p className={styles.campaignReportCostNote}>
+                        {relatorioCampanhaDetalhado.custo_estimado.criterio}
+                      </p>
+                    </div>
+
+                    {linhasRelatorioCampanhaFiltradas.length === 0 ? (
+                      <div className={styles.emptyState}>
+                        Nenhum contato encontrado nesta campanha para a busca atual.
+                      </div>
+                    ) : (
+                      <>
+                        <div className={styles.campaignReportTableWrap}>
+                          <table className={styles.campaignReportTable}>
+                            <thead>
+                              <tr>
+                                <th>Número</th>
+                                <th>Nome</th>
+                                <th>Status</th>
+                                <th>1ª mensagem respondida</th>
+                                <th>Enviado em</th>
+                                <th>Lido em</th>
+                                <th>Respondido em</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {linhasRelatorioCampanhaPaginadas.map(
+                                (item, index) => {
+                                  const status = String(
+                                    item.status_final || "pendente"
+                                  ).toLowerCase();
+
+                                  return (
+                                    <tr
+                                      key={`${item.numero || "sem-numero"}-${item.enviado_em || index}`}
+                                    >
+                                      <td className={styles.campaignReportPhone}>
+                                        {item.numero || "-"}
+                                      </td>
+                                      <td className={styles.campaignReportName}>
+                                        {item.nome_contato || "Sem nome"}
+                                      </td>
+                                      <td>
+                                        <span
+                                          className={`${styles.campaignReportStatus} ${
+                                            status === "lido"
+                                              ? styles.campaignReportStatusRead
+                                              : status === "entregue"
+                                              ? styles.campaignReportStatusDelivered
+                                              : status === "falha"
+                                              ? styles.campaignReportStatusFailed
+                                              : status === "cancelado"
+                                              ? styles.campaignReportStatusCancelled
+                                              : status === "enviado"
+                                              ? styles.campaignReportStatusSent
+                                              : styles.campaignReportStatusPending
+                                          }`}
+                                        >
+                                          {item.status_label || "Pendente"}
+                                        </span>
+                                        {item.erro ? (
+                                          <span
+                                            className={styles.campaignReportError}
+                                            title={item.erro}
+                                          >
+                                            {item.erro}
+                                          </span>
+                                        ) : null}
+                                      </td>
+                                      <td className={styles.campaignReportReply}>
+                                        {item.primeira_resposta || "—"}
+                                      </td>
+                                      <td>
+                                        {formatarDataHora(item.enviado_em) || "—"}
+                                      </td>
+                                      <td>
+                                        {formatarDataHora(item.lido_em) || "—"}
+                                      </td>
+                                      <td>
+                                        {formatarDataHora(item.resposta_em) || "—"}
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className={styles.paginationBar}>
+                          <span className={styles.paginationInfo}>
+                            Mostrando {primeiroItemRelatorioCampanha} a{" "}
+                            {ultimoItemRelatorioCampanha} de{" "}
+                            {linhasRelatorioCampanhaFiltradas.length} contatos
+                          </span>
+
+                          <div className={styles.paginationActions}>
+                            <button
+                              type="button"
+                              className={styles.paginationButton}
+                              onClick={() =>
+                                setPaginaRelatorioCampanha((pagina) =>
+                                  Math.max(1, pagina - 1)
+                                )
+                              }
+                              disabled={paginaRelatorioCampanhaSegura <= 1}
+                            >
+                              Anterior
+                            </button>
+
+                            <span className={styles.paginationCurrent}>
+                              Página {paginaRelatorioCampanhaSegura} de{" "}
+                              {totalPaginasRelatorioCampanha}
+                            </span>
+
+                            <button
+                              type="button"
+                              className={styles.paginationButton}
+                              onClick={() =>
+                                setPaginaRelatorioCampanha((pagina) =>
+                                  Math.min(
+                                    totalPaginasRelatorioCampanha,
+                                    pagina + 1
+                                  )
+                                )
+                              }
+                              disabled={
+                                paginaRelatorioCampanhaSegura >=
+                                totalPaginasRelatorioCampanha
+                              }
+                            >
+                              Próxima
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                {loadingHistorico ? (
               <div className={styles.emptyState}>Carregando histórico...</div>
             ) : resultadoFiltrado.length === 0 ? (
               <div className={styles.emptyState}>
@@ -6496,6 +6739,8 @@ export default function DisparosWhatsAppPage() {
                   </div>
                 ) : null}
               </div>
+            )}
+              </>
             )}
           </section>
         </div>
