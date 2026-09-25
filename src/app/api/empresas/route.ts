@@ -49,7 +49,19 @@ export async function GET() {
       plano_id,
       limite_integracoes_whatsapp,
       limite_usuarios,
+      assinatura_status,
       nicho_id,
+      empresa_tokens_ia (
+        limite_mensal,
+        tokens_restantes,
+        saldo_mensal_restante,
+        saldo_avulso_restante,
+        tokens_mensais_usados,
+        tokens_avulsos_usados,
+        periodo_inicio,
+        periodo_fim,
+        updated_at
+      ),
       nichos (
         id,
         codigo,
