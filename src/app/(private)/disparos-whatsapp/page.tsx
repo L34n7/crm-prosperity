@@ -3506,6 +3506,17 @@ export default function DisparosWhatsAppPage() {
     return ids.size;
   }, [gruposConflitoAtivos]);
 
+  const campanhaHistoricoSelecionada = useMemo(
+    () =>
+      campanhasHistorico.find(
+        (campanha) => campanha.id === filtroHistoricoCampanha
+      ) || null,
+    [campanhasHistorico, filtroHistoricoCampanha]
+  );
+  const nomeCampanhaRelatorioSelecionada = campanhaHistoricoSelecionada
+    ? nomeCampanhaHistorico(campanhaHistoricoSelecionada)
+    : relatorioCampanhaDetalhado?.campanha.nome || "Disparo em massa";
+
   const totalSucesso = totaisHistorico.sucesso;
   const totalFalha = totaisHistorico.falha;
   const totalProcessando = totaisHistorico.processando;
@@ -6279,7 +6290,7 @@ export default function DisparosWhatsAppPage() {
                             Relatório por campanha
                           </p>
                           <h3 className={styles.campaignReportTitle}>
-                            {relatorioCampanhaDetalhado.campanha.nome}
+                            {nomeCampanhaRelatorioSelecionada}
                           </h3>
                           <p className={styles.campaignReportMeta}>
                             Template:{" "}
