@@ -132,6 +132,7 @@ type AssinaturaResumo = {
   pending: {
     whatsapp_cancellations: number;
     plan_change: {
+      change_id: string | null;
       plan_id: string;
       plan_name: string;
       plan_slug: string;
@@ -159,7 +160,7 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
       "Para começar com atendimento automatizado, organização profissional e IA integrada.",
     precoOriginal: "R$ 197/mês",
     preco: "R$ 137/mês",
-    observacao: "2 usuários e 100 mil tokens de IA.",
+    observacao: "2 usuários · 100 mil tokens de IA · 1 número",
     recursos: [
       "API Oficial do WhatsApp inclusa",
       "Atendimento automatizado com IA",
@@ -178,7 +179,7 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
       "Para equipes que precisam de mais automação, IA e volume para escalar vendas e atendimento.",
     precoOriginal: "R$ 367/mês",
     preco: "R$ 267/mês",
-    observacao: "6 usuários, 400 mil tokens de IA e 2 números de WhatsApp.",
+    observacao: "6 usuários · 400 mil tokens de IA · 2 números",
     recursos: [
       "2 números na API Oficial do WhatsApp",
       "Atendimento automatizado avançado",
@@ -235,6 +236,8 @@ export default function Header({
     useState<string | null>(null);
   const [cancelandoAddonId, setCancelandoAddonId] = useState<string | null>(null);
   const [abrindoCheckoutAddon, setAbrindoCheckoutAddon] = useState(false);
+  const [cancelandoAlteracaoPlano, setCancelandoAlteracaoPlano] =
+    useState(false);
   const [feedbackAgendaPopup, setFeedbackAgendaPopup] =
     useState<Notificacao | null>(null);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
@@ -817,6 +820,48 @@ export default function Header({
     }
   }
 
+  async function manterPlanoAtual() {
+    if (cancelandoAlteracaoPlano || !assinaturaResumo?.pending.plan_change) {
+      return;
+    }
+
+    setCancelandoAlteracaoPlano(true);
+    setErroAssinaturaResumo("");
+
+    try {
+      const response = await fetch(
+        "/api/assinaturas/plano/cancelar-alteracao",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            change_id:
+              assinaturaResumo.pending.plan_change.change_id || undefined,
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(
+          data?.error || "Não foi possível manter o plano atual."
+        );
+      }
+
+      setPlanoPagamentoSelecionado(null);
+      await carregarResumoAssinatura();
+      window.dispatchEvent(new CustomEvent("assinatura:atualizada"));
+    } catch (error) {
+      setErroAssinaturaResumo(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível manter o plano atual."
+      );
+    } finally {
+      setCancelandoAlteracaoPlano(false);
+    }
+  }
+
   function abrirModalPlanosAssinatura() {
     setMenuOpen(false);
     setNotificacoesOpen(false);
@@ -889,7 +934,9 @@ export default function Header({
   const assinaturaPagaAntecipadamente =
     assinaturaResumo?.subscription.paid_ahead === true;
   const assinaturaPodeRenovar =
-    !assinaturaResumo?.plan.is_free && !assinaturaPagaAntecipadamente;
+    !assinaturaResumo?.plan.is_free &&
+    !assinaturaPagaAntecipadamente &&
+    !assinaturaResumo?.pending.plan_change;
   const assinaturaAcaoPagamento =
     assinaturaStatus === "ativa"
       ? "Adiantar próxima mensalidade"
@@ -1323,11 +1370,13 @@ export default function Header({
                       >
                         {assinaturaPagaAntecipadamente
                           ? "Próxima mensalidade já paga"
-                          : assinaturaResumo
-                            ? `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
-                                assinaturaResumo.subscription.next_amount_cents
-                              )}`
-                            : assinaturaAcaoPagamento}
+                          : assinaturaResumo?.pending.plan_change
+                            ? "Alteração de plano agendada"
+                            : assinaturaResumo
+                              ? `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
+                                  assinaturaResumo.subscription.next_amount_cents
+                                )}`
+                              : assinaturaAcaoPagamento}
                       </button>
                     )}
                   </div>
@@ -1355,6 +1404,9 @@ export default function Header({
                               ? ` · ${formatarQuantidadeCompacta(
                                   assinaturaResumo.plan.tokens_limit
                                 )} tokens de IA`
+                              : ""}
+                            {assinaturaResumo?.plan.whatsapp_included
+                              ? ` · ${assinaturaResumo.plan.whatsapp_included} ${assinaturaResumo.plan.whatsapp_included === 1 ? "número" : "números"}`
                               : ""}
                           </small>
                         </div>
@@ -1390,7 +1442,7 @@ export default function Header({
                               a confirmação do pagamento.
                             </small>
                           </div>
-                          <div>
+                          <div className={styles.subscriptionPendingPlanActions}>
                             <span>Próximo plano</span>
                             <strong>
                               {formatarMoedaCentavos(
@@ -1399,6 +1451,16 @@ export default function Header({
                               )}
                               /mês
                             </strong>
+                            <button
+                              type="button"
+                              className={styles.subscriptionKeepPlanButton}
+                              onClick={manterPlanoAtual}
+                              disabled={cancelandoAlteracaoPlano}
+                            >
+                              {cancelandoAlteracaoPlano
+                                ? "Mantendo plano..."
+                                : "Manter plano atual"}
+                            </button>
                           </div>
                         </div>
                       )}
@@ -1614,9 +1676,11 @@ export default function Header({
                             >
                               {assinaturaPagaAntecipadamente
                                 ? "Próxima mensalidade já paga"
-                                : `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
-                                    assinaturaResumo.subscription.next_amount_cents
-                                  )}`}
+                                : assinaturaResumo.pending.plan_change
+                                  ? "Alteração de plano agendada"
+                                  : `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
+                                      assinaturaResumo.subscription.next_amount_cents
+                                    )}`}
                             </button>
                           )}
                         </div>
@@ -1639,6 +1703,10 @@ export default function Header({
                   {PLANOS_RENOVACAO.map((plano) => {
                     const planoAtual =
                       !assinaturaResumo?.plan.is_free && planoEhAtual(plano);
+                    const planoAgendado =
+                      plano.tipo === "checkout" &&
+                      assinaturaResumo?.pending.plan_change?.plan_slug ===
+                        plano.slug;
 
                     return (
                       <article
@@ -1679,7 +1747,7 @@ export default function Header({
                           className={
                             plano.tipo === "cotacao"
                               ? styles.planRenewalSecondary
-                              : planoAtual
+                              : planoAtual || planoAgendado
                                 ? styles.planRenewalCurrent
                                 : styles.planRenewalPrimary
                           }
@@ -1687,13 +1755,17 @@ export default function Header({
                           title={
                             planoAtual
                               ? "Este é o plano atual"
-                              : getPlanoActionLabel(plano, planoAtual)
+                              : planoAgendado
+                                ? "Alteração já agendada para a próxima renovação"
+                                : getPlanoActionLabel(plano, planoAtual)
                           }
-                          disabled={planoAtual}
+                          disabled={planoAtual || planoAgendado}
                         >
                           {planoAtual
                             ? "Plano atual"
-                            : getPlanoActionLabel(plano, planoAtual)}
+                            : planoAgendado
+                              ? "Alteração agendada"
+                              : getPlanoActionLabel(plano, planoAtual)}
                         </button>
                       </article>
                     );
