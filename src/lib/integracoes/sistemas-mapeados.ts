@@ -8,11 +8,12 @@ export type SistemaIntegracaoMapeado = { chave:string; nome:string; descricao:st
 const opcoesPagamentoStatus=[{value:"waiting_payment",label:"Aguardando pagamento"},{value:"paid",label:"Pago"},{value:"cancelled",label:"Cancelado"},{value:"refused",label:"Recusado"},{value:"unpaid",label:"Não pago"}] as OpcaoCampoSistemaMapeado[];
 const opcoesMetodoPagamento=[{value:"pix",label:"PIX"},{value:"credit_card",label:"Cartão de crédito"}] as OpcaoCampoSistemaMapeado[];
 const opcoesTipoCobranca=[{value:"contratacao",label:"Contratação"},{value:"renovacao",label:"Renovação / recorrência"}] as OpcaoCampoSistemaMapeado[];
+const opcoesOrigemGeracaoPix=[{value:"cliente",label:"Gerado pelo cliente"},{value:"plataforma_automatica",label:"Gerado automaticamente pela plataforma"}] as OpcaoCampoSistemaMapeado[];
 const opcoesAssinaturaStatus=[{value:"ativa",label:"Ativa"},{value:"vencida",label:"Vencida"},{value:"bloqueada",label:"Bloqueada"}] as OpcaoCampoSistemaMapeado[];
 const opcoesOnboardingStatus=[{value:"pendente",label:"Pendente"},{value:"concluido",label:"Concluído"},{value:"erro",label:"Com erro"}] as OpcaoCampoSistemaMapeado[];
 
 export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
-  chave:"crm_prosperity",nome:"CRM Prosperity",descricao:"Conector oficial do próprio CRM Prosperity para cobrança, checkout, assinaturas e onboarding.",tipo_integracao:"crm_prosperity",versao_mapeamento:3,base_url_padrao:"https://crmprosperity.com/api/integracoes/prosperity/v1",
+  chave:"crm_prosperity",nome:"CRM Prosperity",descricao:"Conector oficial do próprio CRM Prosperity para cobrança, checkout, assinaturas e onboarding.",tipo_integracao:"crm_prosperity",versao_mapeamento:4,base_url_padrao:"https://crmprosperity.com/api/integracoes/prosperity/v1",
   autenticacao:{tipo:"bearer",descricao:"Token Bearer emitido especificamente para a integração."},
   recursos:[
     {chave:"clientes",nome:"Clientes e leads",descricao:"Cadastros originados do checkout e da contratação do CRM Prosperity.",endpoint:"/clientes",identificador:"cliente.id",eventos:[
@@ -41,6 +42,7 @@ export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
       {chave:"pagamento.status",api_path:"status",nome:"Status da transação atual",descricao:"Situação atual desta transação específica.",tipo:"select",opcoes:opcoesPagamentoStatus},
       {chave:"pagamento.metodo",api_path:"metodo",nome:"Método de pagamento",descricao:"Forma utilizada nesta transação.",tipo:"select",opcoes:opcoesMetodoPagamento},
       {chave:"pagamento.tipo_cobranca",api_path:"tipo_cobranca",nome:"Tipo de cobrança",descricao:"Diferencia contratação inicial de renovação/recorrência.",tipo:"select",opcoes:opcoesTipoCobranca},
+      {chave:"pagamento.origem_geracao",api_path:"origem_geracao",nome:"Origem da geração do PIX",descricao:"Indica se o PIX foi solicitado pelo cliente no checkout ou gerado automaticamente pela plataforma.",tipo:"select",opcoes:opcoesOrigemGeracaoPix},
       {chave:"pagamento.valor_centavos",api_path:"valor_centavos",nome:"Valor",descricao:"Valor bruto da transação em centavos.",tipo:"money",disponivel_como_variavel:true},
       {chave:"pagamento.transacao_paga",api_path:"transacao_paga",nome:"Esta transação está paga",descricao:"Indica somente se esta transação específica foi paga.",tipo:"boolean"},
       {chave:"pagamento.pago_atualmente",api_path:"transacao_paga",nome:"Esta transação está paga",descricao:"Alias de compatibilidade usado na revalidação de automações antigas.",tipo:"boolean"},
