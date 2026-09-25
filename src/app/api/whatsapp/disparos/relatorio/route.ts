@@ -211,27 +211,6 @@ const BORDA_CARD = {
   right: { style: "thin" as const, color: { argb: COR.borda } },
 };
 
-function estilizarFaixa(
-  worksheet: ExcelJS.Worksheet,
-  inicio: string,
-  fim: string,
-  estilo: Partial<ExcelJS.Style>
-) {
-  const inicioCelula = worksheet.getCell(inicio);
-  const fimCelula = worksheet.getCell(fim);
-
-  for (let row = inicioCelula.row; row <= fimCelula.row; row += 1) {
-    for (let col = inicioCelula.col; col <= fimCelula.col; col += 1) {
-      Object.assign(worksheet.getCell(row, col), {
-        style: {
-          ...worksheet.getCell(row, col).style,
-          ...estilo,
-        },
-      });
-    }
-  }
-}
-
 function estiloStatusExcel(status: string) {
   switch (status) {
     case "lido":
@@ -852,7 +831,7 @@ export async function GET(req: NextRequest) {
       to: "G13",
     };
 
-    worksheet.printArea = `A1:H${Math.max(14, 13 + linhasDetalhadas.length)}`;
+    worksheet.pageSetup.printArea = `A1:H${Math.max(14, 13 + linhasDetalhadas.length)}`;
 
     const buffer = await workbook.xlsx.writeBuffer();
     const arquivo = Buffer.from(buffer);
