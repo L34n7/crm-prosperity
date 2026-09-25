@@ -1,6 +1,8 @@
 import {
   extractIncomingMessages,
   extractMessageStatuses,
+  extractTemplateCategoryUpdates,
+  extractTemplateStatusUpdates,
   countCoexistenceWebhookItems,
   type WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
@@ -21,6 +23,7 @@ import { processarMensagemRecebidaParaOptOut } from "@/lib/whatsapp/opt-out";
 import { obterFeedbackOptOut } from "@/lib/whatsapp/opt-out-policy";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { processCoexistenceWebhookBody } from "@/lib/whatsapp/process-coexistence-webhook";
+import { processTemplateWebhookUpdates } from "@/lib/whatsapp/process-template-webhook";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -397,12 +400,17 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
   const incomingMessages = extractIncomingMessages(body);
   const incomingStatuses = extractMessageStatuses(body);
+  const templateStatusUpdates = extractTemplateStatusUpdates(body);
+  const templateCategoryUpdates = extractTemplateCategoryUpdates(body);
   const coexistenceItems = countCoexistenceWebhookItems(body);
+  const totalTemplateUpdates =
+    templateStatusUpdates.length + templateCategoryUpdates.length;
 
   if (
     incomingMessages.length === 0 &&
     incomingStatuses.length === 0 &&
-    coexistenceItems.total === 0
+    coexistenceItems.total === 0 &&
+    totalTemplateUpdates === 0
   ) {
     return {
       success: true,
@@ -420,6 +428,20 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
   const processedResults: Array<Record<string, unknown>> = [];
   let optOutCriticalError: OptOutCriticalError | null = null;
+
+  const templateUpdatesResult =
+    totalTemplateUpdates > 0
+      ? await processTemplateWebhookUpdates({
+          statusUpdates: templateStatusUpdates,
+          categoryUpdates: templateCategoryUpdates,
+        })
+      : {
+          processed: 0,
+          statusUpdates: 0,
+          categoryUpdates: 0,
+          emailsSent: 0,
+          unmatched: 0,
+        };
 
   for (const statusItem of incomingStatuses) {
     try {
@@ -1136,11 +1158,15 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       incomingMessages: incomingMessages.length,
       incomingStatuses: incomingStatuses.length,
       coexistence: coexistenceResult,
+      templateUpdates: templateUpdatesResult,
       processed:
-        processedResults.length + coexistenceResult.processed,
+        processedResults.length +
+        coexistenceResult.processed +
+        templateUpdatesResult.processed,
       successCount:
         processedResults.filter((item) => item.success).length +
-        coexistenceResult.processed,
+        coexistenceResult.processed +
+        templateUpdatesResult.processed,
       errorCount: processedResults.filter((item) => !item.success).length,
     },
     results: processedResults,

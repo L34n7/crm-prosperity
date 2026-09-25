@@ -293,6 +293,24 @@ export type WhatsAppChange = {
         timestamp?: string;
       };
     }>;
+    message_template_id?: string | number;
+    message_template_name?: string;
+    message_template_language?: string;
+    message_template_category?: string;
+    reason?: string | null;
+    previous_category?: string;
+    new_category?: string;
+    rejection_info?: {
+      reason?: string | null;
+      recommendation?: string | null;
+    };
+    disable_info?: {
+      disable_date?: string | number | null;
+    };
+    other_info?: {
+      title?: string | null;
+      description?: string | null;
+    };
     event?: string;
     waba_info?: {
       waba_id?: string;
@@ -774,6 +792,113 @@ export function extractMessageStatuses(
           rawStatus: statusItem,
         });
       }
+    }
+  }
+
+  return results;
+}
+
+export type ExtractedTemplateStatusUpdate = {
+  wabaId: string;
+  event: string;
+  messageTemplateId: string;
+  messageTemplateName: string;
+  messageTemplateLanguage: string;
+  category: string | null;
+  reason: string | null;
+  rawValue: Record<string, unknown>;
+};
+
+export type ExtractedTemplateCategoryUpdate = {
+  wabaId: string;
+  messageTemplateId: string;
+  messageTemplateName: string;
+  messageTemplateLanguage: string;
+  previousCategory: string | null;
+  newCategory: string;
+  rawValue: Record<string, unknown>;
+};
+
+export function extractTemplateStatusUpdates(
+  body: WhatsAppWebhookBody
+): ExtractedTemplateStatusUpdate[] {
+  const results: ExtractedTemplateStatusUpdate[] = [];
+
+  for (const entry of body?.entry || []) {
+    for (const change of entry?.changes || []) {
+      if (change?.field !== "message_template_status_update") continue;
+
+      const value = change.value;
+      const wabaId = String(entry.id || "").trim();
+      const event = String(value?.event || "").trim().toUpperCase();
+      const messageTemplateId = String(value?.message_template_id || "").trim();
+      const messageTemplateName = String(
+        value?.message_template_name || ""
+      ).trim();
+      const messageTemplateLanguage = String(
+        value?.message_template_language || ""
+      ).trim();
+      const category =
+        String(value?.message_template_category || "").trim().toUpperCase() ||
+        null;
+      const reason =
+        value?.reason == null
+          ? null
+          : String(value.reason || "").trim() || null;
+
+      if (!wabaId || !event || !messageTemplateId) continue;
+
+      results.push({
+        wabaId,
+        event,
+        messageTemplateId,
+        messageTemplateName,
+        messageTemplateLanguage,
+        category,
+        reason,
+        rawValue: (value || {}) as Record<string, unknown>,
+      });
+    }
+  }
+
+  return results;
+}
+
+export function extractTemplateCategoryUpdates(
+  body: WhatsAppWebhookBody
+): ExtractedTemplateCategoryUpdate[] {
+  const results: ExtractedTemplateCategoryUpdate[] = [];
+
+  for (const entry of body?.entry || []) {
+    for (const change of entry?.changes || []) {
+      if (change?.field !== "template_category_update") continue;
+
+      const value = change.value;
+      const wabaId = String(entry.id || "").trim();
+      const messageTemplateId = String(value?.message_template_id || "").trim();
+      const messageTemplateName = String(
+        value?.message_template_name || ""
+      ).trim();
+      const messageTemplateLanguage = String(
+        value?.message_template_language || ""
+      ).trim();
+      const previousCategory =
+        String(value?.previous_category || "").trim().toUpperCase() || null;
+      const newCategory = String(value?.new_category || "")
+        .trim()
+        .toUpperCase();
+
+      if (!wabaId || !messageTemplateId || !newCategory) continue;
+
+      results.push({
+        wabaId,
+        messageTemplateId,
+        messageTemplateName,
+        messageTemplateLanguage,
+        previousCategory,
+        newCategory,
+        rawValue: (value || {}) as Record<string, unknown>,
+      });
     }
   }
 

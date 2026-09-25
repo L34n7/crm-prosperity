@@ -128,6 +128,7 @@ export async function POST(req: NextRequest) {
         "phone_number_quality_update",
         "account_update",
         "message_template_status_update",
+        "template_category_update",
       ].includes(String(field))
     );
 
