@@ -6344,6 +6344,18 @@ export default function DisparosWhatsAppPage() {
                             {relatorioCampanhaDetalhado.totais.falha}
                           </strong>
                         </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Pendentes</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.pendente}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Cancelados</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.cancelado}
+                          </strong>
+                        </div>
                       </div>
 
                       <p className={styles.campaignReportCostNote}>
