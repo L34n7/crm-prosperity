@@ -236,36 +236,242 @@ async function carregarResumoPixPendentesProsperity(contatoId: string) {
     cachePixPendentePorContato.delete(id);
   }
 
-  const { data, error } = await supabaseAdmin.rpc(
-    "prosperity_resumo_pix_pendentes_contato",
-    { p_contato_id: id }
-  );
+  const { data: contato, error: contatoError } = await supabaseAdmin
+    .from("contatos")
+    .select("empresa_id,email,telefone")
+    .eq("id", id)
+    .maybeSingle();
 
-  if (error) {
-    console.error(
-      "[AUTOMACAO_VARIAVEIS] Erro ao resolver resumo de PIX pendentes:",
-      {
-        code: error.code,
-        message: error.message,
-      }
-    );
-
+  if (contatoError || !contato?.empresa_id) {
+    if (contatoError) {
+      console.error(
+        "[AUTOMACAO_VARIAVEIS] Erro ao localizar contato para PIX pendente:",
+        contatoError.message
+      );
+    }
     return "";
   }
 
-  const resultado =
-    data && typeof data === "object" && !Array.isArray(data)
-      ? (data as Record<string, unknown>)
+  const { data: integracao, error: integracaoError } = await supabaseAdmin
+    .from("integracoes_api_externas")
+    .select("id")
+    .eq("empresa_id", contato.empresa_id)
+    .eq("tipo", "crm_prosperity")
+    .eq("status", "ativa")
+    .limit(1)
+    .maybeSingle();
+
+  if (integracaoError) {
+    console.error(
+      "[AUTOMACAO_VARIAVEIS] Erro ao validar integração para PIX pendente:",
+      integracaoError.message
+    );
+    return "";
+  }
+
+  if (!integracao) {
+    cachePixPendentePorContato.set(id, {
+      autorizado: false,
+      resumo: "",
+      expiraEm: agora + CACHE_PIX_NAO_AUTORIZADO_MS,
+    });
+    limparCachePixPendente();
+    return "";
+  }
+
+  const email = String(contato.email || "").trim().toLowerCase();
+  const telefone = String(contato.telefone || "").replace(/\D/g, "");
+
+  if (!email && !telefone) {
+    return "";
+  }
+
+  let pagamentosQuery = supabaseAdmin
+    .from("pagamentos")
+    .select(
+      "id,gateway,status,metodo,created_at,offer_hash,offer_titulo,payload,customer_email,customer_telefone"
+    )
+    .eq("metodo", "pix")
+    .in("status", [
+      "waiting_payment",
+      "pending",
+      "paid",
+      "approved",
+      "completed",
+    ])
+    .gte("created_at", new Date(agora - 12 * 60 * 60 * 1000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const filtrosContato: string[] = [];
+  if (email) {
+    filtrosContato.push(`customer_email.ilike.${email}`);
+  }
+  if (telefone) {
+    filtrosContato.push(`customer_telefone.eq.${telefone}`);
+  }
+
+  if (filtrosContato.length > 0) {
+    pagamentosQuery = pagamentosQuery.or(filtrosContato.join(","));
+  }
+
+  const { data: pagamentos, error: pagamentosError } = await pagamentosQuery;
+
+  if (pagamentosError) {
+    console.error(
+      "[AUTOMACAO_VARIAVEIS] Erro ao buscar pagamentos PIX pendentes:",
+      pagamentosError.message
+    );
+    return "";
+  }
+
+  const referencias = Array.from(
+    new Set(
+      (pagamentos || [])
+        .map((item: any) => String(item.offer_hash || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  const { data: ofertas, error: ofertasError } = referencias.length
+    ? await supabaseAdmin
+        .from("ia_token_ofertas")
+        .select("gateway,referencia,tipo,nome,plano_id,planos:plano_id(nome)")
+        .eq("ativa", true)
+        .in("referencia", referencias)
+    : { data: [], error: null };
+
+  if (ofertasError) {
+    console.error(
+      "[AUTOMACAO_VARIAVEIS] Erro ao localizar ofertas dos PIX pendentes:",
+      ofertasError.message
+    );
+    return "";
+  }
+
+  const ofertasPorChave = new Map<string, any>();
+  for (const oferta of ofertas || []) {
+    const chave = `${String(oferta.gateway || "")
+      .trim()
+      .toLowerCase()}:${String(oferta.referencia || "").trim()}`;
+    if (!ofertasPorChave.has(chave)) {
+      ofertasPorChave.set(chave, oferta);
+    }
+  }
+
+  function objetoSeguro(valor: unknown) {
+    return valor && typeof valor === "object" && !Array.isArray(valor)
+      ? (valor as Record<string, any>)
       : {};
-  const autorizado = resultado.autorizado === true;
-  const resumo = autorizado ? String(resultado.resumo || "") : "";
+  }
+
+  function pixCopiaCola(payload: unknown) {
+    const raiz = objetoSeguro(payload);
+    const transaction = objetoSeguro(raiz.transaction);
+    const pix = objetoSeguro(transaction.pix);
+    const payment = objetoSeguro(raiz.payment);
+
+    return String(
+      pix.code ||
+        payment.pix_code ||
+        raiz.pix_code ||
+        ""
+    ).trim();
+  }
+
+  function planoNome(oferta: any) {
+    const plano = Array.isArray(oferta?.planos)
+      ? oferta.planos[0]
+      : oferta?.planos;
+    const nome = String(plano?.nome || "").trim();
+    if (!nome) return "";
+    return /^plano\s+/i.test(nome) ? nome : `Plano ${nome}`;
+  }
+
+  const gruposVistos = new Set<string>();
+  const pendentes: Array<{
+    item: string;
+    criadoEm: string;
+    pix: string;
+  }> = [];
+
+  for (const pagamento of pagamentos || []) {
+    const gateway = String(pagamento.gateway || "").trim().toLowerCase();
+    const referencia = String(pagamento.offer_hash || "").trim();
+    const oferta =
+      ofertasPorChave.get(`${gateway}:${referencia}`) ||
+      (ofertas || []).find(
+        (item: any) => String(item.referencia || "").trim() === referencia
+      ) ||
+      null;
+
+    let grupo = "";
+    let itemCobranca = "";
+
+    if (oferta?.tipo === "mensalidade" && oferta?.plano_id) {
+      grupo = `plano:${oferta.plano_id}`;
+      itemCobranca = planoNome(oferta);
+    } else if (oferta?.tipo === "recarga") {
+      grupo = "recarga_tokens";
+      itemCobranca =
+        String(oferta.nome || "").trim() || "Pacote de tokens de IA";
+    } else if (referencia) {
+      grupo = `oferta:${referencia}`;
+      itemCobranca =
+        String(pagamento.offer_titulo || "").trim() || "Pagamento";
+    }
+
+    if (!grupo || gruposVistos.has(grupo)) {
+      continue;
+    }
+
+    gruposVistos.add(grupo);
+
+    const status = String(pagamento.status || "").trim().toLowerCase();
+    const pendente =
+      status === "waiting_payment" || status === "pending";
+
+    if (!pendente) {
+      continue;
+    }
+
+    const codigoPix = pixCopiaCola(pagamento.payload);
+    if (!codigoPix || !itemCobranca) {
+      continue;
+    }
+
+    pendentes.push({
+      item: itemCobranca,
+      criadoEm: String(pagamento.created_at || ""),
+      pix: codigoPix,
+    });
+  }
+
+  const resumo = pendentes
+    .map((item) => {
+      const data = new Date(item.criadoEm);
+      const dataFormatada = Number.isNaN(data.getTime())
+        ? ""
+        : data.toLocaleString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+      return [
+        `*${item.item}*${dataFormatada ? ` — gerado em ${dataFormatada.replace(",", " às")}` : ""}`,
+        "PIX Copia e Cola:",
+        item.pix,
+      ].join("\n");
+    })
+    .join("\n\n");
 
   cachePixPendentePorContato.set(id, {
-    autorizado,
+    autorizado: true,
     resumo,
-    expiraEm:
-      agora +
-      (autorizado ? CACHE_PIX_AUTORIZADO_MS : CACHE_PIX_NAO_AUTORIZADO_MS),
+    expiraEm: agora + CACHE_PIX_AUTORIZADO_MS,
   });
   limparCachePixPendente();
 
