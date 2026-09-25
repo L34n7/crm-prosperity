@@ -8,10 +8,11 @@ type SubscriptionAction =
   | { type: "renew" }
   | { type: "change_plan"; offerReference: string }
   | { type: "add_addon"; addonCode: string; quantity?: number }
-  | { type: "remove_addon"; addonCode: string; quantity?: number };
+  | { type: "remove_addon"; addonCode: string; quantity?: number }
+  | { type: "cancel_scheduled_plan_change"; changeId?: string };
 
 type CheckoutIntent = {
-  status: "awaiting_payment" | "scheduled";
+  status: "awaiting_payment" | "scheduled" | "cancelled";
   subscriptionId: string;
   changeId?: string;
   amountCents: number;
@@ -149,20 +150,106 @@ async function valorContratadoEmpresa(empresaId: string, planoId: string, metada
   return Number(plano.preco_mensal_centavos);
 }
 
-export async function garantirAssinaturaProsperityPay(empresaId: string) {
-  const mirror = await supabase.from("prosperity_pay_assinaturas")
-    .select("*")
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-  if (mirror.error) throw mirror.error;
-  if (mirror.data?.external_subscription_id) return mirror.data;
+async function reconciliarComposicaoImportada(params: {
+  empresaId: string;
+  empresa: any;
+  plano: any;
+  assinatura: any;
+}) {
+  const metadata = obj(params.empresa.assinatura_metadata_json);
+  if (metadata.billing_components_v2 !== true) {
+    return params.assinatura;
+  }
 
+  const baseLimit = Math.max(
+    1,
+    Number(params.plano?.limite_integracoes_whatsapp || 1),
+  );
+  const effectiveLimit = Math.max(
+    baseLimit,
+    Number(params.empresa.limite_integracoes_whatsapp || baseLimit),
+  );
+  const whatsappNumberQuantity = Math.max(0, effectiveLimit - baseLimit);
+
+  const baseAmountCents = await valorContratadoEmpresa(
+    params.empresaId,
+    params.empresa.plano_id,
+    params.empresa.assinatura_metadata_json,
+  );
+  const oferta = await ofertaProsperityPorPlanoValor(
+    params.empresa.plano_id,
+    baseAmountCents,
+    params.empresa.assinatura_metadata_json,
+  );
+
+  const items = Array.isArray(params.assinatura.items)
+    ? params.assinatura.items
+    : [];
+  const whatsappItem = items.find(
+    (item: any) =>
+      String(item?.code || "") === "whatsapp_number" &&
+      String(item?.type || item?.item_type || "addon") === "addon",
+  );
+  const currentWhatsappQuantity = Math.max(
+    0,
+    Number(whatsappItem?.quantity || 0),
+  );
+
+  const precisaReconciliar =
+    Number(params.assinatura.base_amount_cents || 0) !== baseAmountCents ||
+    currentWhatsappQuantity !== whatsappNumberQuantity ||
+    String(params.assinatura.external_offer_reference || "") !==
+      String(oferta.referencia || "");
+
+  if (!precisaReconciliar) {
+    return params.assinatura;
+  }
+
+  const resultado = await signedPost<{
+    ok: boolean;
+    subscription: {
+      id: string;
+      offer_reference: string;
+      base_amount_cents: number;
+      current_amount_cents: number;
+      items: unknown[];
+    };
+  }>("/api/integrations/subscriptions/reconcile", {
+    subscriptionId: params.assinatura.external_subscription_id,
+    offerReference: oferta.referencia,
+    baseAmountCents,
+    whatsappNumberQuantity,
+  });
+
+  const { data: atualizado, error } = await supabase
+    .from("prosperity_pay_assinaturas")
+    .update({
+      external_offer_reference: resultado.subscription.offer_reference,
+      base_amount_cents: resultado.subscription.base_amount_cents,
+      current_amount_cents: resultado.subscription.current_amount_cents,
+      items: resultado.subscription.items,
+      synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("empresa_id", params.empresaId)
+    .select("*")
+    .single();
+
+  if (error || !atualizado) {
+    throw error ?? new Error("Falha ao atualizar composição da assinatura.");
+  }
+
+  return atualizado;
+}
+
+export async function garantirAssinaturaProsperityPay(empresaId: string) {
   const { data: empresa, error } = await supabase.from("empresas")
-    .select("id,nome_fantasia,nome_responsavel,email,plano_id,assinatura_gateway,assinatura_inicio_em,assinatura_vencimento_em,assinatura_metadata_json,planos:plano_id(slug)")
+    .select("id,nome_fantasia,nome_responsavel,email,plano_id,limite_integracoes_whatsapp,assinatura_gateway,assinatura_inicio_em,assinatura_vencimento_em,assinatura_metadata_json,planos:plano_id(id,slug,preco_mensal_centavos,limite_integracoes_whatsapp)")
     .eq("id", empresaId)
     .single();
   if (error || !empresa) throw error ?? new Error("Empresa não encontrada.");
 
+  const plano = planoRelacao(empresa.planos);
   const metadataEmpresa = obj(empresa.assinatura_metadata_json);
   const assinaturaGratuita =
     String(empresa.assinatura_gateway || "") === "CRM_FREE_CHECKOUT_KEY" ||
@@ -173,6 +260,21 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
     throw new Error(
       "Este é um plano gratuito. Contrate um plano pago antes de usar recursos recorrentes da Prosperity Pay."
     );
+  }
+
+  const mirror = await supabase.from("prosperity_pay_assinaturas")
+    .select("*")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  if (mirror.error) throw mirror.error;
+
+  if (mirror.data?.external_subscription_id) {
+    return reconciliarComposicaoImportada({
+      empresaId,
+      empresa,
+      plano,
+      assinatura: mirror.data,
+    });
   }
 
   const inicio = empresa.assinatura_inicio_em ? new Date(empresa.assinatura_inicio_em) : new Date();
@@ -232,7 +334,13 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
     updated_at: new Date().toISOString(),
   }, { onConflict: "external_subscription_id" }).select("*").single();
   if (upsert.error || !upsert.data) throw upsert.error ?? new Error("Falha ao salvar assinatura importada.");
-  return upsert.data;
+
+  return reconciliarComposicaoImportada({
+    empresaId,
+    empresa,
+    plano,
+    assinatura: upsert.data,
+  });
 }
 
 export async function criarCheckoutAssinaturaProsperityPay(
@@ -244,6 +352,23 @@ export async function criarCheckoutAssinaturaProsperityPay(
     subscriptionId: subscription.external_subscription_id,
     action,
   });
+}
+
+export async function cancelarMudancaPlanoAgendadaProsperityPay(
+  empresaId: string,
+  changeId?: string,
+) {
+  const subscription = await garantirAssinaturaProsperityPay(empresaId);
+  return signedPost<CheckoutIntent>(
+    "/api/integrations/subscriptions/checkout-sessions",
+    {
+      subscriptionId: subscription.external_subscription_id,
+      action: {
+        type: "cancel_scheduled_plan_change",
+        ...(changeId ? { changeId } : {}),
+      },
+    },
+  );
 }
 
 export async function referenciaProsperityPayPorPlanoSlug(slug: "basico" | "essencial") {
