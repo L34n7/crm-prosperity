@@ -513,7 +513,6 @@ export async function GET(req: NextRequest) {
       { key: "apoio", width: 18 },
     ];
 
-    worksheet.sheetProperties.pageSetUpPr = { fitToPage: true };
     worksheet.pageSetup.horizontalCentered = true;
     worksheet.headerFooter.oddFooter =
       '&LCRM Prosperity&CResultados dos disparos&R&P / &N';
