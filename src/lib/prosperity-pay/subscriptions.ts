@@ -157,7 +157,15 @@ async function reconciliarComposicaoImportada(params: {
   assinatura: any;
 }) {
   const metadata = obj(params.empresa.assinatura_metadata_json);
-  if (metadata.billing_components_v2 !== true) {
+  const gatewayEmpresa = String(
+    params.empresa.assinatura_gateway || ""
+  ).trim().toLowerCase();
+  const assinaturaImportadaLegada =
+    metadata.billing_components_v2 === true ||
+    gatewayEmpresa === "manual" ||
+    gatewayEmpresa === "atomo";
+
+  if (!assinaturaImportadaLegada) {
     return params.assinatura;
   }
 
