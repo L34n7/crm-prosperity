@@ -536,32 +536,37 @@ export default function WhatsappPerfilPage() {
 
       const json = await res.json().catch(() => null);
 
-      if (!res.ok || !json?.ok) {
-        throw new Error(
-          json?.error || "Não foi possível verificar a forma de pagamento na Meta."
+      if (json?.status) {
+        setIntegracoes((atuais) =>
+          atuais.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  payment_method_added: json.payment_method_added === true,
+                  meta_payment_status: json.status || "nao_verificado",
+                  meta_primary_funding_id: json.primary_funding_id || null,
+                  meta_payment_checked_at: json.checked_at || null,
+                  meta_payment_check_error:
+                    json.check_error || json.error || null,
+                }
+              : item
+          )
         );
       }
 
-      setIntegracoes((atuais) =>
-        atuais.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                payment_method_added: json.payment_method_added === true,
-                meta_payment_status: json.status || "nao_verificado",
-                meta_primary_funding_id: json.primary_funding_id || null,
-                meta_payment_checked_at: json.checked_at || null,
-                meta_payment_check_error: json.check_error || null,
-              }
-            : item
-        )
-      );
+      if (!res.ok || !json?.ok) {
+        throw new Error(
+          json?.check_error ||
+            json?.error ||
+            "Não foi possível verificar a forma de pagamento na Meta."
+        );
+      }
 
       if (!options?.silencioso) {
         setSucesso(
           json.payment_method_added
             ? "Forma de pagamento confirmada na Meta."
-            : "A Meta não retornou uma forma de pagamento cadastrada para esta WABA."
+            : "A consulta foi concluída, mas a Meta não retornou uma forma de pagamento cadastrada para esta WABA."
         );
       }
     } catch (error: unknown) {
