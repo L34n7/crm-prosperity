@@ -163,7 +163,8 @@ async function reconciliarComposicaoImportada(params: {
   const assinaturaImportadaLegada =
     metadata.billing_components_v2 === true ||
     gatewayEmpresa === "manual" ||
-    gatewayEmpresa === "atomo";
+    gatewayEmpresa === "atomo" ||
+    gatewayEmpresa === "atomopay";
 
   if (!assinaturaImportadaLegada) {
     return params.assinatura;
