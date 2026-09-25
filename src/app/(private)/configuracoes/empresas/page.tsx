@@ -395,7 +395,7 @@ export default function EmpresasPage() {
 
     if (
       acaoTokens === "adicionar_avulso" &&
-      (!Number.isSafeInteger(quantidade) || Number(quantidade) <= 0)
+      (!Number.isSafeInteger(Number(quantidade)) || Number(quantidade) <= 0)
     ) {
       setErro("Informe uma quantidade válida de tokens extras.");
       return;
