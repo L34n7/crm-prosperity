@@ -22,18 +22,6 @@ type Integracao = {
   meta_messaging_limit?: number | null;
   meta_account_mode?: string | null;
   meta_saude_ultima_verificacao_em?: string | null;
-  payment_method_added?: boolean;
-  meta_payment_status?:
-    | "nao_verificado"
-    | "configurado"
-    | "nao_configurado"
-    | "indisponivel"
-    | "erro"
-    | string
-    | null;
-  meta_primary_funding_id?: string | null;
-  meta_payment_checked_at?: string | null;
-  meta_payment_check_error?: string | null;
   setup_completed_at?: string | null;
   onboarding_status?: string | null;
   onboarding_erro?: string | null;
@@ -198,79 +186,6 @@ function formatarData(valor?: string | null) {
   }).format(data);
 }
 
-function formatarDataHora(valor?: string | null) {
-  if (!valor) return "Ainda não verificado";
-
-  const data = new Date(valor);
-  if (Number.isNaN(data.getTime())) return "Ainda não verificado";
-
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(data);
-}
-
-function obterStatusPagamentoMeta(integracao?: Integracao | null) {
-  const status = normalizarStatus(integracao?.meta_payment_status);
-
-  if (status === "configurado") {
-    return {
-      label: "Configurada",
-      descricao:
-        "A Meta confirmou uma forma de pagamento vinculada a esta conta do WhatsApp Business.",
-      classe: styles.paymentStatusOk,
-    };
-  }
-
-  if (status === "nao_configurado") {
-    return {
-      label: "Não cadastrada",
-      descricao:
-        "A consulta foi concluída e a Meta não retornou uma forma de pagamento vinculada à WABA.",
-      classe: styles.paymentStatusMissing,
-    };
-  }
-
-  if (status === "indisponivel") {
-    return {
-      label: "Validação indisponível",
-      descricao:
-        integracao?.meta_payment_check_error ||
-        "A Meta não disponibiliza a consulta automática da forma de pagamento para este aplicativo.",
-      classe: styles.paymentStatusWarning,
-    };
-  }
-
-  if (status === "erro") {
-    return {
-      label: "Não foi possível verificar",
-      descricao:
-        integracao?.meta_payment_check_error ||
-        "Não foi possível concluir a verificação da forma de pagamento.",
-      classe: styles.paymentStatusWarning,
-    };
-  }
-
-  if (integracao?.payment_method_added === true) {
-    return {
-      label: "Informada no cadastro",
-      descricao:
-        "A forma de pagamento foi informada durante a configuração, mas ainda não foi confirmada automaticamente pela API da Meta.",
-      classe: styles.paymentStatusNeutral,
-    };
-  }
-
-  return {
-    label: "Não verificada",
-    descricao:
-      "O CRM ainda não confirmou a forma de pagamento desta integração pela API da Meta.",
-    classe: styles.paymentStatusNeutral,
-  };
-}
-
 function obterQualidadeNumero(quality?: string | null) {
   const valor = normalizarStatus(quality);
 
@@ -363,8 +278,6 @@ export default function WhatsappPerfilPage() {
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
-  const [verificandoPagamento, setVerificandoPagamento] = useState(false);
-  const [erroPagamento, setErroPagamento] = useState("");
   const [administrador, setAdministrador] =
   useState<AdministradorEmpresa | null>(null);
   const [diagnosticoWhatsapp, setDiagnosticoWhatsapp] =
@@ -488,7 +401,6 @@ export default function WhatsappPerfilPage() {
   const qualidadeNumero = obterQualidadeNumero(
     integracaoSelecionada?.quality_rating
   );
-  const pagamentoMeta = obterStatusPagamentoMeta(integracaoSelecionada);
   const proximaPosicaoVisual = Math.min(
     integracoes.length + 1,
     limiteIntegracoesWhatsapp
@@ -516,70 +428,6 @@ export default function WhatsappPerfilPage() {
   const nomeIntegracaoAlterado =
     nomeIntegracao.trim() !== nomeIntegracaoOriginal.trim();
   const haAlteracoesPerfil = haAlteracoesMeta || nomeIntegracaoAlterado;
-
-  async function verificarFormaPagamentoMeta(
-    id: string,
-    options?: { silencioso?: boolean }
-  ) {
-    if (!id || verificandoPagamento) return;
-
-    try {
-      setVerificandoPagamento(true);
-      if (!options?.silencioso) setErroPagamento("");
-
-      const res = await fetch("/api/integracoes-whatsapp/payment-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ integracao_id: id }),
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (json?.status) {
-        setIntegracoes((atuais) =>
-          atuais.map((item) =>
-            item.id === id
-              ? {
-                  ...item,
-                  payment_method_added: json.payment_method_added === true,
-                  meta_payment_status: json.status || "nao_verificado",
-                  meta_primary_funding_id: json.primary_funding_id || null,
-                  meta_payment_checked_at: json.checked_at || null,
-                  meta_payment_check_error:
-                    json.check_error || json.error || null,
-                }
-              : item
-          )
-        );
-      }
-
-      if (!res.ok || !json?.ok) {
-        throw new Error(
-          json?.check_error ||
-            json?.error ||
-            "Não foi possível verificar a forma de pagamento na Meta."
-        );
-      }
-
-      if (!options?.silencioso) {
-        setSucesso(
-          json.payment_method_added
-            ? "Forma de pagamento confirmada na Meta."
-            : "A consulta foi concluída, mas a Meta não retornou uma forma de pagamento cadastrada para esta WABA."
-        );
-      }
-    } catch (error: unknown) {
-      const mensagem = getErrorMessage(
-        error,
-        "Não foi possível verificar a forma de pagamento na Meta."
-      );
-
-      setErroPagamento(mensagem);
-    } finally {
-      setVerificandoPagamento(false);
-    }
-  }
 
   async function carregarPerfil(
     id?: string,
@@ -637,14 +485,6 @@ export default function WhatsappPerfilPage() {
           meta_account_mode: integracaoAtualizada.meta_account_mode,
           meta_saude_ultima_verificacao_em:
             integracaoAtualizada.meta_saude_ultima_verificacao_em,
-          payment_method_added: integracaoAtualizada.payment_method_added,
-          meta_payment_status: integracaoAtualizada.meta_payment_status,
-          meta_primary_funding_id:
-            integracaoAtualizada.meta_primary_funding_id,
-          meta_payment_checked_at:
-            integracaoAtualizada.meta_payment_checked_at,
-          meta_payment_check_error:
-            integracaoAtualizada.meta_payment_check_error,
           setup_completed_at: integracaoAtualizada.setup_completed_at,
           onboarding_status: integracaoAtualizada.onboarding_status,
           onboarding_erro: integracaoAtualizada.onboarding_erro,
@@ -687,12 +527,6 @@ export default function WhatsappPerfilPage() {
         }));
       }
       setFoto(null);
-
-      if (novaIntegracaoId && integracaoAtualizada?.waba_id) {
-        void verificarFormaPagamentoMeta(novaIntegracaoId, {
-          silencioso: true,
-        });
-      }
     } catch (error: unknown) {
       setErro(getErrorMessage(error, "Erro ao carregar perfil."));
     } finally {
@@ -1587,55 +1421,6 @@ export default function WhatsappPerfilPage() {
                 </div>
               </div>
             )}
-
-            <div className={styles.paymentCard}>
-              <div className={styles.paymentCardHeader}>
-                <div>
-                  <span className={styles.paymentEyebrow}>Cobrança Meta</span>
-                  <strong>Forma de pagamento</strong>
-                </div>
-
-                <span
-                  className={`${styles.paymentStatusBadge} ${pagamentoMeta.classe}`}
-                >
-                  {pagamentoMeta.label}
-                </span>
-              </div>
-
-              <p className={styles.paymentDescription}>
-                {pagamentoMeta.descricao}
-              </p>
-
-              <div className={styles.paymentCardFooter}>
-                <span>
-                  Última verificação:{" "}
-                  <strong>
-                    {formatarDataHora(
-                      integracaoSelecionada?.meta_payment_checked_at
-                    )}
-                  </strong>
-                </span>
-
-                <button
-                  type="button"
-                  className={styles.paymentRefreshButton}
-                  onClick={() =>
-                    integracaoId &&
-                    verificarFormaPagamentoMeta(integracaoId)
-                  }
-                  disabled={!integracaoId || verificandoPagamento}
-                >
-                  {verificandoPagamento ? "Verificando..." : "Verificar agora"}
-                </button>
-              </div>
-
-              {erroPagamento &&
-                !["erro", "indisponivel"].includes(
-                  normalizarStatus(integracaoSelecionada?.meta_payment_status)
-                ) && (
-                  <div className={styles.paymentError}>{erroPagamento}</div>
-                )}
-            </div>
 
             <a
               className={`${styles.metaButton} ${styles.summaryMetaButton}`}
