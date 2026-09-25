@@ -379,6 +379,40 @@ async function carregarResumoPixPendentesProsperity(contatoId: string) {
     ).trim();
   }
 
+  function pixGeradoPeloCliente(pagamento: any) {
+    const gateway = String(pagamento?.gateway || "")
+      .trim()
+      .toLowerCase();
+    const payload = objetoSeguro(pagamento?.payload);
+
+    if (gateway === "prosperity_pay") {
+      const payment = objetoSeguro(payload.payment);
+      return String(payment.generation_source || "")
+        .trim()
+        .toLowerCase() !== "platform_automatic";
+    }
+
+    if (gateway === "atomo") {
+      const criadoBruto =
+        String(payload.created_at || "").trim() ||
+        String(pagamento?.created_at || "").trim();
+      const criado = criadoBruto ? new Date(criadoBruto) : null;
+
+      // A Átomo não informa a origem explicitamente. A rotina automática
+      // observada no histórico gera os PIX perto de 09:00 UTC todos os dias.
+      if (
+        criado &&
+        !Number.isNaN(criado.getTime()) &&
+        criado.getUTCHours() === 9 &&
+        criado.getUTCMinutes() <= 5
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   function planoNome(oferta: any) {
     const plano = Array.isArray(oferta?.planos)
       ? oferta.planos[0]
@@ -404,6 +438,10 @@ async function carregarResumoPixPendentesProsperity(contatoId: string) {
         (item: any) => String(item.referencia || "").trim() === referencia
       ) ||
       null;
+
+    if (!pixGeradoPeloCliente(pagamento)) {
+      continue;
+    }
 
     let grupo = "";
     let itemCobranca = "";
