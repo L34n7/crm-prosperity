@@ -178,19 +178,77 @@ function limparNomeArquivo(valor: string) {
     .slice(0, 80) || "campanha";
 }
 
+function aplicarEstiloCelula(
+  sheet: XLSX.WorkSheet,
+  endereco: string,
+  estilo: Record<string, unknown>
+) {
+  const celula = sheet[endereco] as (XLSX.CellObject & {
+    s?: Record<string, unknown>;
+  }) | undefined;
+
+  if (!celula) return;
+  celula.s = estilo;
+}
+
+function aplicarEstiloIntervalo(
+  sheet: XLSX.WorkSheet,
+  intervalo: string,
+  estilo: Record<string, unknown>
+) {
+  const range = XLSX.utils.decode_range(intervalo);
+
+  for (let row = range.s.r; row <= range.e.r; row += 1) {
+    for (let col = range.s.c; col <= range.e.c; col += 1) {
+      aplicarEstiloCelula(
+        sheet,
+        XLSX.utils.encode_cell({ r: row, c: col }),
+        estilo
+      );
+    }
+  }
+}
+
 function aplicarLarguras(sheet: XLSX.WorkSheet) {
   sheet["!cols"] = [
-    { wch: 19 },
-    { wch: 30 },
-    { wch: 16 },
-    { wch: 58 },
-    { wch: 22 },
-    { wch: 22 },
-    { wch: 22 },
     { wch: 18 },
-    { wch: 42 },
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 36 },
+    { wch: 21 },
+    { wch: 21 },
+    { wch: 21 },
+    { wch: 16 },
+    { wch: 34 },
   ];
 }
+
+const ESTILO_TITULO = {
+  font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+  fill: { patternType: "solid", fgColor: { rgb: "173E3A" } },
+  alignment: { vertical: "center", horizontal: "left" },
+};
+
+const ESTILO_SUBTITULO = {
+  font: { bold: true, sz: 11, color: { rgb: "173E3A" } },
+  fill: { patternType: "solid", fgColor: { rgb: "E8F2F0" } },
+  alignment: { vertical: "center", horizontal: "left" },
+};
+
+const ESTILO_LABEL = {
+  font: { bold: true, color: { rgb: "304B49" } },
+  alignment: { vertical: "center" },
+};
+
+const ESTILO_CABECALHO_TABELA = {
+  font: { bold: true, color: { rgb: "FFFFFF" } },
+  fill: { patternType: "solid", fgColor: { rgb: "245B55" } },
+  alignment: { vertical: "center", horizontal: "left", wrapText: true },
+};
+
+const ESTILO_TEXTO_WRAP = {
+  alignment: { vertical: "top", wrapText: true },
+};
 
 function formatarDataBCB(data: Date) {
   const dia = String(data.getDate()).padStart(2, "0");
@@ -440,44 +498,140 @@ export async function GET(req: NextRequest) {
 
     const workbook = XLSX.utils.book_new();
     const categoriaLabel = String(campanha.template_categoria || "-");
+    const statusCampanhaLabel =
+      String(campanha.status || "-")
+        .replace(/_/g, " ")
+        .replace(/^./, (letra) => letra.toUpperCase());
+
     const resumo = XLSX.utils.aoa_to_sheet([
-      ["Relatório detalhado de campanha WhatsApp"],
+      ["Relatório detalhado de campanha WhatsApp", "", "", "", "", ""],
+      [nomeCampanha, "", "", "", "", ""],
       [],
-      ["Campanha", nomeCampanha],
-      ["Template", campanha.template_nome || "-"],
-      ["Categoria", categoriaLabel],
-      ["Status da campanha", campanha.status || "-"],
-      ["Criada em", formatarDataHora(campanha.created_at)],
-      ["Finalizada em", formatarDataHora(campanha.finished_at)],
+      ["DADOS DA CAMPANHA", "", "", "RESULTADOS", "", ""],
+      ["Template", campanha.template_nome || "-", "", "Total de contatos", totais.total, ""],
+      ["Categoria", categoriaLabel, "", "Enviados", totais.enviado, ""],
+      ["Status", statusCampanhaLabel, "", "Entregues", totais.entregue, ""],
+      ["Criada em", formatarDataHora(campanha.created_at), "", "Lidos", totais.lido, ""],
+      ["Finalizada em", formatarDataHora(campanha.finished_at), "", "Respondidos", totais.respondido, ""],
+      ["", "", "", "Falhas", totais.falha, ""],
+      ["", "", "", "Cancelados", totais.cancelado, ""],
+      ["", "", "", "Pendentes", totais.pendente, ""],
       [],
-      ["Total de contatos", totais.total],
-      ["Enviados", totais.enviado],
-      ["Entregues", totais.entregue],
-      ["Lidos", totais.lido],
-      ["Respondidos", totais.respondido],
-      ["Falhas", totais.falha],
-      ["Cancelados", totais.cancelado],
-      ["Pendentes", totais.pendente],
+      ["ESTIMATIVA DE CUSTO", "", "", "", "", ""],
+      ["Custo estimado (R$)", custoEstimado.valorTotalBrlEstimado, "", "", "", ""],
+      ["Custo estimado (USD)", custoEstimado.valorTotalUsd, "", "", "", ""],
+      ["Mensagens consideradas", custoEstimado.quantidadeCobravelEstimada, "", "", "", ""],
+      ["Cotação USD/BRL", custoEstimado.cotacaoUsdBrl, "", "", "", ""],
+      ["Fonte da cotação", custoEstimado.fonteCotacao, "", "", "", ""],
       [],
-      ["Custo estimado (R$)", custoEstimado.valorTotalBrlEstimado],
-      ["Custo estimado (USD)", custoEstimado.valorTotalUsd],
-      ["Mensagens consideradas no custo", custoEstimado.quantidadeCobravelEstimada],
-      ["Cotação USD/BRL", custoEstimado.cotacaoUsdBrl],
-      ["Fonte da cotação", custoEstimado.fonteCotacao],
-      ["Observação", custoEstimado.criterio],
+      ["OBSERVAÇÃO", "", "", "", "", ""],
+      [custoEstimado.criterio || "", "", "", "", "", ""],
     ]);
-    resumo["!cols"] = [{ wch: 32 }, { wch: 90 }];
+
+    resumo["!merges"] = [
+      XLSX.utils.decode_range("A1:F1"),
+      XLSX.utils.decode_range("A2:F2"),
+      XLSX.utils.decode_range("A4:B4"),
+      XLSX.utils.decode_range("D4:E4"),
+      XLSX.utils.decode_range("A14:B14"),
+      XLSX.utils.decode_range("A21:F21"),
+      XLSX.utils.decode_range("A22:F23"),
+    ];
+    resumo["!cols"] = [
+      { wch: 24 },
+      { wch: 34 },
+      { wch: 4 },
+      { wch: 22 },
+      { wch: 14 },
+      { wch: 4 },
+    ];
+    resumo["!rows"] = [
+      { hpt: 26 },
+      { hpt: 22 },
+      { hpt: 8 },
+      { hpt: 22 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 8 },
+      { hpt: 22 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 8 },
+      { hpt: 22 },
+      { hpt: 38 },
+      { hpt: 20 },
+    ];
+
+    aplicarEstiloIntervalo(resumo, "A1:F1", ESTILO_TITULO);
+    aplicarEstiloIntervalo(resumo, "A2:F2", {
+      font: { bold: true, sz: 12, color: { rgb: "173E3A" } },
+      alignment: { vertical: "center", horizontal: "left" },
+    });
+    aplicarEstiloIntervalo(resumo, "A4:B4", ESTILO_SUBTITULO);
+    aplicarEstiloIntervalo(resumo, "D4:E4", ESTILO_SUBTITULO);
+    aplicarEstiloIntervalo(resumo, "A14:B14", ESTILO_SUBTITULO);
+    aplicarEstiloIntervalo(resumo, "A21:F21", ESTILO_SUBTITULO);
+    aplicarEstiloIntervalo(resumo, "A5:A9", ESTILO_LABEL);
+    aplicarEstiloIntervalo(resumo, "D5:D12", ESTILO_LABEL);
+    aplicarEstiloIntervalo(resumo, "A15:A19", ESTILO_LABEL);
+    aplicarEstiloIntervalo(resumo, "A22:F23", ESTILO_TEXTO_WRAP);
+
+    if (resumo.B15) resumo.B15.z = '"R$" #,##0.00';
+    if (resumo.B16) resumo.B16.z = '"US$" #,##0.0000';
+    if (resumo.B18) resumo.B18.z = "0.0000";
+
+    resumo["!margins"] = {
+      left: 0.35,
+      right: 0.35,
+      top: 0.5,
+      bottom: 0.5,
+      header: 0.2,
+      footer: 0.2,
+    };
+
     XLSX.utils.book_append_sheet(workbook, resumo, "Resumo");
 
     const dadosContatos = [
       [
+        nomeCampanha,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ],
+      [
+        `${totais.total} contatos • ${categoriaLabel} • ${statusCampanhaLabel}`,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ],
+      [],
+      [
         "Número",
         "Nome",
         "Status",
-        "Primeira mensagem da resposta",
-        "Data/hora do disparo",
-        "Data/hora da leitura",
-        "Data/hora da resposta",
+        "1ª mensagem respondida",
+        "Enviado em",
+        "Lido em",
+        "Respondido em",
         "Situação",
         "Motivo da falha/recusa",
       ],
@@ -496,12 +650,44 @@ export async function GET(req: NextRequest) {
 
     const contatos = XLSX.utils.aoa_to_sheet(dadosContatos);
     aplicarLarguras(contatos);
+    contatos["!merges"] = [
+      XLSX.utils.decode_range("A1:I1"),
+      XLSX.utils.decode_range("A2:I2"),
+    ];
+    contatos["!rows"] = [
+      { hpt: 26 },
+      { hpt: 20 },
+      { hpt: 8 },
+      { hpt: 24 },
+      ...linhasDetalhadas.map(() => ({ hpt: 30 })),
+    ];
+
+    aplicarEstiloIntervalo(contatos, "A1:I1", ESTILO_TITULO);
+    aplicarEstiloIntervalo(contatos, "A2:I2", {
+      font: { bold: true, color: { rgb: "476A66" } },
+      alignment: { vertical: "center", horizontal: "left" },
+    });
+    aplicarEstiloIntervalo(contatos, "A4:I4", ESTILO_CABECALHO_TABELA);
 
     if (linhasDetalhadas.length > 0) {
+      aplicarEstiloIntervalo(
+        contatos,
+        `A5:I${linhasDetalhadas.length + 4}`,
+        ESTILO_TEXTO_WRAP
+      );
       contatos["!autofilter"] = {
-        ref: `A1:I${linhasDetalhadas.length + 1}`,
+        ref: `A4:I${linhasDetalhadas.length + 4}`,
       };
     }
+
+    contatos["!margins"] = {
+      left: 0.25,
+      right: 0.25,
+      top: 0.5,
+      bottom: 0.5,
+      header: 0.2,
+      footer: 0.2,
+    };
 
     XLSX.utils.book_append_sheet(workbook, contatos, "Contatos");
 
@@ -509,6 +695,7 @@ export async function GET(req: NextRequest) {
       bookType: "xlsx",
       type: "buffer",
       compression: true,
+      cellStyles: true,
     }) as Buffer;
 
     const baseNome = limparNomeArquivo(nomeCampanha);
