@@ -58,6 +58,40 @@ function formatarDataHora(valor?: string | null) {
     .replace(",", "");
 }
 
+function formatarDataHoraCurta(valor?: string | null) {
+  if (!valor) return "";
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(data)
+    .replace(",", "");
+}
+
+function nomeCampanhaRelatorio(campanha: {
+  nome?: string | null;
+  total_itens?: number | null;
+  created_at?: string | null;
+}) {
+  const nome = String(campanha.nome || "").trim();
+  if (nome) return nome;
+
+  const total = Math.max(0, Number(campanha.total_itens || 0));
+  const unidade = total === 1 ? "contato" : "contatos";
+  const data =
+    formatarDataHoraCurta(campanha.created_at) || "data nao informada";
+
+  return `Disparo em massa - ${data} - ${total} ${unidade}`;
+}
+
 function normalizarCategoria(
   valor?: string | null
 ): CategoriaTemplateCobranca | null {
@@ -367,6 +401,7 @@ export async function GET(req: NextRequest) {
       categoria: campanha.template_categoria,
       quantidade: quantidadeBaseCusto,
     });
+    const nomeCampanha = nomeCampanhaRelatorio(campanha);
 
     const linhasDetalhadas = linhas.map((linha) => ({
       ...linha,
@@ -380,7 +415,7 @@ export async function GET(req: NextRequest) {
           ok: true,
           campanha: {
             id: campanha.id,
-            nome: campanha.nome || campanha.id,
+            nome: nomeCampanha,
             template_nome: campanha.template_nome || null,
             template_categoria: campanha.template_categoria || null,
             status: campanha.status || null,
@@ -408,7 +443,7 @@ export async function GET(req: NextRequest) {
     const resumo = XLSX.utils.aoa_to_sheet([
       ["Relatório detalhado de campanha WhatsApp"],
       [],
-      ["Campanha", campanha.nome || campanha.id],
+      ["Campanha", nomeCampanha],
       ["Template", campanha.template_nome || "-"],
       ["Categoria", categoriaLabel],
       ["Status da campanha", campanha.status || "-"],
@@ -476,10 +511,8 @@ export async function GET(req: NextRequest) {
       compression: true,
     }) as Buffer;
 
-    const baseNome = limparNomeArquivo(
-      campanha.nome || campanha.template_nome || "campanha-whatsapp"
-    );
-    const nomeArquivo = `relatorio-${baseNome}.xlsx`;
+    const baseNome = limparNomeArquivo(nomeCampanha);
+    const nomeArquivo = `${baseNome}.xlsx`;
 
     return new NextResponse(new Uint8Array(arquivo), {
       status: 200,
