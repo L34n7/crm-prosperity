@@ -4756,7 +4756,13 @@ export default function DisparosWhatsAppPage() {
         subtitle="Selecione a conexão WhatsApp, o template aprovado e os contatos salvos para enviar mensagens."
       />
 
-      <div className={styles.pageContent}>
+      <div
+        className={
+          filtroHistoricoCampanha
+            ? `${styles.pageContent} ${styles.pageContentCampaignReport}`
+            : styles.pageContent
+        }
+      >
         <div className={styles.layout}>
           <section className={styles.formCard}>
             <div className={styles.cardHeader}>
