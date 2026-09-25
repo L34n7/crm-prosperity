@@ -3,6 +3,7 @@
   max-width: 1180px;
   margin: 0 auto;
 
+
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -11,6 +12,17 @@
   min-height: calc(100vh - 170px);
 
   box-sizing: border-box;
+}
+
+.pageContentCampaignReport {
+  max-width: 1540px;
+}
+
+.pageContentCampaignReport .formCard {
+  width: 100%;
+  max-width: 1180px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .layout {
@@ -3517,7 +3529,7 @@
 
 .campaignReportTableWrap {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   border: 1px solid var(--crm-border);
   border-radius: 16px;
   background: var(--crm-surface);
@@ -3525,9 +3537,39 @@
 
 .campaignReportTable {
   width: 100%;
-  min-width: 1180px;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
+}
+
+.campaignReportTable th:nth-child(1),
+.campaignReportTable td:nth-child(1) {
+  width: 14%;
+}
+
+.campaignReportTable th:nth-child(2),
+.campaignReportTable td:nth-child(2) {
+  width: 14%;
+}
+
+.campaignReportTable th:nth-child(3),
+.campaignReportTable td:nth-child(3) {
+  width: 10%;
+}
+
+.campaignReportTable th:nth-child(4),
+.campaignReportTable td:nth-child(4) {
+  width: 20%;
+}
+
+.campaignReportTable th:nth-child(5),
+.campaignReportTable td:nth-child(5),
+.campaignReportTable th:nth-child(6),
+.campaignReportTable td:nth-child(6),
+.campaignReportTable th:nth-child(7),
+.campaignReportTable td:nth-child(7) {
+  width: 14%;
 }
 
 .campaignReportTable th {
@@ -3540,7 +3582,7 @@
   font-weight: 900;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .campaignReportTable td {
@@ -3566,14 +3608,14 @@
 }
 
 .campaignReportName {
-  min-width: 170px;
+  min-width: 0;
   color: var(--crm-text-strong) !important;
   font-weight: 700;
 }
 
 .campaignReportReply {
-  min-width: 250px;
-  max-width: 380px;
+  min-width: 0;
+  max-width: none;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -3636,6 +3678,19 @@
 @media (max-width: 1100px) {
   .campaignReportMetrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .campaignReportTableWrap {
+    overflow-x: auto;
+  }
+
+  .campaignReportTable {
+    min-width: 1080px;
+    table-layout: auto;
+  }
+
+  .campaignReportTable th {
+    white-space: nowrap;
   }
 }
 
