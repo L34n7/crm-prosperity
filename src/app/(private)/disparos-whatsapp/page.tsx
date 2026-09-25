@@ -8,7 +8,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { Check, ChevronDown, CircleStop, Search } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  CircleStop,
+  FileSpreadsheet,
+  Search,
+} from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
@@ -1946,6 +1952,8 @@ export default function DisparosWhatsAppPage() {
     falha: 0,
   });
   const [historicoTemMais, setHistoricoTemMais] = useState(false);
+  const [exportandoRelatorioCampanha, setExportandoRelatorioCampanha] =
+    useState(false);
   const [campanhasHistorico, setCampanhasHistorico] = useState<
     CampanhaHistoricoFiltro[]
   >([]);
@@ -2074,6 +2082,68 @@ export default function DisparosWhatsAppPage() {
     },
     [aplicarCampanhaPagina]
   );
+
+  async function gerarRelatorioExcelCampanha() {
+    if (!filtroHistoricoCampanha || exportandoRelatorioCampanha) {
+      if (!filtroHistoricoCampanha) {
+        setErro("Selecione um disparo em massa para gerar o relatório.");
+      }
+      return;
+    }
+
+    try {
+      setExportandoRelatorioCampanha(true);
+      setErro("");
+      setMensagem("");
+
+      const params = new URLSearchParams({
+        campanha_id: filtroHistoricoCampanha,
+      });
+
+      const res = await fetch(
+        `/api/whatsapp/disparos/relatorio?${params.toString()}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(
+          json?.error || "Não foi possível gerar o relatório da campanha."
+        );
+      }
+
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get("Content-Disposition") || "";
+      const nomeUtf8 = contentDisposition.match(
+        /filename\*=UTF-8''([^;]+)/i
+      )?.[1];
+      const nomeSimples = contentDisposition.match(
+        /filename="?([^";]+)"?/i
+      )?.[1];
+      const nomeArquivo = nomeUtf8
+        ? decodeURIComponent(nomeUtf8)
+        : nomeSimples || "relatorio-campanha-whatsapp.xlsx";
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = nomeArquivo;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setMensagem("Relatório Excel da campanha gerado com sucesso.");
+    } catch (error: any) {
+      setErro(
+        error?.message || "Não foi possível gerar o relatório da campanha."
+      );
+    } finally {
+      setExportandoRelatorioCampanha(false);
+    }
+  }
 
   async function carregarUsuarioLogado() {
     try {
@@ -5972,6 +6042,27 @@ export default function DisparosWhatsAppPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className={styles.historyExportAction}>
+              <button
+                type="button"
+                className={styles.historyExportButton}
+                onClick={gerarRelatorioExcelCampanha}
+                disabled={
+                  !filtroHistoricoCampanha || exportandoRelatorioCampanha
+                }
+                title={
+                  filtroHistoricoCampanha
+                    ? "Gerar relatório Excel desta campanha"
+                    : "Selecione um disparo em massa"
+                }
+              >
+                <FileSpreadsheet size={17} />
+                {exportandoRelatorioCampanha
+                  ? "Gerando..."
+                  : "Gerar relatório Excel"}
+              </button>
             </div>
           </div>
 
