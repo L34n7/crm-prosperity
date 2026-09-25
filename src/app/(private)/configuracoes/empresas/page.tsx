@@ -37,6 +37,19 @@ type SaldoTokensEmpresa = {
   updated_at: string;
 };
 
+type LeadEmpresa = {
+  id: string;
+  nome: string;
+  empresa: string | null;
+  email: string;
+  telefone: string | null;
+  categoria: string;
+  plano_slug: string;
+  status: string;
+  pago: boolean;
+  created_at: string | null;
+};
+
 type Empresa = {
   id: string;
   nome_fantasia: string;
@@ -132,6 +145,18 @@ function formatarTokens(valor: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR").format(valor);
 }
 
+function formatarDataLead(valor: string | null) {
+  if (!valor) return "—";
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(data);
+}
+
 
 export default function EmpresasPage() {
   const { permissoes } = useHeaderUser();
@@ -164,6 +189,13 @@ export default function EmpresasPage() {
   const [quantidadeTokensExtras, setQuantidadeTokensExtras] = useState("100000");
   const [motivoTokens, setMotivoTokens] = useState("");
   const [ajustandoTokens, setAjustandoTokens] = useState(false);
+  const [empresaLeadsModal, setEmpresaLeadsModal] = useState<Empresa | null>(null);
+  const [leadsEmpresa, setLeadsEmpresa] = useState<LeadEmpresa[]>([]);
+  const [leadsCarregando, setLeadsCarregando] = useState(false);
+  const [leadsErro, setLeadsErro] = useState("");
+  const [leadsPagina, setLeadsPagina] = useState(1);
+  const [leadsTotal, setLeadsTotal] = useState(0);
+  const [leadsTotalPaginas, setLeadsTotalPaginas] = useState(1);
 
   const [editNomeFantasia, setEditNomeFantasia] = useState("");
   const [editRazaoSocial, setEditRazaoSocial] = useState("");
@@ -446,11 +478,88 @@ export default function EmpresasPage() {
     }
   }
 
+  async function carregarLeadsEmpresa(empresa: Empresa, pagina = 1) {
+    setLeadsCarregando(true);
+    setLeadsErro("");
+
+    try {
+      const response = await fetch(
+        `/api/empresas/${empresa.id}/leads?page=${pagina}&limit=25`,
+        { cache: "no-store" }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setLeadsErro(data.error || "Não foi possível carregar os leads.");
+        return;
+      }
+
+      setLeadsEmpresa(data.leads || []);
+      setLeadsPagina(data.pagination?.page || pagina);
+      setLeadsTotal(data.pagination?.total || 0);
+      setLeadsTotalPaginas(data.pagination?.total_pages || 1);
+    } catch {
+      setLeadsErro("Não foi possível carregar os leads.");
+    } finally {
+      setLeadsCarregando(false);
+    }
+  }
+
+  function abrirLeadsEmpresa(empresa: Empresa) {
+    setEmpresaLeadsModal(empresa);
+    setLeadsEmpresa([]);
+    setLeadsPagina(1);
+    setLeadsTotal(0);
+    setLeadsTotalPaginas(1);
+    setLeadsErro("");
+    void carregarLeadsEmpresa(empresa, 1);
+  }
+
+  function fecharLeadsEmpresa() {
+    if (leadsCarregando) return;
+    setEmpresaLeadsModal(null);
+    setLeadsEmpresa([]);
+    setLeadsErro("");
+  }
+
+  function alterarPaginaLeads(novaPagina: number) {
+    if (
+      !empresaLeadsModal ||
+      leadsCarregando ||
+      novaPagina < 1 ||
+      novaPagina > leadsTotalPaginas
+    ) {
+      return;
+    }
+
+    void carregarLeadsEmpresa(empresaLeadsModal, novaPagina);
+  }
+
   useEffect(() => {
     carregarEmpresas();
     carregarPlanos();
     carregarNichos();
   }, []);
+
+  useEffect(() => {
+    if (!empresaLeadsModal) return;
+
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function fecharComEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !leadsCarregando) {
+        setEmpresaLeadsModal(null);
+      }
+    }
+
+    window.addEventListener("keydown", fecharComEscape);
+
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      window.removeEventListener("keydown", fecharComEscape);
+    };
+  }, [empresaLeadsModal, leadsCarregando]);
 
   const empresasFiltradas = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -709,6 +818,16 @@ export default function EmpresasPage() {
                       </div>
 
                       <div className={styles.itemRight}>
+                        {!editando && (
+                          <button
+                            type="button"
+                            onClick={() => abrirLeadsEmpresa(empresa)}
+                            className={styles.leadsButton}
+                          >
+                            Leads
+                          </button>
+                        )}
+
                         {!editando && podeAcessarTemporariamente && (
                           <button
                             type="button"
@@ -1140,6 +1259,186 @@ export default function EmpresasPage() {
           )}
         </section>
       </div>
+
+      {empresaLeadsModal && (
+        <div
+          className={styles.leadsModalOverlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              fecharLeadsEmpresa();
+            }
+          }}
+        >
+          <section
+            className={styles.leadsModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="company-leads-modal-title"
+          >
+            <div className={styles.leadsModalHeader}>
+              <div>
+                <span className={styles.leadsModalEyebrow}>Leads</span>
+                <h2 id="company-leads-modal-title">
+                  Leads da empresa
+                </h2>
+                <p>
+                  {empresaLeadsModal.nome_fantasia}
+                </p>
+              </div>
+
+              <div className={styles.leadsModalHeaderRight}>
+                <span className={styles.leadsCountBadge}>
+                  {leadsTotal} {leadsTotal === 1 ? "lead" : "leads"}
+                </span>
+                <button
+                  type="button"
+                  className={styles.leadsModalClose}
+                  onClick={fecharLeadsEmpresa}
+                  disabled={leadsCarregando}
+                  aria-label="Fechar leads"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.leadsModalSummary}>
+              <div>
+                <span>Ordenação</span>
+                <strong>Mais novos primeiro</strong>
+              </div>
+              <div>
+                <span>Página</span>
+                <strong>
+                  {leadsPagina} de {leadsTotalPaginas}
+                </strong>
+              </div>
+              <div>
+                <span>Exibindo</span>
+                <strong>{leadsEmpresa.length} registros</strong>
+              </div>
+            </div>
+
+            <div className={styles.leadsTableShell}>
+              {leadsCarregando ? (
+                <div className={styles.leadsLoadingState}>
+                  <span className={styles.leadsLoadingSpinner} />
+                  <strong>Carregando leads...</strong>
+                  <p>Buscando os registros mais recentes da empresa.</p>
+                </div>
+              ) : leadsErro ? (
+                <div className={styles.leadsErrorState}>
+                  <strong>Não foi possível carregar os leads</strong>
+                  <p>{leadsErro}</p>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() =>
+                      void carregarLeadsEmpresa(
+                        empresaLeadsModal,
+                        leadsPagina
+                      )
+                    }
+                  >
+                    Tentar novamente
+                  </button>
+                </div>
+              ) : leadsEmpresa.length === 0 ? (
+                <div className={styles.leadsEmptyState}>
+                  <div className={styles.leadsEmptyIcon}>L</div>
+                  <strong>Nenhum lead vinculado</strong>
+                  <p>
+                    Ainda não existem leads cadastrados para esta empresa.
+                  </p>
+                </div>
+              ) : (
+                <div className={styles.leadsTableScroll}>
+                  <table className={styles.leadsTable}>
+                    <thead>
+                      <tr>
+                        <th>Nome</th>
+                        <th>Nome empresa</th>
+                        <th>E-mail</th>
+                        <th>Número</th>
+                        <th>Categoria</th>
+                        <th>Data</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leadsEmpresa.map((lead) => (
+                        <tr key={lead.id}>
+                          <td>
+                            <div className={styles.leadIdentity}>
+                              <span className={styles.leadAvatar}>
+                                {getIniciais(lead.nome || "Lead")}
+                              </span>
+                              <strong>{lead.nome || "—"}</strong>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={styles.leadCompany}>
+                              {lead.empresa || "—"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={styles.leadEmail}>
+                              {lead.email || "—"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={styles.leadPhone}>
+                              {lead.telefone || "—"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={styles.leadCategoryBadge}>
+                              {lead.categoria || "Não informado"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={styles.leadDate}>
+                              {formatarDataLead(lead.created_at)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {!leadsCarregando && !leadsErro && leadsTotal > 0 && (
+              <div className={styles.leadsPagination}>
+                <span>
+                  {(leadsPagina - 1) * 25 + 1}–
+                  {Math.min(leadsPagina * 25, leadsTotal)} de {leadsTotal}
+                </span>
+
+                <div>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => alterarPaginaLeads(leadsPagina - 1)}
+                    disabled={leadsPagina <= 1}
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => alterarPaginaLeads(leadsPagina + 1)}
+                    disabled={leadsPagina >= leadsTotalPaginas}
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {empresaTokensModal && (
         <div
