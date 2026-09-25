@@ -285,6 +285,10 @@ export async function GET() {
         whatsapp_cancellations: pendingWhatsappCount,
         plan_change: pendingPlan
           ? {
+              change_id:
+                typeof pendingChange.change_id === "string"
+                  ? pendingChange.change_id
+                  : null,
               plan_id: pendingPlan.id,
               plan_name: pendingPlan.nome,
               plan_slug: pendingPlan.slug,
