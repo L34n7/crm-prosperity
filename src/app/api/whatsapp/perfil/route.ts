@@ -120,6 +120,22 @@ function normalizarStatus(valor: unknown) {
   return String(valor || "").trim().toLowerCase();
 }
 
+function podeTentarRecuperacaoMeta(integracao: IntegracaoWhatsapp) {
+  const status = normalizarStatus(integracao.status);
+  const onboardingStatus = normalizarStatus(integracao.onboarding_status);
+
+  return Boolean(
+    integracao.phone_number_id &&
+      integracao.waba_id &&
+      integracao.setup_completed_at &&
+      (status === "erro" || onboardingStatus === "erro")
+  );
+}
+
+function numeroMetaConfirmadoOperacional(phoneJson: PhoneInfoMeta | null) {
+  return normalizarStatus(phoneJson?.status) === "connected";
+}
+
 function isErroMetaTemporario(body: MetaErrorBody) {
   const message = body?.error?.message?.trim().toLowerCase();
   const code = Number(body?.error?.code);
@@ -677,7 +693,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    if (!isWhatsAppProfileMetaAvailable(integracaoSelecionada)) {
+    if (
+      !isWhatsAppProfileMetaAvailable(integracaoSelecionada) &&
+      !podeTentarRecuperacaoMeta(integracaoSelecionada)
+    ) {
       const onboardingRedirect = `/configurar-ambiente?integracao_id=${encodeURIComponent(
         integracaoSelecionada.id
       )}&retomar=1`;
@@ -822,6 +841,45 @@ export async function GET(req: NextRequest) {
       );
 
       if (diagnostico.bloqueiaOperacao) {
+        const numeroOperacionalAgora =
+          numeroMetaConfirmadoOperacional(phoneJson);
+
+        if (
+          diagnostico.motivo === "business_account_locked" &&
+          numeroOperacionalAgora
+        ) {
+          console.warn(
+            "[WHATSAPP PERFIL STALE LOCK IGNORED] A Meta confirmou o número como CONNECTED, mas o endpoint de perfil ainda retornou bloqueio.",
+            {
+              integracaoId: integracaoSelecionada.id,
+              phoneNumberId: integracaoSelecionada.phone_number_id,
+              modoIntegracao: integracaoSelecionada.modo_integracao,
+              metaError: metaJson,
+            }
+          );
+
+          const diagnosticoPerfil =
+            integracaoSelecionada.modo_integracao === "coexistence"
+              ? null
+              : {
+                  ...diagnostico,
+                  motivo: "profile_lock_stale_after_recovery",
+                  titulo: "Perfil do WhatsApp temporariamente indisponível",
+                  descricao:
+                    "A Meta já confirmou o número como conectado e operacional, mas o endpoint de perfil ainda retornou o bloqueio anterior. O CRM manteve a integração ativa e não reaplicou o banimento.",
+                  bloqueiaOperacao: false,
+                };
+
+          return NextResponse.json({
+            ok: true,
+            perfil_indisponivel: true,
+            diagnostico: diagnosticoPerfil,
+            meta: metaJson,
+            ...respostaComum,
+            perfil: null,
+          });
+        }
+
         await marcarIntegracaoComDiagnosticoMeta({
           integracao: integracaoSelecionada,
           empresaId,
