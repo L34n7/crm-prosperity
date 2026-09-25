@@ -51,7 +51,7 @@ export async function POST(
     quantidade = Number(body?.quantidade);
 
     if (
-      !Number.isSafeInteger(quantidade) ||
+      !Number.isSafeInteger(Number(quantidade)) ||
       quantidade <= 0 ||
       quantidade > 1_000_000_000
     ) {
