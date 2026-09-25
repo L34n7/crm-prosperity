@@ -171,15 +171,23 @@ async function reconciliarComposicaoImportada(params: {
   );
   const whatsappNumberQuantity = Math.max(0, effectiveLimit - baseLimit);
 
-  const baseAmountCents = await valorContratadoEmpresa(
-    params.empresaId,
-    params.empresa.plano_id,
-    params.empresa.assinatura_metadata_json,
-  );
+  const planoSlug = String(params.plano?.slug || "").trim().toLowerCase();
+  const pricingException = String(metadata.pricing_exception || "").trim();
+  const baseAmountCents =
+    pricingException === "navegue_veiculos_basico_100" &&
+    planoSlug === "basico"
+      ? 10_000
+      : Math.max(
+          1,
+          Number(params.plano?.preco_mensal_centavos || 0),
+        );
   const oferta = await ofertaProsperityPorPlanoValor(
     params.empresa.plano_id,
     baseAmountCents,
-    params.empresa.assinatura_metadata_json,
+    pricingException === "navegue_veiculos_basico_100" &&
+      planoSlug === "basico"
+      ? params.empresa.assinatura_metadata_json
+      : {},
   );
 
   const items = Array.isArray(params.assinatura.items)
@@ -283,8 +291,33 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
     throw new Error("Ciclo atual da assinatura é inválido para importação.");
   }
 
-  const valor = await valorContratadoEmpresa(empresaId, empresa.plano_id, empresa.assinatura_metadata_json);
-  const oferta = await ofertaProsperityPorPlanoValor(empresa.plano_id, valor, empresa.assinatura_metadata_json);
+  const planoSlug = String(plano?.slug || "").trim().toLowerCase();
+  const pricingException = String(metadataEmpresa.pricing_exception || "").trim();
+  const valor =
+    metadataEmpresa.billing_components_v2 === true
+      ? pricingException === "navegue_veiculos_basico_100" &&
+        planoSlug === "basico"
+        ? 10_000
+        : Math.max(
+            1,
+            Number(plano?.preco_mensal_centavos || 0),
+          )
+      : await valorContratadoEmpresa(
+          empresaId,
+          empresa.plano_id,
+          empresa.assinatura_metadata_json,
+        );
+  const oferta = await ofertaProsperityPorPlanoValor(
+    empresa.plano_id,
+    valor,
+    metadataEmpresa.billing_components_v2 === true &&
+      !(
+        pricingException === "navegue_veiculos_basico_100" &&
+        planoSlug === "basico"
+      )
+      ? {}
+      : empresa.assinatura_metadata_json,
+  );
   const lead = await supabase.from("leads_cadastro")
     .select("metadata_json")
     .eq("empresa_id", empresaId)
