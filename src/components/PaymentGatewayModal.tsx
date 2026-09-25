@@ -53,7 +53,7 @@ export default function PaymentGatewayModal({
   async function abrirCheckout(gateway: GatewayPagamento) {
     if (loadingGateway) return;
 
-    const novaAba = window.open("about:blank", "_blank");
+    const novaAba = window.open("/checkout-carregando", "_blank");
 
     if (!novaAba) {
       setError(
@@ -104,7 +104,7 @@ export default function PaymentGatewayModal({
         return;
       }
 
-      novaAba.location.href = checkoutUrl;
+      novaAba.location.replace(checkoutUrl);
       setMessage(
         `Checkout do ${nomeGateway(gateway)} aberto em uma nova aba. Se precisar, você pode usar o outro gateway por aqui.`
       );
@@ -167,7 +167,7 @@ export default function PaymentGatewayModal({
           </span>
           <span className={styles.providerAction}>
             {loadingGateway === "prosperity_pay"
-              ? "Abrindo..."
+              ? "Preparando checkout..."
               : "Continuar →"}
           </span>
         </button>
@@ -181,7 +181,7 @@ export default function PaymentGatewayModal({
             disabled={Boolean(loadingGateway)}
           >
             {loadingGateway === "atomo"
-              ? "Abrindo alternativa..."
+              ? "Preparando alternativa..."
               : "Usar Átomo como alternativa"}
           </button>
         </div>
