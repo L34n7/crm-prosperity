@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as XLSX from "xlsx-js-style";
+import ExcelJS from "exceljs";
+import path from "node:path";
+import { existsSync } from "node:fs";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
@@ -178,77 +180,74 @@ function limparNomeArquivo(valor: string) {
     .slice(0, 80) || "campanha";
 }
 
-function aplicarEstiloCelula(
-  sheet: XLSX.WorkSheet,
-  endereco: string,
-  estilo: Record<string, unknown>
+const COR = {
+  verdeEscuro: "173E3A",
+  verde: "245B55",
+  verdeClaro: "E8F2F0",
+  fundo: "F7FAF9",
+  borda: "D7E2E0",
+  texto: "18302D",
+  textoSuave: "667B78",
+  azulClaro: "EAF3FB",
+  azulTexto: "22577A",
+  verdeStatus: "E7F6EC",
+  verdeStatusTexto: "227A43",
+  tealStatus: "E8F6F4",
+  tealStatusTexto: "246B63",
+  vermelhoClaro: "FDECEC",
+  vermelhoTexto: "A83B3B",
+  amareloClaro: "FFF7DF",
+  amareloTexto: "8A6500",
+  cinzaClaro: "F1F4F4",
+  cinzaTexto: "5C6D6A",
+  roxoClaro: "F2ECFB",
+  roxoTexto: "6A45A1",
+};
+
+const BORDA_CARD = {
+  top: { style: "thin" as const, color: { argb: COR.borda } },
+  left: { style: "thin" as const, color: { argb: COR.borda } },
+  bottom: { style: "thin" as const, color: { argb: COR.borda } },
+  right: { style: "thin" as const, color: { argb: COR.borda } },
+};
+
+function estilizarFaixa(
+  worksheet: ExcelJS.Worksheet,
+  inicio: string,
+  fim: string,
+  estilo: Partial<ExcelJS.Style>
 ) {
-  const celula = sheet[endereco] as (XLSX.CellObject & {
-    s?: Record<string, unknown>;
-  }) | undefined;
+  const inicioCelula = worksheet.getCell(inicio);
+  const fimCelula = worksheet.getCell(fim);
 
-  if (!celula) return;
-  celula.s = estilo;
-}
-
-function aplicarEstiloIntervalo(
-  sheet: XLSX.WorkSheet,
-  intervalo: string,
-  estilo: Record<string, unknown>
-) {
-  const range = XLSX.utils.decode_range(intervalo);
-
-  for (let row = range.s.r; row <= range.e.r; row += 1) {
-    for (let col = range.s.c; col <= range.e.c; col += 1) {
-      aplicarEstiloCelula(
-        sheet,
-        XLSX.utils.encode_cell({ r: row, c: col }),
-        estilo
-      );
+  for (let row = inicioCelula.row; row <= fimCelula.row; row += 1) {
+    for (let col = inicioCelula.col; col <= fimCelula.col; col += 1) {
+      Object.assign(worksheet.getCell(row, col), {
+        style: {
+          ...worksheet.getCell(row, col).style,
+          ...estilo,
+        },
+      });
     }
   }
 }
 
-function aplicarLarguras(sheet: XLSX.WorkSheet) {
-  sheet["!cols"] = [
-    { wch: 18 },
-    { wch: 24 },
-    { wch: 14 },
-    { wch: 36 },
-    { wch: 21 },
-    { wch: 21 },
-    { wch: 21 },
-    { wch: 16 },
-    { wch: 34 },
-  ];
+function estiloStatusExcel(status: string) {
+  switch (status) {
+    case "lido":
+      return { fill: COR.verdeStatus, font: COR.verdeStatusTexto };
+    case "entregue":
+      return { fill: COR.tealStatus, font: COR.tealStatusTexto };
+    case "falha":
+      return { fill: COR.vermelhoClaro, font: COR.vermelhoTexto };
+    case "cancelado":
+      return { fill: COR.cinzaClaro, font: COR.vermelhoTexto };
+    case "enviado":
+      return { fill: COR.azulClaro, font: COR.azulTexto };
+    default:
+      return { fill: COR.amareloClaro, font: COR.amareloTexto };
+  }
 }
-
-const ESTILO_TITULO = {
-  font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
-  fill: { patternType: "solid", fgColor: { rgb: "173E3A" } },
-  alignment: { vertical: "center", horizontal: "left" },
-};
-
-const ESTILO_SUBTITULO = {
-  font: { bold: true, sz: 11, color: { rgb: "173E3A" } },
-  fill: { patternType: "solid", fgColor: { rgb: "E8F2F0" } },
-  alignment: { vertical: "center", horizontal: "left" },
-};
-
-const ESTILO_LABEL = {
-  font: { bold: true, color: { rgb: "304B49" } },
-  alignment: { vertical: "center" },
-};
-
-const ESTILO_CABECALHO_TABELA = {
-  font: { bold: true, color: { rgb: "FFFFFF" } },
-  fill: { patternType: "solid", fgColor: { rgb: "245B55" } },
-  alignment: { vertical: "center", horizontal: "left", wrapText: true },
-};
-
-const ESTILO_TEXTO_WRAP = {
-  alignment: { vertical: "top", wrapText: true },
-};
 
 function formatarDataBCB(data: Date) {
   const dia = String(data.getDate()).padStart(2, "0");
@@ -496,207 +495,367 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const workbook = XLSX.utils.book_new();
-    const categoriaLabel = String(campanha.template_categoria || "-");
-    const statusCampanhaLabel =
-      String(campanha.status || "-")
-        .replace(/_/g, " ")
-        .replace(/^./, (letra) => letra.toUpperCase());
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "CRM Prosperity";
+    workbook.company = "CRM Prosperity";
+    workbook.subject = "Resultados dos disparos WhatsApp";
+    workbook.title = nomeCampanha;
+    workbook.created = new Date();
 
-    const resumo = XLSX.utils.aoa_to_sheet([
-      ["Relatório detalhado de campanha WhatsApp", "", "", "", "", ""],
-      [nomeCampanha, "", "", "", "", ""],
-      [],
-      ["DADOS DA CAMPANHA", "", "", "RESULTADOS", "", ""],
-      ["Template", campanha.template_nome || "-", "", "Total de contatos", totais.total, ""],
-      ["Categoria", categoriaLabel, "", "Enviados", totais.enviado, ""],
-      ["Status", statusCampanhaLabel, "", "Entregues", totais.entregue, ""],
-      ["Criada em", formatarDataHora(campanha.created_at), "", "Lidos", totais.lido, ""],
-      ["Finalizada em", formatarDataHora(campanha.finished_at), "", "Respondidos", totais.respondido, ""],
-      ["", "", "", "Falhas", totais.falha, ""],
-      ["", "", "", "Cancelados", totais.cancelado, ""],
-      ["", "", "", "Pendentes", totais.pendente, ""],
-      [],
-      ["ESTIMATIVA DE CUSTO", "", "", "", "", ""],
-      ["Custo estimado (R$)", custoEstimado.valorTotalBrlEstimado, "", "", "", ""],
-      ["Custo estimado (USD)", custoEstimado.valorTotalUsd, "", "", "", ""],
-      ["Mensagens consideradas", custoEstimado.quantidadeCobravelEstimada, "", "", "", ""],
-      ["Cotação USD/BRL", custoEstimado.cotacaoUsdBrl, "", "", "", ""],
-      ["Fonte da cotação", custoEstimado.fonteCotacao, "", "", "", ""],
-      [],
-      ["OBSERVAÇÃO", "", "", "", "", ""],
-      [custoEstimado.criterio || "", "", "", "", "", ""],
-    ]);
-
-    resumo["!merges"] = [
-      XLSX.utils.decode_range("A1:F1"),
-      XLSX.utils.decode_range("A2:F2"),
-      XLSX.utils.decode_range("A4:B4"),
-      XLSX.utils.decode_range("D4:E4"),
-      XLSX.utils.decode_range("A14:B14"),
-      XLSX.utils.decode_range("A21:F21"),
-      XLSX.utils.decode_range("A22:F23"),
-    ];
-    resumo["!cols"] = [
-      { wch: 24 },
-      { wch: 34 },
-      { wch: 4 },
-      { wch: 22 },
-      { wch: 14 },
-      { wch: 4 },
-    ];
-    resumo["!rows"] = [
-      { hpt: 26 },
-      { hpt: 22 },
-      { hpt: 8 },
-      { hpt: 22 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 8 },
-      { hpt: 22 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 8 },
-      { hpt: 22 },
-      { hpt: 38 },
-      { hpt: 20 },
-    ];
-
-    aplicarEstiloIntervalo(resumo, "A1:F1", ESTILO_TITULO);
-    aplicarEstiloIntervalo(resumo, "A2:F2", {
-      font: { bold: true, sz: 12, color: { rgb: "173E3A" } },
-      alignment: { vertical: "center", horizontal: "left" },
+    const worksheet = workbook.addWorksheet("Resultados dos disparos", {
+      properties: {
+        defaultRowHeight: 20,
+      },
+      pageSetup: {
+        orientation: "landscape",
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: {
+          left: 0.25,
+          right: 0.25,
+          top: 0.4,
+          bottom: 0.4,
+          header: 0.2,
+          footer: 0.2,
+        },
+      },
+      views: [{ state: "frozen", ySplit: 13 }],
     });
-    aplicarEstiloIntervalo(resumo, "A4:B4", ESTILO_SUBTITULO);
-    aplicarEstiloIntervalo(resumo, "D4:E4", ESTILO_SUBTITULO);
-    aplicarEstiloIntervalo(resumo, "A14:B14", ESTILO_SUBTITULO);
-    aplicarEstiloIntervalo(resumo, "A21:F21", ESTILO_SUBTITULO);
-    aplicarEstiloIntervalo(resumo, "A5:A9", ESTILO_LABEL);
-    aplicarEstiloIntervalo(resumo, "D5:D12", ESTILO_LABEL);
-    aplicarEstiloIntervalo(resumo, "A15:A19", ESTILO_LABEL);
-    aplicarEstiloIntervalo(resumo, "A22:F23", ESTILO_TEXTO_WRAP);
 
-    if (resumo.B15) resumo.B15.z = '"R$" #,##0.00';
-    if (resumo.B16) resumo.B16.z = '"US$" #,##0.0000';
-    if (resumo.B18) resumo.B18.z = "0.0000";
+    worksheet.columns = [
+      { key: "numero", width: 19 },
+      { key: "nome", width: 24 },
+      { key: "status", width: 15 },
+      { key: "resposta", width: 38 },
+      { key: "enviado", width: 22 },
+      { key: "lido", width: 22 },
+      { key: "respondido", width: 22 },
+      { key: "apoio", width: 18 },
+    ];
 
-    resumo["!margins"] = {
-      left: 0.35,
-      right: 0.35,
-      top: 0.5,
-      bottom: 0.5,
-      header: 0.2,
-      footer: 0.2,
+    worksheet.sheetProperties.pageSetUpPr = { fitToPage: true };
+    worksheet.pageSetup.horizontalCentered = true;
+    worksheet.headerFooter.oddFooter =
+      '&LCRM Prosperity&CResultados dos disparos&R&P / &N';
+
+    // Header com logo e nome
+    worksheet.mergeCells("B1:H1");
+    worksheet.mergeCells("B2:H2");
+    worksheet.mergeCells("B3:H3");
+    worksheet.getRow(1).height = 24;
+    worksheet.getRow(2).height = 24;
+    worksheet.getRow(3).height = 26;
+
+    worksheet.getCell("B1").value = "CRM Prosperity";
+    worksheet.getCell("B1").font = {
+      name: "Aptos Display",
+      size: 18,
+      bold: true,
+      color: { argb: COR.verdeEscuro },
     };
+    worksheet.getCell("B1").alignment = { vertical: "middle" };
 
-    XLSX.utils.book_append_sheet(workbook, resumo, "Resumo");
+    worksheet.getCell("B2").value = "Resultados dos disparos";
+    worksheet.getCell("B2").font = {
+      name: "Aptos",
+      size: 14,
+      bold: true,
+      color: { argb: COR.texto },
+    };
+    worksheet.getCell("B2").alignment = { vertical: "middle" };
 
-    const dadosContatos = [
-      [
-        nomeCampanha,
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-      ],
-      [
-        `${totais.total} contatos • ${categoriaLabel} • ${statusCampanhaLabel}`,
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-      ],
-      [],
-      [
-        "Número",
-        "Nome",
-        "Status",
-        "1ª mensagem respondida",
-        "Enviado em",
-        "Lido em",
-        "Respondido em",
-        "Situação",
-        "Motivo da falha/recusa",
-      ],
-      ...linhasDetalhadas.map((linha) => [
-        linha.numero || "",
-        linha.nome_contato || "Sem nome",
-        linha.status_label,
-        linha.primeira_resposta || "",
-        formatarDataHora(linha.enviado_em),
-        formatarDataHora(linha.lido_em),
-        formatarDataHora(linha.resposta_em),
-        linha.situacao || "",
-        linha.erro || "",
-      ]),
-    ];
+    worksheet.getCell("B3").value = nomeCampanha;
+    worksheet.getCell("B3").font = {
+      name: "Aptos",
+      size: 11,
+      color: { argb: COR.textoSuave },
+    };
+    worksheet.getCell("B3").alignment = { vertical: "middle" };
 
-    const contatos = XLSX.utils.aoa_to_sheet(dadosContatos);
-    aplicarLarguras(contatos);
-    contatos["!merges"] = [
-      XLSX.utils.decode_range("A1:I1"),
-      XLSX.utils.decode_range("A2:I2"),
-    ];
-    contatos["!rows"] = [
-      { hpt: 26 },
-      { hpt: 20 },
-      { hpt: 8 },
-      { hpt: 24 },
-      ...linhasDetalhadas.map(() => ({ hpt: 30 })),
-    ];
+    worksheet.mergeCells("A4:H4");
+    worksheet.getCell("A4").value =
+      `Template: ${campanha.template_nome || "-"}   •   Categoria: ${String(
+        campanha.template_categoria || "-"
+      ).toUpperCase()}   •   Criada em: ${formatarDataHora(
+        campanha.created_at
+      ) || "-"}`;
+    worksheet.getCell("A4").font = {
+      name: "Aptos",
+      size: 10,
+      color: { argb: COR.textoSuave },
+    };
+    worksheet.getCell("A4").alignment = {
+      vertical: "middle",
+      horizontal: "left",
+    };
+    worksheet.getRow(4).height = 22;
 
-    aplicarEstiloIntervalo(contatos, "A1:I1", ESTILO_TITULO);
-    aplicarEstiloIntervalo(contatos, "A2:I2", {
-      font: { bold: true, color: { rgb: "476A66" } },
-      alignment: { vertical: "center", horizontal: "left" },
-    });
-    aplicarEstiloIntervalo(contatos, "A4:I4", ESTILO_CABECALHO_TABELA);
+    const logoPath = path.join(
+      process.cwd(),
+      "public",
+      "android-chrome-192x192.png"
+    );
 
-    if (linhasDetalhadas.length > 0) {
-      aplicarEstiloIntervalo(
-        contatos,
-        `A5:I${linhasDetalhadas.length + 4}`,
-        ESTILO_TEXTO_WRAP
-      );
-      contatos["!autofilter"] = {
-        ref: `A4:I${linhasDetalhadas.length + 4}`,
+    if (existsSync(logoPath)) {
+      const logoId = workbook.addImage({
+        filename: logoPath,
+        extension: "png",
+      });
+      worksheet.addImage(logoId, {
+        tl: { col: 0.08, row: 0.15 },
+        ext: { width: 58, height: 58 },
+        editAs: "oneCell",
+      });
+    } else {
+      worksheet.getCell("A1").value = "CRM";
+      worksheet.getCell("A1").font = {
+        bold: true,
+        size: 14,
+        color: { argb: COR.verdeEscuro },
+      };
+      worksheet.getCell("A1").alignment = {
+        horizontal: "center",
+        vertical: "middle",
       };
     }
 
-    contatos["!margins"] = {
-      left: 0.25,
-      right: 0.25,
-      top: 0.5,
-      bottom: 0.5,
-      header: 0.2,
-      footer: 0.2,
+    // Cards de totais como na tela
+    const cards = [
+      { col: 1, label: "TOTAL", value: totais.total, fill: COR.cinzaClaro, color: COR.texto },
+      { col: 2, label: "ENVIADOS", value: totais.enviado, fill: COR.azulClaro, color: COR.azulTexto },
+      { col: 3, label: "ENTREGUES", value: totais.entregue, fill: COR.tealStatus, color: COR.tealStatusTexto },
+      { col: 4, label: "LIDOS", value: totais.lido, fill: COR.verdeStatus, color: COR.verdeStatusTexto },
+      { col: 5, label: "RESPONDIDOS", value: totais.respondido, fill: COR.roxoClaro, color: COR.roxoTexto },
+      { col: 6, label: "FALHAS", value: totais.falha, fill: COR.vermelhoClaro, color: COR.vermelhoTexto },
+      { col: 7, label: "PENDENTES", value: totais.pendente, fill: COR.amareloClaro, color: COR.amareloTexto },
+      { col: 8, label: "CANCELADOS", value: totais.cancelado, fill: COR.cinzaClaro, color: COR.cinzaTexto },
+    ];
+
+    worksheet.getRow(6).height = 20;
+    worksheet.getRow(7).height = 28;
+
+    for (const card of cards) {
+      const labelCell = worksheet.getCell(6, card.col);
+      const valueCell = worksheet.getCell(7, card.col);
+
+      labelCell.value = card.label;
+      labelCell.font = {
+        name: "Aptos",
+        size: 9,
+        bold: true,
+        color: { argb: card.color },
+      };
+      labelCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: card.fill },
+      };
+      labelCell.border = BORDA_CARD;
+      labelCell.alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
+
+      valueCell.value = card.value;
+      valueCell.font = {
+        name: "Aptos Display",
+        size: 16,
+        bold: true,
+        color: { argb: card.color },
+      };
+      valueCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: card.fill },
+      };
+      valueCell.border = BORDA_CARD;
+      valueCell.alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
+    }
+
+    // Custo estimado
+    worksheet.mergeCells("A9:C9");
+    worksheet.mergeCells("A10:C11");
+    worksheet.mergeCells("D9:H9");
+    worksheet.mergeCells("D10:H11");
+
+    worksheet.getCell("A9").value = "CUSTO ESTIMADO";
+    worksheet.getCell("A9").font = {
+      size: 9,
+      bold: true,
+      color: { argb: COR.verdeEscuro },
+    };
+    worksheet.getCell("A9").fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: COR.verdeClaro },
+    };
+    worksheet.getCell("A9").border = BORDA_CARD;
+    worksheet.getCell("A9").alignment = { vertical: "middle" };
+
+    worksheet.getCell("A10").value =
+      custoEstimado.disponivel
+        ? custoEstimado.valorTotalBrlEstimado
+        : "Não disponível";
+    worksheet.getCell("A10").numFmt =
+      custoEstimado.disponivel ? '"R$" #,##0.00' : "@";
+    worksheet.getCell("A10").font = {
+      size: 18,
+      bold: true,
+      color: { argb: COR.texto },
+    };
+    worksheet.getCell("A10").fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFF" },
+    };
+    worksheet.getCell("A10").border = BORDA_CARD;
+    worksheet.getCell("A10").alignment = {
+      vertical: "middle",
+      horizontal: "left",
     };
 
-    XLSX.utils.book_append_sheet(workbook, contatos, "Contatos");
+    worksheet.getCell("D9").value = "CRITÉRIO DA ESTIMATIVA";
+    worksheet.getCell("D9").font = {
+      size: 9,
+      bold: true,
+      color: { argb: COR.textoSuave },
+    };
+    worksheet.getCell("D9").fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: COR.fundo },
+    };
+    worksheet.getCell("D9").border = BORDA_CARD;
 
-    const arquivo = XLSX.write(workbook, {
-      bookType: "xlsx",
-      type: "buffer",
-      compression: true,
-      cellStyles: true,
-    }) as Buffer;
+    worksheet.getCell("D10").value =
+      custoEstimado.criterio ||
+      "Estimativa calculada pela categoria do template.";
+    worksheet.getCell("D10").font = {
+      size: 9,
+      color: { argb: COR.textoSuave },
+    };
+    worksheet.getCell("D10").fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFF" },
+    };
+    worksheet.getCell("D10").border = BORDA_CARD;
+    worksheet.getCell("D10").alignment = {
+      vertical: "middle",
+      wrapText: true,
+    };
+    worksheet.getRow(10).height = 24;
+    worksheet.getRow(11).height = 24;
+
+    // Tabela detalhada
+    const cabecalhos = [
+      "NÚMERO",
+      "NOME",
+      "STATUS",
+      "1ª MENSAGEM RESPONDIDA",
+      "ENVIADO EM",
+      "LIDO EM",
+      "RESPONDIDO EM",
+    ];
+
+    cabecalhos.forEach((titulo, index) => {
+      const cell = worksheet.getCell(13, index + 1);
+      cell.value = titulo;
+      cell.font = {
+        name: "Aptos",
+        size: 9,
+        bold: true,
+        color: { argb: COR.textoSuave },
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: COR.fundo },
+      };
+      cell.border = BORDA_CARD;
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: "left",
+        wrapText: true,
+      };
+    });
+    worksheet.getRow(13).height = 26;
+
+    linhasDetalhadas.forEach((linha, index) => {
+      const rowNumber = 14 + index;
+      const row = worksheet.getRow(rowNumber);
+      const status = String(linha.status_final || "pendente").toLowerCase();
+      const statusStyle = estiloStatusExcel(status);
+
+      row.values = [
+        linha.numero || "",
+        linha.nome_contato || "Sem nome",
+        linha.status_label || "Pendente",
+        linha.primeira_resposta || "—",
+        formatarDataHora(linha.enviado_em) || "—",
+        formatarDataHora(linha.lido_em) || "—",
+        formatarDataHora(linha.resposta_em) || "—",
+      ];
+      row.height = 28;
+
+      for (let col = 1; col <= 7; col += 1) {
+        const cell = row.getCell(col);
+        cell.font = {
+          name: "Aptos",
+          size: 10,
+          color: { argb: COR.texto },
+          bold: col === 1 || col === 2,
+        };
+        cell.alignment = {
+          vertical: "middle",
+          horizontal: "left",
+          wrapText: col === 4,
+        };
+        cell.border = {
+          bottom: { style: "thin", color: { argb: COR.borda } },
+        };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: index % 2 === 0 ? "FFFFFF" : "FBFCFC" },
+        };
+      }
+
+      const statusCell = row.getCell(3);
+      statusCell.font = {
+        name: "Aptos",
+        size: 10,
+        bold: true,
+        color: { argb: statusStyle.font },
+      };
+      statusCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: statusStyle.fill },
+      };
+      statusCell.alignment = {
+        vertical: "middle",
+        horizontal: "center",
+      };
+
+      if (linha.erro && status === "falha") {
+        statusCell.note = linha.erro;
+      }
+    });
+
+    worksheet.autoFilter = {
+      from: "A13",
+      to: "G13",
+    };
+
+    worksheet.printArea = `A1:H${Math.max(14, 13 + linhasDetalhadas.length)}`;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const arquivo = Buffer.from(buffer);
 
     const baseNome = limparNomeArquivo(nomeCampanha);
     const nomeArquivo = `${baseNome}.xlsx`;
