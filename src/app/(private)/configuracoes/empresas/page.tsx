@@ -25,6 +25,18 @@ type Nicho = {
 
 type StatusEmpresa = "ativa" | "inativa" | "suspensa" | "cancelada";
 
+type SaldoTokensEmpresa = {
+  limite_mensal: number | null;
+  tokens_restantes: number | null;
+  saldo_mensal_restante: number | null;
+  saldo_avulso_restante: number;
+  tokens_mensais_usados: number;
+  tokens_avulsos_usados: number;
+  periodo_inicio: string;
+  periodo_fim: string;
+  updated_at: string;
+};
+
 type Empresa = {
   id: string;
   nome_fantasia: string;
@@ -40,6 +52,8 @@ type Empresa = {
   plano_id: string;
   limite_integracoes_whatsapp: number | null;
   limite_usuarios: number | null;
+  assinatura_status?: string | null;
+  empresa_tokens_ia?: SaldoTokensEmpresa | SaldoTokensEmpresa[] | null;
   nicho_id: string;
   nichos?: Nicho | null;
   planos?: {
@@ -103,6 +117,22 @@ function getOpcaoLimiteLabel(quantidade: number, limitePlano: number) {
   return String(quantidade);
 }
 
+function getSaldoTokensEmpresa(empresa: Empresa) {
+  const saldo = empresa.empresa_tokens_ia;
+
+  if (Array.isArray(saldo)) {
+    return saldo[0] ?? null;
+  }
+
+  return saldo ?? null;
+}
+
+function formatarTokens(valor: number | null | undefined) {
+  if (valor === null || valor === undefined) return "—";
+  return new Intl.NumberFormat("pt-BR").format(valor);
+}
+
+
 export default function EmpresasPage() {
   const { permissoes } = useHeaderUser();
   const podeEditarEmpresas = permissoes.includes("empresas.editar");
@@ -127,6 +157,13 @@ export default function EmpresasPage() {
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [reenviandoAcessoId, setReenviandoAcessoId] = useState<string | null>(null);
   const [acessandoEmpresaId, setAcessandoEmpresaId] = useState<string | null>(null);
+  const [empresaTokensModal, setEmpresaTokensModal] = useState<Empresa | null>(null);
+  const [acaoTokens, setAcaoTokens] = useState<
+    "restaurar_mensal" | "adicionar_avulso"
+  >("adicionar_avulso");
+  const [quantidadeTokensExtras, setQuantidadeTokensExtras] = useState("100000");
+  const [motivoTokens, setMotivoTokens] = useState("");
+  const [ajustandoTokens, setAjustandoTokens] = useState(false);
 
   const [editNomeFantasia, setEditNomeFantasia] = useState("");
   const [editRazaoSocial, setEditRazaoSocial] = useState("");
@@ -328,6 +365,84 @@ export default function EmpresasPage() {
       setErro("Não foi possível iniciar a sessão temporária.");
     } finally {
       setAcessandoEmpresaId(null);
+    }
+  }
+
+  function abrirAjusteTokens(
+    empresa: Empresa,
+    acao: "restaurar_mensal" | "adicionar_avulso"
+  ) {
+    setEmpresaTokensModal(empresa);
+    setAcaoTokens(acao);
+    setQuantidadeTokensExtras("100000");
+    setMotivoTokens("");
+    setMensagem("");
+    setErro("");
+  }
+
+  function fecharAjusteTokens() {
+    if (ajustandoTokens) return;
+    setEmpresaTokensModal(null);
+  }
+
+  async function confirmarAjusteTokens() {
+    if (!empresaTokensModal || ajustandoTokens) return;
+
+    const quantidade =
+      acaoTokens === "adicionar_avulso"
+        ? Number(quantidadeTokensExtras)
+        : null;
+
+    if (
+      acaoTokens === "adicionar_avulso" &&
+      (!Number.isSafeInteger(quantidade) || Number(quantidade) <= 0)
+    ) {
+      setErro("Informe uma quantidade válida de tokens extras.");
+      return;
+    }
+
+    setAjustandoTokens(true);
+    setMensagem("");
+    setErro("");
+
+    try {
+      const response = await fetch(
+        `/api/empresas/${empresaTokensModal.id}/tokens`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            acao: acaoTokens,
+            quantidade,
+            motivo: motivoTokens,
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setErro(data.error || "Não foi possível ajustar os tokens.");
+        return;
+      }
+
+      if (data.saldo) {
+        setEmpresas((atuais) =>
+          atuais.map((empresa) =>
+            empresa.id === empresaTokensModal.id
+              ? { ...empresa, empresa_tokens_ia: data.saldo }
+              : empresa
+          )
+        );
+      } else {
+        await carregarEmpresas();
+      }
+
+      setMensagem(data.message || "Tokens ajustados com sucesso.");
+      setEmpresaTokensModal(null);
+    } catch {
+      setErro("Não foi possível ajustar os tokens da empresa.");
+    } finally {
+      setAjustandoTokens(false);
     }
   }
 
@@ -540,6 +655,15 @@ export default function EmpresasPage() {
                   empresa.limite_usuarios ??
                   empresa.planos?.limite_usuarios ??
                   2;
+                const saldoTokensEmpresa = getSaldoTokensEmpresa(empresa);
+                const saldoMensalTokens =
+                  saldoTokensEmpresa?.saldo_mensal_restante ?? 0;
+                const saldoAvulsoTokens =
+                  saldoTokensEmpresa?.saldo_avulso_restante ?? 0;
+                const totalTokensDisponiveis =
+                  empresa.assinatura_status === "ativa"
+                    ? saldoMensalTokens + saldoAvulsoTokens
+                    : 0;
 
                 return (
                   <article key={empresa.id} className={styles.itemCard}>
@@ -901,6 +1025,84 @@ export default function EmpresasPage() {
                             </div>
 
                             {podeEditarEmpresas && (
+                              <div className={styles.tokensManagementBlock}>
+                                <div className={styles.tokensManagementHeader}>
+                                  <div>
+                                    <span className={styles.infoLabel}>
+                                      Tokens de IA
+                                    </span>
+                                    <strong className={styles.tokensManagementTitle}>
+                                      Gerenciar saldo da empresa
+                                    </strong>
+                                    <p className={styles.tokensManagementDescription}>
+                                      Restaure a franquia mensal ou conceda saldo
+                                      avulso sem alterar plano, vencimento ou pagamento.
+                                    </p>
+                                  </div>
+
+                                  <span className={styles.tokensTotalBadge}>
+                                    {formatarTokens(totalTokensDisponiveis)} disponíveis
+                                  </span>
+                                </div>
+
+                                <div className={styles.tokensStatsGrid}>
+                                  <div>
+                                    <span>Franquia</span>
+                                    <strong>
+                                      {formatarTokens(
+                                        saldoTokensEmpresa?.limite_mensal
+                                      )}
+                                    </strong>
+                                  </div>
+                                  <div>
+                                    <span>Mensal restante</span>
+                                    <strong>
+                                      {formatarTokens(
+                                        saldoTokensEmpresa?.saldo_mensal_restante
+                                      )}
+                                    </strong>
+                                  </div>
+                                  <div>
+                                    <span>Saldo avulso</span>
+                                    <strong>
+                                      {formatarTokens(
+                                        saldoTokensEmpresa?.saldo_avulso_restante
+                                      )}
+                                    </strong>
+                                  </div>
+                                </div>
+
+                                <div className={styles.tokensManagementActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() =>
+                                      abrirAjusteTokens(
+                                        empresa,
+                                        "restaurar_mensal"
+                                      )
+                                    }
+                                  >
+                                    Restaurar tokens mensais
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.primaryButton}
+                                    onClick={() =>
+                                      abrirAjusteTokens(
+                                        empresa,
+                                        "adicionar_avulso"
+                                      )
+                                    }
+                                  >
+                                    Adicionar tokens extras
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {podeEditarEmpresas && (
                               <div className={styles.accessBlock}>
                                 <div>
                                   <span className={styles.infoLabel}>
@@ -938,6 +1140,161 @@ export default function EmpresasPage() {
           )}
         </section>
       </div>
+
+      {empresaTokensModal && (
+        <div
+          className={styles.tokenModalOverlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              fecharAjusteTokens();
+            }
+          }}
+        >
+          <section
+            className={styles.tokenModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="token-admin-modal-title"
+          >
+            <button
+              type="button"
+              className={styles.tokenModalClose}
+              onClick={fecharAjusteTokens}
+              disabled={ajustandoTokens}
+              aria-label="Fechar"
+            >
+              ×
+            </button>
+
+            <span className={styles.tokenModalEyebrow}>Tokens de IA</span>
+            <h2 id="token-admin-modal-title">
+              Gerenciar tokens
+            </h2>
+            <p className={styles.tokenModalCompany}>
+              {empresaTokensModal.nome_fantasia}
+            </p>
+
+            <div className={styles.tokenActionTabs}>
+              <button
+                type="button"
+                className={
+                  acaoTokens === "restaurar_mensal"
+                    ? styles.tokenActionTabActive
+                    : styles.tokenActionTab
+                }
+                onClick={() => setAcaoTokens("restaurar_mensal")}
+                disabled={ajustandoTokens}
+              >
+                Restaurar mensal
+              </button>
+              <button
+                type="button"
+                className={
+                  acaoTokens === "adicionar_avulso"
+                    ? styles.tokenActionTabActive
+                    : styles.tokenActionTab
+                }
+                onClick={() => setAcaoTokens("adicionar_avulso")}
+                disabled={ajustandoTokens}
+              >
+                Adicionar extras
+              </button>
+            </div>
+
+            {acaoTokens === "restaurar_mensal" ? (
+              <div className={styles.tokenRestorePanel}>
+                <span>Franquia mensal atual</span>
+                <strong>
+                  {formatarTokens(
+                    getSaldoTokensEmpresa(empresaTokensModal)?.limite_mensal
+                  )}
+                </strong>
+                <p>
+                  Recompõe a franquia mensal deste ciclo para o limite total.
+                  O saldo avulso é preservado e o vencimento não é alterado.
+                </p>
+              </div>
+            ) : (
+              <div className={styles.tokenAmountPanel}>
+                <label className={styles.label} htmlFor="tokens-extras">
+                  Quantidade de tokens extras
+                </label>
+                <input
+                  id="tokens-extras"
+                  className={styles.input}
+                  type="number"
+                  min="1"
+                  max="1000000000"
+                  step="1000"
+                  value={quantidadeTokensExtras}
+                  onChange={(event) =>
+                    setQuantidadeTokensExtras(event.target.value)
+                  }
+                />
+
+                <div className={styles.tokenQuickAmounts}>
+                  {[50000, 100000, 200000, 500000].map((quantidade) => (
+                    <button
+                      key={quantidade}
+                      type="button"
+                      onClick={() =>
+                        setQuantidadeTokensExtras(String(quantidade))
+                      }
+                      disabled={ajustandoTokens}
+                    >
+                      +{formatarTokens(quantidade)}
+                    </button>
+                  ))}
+                </div>
+
+                <p>
+                  Tokens extras entram no saldo avulso, não expiram e são
+                  consumidos antes da franquia mensal.
+                </p>
+              </div>
+            )}
+
+            <div className={styles.tokenReasonField}>
+              <label className={styles.label} htmlFor="tokens-motivo">
+                Motivo do ajuste <span>(opcional)</span>
+              </label>
+              <textarea
+                id="tokens-motivo"
+                className={styles.textarea}
+                rows={3}
+                maxLength={500}
+                placeholder="Ex.: cortesia comercial, correção de saldo..."
+                value={motivoTokens}
+                onChange={(event) => setMotivoTokens(event.target.value)}
+              />
+            </div>
+
+            <div className={styles.tokenModalActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={fecharAjusteTokens}
+                disabled={ajustandoTokens}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={confirmarAjusteTokens}
+                disabled={ajustandoTokens}
+              >
+                {ajustandoTokens
+                  ? "Aplicando..."
+                  : acaoTokens === "restaurar_mensal"
+                    ? "Restaurar franquia"
+                    : "Adicionar tokens"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
