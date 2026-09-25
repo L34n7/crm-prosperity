@@ -27,6 +27,7 @@ type Integracao = {
     | "nao_verificado"
     | "configurado"
     | "nao_configurado"
+    | "indisponivel"
     | "erro"
     | string
     | null;
@@ -215,11 +216,11 @@ function formatarDataHora(valor?: string | null) {
 function obterStatusPagamentoMeta(integracao?: Integracao | null) {
   const status = normalizarStatus(integracao?.meta_payment_status);
 
-  if (status === "configurado" || integracao?.payment_method_added === true) {
+  if (status === "configurado") {
     return {
       label: "Configurada",
       descricao:
-        "A Meta retornou uma forma de pagamento vinculada a esta conta do WhatsApp Business.",
+        "A Meta confirmou uma forma de pagamento vinculada a esta conta do WhatsApp Business.",
       classe: styles.paymentStatusOk,
     };
   }
@@ -228,8 +229,18 @@ function obterStatusPagamentoMeta(integracao?: Integracao | null) {
     return {
       label: "Não cadastrada",
       descricao:
-        "Nenhuma forma de pagamento foi encontrada na WABA. Cadastre uma forma de pagamento na Meta para evitar interrupções de cobrança.",
+        "A consulta foi concluída e a Meta não retornou uma forma de pagamento vinculada à WABA.",
       classe: styles.paymentStatusMissing,
+    };
+  }
+
+  if (status === "indisponivel") {
+    return {
+      label: "Validação indisponível",
+      descricao:
+        integracao?.meta_payment_check_error ||
+        "A Meta não disponibiliza a consulta automática da forma de pagamento para este aplicativo.",
+      classe: styles.paymentStatusWarning,
     };
   }
 
@@ -238,15 +249,24 @@ function obterStatusPagamentoMeta(integracao?: Integracao | null) {
       label: "Não foi possível verificar",
       descricao:
         integracao?.meta_payment_check_error ||
-        "A Meta não permitiu concluir a verificação com a credencial atual.",
+        "Não foi possível concluir a verificação da forma de pagamento.",
       classe: styles.paymentStatusWarning,
+    };
+  }
+
+  if (integracao?.payment_method_added === true) {
+    return {
+      label: "Informada no cadastro",
+      descricao:
+        "A forma de pagamento foi informada durante a configuração, mas ainda não foi confirmada automaticamente pela API da Meta.",
+      classe: styles.paymentStatusNeutral,
     };
   }
 
   return {
     label: "Não verificada",
     descricao:
-      "O CRM ainda não consultou a forma de pagamento desta integração na Meta.",
+      "O CRM ainda não confirmou a forma de pagamento desta integração pela API da Meta.",
     classe: styles.paymentStatusNeutral,
   };
 }
@@ -1604,9 +1624,12 @@ export default function WhatsappPerfilPage() {
                 </button>
               </div>
 
-              {erroPagamento && (
-                <div className={styles.paymentError}>{erroPagamento}</div>
-              )}
+              {erroPagamento &&
+                !["erro", "indisponivel"].includes(
+                  normalizarStatus(integracaoSelecionada?.meta_payment_status)
+                ) && (
+                  <div className={styles.paymentError}>{erroPagamento}</div>
+                )}
             </div>
 
             <a

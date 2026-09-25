@@ -40,26 +40,51 @@ function objeto(valor: ConfigJson) {
     : {};
 }
 
-function mensagemErroMeta(json: MetaPaymentResponse, statusHttp: number) {
+function analisarErroMeta(json: MetaPaymentResponse, statusHttp: number) {
   const codigo = Number(json?.error?.code);
   const detalhe =
     String(json?.error?.error_user_msg || "").trim() ||
     String(json?.error?.message || "").trim();
+  const detalheLower = detalhe.toLowerCase();
+
+  if (
+    detalheLower.includes("business solution provider for whatsapp") ||
+    detalheLower.includes("business solution provider")
+  ) {
+    return {
+      status: "indisponivel" as const,
+      mensagem:
+        "A forma de pagamento está cadastrada na Meta, mas a Meta restringe a validação automática deste campo a aplicativos habilitados como Business Solution Provider. O status não pode ser confirmado pela API atual.",
+    };
+  }
 
   if (codigo === 10 || codigo === 200) {
-    return "A Meta não autorizou a consulta da forma de pagamento com o token atual. Verifique a permissão whatsapp_business_management da integração.";
+    return {
+      status: "erro" as const,
+      mensagem:
+        "A Meta recusou a consulta da forma de pagamento com a credencial atual.",
+    };
   }
 
   if (codigo === 190) {
-    return "O token da Meta expirou ou não é mais válido. Reconecte a integração para verificar a forma de pagamento.";
+    return {
+      status: "erro" as const,
+      mensagem:
+        "O token da Meta expirou ou não é mais válido. Reconecte a integração para tentar novamente.",
+    };
   }
 
-  return detalhe || `A Meta retornou HTTP ${statusHttp} ao consultar a forma de pagamento.`;
+  return {
+    status: "erro" as const,
+    mensagem:
+      detalhe ||
+      `A Meta retornou HTTP ${statusHttp} ao consultar a forma de pagamento.`,
+  };
 }
 
 async function salvarResultado(params: {
   integracao: IntegracaoPagamentoMeta;
-  status: "configurado" | "nao_configurado" | "erro";
+  status: "configurado" | "nao_configurado" | "indisponivel" | "erro";
   paymentMethodAdded?: boolean;
   primaryFundingId?: string | null;
   checkedAt: string;
@@ -199,23 +224,23 @@ export async function verificarFormaPagamentoMeta(
   }
 
   if (!response.ok) {
-    const error = mensagemErroMeta(json, response.status);
+    const analise = analisarErroMeta(json, response.status);
 
     await salvarResultado({
       integracao,
-      status: "erro",
+      status: analise.status,
       checkedAt,
-      error,
+      error: analise.mensagem,
       meta: json,
     });
 
     return {
       ok: false as const,
-      status: "erro" as const,
+      status: analise.status,
       paymentMethodAdded: Boolean(integracao.payment_method_added),
       primaryFundingId: integracao.meta_primary_funding_id || null,
       checkedAt,
-      error,
+      error: analise.mensagem,
       meta: json,
     };
   }
