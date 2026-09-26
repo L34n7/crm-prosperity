@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { criarCheckoutAssinaturaProsperityPay } from "@/lib/prosperity-pay/subscriptions";
-import { obterResumoLimitesWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import {
+  listarIntegracoesWhatsappDaEmpresa,
+  obterResumoLimitesWhatsapp,
+} from "@/lib/whatsapp/integracoes-multiplas";
 
 export async function POST() {
   try {
@@ -15,9 +18,15 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: "Usuário sem empresa vinculada." }, { status: 400 });
     }
 
-    const limites = await obterResumoLimitesWhatsapp(empresaId);
+    const [limites, integracoes] = await Promise.all([
+      obterResumoLimitesWhatsapp(empresaId),
+      listarIntegracoesWhatsappDaEmpresa(empresaId),
+    ]);
 
-    if (!limites.podeContratarNumeroAdicional) {
+    if (
+      integracoes.length >= limites.limiteTotalPermitido ||
+      !limites.podeContratarNumeroAdicional
+    ) {
       return NextResponse.json(
         {
           ok: false,
@@ -27,6 +36,9 @@ export async function POST() {
             limites.limiteNumerosAdicionais,
           numeros_adicionais_contratados:
             limites.numerosAdicionaisContratados,
+          limite_total_numeros_whatsapp:
+            limites.limiteTotalPermitido,
+          total_numeros_cadastrados: integracoes.length,
         },
         { status: 403 },
       );
