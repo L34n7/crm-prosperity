@@ -1291,7 +1291,7 @@ export default function EmpresasPage() {
                 <button
                   type="button"
                   className={styles.leadsModalClose}
-                  onClick={fecharLeadsEmpresa}
+                  onClick={fecharLeads}
                   disabled={leadsCarregando}
                   aria-label="Fechar leads"
                 >
