@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { criarCheckoutAssinaturaProsperityPay } from "@/lib/prosperity-pay/subscriptions";
+import { obterResumoLimitesWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 
 export async function POST() {
   try {
@@ -12,6 +13,23 @@ export async function POST() {
     const empresaId = contexto.usuario.empresa_id;
     if (!empresaId) {
       return NextResponse.json({ ok: false, error: "Usuário sem empresa vinculada." }, { status: 400 });
+    }
+
+    const limites = await obterResumoLimitesWhatsapp(empresaId);
+
+    if (!limites.podeContratarNumeroAdicional) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "O limite de números adicionais do WhatsApp para esta empresa foi atingido.",
+          limite_numeros_adicionais_whatsapp:
+            limites.limiteNumerosAdicionais,
+          numeros_adicionais_contratados:
+            limites.numerosAdicionaisContratados,
+        },
+        { status: 403 },
+      );
     }
 
     const intent = await criarCheckoutAssinaturaProsperityPay(empresaId, {
