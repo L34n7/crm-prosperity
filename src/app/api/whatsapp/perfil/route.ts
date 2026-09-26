@@ -679,6 +679,8 @@ export async function GET(req: NextRequest) {
         resumoLimitesWhatsapp.limiteBasePlano,
       limite_numeros_adicionais_whatsapp:
         resumoLimitesWhatsapp.limiteNumerosAdicionais,
+      limite_total_numeros_whatsapp:
+        resumoLimitesWhatsapp.limiteTotalPermitido,
       limite_total_permitido_whatsapp:
         resumoLimitesWhatsapp.limiteTotalPermitido,
       numeros_adicionais_contratados:
