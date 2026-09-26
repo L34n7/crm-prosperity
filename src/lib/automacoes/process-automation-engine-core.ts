@@ -6483,7 +6483,11 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
           "Esse horario acabou de ficar indisponivel. Escolha uma das novas opcoes:",
       });
 
-      if (resultadoNovasOpcoes?.saidaProcessada === "sem_horarios") {
+      if (
+        resultadoNovasOpcoes &&
+        "saidaProcessada" in resultadoNovasOpcoes &&
+        resultadoNovasOpcoes.saidaProcessada === "sem_horarios"
+      ) {
         return {
           ok: true,
           valido: false,
@@ -6655,7 +6659,11 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
       dataForcada: interpretacao.data,
     });
 
-    if (resultadoOpcoes?.saidaProcessada === "sem_horarios") {
+    if (
+      resultadoOpcoes &&
+      "saidaProcessada" in resultadoOpcoes &&
+      resultadoOpcoes.saidaProcessada === "sem_horarios"
+    ) {
       return {
         ok: true,
         valido: false,
