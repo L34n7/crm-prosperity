@@ -40,6 +40,9 @@ export type TemplateDisparo = {
 
 export type IntegracaoDisparo = {
   id: string;
+  status?: string | null;
+  phone_number_status?: string | null;
+  onboarding_erro?: string | null;
   phone_number_id?: string | null;
   token_ref?: string | null;
   config_json?: Record<string, unknown> | null;
