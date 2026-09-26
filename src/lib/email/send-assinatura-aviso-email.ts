@@ -4,7 +4,12 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-export type TipoAvisoAssinatura = "pre_vencimento" | "vencida" | "bloqueada";
+export type TipoAvisoAssinatura =
+  | "pre_vencimento"
+  | "vencida"
+  | "bloqueada"
+  | "reativacao_20d"
+  | "suspensao_50d";
 
 function escaparHtml(valor: string) {
   return String(valor || "")
@@ -48,6 +53,16 @@ export async function sendAssinaturaAvisoEmail(params: {
   const bloqueioData = new Date(vencimentoData.getTime() + 7 * 24 * 60 * 60 * 1000);
   const vencimento = formatarData(params.vencimentoEm);
   const bloqueio = formatarData(bloqueioData.toISOString());
+  const pausaRecebimentoData = new Date(
+    bloqueioData.getTime() + 30 * 24 * 60 * 60 * 1000
+  );
+  const suspensaoIntegracaoData = new Date(
+    bloqueioData.getTime() + 60 * 24 * 60 * 60 * 1000
+  );
+  const pausaRecebimento = formatarData(pausaRecebimentoData.toISOString());
+  const suspensaoIntegracao = formatarData(
+    suspensaoIntegracaoData.toISOString()
+  );
 
   const conteudo = {
     pre_vencimento: {
@@ -58,7 +73,7 @@ export async function sendAssinaturaAvisoEmail(params: {
       acao: "Antecipar pagamento",
       pontos: [
         `Até ${vencimento}, o sistema continuará funcionando normalmente.`,
-        "Se o pagamento não for identificado, a assinatura ficará vencida, os tokens atuais expirarão e novos tokens não serão liberados.",
+        "Se o pagamento não for identificado, a assinatura ficará vencida e a franquia mensal de IA ficará indisponível. Tokens avulsos permanecem preservados.",
         "Enquanto a assinatura estiver vencida, o sistema continuará exibindo avisos sobre a pendência.",
         `Se a pendência continuar por 7 dias, até ${bloqueio}, as automações serão pausadas, os disparos e os demais módulos serão bloqueados.`,
         "Após o pagamento, a assinatura será regularizada e os tokens serão renovados imediatamente.",
@@ -72,7 +87,7 @@ export async function sendAssinaturaAvisoEmail(params: {
       acao: "Regularizar mensalidade",
       pontos: [
         `O vencimento ocorreu em ${vencimento}.`,
-        "Os tokens expiraram e não serão renovados enquanto a assinatura permanecer vencida.",
+        "A franquia mensal de IA está indisponível enquanto a assinatura permanecer vencida. Tokens avulsos permanecem preservados.",
         "O sistema continuará exibindo avisos de vencimento enquanto houver pendência.",
         `Se o pagamento não for identificado até ${bloqueio}, as automações serão pausadas, não será possível fazer disparos e os módulos serão bloqueados.`,
         "Após o bloqueio, somente a página de Conversas ficará disponível, permitindo apenas responder conversas que já estiverem abertas.",
@@ -87,11 +102,39 @@ export async function sendAssinaturaAvisoEmail(params: {
       acao: "Regularizar e reativar acesso",
       pontos: [
         `O vencimento original foi em ${vencimento}.`,
-        "Os tokens expiraram e permanecerão indisponíveis enquanto a assinatura estiver bloqueada.",
+        "A franquia mensal de IA permanece indisponível enquanto a assinatura estiver bloqueada. Tokens avulsos ficam preservados para a reativação.",
         "As automações foram pausadas e não é possível realizar disparos.",
         "Todos os módulos foram bloqueados, exceto a página de Conversas, que permite apenas responder conversas que já estiverem abertas.",
         "Os avisos de inadimplência continuarão sendo exibidos enquanto houver pendência.",
         "Assim que o pagamento for confirmado, a assinatura será reativada, os tokens serão renovados e o funcionamento do sistema voltará ao normal.",
+      ],
+    },
+    reativacao_20d: {
+      etiqueta: "Queremos você de volta",
+      titulo: "Sentimos sua falta na Prosperity",
+      cor: "#0f766e",
+      texto: "Sua estrutura continua preservada no CRM Prosperity e você pode retomar o atendimento sem começar tudo novamente.",
+      acao: "Reativar minha conta",
+      pontos: [
+        `Sua conta está bloqueada desde ${bloqueio}.`,
+        "Ao reativar, você volta a ter acesso às automações, IA, atendimento organizado, disparos e demais recursos do seu plano.",
+        "Se a conta permanecer bloqueada por 30 dias, novas mensagens do WhatsApp deixarão de ser processadas e armazenadas pelo CRM.",
+        "Os dados e tokens avulsos já existentes continuam preservados durante o bloqueio.",
+        "Assim que o pagamento for confirmado, a assinatura volta a ficar ativa automaticamente.",
+      ],
+    },
+    suspensao_50d: {
+      etiqueta: "Aviso de suspensão",
+      titulo: "Sua integração será suspensa em 10 dias",
+      cor: "#b42318",
+      texto: "Sua conta permanece bloqueada e está próxima da suspensão automática da integração do WhatsApp por inadimplência prolongada.",
+      acao: "Reativar antes da suspensão",
+      pontos: [
+        `O recebimento de novas mensagens no CRM está pausado desde ${pausaRecebimento}.`,
+        `Se a pendência continuar, a integração será suspensa em ${suspensaoIntegracao}.`,
+        "A suspensão não remove o número, WABA, credenciais ou configuração da Meta; ela apenas interrompe o uso da integração pelo CRM.",
+        "Ao regularizar a assinatura, uma integração suspensa por inadimplência é reativada automaticamente.",
+        "Se precisar de ajuda para retornar, nossa equipe está à disposição.",
       ],
     },
   }[params.tipo];
