@@ -17,11 +17,11 @@ function permissaoDaOperacao(operacao: string) {
     return "agendas.visualizar";
   }
 
-  if (operacao === "salvar_agendamento") {
-    return "agendas.gerenciar_agendamentos";
+  if (operacao === "salvar_agendamento" || operacao === "salvar_tipo") {
+    return "agendas.editar";
   }
 
-  return "agendas.editar";
+  return "agendas.visualizar";
 }
 
 export async function POST(request: NextRequest) {
