@@ -418,6 +418,17 @@
   border-color: var(--crm-primary-border);
 }
 
+.defaultFlowScopeBadge {
+  min-height: 24px;
+  padding: 0 10px;
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
 .badgeYellow {
   background: var(--crm-warning-bg);
   color: var(--crm-warning-text);
@@ -2927,6 +2938,16 @@
   line-height: 1.45;
 }
 
+.switchField:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.defaultFlowConflictText {
+  color: var(--crm-danger-text) !important;
+  font-weight: 700;
+}
+
 .delayField {
   display: grid;
   gap: 6px;
@@ -3335,9 +3356,11 @@
   align-items: center;
   height: 22px;
   padding: 0 9px;
+  border: 1px solid #1d4ed8;
   border-radius: 999px;
-  background: var(--crm-primary);
-  color: var(--crm-text-inverse);
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
