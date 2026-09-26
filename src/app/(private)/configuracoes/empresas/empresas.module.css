@@ -1434,3 +1434,260 @@
     bottom: calc(142px + env(safe-area-inset-bottom));
   }
 }
+
+
+.dangerOutlineButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-surface);
+  color: var(--crm-danger-text);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.dangerOutlineButton:hover {
+  transform: translateY(-1px);
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-text);
+}
+
+.dangerButton {
+  border: 1px solid var(--crm-danger-text);
+  background: var(--crm-danger-text);
+  color: var(--crm-text-inverse);
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 850;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.dangerButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.deleteCompanyOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 8, 12, 0.8);
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+}
+
+.deleteCompanyModal {
+  position: relative;
+  width: min(100%, 660px);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 30px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 24px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.deleteCompanyClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.deleteCompanyClose:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.deleteCompanyEyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 999px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.deleteCompanyModal h2 {
+  margin: 0;
+  padding-right: 48px;
+  color: var(--crm-text-strong);
+  font-size: 29px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.deleteCompanyName {
+  margin: 7px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.deleteCompanyWarning {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 16px;
+  background: var(--crm-danger-bg);
+}
+
+.deleteCompanyWarning strong {
+  display: block;
+  color: var(--crm-danger-text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.deleteCompanyWarning p {
+  margin: 6px 0 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.deleteCompanyLoading,
+.deleteCompanyError {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.deleteCompanyLoading {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+}
+
+.deleteCompanyError {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-weight: 700;
+}
+
+.deleteCompanyImpact {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.deleteCompanyImpact > div {
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-subtle);
+}
+
+.deleteCompanyImpact span {
+  display: block;
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.deleteCompanyImpact strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.deleteCompanyConfirm {
+  margin-top: 18px;
+}
+
+.deleteCompanyConfirm label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 8px;
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.deleteCompanyConfirm label strong {
+  color: var(--crm-danger-text);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.deleteCompanyActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .deleteCompanyOverlay {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .deleteCompanyModal {
+    padding: 24px 18px 20px;
+    border-radius: 22px;
+  }
+
+  .deleteCompanyModal h2 {
+    font-size: 25px;
+  }
+
+  .deleteCompanyImpact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .deleteCompanyActions {
+    flex-direction: column-reverse;
+  }
+
+  .deleteCompanyActions button {
+    width: 100%;
+  }
+}
