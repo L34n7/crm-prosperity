@@ -924,7 +924,7 @@
 }
 
 .leadsModal {
-  width: min(100%, 1240px);
+  width: min(96vw, 1580px);
   max-height: 90vh;
   overflow: hidden;
   display: flex;
@@ -1078,7 +1078,8 @@
 }
 
 .leadsTableScroll {
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
   border: 1px solid var(--crm-border);
   border-radius: 17px;
@@ -1087,9 +1088,40 @@
 
 .leadsTable {
   width: 100%;
-  min-width: 980px;
+  min-width: 0;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
+}
+
+.leadsTable th:nth-child(1),
+.leadsTable td:nth-child(1) {
+  width: 18%;
+}
+
+.leadsTable th:nth-child(2),
+.leadsTable td:nth-child(2) {
+  width: 18%;
+}
+
+.leadsTable th:nth-child(3),
+.leadsTable td:nth-child(3) {
+  width: 23%;
+}
+
+.leadsTable th:nth-child(4),
+.leadsTable td:nth-child(4) {
+  width: 13%;
+}
+
+.leadsTable th:nth-child(5),
+.leadsTable td:nth-child(5) {
+  width: 14%;
+}
+
+.leadsTable th:nth-child(6),
+.leadsTable td:nth-child(6) {
+  width: 14%;
 }
 
 .leadsTable th {
@@ -1283,6 +1315,17 @@
 @keyframes leadsSpin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1100px) {
+  .leadsTableScroll {
+    overflow-x: auto;
+  }
+
+  .leadsTable {
+    min-width: 1040px;
+    table-layout: auto;
   }
 }
 
