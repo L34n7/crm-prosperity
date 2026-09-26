@@ -1,6 +1,7 @@
 import type {
   EscopoIntegracoesFluxo,
   EscopoIntegracoesModo,
+  Fluxo,
   IntegracaoWhatsappOpcao,
   TemplateWhatsappOpcao,
 } from "./types";
@@ -66,6 +67,44 @@ export function escoposIntegracaoConflitam(
 
   const idsExistentes = new Set(existente.ids);
   return atual.ids.some((id) => idsExistentes.has(id));
+}
+
+export function rotuloFluxoPadraoIntegracoes(
+  fluxo: Fluxo,
+  integracoes: IntegracaoWhatsappOpcao[]
+) {
+  if (!fluxo.fluxo_padrao) return "";
+
+  const escopo = normalizarEscopoIntegracoesFluxo(fluxo.configuracao_json);
+
+  if (escopo.modo !== "selecionadas") {
+    return integracoes.length === 1 ? "Padrão • 1º" : "Padrão • Todas";
+  }
+
+  const posicoes = Array.from(
+    new Set(
+      escopo.ids
+        .map((integracaoId) => {
+          const indice = integracoes.findIndex(
+            (integracao) => integracao.id === integracaoId
+          );
+
+          if (indice < 0) return null;
+
+          const posicao = Number(integracoes[indice]?.posicao);
+          return Number.isFinite(posicao) && posicao > 0
+            ? Math.floor(posicao)
+            : indice + 1;
+        })
+        .filter((posicao): posicao is number => posicao !== null)
+    )
+  ).sort((a, b) => a - b);
+
+  if (posicoes.length === 0) {
+    return "Padrão";
+  }
+
+  return `Padrão • ${posicoes.map((posicao) => `${posicao}º`).join(" · ")}`;
 }
 
 export function rotuloIntegracaoWhatsapp(
