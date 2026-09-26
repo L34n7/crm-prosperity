@@ -1957,7 +1957,10 @@ function FluxosPageContent() {
           : tipoNoOrigem === TIPO_NO_AGENDA_ESCOLHER_HORARIO
             ? saidaAgendaEscolherHorarioPorValor(
                 conexao.condicao_json?.valor
-              )?.valor
+              )?.valor ||
+              (conexao.condicao_json?.tipo === "sempre"
+                ? "slot_escolhido"
+                : undefined)
             : undefined,
       type: "default",
       ...( {
@@ -2111,14 +2114,21 @@ const onConnect = useCallback(
 
     if (
       saidaFixa &&
-      edges.some(
-        (edge) =>
-          edge.source === connection.source &&
-          String(
-            (edge.data as EdgeDataConexao | undefined)?.condicao_json
-              ?.valor || ""
-          ) === saidaFixa.valor
-      )
+      edges.some((edge) => {
+        if (edge.source !== connection.source) return false;
+
+        const condicao =
+          (edge.data as EdgeDataConexao | undefined)?.condicao_json || {};
+        const valor = String(condicao.valor || "").trim();
+
+        if (valor === saidaFixa.valor) return true;
+
+        return (
+          origemAgendaEscolherHorario &&
+          saidaFixa.valor === "slot_escolhido" &&
+          String(condicao.tipo || "").trim() === "sempre"
+        );
+      })
     ) {
       setErro(
         `A saída "${saidaFixa.titulo}" já está conectada.`
