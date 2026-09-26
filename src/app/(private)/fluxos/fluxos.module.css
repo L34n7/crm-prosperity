@@ -496,6 +496,14 @@
   gap: 5px;
 }
 
+.editorFlowBadges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 .infoAlertIcon {
   position: relative;
   display: inline-flex;
