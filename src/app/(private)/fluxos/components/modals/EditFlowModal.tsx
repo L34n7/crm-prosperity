@@ -210,16 +210,21 @@ export default function EditFlowModal({
             />
 
             <div>
-              <strong>Tornar este fluxo padrão</strong>
+              <strong>Tornar padrão neste escopo</strong>
               <p>
                 O fluxo padrão é iniciado automaticamente quando nenhuma
-                palavra-chave de outro fluxo for encontrada.
+                palavra-chave de outro fluxo for encontrada nas integrações
+                selecionadas.
+              </p>
+              <p>
+                Cada integração pode ter apenas 1 fluxo padrão, mas um mesmo
+                fluxo pode atender várias integrações.
               </p>
 
               {!fluxoPadrao && outroFluxoPadraoExiste && (
-                <p className={styles.help}>
-                  Já existe outro fluxo padrão nesta empresa. Só pode existir
-                  1 fluxo padrão por empresa.
+                <p className={styles.defaultFlowConflictText}>
+                  Uma ou mais integrações deste escopo já possuem outro fluxo
+                  padrão. Ajuste o escopo para remover o conflito.
                 </p>
               )}
             </div>
@@ -230,12 +235,13 @@ export default function EditFlowModal({
               <div className={styles.defaultFlowIcon}>↪</div>
               <div className={styles.defaultFlowContent}>
                 <div className={styles.defaultFlowTop}>
-                  <strong>Fluxo padrão de fallback</strong>
+                  <strong>Fluxo padrão do escopo</strong>
                   <span className={styles.defaultFlowBadge}>Padrão</span>
                 </div>
                 <p>
                   Este fluxo é iniciado automaticamente quando nenhuma
-                  palavra-chave de outro fluxo for encontrada.
+                  palavra-chave de outro fluxo for encontrada nas integrações
+                  deste escopo.
                 </p>
                 <p>Por isso, ele não usa gatilhos próprios.</p>
               </div>
