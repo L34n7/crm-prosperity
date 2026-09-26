@@ -26,6 +26,8 @@ const supabaseAdmin = getSupabaseAdmin();
 
 const CONSTRAINT_PALAVRA_CHAVE_UNICA =
   "automacao_gatilhos_empresa_palavra_chave_unique";
+const CONSTRAINT_FLUXO_PADRAO_POR_INTEGRACAO =
+  "automacao_fluxos_padrao_por_integracao_unique";
 
 type GatilhoNovoFluxo = {
   tipo_gatilho: string;
@@ -60,6 +62,43 @@ function erroDePalavraChaveDuplicada(error: unknown) {
     erro?.code === "23505" &&
     (erro.constraint === CONSTRAINT_PALAVRA_CHAVE_UNICA ||
       String(erro.message || "").includes("palavra-chave"))
+  );
+}
+
+function erroDeFluxoPadraoConflitante(error: unknown) {
+  const erro =
+    error && typeof error === "object"
+      ? (error as {
+          code?: string;
+          constraint?: string;
+          message?: string;
+          details?: string;
+        })
+      : null;
+
+  const textoErro = [
+    erro?.constraint,
+    erro?.message,
+    erro?.details,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    erro?.code === "23505" &&
+    textoErro.includes(CONSTRAINT_FLUXO_PADRAO_POR_INTEGRACAO)
+  );
+}
+
+function respostaFluxoPadraoConflitante() {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: "FLUXO_PADRAO_INTEGRACAO_CONFLITANTE",
+      error:
+        "Uma ou mais integrações selecionadas já possuem outro fluxo padrão. Cada integração pode ter apenas 1 fluxo padrão.",
+    },
+    { status: 409 }
   );
 }
 
@@ -956,13 +995,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (fluxoPadraoExistente) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Já existe um fluxo padrão cadastrado.",
-          },
-          { status: 400 }
-        );
+        return respostaFluxoPadraoConflitante();
       }
     }
 
@@ -1003,6 +1036,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
+      if (erroDeFluxoPadraoConflitante(error)) {
+        return respostaFluxoPadraoConflitante();
+      }
+
       return NextResponse.json(
         { ok: false, error: `Erro ao criar fluxo: ${error.message}` },
         { status: 500 }
@@ -1307,14 +1344,7 @@ export async function PATCH(req: NextRequest) {
       });
 
       if (fluxoPadraoExistente) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "Já existe um fluxo padrão cadastrado para este escopo de integração.",
-          },
-          { status: 400 }
-        );
+        return respostaFluxoPadraoConflitante();
       }
     }
 
@@ -1383,6 +1413,10 @@ export async function PATCH(req: NextRequest) {
       .single();
 
     if (error) {
+      if (erroDeFluxoPadraoConflitante(error)) {
+        return respostaFluxoPadraoConflitante();
+      }
+
       return NextResponse.json(
         { ok: false, error: `Erro ao atualizar fluxo: ${error.message}` },
         { status: 500 }
