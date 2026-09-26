@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { CopyPlus } from "lucide-react";
-import type { Fluxo } from "../types";
+import type { Fluxo, IntegracaoWhatsappOpcao } from "../types";
 import { AVISO_FLUXO_CONEXAO_ERRO_ARQUIVO_IA } from "../constants";
+import { rotuloFluxoPadraoIntegracoes } from "../fluxo-integracoes";
 import styles from "../fluxos.module.css";
 
 export type FiltroStatusFluxo =
@@ -23,6 +24,7 @@ type MenuFluxo = {
 
 type FluxosSidebarProps = {
   fluxos: Fluxo[];
+  integracoesWhatsapp: IntegracaoWhatsappOpcao[];
   fluxoSelecionadoId?: string | null;
   carregandoFluxos: boolean;
   buscaFluxo: string;
@@ -58,6 +60,7 @@ function badgeClass(status: string) {
 
 export default function FluxosSidebar({
   fluxos,
+  integracoesWhatsapp,
   fluxoSelecionadoId,
   carregandoFluxos,
   buscaFluxo,
@@ -231,8 +234,14 @@ export default function FluxosSidebar({
                       )}
 
                       {fluxo.fluxo_padrao && (
-                        <span className={`${styles.badge} ${styles.badgeBlue}`}>
-                          padrão
+                        <span
+                          className={`${styles.badge} ${styles.defaultFlowScopeBadge}`}
+                          title="Fluxo padrão das integrações indicadas"
+                        >
+                          {rotuloFluxoPadraoIntegracoes(
+                            fluxo,
+                            integracoesWhatsapp
+                          )}
                         </span>
                       )}
 
