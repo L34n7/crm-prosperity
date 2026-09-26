@@ -24,7 +24,6 @@ export type IntegracaoWhatsappResumo = {
 type EmpresaLimiteWhatsapp = {
   id: string;
   limite_integracoes_whatsapp?: number | null;
-  limite_numeros_adicionais_whatsapp?: number | null;
   limite_total_numeros_whatsapp?: number | null;
   planos?: {
     limite_integracoes_whatsapp?: number | null;
@@ -37,11 +36,6 @@ function normalizarQuantidadeMinimaUm(valor: unknown) {
   return Math.max(Math.floor(numero), 1);
 }
 
-function normalizarQuantidadeNaoNegativa(valor: unknown, fallback = 0) {
-  const numero = Number(valor);
-  if (!Number.isFinite(numero)) return fallback;
-  return Math.max(Math.floor(numero), 0);
-}
 
 function normalizarPlano(valor: unknown) {
   if (Array.isArray(valor)) return valor[0] || null;
@@ -70,7 +64,7 @@ export async function obterResumoLimitesWhatsapp(empresaId: string) {
   const { data, error } = await supabaseAdmin
     .from("empresas")
     .select(
-      "id, limite_integracoes_whatsapp, limite_total_numeros_whatsapp, limite_numeros_adicionais_whatsapp, planos:plano_id(limite_integracoes_whatsapp)"
+      "id, limite_integracoes_whatsapp, limite_total_numeros_whatsapp, planos:plano_id(limite_integracoes_whatsapp)"
     )
     .eq("id", empresaId)
     .maybeSingle<EmpresaLimiteWhatsapp>();
