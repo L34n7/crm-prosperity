@@ -73,6 +73,11 @@ import {
   saidaConsultaEstoquePorValor,
   validarConsultasEstoqueAntesDeAtivar,
 } from "./consultar-estoque-editor";
+import {
+  SAIDAS_AGENDA_ESCOLHER_HORARIO,
+  TIPO_NO_AGENDA_ESCOLHER_HORARIO,
+  saidaAgendaEscolherHorarioPorValor,
+} from "./agenda-escolher-horario-editor";
 import useFluxoMidias from "./hooks/useFluxoMidias";
 import {
   montarPreviaWhatsappFluxo,
@@ -203,7 +208,12 @@ function tipoNoEsperaResposta(tipoNo: string) {
 }
 
 function tipoCondicaoPadraoPorTipoNo(tipoNo: string) {
-  if (tipoNo === TIPO_NO_CONSULTAR_ESTOQUE) return "resposta_igual";
+  if (
+    tipoNo === TIPO_NO_CONSULTAR_ESTOQUE ||
+    tipoNo === TIPO_NO_AGENDA_ESCOLHER_HORARIO
+  ) {
+    return "resposta_igual";
+  }
   if (tipoNo === "capturar_resposta") return "sempre";
 
   return tipoNoEsperaResposta(tipoNo) ? "resposta_contem" : "sempre";
@@ -1944,7 +1954,11 @@ function FluxosPageContent() {
       sourceHandle:
         tipoNoOrigem === TIPO_NO_CONSULTAR_ESTOQUE
           ? saidaConsultaEstoquePorValor(conexao.condicao_json?.valor)?.valor
-          : undefined,
+          : tipoNoOrigem === TIPO_NO_AGENDA_ESCOLHER_HORARIO
+            ? saidaAgendaEscolherHorarioPorValor(
+                conexao.condicao_json?.valor
+              )?.valor
+            : undefined,
       type: "default",
       ...( {
         pathOptions: {
@@ -2066,6 +2080,8 @@ const onConnect = useCallback(
 
     const origemConsultaEstoque =
       tipoOrigem === TIPO_NO_CONSULTAR_ESTOQUE;
+    const origemAgendaEscolherHorario =
+      tipoOrigem === TIPO_NO_AGENDA_ESCOLHER_HORARIO;
 
     const saidaEstoque = origemConsultaEstoque
       ? SAIDAS_CONSULTA_ESTOQUE.find(
@@ -2073,37 +2089,49 @@ const onConnect = useCallback(
             saida.valor === String(connection.sourceHandle || "")
         ) || null
       : null;
+    const saidaAgendaEscolherHorario = origemAgendaEscolherHorario
+      ? SAIDAS_AGENDA_ESCOLHER_HORARIO.find(
+          (saida) =>
+            saida.valor === String(connection.sourceHandle || "")
+        ) || null
+      : null;
+    const saidaFixa = saidaEstoque || saidaAgendaEscolherHorario;
 
-    if (origemConsultaEstoque && !saidaEstoque) {
+    if (
+      (origemConsultaEstoque || origemAgendaEscolherHorario) &&
+      !saidaFixa
+    ) {
       setErro(
-        "Escolha uma das quatro saídas do bloco Consultar estoque."
+        origemConsultaEstoque
+          ? "Escolha uma das saídas do bloco Consultar estoque."
+          : "Escolha uma das saídas do bloco Escolher horário."
       );
       return;
     }
 
     if (
-      saidaEstoque &&
+      saidaFixa &&
       edges.some(
         (edge) =>
           edge.source === connection.source &&
           String(
             (edge.data as EdgeDataConexao | undefined)?.condicao_json
               ?.valor || ""
-          ) === saidaEstoque.valor
+          ) === saidaFixa.valor
       )
     ) {
       setErro(
-        `A saída "${saidaEstoque.titulo}" já está conectada.`
+        `A saída "${saidaFixa.titulo}" já está conectada.`
       );
       return;
     }
 
     const usarIaPadrao =
-      !origemConsultaEstoque &&
+      !saidaFixa &&
       tipoOrigem === TIPO_NO_PERGUNTA_LIVRE_IA;
 
     const opcaoRespostaPadrao =
-      saidaEstoque ||
+      saidaFixa ||
       proximaOpcaoRespostaDisponivel(nodeOrigem, edges);
 
       const tipoCondicaoPadrao = tipoCondicaoPadraoPorTipoNo(tipoOrigem);
