@@ -292,6 +292,7 @@ export default function WhatsappPerfilPage() {
     useState<number | null>(null);
   const [podeCadastrarNovaIntegracao, setPodeCadastrarNovaIntegracao] =
     useState(false);
+  const [podeExibirAddNumero, setPodeExibirAddNumero] = useState(false);
   const [cadastrandoIntegracao, setCadastrandoIntegracao] = useState(false);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
   const [abrindoCheckoutAdicional, setAbrindoCheckoutAdicional] = useState(false);
@@ -501,6 +502,7 @@ export default function WhatsappPerfilPage() {
         typeof json.proxima_posicao === "number" ? json.proxima_posicao : null
       );
       setPodeCadastrarNovaIntegracao(json.pode_cadastrar_nova === true);
+      setPodeExibirAddNumero(json.pode_exibir_add_numero === true);
 
       const novaIntegracaoId = integracaoAtualizada?.id || "";
 
@@ -1081,14 +1083,16 @@ export default function WhatsappPerfilPage() {
             </div>
 
             <div className={`${styles.newConnectionArea} ${styles.hiddenLegacyConnectionArea}`}>
-              <button
-                type="button"
-                className={styles.newConnectionButton}
-                onClick={cadastrarNovaIntegracao}
-                disabled={cadastrandoIntegracao}
-              >
-                {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
-              </button>
+              {podeExibirAddNumero && (
+                <button
+                  type="button"
+                  className={styles.newConnectionButton}
+                  onClick={cadastrarNovaIntegracao}
+                  disabled={cadastrandoIntegracao}
+                >
+                  {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
+                </button>
+              )}
 
               {deveMostrarControlesMultiIntegracao && (
                 <span>
@@ -1100,18 +1104,20 @@ export default function WhatsappPerfilPage() {
             </div>
 
             <div className={`${styles.newConnectionArea} ${styles.hiddenLegacyConnectionArea}`}>
-              <button
-                type="button"
-                className={styles.newConnectionButton}
-                onClick={cadastrarNovaIntegracao}
-                disabled={cadastrandoIntegracao}
-              >
-                {cadastrandoIntegracao
-                  ? "Criando..."
-                  : proximaPosicaoIntegracao
-                  ? `Cadastrar nÃºmero ${proximaPosicaoIntegracao}`
-                  : "Limite de nÃºmeros atingido"}
-              </button>
+              {podeExibirAddNumero && (
+                <button
+                  type="button"
+                  className={styles.newConnectionButton}
+                  onClick={cadastrarNovaIntegracao}
+                  disabled={cadastrandoIntegracao}
+                >
+                  {cadastrandoIntegracao
+                    ? "Criando..."
+                    : proximaPosicaoIntegracao
+                    ? `Cadastrar nÃºmero ${proximaPosicaoIntegracao}`
+                    : "Limite de nÃºmeros atingido"}
+                </button>
+              )}
 
               <span>
                 {integracoes.length} de {limiteIntegracoesWhatsapp} integraÃ§Ã£o
@@ -1441,14 +1447,16 @@ export default function WhatsappPerfilPage() {
                 Desconectar integração
               </button>
 
-              <button
-                type="button"
-                className={styles.addNumberButton}
-                onClick={cadastrarNovaIntegracao}
-                disabled={cadastrandoIntegracao}
-              >
-                {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
-              </button>
+              {podeExibirAddNumero && (
+                <button
+                  type="button"
+                  className={styles.addNumberButton}
+                  onClick={cadastrarNovaIntegracao}
+                  disabled={cadastrandoIntegracao}
+                >
+                  {cadastrandoIntegracao ? "Criando..." : labelAdicionarNumero}
+                </button>
+              )}
             </div>
             </aside>
 
