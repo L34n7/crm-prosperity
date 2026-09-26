@@ -826,6 +826,9 @@ async function buscarIntegracao(integracaoId: string, empresaId: string) {
 
   return {
     id: data.id,
+    status: data.status || null,
+    phone_number_status: data.phone_number_status || null,
+    onboarding_erro: data.onboarding_erro || null,
     phone_number_id: data.phone_number_id || null,
     token_ref: data.token_ref || null,
     config_json: objeto(data.config_json),
@@ -951,6 +954,48 @@ async function contarFalhasMetaCampanha(
   return Number(count || 0);
 }
 
+async function contarFalhasConsecutivasMetaCampanha(
+  campanhaId: string,
+  erroCodigoMeta: number,
+  limite = 3
+) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_disparo_itens")
+    .select("status, erro_codigo_meta, processed_at")
+    .eq("campanha_id", campanhaId)
+    .in("status", ["enviado", "falha"])
+    .order("processed_at", { ascending: false, nullsFirst: false })
+    .limit(Math.max(1, limite));
+
+  if (error) {
+    console.error(
+      "[WHATSAPP DISPARO FILA] Erro ao contar falhas consecutivas Meta:",
+      {
+        campanhaId,
+        erroCodigoMeta,
+        erro: error,
+      }
+    );
+    return null;
+  }
+
+  let consecutivas = 0;
+
+  for (const item of data || []) {
+    if (
+      item.status === "falha" &&
+      Number(item.erro_codigo_meta || 0) === erroCodigoMeta
+    ) {
+      consecutivas += 1;
+      continue;
+    }
+
+    break;
+  }
+
+  return consecutivas;
+}
+
 async function avaliarCircuitBreakerCampanha(params: {
   campanhaId: string;
   empresaId: string;
@@ -960,6 +1005,31 @@ async function avaliarCircuitBreakerCampanha(params: {
 }) {
   const erroCodigo = params.erroCodigoMeta || null;
   const mensagem = params.erroMensagem || "Campanha pausada automaticamente.";
+
+  if (erroCodigo === 133010) {
+    const falhasConsecutivas = await contarFalhasConsecutivasMetaCampanha(
+      params.campanhaId,
+      133010,
+      3
+    );
+
+    if (falhasConsecutivas === null || falhasConsecutivas < 3) {
+      return;
+    }
+
+    await cancelarCampanhaDisparo({
+      campanhaId: params.campanhaId,
+      empresaId: params.empresaId,
+      usuarioId: null,
+      motivo:
+        "Campanha cancelada automaticamente após 3 falhas consecutivas Meta 133010 (Account not registered). " +
+        "A integração precisa ser reconectada ou regularizada antes de novos disparos.",
+      automatico: true,
+      erroCodigoMeta: 133010,
+      ocorrenciasErroMeta: falhasConsecutivas,
+    });
+    return;
+  }
 
   if (erroCodigo === 131031) {
     await pausarCampanha({
@@ -1218,6 +1288,27 @@ async function processarItemDisparo(item: DisparoItemRow) {
     buscarTemplate(campanha.template_id, campanha.empresa_id),
     buscarIntegracao(campanha.integracao_whatsapp_id, campanha.empresa_id),
   ]);
+
+  const integracaoDesconectada =
+    String(integracao.status || "").toLowerCase() === "desconectada" ||
+    String(integracao.status || "").toLowerCase() === "disconnected" ||
+    String(integracao.phone_number_status || "").toUpperCase() ===
+      "DISCONNECTED";
+
+  if (integracaoDesconectada) {
+    const motivo =
+      "Campanha cancelada porque a integração WhatsApp está desconectada. Reconecte o número antes de realizar novos disparos.";
+
+    await cancelarCampanhaDisparo({
+      campanhaId: campanha.id,
+      empresaId: campanha.empresa_id,
+      usuarioId: null,
+      motivo,
+      automatico: true,
+    });
+
+    return { status: "cancelado" as const };
+  }
 
   const classificacaoLista = await classificarDestinatariosPorOptIn({
     supabase: supabaseAdmin,
