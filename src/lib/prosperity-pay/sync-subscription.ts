@@ -286,16 +286,30 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     Boolean(periodStart) &&
     new Date(String(periodStart)).getTime() > Date.now() + 60_000;
   const additionalNumbers = addonWhatsappQuantity(payload);
-  const baseWhatsappLimit = Math.max(1, Number((plan as any)?.limite_integracoes_whatsapp || 1));
-  const whatsappLimit = Math.min(10, baseWhatsappLimit + additionalNumbers);
+  const baseWhatsappLimit = Math.max(
+    1,
+    Number((plan as any)?.limite_integracoes_whatsapp || 1),
+  );
   const planTokenLimitRaw = (plan as any)?.limite_tokens_ia;
-  const planTokenLimit = planTokenLimitRaw == null ? null : Number(planTokenLimitRaw);
+  const planTokenLimit =
+    planTokenLimitRaw == null ? null : Number(planTokenLimitRaw);
 
   const currentCompany = await supabase.from("empresas")
-    .select("assinatura_metadata_json")
+    .select("assinatura_metadata_json,limite_numeros_adicionais_whatsapp")
     .eq("id", empresaId)
     .single();
   if (currentCompany.error) throw currentCompany.error;
+
+  const additionalNumbersLimit = Math.max(
+    0,
+    Number(currentCompany.data?.limite_numeros_adicionais_whatsapp ?? 5),
+  );
+  const effectiveAdditionalNumbers = Math.min(
+    additionalNumbers,
+    additionalNumbersLimit,
+  );
+  const whatsappLimit =
+    baseWhatsappLimit + effectiveAdditionalNumbers;
 
   const existingMetadata =
     currentCompany.data?.assinatura_metadata_json &&
@@ -348,6 +362,8 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
       current_amount_cents: Number(subscription?.current_amount_cents || 0) || null,
       cycle_number: Number(subscription?.cycle_number || 0) || null,
       whatsapp_addon_quantity: additionalNumbers,
+      whatsapp_addon_quantity_effective: effectiveAdditionalNumbers,
+      whatsapp_addon_limit: additionalNumbersLimit,
       last_subscription_event: payload.event,
       last_subscription_event_id: payload.event_id,
       ...(payload.event === "subscription.renewed"
@@ -398,5 +414,7 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     planId: mapping.plano_id,
     whatsappLimit,
     additionalNumbers,
+    effectiveAdditionalNumbers,
+    additionalNumbersLimit,
   };
 }
