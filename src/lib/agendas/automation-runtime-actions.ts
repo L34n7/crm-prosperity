@@ -208,6 +208,17 @@ async function reabrirUltimoProtocolo(context: Context) { // CRM_AGENDA_DAY_BREA
 }
 
 export async function startPostFlow(context: Context) {
+  const appointmentStatus = String(context.appointment.status || "").trim();
+
+  if (["cancelado", "faltou"].includes(appointmentStatus)) {
+    throw new AgendaAutomationError(
+      appointmentStatus === "faltou"
+        ? "O pós-atendimento não será enviado porque o cliente foi marcado como não compareceu."
+        : "O pós-atendimento não será enviado porque o agendamento foi cancelado.",
+      { cancel: true }
+    );
+  }
+
   if (!context.flow || context.flow.status !== "ativo") {
     throw new AgendaAutomationError(
       "O fluxo de pós-atendimento não está ativo ou não foi encontrado.",
