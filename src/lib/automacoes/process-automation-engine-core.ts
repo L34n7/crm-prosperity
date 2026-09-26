@@ -9173,6 +9173,14 @@ async function registrarAvaliacaoAutomacao(params: {
     };
   }
 
+  const metadataExecucao = execucao.metadata_json || {};
+  const agendaAgendamentoId =
+    String(
+      metadataExecucao.agenda_agendamento_id ||
+        metadataExecucao?.variaveis?.agenda_agendamento_id ||
+        ""
+    ).trim() || null;
+
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
     empresaId,
     conversaId,
@@ -9188,6 +9196,7 @@ async function registrarAvaliacaoAutomacao(params: {
       automacao_execucao_id: execucao.id,
       automacao_fluxo_id: execucao.fluxo_id,
       automacao_no_id: no.id,
+      agenda_agendamento_id: agendaAgendamentoId,
       numero_cliente: numeroDestino,
       protocolo: protocoloAtivo.protocolo,
       nota,
@@ -9195,6 +9204,14 @@ async function registrarAvaliacaoAutomacao(params: {
       metadata_json: {
         resposta_original: resposta,
         configuracao_no: no.configuracao_json || {},
+        ...(agendaAgendamentoId
+          ? {
+              agenda_agendamento_id: agendaAgendamentoId,
+              agenda_id: metadataExecucao.agenda_id || null,
+              agenda_automacao_execucao_id:
+                metadataExecucao.agenda_automacao_execucao_id || null,
+            }
+          : {}),
       },
     })
     .select("id")
@@ -9320,11 +9337,27 @@ async function registrarComentarioAvaliacaoAutomacao(params: {
     };
   }
 
+  const { data: avaliacaoAtual, error: avaliacaoAtualError } =
+    await supabaseAdmin
+      .from("atendimento_avaliacoes")
+      .select("metadata_json")
+      .eq("id", avaliacaoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+  if (avaliacaoAtualError) {
+    console.warn(
+      "[AUTOMATION_ENGINE] Não foi possível carregar metadata anterior da avaliação:",
+      avaliacaoAtualError
+    );
+  }
+
   const { error } = await supabaseAdmin
     .from("atendimento_avaliacoes")
     .update({
       comentario,
       metadata_json: {
+        ...(avaliacaoAtual?.metadata_json || {}),
         comentario_original: comentario,
         comentario_registrado_em: new Date().toISOString(),
       },
