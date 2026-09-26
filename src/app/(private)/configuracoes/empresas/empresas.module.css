@@ -960,7 +960,7 @@
   border-radius: 999px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -969,7 +969,7 @@
 .leadsModalHeader h2 {
   margin: 0;
   color: var(--crm-text-strong);
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.15;
   font-weight: 900;
   letter-spacing: -0.025em;
@@ -978,7 +978,7 @@
 .leadsModalHeader p {
   margin: 7px 0 0;
   color: var(--crm-text-muted);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
@@ -997,7 +997,7 @@
   border-radius: 999px;
   background: var(--crm-surface);
   color: var(--crm-text);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -1051,7 +1051,7 @@
 .leadsModalSummary span {
   display: block;
   color: var(--crm-text-muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 850;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1062,7 +1062,7 @@
   margin-top: 4px;
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1100,7 +1100,7 @@
   border-bottom: 1px solid var(--crm-border);
   background: var(--crm-surface-soft);
   color: var(--crm-text-muted);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.06em;
   text-align: left;
@@ -1112,7 +1112,7 @@
   padding: 13px 14px;
   border-bottom: 1px solid var(--crm-border);
   color: var(--crm-text);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.45;
   vertical-align: middle;
 }
@@ -1140,7 +1140,7 @@
   overflow: hidden;
   max-width: 210px;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1157,7 +1157,7 @@
   border-radius: 10px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -1190,7 +1190,7 @@
   border-radius: 999px;
   background: var(--crm-surface-soft);
   color: var(--crm-text);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1215,7 +1215,7 @@
 .leadsEmptyState strong {
   margin-top: 10px;
   color: var(--crm-text-strong);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -1225,7 +1225,7 @@
   max-width: 420px;
   margin: 5px 0 0;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -1266,7 +1266,7 @@
 
 .leadsPagination > span {
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
