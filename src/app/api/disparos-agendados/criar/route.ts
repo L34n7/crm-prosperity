@@ -13,6 +13,7 @@ import {
 } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import { obterDisponibilidadeAgendamentoMeta } from "@/lib/whatsapp/meta-limites";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -28,6 +29,19 @@ function normalizarVariavelTemplate(valor: unknown) {
     .replace(/[^a-z0-9_]/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "");
+}
+
+function formatarDataHoraBrasil(dataIso: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+    .format(new Date(dataIso))
+    .replace(",", "");
 }
 
 function contarVariaveisTemplate(payload: any) {
@@ -212,7 +226,9 @@ export async function POST(request: NextRequest) {
 
     const { data: integracao, error: integracaoError } = await supabase
       .from("integracoes_whatsapp")
-      .select("id, nome_conexao, numero, status, phone_number_id")
+      .select(
+        "id, nome_conexao, numero, status, phone_number_id, business_portfolio_id, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, quality_rating, config_json"
+      )
       .eq("id", integracaoWhatsappId)
       .eq("empresa_id", usuario.empresa_id)
       .maybeSingle();
@@ -375,12 +391,15 @@ export async function POST(request: NextRequest) {
       .filter((id: string | null): id is string => Boolean(id));
 
     const conversaPorContatoId = new Map<string, string>();
+    const ultimaEntradaPorContatoId = new Map<string, string>();
 
     if (contatosIds.length > 0) {
       const { data: conversasDosContatos, error: conversasError } =
         await supabase
           .from("conversas")
-          .select("id, contato_id, integracao_whatsapp_id, last_message_at")
+          .select(
+            "id, contato_id, integracao_whatsapp_id, last_message_at, last_inbound_message_at"
+          )
           .eq("empresa_id", usuario.empresa_id)
           .eq("integracao_whatsapp_id", integracaoWhatsappId)
           .in("contato_id", contatosIds)
@@ -411,7 +430,116 @@ export async function POST(request: NextRequest) {
         ) {
           conversaPorContatoId.set(conversa.contato_id, conversa.id);
         }
+
+        if (
+          conversa.contato_id &&
+          conversa.last_inbound_message_at &&
+          !ultimaEntradaPorContatoId.has(conversa.contato_id)
+        ) {
+          ultimaEntradaPorContatoId.set(
+            conversa.contato_id,
+            conversa.last_inbound_message_at
+          );
+        }
       }
+    }
+
+    const horarioExecucaoMs = new Date(executarEm).getTime();
+    const categoriaTemplate = String(template.categoria || "")
+      .trim()
+      .toLowerCase();
+    const telefonesQueConsomemNoHorario = Array.from(
+      new Set(
+        contatosValidos
+          .filter((contato: any) => {
+            if (categoriaTemplate !== "utility") return true;
+            if (!contato.id) return true;
+
+            const ultimaEntrada = ultimaEntradaPorContatoId.get(contato.id);
+
+            if (!ultimaEntrada) return true;
+
+            const ultimaEntradaMs = new Date(ultimaEntrada).getTime();
+
+            return (
+              !Number.isFinite(ultimaEntradaMs) ||
+              ultimaEntradaMs + 24 * 60 * 60 * 1000 <= horarioExecucaoMs
+            );
+          })
+          .map((contato: any) => contato.telefone)
+      )
+    );
+
+    const disponibilidadeNoHorario =
+      await obterDisponibilidadeAgendamentoMeta({
+        empresaId: usuario.empresa_id,
+        integracao,
+        telefones: telefonesQueConsomemNoHorario,
+        aPartirDe: executarEm,
+      });
+
+    if (!disponibilidadeNoHorario.disponivel) {
+      if (disponibilidadeNoHorario.impossivel) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "WHATSAPP_META_AGENDAMENTO_ACIMA_CAPACIDADE",
+            error:
+              "A quantidade de contatos que consome o limite da Meta e maior que a capacidade da conta para um unico disparo. Divida a selecao em mais de um agendamento.",
+            limite: disponibilidadeNoHorario.limite,
+            selecionados_unicos:
+              disponibilidadeNoHorario.selecionadosUnicos,
+          },
+          { status: 422 }
+        );
+      }
+
+      const todosTelefonesSelecionados = Array.from(
+        new Set(contatosValidos.map((contato: any) => contato.telefone))
+      );
+      const disponibilidadeSegura =
+        await obterDisponibilidadeAgendamentoMeta({
+          empresaId: usuario.empresa_id,
+          integracao,
+          telefones: todosTelefonesSelecionados,
+          aPartirDe: executarEm,
+        });
+
+      if (disponibilidadeSegura.impossivel) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "WHATSAPP_META_AGENDAMENTO_ACIMA_CAPACIDADE",
+            error:
+              "Nao ha capacidade suficiente para esta selecao em um unico horario. Divida os contatos em mais de um disparo agendado.",
+            limite: disponibilidadeSegura.limite,
+            selecionados_unicos:
+              disponibilidadeSegura.selecionadosUnicos,
+          },
+          { status: 422 }
+        );
+      }
+
+      const disponivelApartirDe =
+        disponibilidadeSegura.disponivelApartirDe ||
+        disponibilidadeNoHorario.disponivelApartirDe;
+
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "WHATSAPP_META_AGENDAMENTO_ANTES_DA_LIBERACAO",
+          error: disponivelApartirDe
+            ? `O limite de 24 horas da Meta ainda estara ocupado nesse horario. Agende a partir de ${formatarDataHoraBrasil(
+                disponivelApartirDe
+              )}.`
+            : "O limite de 24 horas da Meta ainda estara ocupado no horario escolhido.",
+          disponivel_a_partir_de: disponivelApartirDe,
+          limite: disponibilidadeNoHorario.limite,
+          selecionados_unicos:
+            disponibilidadeNoHorario.selecionadosUnicos,
+        },
+        { status: 429 }
+      );
     }
 
     const agendamentoGrupoId = randomUUID();

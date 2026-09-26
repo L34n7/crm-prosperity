@@ -1470,6 +1470,25 @@ function dataHojeParaInput() {
   return `${ano}-${mes}-${dia}`;
 }
 
+function camposDataHoraLocal(data?: string | null) {
+  if (!data) return null;
+
+  const valor = new Date(data);
+
+  if (Number.isNaN(valor.getTime())) return null;
+
+  const dataLocal = new Date(
+    valor.getTime() - valor.getTimezoneOffset() * 60 * 1000
+  )
+    .toISOString()
+    .slice(0, 16);
+
+  return {
+    data: dataLocal.slice(0, 10),
+    hora: dataLocal.slice(11, 16),
+  };
+}
+
 function formatarDataHoraCurta(data?: string | null) {
   if (!data) return "";
 
@@ -2022,6 +2041,17 @@ export default function DisparosWhatsAppPage() {
     fonteCotacao?: string;
     cotacaoDataHora?: string | null;
     cotacaoFallback?: boolean;
+    disponibilidadeAgendamentoMeta?: {
+      disponivel: boolean;
+      impossivel: boolean;
+      horarioConsultado: string;
+      disponivelApartirDe: string | null;
+      limite: number;
+      selecionadosUnicos: number;
+      usadosNoHorario: number;
+      ocupadosPorOutros: number;
+      totalProjetado: number;
+    } | null;
   } | null>(null);
 
   const [loadingPreviewCusto, setLoadingPreviewCusto] = useState(false);
@@ -3029,6 +3059,31 @@ export default function DisparosWhatsAppPage() {
     : null;
   const selecaoExcedeLimite =
     typeof saldoEstimadoAposSelecao === "number" && saldoEstimadoAposSelecao < 0;
+  const disponibilidadeAgendamentoMeta =
+    previewCusto?.disponibilidadeAgendamentoMeta || null;
+  const horarioLiberacaoMeta = disponibilidadeAgendamentoMeta?.disponivel
+    ? null
+    : disponibilidadeAgendamentoMeta?.disponivelApartirDe || null;
+  const horarioLiberacaoMetaMs = horarioLiberacaoMeta
+    ? new Date(horarioLiberacaoMeta).getTime()
+    : null;
+  const camposLiberacaoMeta = camposDataHoraLocal(horarioLiberacaoMeta);
+  const horarioAgendamentoSelecionadoMs =
+    agendamentoData && agendamentoHora
+      ? new Date(`${agendamentoData}T${agendamentoHora}:00`).getTime()
+      : null;
+  const agendamentoAntesDaLiberacaoMeta =
+    typeof horarioLiberacaoMetaMs === "number" &&
+    Number.isFinite(horarioLiberacaoMetaMs) &&
+    typeof horarioAgendamentoSelecionadoMs === "number" &&
+    Number.isFinite(horarioAgendamentoSelecionadoMs) &&
+    horarioAgendamentoSelecionadoMs < horarioLiberacaoMetaMs;
+  const agendamentoImpossivelPeloLimiteMeta =
+    disponibilidadeAgendamentoMeta?.impossivel === true;
+  const agendamentoInvalidoPeloLimiteMeta =
+    agendarDisparo &&
+    (agendamentoAntesDaLiberacaoMeta ||
+      agendamentoImpossivelPeloLimiteMeta);
 
   const templateSelecionado = useMemo(() => {
     return templates.find((item) => item.id === templateId) || null;
@@ -4107,6 +4162,26 @@ export default function DisparosWhatsAppPage() {
         setErro("A data e a hora do agendamento precisam ser futuras.");
         return;
       }
+
+      if (agendamentoImpossivelPeloLimiteMeta) {
+        setErro(
+          "Esta seleção ultrapassa a capacidade da Meta para um único disparo. Divida os contatos em mais de um agendamento."
+        );
+        return;
+      }
+
+      if (
+        typeof horarioLiberacaoMetaMs === "number" &&
+        Number.isFinite(horarioLiberacaoMetaMs) &&
+        executarEm.getTime() < horarioLiberacaoMetaMs
+      ) {
+        setErro(
+          `O limite de 24 horas ainda estará ocupado nesse horário. Agende a partir de ${formatarDataHora(
+            horarioLiberacaoMeta
+          )}.`
+        );
+        return;
+      }
     }
 
     if (temConflitosPendentes) {
@@ -4162,6 +4237,15 @@ export default function DisparosWhatsAppPage() {
         const json = await res.json();
 
         if (!res.ok || !json.ok) {
+          if (json.disponivel_a_partir_de) {
+            const campos = camposDataHoraLocal(json.disponivel_a_partir_de);
+
+            if (campos) {
+              setAgendamentoData(campos.data);
+              setAgendamentoHora(campos.hora);
+            }
+          }
+
           throw new Error(json.error || "Erro ao agendar disparo.");
         }
 
@@ -4308,6 +4392,7 @@ export default function DisparosWhatsAppPage() {
         },
         body: JSON.stringify({
           categoria,
+          integracao_whatsapp_id: integracaoId,
           contatos: contatosLista.map((contato) => ({
             id: contato.id,
             telefone: contato.telefone,
@@ -4361,6 +4446,8 @@ export default function DisparosWhatsAppPage() {
         fonteCotacao: json.fonteCotacao || "",
         cotacaoDataHora: json.cotacaoDataHora || null,
         cotacaoFallback: Boolean(json.cotacaoFallback),
+        disponibilidadeAgendamentoMeta:
+          json.disponibilidadeAgendamentoMeta || null,
       });
     } catch (error: any) {
       setPreviewCusto(null);
@@ -4569,7 +4656,7 @@ export default function DisparosWhatsAppPage() {
     }
 
     calcularPreviewCusto(categoria, contatosSelecionados);
-  }, [templateSelecionado, contatosSelecionados]);
+  }, [templateSelecionado, contatosSelecionados, integracaoId]);
 
   return (
     <>
@@ -4709,7 +4796,32 @@ export default function DisparosWhatsAppPage() {
                         <input
                           type="checkbox"
                           checked={agendarDisparo}
-                          onChange={(e) => setAgendarDisparo(e.target.checked)}
+                          onChange={(e) => {
+                            const ativo = e.target.checked;
+                            setAgendarDisparo(ativo);
+
+                            if (
+                              ativo &&
+                              camposLiberacaoMeta &&
+                              typeof horarioLiberacaoMetaMs === "number"
+                            ) {
+                              const horarioAtual =
+                                agendamentoData && agendamentoHora
+                                  ? new Date(
+                                      `${agendamentoData}T${agendamentoHora}:00`
+                                    ).getTime()
+                                  : null;
+
+                              if (
+                                typeof horarioAtual !== "number" ||
+                                !Number.isFinite(horarioAtual) ||
+                                horarioAtual < horarioLiberacaoMetaMs
+                              ) {
+                                setAgendamentoData(camposLiberacaoMeta.data);
+                                setAgendamentoHora(camposLiberacaoMeta.hora);
+                              }
+                            }
+                          }}
                           className={styles.scheduleToggleInput}
                         />
                         <span
@@ -4725,7 +4837,12 @@ export default function DisparosWhatsAppPage() {
                             <input
                               type="date"
                               value={agendamentoData}
-                              min={dataHojeParaInput()}
+                              min={
+                                camposLiberacaoMeta?.data &&
+                                camposLiberacaoMeta.data > dataHojeParaInput()
+                                  ? camposLiberacaoMeta.data
+                                  : dataHojeParaInput()
+                              }
                               onChange={(e) =>
                                 setAgendamentoData(e.target.value)
                               }
@@ -4738,12 +4855,32 @@ export default function DisparosWhatsAppPage() {
                             <input
                               type="time"
                               value={agendamentoHora}
+                              min={
+                                camposLiberacaoMeta &&
+                                agendamentoData === camposLiberacaoMeta.data
+                                  ? camposLiberacaoMeta.hora
+                                  : undefined
+                              }
                               onChange={(e) =>
                                 setAgendamentoHora(e.target.value)
                               }
                               className={styles.input}
                             />
                           </div>
+
+                          {agendamentoImpossivelPeloLimiteMeta ? (
+                            <p className={styles.metaHealthAlert}>
+                              Esta seleção excede a capacidade da Meta para um único horário. Divida os contatos em mais de um disparo agendado.
+                            </p>
+                          ) : horarioLiberacaoMeta ? (
+                            <p className={styles.metaHealthAlert}>
+                              Limite de 24 horas ocupado. Para esta seleção, o agendamento está liberado a partir de{" "}
+                              <strong>
+                                {formatarDataHora(horarioLiberacaoMeta)}
+                              </strong>
+                              .
+                            </p>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -5763,9 +5900,14 @@ export default function DisparosWhatsAppPage() {
 
                     {selecaoExcedeLimite && (
                       <p className={styles.metaHealthAlert}>
-                        {agendarDisparo
-                          ? "A selecao ultrapassa o limite disponivel agora. O CRM vai reavaliar o limite quando chegar o horario agendado."
-                          : "A selecao atual ultrapassa o limite disponivel. O CRM vai bloquear o envio antes de chamar a Meta."}
+                        {agendarDisparo && horarioLiberacaoMeta
+                          ? `O limite disponível agora é insuficiente. Para esta seleção, use um horário a partir de ${formatarDataHora(
+                              horarioLiberacaoMeta
+                            )}.`
+                          : agendarDisparo &&
+                            agendamentoImpossivelPeloLimiteMeta
+                          ? "A seleção ultrapassa a capacidade da Meta para um único horário. Divida o disparo em mais de um agendamento."
+                          : "A seleção atual ultrapassa o limite disponível. O CRM vai bloquear o envio antes de chamar a Meta."}
                       </p>
                     )}
                   </div>
@@ -5828,6 +5970,7 @@ export default function DisparosWhatsAppPage() {
                         contatosSelecionados.length === 0 ||
                         (agendarDisparo &&
                           (!agendamentoData || !agendamentoHora)) ||
+                        agendamentoInvalidoPeloLimiteMeta ||
                         disparando ||
                         (!agendarDisparo && disparoBloqueado) ||
                         (!agendarDisparo && selecaoExcedeLimite) ||
@@ -6763,6 +6906,7 @@ export default function DisparosWhatsAppPage() {
                   (!agendarDisparo && disparoBloqueado) ||
                   (agendarDisparo &&
                     (!agendamentoData || !agendamentoHora)) ||
+                  agendamentoInvalidoPeloLimiteMeta ||
                   loadingConflitos ||
                   temConflitosPendentes
                 }

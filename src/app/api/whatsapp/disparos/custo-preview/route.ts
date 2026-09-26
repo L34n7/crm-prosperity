@@ -8,9 +8,11 @@ import {
   USD_BRL_EXCHANGE_RATE,
   type CategoriaTemplateCobranca,
 } from "@/lib/whatsapp/pricing";
+import { obterDisponibilidadeAgendamentoMeta } from "@/lib/whatsapp/meta-limites";
 
 type BodyRequest = {
   categoria?: string | null;
+  integracao_whatsapp_id?: string | null;
   contatos?: Array<{
     id?: string;
     telefone?: string | null;
@@ -126,6 +128,9 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as BodyRequest;
     const categoria = String(body?.categoria || "").toLowerCase();
+    const integracaoWhatsappId = String(
+      body?.integracao_whatsapp_id || ""
+    ).trim();
 
     if (!categoriaValida(categoria)) {
       return NextResponse.json(
@@ -253,6 +258,35 @@ export async function POST(request: Request) {
             (telefone) => !telefonesDentroDaJanela24h.has(telefone)
           );
 
+    let disponibilidadeAgendamentoMeta = null;
+
+    if (integracaoWhatsappId) {
+      const { data: integracao, error: integracaoError } = await supabaseAdmin
+        .from("integracoes_whatsapp")
+        .select(
+          "id, empresa_id, phone_number_id, business_portfolio_id, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, quality_rating, config_json"
+        )
+        .eq("id", integracaoWhatsappId)
+        .eq("empresa_id", usuario.empresa_id)
+        .maybeSingle();
+
+      if (integracaoError) {
+        return NextResponse.json(
+          { ok: false, error: integracaoError.message },
+          { status: 500 }
+        );
+      }
+
+      if (integracao) {
+        disponibilidadeAgendamentoMeta =
+          await obterDisponibilidadeAgendamentoMeta({
+            empresaId: usuario.empresa_id,
+            integracao,
+            telefones: telefonesCobrados,
+          });
+      }
+    }
+
     const valorUnitarioUsd = WHATSAPP_TEMPLATE_PRICING[categoria].usd;
     const valorTotalUsd = Number((totalCobrados * valorUnitarioUsd).toFixed(4));
 
@@ -293,6 +327,7 @@ export async function POST(request: Request) {
       fonteCotacao: fonte,
       cotacaoDataHora: dataHora,
       cotacaoFallback: fallback,
+      disponibilidadeAgendamentoMeta,
     });
   } catch (error: any) {
     return NextResponse.json(
