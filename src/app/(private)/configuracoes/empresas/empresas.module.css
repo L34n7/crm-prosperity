@@ -848,6 +848,54 @@
   margin-top: 20px;
 }
 
+.tokenModalEyebrow {
+  font-size: 11px;
+}
+
+.tokenModal h2 {
+  font-size: 29px;
+}
+
+.tokenModalCompany {
+  font-size: 14px;
+}
+
+.tokenActionTab,
+.tokenActionTabActive {
+  font-size: 13.5px;
+}
+
+.tokenRestorePanel > span {
+  font-size: 13px;
+}
+
+.tokenRestorePanel > strong {
+  font-size: 30px;
+}
+
+.tokenRestorePanel p,
+.tokenAmountPanel p {
+  font-size: 13px;
+}
+
+.tokenQuickAmounts button {
+  font-size: 12.5px;
+}
+
+.tokenModal .label {
+  font-size: 14px;
+}
+
+.tokenModal .input,
+.tokenModal .textarea {
+  font-size: 15px;
+}
+
+.tokenModal .primaryButton,
+.tokenModal .secondaryButton {
+  font-size: 15px;
+}
+
 @media (max-width: 640px) {
   .tokensManagementHeader {
     flex-direction: column;
