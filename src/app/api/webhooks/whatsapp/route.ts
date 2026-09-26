@@ -16,6 +16,10 @@ import {
 } from "@/lib/whatsapp/webhook-queue";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { qstash } from "@/lib/qstash/client";
+import {
+  buscarPhoneNumberIdsComRecebimentoSuspenso,
+  removerMensagensWhatsappPorPhoneNumberIds,
+} from "@/lib/whatsapp/inadimplencia";
 
 export const runtime = "nodejs";
 
@@ -102,7 +106,7 @@ export async function POST(req: NextRequest) {
   const inicioPost = Date.now();
 
   try {
-    const rawBody = (await req.json()) as WhatsAppWebhookBody;
+    let rawBody = (await req.json()) as WhatsAppWebhookBody;
 
     perf("WEBHOOK / body lido", inicioPost);
 
@@ -111,6 +115,32 @@ export async function POST(req: NextRequest) {
         { success: false, error: "Evento nao e do WhatsApp" },
         { status: 400 }
       );
+    }
+
+    const mensagensAntesDoFiltro = extractIncomingMessages(rawBody);
+
+    if (mensagensAntesDoFiltro.length > 0) {
+      const phoneNumberIdsSuspensos =
+        await buscarPhoneNumberIdsComRecebimentoSuspenso(
+          mensagensAntesDoFiltro.map((message) => message.phoneNumberId)
+        );
+
+      if (phoneNumberIdsSuspensos.size > 0) {
+        rawBody = removerMensagensWhatsappPorPhoneNumberIds(
+          rawBody,
+          phoneNumberIdsSuspensos
+        );
+
+        console.log(
+          "[WEBHOOK WHATSAPP] Mensagens ignoradas por inadimplencia prolongada",
+          {
+            phoneNumberIds: Array.from(phoneNumberIdsSuspensos),
+            mensagensIgnoradas: mensagensAntesDoFiltro.filter((message) =>
+              phoneNumberIdsSuspensos.has(message.phoneNumberId)
+            ).length,
+          }
+        );
+      }
     }
 
     const specialCounts = countWhatsAppSpecialMessageTypes(rawBody);
