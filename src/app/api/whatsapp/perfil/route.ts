@@ -18,7 +18,7 @@ import {
   calcularProximaPosicaoLivre,
   listarIntegracoesWhatsappDaEmpresa,
   listarIntegracoesWhatsappPermitidas,
-  obterLimiteIntegracoesWhatsapp,
+  obterResumoLimitesWhatsapp,
 } from "@/lib/whatsapp/integracoes-multiplas";
 
 const GRAPH_VERSION = "v23.0";
@@ -640,11 +640,13 @@ export async function GET(req: NextRequest) {
     const empresaId = contexto.usuario.empresa_id;
     if (!empresaId) return jsonErro("Usuário sem empresa vinculada.", 403);
 
-    const [limiteIntegracoesWhatsapp, todasIntegracoesWhatsapp] =
+    const [resumoLimitesWhatsapp, todasIntegracoesWhatsapp] =
       await Promise.all([
-        obterLimiteIntegracoesWhatsapp(empresaId),
+        obterResumoLimitesWhatsapp(empresaId),
         listarIntegracoesWhatsappDaEmpresa(empresaId),
       ]);
+    const limiteIntegracoesWhatsapp =
+      resumoLimitesWhatsapp.limiteIntegracoesEfetivo;
     const proximaPosicaoIntegracao = calcularProximaPosicaoLivre(
       todasIntegracoesWhatsapp,
       limiteIntegracoesWhatsapp
@@ -673,9 +675,22 @@ export async function GET(req: NextRequest) {
     const administradorPromise = buscarAdministradorEmpresa(empresaId);
     const baseResposta = {
       limite_integracoes_whatsapp: limiteIntegracoesWhatsapp,
+      limite_base_integracoes_whatsapp:
+        resumoLimitesWhatsapp.limiteBasePlano,
+      limite_numeros_adicionais_whatsapp:
+        resumoLimitesWhatsapp.limiteNumerosAdicionais,
+      limite_total_permitido_whatsapp:
+        resumoLimitesWhatsapp.limiteTotalPermitido,
+      numeros_adicionais_contratados:
+        resumoLimitesWhatsapp.numerosAdicionaisContratados,
+      atingiu_limite_numeros_adicionais:
+        resumoLimitesWhatsapp.atingiuLimiteAdicionais,
       total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
       proxima_posicao: proximaPosicaoIntegracao,
       pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
+      pode_exibir_add_numero:
+        todasIntegracoesWhatsapp.length <
+        resumoLimitesWhatsapp.limiteTotalPermitido,
     };
 
     if (!integracaoSelecionada) {
