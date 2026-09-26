@@ -158,7 +158,7 @@ export default function AgendaAppointmentSecondarySections({
                     {dateTime(avaliacao.created_at)}
                   </small>
                 </span>
-                <em>{avaliacao.nota}/5</em>
+                <em>★ {avaliacao.nota}</em>
               </div>
             ))}
           </div>
