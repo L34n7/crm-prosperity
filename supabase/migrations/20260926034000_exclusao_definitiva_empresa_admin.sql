@@ -9,12 +9,8 @@ as $function$
 declare
   v_empresa_nome text;
   v_tabela record;
-  v_pass integer;
   v_excluidos bigint;
   v_total_excluidos bigint := 0;
-  v_houve_progresso boolean;
-  v_restantes bigint;
-  v_tabelas_pendentes text[] := array[]::text[];
 begin
   if p_empresa_id is null then
     raise exception 'Empresa nao informada.';
@@ -30,44 +26,8 @@ begin
     raise exception 'Empresa nao encontrada.';
   end if;
 
-  for v_pass in 1..12 loop
-    v_houve_progresso := false;
-
-    for v_tabela in
-      select distinct c.relname as tabela
-      from pg_class c
-      join pg_namespace n on n.oid = c.relnamespace
-      join pg_attribute a on a.attrelid = c.oid
-      where n.nspname = 'public'
-        and c.relkind in ('r', 'p')
-        and a.attnum > 0
-        and not a.attisdropped
-        and a.attname = 'empresa_id'
-        and c.relname <> 'empresas'
-      order by c.relname
-    loop
-      begin
-        execute format(
-          'delete from public.%I where empresa_id = $1',
-          v_tabela.tabela
-        )
-        using p_empresa_id;
-
-        get diagnostics v_excluidos = row_count;
-
-        if v_excluidos > 0 then
-          v_total_excluidos := v_total_excluidos + v_excluidos;
-          v_houve_progresso := true;
-        end if;
-      exception
-        when foreign_key_violation then
-          null;
-      end;
-    end loop;
-
-    exit when not v_houve_progresso;
-  end loop;
-
+  -- Limpa somente tabelas com empresa_id que nao possuem FK direta para
+  -- empresas. Elas nao participam do CASCADE e poderiam ficar orfas.
   for v_tabela in
     select distinct c.relname as tabela
     from pg_class c
@@ -79,35 +39,97 @@ begin
       and not a.attisdropped
       and a.attname = 'empresa_id'
       and c.relname <> 'empresas'
+      and not exists (
+        select 1
+        from pg_constraint con
+        where con.contype = 'f'
+          and con.conrelid = c.oid
+          and con.confrelid = 'public.empresas'::regclass
+      )
+    order by c.relname
+  loop
+    begin
+      execute format(
+        'delete from public.%I where empresa_id = $1',
+        v_tabela.tabela
+      )
+      using p_empresa_id;
+
+      get diagnostics v_excluidos = row_count;
+      v_total_excluidos := v_total_excluidos + v_excluidos;
+    exception
+      when foreign_key_violation then
+        null;
+    end;
+  end loop;
+
+  -- agenda_agendamentos possui um filho RESTRICT.
+  delete from public.estoque_consumos_clinicos
+  where empresa_id = p_empresa_id;
+  get diagnostics v_excluidos = row_count;
+  v_total_excluidos := v_total_excluidos + v_excluidos;
+
+  -- Limpa apenas FKs diretas para empresas que nao sao CASCADE.
+  for v_tabela in
+    select distinct c.relname as tabela
+    from pg_constraint con
+    join pg_class c on c.oid = con.conrelid
+    join pg_namespace n on n.oid = c.relnamespace
+    where con.contype = 'f'
+      and con.confrelid = 'public.empresas'::regclass
+      and con.confdeltype <> 'c'
+      and n.nspname = 'public'
     order by c.relname
   loop
     execute format(
-      'select count(*) from public.%I where empresa_id = $1',
+      'delete from public.%I where empresa_id = $1',
       v_tabela.tabela
     )
-    into v_restantes
     using p_empresa_id;
 
-    if v_restantes > 0 then
-      v_tabelas_pendentes := array_append(
-        v_tabelas_pendentes,
-        v_tabela.tabela || ':' || v_restantes::text
-      );
-    end if;
+    get diagnostics v_excluidos = row_count;
+    v_total_excluidos := v_total_excluidos + v_excluidos;
   end loop;
 
-  if cardinality(v_tabelas_pendentes) > 0 then
-    raise exception
-      'Exclusao interrompida: ainda existem registros vinculados em %',
-      array_to_string(v_tabelas_pendentes, ', ');
-  end if;
-
+  -- O PostgreSQL remove o restante pelas FKs ON DELETE CASCADE.
   delete from public.empresas
   where id = p_empresa_id;
 
   if not found then
     raise exception 'Empresa nao encontrada no momento da exclusao.';
   end if;
+
+  -- Segunda passada nas tabelas sem FK direta para limpar qualquer registro
+  -- que tenha ficado bloqueado por uma dependencia removida no CASCADE.
+  for v_tabela in
+    select distinct c.relname as tabela
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_attribute a on a.attrelid = c.oid
+    where n.nspname = 'public'
+      and c.relkind in ('r', 'p')
+      and a.attnum > 0
+      and not a.attisdropped
+      and a.attname = 'empresa_id'
+      and c.relname <> 'empresas'
+      and not exists (
+        select 1
+        from pg_constraint con
+        where con.contype = 'f'
+          and con.conrelid = c.oid
+          and con.confrelid = 'public.empresas'::regclass
+      )
+    order by c.relname
+  loop
+    execute format(
+      'delete from public.%I where empresa_id = $1',
+      v_tabela.tabela
+    )
+    using p_empresa_id;
+
+    get diagnostics v_excluidos = row_count;
+    v_total_excluidos := v_total_excluidos + v_excluidos;
+  end loop;
 
   return jsonb_build_object(
     'ok', true,
