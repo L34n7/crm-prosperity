@@ -82,6 +82,7 @@ import {
   normalizarEscopoIntegracoesFluxo,
   normalizarTemplatesPorIntegracao,
   obterIntegracoesDoEscopoFluxo,
+  rotuloFluxoPadraoIntegracoes,
   rotuloIntegracaoWhatsapp,
   templateCompativelComIntegracao,
   templateWhatsappAprovado,
@@ -4763,6 +4764,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
     >
       <FluxosSidebar
         fluxos={fluxos}
+        integracoesWhatsapp={integracoesWhatsapp}
         fluxoSelecionadoId={fluxoSelecionado?.id}
         carregandoFluxos={carregandoFluxos}
         buscaFluxo={buscaFluxo}
@@ -4799,6 +4801,14 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
         <FluxoEditorHeader
           fluxoSelecionado={fluxoSelecionado}
           fluxoSistema={fluxoEhSistemaCalendario(fluxoSelecionado)}
+          rotuloFluxoPadrao={
+            fluxoSelecionado?.fluxo_padrao
+              ? rotuloFluxoPadraoIntegracoes(
+                  fluxoSelecionado,
+                  integracoesWhatsapp
+                )
+              : ""
+          }
           salvando={salvando}
           ultimoSalvamentoTexto={formatarUltimoSalvamento(ultimoSalvamento)}
           podeCriarFluxos={podeCriarFluxos}
