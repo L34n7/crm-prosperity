@@ -58,10 +58,41 @@ export async function GET(request: Request) {
     );
   }
 
+  const empresaIds = Array.from(
+    new Set(
+      (data || [])
+        .map((lead) => lead.empresa_id)
+        .filter((empresaId): empresaId is string => Boolean(empresaId))
+    )
+  );
+
+  const nomesEmpresas = new Map<string, string>();
+
+  if (empresaIds.length > 0) {
+    const { data: empresas, error: empresasError } = await supabaseAdmin
+      .from("empresas")
+      .select("id, nome_fantasia")
+      .in("id", empresaIds);
+
+    if (empresasError) {
+      return NextResponse.json(
+        { ok: false, error: empresasError.message },
+        { status: 500 }
+      );
+    }
+
+    for (const empresa of empresas || []) {
+      nomesEmpresas.set(empresa.id, empresa.nome_fantasia);
+    }
+  }
+
   const leads = (data || []).map((lead) => ({
     id: lead.id,
     nome: lead.nome,
-    empresa: lead.empresa,
+    empresa:
+      lead.empresa ||
+      (lead.empresa_id ? nomesEmpresas.get(lead.empresa_id) : null) ||
+      null,
     email: lead.email,
     telefone: lead.telefone,
     categoria: lead.segmento_nome || "Não informado",
