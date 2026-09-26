@@ -94,13 +94,13 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
             </div>
 
             <h2 id="meta-whatsapp-aviso-titulo">
-              Novas regras de cobrança do WhatsApp
+              Novas regras de cobrança do WhatsApp a partir de 1º de outubro
             </h2>
 
             <p>
-              A Meta vai alterar a cobrança de mensagens enviadas pela
-              WhatsApp Business Platform. Veja os principais pontos antes de
-              continuar.
+              A partir de 1º de outubro de 2026, a Meta vai alterar a cobrança de
+              mensagens enviadas pela WhatsApp Business Platform. Veja os
+              principais pontos antes de continuar.
             </p>
           </div>
         </div>
