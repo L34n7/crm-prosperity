@@ -50,6 +50,18 @@ type LeadEmpresa = {
   created_at: string | null;
 };
 
+type ImpactoExclusaoEmpresa = {
+  usuarios: number;
+  contatos: number;
+  conversas: number;
+  mensagens: number;
+  automacoes: number;
+  integracoes_whatsapp: number;
+  leads: number;
+  pagamentos: number;
+  midias: number;
+};
+
 type Empresa = {
   id: string;
   nome_fantasia: string;
@@ -196,6 +208,12 @@ export default function EmpresasPage() {
   const [leadsPagina, setLeadsPagina] = useState(1);
   const [leadsTotal, setLeadsTotal] = useState(0);
   const [leadsTotalPaginas, setLeadsTotalPaginas] = useState(1);
+  const [empresaExclusaoModal, setEmpresaExclusaoModal] = useState<Empresa | null>(null);
+  const [impactoExclusao, setImpactoExclusao] = useState<ImpactoExclusaoEmpresa | null>(null);
+  const [confirmacaoExclusao, setConfirmacaoExclusao] = useState("");
+  const [carregandoExclusao, setCarregandoExclusao] = useState(false);
+  const [excluindoEmpresa, setExcluindoEmpresa] = useState(false);
+  const [erroExclusao, setErroExclusao] = useState("");
 
   const [editNomeFantasia, setEditNomeFantasia] = useState("");
   const [editRazaoSocial, setEditRazaoSocial] = useState("");
@@ -534,6 +552,107 @@ export default function EmpresasPage() {
     void carregarLeads(novaPagina);
   }
 
+  async function abrirExclusaoEmpresa(empresa: Empresa) {
+    setEmpresaExclusaoModal(empresa);
+    setImpactoExclusao(null);
+    setConfirmacaoExclusao("");
+    setErroExclusao("");
+    setCarregandoExclusao(true);
+
+    try {
+      const response = await fetch(
+        `/api/empresas/${empresa.id}/exclusao-definitiva`,
+        { cache: "no-store" }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setErroExclusao(
+          data.error || "Não foi possível calcular o impacto da exclusão."
+        );
+        return;
+      }
+
+      setImpactoExclusao(data.impacto || null);
+    } catch {
+      setErroExclusao("Não foi possível calcular o impacto da exclusão.");
+    } finally {
+      setCarregandoExclusao(false);
+    }
+  }
+
+  function fecharExclusaoEmpresa() {
+    if (excluindoEmpresa) return;
+    setEmpresaExclusaoModal(null);
+    setImpactoExclusao(null);
+    setConfirmacaoExclusao("");
+    setErroExclusao("");
+  }
+
+  async function confirmarExclusaoEmpresa() {
+    if (
+      !empresaExclusaoModal ||
+      excluindoEmpresa ||
+      confirmacaoExclusao.trim() !== empresaExclusaoModal.nome_fantasia.trim()
+    ) {
+      return;
+    }
+
+    setExcluindoEmpresa(true);
+    setErroExclusao("");
+    setMensagem("");
+    setErro("");
+
+    try {
+      const response = await fetch(
+        `/api/empresas/${empresaExclusaoModal.id}/exclusao-definitiva`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmacao: confirmacaoExclusao.trim(),
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setErroExclusao(data.error || "Não foi possível excluir a empresa.");
+        return;
+      }
+
+      setEmpresas((atuais) =>
+        atuais.filter((empresa) => empresa.id !== empresaExclusaoModal.id)
+      );
+
+      if (expandidoId === empresaExclusaoModal.id) {
+        setExpandidoId(null);
+      }
+
+      if (editandoId === empresaExclusaoModal.id) {
+        setEditandoId(null);
+      }
+
+      const avisos = Array.isArray(data.avisos)
+        ? data.avisos.filter(Boolean)
+        : [];
+
+      setMensagem(
+        avisos.length > 0
+          ? `${data.message} Aviso: ${avisos.join(" ")}`
+          : data.message || "Empresa excluída definitivamente."
+      );
+
+      setEmpresaExclusaoModal(null);
+      setImpactoExclusao(null);
+      setConfirmacaoExclusao("");
+    } catch {
+      setErroExclusao("Não foi possível excluir a empresa.");
+    } finally {
+      setExcluindoEmpresa(false);
+    }
+  }
+
   useEffect(() => {
     carregarEmpresas();
     carregarPlanos();
@@ -847,6 +966,18 @@ export default function EmpresasPage() {
                             Editar
                           </button>
                         )}
+
+                        {!editando &&
+                          podeEditarEmpresas &&
+                          podeAcessarTemporariamente && (
+                            <button
+                              type="button"
+                              onClick={() => abrirExclusaoEmpresa(empresa)}
+                              className={styles.dangerOutlineButton}
+                            >
+                              Excluir
+                            </button>
+                          )}
                       </div>
                     </div>
 
@@ -1427,6 +1558,148 @@ export default function EmpresasPage() {
                   </button>
                 </div>
               </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {empresaExclusaoModal && (
+        <div
+          className={styles.deleteCompanyOverlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              fecharExclusaoEmpresa();
+            }
+          }}
+        >
+          <section
+            className={styles.deleteCompanyModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-company-title"
+          >
+            <button
+              type="button"
+              className={styles.deleteCompanyClose}
+              onClick={fecharExclusaoEmpresa}
+              disabled={excluindoEmpresa}
+              aria-label="Fechar"
+            >
+              ×
+            </button>
+
+            <span className={styles.deleteCompanyEyebrow}>
+              Exclusão definitiva
+            </span>
+            <h2 id="delete-company-title">Excluir empresa</h2>
+            <p className={styles.deleteCompanyName}>
+              {empresaExclusaoModal.nome_fantasia}
+            </p>
+
+            <div className={styles.deleteCompanyWarning}>
+              <strong>Esta ação é irreversível.</strong>
+              <p>
+                Todos os dados operacionais vinculados a esta empresa serão
+                removidos, incluindo usuários, contatos, conversas, automações,
+                integrações, leads, pagamentos de teste e histórico de tokens.
+              </p>
+            </div>
+
+            {carregandoExclusao ? (
+              <div className={styles.deleteCompanyLoading}>
+                Calculando o impacto da exclusão...
+              </div>
+            ) : erroExclusao ? (
+              <div className={styles.deleteCompanyError}>
+                {erroExclusao}
+              </div>
+            ) : impactoExclusao ? (
+              <div className={styles.deleteCompanyImpact}>
+                <div>
+                  <span>Usuários</span>
+                  <strong>{impactoExclusao.usuarios}</strong>
+                </div>
+                <div>
+                  <span>Contatos</span>
+                  <strong>{impactoExclusao.contatos}</strong>
+                </div>
+                <div>
+                  <span>Conversas</span>
+                  <strong>{impactoExclusao.conversas}</strong>
+                </div>
+                <div>
+                  <span>Mensagens</span>
+                  <strong>{impactoExclusao.mensagens}</strong>
+                </div>
+                <div>
+                  <span>Automações</span>
+                  <strong>{impactoExclusao.automacoes}</strong>
+                </div>
+                <div>
+                  <span>WhatsApp</span>
+                  <strong>{impactoExclusao.integracoes_whatsapp}</strong>
+                </div>
+                <div>
+                  <span>Leads</span>
+                  <strong>{impactoExclusao.leads}</strong>
+                </div>
+                <div>
+                  <span>Pagamentos</span>
+                  <strong>{impactoExclusao.pagamentos}</strong>
+                </div>
+                <div>
+                  <span>Mídias</span>
+                  <strong>{impactoExclusao.midias}</strong>
+                </div>
+              </div>
+            ) : null}
+
+            {!carregandoExclusao && !erroExclusao && impactoExclusao && (
+              <>
+                <div className={styles.deleteCompanyConfirm}>
+                  <label htmlFor="confirmar-exclusao-empresa">
+                    Para confirmar, digite exatamente:
+                    <strong>{empresaExclusaoModal.nome_fantasia}</strong>
+                  </label>
+                  <input
+                    id="confirmar-exclusao-empresa"
+                    className={styles.input}
+                    value={confirmacaoExclusao}
+                    onChange={(event) =>
+                      setConfirmacaoExclusao(event.target.value)
+                    }
+                    autoComplete="off"
+                    placeholder="Digite o nome da empresa"
+                    disabled={excluindoEmpresa}
+                  />
+                </div>
+
+                <div className={styles.deleteCompanyActions}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={fecharExclusaoEmpresa}
+                    disabled={excluindoEmpresa}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.dangerButton}
+                    onClick={confirmarExclusaoEmpresa}
+                    disabled={
+                      excluindoEmpresa ||
+                      confirmacaoExclusao.trim() !==
+                        empresaExclusaoModal.nome_fantasia.trim()
+                    }
+                  >
+                    {excluindoEmpresa
+                      ? "Excluindo definitivamente..."
+                      : "Excluir definitivamente"}
+                  </button>
+                </div>
+              </>
             )}
           </section>
         </div>
