@@ -157,24 +157,34 @@ export default function CreateFlowModal({
             onMensagemChange={onMensagemInatividadeChange}
           />
 
-          {!jaExisteFluxoPadrao && (
-            <label className={styles.switchField}>
-              <input
-                type="checkbox"
-                checked={fluxoPadrao}
-                onChange={(event) =>
-                  onFluxoPadraoChange(event.target.checked)
-                }
-              />
-              <div>
-                <strong>Fluxo padrão</strong>
-                <p>
-                  Inicia automaticamente quando nenhuma palavra-chave de outro
-                  fluxo for encontrada.
+          <label className={styles.switchField}>
+            <input
+              type="checkbox"
+              checked={fluxoPadrao}
+              disabled={!fluxoPadrao && jaExisteFluxoPadrao}
+              onChange={(event) =>
+                onFluxoPadraoChange(event.target.checked)
+              }
+            />
+            <div>
+              <strong>Fluxo padrão deste escopo</strong>
+              <p>
+                Inicia automaticamente quando nenhuma palavra-chave de outro
+                fluxo for encontrada nas integrações selecionadas.
+              </p>
+              <p>
+                Cada integração pode ter apenas 1 fluxo padrão, mas o mesmo
+                fluxo pode ser padrão para várias integrações.
+              </p>
+
+              {!fluxoPadrao && jaExisteFluxoPadrao && (
+                <p className={styles.defaultFlowConflictText}>
+                  Uma ou mais integrações deste escopo já possuem fluxo padrão.
+                  Selecione apenas integrações sem padrão para criar outro.
                 </p>
-              </div>
-            </label>
-          )}
+              )}
+            </div>
+          </label>
 
           {!fluxoPadrao && (
             <div className={styles.gatilhosBox}>
