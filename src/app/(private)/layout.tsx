@@ -5,7 +5,9 @@ import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
 import MobileEmpresaMenuLink from "@/components/MobileEmpresaMenuLink";
 import AgendaMenuLabel from "@/components/AgendaMenuLabel";
 import AcessoTemporarioEmpresaBanner from "@/components/AcessoTemporarioEmpresaBanner";
+import MetaWhatsAppPricingNotice from "@/components/MetaWhatsAppPricingNotice";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+import { usuarioConfirmouAvisoMetaWhatsapp } from "@/lib/avisos/meta-whatsapp-cobranca";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import type { NichoCodigo } from "@/lib/nichos/config";
@@ -25,6 +27,7 @@ export default async function PrivateLayout({
   let assinatura: AssinaturaEmpresa | null = null;
   let isAdmin = false;
   let nichoCodigo: NichoCodigo = "comercio";
+  let exibirAvisoMetaWhatsapp = false;
 
   const resultado = await getUsuarioContexto();
 
@@ -45,6 +48,19 @@ export default async function PrivateLayout({
   permissoes = resultado.usuario.permissoes;
   assinatura = resultado.usuario.assinatura;
   isAdmin = resultado.usuario.is_admin;
+
+  if (isAdmin && resultado.usuario.empresa_id && !acessoTemporario) {
+    try {
+      exibirAvisoMetaWhatsapp = !(await usuarioConfirmouAvisoMetaWhatsapp(
+        resultado.usuario.id
+      ));
+    } catch (error) {
+      console.error(
+        "[AVISO_META_WHATSAPP] Erro ao verificar confirmacao do usuario:",
+        error
+      );
+    }
+  }
 
   if (resultado.usuario.empresa_id) {
     try {
@@ -68,6 +84,7 @@ export default async function PrivateLayout({
       {acessoTemporario && (
         <AcessoTemporarioEmpresaBanner acesso={acessoTemporario} />
       )}
+      <MetaWhatsAppPricingNotice initialOpen={exibirAvisoMetaWhatsapp} />
       {children}
       <AmbienteObrigatorioGuard />
       <MobileEmpresaMenuLink isAdmin={isAdmin} />
