@@ -3,6 +3,7 @@ import {
   Bell,
   CheckCircle2,
   History,
+  Star,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -127,6 +128,37 @@ export default function AgendaAppointmentSecondarySections({
                   </small>
                 </span>
                 {r.status ? <em>{r.status}</em> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {appointment.avaliacoes && appointment.avaliacoes.length > 0 ? (
+        <section className={styles.section}>
+          <div className={styles.sectionTitle}>
+            <Star size={17} />
+            <div>
+              <h3>Avaliação do cliente</h3>
+              <p>Notas e comentários vinculados a este agendamento.</p>
+            </div>
+          </div>
+          <div className={styles.compactList}>
+            {appointment.avaliacoes.map((avaliacao) => (
+              <div key={avaliacao.id}>
+                <div className={styles.smallAvatar}>
+                  <Star size={15} />
+                </div>
+                <span>
+                  <strong>Nota {avaliacao.nota}</strong>
+                  <small>
+                    {avaliacao.comentario?.trim()
+                      ? avaliacao.comentario
+                      : "Sem comentário"}
+                    {" · "}
+                    {dateTime(avaliacao.created_at)}
+                  </small>
+                </span>
+                <em>{avaliacao.nota}/5</em>
               </div>
             ))}
           </div>
