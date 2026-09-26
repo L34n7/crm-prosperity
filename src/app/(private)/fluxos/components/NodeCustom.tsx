@@ -15,6 +15,10 @@ import {
   SAIDAS_CHECKOUT_PAGAMENTO,
   TIPO_NO_CHECKOUT_PAGAMENTO,
 } from "../checkout-pagamento-editor";
+import {
+  SAIDAS_AGENDA_ESCOLHER_HORARIO,
+  TIPO_NO_AGENDA_ESCOLHER_HORARIO,
+} from "../agenda-escolher-horario-editor";
 import { labelTipoNo, tituloVisivelCard } from "../utils";
 
 function corTipoNo(tipo: string) {
@@ -50,11 +54,15 @@ export default function NodeCustom({ data, dragging }: any) {
     data?.agendar_disparo_template_waba_alerta === true;
   const consultaEstoque = data?.tipo_no === TIPO_NO_CONSULTAR_ESTOQUE;
   const checkoutPagamento = data?.tipo_no === TIPO_NO_CHECKOUT_PAGAMENTO;
+  const escolherHorarioAgenda =
+    data?.tipo_no === TIPO_NO_AGENDA_ESCOLHER_HORARIO;
   const saidasFixas = consultaEstoque
     ? SAIDAS_CONSULTA_ESTOQUE
     : checkoutPagamento
       ? SAIDAS_CHECKOUT_PAGAMENTO
-      : null;
+      : escolherHorarioAgenda
+        ? SAIDAS_AGENDA_ESCOLHER_HORARIO
+        : null;
 
   return (
     <div
