@@ -530,6 +530,22 @@ async function enfileirarGrupo(agendamentos: AgendamentoDisparo[]) {
     );
   }
 
+  const statusIntegracao = String(integracao.status || "").toLowerCase();
+  const statusNumeroMeta = String(
+    integracao.phone_number_status || ""
+  ).toLowerCase();
+
+  if (
+    ["desconectado", "desconectada", "disconnected"].includes(
+      statusIntegracao
+    ) ||
+    statusNumeroMeta === "disconnected"
+  ) {
+    throw new Error(
+      "Integração WhatsApp desconectada. Reconecte o número antes de executar disparos agendados."
+    );
+  }
+
   const telefones = agendamentos.map((agendamento) =>
     textoPayload(agendamento, "numero_destino")
   );
