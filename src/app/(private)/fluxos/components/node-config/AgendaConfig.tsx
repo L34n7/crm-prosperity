@@ -305,6 +305,12 @@ export default function AgendaConfig(props: AgendaConfigProps) {
               value={mensagemSemHorarios}
               onChange={(e) => props.onMensagemSemHorariosChange(e.target.value)}
             />
+            <span className={styles.help}>
+              O bloco possui as saídas "Horário escolhido" e "Sem horários".
+              Conecte "Sem horários" a um bloco Transferir setor para encaminhar
+              imediatamente. Se essa saída não estiver conectada, o fluxo
+              continua aguardando outra data, mantendo o comportamento atual.
+            </span>
           </label>
 
           <label className={styles.field}>
