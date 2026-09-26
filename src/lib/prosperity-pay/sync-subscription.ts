@@ -295,21 +295,27 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     planTokenLimitRaw == null ? null : Number(planTokenLimitRaw);
 
   const currentCompany = await supabase.from("empresas")
-    .select("assinatura_metadata_json,limite_numeros_adicionais_whatsapp")
+    .select("assinatura_metadata_json,limite_total_numeros_whatsapp")
     .eq("id", empresaId)
     .single();
   if (currentCompany.error) throw currentCompany.error;
 
+  const totalWhatsappLimit = Math.max(
+    baseWhatsappLimit,
+    Number(currentCompany.data?.limite_total_numeros_whatsapp ?? 5),
+  );
   const additionalNumbersLimit = Math.max(
+    totalWhatsappLimit - baseWhatsappLimit,
     0,
-    Number(currentCompany.data?.limite_numeros_adicionais_whatsapp ?? 5),
   );
   const effectiveAdditionalNumbers = Math.min(
     additionalNumbers,
     additionalNumbersLimit,
   );
-  const whatsappLimit =
-    baseWhatsappLimit + effectiveAdditionalNumbers;
+  const whatsappLimit = Math.min(
+    totalWhatsappLimit,
+    baseWhatsappLimit + effectiveAdditionalNumbers,
+  );
 
   const existingMetadata =
     currentCompany.data?.assinatura_metadata_json &&
@@ -364,6 +370,7 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
       whatsapp_addon_quantity: additionalNumbers,
       whatsapp_addon_quantity_effective: effectiveAdditionalNumbers,
       whatsapp_addon_limit: additionalNumbersLimit,
+      whatsapp_total_limit: totalWhatsappLimit,
       last_subscription_event: payload.event,
       last_subscription_event_id: payload.event_id,
       ...(payload.event === "subscription.renewed"
