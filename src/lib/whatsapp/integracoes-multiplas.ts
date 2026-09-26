@@ -2,7 +2,7 @@ import { isAdministrador } from "@/lib/auth/authorization";
 import type { UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const LIMITE_ADICIONAIS_WHATSAPP_PADRAO = 5;
+export const LIMITE_TOTAL_NUMEROS_WHATSAPP_PADRAO = 5;
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -25,6 +25,7 @@ type EmpresaLimiteWhatsapp = {
   id: string;
   limite_integracoes_whatsapp?: number | null;
   limite_numeros_adicionais_whatsapp?: number | null;
+  limite_total_numeros_whatsapp?: number | null;
   planos?: {
     limite_integracoes_whatsapp?: number | null;
   } | null;
@@ -69,7 +70,7 @@ export async function obterResumoLimitesWhatsapp(empresaId: string) {
   const { data, error } = await supabaseAdmin
     .from("empresas")
     .select(
-      "id, limite_integracoes_whatsapp, limite_numeros_adicionais_whatsapp, planos:plano_id(limite_integracoes_whatsapp)"
+      "id, limite_integracoes_whatsapp, limite_total_numeros_whatsapp, limite_numeros_adicionais_whatsapp, planos:plano_id(limite_integracoes_whatsapp)"
     )
     .eq("id", empresaId)
     .maybeSingle<EmpresaLimiteWhatsapp>();
@@ -84,9 +85,17 @@ export async function obterResumoLimitesWhatsapp(empresaId: string) {
   const limiteBasePlano = normalizarQuantidadeMinimaUm(
     plano?.limite_integracoes_whatsapp ?? 1
   );
-  const limiteNumerosAdicionais = normalizarQuantidadeNaoNegativa(
-    data?.limite_numeros_adicionais_whatsapp,
-    LIMITE_ADICIONAIS_WHATSAPP_PADRAO
+  const limiteTotalConfigurado = normalizarQuantidadeMinimaUm(
+    data?.limite_total_numeros_whatsapp ??
+      LIMITE_TOTAL_NUMEROS_WHATSAPP_PADRAO
+  );
+  const limiteTotalPermitido = Math.max(
+    limiteBasePlano,
+    limiteTotalConfigurado
+  );
+  const limiteNumerosAdicionais = Math.max(
+    limiteTotalPermitido - limiteBasePlano,
+    0
   );
   const limiteIntegracoesContratadas = Math.max(
     limiteBasePlano,
@@ -94,8 +103,6 @@ export async function obterResumoLimitesWhatsapp(empresaId: string) {
       data?.limite_integracoes_whatsapp ?? limiteBasePlano
     )
   );
-  const limiteTotalPermitido =
-    limiteBasePlano + limiteNumerosAdicionais;
   const limiteIntegracoesEfetivo = Math.min(
     limiteIntegracoesContratadas,
     limiteTotalPermitido
@@ -107,15 +114,16 @@ export async function obterResumoLimitesWhatsapp(empresaId: string) {
 
   return {
     limiteBasePlano,
+    limiteTotalConfigurado,
     limiteNumerosAdicionais,
     limiteTotalPermitido,
     limiteIntegracoesContratadas,
     limiteIntegracoesEfetivo,
     numerosAdicionaisContratados,
     atingiuLimiteAdicionais:
-      numerosAdicionaisContratados >= limiteNumerosAdicionais,
+      limiteIntegracoesContratadas >= limiteTotalPermitido,
     podeContratarNumeroAdicional:
-      numerosAdicionaisContratados < limiteNumerosAdicionais,
+      limiteIntegracoesContratadas < limiteTotalPermitido,
   };
 }
 
