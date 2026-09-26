@@ -330,42 +330,21 @@ export default function AgendaConfig(props: AgendaConfigProps) {
             <strong>Conexões necessárias</strong>
             <small>
               Este bloco possui duas saídas. Arraste cada saída até o próximo
-              passo do fluxo. As duas conexões devem usar o tipo de condição
-              <strong> Exata</strong> e o ID da resposta é preenchido
-              automaticamente pela própria saída.
+              passo do fluxo. O ID da resposta é preenchido automaticamente
+              pela própria saída.
             </small>
 
             <div className={connectionCardStyles.outputGrid}>
               <span>
                 <strong>Horário escolhido</strong>
                 <br />
-                <code
-                  style={{
-                    color: "var(--crm-text-muted)",
-                    fontSize: 11,
-                    fontWeight: 600,
-                  }}
-                >
-                  slot_escolhido
-                </code>
-                <br />
-                <small>Tipo da condição: Exata</small>
+                <code>slot_escolhido</code>
               </span>
 
               <span>
                 <strong>Sem horários</strong>
                 <br />
-                <code
-                  style={{
-                    color: "var(--crm-text-muted)",
-                    fontSize: 11,
-                    fontWeight: 600,
-                  }}
-                >
-                  sem_horarios
-                </code>
-                <br />
-                <small>Tipo da condição: Exata</small>
+                <code>sem_horarios</code>
               </span>
             </div>
 
