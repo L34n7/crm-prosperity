@@ -189,7 +189,7 @@ export default function EmpresasPage() {
   const [quantidadeTokensExtras, setQuantidadeTokensExtras] = useState("100000");
   const [motivoTokens, setMotivoTokens] = useState("");
   const [ajustandoTokens, setAjustandoTokens] = useState(false);
-  const [empresaLeadsModal, setEmpresaLeadsModal] = useState<Empresa | null>(null);
+  const [leadsModalAberto, setLeadsModalAberto] = useState(false);
   const [leadsEmpresa, setLeadsEmpresa] = useState<LeadEmpresa[]>([]);
   const [leadsCarregando, setLeadsCarregando] = useState(false);
   const [leadsErro, setLeadsErro] = useState("");
@@ -478,13 +478,13 @@ export default function EmpresasPage() {
     }
   }
 
-  async function carregarLeadsEmpresa(empresa: Empresa, pagina = 1) {
+  async function carregarLeads(pagina = 1) {
     setLeadsCarregando(true);
     setLeadsErro("");
 
     try {
       const response = await fetch(
-        `/api/empresas/${empresa.id}/leads?page=${pagina}&limit=25`,
+        `/api/empresas/leads?page=${pagina}&limit=25`,
         { cache: "no-store" }
       );
       const data = await response.json();
@@ -505,26 +505,25 @@ export default function EmpresasPage() {
     }
   }
 
-  function abrirLeadsEmpresa(empresa: Empresa) {
-    setEmpresaLeadsModal(empresa);
+  function abrirLeads() {
+    setLeadsModalAberto(true);
     setLeadsEmpresa([]);
     setLeadsPagina(1);
     setLeadsTotal(0);
     setLeadsTotalPaginas(1);
     setLeadsErro("");
-    void carregarLeadsEmpresa(empresa, 1);
+    void carregarLeads(1);
   }
 
-  function fecharLeadsEmpresa() {
+  function fecharLeads() {
     if (leadsCarregando) return;
-    setEmpresaLeadsModal(null);
+    setLeadsModalAberto(false);
     setLeadsEmpresa([]);
     setLeadsErro("");
   }
 
   function alterarPaginaLeads(novaPagina: number) {
     if (
-      !empresaLeadsModal ||
       leadsCarregando ||
       novaPagina < 1 ||
       novaPagina > leadsTotalPaginas
@@ -532,7 +531,7 @@ export default function EmpresasPage() {
       return;
     }
 
-    void carregarLeadsEmpresa(empresaLeadsModal, novaPagina);
+    void carregarLeads(novaPagina);
   }
 
   useEffect(() => {
@@ -542,14 +541,14 @@ export default function EmpresasPage() {
   }, []);
 
   useEffect(() => {
-    if (!empresaLeadsModal) return;
+    if (!leadsModalAberto) return;
 
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     function fecharComEscape(event: KeyboardEvent) {
       if (event.key === "Escape" && !leadsCarregando) {
-        setEmpresaLeadsModal(null);
+        setLeadsModalAberto(false);
       }
     }
 
@@ -559,7 +558,7 @@ export default function EmpresasPage() {
       document.body.style.overflow = overflowAnterior;
       window.removeEventListener("keydown", fecharComEscape);
     };
-  }, [empresaLeadsModal, leadsCarregando]);
+  }, [leadsModalAberto, leadsCarregando]);
 
   const empresasFiltradas = useMemo(() => {
     const termo = busca.trim().toLocaleLowerCase("pt-BR");
@@ -818,16 +817,6 @@ export default function EmpresasPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        {!editando && (
-                          <button
-                            type="button"
-                            onClick={() => abrirLeadsEmpresa(empresa)}
-                            className={styles.leadsButton}
-                          >
-                            Leads
-                          </button>
-                        )}
-
                         {!editando && podeAcessarTemporariamente && (
                           <button
                             type="button"
@@ -1260,13 +1249,21 @@ export default function EmpresasPage() {
         </section>
       </div>
 
-      {empresaLeadsModal && (
+      <button
+        type="button"
+        className={styles.leadsLauncher}
+        onClick={abrirLeads}
+      >
+        Leads
+      </button>
+
+      {leadsModalAberto && (
         <div
           className={styles.leadsModalOverlay}
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
-              fecharLeadsEmpresa();
+              fecharLeads();
             }
           }}
         >
@@ -1283,7 +1280,7 @@ export default function EmpresasPage() {
                   Leads da empresa
                 </h2>
                 <p>
-                  {empresaLeadsModal.nome_fantasia}
+                  Todos os leads cadastrados no CRM, do mais novo para o mais antigo.
                 </p>
               </div>
 
@@ -1334,12 +1331,7 @@ export default function EmpresasPage() {
                   <button
                     type="button"
                     className={styles.secondaryButton}
-                    onClick={() =>
-                      void carregarLeadsEmpresa(
-                        empresaLeadsModal,
-                        leadsPagina
-                      )
-                    }
+                    onClick={() => void carregarLeads(leadsPagina)}
                   >
                     Tentar novamente
                   </button>
