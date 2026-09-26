@@ -58,7 +58,7 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
       if (!response.ok || !payload?.ok) {
         throw new Error(
           payload?.error ||
-            "Nao foi possivel registrar sua confirmacao. Tente novamente."
+            "Não foi possível registrar sua confirmação. Tente novamente."
         );
       }
 
@@ -67,7 +67,7 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
       setErro(
         error instanceof Error
           ? error.message
-          : "Nao foi possivel registrar sua confirmacao. Tente novamente."
+          : "Não foi possível registrar sua confirmação. Tente novamente."
       );
     } finally {
       setConfirmando(false);
@@ -75,7 +75,12 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
   }
 
   return (
-    <div className={styles.overlay} role="dialog" aria-modal="true" aria-labelledby="meta-whatsapp-aviso-titulo">
+    <div
+      className={styles.overlay}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="meta-whatsapp-aviso-titulo"
+    >
       <div className={styles.modal}>
         <div className={styles.hero}>
           <div className={styles.heroIcon} aria-hidden="true">
@@ -84,16 +89,16 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
 
           <div className={styles.heroContent}>
             <div className={styles.eyebrow}>
-              <span>Atualizacao importante</span>
+              <span>Atualização importante</span>
               <span className={styles.dateBadge}>01/10/2026</span>
             </div>
 
             <h2 id="meta-whatsapp-aviso-titulo">
-              Novas regras de cobranca do WhatsApp
+              Novas regras de cobrança do WhatsApp
             </h2>
 
             <p>
-              A Meta vai alterar a cobranca de mensagens enviadas pela
+              A Meta vai alterar a cobrança de mensagens enviadas pela
               WhatsApp Business Platform. Veja os principais pontos antes de
               continuar.
             </p>
@@ -108,7 +113,7 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
             <div>
               <strong>1.000 mensagens Service gratuitas</strong>
               <p>
-                Cada numero tera uma franquia mensal de 1.000 mensagens de
+                Cada número terá uma franquia mensal de 1.000 mensagens de
                 atendimento enviadas pela API.
               </p>
             </div>
@@ -136,7 +141,7 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
               <strong>Templates Utility dentro das 24h</strong>
               <p>
                 Templates de Utilidade enviados pela API dentro da janela de
-                atendimento tambem passam a seguir a cobranca da Meta.
+                atendimento também passam a seguir a cobrança da Meta.
               </p>
             </div>
           </article>
@@ -146,10 +151,10 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
               <ShieldCheck size={21} />
             </div>
             <div>
-              <strong>Conversas iniciadas por anuncios</strong>
+              <strong>Conversas iniciadas por anúncios</strong>
               <p>
-                Anuncios elegiveis da Meta podem continuar oferecendo uma
-                janela gratuita de ate 72 horas, conforme as regras da
+                Anúncios elegíveis da Meta podem continuar oferecendo uma
+                janela gratuita de até 72 horas, conforme as regras da
                 plataforma.
               </p>
             </div>
@@ -176,7 +181,7 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
               <CheckCircle2 size={16} />
             </span>
             <span>
-              Estou ciente das mudancas nas cobrancas do WhatsApp Business
+              Estou ciente das mudanças nas cobranças do WhatsApp Business
               Platform pela Meta.
             </span>
           </label>
@@ -197,7 +202,7 @@ export default function MetaWhatsAppPricingNotice({ initialOpen }: Props) {
           </button>
 
           <p className={styles.disclaimer}>
-            Este aviso sera exibido apenas uma vez para cada usuario
+            Este aviso será exibido apenas uma vez para cada usuário
             administrador.
           </p>
         </div>
