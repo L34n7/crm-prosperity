@@ -10,6 +10,7 @@ export type IntegracaoWhatsappAmbiente = {
   onboarding_status?: string | null;
   setup_completed_at?: string | null;
   phone_registered?: boolean | null;
+  phone_number_status?: string | null;
   app_assigned?: boolean | null;
   waba_id?: string | null;
   phone_number_id?: string | null;
@@ -29,8 +30,12 @@ export function isAmbienteConfigurado(
     "coexistence"
       ? isCoexistencePhoneReady(integracao)
       : integracao.phone_registered === true;
+  const numeroDesconectado =
+    String(integracao.phone_number_status || "").toUpperCase() ===
+    "DISCONNECTED";
 
   return (
+    !numeroDesconectado &&
     integracao.status === "ativa" &&
     integracao.webhook_verificado === true &&
     integracao.onboarding_etapa === "concluido" &&
