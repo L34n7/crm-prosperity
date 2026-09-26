@@ -84,8 +84,8 @@
 .outputGrid code {
   max-width: 100%;
   color: var(--crm-text-muted);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.4;
   overflow-wrap: anywhere;
   white-space: normal;
