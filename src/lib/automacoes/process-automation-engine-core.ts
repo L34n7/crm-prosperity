@@ -2562,6 +2562,17 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
           return slotRegistrado;
         }
 
+        if (
+          "saidaProcessada" in slotRegistrado &&
+          slotRegistrado.saidaProcessada === "sem_horarios"
+        ) {
+          return {
+            ok: true,
+            status: "agenda_sem_horarios",
+            execucaoId: execucaoExistente.id,
+          };
+        }
+
         if (slotRegistrado.aguardando) {
           await agendarEncerramentoInatividadeFluxoSeAtivo({
             empresaId,
@@ -6210,6 +6221,66 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       noId: no.id,
     });
 
+    const { data: conexoesSemHorarios, error: conexoesSemHorariosError } =
+      await supabaseAdmin
+        .from("automacao_conexoes")
+        .select("id, condicao_json")
+        .eq("empresa_id", empresaId)
+        .eq("fluxo_id", execucao.fluxo_id)
+        .eq("no_origem_id", no.id)
+        .eq("ativo", true);
+
+    if (conexoesSemHorariosError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao verificar saída sem horários:",
+        conexoesSemHorariosError
+      );
+    }
+
+    const possuiSaidaSemHorarios = (conexoesSemHorarios || []).some(
+      (conexao: any) =>
+        String(conexao.condicao_json?.tipo || "").trim() === "resposta_igual" &&
+        String(conexao.condicao_json?.valor || "").trim() === "sem_horarios"
+    );
+
+    if (possuiSaidaSemHorarios) {
+      await registrarLog({
+        empresaId,
+        execucaoId: execucao.id,
+        fluxoId: execucao.fluxo_id,
+        noId: no.id,
+        tipoEvento: "agenda_sem_horarios",
+        descricao:
+          "Nenhum horário disponível; fluxo encaminhado pela saída Sem horários.",
+        entrada: {
+          mensagemTexto,
+          data_escolhida: dataEscolhida,
+          preferencia_horario: interpretacao.preferencia,
+        },
+        saida: {
+          agenda_id: agendaId,
+          data_escolhida: dataEscolhida,
+          sem_expediente: Boolean(semExpedienteNoDia),
+        },
+      });
+
+      await seguirParaProximoNo({
+        empresaId,
+        conversaId,
+        execucaoId: execucao.id,
+        fluxoId: execucao.fluxo_id,
+        noAtualId: no.id,
+        mensagemTexto: "sem_horarios",
+        numeroDestino,
+      });
+
+      return {
+        ok: true,
+        aguardando: false,
+        saidaProcessada: "sem_horarios" as const,
+      };
+    }
+
     await salvarEstadoExecucaoAgenda({
       empresaId,
       execucaoId: execucao.id,
@@ -6398,7 +6469,7 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
     });
 
     if (conflito) {
-      await enviarOpcoesEscolhaHorarioAgenda({
+      const resultadoNovasOpcoes = await enviarOpcoesEscolhaHorarioAgenda({
         empresaId,
         conversaId,
         execucao,
@@ -6411,6 +6482,16 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
         mensagemInicial:
           "Esse horario acabou de ficar indisponivel. Escolha uma das novas opcoes:",
       });
+
+      if (resultadoNovasOpcoes?.saidaProcessada === "sem_horarios") {
+        return {
+          ok: true,
+          valido: false,
+          aguardando: false,
+          excedeuTentativas: false,
+          saidaProcessada: "sem_horarios" as const,
+        };
+      }
 
       return {
         ok: true,
@@ -6564,7 +6645,7 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
   }
 
   if (interpretacao.data) {
-    await enviarOpcoesEscolhaHorarioAgenda({
+    const resultadoOpcoes = await enviarOpcoesEscolhaHorarioAgenda({
       empresaId,
       conversaId,
       execucao,
@@ -6573,6 +6654,16 @@ async function registrarEscolhaSlotAgendaAutomacao(params: {
       mensagemTexto,
       dataForcada: interpretacao.data,
     });
+
+    if (resultadoOpcoes?.saidaProcessada === "sem_horarios") {
+      return {
+        ok: true,
+        valido: false,
+        aguardando: false,
+        excedeuTentativas: false,
+        saidaProcessada: "sem_horarios" as const,
+      };
+    }
 
     return {
       ok: true,
