@@ -24,6 +24,7 @@ import { obterFeedbackOptOut } from "@/lib/whatsapp/opt-out-policy";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { processCoexistenceWebhookBody } from "@/lib/whatsapp/process-coexistence-webhook";
 import { processTemplateWebhookUpdates } from "@/lib/whatsapp/process-template-webhook";
+import { empresaComRecebimentoWhatsappSuspenso } from "@/lib/whatsapp/inadimplencia";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -427,6 +428,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
   }
 
   const processedResults: Array<Record<string, unknown>> = [];
+  const recebimentoSuspensoPorEmpresa = new Map<string, boolean>();
   let optOutCriticalError: OptOutCriticalError | null = null;
 
   const templateUpdatesResult =
@@ -591,6 +593,34 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           success: false,
           reason: "integracao nao encontrada",
           phoneNumberId: message.phoneNumberId,
+        });
+
+        continue;
+      }
+
+      let recebimentoSuspenso = recebimentoSuspensoPorEmpresa.get(
+        integration.empresa_id
+      );
+
+      if (recebimentoSuspenso === undefined) {
+        recebimentoSuspenso =
+          await empresaComRecebimentoWhatsappSuspenso(integration.empresa_id);
+        recebimentoSuspensoPorEmpresa.set(
+          integration.empresa_id,
+          recebimentoSuspenso
+        );
+      }
+
+      if (
+        recebimentoSuspenso ||
+        integration.status === "suspensa_inadimplencia"
+      ) {
+        processedResults.push({
+          messageId: message.messageId,
+          success: true,
+          ignored: true,
+          reason: "inadimplencia_prolongada",
+          integrationId: integration.id,
         });
 
         continue;
