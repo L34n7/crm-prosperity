@@ -185,6 +185,16 @@
   line-height: 1.35;
 }
 
+.outputGrid code {
+  display: inline-block;
+  margin-top: 3px;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .error {
   border: 1px solid var(--crm-danger-border);
   background: var(--crm-danger-bg);
