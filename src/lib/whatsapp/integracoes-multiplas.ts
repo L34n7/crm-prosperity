@@ -2,7 +2,7 @@ import { isAdministrador } from "@/lib/auth/authorization";
 import type { UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const MAX_INTEGRACOES_WHATSAPP = 10;
+export const LIMITE_ADICIONAIS_WHATSAPP_PADRAO = 5;
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -24,17 +24,22 @@ export type IntegracaoWhatsappResumo = {
 type EmpresaLimiteWhatsapp = {
   id: string;
   limite_integracoes_whatsapp?: number | null;
+  limite_numeros_adicionais_whatsapp?: number | null;
   planos?: {
     limite_integracoes_whatsapp?: number | null;
   } | null;
 };
 
-function limitarQuantidade(valor: unknown) {
+function normalizarQuantidadeMinimaUm(valor: unknown) {
   const numero = Number(valor);
-
   if (!Number.isFinite(numero)) return 1;
+  return Math.max(Math.floor(numero), 1);
+}
 
-  return Math.min(Math.max(Math.floor(numero), 1), MAX_INTEGRACOES_WHATSAPP);
+function normalizarQuantidadeNaoNegativa(valor: unknown, fallback = 0) {
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return fallback;
+  return Math.max(Math.floor(numero), 0);
 }
 
 function normalizarPlano(valor: unknown) {
@@ -50,7 +55,7 @@ export function normalizarPosicaoIntegracao(valor: unknown) {
   if (!Number.isFinite(numero)) return null;
 
   const posicao = Math.floor(numero);
-  return posicao >= 1 && posicao <= MAX_INTEGRACOES_WHATSAPP ? posicao : null;
+  return posicao >= 1 ? posicao : null;
 }
 
 export function getPosicaoVisualIntegracao(
@@ -60,28 +65,63 @@ export function getPosicaoVisualIntegracao(
   return normalizarPosicaoIntegracao(integracao?.posicao) || fallbackIndex + 1;
 }
 
-export async function obterLimiteIntegracoesWhatsapp(empresaId: string) {
+export async function obterResumoLimitesWhatsapp(empresaId: string) {
   const { data, error } = await supabaseAdmin
     .from("empresas")
     .select(
-      "id, limite_integracoes_whatsapp, planos:plano_id(limite_integracoes_whatsapp)"
+      "id, limite_integracoes_whatsapp, limite_numeros_adicionais_whatsapp, planos:plano_id(limite_integracoes_whatsapp)"
     )
     .eq("id", empresaId)
     .maybeSingle<EmpresaLimiteWhatsapp>();
 
   if (error) {
     throw new Error(
-      `Erro ao buscar limite de integracoes WhatsApp: ${error.message}`
+      `Erro ao buscar limites de integracoes WhatsApp: ${error.message}`
     );
   }
 
   const plano = normalizarPlano(data?.planos);
-
-  return limitarQuantidade(
-    data?.limite_integracoes_whatsapp ??
-      plano?.limite_integracoes_whatsapp ??
-      1
+  const limiteBasePlano = normalizarQuantidadeMinimaUm(
+    plano?.limite_integracoes_whatsapp ?? 1
   );
+  const limiteNumerosAdicionais = normalizarQuantidadeNaoNegativa(
+    data?.limite_numeros_adicionais_whatsapp,
+    LIMITE_ADICIONAIS_WHATSAPP_PADRAO
+  );
+  const limiteIntegracoesContratadas = Math.max(
+    limiteBasePlano,
+    normalizarQuantidadeMinimaUm(
+      data?.limite_integracoes_whatsapp ?? limiteBasePlano
+    )
+  );
+  const limiteTotalPermitido =
+    limiteBasePlano + limiteNumerosAdicionais;
+  const limiteIntegracoesEfetivo = Math.min(
+    limiteIntegracoesContratadas,
+    limiteTotalPermitido
+  );
+  const numerosAdicionaisContratados = Math.max(
+    limiteIntegracoesContratadas - limiteBasePlano,
+    0
+  );
+
+  return {
+    limiteBasePlano,
+    limiteNumerosAdicionais,
+    limiteTotalPermitido,
+    limiteIntegracoesContratadas,
+    limiteIntegracoesEfetivo,
+    numerosAdicionaisContratados,
+    atingiuLimiteAdicionais:
+      numerosAdicionaisContratados >= limiteNumerosAdicionais,
+    podeContratarNumeroAdicional:
+      numerosAdicionaisContratados < limiteNumerosAdicionais,
+  };
+}
+
+export async function obterLimiteIntegracoesWhatsapp(empresaId: string) {
+  const resumo = await obterResumoLimitesWhatsapp(empresaId);
+  return resumo.limiteIntegracoesEfetivo;
 }
 
 export async function listarIntegracoesWhatsappDaEmpresa(
@@ -215,13 +255,14 @@ export function calcularProximaPosicaoLivre(
   integracoes: Array<Pick<IntegracaoWhatsappResumo, "posicao">>,
   limite: number
 ) {
+  const limiteNormalizado = normalizarQuantidadeMinimaUm(limite);
   const ocupadas = new Set(
     integracoes
       .map((item, index) => getPosicaoVisualIntegracao(item, index))
-      .filter((posicao) => posicao >= 1 && posicao <= MAX_INTEGRACOES_WHATSAPP)
+      .filter((posicao) => posicao >= 1 && posicao <= limiteNormalizado)
   );
 
-  for (let posicao = 1; posicao <= limite; posicao += 1) {
+  for (let posicao = 1; posicao <= limiteNormalizado; posicao += 1) {
     if (!ocupadas.has(posicao)) return posicao;
   }
 
