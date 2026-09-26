@@ -573,39 +573,21 @@ export default function ConsultarEstoqueConfig({
           <span>
             <strong>Disponível</strong>
             <br />
-            <code
-              style={{
-                color: "var(--crm-text-muted)",
-                fontSize: 11,
-                fontWeight: 600,
-              }}
-            >
+            <code>
               disponivel
             </code>
           </span>
           <span>
             <strong>Sem estoque</strong>
             <br />
-            <code
-              style={{
-                color: "var(--crm-text-muted)",
-                fontSize: 11,
-                fontWeight: 600,
-              }}
-            >
+            <code>
               sem_estoque
             </code>
           </span>
           <span>
             <strong>Não encontrado</strong>
             <br />
-            <code
-              style={{
-                color: "var(--crm-text-muted)",
-                fontSize: 11,
-                fontWeight: 600,
-              }}
-            >
+            <code>
               nao_encontrado
             </code>
           </span>
