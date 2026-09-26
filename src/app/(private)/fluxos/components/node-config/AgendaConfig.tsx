@@ -9,6 +9,7 @@ import type {
   TemplateWhatsappOpcao,
 } from "../../types";
 import styles from "../../fluxos.module.css";
+import connectionCardStyles from "@/components/automacoes/ConsultarEstoqueConfig.module.css";
 import AgendaTipoAgendamentoConfig from "./AgendaTipoAgendamentoConfig";
 
 type CustoPreview = {
@@ -324,6 +325,56 @@ export default function AgendaConfig(props: AgendaConfigProps) {
               Use quando o dia pedido nao tem horario configurado na agenda. Variavel: {"{{agenda_data_nova}}"}.
             </span>
           </label>
+
+          <div className={connectionCardStyles.outputs}>
+            <strong>Conexões necessárias</strong>
+            <small>
+              Este bloco possui duas saídas. Arraste cada saída até o próximo
+              passo do fluxo. As duas conexões devem usar o tipo de condição
+              <strong> Exata</strong> e o ID da resposta é preenchido
+              automaticamente pela própria saída.
+            </small>
+
+            <div className={connectionCardStyles.outputGrid}>
+              <span>
+                <strong>Horário escolhido</strong>
+                <br />
+                <code
+                  style={{
+                    color: "var(--crm-text-muted)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  slot_escolhido
+                </code>
+                <br />
+                <small>Tipo da condição: Exata</small>
+              </span>
+
+              <span>
+                <strong>Sem horários</strong>
+                <br />
+                <code
+                  style={{
+                    color: "var(--crm-text-muted)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  sem_horarios
+                </code>
+                <br />
+                <small>Tipo da condição: Exata</small>
+              </span>
+            </div>
+
+            <small>
+              Recomendação: Horário escolhido → continuar o processo de
+              agendamento; Sem horários → Transferir setor ou outro tratamento
+              para atendimento humano.
+            </small>
+          </div>
         </>
       )}
 
