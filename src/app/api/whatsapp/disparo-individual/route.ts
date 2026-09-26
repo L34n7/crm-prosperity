@@ -628,6 +628,24 @@ export async function POST(request: Request) {
       );
     }
 
+    if (
+      ["desconectado", "desconectada", "disconnected"].includes(
+        statusIntegracao
+      ) ||
+      statusNumeroMeta === "disconnected"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta integração WhatsApp está desconectada. Reconecte o número antes de enviar mensagens.",
+          motivo: "whatsapp_meta_desconectado",
+          bloquear_disparos: true,
+        },
+        { status: 409 }
+      );
+    }
+
     if (!isAmbienteConfigurado(integracao)) {
       return NextResponse.json(
         {
