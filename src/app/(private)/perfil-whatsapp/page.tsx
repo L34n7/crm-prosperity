@@ -288,6 +288,8 @@ export default function WhatsappPerfilPage() {
     useState("/configurar-ambiente");
   const [limiteIntegracoesWhatsapp, setLimiteIntegracoesWhatsapp] =
     useState(1);
+  const [limiteTotalNumerosWhatsapp, setLimiteTotalNumerosWhatsapp] =
+    useState(5);
   const [proximaPosicaoIntegracao, setProximaPosicaoIntegracao] =
     useState<number | null>(null);
   const [podeCadastrarNovaIntegracao, setPodeCadastrarNovaIntegracao] =
@@ -404,7 +406,7 @@ export default function WhatsappPerfilPage() {
   );
   const proximaPosicaoVisual = Math.min(
     integracoes.length + 1,
-    limiteIntegracoesWhatsapp
+    limiteTotalNumerosWhatsapp
   );
   const deveMostrarControlesMultiIntegracao =
     limiteIntegracoesWhatsapp > 1 || integracoes.length > 1;
@@ -497,6 +499,9 @@ export default function WhatsappPerfilPage() {
       setAdministrador(json.administrador || null);
       setLimiteIntegracoesWhatsapp(
         Number(json.limite_integracoes_whatsapp || 1)
+      );
+      setLimiteTotalNumerosWhatsapp(
+        Number(json.limite_total_numeros_whatsapp || 5)
       );
       setProximaPosicaoIntegracao(
         typeof json.proxima_posicao === "number" ? json.proxima_posicao : null
