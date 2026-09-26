@@ -12,6 +12,7 @@ import responsive from "./FluxoEditorHeader.module.css";
 type FluxoEditorHeaderProps = {
   fluxoSelecionado: Fluxo | null;
   fluxoSistema: boolean;
+  rotuloFluxoPadrao?: string;
   salvando: boolean;
   ultimoSalvamentoTexto: string;
   podeCriarFluxos: boolean;
@@ -34,6 +35,7 @@ type FluxoEditorHeaderProps = {
 export default function FluxoEditorHeader({
   fluxoSelecionado,
   fluxoSistema,
+  rotuloFluxoPadrao = "",
   salvando,
   ultimoSalvamentoTexto,
   podeCriarFluxos,
@@ -76,14 +78,22 @@ export default function FluxoEditorHeader({
           <span className={responsive.titleText}>{tituloFluxo}</span>
         </h2>
 
-        {fluxoSistema && (
-          <span
-            className={`${styles.badge} ${styles.systemFlowBadge}`}
-            data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
-          >
-            FLUXO DO SISTEMA
-          </span>
-        )}
+        <div className={styles.editorFlowBadges}>
+          {fluxoSistema && (
+            <span
+              className={`${styles.badge} ${styles.systemFlowBadge}`}
+              data-system-flow-badge="CRM_SYSTEM_FLOW_STRONG_BADGE_V1"
+            >
+              FLUXO DO SISTEMA
+            </span>
+          )}
+
+          {rotuloFluxoPadrao && (
+            <span className={`${styles.badge} ${styles.defaultFlowScopeBadge}`}>
+              {rotuloFluxoPadrao}
+            </span>
+          )}
+        </div>
 
         <p
           className={`${styles.editorSubtitle} ${responsive.subtitle}`}
