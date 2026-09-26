@@ -29,7 +29,6 @@ import {
 import Header from "@/components/Header";
 import FeedbackToast from "@/components/FeedbackToast";
 import { useHeaderUser } from "@/components/header-user-context";
-import { createClient } from "@/lib/supabase/client";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
 import { solicitarAtualizacaoFeedbackAgendasHeader } from "@/lib/header-summary/events";
 import AgendaAutomationSettings, {
@@ -360,6 +359,31 @@ const toForm = (a: Ag): Form => ({
   observacoes_internas: a.observacoes_internas || "",
 });
 
+async function agendaRpcContextual<T>(
+  operacao:
+    | "listar"
+    | "buscar_contatos"
+    | "salvar_tipo"
+    | "salvar_agendamento",
+  argumentos: Record<string, unknown>,
+): Promise<T> {
+  const response = await fetch("/api/agendas/rpc-contexto", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({ operacao, argumentos }),
+  });
+  const result = await response.json();
+
+  if (!response.ok || !result?.ok) {
+    throw new Error(
+      result?.error || "Não foi possível executar a operação da agenda.",
+    );
+  }
+
+  return result.data as T;
+}
+
 function Page() {
   const headerUser = useHeaderUser();
   const podeCriarAgenda = headerUser.permissoes.includes("agendas.criar");
@@ -392,8 +416,7 @@ function Page() {
       active = false;
     };
   }, []);
-  const sp = useSearchParams(),
-    sb = useMemo(() => createClient(), []);
+  const sp = useSearchParams();
   const [agendas, setAgendas] = useState<Agenda[]>([]),
     [agendaId, setAgendaId] = useState(""),
     [ags, setAgs] = useState<Ag[]>([]),
@@ -621,13 +644,17 @@ function Page() {
   );
   const loadData = useCallback(
     async (id: string) => {
-      const rg = range(month),
-        { data, error } = await sb.rpc("agenda_etapa1_listar", {
-          p_agenda_id: id,
-          p_inicio: rg.start,
-          p_fim: rg.end,
-        });
-      if (error) throw Error(error.message);
+      const rg = range(month);
+      const data = await agendaRpcContextual<{
+        agendamentos?: Ag[];
+        tipos?: Tipo[];
+        responsaveis?: Resp[];
+        usuario_atual_id?: string;
+      }>("listar", {
+        agenda_id: id,
+        inicio: rg.start,
+        fim: rg.end,
+      });
       const appointments = (data?.agendamentos || []) as Ag[];
       const propertyIds = Array.from(
         new Set(
@@ -709,7 +736,7 @@ function Page() {
       await loadGoogle(id);
       return appointments;
     },
-    [loadGoogle, month, sb],
+    [loadGoogle, month],
   );
   const loadFeedback = useCallback(async () => {
     try {
@@ -754,30 +781,44 @@ function Page() {
       return;
     }
     const t = setTimeout(async () => {
-      const { data, error } = await sb.rpc("agenda_etapa1_buscar_contatos", {
-        p_busca: cq,
-        p_limite: 20,
-      });
-      if (error) setErr(error.message);
-      else setContacts(data || []);
+      try {
+        const data = await agendaRpcContextual<Contato[]>("buscar_contatos", {
+          busca: cq,
+          limite: 20,
+        });
+        setContacts(data || []);
+      } catch (error) {
+        setErr(
+          error instanceof Error
+            ? error.message
+            : "Erro ao buscar contatos da agenda.",
+        );
+      }
     }, 300);
     return () => clearTimeout(t);
-  }, [cq, open, sb]);
+  }, [cq, open]);
   useEffect(() => {
     if (!open || participantQuery.trim().length < 2) {
       setParticipantResults([]);
       return;
     }
     const t = setTimeout(async () => {
-      const { data, error } = await sb.rpc("agenda_etapa1_buscar_contatos", {
-        p_busca: participantQuery,
-        p_limite: 20,
-      });
-      if (error) setErr(error.message);
-      else setParticipantResults(data || []);
+      try {
+        const data = await agendaRpcContextual<Contato[]>("buscar_contatos", {
+          busca: participantQuery,
+          limite: 20,
+        });
+        setParticipantResults(data || []);
+      } catch (error) {
+        setErr(
+          error instanceof Error
+            ? error.message
+            : "Erro ao buscar participantes da agenda.",
+        );
+      }
     }, 300);
     return () => clearTimeout(t);
-  }, [open, participantQuery, sb]);
+  }, [open, participantQuery]);
   useEffect(() => {
     const s = sp.get("google_calendar");
     if (s) setOk(s.startsWith("conectado") ? "Google Calendar conectado." : "");
@@ -1014,13 +1055,12 @@ function Page() {
     try {
       setTypeBusy(true);
       setTypeError("");
-      const { data, error } = await sb.rpc("agenda_etapa1_salvar_tipo", {
-        p_tipo_id: null,
-        p_nome: nome,
-        p_cor: cor,
-        p_icone: "calendar",
+      const data = await agendaRpcContextual<Tipo>("salvar_tipo", {
+        tipo_id: null,
+        nome,
+        cor,
+        icone: "calendar",
       });
-      if (error) throw Error(error.message);
       setTipos((x) => [...x.filter((t) => t.id !== data.id), data]);
       setForm((f) => ({ ...f, tipo_id: data.id }));
       setTypeModal(false);
@@ -1109,12 +1149,11 @@ function Page() {
             : {}),
         },
       };
-      const { error } = await sb.rpc("agenda_etapa1_salvar_agendamento", {
-        p_agenda_id: agendaId,
-        p_agendamento_id: form.id,
-        p_payload: payload,
+      await agendaRpcContextual("salvar_agendamento", {
+        agenda_id: agendaId,
+        agendamento_id: form.id,
+        payload,
       });
-      if (error) throw Error(error.message);
       if (google.conectado)
         await fetch(`/api/agendas/${agendaId}/google-calendar`, {
           method: "POST",
