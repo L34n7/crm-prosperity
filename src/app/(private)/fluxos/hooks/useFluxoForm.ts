@@ -249,7 +249,14 @@ export default function useFluxoForm({
         return;
       }
 
-      const fluxoPadraoFinal = !jaExisteFluxoPadrao && novoFluxoPadrao;
+      if (novoFluxoPadrao && jaExisteFluxoPadrao) {
+        onErroCriacao(
+          "Uma ou mais integrações selecionadas já possuem outro fluxo padrão. Cada integração pode ter apenas 1 fluxo padrão."
+        );
+        return;
+      }
+
+      const fluxoPadraoFinal = novoFluxoPadrao;
       const gatilhosValidos = gatilhosNovoFluxo.filter((gatilho) =>
         String(gatilho.valor || "").trim()
       );
@@ -504,6 +511,13 @@ export default function useFluxoForm({
       return;
     }
 
+    if (fluxoPadraoEdicao && existeOutroFluxoPadraoNaEmpresa()) {
+      onErroEdicao(
+        "Uma ou mais integrações selecionadas já possuem outro fluxo padrão. Cada integração pode ter apenas 1 fluxo padrão."
+      );
+      return;
+    }
+
     try {
       onClearError();
       onClearSuccess();
@@ -556,6 +570,7 @@ export default function useFluxoForm({
     fluxoEscopoIntegracoesModoEdicao,
     fluxoIntegracoesIdsEdicao,
     fluxoPadraoEdicao,
+    existeOutroFluxoPadraoNaEmpresa,
     nomeFluxoEdicao,
     obterFluxoAlvoEdicao,
     onClearError,
