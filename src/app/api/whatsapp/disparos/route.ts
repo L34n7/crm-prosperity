@@ -656,6 +656,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (
+      ["desconectado", "desconectada", "disconnected"].includes(
+        statusIntegracao
+      ) ||
+      statusNumeroMeta === "disconnected"
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta integracao WhatsApp esta desconectada. Reconecte o numero antes de realizar disparos.",
+          detalhe:
+            "O numero selecionado nao esta conectado a plataforma do WhatsApp na Meta.",
+          motivo: "whatsapp_meta_desconectado",
+          bloquear_disparos: true,
+        },
+        { status: 409 }
+      );
+    }
+
     if (!isAmbienteConfigurado(integracao)) {
       return NextResponse.json(
         {
