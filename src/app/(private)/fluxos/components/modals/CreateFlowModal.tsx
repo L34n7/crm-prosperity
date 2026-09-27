@@ -25,6 +25,7 @@ type CreateFlowModalProps = {
   nome: string;
   descricao: string;
   fluxoPadrao: boolean;
+  executarApenasUmaVezPorConversa: boolean;
   jaExisteFluxoPadrao: boolean;
   mostrarEscopoIntegracoes: boolean;
   escopoModo: EscopoIntegracoesModo;
@@ -42,6 +43,7 @@ type CreateFlowModalProps = {
   onNomeChange: (value: string) => void;
   onDescricaoChange: (value: string) => void;
   onFluxoPadraoChange: (value: boolean) => void;
+  onExecutarApenasUmaVezPorConversaChange: (value: boolean) => void;
   onEscopoModoChange: (value: EscopoIntegracoesModo) => void;
   onAlternarIntegracao: (integracaoId: string) => void;
   onQuantidadeInatividadeChange: (value: string) => void;
@@ -61,6 +63,7 @@ export default function CreateFlowModal({
   nome,
   descricao,
   fluxoPadrao,
+  executarApenasUmaVezPorConversa,
   jaExisteFluxoPadrao,
   mostrarEscopoIntegracoes,
   escopoModo,
@@ -78,6 +81,7 @@ export default function CreateFlowModal({
   onNomeChange,
   onDescricaoChange,
   onFluxoPadraoChange,
+  onExecutarApenasUmaVezPorConversaChange,
   onEscopoModoChange,
   onAlternarIntegracao,
   onQuantidadeInatividadeChange,
@@ -183,6 +187,24 @@ export default function CreateFlowModal({
                   Selecione apenas integrações sem padrão para criar outro.
                 </p>
               )}
+            </div>
+          </label>
+
+          <label className={styles.switchField}>
+            <input
+              type="checkbox"
+              checked={executarApenasUmaVezPorConversa}
+              onChange={(event) =>
+                onExecutarApenasUmaVezPorConversaChange(event.target.checked)
+              }
+            />
+            <div>
+              <strong>Executar este fluxo apenas uma vez por conversa</strong>
+              <p>
+                Quando ativado, este fluxo não inicia novamente se já tiver
+                sido executado nesta mesma conversa. Em uma nova conversa, ele
+                poderá iniciar normalmente.
+              </p>
             </div>
           </label>
 

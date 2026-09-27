@@ -79,6 +79,10 @@ export default function useFluxoForm({
   const [novoFluxoNome, setNovoFluxoNome] = useState("");
   const [novoFluxoPadrao, setNovoFluxoPadrao] = useState(false);
   const [
+    novoFluxoUmaVezPorConversa,
+    setNovoFluxoUmaVezPorConversa,
+  ] = useState(false);
+  const [
     novoFluxoEscopoIntegracoesModo,
     setNovoFluxoEscopoIntegracoesModo,
   ] = useState<EscopoIntegracoesModo>("todas");
@@ -91,6 +95,10 @@ export default function useFluxoForm({
   const [nomeFluxoEdicao, setNomeFluxoEdicao] = useState("");
   const [descricaoFluxoEdicao, setDescricaoFluxoEdicao] = useState("");
   const [fluxoPadraoEdicao, setFluxoPadraoEdicao] = useState(false);
+  const [
+    fluxoUmaVezPorConversaEdicao,
+    setFluxoUmaVezPorConversaEdicao,
+  ] = useState(false);
   const [
     fluxoEscopoIntegracoesModoEdicao,
     setFluxoEscopoIntegracoesModoEdicao,
@@ -208,6 +216,7 @@ export default function useFluxoForm({
     setNovoFluxoNome("");
     setDescricaoNovoFluxo("");
     setNovoFluxoPadrao(false);
+    setNovoFluxoUmaVezPorConversa(false);
     setNovoFluxoEscopoIntegracoesModo("todas");
     setNovoFluxoIntegracoesIds([]);
     resetarGatilhosNovoFluxo();
@@ -329,6 +338,8 @@ export default function useFluxoForm({
                 ativo: gatilho.ativo !== false,
               })),
           configuracao_json: {
+            executar_apenas_uma_vez_por_conversa:
+              novoFluxoUmaVezPorConversa,
             integracoes_whatsapp: escopoIntegracoes,
             horario_atendimento: horarioNormalizado,
             encerramento_inatividade: {
@@ -382,6 +393,7 @@ export default function useFluxoForm({
     novoFluxoIntegracoesIds,
     novoFluxoNome,
     novoFluxoPadrao,
+    novoFluxoUmaVezPorConversa,
     onClearError,
     onClearSuccess,
     onErroCriacao,
@@ -409,6 +421,9 @@ export default function useFluxoForm({
       setFluxoPadraoEdicao(Boolean(fluxoParaEditar.fluxo_padrao));
 
       const config = fluxoParaEditar.configuracao_json || {};
+      setFluxoUmaVezPorConversaEdicao(
+        config.executar_apenas_uma_vez_por_conversa === true
+      );
       const escopoIntegracoes = normalizarEscopoIntegracoesFluxo(config);
       setFluxoEscopoIntegracoesModoEdicao(escopoIntegracoes.modo);
       setFluxoIntegracoesIdsEdicao(escopoIntegracoes.ids);
@@ -532,6 +547,8 @@ export default function useFluxoForm({
           fluxo_padrao: fluxoPadraoEdicao,
           configuracao_json: {
             ...(fluxoParaEditar.configuracao_json || {}),
+            executar_apenas_uma_vez_por_conversa:
+              fluxoUmaVezPorConversaEdicao,
             integracoes_whatsapp: escopoIntegracoes,
             horario_atendimento: horarioNormalizado,
             encerramento_inatividade: {
@@ -570,6 +587,7 @@ export default function useFluxoForm({
     fluxoEscopoIntegracoesModoEdicao,
     fluxoIntegracoesIdsEdicao,
     fluxoPadraoEdicao,
+    fluxoUmaVezPorConversaEdicao,
     existeOutroFluxoPadraoNaEmpresa,
     nomeFluxoEdicao,
     obterFluxoAlvoEdicao,
@@ -627,6 +645,8 @@ export default function useFluxoForm({
     setNovoFluxoNome,
     novoFluxoPadrao,
     setNovoFluxoPadrao,
+    novoFluxoUmaVezPorConversa,
+    setNovoFluxoUmaVezPorConversa,
     novoFluxoEscopoIntegracoesModo,
     setNovoFluxoEscopoIntegracoesModo,
     novoFluxoIntegracoesIds,
@@ -645,6 +665,8 @@ export default function useFluxoForm({
     setDescricaoFluxoEdicao,
     fluxoPadraoEdicao,
     setFluxoPadraoEdicao,
+    fluxoUmaVezPorConversaEdicao,
+    setFluxoUmaVezPorConversaEdicao,
     fluxoEscopoIntegracoesModoEdicao,
     setFluxoEscopoIntegracoesModoEdicao,
     fluxoIntegracoesIdsEdicao,

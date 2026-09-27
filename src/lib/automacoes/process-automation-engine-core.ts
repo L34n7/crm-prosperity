@@ -2882,51 +2882,6 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
       return { ok: true, status: "sem_gatilho" };
     }
 
-    const {
-      data: execucaoFluxoPadraoAnterior,
-      error: execucaoFluxoPadraoAnteriorError,
-    } = await supabaseAdmin
-      .from("automacao_execucoes")
-      .select("id, status, created_at")
-      .eq("empresa_id", empresaId)
-      .eq("conversa_id", conversaId)
-      .eq("fluxo_id", fluxoPadrao.id)
-      .eq("metadata_json->>tipo_inicio", "fluxo_padrao")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (execucaoFluxoPadraoAnteriorError) {
-      console.error(
-        "[AUTOMATION_ENGINE] Erro ao verificar execução anterior do fluxo padrão:",
-        execucaoFluxoPadraoAnteriorError
-      );
-      return {
-        ok: false,
-        error: "Erro ao verificar histórico do fluxo padrão da conversa.",
-      };
-    }
-
-    if (execucaoFluxoPadraoAnterior) {
-      console.log(
-        "[AUTOMATION_ENGINE] Fluxo padrão já executado nesta conversa. Novo início ignorado.",
-        {
-          empresaId,
-          conversaId,
-          fluxoId: fluxoPadrao.id,
-          execucaoAnteriorId: execucaoFluxoPadraoAnterior.id,
-          execucaoAnteriorStatus: execucaoFluxoPadraoAnterior.status,
-        }
-      );
-
-      return {
-        ok: true,
-        status: "fluxo_padrao_ja_executado_conversa",
-        execucaoId: execucaoFluxoPadraoAnterior.id,
-        fluxoId: fluxoPadrao.id,
-      };
-    }
-
     fluxoIdParaExecutar = fluxoPadrao.id;
     tipoInicioExecucao = "fluxo_padrao";
   }
@@ -2947,6 +2902,61 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   if (!fluxo) {
     console.log("[AUTOMATION_ENGINE] Fluxo encontrado, mas não está ativo.");
     return { ok: true, status: "fluxo_inativo" };
+  }
+
+  const configuracaoFluxo =
+    fluxo.configuracao_json &&
+    typeof fluxo.configuracao_json === "object" &&
+    !Array.isArray(fluxo.configuracao_json)
+      ? fluxo.configuracao_json
+      : {};
+  const executarApenasUmaVezPorConversa =
+    configuracaoFluxo.executar_apenas_uma_vez_por_conversa === true;
+
+  if (executarApenasUmaVezPorConversa) {
+    const {
+      data: execucaoAnteriorDoFluxo,
+      error: execucaoAnteriorDoFluxoError,
+    } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("id, status, created_at")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .eq("fluxo_id", fluxo.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (execucaoAnteriorDoFluxoError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao verificar execução anterior do fluxo:",
+        execucaoAnteriorDoFluxoError
+      );
+      return {
+        ok: false,
+        error: "Erro ao verificar histórico do fluxo da conversa.",
+      };
+    }
+
+    if (execucaoAnteriorDoFluxo) {
+      console.log(
+        "[AUTOMATION_ENGINE] Fluxo configurado para uma execução por conversa já foi executado. Novo início ignorado.",
+        {
+          empresaId,
+          conversaId,
+          fluxoId: fluxo.id,
+          execucaoAnteriorId: execucaoAnteriorDoFluxo.id,
+          execucaoAnteriorStatus: execucaoAnteriorDoFluxo.status,
+        }
+      );
+
+      return {
+        ok: true,
+        status: "fluxo_ja_executado_conversa",
+        execucaoId: execucaoAnteriorDoFluxo.id,
+        fluxoId: fluxo.id,
+      };
+    }
   }
 
   const { data: noInicial, error: noInicialError } = await supabaseAdmin

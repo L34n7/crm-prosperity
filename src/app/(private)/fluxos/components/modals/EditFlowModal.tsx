@@ -21,6 +21,7 @@ type EditFlowModalProps = {
   nome: string;
   descricao: string;
   fluxoPadrao: boolean;
+  executarApenasUmaVezPorConversa: boolean;
   outroFluxoPadraoExiste: boolean;
   mostrarEscopoIntegracoes: boolean;
   escopoModo: EscopoIntegracoesModo;
@@ -40,6 +41,7 @@ type EditFlowModalProps = {
   onNomeChange: (value: string) => void;
   onDescricaoChange: (value: string) => void;
   onFluxoPadraoChange: (value: boolean) => void;
+  onExecutarApenasUmaVezPorConversaChange: (value: boolean) => void;
   onEscopoModoChange: (value: EscopoIntegracoesModo) => void;
   onAlternarIntegracao: (integracaoId: string) => void;
   onQuantidadeInatividadeChange: (value: string) => void;
@@ -59,6 +61,7 @@ export default function EditFlowModal({
   nome,
   descricao,
   fluxoPadrao,
+  executarApenasUmaVezPorConversa,
   outroFluxoPadraoExiste,
   mostrarEscopoIntegracoes,
   escopoModo,
@@ -78,6 +81,7 @@ export default function EditFlowModal({
   onNomeChange,
   onDescricaoChange,
   onFluxoPadraoChange,
+  onExecutarApenasUmaVezPorConversaChange,
   onEscopoModoChange,
   onAlternarIntegracao,
   onQuantidadeInatividadeChange,
@@ -227,6 +231,24 @@ export default function EditFlowModal({
                   padrão. Ajuste o escopo para remover o conflito.
                 </p>
               )}
+            </div>
+          </label>
+
+          <label className={styles.switchField}>
+            <input
+              type="checkbox"
+              checked={executarApenasUmaVezPorConversa}
+              onChange={(event) =>
+                onExecutarApenasUmaVezPorConversaChange(event.target.checked)
+              }
+            />
+            <div>
+              <strong>Executar este fluxo apenas uma vez por conversa</strong>
+              <p>
+                Quando ativado, este fluxo não inicia novamente se já tiver
+                sido executado nesta mesma conversa. Em uma nova conversa, ele
+                poderá iniciar normalmente.
+              </p>
             </div>
           </label>
 

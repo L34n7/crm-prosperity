@@ -1029,6 +1029,8 @@ function FluxosPageContent() {
     setNovoFluxoNome,
     novoFluxoPadrao,
     setNovoFluxoPadrao,
+    novoFluxoUmaVezPorConversa,
+    setNovoFluxoUmaVezPorConversa,
     novoFluxoEscopoIntegracoesModo,
     setNovoFluxoEscopoIntegracoesModo,
     novoFluxoIntegracoesIds,
@@ -1048,6 +1050,8 @@ function FluxosPageContent() {
     setDescricaoFluxoEdicao,
     fluxoPadraoEdicao,
     setFluxoPadraoEdicao,
+    fluxoUmaVezPorConversaEdicao,
+    setFluxoUmaVezPorConversaEdicao,
     fluxoEscopoIntegracoesModoEdicao,
     setFluxoEscopoIntegracoesModoEdicao,
     fluxoIntegracoesIdsEdicao,
@@ -5829,6 +5833,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           nome={nomeFluxoEdicao}
           descricao={descricaoFluxoEdicao}
           fluxoPadrao={fluxoPadraoEdicao}
+          executarApenasUmaVezPorConversa={fluxoUmaVezPorConversaEdicao}
           outroFluxoPadraoExiste={existeOutroFluxoPadraoNaEmpresa()}
           mostrarEscopoIntegracoes={deveMostrarEscopoIntegracoesFluxo}
           escopoModo={fluxoEscopoIntegracoesModoEdicao}
@@ -5859,6 +5864,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               setNovoGatilhoCondicao("contem");
             }
           }}
+          onExecutarApenasUmaVezPorConversaChange={
+            setFluxoUmaVezPorConversaEdicao
+          }
           onEscopoModoChange={(modo) => {
             setFluxoEscopoIntegracoesModoEdicao(modo);
 
@@ -5968,6 +5976,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
           nome={novoFluxoNome}
           descricao={descricaoNovoFluxo}
           fluxoPadrao={novoFluxoPadrao}
+          executarApenasUmaVezPorConversa={novoFluxoUmaVezPorConversa}
           jaExisteFluxoPadrao={jaExisteFluxoPadrao}
           mostrarEscopoIntegracoes={deveMostrarEscopoIntegracoesFluxo}
           escopoModo={novoFluxoEscopoIntegracoesModo}
@@ -5992,6 +6001,9 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               setNovoGatilhoValor("");
             }
           }}
+          onExecutarApenasUmaVezPorConversaChange={
+            setNovoFluxoUmaVezPorConversa
+          }
           onEscopoModoChange={(modo) => {
             setNovoFluxoEscopoIntegracoesModo(modo);
 
