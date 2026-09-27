@@ -159,15 +159,17 @@ export async function sincronizarOcupacaoCompartilhada(params: {
         .filter(Boolean),
     ),
   );
+  const grupoAtualId = String(vinculoAtual?.grupo_id || "");
+  const gruposParaIncorporar = grupoIds.filter((id) => id !== grupoAtualId);
 
   let agendaIdsFinais = new Set(desejados);
 
-  if (grupoIds.length > 0) {
+  if (gruposParaIncorporar.length > 0) {
     const { data: membrosExistentes, error: membrosError } = await params.supabase
       .from("agenda_grupos_ocupacao_calendarios")
       .select("grupo_id, agenda_id")
       .eq("empresa_id", params.empresaId)
-      .in("grupo_id", grupoIds);
+      .in("grupo_id", gruposParaIncorporar);
 
     if (membrosError) {
       throw new Error(
@@ -223,6 +225,38 @@ export async function sincronizarOcupacaoCompartilhada(params: {
       .delete()
       .eq("empresa_id", params.empresaId)
       .in("id", gruposSecundarios);
+  }
+
+  const { data: membrosGrupoAtual, error: membrosGrupoAtualError } =
+    await params.supabase
+      .from("agenda_grupos_ocupacao_calendarios")
+      .select("agenda_id")
+      .eq("empresa_id", params.empresaId)
+      .eq("grupo_id", grupoId);
+
+  if (membrosGrupoAtualError) {
+    throw new Error(
+      `Erro ao reconciliar ocupação compartilhada: ${membrosGrupoAtualError.message}`,
+    );
+  }
+
+  const removidos = (membrosGrupoAtual || [])
+    .map((item: any) => String(item.agenda_id))
+    .filter((agendaId: string) => !agendaIdsFinais.has(agendaId));
+
+  if (removidos.length > 0) {
+    const { error: removerMembrosError } = await params.supabase
+      .from("agenda_grupos_ocupacao_calendarios")
+      .delete()
+      .eq("empresa_id", params.empresaId)
+      .eq("grupo_id", grupoId)
+      .in("agenda_id", removidos);
+
+    if (removerMembrosError) {
+      throw new Error(
+        `Erro ao remover calendários da ocupação compartilhada: ${removerMembrosError.message}`,
+      );
+    }
   }
 
   const rows = Array.from(agendaIdsFinais).map((agendaId) => ({
