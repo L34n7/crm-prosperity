@@ -657,17 +657,39 @@ function Page() {
   const loadData = useCallback(
     async (id: string) => {
       const rg = range(month);
-      const data = await agendaRpcContextual<{
-        agendamentos?: Ag[];
-        tipos?: Tipo[];
-        responsaveis?: Resp[];
-        usuario_atual_id?: string;
-      }>("listar", {
-        agenda_id: id,
-        inicio: rg.start,
-        fim: rg.end,
-      });
-      const appointments = (data?.agendamentos || []) as Ag[];
+      const ids = Array.from(
+        new Set(
+          [id, ...agendaIdsVisiveis]
+            .map((value) => String(value || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      const resultados = await Promise.all(
+        ids.map(async (agendaConsultaId) => ({
+          agenda_id: agendaConsultaId,
+          data: await agendaRpcContextual<{
+            agendamentos?: Ag[];
+            tipos?: Tipo[];
+            responsaveis?: Resp[];
+            usuario_atual_id?: string;
+          }>("listar", {
+            agenda_id: agendaConsultaId,
+            inicio: rg.start,
+            fim: rg.end,
+          }),
+        })),
+      );
+      const principal =
+        resultados.find((item) => item.agenda_id === id)?.data ||
+        resultados[0]?.data ||
+        {};
+      const appointments = Array.from(
+        new Map(
+          resultados
+            .flatMap((item) => item.data?.agendamentos || [])
+            .map((appointment) => [appointment.id, appointment as Ag]),
+        ).values(),
+      );
       const propertyIds = Array.from(
         new Set(
           appointments.flatMap((appointment) =>
@@ -742,13 +764,13 @@ function Page() {
         });
       }
       setAgs(appointments);
-      setTipos(data?.tipos || []);
-      setResps(data?.responsaveis || []);
-      setUserId(data?.usuario_atual_id || "");
+      setTipos(principal?.tipos || []);
+      setResps(principal?.responsaveis || []);
+      setUserId(principal?.usuario_atual_id || "");
       await loadGoogle(id);
       return appointments;
     },
-    [loadGoogle, month],
+    [agendaIdsVisiveis, loadGoogle, month],
   );
   const loadFeedback = useCallback(async () => {
     try {
@@ -777,6 +799,18 @@ function Page() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    if (!agendaId) {
+      setAgendaIdsVisiveis([]);
+      return;
+    }
+
+    setAgendaIdsVisiveis((atual) => {
+      if (atual.includes(agendaId)) return atual;
+      return [agendaId];
+    });
+  }, [agendaId]);
+
   useEffect(() => {
     if (!agendaId) return;
     setLoad(true);
@@ -883,7 +917,13 @@ function Page() {
     }
     if (!agenda) return;
     setViewing(null);
-    setForm(blank(d, agenda.duracao_minutos, userId));
+    setForm(
+      blank(
+        d,
+        agenda.duracao_minutos,
+        agenda.responsavel_id || userId,
+      ),
+    );
     setContact(null);
     setParticipantQuery("");
     setParticipantResults([]);
@@ -1090,7 +1130,10 @@ function Page() {
       setErr("Você não tem permissão para editar agendas.");
       return;
     }
-    if (!agendaId) return;
+    const agendaDestinoId = form.id
+      ? viewing?.agenda_id || agendaId
+      : agendaId;
+    if (!agendaDestinoId) return;
     try {
       setBusy(true);
       setErr("");
@@ -1162,12 +1205,12 @@ function Page() {
         },
       };
       await agendaRpcContextual("salvar_agendamento", {
-        agenda_id: agendaId,
+        agenda_id: agendaDestinoId,
         agendamento_id: form.id,
         payload,
       });
-      if (google.conectado)
-        await fetch(`/api/agendas/${agendaId}/google-calendar`, {
+      if (google.conectado && agendaDestinoId === agendaId)
+        await fetch(`/api/agendas/${agendaDestinoId}/google-calendar`, {
           method: "POST",
         }).catch(() => undefined);
       const appointments = await loadData(agendaId);
