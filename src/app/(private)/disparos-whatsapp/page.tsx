@@ -1491,6 +1491,26 @@ function camposDataHoraLocal(data?: string | null) {
   };
 }
 
+function formatarDataHoraListaFiltro(createdAt?: string | null) {
+  if (!createdAt) return "";
+
+  const data = new Date(createdAt);
+
+  if (Number.isNaN(data.getTime())) return "";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(data)
+    .replace(",", "");
+}
+
 function formatarDataHoraCurta(data?: string | null) {
   if (!data) return "";
 
@@ -2297,7 +2317,13 @@ export default function DisparosWhatsAppPage() {
           params.set("busca", busca.trim());
         }
 
-        if (origem.trim()) {
+        const listaIdDaOrigem = origem.startsWith("lista:")
+          ? origem.replace("lista:", "").trim()
+          : "";
+
+        if (listaIdDaOrigem) {
+          params.set("lista_id", listaIdDaOrigem);
+        } else if (origem.trim()) {
           params.set("origem", origem.trim());
         }
 
@@ -2305,7 +2331,7 @@ export default function DisparosWhatsAppPage() {
           params.set("campanha", campanha.trim());
         }
 
-        if (listaId.trim()) {
+        if (listaId.trim() && !listaIdDaOrigem) {
           params.set("lista_id", listaId.trim());
         }
 
@@ -3560,9 +3586,21 @@ export default function DisparosWhatsAppPage() {
   function montarParametrosContatosAcaoMassa(paginaAtual: number, limite: number) {
     const params = new URLSearchParams();
     if (buscaContato.trim()) params.set("busca", buscaContato.trim());
-    if (origemFiltro.trim()) params.set("origem", origemFiltro.trim());
+
+    const listaIdDaOrigem = origemFiltro.startsWith("lista:")
+      ? origemFiltro.replace("lista:", "").trim()
+      : "";
+
+    if (listaIdDaOrigem) {
+      params.set("lista_id", listaIdDaOrigem);
+    } else if (origemFiltro.trim()) {
+      params.set("origem", origemFiltro.trim());
+    }
+
     if (campanhaFiltro.trim()) params.set("campanha", campanhaFiltro.trim());
-    if (listaFiltro.trim()) params.set("lista_id", listaFiltro.trim());
+    if (listaFiltro.trim() && !listaIdDaOrigem) {
+      params.set("lista_id", listaFiltro.trim());
+    }
     if (interesseFiltro.trim()) params.set("interesse", interesseFiltro.trim());
     if (classificacaoFiltro.trim()) params.set("classificacoes", classificacaoFiltro.trim());
     if (disparoAnteriorFiltroContatos.trim()) params.set("disparo_anterior_id", disparoAnteriorFiltroContatos.trim());
@@ -5125,22 +5163,60 @@ export default function DisparosWhatsAppPage() {
                       <label className={styles.label}>Filtrar por origem</label>
                       <select
                         value={origemFiltro}
-                        onChange={(e) => setOrigemFiltro(e.target.value)}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+
+                          contatosConsultaAtivaRef.current += 1;
+                          setOrigemFiltro(valor);
+
+                          if (valor.startsWith("lista:")) {
+                            setListaFiltro("");
+                          }
+
+                          setContatos([]);
+                          setTotalContatosDisponiveis(0);
+                          setLoadingContatos(true);
+                        }}
                         className={styles.input}
                       >
-                      {origensDisponiveis.length > 0 ? (
-                        <>
-                          <option value="">Todas as origens</option>
+                        <option value="">Todas as origens</option>
 
-                          {origensDisponiveis.map((origem) => (
-                            <option key={origem} value={origem}>
-                              {origem}
-                            </option>
-                          ))}
-                        </>
-                      ) : (
-                        <option value="">Nenhuma origem encontrada</option>
-                      )}
+                        {listasDisponiveis.length > 0 ? (
+                          <optgroup label="Listas importadas">
+                            {listasDisponiveis.map((lista) => {
+                              const dataLista = formatarDataHoraListaFiltro(
+                                lista.created_at
+                              );
+
+                              return (
+                                <option
+                                  key={lista.id}
+                                  value={`lista:${lista.id}`}
+                                >
+                                  {lista.nome}
+                                  {dataLista ? ` · ${dataLista}` : ""}
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        ) : null}
+
+                        {origensDisponiveis.length > 0 ? (
+                          <optgroup label="Outras origens">
+                            {origensDisponiveis.map((origem) => (
+                              <option key={origem} value={origem}>
+                                {origem}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : null}
+
+                        {listasDisponiveis.length === 0 &&
+                        origensDisponiveis.length === 0 ? (
+                          <option value="" disabled>
+                            Nenhuma origem encontrada
+                          </option>
+                        ) : null}
                       </select>
                     </div>
 
@@ -5168,7 +5244,7 @@ export default function DisparosWhatsAppPage() {
                     </div>
 
                     <div className={styles.field}>
-                      <label className={styles.label}>Filtrar por lista importada</label>
+                      <label className={styles.label}>Filtrar por lista</label>
                       <select
                         value={listaFiltro}
                         onChange={(e) => {
@@ -5180,7 +5256,7 @@ export default function DisparosWhatsAppPage() {
                         }}
                         className={styles.input}
                       >
-                        <option value="">Todas as listas importadas</option>
+                        <option value="">Todas as listas</option>
                         {listasDisponiveis.map((lista) => (
                           <option key={lista.id} value={lista.id}>
                             {lista.nome}

@@ -473,8 +473,8 @@ export async function POST(request: NextRequest) {
     const disponibilidadeNoHorario =
       await obterDisponibilidadeAgendamentoMeta({
         empresaId: usuario.empresa_id,
-        integracao,
-        telefones: telefonesQueConsomemNoHorario,
+        integracao: integracao as any,
+        telefones: telefonesQueConsomemNoHorario as string[],
         aPartirDe: executarEm,
       });
 
@@ -500,8 +500,8 @@ export async function POST(request: NextRequest) {
       const disponibilidadeSegura =
         await obterDisponibilidadeAgendamentoMeta({
           empresaId: usuario.empresa_id,
-          integracao,
-          telefones: todosTelefonesSelecionados,
+          integracao: integracao as any,
+          telefones: todosTelefonesSelecionados as string[],
           aPartirDe: executarEm,
         });
 
