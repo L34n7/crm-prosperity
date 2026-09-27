@@ -360,6 +360,7 @@ type CampanhaHistoricoFiltro = {
   id: string;
   nome?: string | null;
   template_nome?: string | null;
+  integracao_whatsapp_id?: string | null;
   total_itens?: number | null;
   total_enviados?: number | null;
   created_at?: string | null;
@@ -424,7 +425,7 @@ const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
 const TEMPO_CARD_CAMPANHA_TERMINAL_MS = 8000;
 const TESTE_CARD_PAGINA_DISPARO_KEY =
   "crm-whatsapp-disparo-page-card-test";
-const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v2";
+const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v3";
 const HISTORICO_CACHE_TTL_MS = 5 * 60 * 1000;
 const HISTORICO_CACHE_MAX_CONSULTAS = 20;
 
@@ -477,12 +478,14 @@ function persistirHistoricoCache() {
 function chaveConsultaHistorico(
   empresaId: string,
   status: string,
+  integracaoWhatsappId: string,
   campanhaId: string,
   busca: string
 ) {
   return JSON.stringify([
     empresaId,
     status,
+    integracaoWhatsappId,
     campanhaId,
     busca.trim().toLocaleLowerCase("pt-BR"),
   ]);
@@ -2027,6 +2030,7 @@ export default function DisparosWhatsAppPage() {
   >("todos");
   const [buscaHistorico, setBuscaHistorico] = useState("");
   const [buscaHistoricoConsulta, setBuscaHistoricoConsulta] = useState("");
+  const [filtroHistoricoIntegracao, setFiltroHistoricoIntegracao] = useState("");
   const [filtroHistoricoCampanha, setFiltroHistoricoCampanha] = useState("");
   const [loadingConflitos, setLoadingConflitos] = useState(false);
 
@@ -2475,6 +2479,7 @@ export default function DisparosWhatsAppPage() {
       const chaveConsulta = chaveConsultaHistorico(
         empresaId,
         filtroHistorico,
+        filtroHistoricoIntegracao,
         filtroHistoricoCampanha,
         buscaHistoricoConsulta
       );
@@ -2545,6 +2550,10 @@ export default function DisparosWhatsAppPage() {
 
         if (paginaAnterior?.proximoCursor) {
           params.set("cursor", paginaAnterior.proximoCursor);
+        }
+
+        if (filtroHistoricoIntegracao) {
+          params.set("integracao_whatsapp_id", filtroHistoricoIntegracao);
         }
 
         if (filtroHistoricoCampanha) {
@@ -2642,6 +2651,7 @@ export default function DisparosWhatsAppPage() {
     [
       usuarioLogado?.empresa_id,
       filtroHistorico,
+      filtroHistoricoIntegracao,
       filtroHistoricoCampanha,
       buscaHistoricoConsulta,
     ]
@@ -3461,6 +3471,17 @@ export default function DisparosWhatsAppPage() {
         }))
         .filter((campanha) => campanha.total > 0),
     [campanhasHistorico]
+  );
+
+  const campanhasHistoricoFiltradas = useMemo(
+    () =>
+      filtroHistoricoIntegracao
+        ? campanhasHistorico.filter(
+            (campanha) =>
+              campanha.integracao_whatsapp_id === filtroHistoricoIntegracao
+          )
+        : campanhasHistorico,
+    [campanhasHistorico, filtroHistoricoIntegracao]
   );
 
   const totalContatosComConflitoSelecionados = useMemo(() => {
@@ -6258,6 +6279,25 @@ export default function DisparosWhatsAppPage() {
               />
             </div>
 
+            <div className={styles.historyIntegrationFilter}>
+              <label className={styles.label}>Integração</label>
+              <select
+                value={filtroHistoricoIntegracao}
+                onChange={(e) => {
+                  setFiltroHistoricoIntegracao(e.target.value);
+                  setFiltroHistoricoCampanha("");
+                }}
+                className={styles.input}
+              >
+                <option value="">Todas as integrações</option>
+                {integracoes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome_conexao || "Integração"} {item.numero || ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className={styles.historyMassFilter}>
               <label className={styles.label}>Disparo em massa</label>
               <select
@@ -6266,7 +6306,7 @@ export default function DisparosWhatsAppPage() {
                 className={styles.input}
               >
                 <option value="">Todos os disparos em massa</option>
-                {campanhasHistorico.map((campanha) => (
+                {campanhasHistoricoFiltradas.map((campanha) => (
                   <option key={campanha.id} value={campanha.id}>
                     {nomeCampanhaHistorico(campanha)}
                   </option>

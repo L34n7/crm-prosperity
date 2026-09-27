@@ -150,6 +150,7 @@ async function buscarCampanhasFiltroHistorico(
         id,
         nome,
         template_nome,
+        integracao_whatsapp_id,
         total_itens,
         total_enviados,
         created_at,
@@ -224,6 +225,8 @@ export async function GET(req: NextRequest) {
       searchParams.get("campanha_disparo_id")?.trim() ||
       "";
     const busca = (searchParams.get("busca") || "").trim().slice(0, 120);
+    const integracaoWhatsappId =
+      searchParams.get("integracao_whatsapp_id")?.trim() || "";
     const incluirTotais = searchParams.get("incluir_totais") === "true";
     const incluirCampanhas =
       searchParams.get("incluir_campanhas") === "true";
@@ -252,6 +255,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (
+      integracaoWhatsappId &&
+      !acessoIntegracoes.idsPermitidos.includes(integracaoWhatsappId)
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Sem acesso a esta integracao WhatsApp." },
+        { status: 403 }
+      );
+    }
+
     if (campanhaId) {
       const { data: campanhaFiltro } = await supabaseAdmin
         .from("whatsapp_disparo_campanhas")
@@ -274,7 +287,7 @@ export async function GET(req: NextRequest) {
     }
 
     const consultaPagina = supabaseAdmin.rpc(
-      "buscar_whatsapp_disparo_historico_paginado",
+      "buscar_whatsapp_disparo_historico_paginado_v2",
       {
         p_empresa_id: usuario.empresa_id,
         p_limite: limite + 1,
@@ -283,14 +296,18 @@ export async function GET(req: NextRequest) {
         p_status: status,
         p_campanha_id: campanhaId || null,
         p_busca: busca || null,
+        p_integracao_whatsapp_id: integracaoWhatsappId || null,
+        p_integracoes_permitidas: acessoIntegracoes.idsPermitidos,
       }
     );
 
     const consultaTotais = incluirTotais
-      ? supabaseAdmin.rpc("contar_whatsapp_disparo_historico", {
+      ? supabaseAdmin.rpc("contar_whatsapp_disparo_historico_v2", {
           p_empresa_id: usuario.empresa_id,
           p_campanha_id: campanhaId || null,
           p_busca: busca || null,
+          p_integracao_whatsapp_id: integracaoWhatsappId || null,
+          p_integracoes_permitidas: acessoIntegracoes.idsPermitidos,
         })
       : Promise.resolve({ data: null, error: null });
 
@@ -315,7 +332,7 @@ export async function GET(req: NextRequest) {
       const funcaoHistoricoAusente =
         paginaError.code === "PGRST202" ||
         paginaError.message.includes(
-          "buscar_whatsapp_disparo_historico_paginado"
+          "buscar_whatsapp_disparo_historico_paginado_v2"
         );
 
       return NextResponse.json(

@@ -327,12 +327,17 @@
 .historySearchBar {
   padding: 14px 18px 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px) auto;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(210px, 280px)
+    minmax(260px, 360px)
+    auto;
   gap: 12px;
   align-items: end;
 }
 
 .historySearchField,
+.historyIntegrationFilter,
 .historyMassFilter {
   min-width: 0;
   display: flex;
@@ -341,6 +346,7 @@
 }
 
 .historyMassFilter .input,
+.historyIntegrationFilter .input,
 .historySearchField .input {
   height: 42px;
 }
