@@ -1360,7 +1360,9 @@ function Page() {
         antecedencia_minutos: "120",
         janela_dias: "14",
         status: "ativo",
+        responsavel_id: "",
       });
+      setCalendariosMescladosIds([]);
       setDisp(
         dias.map((_, i) => ({
           dia_semana: i,
@@ -1380,7 +1382,9 @@ function Page() {
         antecedencia_minutos: String(agenda.antecedencia_minutos),
         janela_dias: String(agenda.janela_dias),
         status: agenda.status,
+        responsavel_id: agenda.responsavel_id || "",
       });
+      setCalendariosMescladosIds(agenda.calendarios_mesclados_ids || []);
       const r = await fetch(`/api/agendas/${agenda.id}/disponibilidades`, {
           cache: "no-store",
         }),
@@ -1460,6 +1464,8 @@ function Page() {
         intervalo_minutos: Number(af.intervalo_minutos),
         antecedencia_minutos: Number(af.antecedencia_minutos),
         janela_dias: Number(af.janela_dias),
+        responsavel_id: af.responsavel_id || null,
+        calendarios_mesclados_ids: calendariosMescladosIds,
         integracao_whatsapp_ids: agendaIntegrationIds,
       };
       const r = await fetch(configNew ? "/api/agendas" : `/api/agendas/${id}`, {
