@@ -12,6 +12,7 @@ import {
   type AgendaSlotsDisponiveisResultado,
   type InterpretacaoDataHorarioAgenda,
 } from "./agenda-service-core";
+import { listarAgendaIdsBloqueio } from "./capacidade";
 
 export * from "./agenda-service-core";
 
@@ -57,6 +58,59 @@ function parseHora(valor: string) {
   const minuto = clamp(Number(minutoRaw || 0), 0, 59);
 
   return hora * 60 + minuto;
+}
+
+function segmentosDisponiveisDia(params: {
+  inicio: number;
+  fim: number;
+  intervalos: AgendaIntervaloDia[];
+}) {
+  let segmentos = [{ inicio: params.inicio, fim: params.fim }];
+
+  const bloqueios = params.intervalos
+    .map((intervalo) => ({
+      inicio: parseHora(intervalo.hora_inicio),
+      fim: parseHora(intervalo.hora_fim),
+    }))
+    .filter(
+      (intervalo) =>
+        intervalo.fim > intervalo.inicio &&
+        intervalo.inicio < params.fim &&
+        intervalo.fim > params.inicio,
+    )
+    .sort((a, b) => a.inicio - b.inicio);
+
+  for (const bloqueio of bloqueios) {
+    const proximos: Array<{ inicio: number; fim: number }> = [];
+
+    for (const segmento of segmentos) {
+      if (
+        bloqueio.fim <= segmento.inicio ||
+        bloqueio.inicio >= segmento.fim
+      ) {
+        proximos.push(segmento);
+        continue;
+      }
+
+      if (bloqueio.inicio > segmento.inicio) {
+        proximos.push({
+          inicio: segmento.inicio,
+          fim: Math.min(bloqueio.inicio, segmento.fim),
+        });
+      }
+
+      if (bloqueio.fim < segmento.fim) {
+        proximos.push({
+          inicio: Math.max(bloqueio.fim, segmento.inicio),
+          fim: segmento.fim,
+        });
+      }
+    }
+
+    segmentos = proximos;
+  }
+
+  return segmentos.filter((segmento) => segmento.fim > segmento.inicio);
 }
 
 function localParts(date: Date, timezone: string): LocalParts {
@@ -244,18 +298,28 @@ export async function listarSlotsDisponiveis(params: {
     timezone,
   });
 
-  await reconciliarExclusoesGoogleCalendar({
+  const agendaIdsBloqueio = await listarAgendaIdsBloqueio({
+    supabase: params.supabase,
     empresaId: params.empresaId,
     agendaId: params.agendaId,
-    inicioAt: rangeInicio.toISOString(),
-    fimAt: rangeFim.toISOString(),
   });
+
+  await Promise.all(
+    agendaIdsBloqueio.map((agendaId) =>
+      reconciliarExclusoesGoogleCalendar({
+        empresaId: params.empresaId,
+        agendaId,
+        inicioAt: rangeInicio.toISOString(),
+        fimAt: rangeFim.toISOString(),
+      }),
+    ),
+  );
 
   const { data: agendamentos, error: agendamentosError } = await params.supabase
     .from("agenda_agendamentos")
-    .select("id, inicio_at, fim_at")
+    .select("id, agenda_id, inicio_at, fim_at")
     .eq("empresa_id", params.empresaId)
-    .eq("agenda_id", params.agendaId)
+    .in("agenda_id", agendaIdsBloqueio)
     .in("status", ["agendado", "confirmado"])
     .lt("inicio_at", rangeFim.toISOString())
     .gt("fim_at", rangeInicio.toISOString());
@@ -272,14 +336,18 @@ export async function listarSlotsDisponiveis(params: {
       fim: new Date(item.fim_at).getTime(),
     })
   );
-  const ocupacoesGoogle = await listarOcupacoesGoogleCalendar({
-    empresaId: params.empresaId,
-    agendaId: params.agendaId,
-    inicioAt: rangeInicio.toISOString(),
-    fimAt: rangeFim.toISOString(),
-  });
+  const ocupacoesGooglePorAgenda = await Promise.all(
+    agendaIdsBloqueio.map((agendaId) =>
+      listarOcupacoesGoogleCalendar({
+        empresaId: params.empresaId,
+        agendaId,
+        inicioAt: rangeInicio.toISOString(),
+        fimAt: rangeFim.toISOString(),
+      }),
+    ),
+  );
 
-  for (const ocupacao of ocupacoesGoogle) {
+  for (const ocupacao of ocupacoesGooglePorAgenda.flat()) {
     ocupados.push({
       inicio: new Date(ocupacao.start).getTime(),
       fim: new Date(ocupacao.end).getTime(),
@@ -309,53 +377,51 @@ export async function listarSlotsDisponiveis(params: {
     }
 
     for (const janela of janelas) {
-      const inicioJanela = parseHora(janela.hora_inicio);
-      const fimJanela = parseHora(janela.hora_fim);
+      const segmentos = segmentosDisponiveisDia({
+        inicio: parseHora(janela.hora_inicio),
+        fim: parseHora(janela.hora_fim),
+        intervalos: intervalosDia,
+      });
 
-      for (
-        let minuto = inicioJanela;
-        minuto + duracaoMinutos <= fimJanela;
-        minuto += passoEntreInicios
-      ) {
-        const inicio = zonedTimeToUtc({
-          data,
-          minutosDoDia: minuto,
-          timezone,
-        });
-        const fim = new Date(inicio.getTime() + duracaoMinutos * 60_000);
-        const fimMinuto = minuto + duracaoMinutos;
-        const interceptaIntervalo = intervalosDia.some(
-          (intervalo) =>
-            minuto < parseHora(intervalo.hora_fim) &&
-            fimMinuto > parseHora(intervalo.hora_inicio)
-        );
+      for (const segmento of segmentos) {
+        for (
+          let minuto = segmento.inicio;
+          minuto + duracaoMinutos <= segmento.fim;
+          minuto += passoEntreInicios
+        ) {
+          const inicio = zonedTimeToUtc({
+            data,
+            minutosDoDia: minuto,
+            timezone,
+          });
+          const fim = new Date(inicio.getTime() + duracaoMinutos * 60_000);
 
-        if (interceptaIntervalo) continue;
-        if (inicio.getTime() <= limiteMinimo.getTime()) continue;
+          if (inicio.getTime() <= limiteMinimo.getTime()) continue;
 
-        // intervalo_minutos é um buffer real entre atendimentos, e não o
-        // passo da grade. Também protegemos esse buffer contra compromissos
-        // já existentes no CRM ou no Google Calendar.
-        const temConflito = ocupados.some(
-          (ocupado) =>
-            inicio.getTime() < ocupado.fim + intervaloMs &&
-            fim.getTime() + intervaloMs > ocupado.inicio
-        );
+          // Um calendário pode compartilhar a mesma capacidade com outros.
+          // Qualquer compromisso CRM ou Google de um membro do grupo bloqueia
+          // o período para todos os demais calendários mesclados.
+          const temConflito = ocupados.some(
+            (ocupado) =>
+              inicio.getTime() < ocupado.fim + intervaloMs &&
+              fim.getTime() + intervaloMs > ocupado.inicio
+          );
 
-        if (temConflito) continue;
+          if (temConflito) continue;
 
-        const labels = formatarSlotAgenda(
-          inicio.toISOString(),
-          fim.toISOString(),
-          timezone
-        );
+          const labels = formatarSlotAgenda(
+            inicio.toISOString(),
+            fim.toISOString(),
+            timezone
+          );
 
-        slots.push({
-          indice: 0,
-          inicio_at: inicio.toISOString(),
-          fim_at: fim.toISOString(),
-          ...labels,
-        });
+          slots.push({
+            indice: 0,
+            inicio_at: inicio.toISOString(),
+            fim_at: fim.toISOString(),
+            ...labels,
+          });
+        }
       }
     }
   }
