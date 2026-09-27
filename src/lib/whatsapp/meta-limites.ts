@@ -141,9 +141,19 @@ export function resolverLimitePorTier(tier?: string | null) {
   if (valor.includes("UNLIMITED")) return 1000000000;
   if (valor.includes("100K")) return 100000;
   if (valor.includes("10K")) return 10000;
+  if (valor.includes("2K")) return 2000;
   if (valor.includes("1K")) return 1000;
   if (valor.includes("250")) return 250;
   if (valor.includes("50")) return 50;
+
+  const matchMilhares = valor.match(/(\d+(?:[.,]\d+)?)K\b/);
+
+  if (matchMilhares) {
+    const milhares = Number(matchMilhares[1].replace(",", "."));
+    return Number.isFinite(milhares) && milhares > 0
+      ? Math.round(milhares * 1000)
+      : null;
+  }
 
   const numero = Number(valor.replace(/[^\d]/g, ""));
   return Number.isFinite(numero) && numero > 0 ? numero : null;

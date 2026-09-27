@@ -63,6 +63,7 @@ type PhoneInfoMeta = {
   name_status?: string;
   new_name_status?: string;
   quality_rating?: string;
+  whatsapp_business_manager_messaging_limit?: string;
   messaging_limit_tier?: string;
   account_mode?: string;
 };
@@ -507,6 +508,7 @@ async function salvarSaudeMetaIntegracao(params: {
     integracao.phone_number_status ||
     null;
   const messagingLimitTier =
+    phoneJson.whatsapp_business_manager_messaging_limit ||
     phoneJson.messaging_limit_tier ||
     integracao.meta_messaging_limit_tier ||
     null;
@@ -585,7 +587,7 @@ async function consultarPhoneInfoMeta(
   token: string
 ) {
   const response = await fetch(
-    `https://graph.facebook.com/${GRAPH_VERSION}/${integracao.phone_number_id}?fields=verified_name,display_phone_number,status,name_status,new_name_status,quality_rating,messaging_limit_tier,account_mode`,
+    `https://graph.facebook.com/${GRAPH_VERSION}/${integracao.phone_number_id}?fields=verified_name,display_phone_number,status,name_status,new_name_status,quality_rating,whatsapp_business_manager_messaging_limit,messaging_limit_tier,account_mode`,
     {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },

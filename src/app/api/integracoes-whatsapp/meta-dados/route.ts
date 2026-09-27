@@ -7,6 +7,7 @@ import {
 } from "@/lib/whatsapp/access-token";
 import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
 import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
+import { resolverLimitePorTier } from "@/lib/whatsapp/meta-limites";
 
 async function fetchGraph(path: string, accessToken: string) {
   const url = new URL(getWhatsAppGraphUrl(path));
@@ -229,7 +230,7 @@ export async function POST(request: NextRequest) {
      * 3. Busca números da WABA.
      */
     const phonesResult = await fetchGraph(
-      `${waba.id}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status,status,account_mode,messaging_limit_tier,is_on_biz_app,platform_type`,
+      `${waba.id}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status,status,account_mode,whatsapp_business_manager_messaging_limit,messaging_limit_tier,is_on_biz_app,platform_type`,
       accessToken
     );
 
@@ -321,6 +322,12 @@ export async function POST(request: NextRequest) {
     /**
      * 4. Salva tudo no banco.
      */
+    const messagingLimitTier =
+      phone.whatsapp_business_manager_messaging_limit ||
+      phone.messaging_limit_tier ||
+      null;
+    const messagingLimit = resolverLimitePorTier(messagingLimitTier);
+
     const { data: integracaoAtualizada, error: updateError } =
       await supabaseAdmin
         .from("integracoes_whatsapp")
@@ -336,7 +343,8 @@ export async function POST(request: NextRequest) {
           quality_rating: phone.quality_rating || null,
           code_verification_status: phone.code_verification_status || null,
           phone_number_status: phone.status || phone.name_status || null,
-          meta_messaging_limit_tier: phone.messaging_limit_tier || null,
+          meta_messaging_limit_tier: messagingLimitTier,
+          meta_messaging_limit: messagingLimit,
           meta_account_mode: phone.account_mode || null,
           ...(modoIntegracao === "coexistence"
             ? {
@@ -364,8 +372,8 @@ export async function POST(request: NextRequest) {
             whatsapp_meta_health: {
               phone_number_status: phone.status || phone.name_status || null,
               quality_rating: phone.quality_rating || null,
-              messaging_limit_tier: phone.messaging_limit_tier || null,
-              messaging_limit: null,
+              messaging_limit_tier: messagingLimitTier,
+              messaging_limit: messagingLimit,
               account_mode: phone.account_mode || null,
               checked_at: agora,
               raw: phone,
