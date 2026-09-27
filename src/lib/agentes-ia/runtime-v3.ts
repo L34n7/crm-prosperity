@@ -209,7 +209,7 @@ async function listarSlotsOrigemAgenda(params: {
   janelaDias?: number;
   limite?: number;
   timezone?: string | null;
-}) {
+}): Promise<any> {
   const limite = Math.max(1, Math.min(50, Number(params.limite || 12)));
   if (params.agendaId) {
     return listarSlotsDisponiveis({
