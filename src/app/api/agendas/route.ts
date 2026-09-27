@@ -5,6 +5,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizeIntegrationIds, withCalendarIntegrationIds } from "@/lib/agendas/integration-scope";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sincronizarOcupacaoCompartilhada } from "@/lib/agendas/capacidade";
 
 const DIAS_UTEIS_PADRAO = [1, 2, 3, 4, 5];
 const TIMEZONE_PADRAO = "America/Sao_Paulo";
@@ -44,6 +45,32 @@ async function validarIntegracoes(
   return { ids, error: "" };
 }
 
+async function validarResponsavel(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  empresaId: string,
+  value: unknown,
+) {
+  const responsavelId = String(value || "").trim();
+  if (!responsavelId) return { id: null as string | null, error: "" };
+
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("id", responsavelId)
+    .eq("status", "ativo")
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      id: null as string | null,
+      error: "O responsável precisa ser um usuário ativo da empresa.",
+    };
+  }
+
+  return { id: responsavelId, error: "" };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const resultado = await getUsuarioContexto();
@@ -64,7 +91,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("calendarios")
-      .select("id, empresa_id, nome, descricao, timezone, duracao_minutos, intervalo_minutos, antecedencia_minutos, janela_dias, status, metadata_json, created_at, updated_at")
+      .select("id, empresa_id, nome, descricao, timezone, duracao_minutos, intervalo_minutos, antecedencia_minutos, janela_dias, status, responsavel_id, metadata_json, created_at, updated_at")
       .eq("empresa_id", usuario.empresa_id)
       .order("created_at", { ascending: false });
 
@@ -78,6 +105,46 @@ export async function GET(request: NextRequest) {
 
     const agendaIds = (agendas || []).map((agenda: any) => agenda.id);
     const proximosPorAgenda = new Map<string, any>();
+    const mescladosPorAgenda = new Map<string, string[]>();
+
+    if (agendaIds.length > 0) {
+      const { data: vinculosOcupacao } = await supabase
+        .from("agenda_grupos_ocupacao_calendarios")
+        .select("grupo_id, agenda_id")
+        .eq("empresa_id", usuario.empresa_id)
+        .in("agenda_id", agendaIds);
+
+      const grupoIds = Array.from(
+        new Set((vinculosOcupacao || []).map((item: any) => String(item.grupo_id))),
+      );
+
+      if (grupoIds.length > 0) {
+        const { data: membrosOcupacao } = await supabase
+          .from("agenda_grupos_ocupacao_calendarios")
+          .select("grupo_id, agenda_id")
+          .eq("empresa_id", usuario.empresa_id)
+          .in("grupo_id", grupoIds);
+
+        const membrosPorGrupo = new Map<string, string[]>();
+        for (const membro of membrosOcupacao || []) {
+          const grupoId = String(membro.grupo_id);
+          membrosPorGrupo.set(grupoId, [
+            ...(membrosPorGrupo.get(grupoId) || []),
+            String(membro.agenda_id),
+          ]);
+        }
+
+        for (const vinculo of vinculosOcupacao || []) {
+          const agendaId = String(vinculo.agenda_id);
+          mescladosPorAgenda.set(
+            agendaId,
+            (membrosPorGrupo.get(String(vinculo.grupo_id)) || []).filter(
+              (id) => id !== agendaId,
+            ),
+          );
+        }
+      }
+    }
     if (agendaIds.length > 0) {
       const { data: proximos } = await supabase
         .from("agenda_agendamentos")
@@ -105,6 +172,7 @@ export async function GET(request: NextRequest) {
       agendas: agendasOrdenadas.map((agenda: any) => ({
         ...agenda,
         proximo_agendamento: proximosPorAgenda.get(agenda.id) || null,
+        calendarios_mesclados_ids: mescladosPorAgenda.get(agenda.id) || [],
       })),
     });
   } catch (error: any) {
@@ -137,6 +205,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Nome da agenda e obrigatorio." }, { status: 400 });
     }
 
+    const responsavel = await validarResponsavel(
+      supabase,
+      usuario.empresa_id,
+      body?.responsavel_id,
+    );
+    if (responsavel.error) {
+      return NextResponse.json(
+        { ok: false, error: responsavel.error },
+        { status: 400 },
+      );
+    }
+
     let integrationIds = normalizeIntegrationIds(body?.integracao_whatsapp_ids);
     if (integrationIds.length === 0) {
       const { data: active } = await supabase
@@ -165,6 +245,7 @@ export async function POST(request: NextRequest) {
         antecedencia_minutos: normalizarInteiro(body?.antecedencia_minutos, 120, 0, 525600),
         janela_dias: normalizarInteiro(body?.janela_dias, 14, 1, 180),
         status: body?.status === "inativo" ? "inativo" : "ativo",
+        responsavel_id: responsavel.id,
         metadata_json: withCalendarIntegrationIds(body?.metadata_json, validation.ids),
         created_by: usuario.id,
         updated_by: usuario.id,
@@ -194,7 +275,21 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, agenda });
+    const calendariosMescladosIds = await sincronizarOcupacaoCompartilhada({
+      supabase,
+      empresaId: usuario.empresa_id,
+      agendaId: agenda.id,
+      agendaIds: body?.calendarios_mesclados_ids,
+      usuarioId: usuario.id,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      agenda: {
+        ...agenda,
+        calendarios_mesclados_ids: calendariosMescladosIds,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error?.message || "Erro interno ao criar agenda." }, { status: 500 });
   }
