@@ -236,8 +236,10 @@ type AtendenteFiltro = {
 type ListaContatoFiltro = {
   id: string;
   nome: string;
+  arquivo_nome?: string | null;
   created_at?: string | null;
   permitir_contatos_existentes?: boolean | null;
+  total_contatos?: number | null;
 };
 
 type FiltrosConsultaContatos = {
@@ -2397,8 +2399,14 @@ export default function DisparosWhatsAppPage() {
         throw new Error(json.error || "Erro ao carregar filtros de contatos.");
       }
 
+      const origens = Array.isArray(json.origens)
+        ? json.origens
+            .map((origem: unknown) => String(origem || "").trim())
+            .filter(Boolean)
+        : [];
+
       setOrigensDisponiveis(
-        Array.isArray(json.origens) ? json.origens : []
+        origens.filter((origem: string) => !origem.startsWith("Importação - "))
       );
       setCampanhasDisponiveis(
         Array.isArray(json.campanhas) ? json.campanhas : []
@@ -5160,7 +5168,7 @@ export default function DisparosWhatsAppPage() {
                     </div>
 
                     <div className={styles.field}>
-                      <label className={styles.label}>Filtrar por lista</label>
+                      <label className={styles.label}>Filtrar por lista importada</label>
                       <select
                         value={listaFiltro}
                         onChange={(e) => {
@@ -5172,10 +5180,13 @@ export default function DisparosWhatsAppPage() {
                         }}
                         className={styles.input}
                       >
-                        <option value="">Todas as listas</option>
+                        <option value="">Todas as listas importadas</option>
                         {listasDisponiveis.map((lista) => (
                           <option key={lista.id} value={lista.id}>
                             {lista.nome}
+                            {typeof lista.total_contatos === "number"
+                              ? ` (${lista.total_contatos})`
+                              : ""}
                           </option>
                         ))}
                       </select>

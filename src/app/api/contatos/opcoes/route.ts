@@ -45,7 +45,9 @@ export async function GET() {
           .order("nome", { ascending: true }),
         supabase
           .from("contatos_listas")
-          .select("id, nome, created_at, permitir_contatos_existentes")
+          .select(
+            "id, nome, arquivo_nome, created_at, permitir_contatos_existentes, contatos_lista_membros(count)"
+          )
           .eq("empresa_id", usuario.empresa_id)
           .order("created_at", { ascending: false }),
       ]);
@@ -85,6 +87,15 @@ export async function GET() {
         ? (data as Record<string, unknown>)
         : {};
 
+    const listas = (listasResult.data || []).map((lista) => {
+      const { contatos_lista_membros: membros, ...listaBase } = lista;
+
+      return {
+        ...listaBase,
+        total_contatos: Number(membros?.[0]?.count ?? 0),
+      };
+    });
+
     return NextResponse.json({
       ok: true,
       origens: Array.isArray(opcoes.origens) ? opcoes.origens : [],
@@ -103,7 +114,7 @@ export async function GET() {
         })
       ),
       atendentes: atendentesResult.data || [],
-      listas: listasResult.data || [],
+      listas,
     });
   } catch (error: unknown) {
     return NextResponse.json(
