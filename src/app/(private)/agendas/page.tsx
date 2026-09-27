@@ -3244,7 +3244,7 @@ function Page() {
                       {agendas
                         .filter(
                           (calendar) =>
-                            calendar.id !== agendaId &&
+                            calendar.id !== (configNew ? "" : agendaId) &&
                             calendar.status !== "arquivado",
                         )
                         .map((calendar) => {
