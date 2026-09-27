@@ -698,10 +698,13 @@ function Page() {
             new Map(
               resultados
                 .flatMap((resultado) => resultado.eventos)
-                .map((evento) => [
-                  `${evento.agenda_id || "google"}:${evento.id}`,
-                  evento,
-                ]),
+                .map(
+                  (evento) =>
+                    [
+                      `${evento.agenda_id || "google"}:${evento.id}`,
+                      evento,
+                    ] as const,
+                ),
             ).values(),
           ),
         );
