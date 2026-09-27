@@ -1236,10 +1236,9 @@ function Page() {
         agendamento_id: form.id,
         payload,
       });
-      if (google.conectado && agendaDestinoId === agendaId)
-        await fetch(`/api/agendas/${agendaDestinoId}/google-calendar`, {
-          method: "POST",
-        }).catch(() => undefined);
+      await fetch(`/api/agendas/${agendaDestinoId}/google-calendar`, {
+        method: "POST",
+      }).catch(() => undefined);
       const appointments = await loadData(agendaId);
       setOpen(false);
       if (form.id) {
