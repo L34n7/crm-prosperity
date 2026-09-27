@@ -4,6 +4,7 @@ import TemplateVariableCombobox, {
   type TemplateVariableOption,
 } from "@/components/TemplateVariableCombobox";
 import type {
+  AgendaGrupoDistribuicaoOpcao,
   AgendaOpcao,
   PreviewTemplateWhatsapp,
   TemplateWhatsappOpcao,
@@ -25,8 +26,10 @@ type AgendaConfigProps = {
   fluxoSistemaCalendario: boolean;
   fluxoTemBuscaQualquerCalendario: boolean;
   agendas: AgendaOpcao[];
+  gruposDistribuicao: AgendaGrupoDistribuicaoOpcao[];
   carregandoAgendas: boolean;
   agendaId: string;
+  grupoDistribuicaoId: string;
   usarContexto: boolean;
   listarAgendamentos: boolean;
   quantidadeOpcoes: string;
@@ -61,6 +64,7 @@ type AgendaConfigProps = {
   loadingCusto: boolean;
   custo: CustoPreview | null;
   onAgendaIdChange: (valor: string) => void;
+  onGrupoDistribuicaoIdChange: (valor: string) => void;
   onUsarContextoChange: (valor: boolean) => void;
   onListarAgendamentosChange: (valor: boolean) => void;
   onQuantidadeOpcoesChange: (valor: string) => void;
@@ -98,8 +102,10 @@ export default function AgendaConfig(props: AgendaConfigProps) {
     fluxoSistemaCalendario,
     fluxoTemBuscaQualquerCalendario,
     agendas,
+    gruposDistribuicao,
     carregandoAgendas,
     agendaId,
+    grupoDistribuicaoId,
     usarContexto,
     listarAgendamentos,
     quantidadeOpcoes,
@@ -198,13 +204,15 @@ export default function AgendaConfig(props: AgendaConfigProps) {
                   valor === "__calendario_contexto__"
                 ) {
                   props.onAgendaIdChange("");
+                  props.onGrupoDistribuicaoIdChange("");
                   props.onUsarContextoChange(true);
                   return;
                 }
                 props.onUsarContextoChange(false);
+                props.onGrupoDistribuicaoIdChange("");
                 props.onAgendaIdChange(valor);
               }}
-              disabled={carregandoAgendas}
+              disabled={carregandoAgendas || Boolean(grupoDistribuicaoId)}
             >
               <option value="">
                 {tipoNode === "agenda_buscar_agendamento"
@@ -227,6 +235,46 @@ export default function AgendaConfig(props: AgendaConfigProps) {
             </select>
           </label>
         ))}
+
+      {tipoNode === "agenda_escolher_horario" &&
+        !fluxoSistemaCalendario && (
+          <label className={styles.field}>
+            <span className={styles.label}>Grupo de distribuição</span>
+            <select
+              className={styles.input}
+              value={grupoDistribuicaoId}
+              onChange={(event) => {
+                const valor = event.target.value;
+                props.onGrupoDistribuicaoIdChange(valor);
+
+                if (valor) {
+                  props.onAgendaIdChange("");
+                  props.onUsarContextoChange(false);
+                }
+              }}
+              disabled={carregandoAgendas || usarContexto}
+            >
+              <option value="">Não distribuir — usar calendário acima</option>
+              {gruposDistribuicao
+                .filter((grupo) => grupo.ativo !== false)
+                .map((grupo) => (
+                  <option key={grupo.id} value={grupo.id}>
+                    {grupo.nome} ·{" "}
+                    {grupo.estrategia === "menor_carga"
+                      ? "Menor carga"
+                      : grupo.estrategia === "primeiro_disponivel"
+                        ? "Primeiro disponível"
+                        : "Rodízio"}
+                  </option>
+                ))}
+            </select>
+            <span className={styles.help}>
+              Quando selecionado, os horários são buscados em todos os
+              calendários do grupo e o sistema escolhe automaticamente o
+              responsável conforme a estratégia configurada no módulo Agenda.
+            </span>
+          </label>
+        )}
 
       {tipoNode === "agenda_criar_agendamento" && (
         <AgendaTipoAgendamentoConfig />
