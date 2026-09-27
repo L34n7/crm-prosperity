@@ -1526,6 +1526,9 @@ function Page() {
       setConfig(false);
       await loadAgendas(id);
       setAgendaId(id);
+      setAgendaIdsVisiveis(
+        Array.from(new Set([id, ...calendariosMescladosIds])),
+      );
       setOk(configNew ? "Agenda criada." : "Agenda atualizada.");
     } catch (e: any) {
       setErr(e.message);
