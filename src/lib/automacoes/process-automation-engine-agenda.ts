@@ -404,7 +404,11 @@ async function selecionarSlotForaDaLista(params: {
   const opcaoTemporaria = {
     ...slot,
     indice: 1,
-    agenda_id: contexto.agendaId,
+    agenda_id: String(slot?.agenda_id || contexto.agendaId || ""),
+    grupo_distribuicao_id:
+      String(
+        slot?.grupo_distribuicao_id || contexto.grupoDistribuicaoId || "",
+      ) || null,
   };
 
   const { error } = await supabaseAdmin
