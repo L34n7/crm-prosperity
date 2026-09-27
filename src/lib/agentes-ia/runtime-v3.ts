@@ -1097,7 +1097,8 @@ function selecionarFerramentasParaModelo(params: {
 
 async function resolverSlotLocal(params: {
   empresaId: string;
-  agendaId: string;
+  agendaId?: string | null;
+  grupoDistribuicaoId?: string | null;
   data: string;
   hora: string;
 }) {
@@ -1107,41 +1108,119 @@ async function resolverSlotLocal(params: {
     return { ok: false as const, error: "Data ou horário local inválido." };
   }
 
+  if (params.grupoDistribuicaoId && !params.agendaId) {
+    const resultado = await listarSlotsGrupoDistribuicao({
+      supabase: supabaseAdmin,
+      empresaId: params.empresaId,
+      grupoId: params.grupoDistribuicaoId,
+      data,
+      janelaDias: 1,
+      limite: 50,
+    });
+    if (!resultado.grupo) {
+      return {
+        ok: false as const,
+        error: "Grupo de distribuição não encontrado ou inativo.",
+      };
+    }
+
+    const slot = resultado.slots.find((item: any) => {
+      const agenda = resultado.grupo?.calendarios.find(
+        (calendar: any) => String(calendar.id) === String(item.agenda_id),
+      );
+      const timezone = agenda?.timezone || "America/Sao_Paulo";
+      return (
+        dataLocalDeIso(item.inicio_at, timezone) === data &&
+        String(item.hora_label) === hora
+      );
+    });
+    if (!slot) {
+      return {
+        ok: false as const,
+        error: "O horário solicitado não está mais disponível.",
+      };
+    }
+    const agenda = resultado.grupo.calendarios.find(
+      (calendar: any) => String(calendar.id) === String(slot.agenda_id),
+    );
+    if (!agenda) {
+      return {
+        ok: false as const,
+        error: "O calendário selecionado pelo grupo não está mais disponível.",
+      };
+    }
+    return {
+      ok: true as const,
+      agenda,
+      agendaId: String(slot.agenda_id),
+      grupoDistribuicaoId: params.grupoDistribuicaoId,
+      slot,
+    };
+  }
+
+  const agendaId = String(params.agendaId || "").trim();
+  if (!agendaId) {
+    return { ok: false as const, error: "Origem de agenda não configurada." };
+  }
+
   const { data: agenda, error: agendaError } = await supabaseAdmin
     .from("calendarios")
-    .select("id, nome, timezone, duracao_minutos, status")
+    .select("id, nome, timezone, duracao_minutos, responsavel_id, status")
     .eq("empresa_id", params.empresaId)
-    .eq("id", params.agendaId)
+    .eq("id", agendaId)
     .eq("status", "ativo")
     .maybeSingle();
   if (agendaError) throw new Error(agendaError.message);
-  if (!agenda) return { ok: false as const, error: "Agenda não encontrada ou inativa." };
+  if (!agenda) {
+    return { ok: false as const, error: "Agenda não encontrada ou inativa." };
+  }
 
   const timezone = agenda.timezone || "America/Sao_Paulo";
   const resultado = await listarSlotsDisponiveis({
     supabase: supabaseAdmin,
     empresaId: params.empresaId,
-    agendaId: params.agendaId,
+    agendaId,
     data,
     janelaDias: 1,
     limite: 50,
   });
   const slot = resultado.slots.find(
-    (item: any) => dataLocalDeIso(item.inicio_at, timezone) === data && String(item.hora_label) === hora
+    (item: any) =>
+      dataLocalDeIso(item.inicio_at, timezone) === data &&
+      String(item.hora_label) === hora,
   );
-  if (!slot) return { ok: false as const, error: "O horário solicitado não está mais disponível." };
-  return { ok: true as const, agenda, slot };
+  if (!slot) {
+    return {
+      ok: false as const,
+      error: "O horário solicitado não está mais disponível.",
+    };
+  }
+  return {
+    ok: true as const,
+    agenda,
+    agendaId,
+    grupoDistribuicaoId: null,
+    slot,
+  };
 }
 
 function compactarSlots(resultado: any, slotsOverride?: any[]) {
-  const timezone = resultado.agenda?.timezone || "America/Sao_Paulo";
   const slots = slotsOverride || resultado.slots || [];
-  return slots.map((slot: any, index: number) => ({
-    n: index + 1,
-    data: dataLocalDeIso(slot.inicio_at, timezone),
-    hora: slot.hora_label,
-    label: slot.label,
-  }));
+  return slots.map((slot: any, index: number) => {
+    const agendaSlot = resultado.grupo?.calendarios?.find(
+      (agenda: any) => String(agenda.id) === String(slot.agenda_id || ""),
+    );
+    const timezone =
+      agendaSlot?.timezone ||
+      resultado.agenda?.timezone ||
+      "America/Sao_Paulo";
+    return {
+      n: index + 1,
+      data: dataLocalDeIso(slot.inicio_at, timezone),
+      hora: slot.hora_label,
+      label: slot.label,
+    };
+  });
 }
 
 function labelNaturalSlot(slot: any) {
@@ -1152,44 +1231,91 @@ function labelNaturalSlot(slot: any) {
 
 async function resolverAgendamentoAtivo(params: {
   ctx: ContextoExecucao;
-  agendaId: string;
+  agendaIds: string[];
   referenciaData?: unknown;
   referenciaHora?: unknown;
 }) {
-  const timezone = params.ctx.agendaAutorizada?.timezone || "America/Sao_Paulo";
   const ativos = await buscarAgendamentosAtivos({
     empresaId: params.ctx.pendencia.empresa_id,
-    agendaId: params.agendaId,
+    agendaIds: params.agendaIds,
     conversaId: params.ctx.pendencia.conversa_id,
     contatoId: params.ctx.pendencia.contato_id || null,
   });
   params.ctx.agendamentosAtivos = ativos;
 
+  const timezoneDo = (agendaId: string) =>
+    params.ctx.grupoDistribuicaoAutorizado?.calendarios?.find(
+      (agenda: any) => String(agenda.id) === String(agendaId),
+    )?.timezone ||
+    (String(params.ctx.agendaAutorizada?.id || "") === String(agendaId)
+      ? params.ctx.agendaAutorizada?.timezone
+      : null) ||
+    "America/Sao_Paulo";
+
   const referenciaData = String(params.referenciaData || "").trim() || null;
   const referenciaHora = normalizarHoraLocal(params.referenciaHora);
   let candidatos = ativos;
   if (referenciaData) {
-    candidatos = candidatos.filter((item) => dataLocalDeIso(item.inicio_at, timezone) === referenciaData);
+    candidatos = candidatos.filter(
+      (item) =>
+        dataLocalDeIso(item.inicio_at, timezoneDo(item.agenda_id)) ===
+        referenciaData,
+    );
   }
   if (referenciaHora) {
-    candidatos = candidatos.filter((item) => formatarAgendamentoAtivo(item, timezone).hora === referenciaHora);
+    candidatos = candidatos.filter(
+      (item) =>
+        formatarAgendamentoAtivo(item, timezoneDo(item.agenda_id)).hora ===
+        referenciaHora,
+    );
   }
 
   const opcoes = (candidatos.length ? candidatos : ativos).map((item) => {
-    const agendamento = formatarAgendamentoAtivo(item, timezone);
-    return { data: agendamento.data, hora: agendamento.hora, label: agendamento.label, titulo: agendamento.titulo };
+    const agendamento = formatarAgendamentoAtivo(
+      item,
+      timezoneDo(item.agenda_id),
+    );
+    return {
+      data: agendamento.data,
+      hora: agendamento.hora,
+      label: agendamento.label,
+      titulo: agendamento.titulo,
+    };
   });
 
   if (!ativos.length) {
-    return { ok: false as const, code: "SEM_AGENDAMENTO_ATIVO", error: "Não existe agendamento ativo para este contato na agenda autorizada.", opcoes: [] };
+    return {
+      ok: false as const,
+      code: "SEM_AGENDAMENTO_ATIVO",
+      error:
+        "Não existe agendamento ativo para este contato na origem de agenda autorizada.",
+      opcoes: [],
+    };
   }
   if (!candidatos.length) {
-    return { ok: false as const, code: "REFERENCIA_NAO_ENCONTRADA", error: "Não encontrei um agendamento ativo que corresponda à referência informada.", opcoes };
+    return {
+      ok: false as const,
+      code: "REFERENCIA_NAO_ENCONTRADA",
+      error:
+        "Não encontrei um agendamento ativo que corresponda à referência informada.",
+      opcoes,
+    };
   }
   if (candidatos.length > 1) {
-    return { ok: false as const, code: "MULTIPLOS_AGENDAMENTOS_ATIVOS", error: "Há mais de um agendamento ativo. Pergunte ao cliente qual deseja alterar/cancelar usando data ou horário.", opcoes };
+    return {
+      ok: false as const,
+      code: "MULTIPLOS_AGENDAMENTOS_ATIVOS",
+      error:
+        "Há mais de um agendamento ativo. Pergunte ao cliente qual deseja alterar/cancelar usando data ou horário.",
+      opcoes,
+    };
   }
-  return { ok: true as const, agendamento: candidatos[0], timezone };
+  const agendamento = candidatos[0];
+  return {
+    ok: true as const,
+    agendamento,
+    timezone: timezoneDo(agendamento.agenda_id),
+  };
 }
 
 async function enviarMensagemAgente(params: {
@@ -1312,43 +1438,62 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   }
 
   if (nome === "consultar_agenda") {
-    const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
-    if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
+    const origem = origemAgendaConfiguradaFerramentas(ctx.ferramentasAtivas);
+    if (!origem.agendaId && !origem.grupoDistribuicaoId) {
+      return { ok: false, error: "Origem de agenda não configurada." };
+    }
     const timezone = ctx.agendaAutorizada?.timezone || "America/Sao_Paulo";
-    const interpretacao = interpretarDataHorarioAgenda(ctx.pendencia.conteudo_agregado, timezone);
+    const interpretacao = interpretarDataHorarioAgenda(
+      ctx.pendencia.conteudo_agregado,
+      timezone,
+    );
     const dataArg = args.data ? String(args.data).trim() : "";
-    const data = /^\d{4}-\d{2}-\d{2}$/.test(dataArg) ? dataArg : interpretacao.data || null;
-    const resultado = await listarSlotsDisponiveis({
-      supabase: supabaseAdmin,
+    const data = /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
+      ? dataArg
+      : interpretacao.data || null;
+    const resultado = await listarSlotsOrigemAgenda({
       empresaId,
-      agendaId,
+      agendaId: origem.agendaId,
+      grupoDistribuicaoId: origem.grupoDistribuicaoId,
       data,
       janelaDias: data ? 1 : 14,
       limite: interpretacao.preferencia ? 50 : 12,
+      timezone,
     });
     const filtrados = filtrarSlotsPorPreferencia(
       resultado.slots,
       interpretacao.preferencia,
-      timezone
+      timezone,
     ).slice(0, 12);
     return {
       ok: true,
-      agenda: resultado.agenda ? {
-        nome: resultado.agenda.nome,
-        timezone: resultado.agenda.timezone,
-      } : null,
+      agenda: resultado.grupo
+        ? {
+            nome: resultado.grupo.nome,
+            timezone,
+            tipo: "grupo_distribuicao",
+          }
+        : resultado.agenda
+          ? {
+              nome: resultado.agenda.nome,
+              timezone: resultado.agenda.timezone,
+              tipo: "agenda",
+            }
+          : null,
       slots: compactarSlots(resultado, filtrados),
     };
   }
 
   if (nome === "criar_agendamento") {
-    const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
-    if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
+    const origem = origemAgendaConfiguradaFerramentas(ctx.ferramentasAtivas);
+    if (!origem.agendaId && !origem.grupoDistribuicaoId) {
+      return { ok: false, error: "Origem de agenda não configurada." };
+    }
 
     if (estadoIndicaReagendamento(ctx.estadoConversa)) {
       const ativos = await buscarAgendamentosAtivos({
         empresaId,
-        agendaId,
+        agendaIds: ctx.agendaIdsAutorizadas,
         conversaId,
         contatoId: ctx.pendencia.contato_id || null,
       });
@@ -1357,10 +1502,22 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
         return {
           ok: false,
           code: "REAGENDAMENTO_EM_ANDAMENTO",
-          error: "Existe agendamento ativo e a conversa está em reagendamento. Use remarcar_agendamento em vez de criar outro compromisso.",
+          error:
+            "Existe agendamento ativo e a conversa está em reagendamento. Use remarcar_agendamento em vez de criar outro compromisso.",
           agendamentos_ativos: ativos.map((item) => {
-            const agendamento = formatarAgendamentoAtivo(item, timezone);
-            return { data: agendamento.data, hora: agendamento.hora, label: agendamento.label };
+            const agendaTimezone =
+              ctx.grupoDistribuicaoAutorizado?.calendarios?.find(
+                (agenda: any) => String(agenda.id) === String(item.agenda_id),
+              )?.timezone || timezone;
+            const agendamento = formatarAgendamentoAtivo(
+              item,
+              agendaTimezone,
+            );
+            return {
+              data: agendamento.data,
+              hora: agendamento.hora,
+              label: agendamento.label,
+            };
           }),
         };
       }
@@ -1368,15 +1525,18 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
 
     const resolvido = await resolverSlotLocal({
       empresaId,
-      agendaId,
+      agendaId: origem.agendaId,
+      grupoDistribuicaoId: origem.grupoDistribuicaoId,
       data: String(args.data || ""),
       hora: String(args.hora || ""),
     });
     if (!resolvido.ok) return resolvido;
 
+    const agendaId = resolvido.agendaId;
     const inicioAt = resolvido.slot.inicio_at;
     const fimAt = resolvido.slot.fim_at;
-    const { data: existente } = await supabaseAdmin.from("agenda_agendamentos")
+    const { data: existente } = await supabaseAdmin
+      .from("agenda_agendamentos")
       .select("id, titulo, status")
       .eq("empresa_id", empresaId)
       .eq("agenda_id", agendaId)
@@ -1389,8 +1549,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     const quando = labelNaturalSlot(resolvido.slot);
     if (existente) {
       ctx.acaoCriticaExecutada = true;
-      ctx.respostaDeterministica = [`Fechado — esse horário já está agendado para ${quando}.`];
-      return { ok: true, idempotente: true, agendamento: existente, quando };
+      ctx.respostaDeterministica = [
+        `Fechado — esse horário já está agendado para ${quando}.`,
+      ];
+      return {
+        ok: true,
+        idempotente: true,
+        agendamento: existente,
+        quando,
+      };
     }
 
     if (await execucaoFoiSupersedida(ctx.pendencia)) {
@@ -1398,49 +1565,80 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
         ok: false,
         code: "EXECUCAO_SUPERSEDIDA",
         supersedido: true,
-        error: "Chegou uma nova mensagem antes da criação do agendamento; nenhuma alteração foi feita.",
+        error:
+          "Chegou uma nova mensagem antes da criação do agendamento; nenhuma alteração foi feita.",
       };
     }
 
     const agora = new Date().toISOString();
-    const { data: criado, error } = await supabaseAdmin.from("agenda_agendamentos").insert({
-      empresa_id: empresaId,
-      agenda_id: agendaId,
-      contato_id: ctx.pendencia.contato_id || null,
-      conversa_id: conversaId,
-      titulo: String(args.titulo || "Agendamento").trim() || "Agendamento",
-      nome_cliente: ctx.contato?.nome || null,
-      telefone_cliente: ctx.contato?.telefone || ctx.pendencia.numero_destino || null,
-      email_cliente: ctx.contato?.email || null,
-      inicio_at: inicioAt,
-      fim_at: fimAt,
-      status: "agendado",
-      origem: "api",
-      metadata_json: { origem: "agente_ia", agente_id: ctx.agente.id, agente_execucao_id: ctx.execucaoId },
-      created_at: agora,
-      updated_at: agora,
-    }).select("id, titulo, status").single();
-    if (error || !criado) throw new Error(error?.message || "Erro ao criar agendamento.");
+    const { data: criado, error } = await supabaseAdmin
+      .from("agenda_agendamentos")
+      .insert({
+        empresa_id: empresaId,
+        agenda_id: agendaId,
+        contato_id: ctx.pendencia.contato_id || null,
+        conversa_id: conversaId,
+        titulo: String(args.titulo || "Agendamento").trim() || "Agendamento",
+        nome_cliente: ctx.contato?.nome || null,
+        telefone_cliente:
+          ctx.contato?.telefone || ctx.pendencia.numero_destino || null,
+        email_cliente: ctx.contato?.email || null,
+        inicio_at: inicioAt,
+        fim_at: fimAt,
+        status: "agendado",
+        origem: "api",
+        metadata_json: {
+          origem: "agente_ia",
+          agente_id: ctx.agente.id,
+          agente_execucao_id: ctx.execucaoId,
+          grupo_distribuicao_id: origem.grupoDistribuicaoId,
+        },
+        created_at: agora,
+        updated_at: agora,
+      })
+      .select("id, titulo, status")
+      .single();
+    if (error || !criado) {
+      throw new Error(error?.message || "Erro ao criar agendamento.");
+    }
+
+    await registrarUsoGrupoDistribuicao({
+      supabase: supabaseAdmin,
+      empresaId,
+      grupoId: origem.grupoDistribuicaoId,
+      agendaId,
+    });
 
     ctx.acaoCriticaExecutada = true;
-    ctx.respostaDeterministica = [`Fechado — ficou agendado para ${quando}.`];
-    await sincronizarAgendamentoGoogleCalendar({ empresaId, agendaId, agendamentoId: criado.id }).catch((errorSync) =>
-      console.error("[AGENTE_IA] Erro ao sincronizar agendamento no Google:", errorSync)
+    ctx.respostaDeterministica = [
+      `Fechado — ficou agendado para ${quando}.`,
+    ];
+    await sincronizarAgendamentoGoogleCalendar({
+      empresaId,
+      agendaId,
+      agendamentoId: criado.id,
+    }).catch((errorSync) =>
+      console.error(
+        "[AGENTE_IA] Erro ao sincronizar agendamento no Google:",
+        errorSync,
+      ),
     );
-    return { ok: true, agendamento: criado, quando };
+    return { ok: true, agendamento: criado, quando, agenda_id: agendaId };
   }
 
   if (nome === "remarcar_agendamento") {
-    const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
-    if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
+    if (!ctx.agendaIdsAutorizadas.length) {
+      return { ok: false, error: "Origem de agenda não configurada." };
+    }
     const atualResolvido = await resolverAgendamentoAtivo({
       ctx,
-      agendaId,
+      agendaIds: ctx.agendaIdsAutorizadas,
       referenciaData: args.referencia_data,
       referenciaHora: args.referencia_hora,
     });
     if (!atualResolvido.ok) return atualResolvido;
     const atual = atualResolvido.agendamento;
+    const agendaId = String(atual.agenda_id);
 
     const dataNova = String(args.data || "").trim();
     const horaNova = normalizarHoraLocal(args.hora);
@@ -1448,13 +1646,29 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       return { ok: false, error: "Nova data ou horário local inválido." };
     }
 
-    const atualFormatado = formatarAgendamentoAtivo(atual, atualResolvido.timezone);
-    if (atualFormatado.data === dataNova && atualFormatado.hora === horaNova) {
+    const atualFormatado = formatarAgendamentoAtivo(
+      atual,
+      atualResolvido.timezone,
+    );
+    if (
+      atualFormatado.data === dataNova &&
+      atualFormatado.hora === horaNova
+    ) {
       ctx.acaoCriticaExecutada = true;
-      ctx.respostaDeterministica = [`Esse agendamento já está nesse horário: ${atualFormatado.label}.`];
-      return { ok: true, idempotente: true, agendamento: { id: atual.id, status: atual.status }, quando: atualFormatado.label };
+      ctx.respostaDeterministica = [
+        `Esse agendamento já está nesse horário: ${atualFormatado.label}.`,
+      ];
+      return {
+        ok: true,
+        idempotente: true,
+        agendamento: { id: atual.id, status: atual.status },
+        quando: atualFormatado.label,
+      };
     }
 
+    // A remarcação preserva o calendário/responsável original. O grupo é
+    // usado para distribuir novos atendimentos, não para trocar o responsável
+    // de um compromisso já existente sem intenção explícita.
     const resolvido = await resolverSlotLocal({
       empresaId,
       agendaId,
@@ -1471,54 +1685,76 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
         ok: false,
         code: "EXECUCAO_SUPERSEDIDA",
         supersedido: true,
-        error: "Chegou uma nova mensagem antes da remarcação; nenhuma alteração foi feita.",
+        error:
+          "Chegou uma nova mensagem antes da remarcação; nenhuma alteração foi feita.",
       };
     }
 
-    const { data: atualizado, error } = await supabaseAdmin.from("agenda_agendamentos").update({
-      inicio_at: inicioAt,
-      fim_at: fimAt,
-      metadata_json: {
-        ...(atual.metadata_json || {}),
-        origem_ultima_alteracao: "agente_ia",
-        agente_id: ctx.agente.id,
-      },
-      updated_at: new Date().toISOString(),
-    }).eq("empresa_id", empresaId).eq("id", atual.id).eq("agenda_id", agendaId)
-      .select("id, agenda_id, titulo, status").single();
-    if (error || !atualizado) throw new Error(error?.message || "Erro ao remarcar agendamento.");
+    const { data: atualizado, error } = await supabaseAdmin
+      .from("agenda_agendamentos")
+      .update({
+        inicio_at: inicioAt,
+        fim_at: fimAt,
+        metadata_json: {
+          ...(atual.metadata_json || {}),
+          origem_ultima_alteracao: "agente_ia",
+          agente_id: ctx.agente.id,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("empresa_id", empresaId)
+      .eq("id", atual.id)
+      .eq("agenda_id", agendaId)
+      .select("id, agenda_id, titulo, status")
+      .single();
+    if (error || !atualizado) {
+      throw new Error(error?.message || "Erro ao remarcar agendamento.");
+    }
 
     ctx.acaoCriticaExecutada = true;
-    ctx.respostaDeterministica = [`Pronto — ficou remarcado para ${quando}.`];
-    await sincronizarAgendamentoGoogleCalendar({ empresaId, agendaId, agendamentoId: atualizado.id }).catch((errorSync) =>
-      console.error("[AGENTE_IA] Erro ao sincronizar remarcação no Google:", errorSync)
+    ctx.respostaDeterministica = [
+      `Pronto — ficou remarcado para ${quando}.`,
+    ];
+    await sincronizarAgendamentoGoogleCalendar({
+      empresaId,
+      agendaId,
+      agendamentoId: atualizado.id,
+    }).catch((errorSync) =>
+      console.error(
+        "[AGENTE_IA] Erro ao sincronizar remarcação no Google:",
+        errorSync,
+      ),
     );
     return { ok: true, agendamento: atualizado, quando };
   }
 
   if (nome === "cancelar_agendamento") {
-    const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
-    if (!agendaId) return { ok: false, error: "Agenda obrigatória não configurada." };
+    if (!ctx.agendaIdsAutorizadas.length) {
+      return { ok: false, error: "Origem de agenda não configurada." };
+    }
     const atualResolvido = await resolverAgendamentoAtivo({
       ctx,
-      agendaId,
+      agendaIds: ctx.agendaIdsAutorizadas,
       referenciaData: args.referencia_data,
       referenciaHora: args.referencia_hora,
     });
     if (!atualResolvido.ok) return atualResolvido;
     const atual = atualResolvido.agendamento;
+    const agendaId = String(atual.agenda_id);
 
     if (await execucaoFoiSupersedida(ctx.pendencia)) {
       return {
         ok: false,
         code: "EXECUCAO_SUPERSEDIDA",
         supersedido: true,
-        error: "Chegou uma nova mensagem antes do cancelamento; nenhuma alteração foi feita.",
+        error:
+          "Chegou uma nova mensagem antes do cancelamento; nenhuma alteração foi feita.",
       };
     }
 
     const agora = new Date().toISOString();
-    const { error } = await supabaseAdmin.from("agenda_agendamentos")
+    const { error } = await supabaseAdmin
+      .from("agenda_agendamentos")
       .update({ status: "cancelado", cancelado_em: agora, updated_at: agora })
       .eq("empresa_id", empresaId)
       .eq("id", atual.id)
@@ -1528,8 +1764,16 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
 
     ctx.acaoCriticaExecutada = true;
     ctx.respostaDeterministica = ["Certo — o agendamento foi cancelado."];
-    await sincronizarAgendamentoGoogleCalendar({ empresaId, agendaId, agendamentoId: atual.id, forcar: true }).catch((errorSync) =>
-      console.error("[AGENTE_IA] Erro ao sincronizar cancelamento no Google:", errorSync)
+    await sincronizarAgendamentoGoogleCalendar({
+      empresaId,
+      agendaId,
+      agendamentoId: atual.id,
+      forcar: true,
+    }).catch((errorSync) =>
+      console.error(
+        "[AGENTE_IA] Erro ao sincronizar cancelamento no Google:",
+        errorSync,
+      ),
     );
     return { ok: true, agendamento_id: atual.id, status: "cancelado" };
   }
