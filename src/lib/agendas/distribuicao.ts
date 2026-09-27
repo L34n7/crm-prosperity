@@ -1,7 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { listarSlotsDisponiveis } from "./agenda-service";
-import type { AgendaSlot } from "./agenda-service-core";
+import {
+  zonedTimeToUtc,
+  type AgendaSlot,
+} from "./agenda-service-core";
 import type { AgendaEstrategiaDistribuicao } from "./capacidade";
 
 export type AgendaSlotDistribuido = AgendaSlot & {
@@ -28,12 +31,28 @@ async function calcularCargaCalendario(params: {
   empresaId: string;
   agendaId: string;
   data: string;
+  timezone?: string | null;
 }) {
   const diaSemana = diaSemanaIso(params.data);
-  const inicioDia = `${params.data}T00:00:00-03:00`;
-  const fim = new Date(`${params.data}T12:00:00-03:00`);
-  fim.setDate(fim.getDate() + 1);
-  const fimDia = fim.toISOString();
+  const timezone = params.timezone || "America/Sao_Paulo";
+  const inicioDia = zonedTimeToUtc({
+    data: params.data,
+    minutosDoDia: 0,
+    timezone,
+  }).toISOString();
+  const dataSeguinte = new Date(params.data + "T12:00:00Z");
+  dataSeguinte.setUTCDate(dataSeguinte.getUTCDate() + 1);
+  const proximoDia =
+    String(dataSeguinte.getUTCFullYear()).padStart(4, "0") +
+    "-" +
+    String(dataSeguinte.getUTCMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(dataSeguinte.getUTCDate()).padStart(2, "0");
+  const fimDia = zonedTimeToUtc({
+    data: proximoDia,
+    minutosDoDia: 0,
+    timezone,
+  }).toISOString();
 
   const [disponibilidade, intervalos, agendamentos] = await Promise.all([
     params.supabase
@@ -213,6 +232,7 @@ export async function listarSlotsGrupoDistribuicao(params: {
             empresaId: params.empresaId,
             agendaId: agenda.id,
             data: params.data,
+            timezone: agenda.timezone,
           }),
         );
       }),
