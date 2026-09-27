@@ -901,7 +901,7 @@ export default function AgentesIaPage() {
 
   async function salvar() {
     if (!editor) return;
-    if (usaFerramentasAgenda && !agendaConfiguradaId) {
+    if (usaFerramentasAgenda && !origemAgendaConfigurada) {
       setErro("Selecione uma agenda ou grupo de distribuição antes de salvar as ferramentas de agenda.");
       setSucesso("");
       return;
