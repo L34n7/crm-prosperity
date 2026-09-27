@@ -2235,7 +2235,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       return { ok: true, processado: false, motivo: "atendimento_humano" };
     }
 
-    agendaIdConfiguradaFerramentas(ferramentasAtivas);
+    origemAgendaConfiguradaFerramentas(ferramentasAtivas);
 
     if (await execucaoFoiSupersedida(pendencia)) {
       await finalizarPendencia({ pendencia, lockToken, status: "processado" });
@@ -2274,6 +2274,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       respostaEnviada: false,
       respostaDeterministica: null,
       agendaAutorizada: null,
+      agendaIdsAutorizadas: [],
+      grupoDistribuicaoAutorizado: null,
       estadoConversa: ESTADO_VAZIO,
       agendamentosAtivos: [],
     };
@@ -2295,6 +2297,10 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     if (!process.env.OPENAI_API_KEY?.trim()) throw new Error("OPENAI_API_KEY não configurada.");
     const contexto = await carregarContexto(ctx);
     ctx.agendaAutorizada = contexto.agendas[0] || null;
+    ctx.agendaIdsAutorizadas = contexto.agendas.map((agenda: any) =>
+      String(agenda.id),
+    );
+    ctx.grupoDistribuicaoAutorizado = contexto.grupoDistribuicao;
     ctx.estadoConversa = contexto.estado;
     ctx.agendamentosAtivos = contexto.agendamentosAtivos;
 
@@ -2415,16 +2421,19 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       };
     }
 
-    const agendaIdFinal = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
-    if (agendaIdFinal && ctx.agendaAutorizada) {
-      const houveMutacaoAgenda = ctx.ferramentasExecutadas.some((item) =>
-        ["criar_agendamento", "remarcar_agendamento", "cancelar_agendamento"].includes(String(item.nome || "")) &&
-        item.resultado?.ok === true
+    if (ctx.agendaIdsAutorizadas.length && ctx.agendaAutorizada) {
+      const houveMutacaoAgenda = ctx.ferramentasExecutadas.some(
+        (item) =>
+          [
+            "criar_agendamento",
+            "remarcar_agendamento",
+            "cancelar_agendamento",
+          ].includes(String(item.nome || "")) && item.resultado?.ok === true,
       );
       const agendamentosAtivosFinais = houveMutacaoAgenda
         ? await buscarAgendamentosAtivos({
             empresaId: pendencia.empresa_id,
-            agendaId: agendaIdFinal,
+            agendaIds: ctx.agendaIdsAutorizadas,
             conversaId: pendencia.conversa_id,
             contatoId: pendencia.contato_id || null,
           })
@@ -2433,7 +2442,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       saidaFinal.estado = sincronizarEstadoComAgendamentosAtivos(
         saidaFinal.estado,
         agendamentosAtivosFinais,
-        ctx.agendaAutorizada.timezone || "America/Sao_Paulo"
+        ctx.agendaAutorizada.timezone || "America/Sao_Paulo",
       );
     }
 
