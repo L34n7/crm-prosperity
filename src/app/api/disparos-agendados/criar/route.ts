@@ -470,6 +470,14 @@ export async function POST(request: NextRequest) {
       )
     );
 
+    const disponibilidadeNoHorario =
+      await obterDisponibilidadeAgendamentoMeta({
+        empresaId: usuario.empresa_id,
+        integracao,
+        telefones: telefonesQueConsomemNoHorario,
+        aPartirDe: executarEm,
+      });
+
     const agendamentoGrupoId = randomUUID();
     const registros = contatosValidos.map((contato: any) => ({
       empresa_id: usuario.empresa_id,
