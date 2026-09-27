@@ -2283,8 +2283,30 @@
 
 .capacityConfigGrid {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(300px, 0.95fr) minmax(0, 1.05fr);
   gap: 14px;
+  overflow: visible;
+}
+
+.capacityConfigGrid > :global(.field) {
+  min-width: 0;
+}
+
+.capacityConfigGrid > :global(.field:first-child) {
+  position: relative;
+  z-index: 3;
+}
+
+.capacityConfigGrid > :global(.field:last-child) {
+  position: relative;
+  z-index: 1;
+}
+
+.capacityConfigGrid > :global(.field select) {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .mergedCalendarList {
