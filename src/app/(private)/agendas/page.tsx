@@ -426,6 +426,7 @@ function Page() {
     [ags, setAgs] = useState<Ag[]>([]),
     [tipos, setTipos] = useState<Tipo[]>([]),
     [resps, setResps] = useState<Resp[]>([]),
+    [responsaveisCalendario, setResponsaveisCalendario] = useState<Resp[]>([]),
     [userId, setUserId] = useState("");
   const [google, setGoogle] = useState<{
       conectado: boolean;
@@ -510,7 +511,16 @@ function Page() {
     [unidadeAntecedenciaAgenda, setUnidadeAntecedenciaAgenda] = useState<
       "minutos" | "horas"
     >("minutos");
-  const agenda = agendas.find((a) => a.id === agendaId),
+  const responsaveisDisponiveis = useMemo(() => {
+      const mapa = new Map<string, Resp>();
+      for (const item of [...responsaveisCalendario, ...resps]) {
+        if (item?.id) mapa.set(item.id, item);
+      }
+      return Array.from(mapa.values()).sort((a, b) =>
+        String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"),
+      );
+    }, [responsaveisCalendario, resps]),
+    agenda = agendas.find((a) => a.id === agendaId),
     agendaFormulario = agendas.find(
       (item) => item.id === (form.id ? viewing?.agenda_id || agendaId : agendaId),
     ),
@@ -785,6 +795,22 @@ function Page() {
       .catch((e) => setErr(e.message))
       .finally(() => setLoad(false));
   }, [loadAgendas, loadFeedback]);
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/agendas/capacidade", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (active && response.ok && data?.ok) {
+          setResponsaveisCalendario(data.responsaveis || []);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     let active = true;
     fetch("/api/agendas/contexto", { cache: "no-store" })
@@ -1859,7 +1885,7 @@ function Page() {
                   }
                 >
                   <option value="todos">Todos os responsáveis</option>
-                  {resps.map((r) => (
+                  {responsaveisDisponiveis.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.nome}
                     </option>
@@ -2207,7 +2233,7 @@ function Page() {
                       disabled={Boolean(agendaFormulario?.responsavel_id)}
                     >
                       <option value="">Sem responsável</option>
-                      {resps.map((r) => (
+                      {responsaveisDisponiveis.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.nome}
                         </option>
@@ -3223,7 +3249,7 @@ function Page() {
                       }
                     >
                       <option value="">Sem responsável fixo</option>
-                      {resps.map((responsavel) => (
+                      {responsaveisDisponiveis.map((responsavel) => (
                         <option key={responsavel.id} value={responsavel.id}>
                           {responsavel.nome}
                           {responsavel.email
