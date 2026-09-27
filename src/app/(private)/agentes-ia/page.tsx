@@ -131,6 +131,12 @@ type OpcaoAgenda = {
   timezone?: string | null;
   duracao_minutos?: number | null;
 };
+type OpcaoGrupoDistribuicao = {
+  id: string;
+  nome: string;
+  estrategia: "rodizio" | "menor_carga" | "primeiro_disponivel";
+  agenda_ids: string[];
+};
 type OpcaoAtendente = {
   id: string;
   nome?: string | null;
@@ -146,6 +152,7 @@ type RespostaLista = {
     fluxos: Opcao[];
     setores: Opcao[];
     agendas: OpcaoAgenda[];
+    grupos_distribuicao: OpcaoGrupoDistribuicao[];
     atendentes: OpcaoAtendente[];
   };
   error?: string;
@@ -241,22 +248,22 @@ const FERRAMENTAS = [
   {
     tipo: "consultar_agenda",
     titulo: "Consultar agenda",
-    descricao: "Consulta disponibilidade somente na agenda configurada para este agente.",
+    descricao: "Consulta disponibilidade na agenda ou grupo de distribuição configurado para este agente.",
   },
   {
     tipo: "criar_agendamento",
     titulo: "Criar agendamento",
-    descricao: "Cria na agenda configurada após revalidar o horário e aplica o tipo de agendamento selecionado.",
+    descricao: "Cria na agenda selecionada pela origem configurada após revalidar o horário e aplica o tipo de agendamento selecionado.",
   },
   {
     tipo: "remarcar_agendamento",
     titulo: "Remarcar agendamento",
-    descricao: "Remarca compromissos da agenda configurada com validação de conflito.",
+    descricao: "Remarca compromissos da origem de agenda configurada com validação de conflito.",
   },
   {
     tipo: "cancelar_agendamento",
     titulo: "Cancelar agendamento",
-    descricao: "Cancela compromissos da agenda configurada de forma idempotente.",
+    descricao: "Cancela compromissos da origem de agenda configurada de forma idempotente.",
   },
   {
     tipo: "transferir_humano",
@@ -444,6 +451,9 @@ export default function AgentesIaPage() {
   const [fluxos, setFluxos] = useState<Opcao[]>([]);
   const [setores, setSetores] = useState<Opcao[]>([]);
   const [agendas, setAgendas] = useState<OpcaoAgenda[]>([]);
+  const [gruposDistribuicao, setGruposDistribuicao] = useState<
+    OpcaoGrupoDistribuicao[]
+  >([]);
   const [atendentes, setAtendentes] = useState<OpcaoAtendente[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -507,14 +517,22 @@ export default function AgentesIaPage() {
     [editor?.ferramentas]
   );
 
-  const agendaConfiguradaId = useMemo(() => {
+  const origemAgendaConfigurada = useMemo(() => {
     for (const item of editor?.ferramentas || []) {
       if (!FERRAMENTAS_AGENDA.has(item.tipo)) continue;
+      const grupoId = String(
+        item.config_json?.grupo_distribuicao_id || "",
+      ).trim();
+      if (grupoId) return { tipo: "grupo" as const, id: grupoId };
       const agendaId = String(item.config_json?.agenda_id || "").trim();
-      if (agendaId) return agendaId;
+      if (agendaId) return { tipo: "agenda" as const, id: agendaId };
     }
-    return "";
+    return null;
   }, [editor?.ferramentas]);
+
+  const origemAgendaConfiguradaValor = origemAgendaConfigurada
+    ? `${origemAgendaConfigurada.tipo}:${origemAgendaConfigurada.id}`
+    : "";
 
   const transferencia = useMemo(
     () => ({ ...TRANSFERENCIA_PADRAO, ...(editor?.fallback_transferencia_json || {}) }),
@@ -556,6 +574,7 @@ export default function AgentesIaPage() {
       setFluxos(json.opcoes?.fluxos || []);
       setSetores(json.opcoes?.setores || []);
       setAgendas(json.opcoes?.agendas || []);
+      setGruposDistribuicao(json.opcoes?.grupos_distribuicao || []);
       setAtendentes(json.opcoes?.atendentes || []);
       const proximoId =
         (preferirId && agentesNormalizados.some((item) => item.id === preferirId) && preferirId) ||
@@ -648,8 +667,17 @@ export default function AgentesIaPage() {
     const existe = editor.ferramentas.find((item) => item.tipo === tipo);
     const ativando = !existe || !existe.ativo;
     const configAgenda =
-      ativando && FERRAMENTAS_AGENDA.has(tipo) && agendaConfiguradaId
-        ? { agenda_id: agendaConfiguradaId }
+      ativando && FERRAMENTAS_AGENDA.has(tipo) && origemAgendaConfigurada
+        ? {
+            agenda_id:
+              origemAgendaConfigurada.tipo === "agenda"
+                ? origemAgendaConfigurada.id
+                : null,
+            grupo_distribuicao_id:
+              origemAgendaConfigurada.tipo === "grupo"
+                ? origemAgendaConfigurada.id
+                : null,
+          }
         : {};
     const proxima = existe
       ? editor.ferramentas.map((item) =>
@@ -678,15 +706,23 @@ export default function AgentesIaPage() {
     setEditor({ ...editor, ferramentas: proxima });
   }
 
-  function atualizarAgendaFerramentas(agendaId: string) {
+  function atualizarOrigemAgendaFerramentas(valor: string) {
     if (!editor) return;
+    const [tipoOrigem, idOrigem] = valor.split(":");
+    const agendaId = tipoOrigem === "agenda" && idOrigem ? idOrigem : null;
+    const grupoDistribuicaoId =
+      tipoOrigem === "grupo" && idOrigem ? idOrigem : null;
     const proxima = editor.ferramentas.map((item) =>
       FERRAMENTAS_AGENDA.has(item.tipo)
         ? {
             ...item,
-            config_json: { ...(item.config_json || {}), agenda_id: agendaId || null },
+            config_json: {
+              ...(item.config_json || {}),
+              agenda_id: agendaId,
+              grupo_distribuicao_id: grupoDistribuicaoId,
+            },
           }
-        : item
+        : item,
     );
     setEditor({ ...editor, ferramentas: proxima });
   }
@@ -824,8 +860,8 @@ export default function AgentesIaPage() {
 
   function validarAntesDeAtivar() {
     if (!editor) return false;
-    if (usaFerramentasAgenda && !agendaConfiguradaId) {
-      setErro("Selecione e salve a agenda obrigatória antes de ativar o agente.");
+    if (usaFerramentasAgenda && !origemAgendaConfigurada) {
+      setErro("Selecione e salve uma agenda ou grupo de distribuição antes de ativar o agente.");
       return false;
     }
     if (
@@ -866,7 +902,7 @@ export default function AgentesIaPage() {
   async function salvar() {
     if (!editor) return;
     if (usaFerramentasAgenda && !agendaConfiguradaId) {
-      setErro("Selecione a agenda obrigatória antes de salvar as ferramentas de agenda.");
+      setErro("Selecione uma agenda ou grupo de distribuição antes de salvar as ferramentas de agenda.");
       setSucesso("");
       return;
     }
@@ -2017,18 +2053,48 @@ export default function AgentesIaPage() {
                   {usaFerramentasAgenda && (
                     <div className={styles.formGrid}>
                       <label className={styles.field}>
-                        <span>Agenda obrigatória</span>
+                        <span>Origem dos agendamentos</span>
                         <select
-                          value={agendaConfiguradaId}
-                          onChange={(event) => atualizarAgendaFerramentas(event.target.value)}
+                          value={origemAgendaConfiguradaValor}
+                          onChange={(event) =>
+                            atualizarOrigemAgendaFerramentas(event.target.value)
+                          }
                         >
-                          <option value="">Selecione uma agenda</option>
-                          {agendas.map((agenda) => (
-                            <option key={agenda.id} value={agenda.id}>
-                              {agenda.nome}
-                              {agenda.duracao_minutos ? ` · ${agenda.duracao_minutos} min` : ""}
-                            </option>
-                          ))}
+                          <option value="">
+                            Selecione uma agenda ou grupo de distribuição
+                          </option>
+                          {agendas.length ? (
+                            <optgroup label="Calendários">
+                              {agendas.map((agenda) => (
+                                <option
+                                  key={agenda.id}
+                                  value={`agenda:${agenda.id}`}
+                                >
+                                  {agenda.nome}
+                                  {agenda.duracao_minutos
+                                    ? ` · ${agenda.duracao_minutos} min`
+                                    : ""}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ) : null}
+                          {gruposDistribuicao.length ? (
+                            <optgroup label="Grupos de distribuição">
+                              {gruposDistribuicao.map((grupo) => (
+                                <option
+                                  key={grupo.id}
+                                  value={`grupo:${grupo.id}`}
+                                >
+                                  {grupo.nome} ·{" "}
+                                  {grupo.estrategia === "rodizio"
+                                    ? "Rodízio"
+                                    : grupo.estrategia === "menor_carga"
+                                      ? "Menor carga"
+                                      : "Primeiro disponível"}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ) : null}
                         </select>
                       </label>
                     </div>
