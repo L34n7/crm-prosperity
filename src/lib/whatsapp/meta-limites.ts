@@ -289,6 +289,148 @@ export async function obterResumoLimiteMeta(params: {
   };
 }
 
+export type DisponibilidadeAgendamentoMeta = {
+  disponivel: boolean;
+  impossivel: boolean;
+  horarioConsultado: string;
+  disponivelApartirDe: string | null;
+  limite: number;
+  selecionadosUnicos: number;
+  usadosNoHorario: number;
+  ocupadosPorOutros: number;
+  totalProjetado: number;
+};
+
+function arredondarDataParaMinuto(data: Date) {
+  const minutoMs = 60 * 1000;
+  const timestamp = data.getTime();
+
+  return new Date(Math.ceil(timestamp / minutoMs) * minutoMs);
+}
+
+export async function obterDisponibilidadeAgendamentoMeta(params: {
+  empresaId: string;
+  integracao: IntegracaoMetaLimite;
+  telefones: string[];
+  aPartirDe?: string | Date | null;
+}): Promise<DisponibilidadeAgendamentoMeta> {
+  const agora = new Date();
+  const solicitado =
+    params.aPartirDe instanceof Date
+      ? params.aPartirDe
+      : params.aPartirDe
+      ? new Date(params.aPartirDe)
+      : agora;
+  const horarioInicial =
+    Number.isNaN(solicitado.getTime()) || solicitado.getTime() < agora.getTime()
+      ? agora
+      : solicitado;
+  const horarioConsultado = horarioInicial.toISOString();
+  const telefonesSelecionados = normalizarTelefonesMetaLimite(params.telefones);
+  const selecionados = new Set(telefonesSelecionados);
+  const limiteInfo = obterLimiteMetaIntegracao(params.integracao);
+
+  if (selecionados.size > limiteInfo.limite) {
+    return {
+      disponivel: false,
+      impossivel: true,
+      horarioConsultado,
+      disponivelApartirDe: null,
+      limite: limiteInfo.limite,
+      selecionadosUnicos: selecionados.size,
+      usadosNoHorario: 0,
+      ocupadosPorOutros: 0,
+      totalProjetado: selecionados.size,
+    };
+  }
+
+  const resumo = await obterResumoLimiteMeta({
+    empresaId: params.empresaId,
+    integracao: params.integracao,
+  });
+  const portfolioId =
+    resumo.portfolioId || params.integracao.business_portfolio_id || null;
+
+  let query = supabaseAdmin
+    .from("whatsapp_meta_conversas_iniciadas")
+    .select("telefone_normalizado, janela_expira_em")
+    .eq("empresa_id", params.empresaId)
+    .gt("janela_expira_em", horarioConsultado)
+    .in("status", ["reservado", "processando", "enviado"]);
+
+  query = portfolioId
+    ? query.eq("business_portfolio_id", portfolioId)
+    : query.eq("integracao_whatsapp_id", params.integracao.id);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(
+      `Erro ao calcular disponibilidade futura do limite Meta: ${error.message}`
+    );
+  }
+
+  const expiraPorTelefone = new Map<string, number>();
+
+  for (const item of data || []) {
+    const telefone = normalizarTelefoneMetaLimite(item.telefone_normalizado);
+    const expiraEm = new Date(item.janela_expira_em).getTime();
+
+    if (!telefone || !Number.isFinite(expiraEm)) continue;
+
+    expiraPorTelefone.set(
+      telefone,
+      Math.max(expiraPorTelefone.get(telefone) || 0, expiraEm)
+    );
+  }
+
+  const expiracoesOutros = Array.from(expiraPorTelefone.entries())
+    .filter(([telefone]) => !selecionados.has(telefone))
+    .map(([, expiraEm]) => expiraEm)
+    .sort((a, b) => a - b);
+  const ocupadosPorOutros = expiracoesOutros.length;
+  const totalProjetado = selecionados.size + ocupadosPorOutros;
+  const disponivel = totalProjetado <= limiteInfo.limite;
+
+  if (disponivel) {
+    return {
+      disponivel: true,
+      impossivel: false,
+      horarioConsultado,
+      disponivelApartirDe: horarioConsultado,
+      limite: limiteInfo.limite,
+      selecionadosUnicos: selecionados.size,
+      usadosNoHorario: expiraPorTelefone.size,
+      ocupadosPorOutros,
+      totalProjetado,
+    };
+  }
+
+  const maxOutrosPermitidos = Math.max(
+    limiteInfo.limite - selecionados.size,
+    0
+  );
+  const quantidadeQuePrecisaLiberar =
+    ocupadosPorOutros - maxOutrosPermitidos;
+  const indiceLiberacao = Math.max(quantidadeQuePrecisaLiberar - 1, 0);
+  const timestampLiberacao = expiracoesOutros[indiceLiberacao];
+  const liberacao = Number.isFinite(timestampLiberacao)
+    ? arredondarDataParaMinuto(new Date(timestampLiberacao))
+    : null;
+
+  return {
+    disponivel: false,
+    impossivel: !liberacao,
+    horarioConsultado,
+    disponivelApartirDe: liberacao?.toISOString() || null,
+    limite: limiteInfo.limite,
+    selecionadosUnicos: selecionados.size,
+    usadosNoHorario: expiraPorTelefone.size,
+    ocupadosPorOutros,
+    totalProjetado,
+  };
+}
+
 export async function reservarLimiteMeta(params: ReservaLimiteParams) {
   const telefones = normalizarTelefonesMetaLimite(params.telefones);
   const limiteInfo = obterLimiteMetaIntegracao(params.integracao);
