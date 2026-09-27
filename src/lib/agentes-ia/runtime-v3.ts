@@ -13,6 +13,11 @@ import {
   listarSlotsDisponiveis,
 } from "@/lib/agendas/agenda-service";
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
+import { registrarUsoGrupoDistribuicao } from "@/lib/agendas/capacidade";
+import {
+  listarSlotsGrupoDistribuicao,
+  obterGrupoDistribuicao,
+} from "@/lib/agendas/distribuicao";
 import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribuicao-transferencia";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
@@ -123,6 +128,8 @@ type ContextoExecucao = {
   respostaEnviada: boolean;
   respostaDeterministica: string[] | null;
   agendaAutorizada: any | null;
+  agendaIdsAutorizadas: string[];
+  grupoDistribuicaoAutorizado: any | null;
   estadoConversa: EstadoConversa;
   agendamentosAtivos: any[];
 };
@@ -141,23 +148,127 @@ function isTipoFerramenta(valor: string): valor is TipoFerramenta {
   return (TIPOS_FERRAMENTAS as readonly string[]).includes(valor);
 }
 
-function agendaIdConfiguradaFerramentas(
-  ferramentasAtivas: Map<TipoFerramenta, Record<string, unknown>>
+function origemAgendaConfiguradaFerramentas(
+  ferramentasAtivas: Map<TipoFerramenta, Record<string, unknown>>,
 ) {
-  const ferramentasAgenda = Array.from(ferramentasAtivas.entries()).filter(([tipo]) =>
-    FERRAMENTAS_AGENDA.has(tipo)
+  const ferramentasAgenda = Array.from(ferramentasAtivas.entries()).filter(
+    ([tipo]) => FERRAMENTAS_AGENDA.has(tipo),
   );
-  if (!ferramentasAgenda.length) return null;
+  if (!ferramentasAgenda.length) {
+    return {
+      agendaId: null as string | null,
+      grupoDistribuicaoId: null as string | null,
+    };
+  }
 
-  const ids = ferramentasAgenda.map(([, config]) => String(config?.agenda_id || "").trim());
-  if (ids.some((id) => !id)) {
-    throw new Error("Ferramentas de agenda ativas sem agenda obrigatória configurada.");
+  const origens = ferramentasAgenda.map(([, config]) => {
+    const agendaId = String(config?.agenda_id || "").trim();
+    const grupoDistribuicaoId = String(
+      config?.grupo_distribuicao_id || "",
+    ).trim();
+    if (agendaId && !grupoDistribuicaoId) return `agenda:${agendaId}`;
+    if (grupoDistribuicaoId && !agendaId) {
+      return `grupo:${grupoDistribuicaoId}`;
+    }
+    return "";
+  });
+
+  if (origens.some((origem) => !origem)) {
+    throw new Error(
+      "Ferramentas de agenda ativas sem agenda ou grupo de distribuição configurado.",
+    );
   }
-  const unicos = Array.from(new Set(ids));
+
+  const unicos = Array.from(new Set(origens));
   if (unicos.length !== 1) {
-    throw new Error("As ferramentas de agenda do agente devem usar uma única agenda configurada.");
+    throw new Error(
+      "As ferramentas de agenda do agente devem usar uma única origem configurada.",
+    );
   }
-  return unicos[0];
+
+  const [tipo, id] = unicos[0].split(":");
+  return {
+    agendaId: tipo === "agenda" ? id : null,
+    grupoDistribuicaoId: tipo === "grupo" ? id : null,
+  };
+}
+
+function adicionarDiasData(data: string, dias: number) {
+  const [ano, mes, dia] = data.split("-").map(Number);
+  const proxima = new Date(Date.UTC(ano, mes - 1, dia + dias));
+  return `${proxima.getUTCFullYear()}-${String(
+    proxima.getUTCMonth() + 1,
+  ).padStart(2, "0")}-${String(proxima.getUTCDate()).padStart(2, "0")}`;
+}
+
+async function listarSlotsOrigemAgenda(params: {
+  empresaId: string;
+  agendaId?: string | null;
+  grupoDistribuicaoId?: string | null;
+  data?: string | null;
+  janelaDias?: number;
+  limite?: number;
+  timezone?: string | null;
+}) {
+  const limite = Math.max(1, Math.min(50, Number(params.limite || 12)));
+  if (params.agendaId) {
+    return listarSlotsDisponiveis({
+      supabase: supabaseAdmin,
+      empresaId: params.empresaId,
+      agendaId: params.agendaId,
+      data: params.data || null,
+      janelaDias: params.janelaDias || 14,
+      limite,
+    });
+  }
+
+  if (!params.grupoDistribuicaoId) {
+    throw new Error("Origem de agenda não configurada.");
+  }
+
+  const grupo = await obterGrupoDistribuicao({
+    supabase: supabaseAdmin,
+    empresaId: params.empresaId,
+    grupoId: params.grupoDistribuicaoId,
+  });
+  if (!grupo) {
+    throw new Error("Grupo de distribuição não encontrado ou inativo.");
+  }
+
+  const timezone =
+    params.timezone ||
+    grupo.calendarios[0]?.timezone ||
+    "America/Sao_Paulo";
+  const dataInicial =
+    params.data || dataLocalDeIso(new Date().toISOString(), timezone);
+  const totalDias = params.data ? 1 : Math.max(1, params.janelaDias || 14);
+  const slots: any[] = [];
+  const diasSemDisponibilidade: string[] = [];
+
+  for (let offset = 0; offset < totalDias && slots.length < limite; offset += 1) {
+    const data = adicionarDiasData(dataInicial, offset);
+    const resultado = await listarSlotsGrupoDistribuicao({
+      supabase: supabaseAdmin,
+      empresaId: params.empresaId,
+      grupoId: params.grupoDistribuicaoId,
+      data,
+      janelaDias: 1,
+      limite: limite - slots.length,
+    });
+    if (resultado.slots.length) {
+      slots.push(...resultado.slots);
+    } else {
+      diasSemDisponibilidade.push(data);
+    }
+  }
+
+  return {
+    agenda: grupo.calendarios[0] || null,
+    grupo,
+    slots,
+    tem_disponibilidade_no_periodo: slots.length > 0,
+    dias_sem_disponibilidade: diasSemDisponibilidade,
+  };
 }
 
 function numeroInteiro(valor: unknown, fallback: number, minimo: number, maximo: number) {
@@ -526,15 +637,17 @@ function formatarAgendamentoAtivo(item: any, timezone: string) {
 
 async function buscarAgendamentosAtivos(params: {
   empresaId: string;
-  agendaId: string;
+  agendaIds: string[];
   conversaId: string;
   contatoId?: string | null;
 }) {
+  if (!params.agendaIds.length) return [];
+
   let query = supabaseAdmin
     .from("agenda_agendamentos")
     .select("id, agenda_id, contato_id, conversa_id, titulo, inicio_at, fim_at, status, metadata_json")
     .eq("empresa_id", params.empresaId)
-    .eq("agenda_id", params.agendaId)
+    .in("agenda_id", params.agendaIds)
     .in("status", ["agendado", "confirmado"])
     .gte("fim_at", new Date().toISOString())
     .order("inicio_at", { ascending: true });
@@ -609,23 +722,45 @@ async function carregarContexto(ctx: ContextoExecucao) {
       .maybeSingle(),
   ]);
 
-  const agendaId = agendaIdConfiguradaFerramentas(ctx.ferramentasAtivas);
+  const origem = origemAgendaConfiguradaFerramentas(ctx.ferramentasAtivas);
   let agendas: any[] = [];
+  let grupoDistribuicao: any | null = null;
   let agendamentosAtivos: any[] = [];
-  if (agendaId) {
+
+  if (origem.grupoDistribuicaoId) {
+    grupoDistribuicao = await obterGrupoDistribuicao({
+      supabase: supabaseAdmin,
+      empresaId: ctx.pendencia.empresa_id,
+      grupoId: origem.grupoDistribuicaoId,
+    });
+    if (!grupoDistribuicao) {
+      throw new Error(
+        "O grupo de distribuição configurado para o agente não está disponível.",
+      );
+    }
+    agendas = grupoDistribuicao.calendarios;
+  } else if (origem.agendaId) {
     const { data: agenda, error: agendaError } = await supabaseAdmin
       .from("calendarios")
-      .select("id, nome, timezone, duracao_minutos")
+      .select("id, nome, timezone, duracao_minutos, responsavel_id")
       .eq("empresa_id", ctx.pendencia.empresa_id)
-      .eq("id", agendaId)
+      .eq("id", origem.agendaId)
       .eq("status", "ativo")
       .maybeSingle();
     if (agendaError) throw new Error(agendaError.message);
-    if (!agenda) throw new Error("A agenda obrigatória configurada para o agente não está disponível.");
+    if (!agenda) {
+      throw new Error(
+        "A agenda obrigatória configurada para o agente não está disponível.",
+      );
+    }
     agendas = [agenda];
+  }
+
+  const agendaIds = agendas.map((agenda) => String(agenda.id));
+  if (agendaIds.length) {
     agendamentosAtivos = await buscarAgendamentosAtivos({
       empresaId: ctx.pendencia.empresa_id,
-      agendaId,
+      agendaIds,
       conversaId: ctx.pendencia.conversa_id,
       contatoId: ctx.pendencia.contato_id || null,
     });
@@ -644,11 +779,21 @@ async function carregarContexto(ctx: ContextoExecucao) {
     }));
 
   const timezone = agendas[0]?.timezone || "America/Sao_Paulo";
-  const estadoSincronizado = agendaId
-    ? sincronizarEstadoComAgendamentosAtivos(normalizarEstado(estado?.estado_json), agendamentosAtivos, timezone)
+  const estadoSincronizado = agendas.length
+    ? sincronizarEstadoComAgendamentosAtivos(
+        normalizarEstado(estado?.estado_json),
+        agendamentosAtivos,
+        timezone,
+      )
     : normalizarEstado(estado?.estado_json);
 
-  return { historico, estado: estadoSincronizado, agendas, agendamentosAtivos };
+  return {
+    historico,
+    estado: estadoSincronizado,
+    agendas,
+    grupoDistribuicao,
+    agendamentosAtivos,
+  };
 }
 
 function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknown>>) {
