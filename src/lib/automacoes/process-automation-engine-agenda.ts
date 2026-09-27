@@ -2,6 +2,7 @@ import {
   interpretarDataHorarioAgenda,
   listarSlotsDisponiveis,
 } from "@/lib/agendas/agenda-service";
+import { listarSlotsGrupoDistribuicao } from "@/lib/agendas/distribuicao";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   enviarMensagemAutomacao,
@@ -22,6 +23,7 @@ type ContextoEscolhaHorario = {
   metadata: any;
   estadoAgenda: any;
   agendaId: string;
+  grupoDistribuicaoId: string;
   dataEscolhida: string;
   opcoes: any[];
 };
@@ -213,10 +215,13 @@ async function carregarContextoEscolhaHorario(
   const estadoAgenda = metadata.agenda_estado?.[noAtualId] || {};
   const dataEscolhida = String(estadoAgenda.data_escolhida || "").trim();
   const agendaId = String(estadoAgenda.agenda_id || "").trim();
+  const grupoDistribuicaoId = String(
+    estadoAgenda.grupo_distribuicao_id || "",
+  ).trim();
 
   if (
     estadoAgenda.etapa !== "aguardando_horario" ||
-    !agendaId ||
+    (!agendaId && !grupoDistribuicaoId) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(dataEscolhida)
   ) {
     return null;
@@ -247,6 +252,7 @@ async function carregarContextoEscolhaHorario(
     metadata,
     estadoAgenda,
     agendaId,
+    grupoDistribuicaoId,
     dataEscolhida,
     opcoes,
   };
@@ -352,14 +358,23 @@ async function buscarSlotExatoNoDia(params: {
   minutos: number;
 }) {
   const { input, contexto, minutos } = params;
-  const resultado = await listarSlotsDisponiveis({
-    supabase: supabaseAdmin,
-    empresaId: input.empresaId,
-    agendaId: contexto.agendaId,
-    data: contexto.dataEscolhida,
-    janelaDias: 1,
-    limite: 100,
-  });
+  const resultado = contexto.grupoDistribuicaoId
+    ? await listarSlotsGrupoDistribuicao({
+        supabase: supabaseAdmin,
+        empresaId: input.empresaId,
+        grupoId: contexto.grupoDistribuicaoId,
+        data: contexto.dataEscolhida,
+        janelaDias: 1,
+        limite: 100,
+      })
+    : await listarSlotsDisponiveis({
+        supabase: supabaseAdmin,
+        empresaId: input.empresaId,
+        agendaId: contexto.agendaId,
+        data: contexto.dataEscolhida,
+        janelaDias: 1,
+        limite: 100,
+      });
 
   const slot = resultado.slots.find(
     (item) => horaLabelParaMinutos(item.hora_label) === minutos
@@ -389,7 +404,11 @@ async function selecionarSlotForaDaLista(params: {
   const opcaoTemporaria = {
     ...slot,
     indice: 1,
-    agenda_id: contexto.agendaId,
+    agenda_id: String(slot?.agenda_id || contexto.agendaId || ""),
+    grupo_distribuicao_id:
+      String(
+        slot?.grupo_distribuicao_id || contexto.grupoDistribuicaoId || "",
+      ) || null,
   };
 
   const { error } = await supabaseAdmin

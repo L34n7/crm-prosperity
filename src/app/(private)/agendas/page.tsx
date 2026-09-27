@@ -48,6 +48,7 @@ import AgendaTemplateConfiguration, {
 } from "./AgendaTemplateConfiguration";
 import AgendaRelatedRecords from "./AgendaRelatedRecords";
 import AgendaAppointmentDetails from "./AgendaAppointmentDetails";
+import AgendaCapacityControls from "./AgendaCapacityControls";
 
 import styles from "./page.module.css";
 
@@ -60,6 +61,8 @@ type Agenda = {
   antecedencia_minutos: number;
   janela_dias: number;
   status: "ativo" | "inativo" | "arquivado";
+  responsavel_id?: string | null;
+  calendarios_mesclados_ids?: string[];
 };
 type Tipo = { id: string; nome: string; cor: string };
 type Resp = { id: string; nome: string; email: string | null };
@@ -419,9 +422,11 @@ function Page() {
   const sp = useSearchParams();
   const [agendas, setAgendas] = useState<Agenda[]>([]),
     [agendaId, setAgendaId] = useState(""),
+    [agendaIdsVisiveis, setAgendaIdsVisiveis] = useState<string[]>([]),
     [ags, setAgs] = useState<Ag[]>([]),
     [tipos, setTipos] = useState<Tipo[]>([]),
     [resps, setResps] = useState<Resp[]>([]),
+    [responsaveisCalendario, setResponsaveisCalendario] = useState<Resp[]>([]),
     [userId, setUserId] = useState("");
   const [google, setGoogle] = useState<{
       conectado: boolean;
@@ -471,6 +476,7 @@ function Page() {
       antecedencia_minutos: "120",
       janela_dias: "14",
       status: "ativo",
+      responsavel_id: "",
     }),
     [disp, setDisp] = useState<Disp[]>(
       dias.map((_, i) => ({
@@ -493,6 +499,9 @@ function Page() {
     >(() => automationCardsFromRules([])),
     [configDetailsLoading, setConfigDetailsLoading] = useState(false),
     [configDetailsError, setConfigDetailsError] = useState("");
+  const [calendariosMescladosIds, setCalendariosMescladosIds] = useState<
+    string[]
+  >([]);
   const [unidadeDuracaoAgenda, setUnidadeDuracaoAgenda] = useState<
       "minutos" | "horas"
     >("minutos"),
@@ -502,7 +511,20 @@ function Page() {
     [unidadeAntecedenciaAgenda, setUnidadeAntecedenciaAgenda] = useState<
       "minutos" | "horas"
     >("minutos");
-  const agenda = agendas.find((a) => a.id === agendaId),
+  const responsaveisDisponiveis = useMemo(() => {
+      const mapa = new Map<string, Resp>();
+      for (const item of [...responsaveisCalendario, ...resps]) {
+        if (item?.id) mapa.set(item.id, item);
+      }
+      return Array.from(mapa.values()).sort((a, b) =>
+        String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"),
+      );
+    }, [responsaveisCalendario, resps]),
+    agenda = agendas.find((a) => a.id === agendaId),
+    agendaFormulario = agendas.find(
+      (item) => item.id === (form.id ? viewing?.agenda_id || agendaId : agendaId),
+    ),
+    visualizacaoMultipla = agendaIdsVisiveis.length > 1,
     days = useMemo(() => cal(month), [month]),
     isHealthNiche = ["medicina", "odontologia"].includes(
       niche?.codigo || "",
@@ -645,17 +667,40 @@ function Page() {
   const loadData = useCallback(
     async (id: string) => {
       const rg = range(month);
-      const data = await agendaRpcContextual<{
+      const ids = Array.from(
+        new Set(
+          [id, ...agendaIdsVisiveis]
+            .map((value) => String(value || "").trim())
+            .filter(Boolean),
+        ),
+      );
+      type AgendaRpcData = {
         agendamentos?: Ag[];
         tipos?: Tipo[];
         responsaveis?: Resp[];
         usuario_atual_id?: string;
-      }>("listar", {
-        agenda_id: id,
-        inicio: rg.start,
-        fim: rg.end,
-      });
-      const appointments = (data?.agendamentos || []) as Ag[];
+      };
+      const resultados = await Promise.all(
+        ids.map(async (agendaConsultaId) => ({
+          agenda_id: agendaConsultaId,
+          data: await agendaRpcContextual<AgendaRpcData>("listar", {
+            agenda_id: agendaConsultaId,
+            inicio: rg.start,
+            fim: rg.end,
+          }),
+        })),
+      );
+      const principal: AgendaRpcData =
+        resultados.find((item) => item.agenda_id === id)?.data ||
+        resultados[0]?.data ||
+        {};
+      const appointments = Array.from(
+        new Map(
+          resultados
+            .flatMap((item) => item.data?.agendamentos || [])
+            .map((appointment) => [appointment.id, appointment as Ag]),
+        ).values(),
+      );
       const propertyIds = Array.from(
         new Set(
           appointments.flatMap((appointment) =>
@@ -730,13 +775,13 @@ function Page() {
         });
       }
       setAgs(appointments);
-      setTipos(data?.tipos || []);
-      setResps(data?.responsaveis || []);
-      setUserId(data?.usuario_atual_id || "");
+      setTipos(principal?.tipos || []);
+      setResps(principal?.responsaveis || []);
+      setUserId(principal?.usuario_atual_id || "");
       await loadGoogle(id);
       return appointments;
     },
-    [loadGoogle, month],
+    [agendaIdsVisiveis, loadGoogle, month],
   );
   const loadFeedback = useCallback(async () => {
     try {
@@ -753,6 +798,22 @@ function Page() {
   }, [loadAgendas, loadFeedback]);
   useEffect(() => {
     let active = true;
+
+    fetch("/api/agendas/capacidade", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (active && response.ok && data?.ok) {
+          setResponsaveisCalendario(data.responsaveis || []);
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    let active = true;
     fetch("/api/agendas/contexto", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json();
@@ -765,6 +826,18 @@ function Page() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    if (!agendaId) {
+      setAgendaIdsVisiveis([]);
+      return;
+    }
+
+    setAgendaIdsVisiveis((atual) => {
+      if (atual.includes(agendaId)) return atual;
+      return [agendaId];
+    });
+  }, [agendaId]);
+
   useEffect(() => {
     if (!agendaId) return;
     setLoad(true);
@@ -871,7 +944,13 @@ function Page() {
     }
     if (!agenda) return;
     setViewing(null);
-    setForm(blank(d, agenda.duracao_minutos, userId));
+    setForm(
+      blank(
+        d,
+        agenda.duracao_minutos,
+        agenda.responsavel_id || userId,
+      ),
+    );
     setContact(null);
     setParticipantQuery("");
     setParticipantResults([]);
@@ -1078,7 +1157,10 @@ function Page() {
       setErr("Você não tem permissão para editar agendas.");
       return;
     }
-    if (!agendaId) return;
+    const agendaDestinoId = form.id
+      ? viewing?.agenda_id || agendaId
+      : agendaId;
+    if (!agendaDestinoId) return;
     try {
       setBusy(true);
       setErr("");
@@ -1150,14 +1232,13 @@ function Page() {
         },
       };
       await agendaRpcContextual("salvar_agendamento", {
-        agenda_id: agendaId,
+        agenda_id: agendaDestinoId,
         agendamento_id: form.id,
         payload,
       });
-      if (google.conectado)
-        await fetch(`/api/agendas/${agendaId}/google-calendar`, {
-          method: "POST",
-        }).catch(() => undefined);
+      await fetch(`/api/agendas/${agendaDestinoId}/google-calendar`, {
+        method: "POST",
+      }).catch(() => undefined);
       const appointments = await loadData(agendaId);
       setOpen(false);
       if (form.id) {
@@ -1305,7 +1386,9 @@ function Page() {
         antecedencia_minutos: "120",
         janela_dias: "14",
         status: "ativo",
+        responsavel_id: "",
       });
+      setCalendariosMescladosIds([]);
       setDisp(
         dias.map((_, i) => ({
           dia_semana: i,
@@ -1325,7 +1408,9 @@ function Page() {
         antecedencia_minutos: String(agenda.antecedencia_minutos),
         janela_dias: String(agenda.janela_dias),
         status: agenda.status,
+        responsavel_id: agenda.responsavel_id || "",
       });
+      setCalendariosMescladosIds(agenda.calendarios_mesclados_ids || []);
       const r = await fetch(`/api/agendas/${agenda.id}/disponibilidades`, {
           cache: "no-store",
         }),
@@ -1405,6 +1490,8 @@ function Page() {
         intervalo_minutos: Number(af.intervalo_minutos),
         antecedencia_minutos: Number(af.antecedencia_minutos),
         janela_dias: Number(af.janela_dias),
+        responsavel_id: af.responsavel_id || null,
+        calendarios_mesclados_ids: calendariosMescladosIds,
         integracao_whatsapp_ids: agendaIntegrationIds,
       };
       const r = await fetch(configNew ? "/api/agendas" : `/api/agendas/${id}`, {
@@ -1438,6 +1525,9 @@ function Page() {
       setConfig(false);
       await loadAgendas(id);
       setAgendaId(id);
+      setAgendaIdsVisiveis(
+        Array.from(new Set([id, ...calendariosMescladosIds])),
+      );
       setOk(configNew ? "Agenda criada." : "Agenda atualizada.");
     } catch (e: any) {
       setErr(e.message);
@@ -1527,6 +1617,16 @@ function Page() {
               </option>
             ))}
           </select>
+
+          <AgendaCapacityControls
+            calendars={agendas}
+            selectedIds={agendaIdsVisiveis}
+            primaryId={agendaId}
+            canEdit={podeEditarAgenda}
+            onSelectedIdsChange={setAgendaIdsVisiveis}
+            onSuccess={setOk}
+            onError={setErr}
+          />
 
           <button
             className="btn"
@@ -1788,7 +1888,7 @@ function Page() {
                   }
                 >
                   <option value="todos">Todos os responsáveis</option>
-                  {resps.map((r) => (
+                  {responsaveisDisponiveis.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.nome}
                     </option>
@@ -1885,6 +1985,12 @@ function Page() {
                               it.responsavel?.nome ||
                               labels[it.status]}
                           </span>
+                          {visualizacaoMultipla ? (
+                            <small className={styles.eventCalendarName}>
+                              {agendas.find((calendar) => calendar.id === it.agenda_id)
+                                ?.nome || "Calendário"}
+                            </small>
+                          ) : null}
                         </button>
                       ),
                     )}
@@ -1923,6 +2029,12 @@ function Page() {
                       a.contato?.nome ||
                       `${customerLabel} não informado`}
                     {a.responsavel?.nome ? ` · ${a.responsavel.nome}` : ""}
+                    {visualizacaoMultipla
+                      ? ` · ${
+                          agendas.find((calendar) => calendar.id === a.agenda_id)
+                            ?.nome || "Calendário"
+                        }`
+                      : ""}
                   </div>
                 </div>
               ))}
@@ -2114,18 +2226,28 @@ function Page() {
                   <div className="field">
                     <label>Responsável</label>
                     <select
-                      value={form.responsavel_id}
+                      value={
+                        agendaFormulario?.responsavel_id ||
+                        form.responsavel_id
+                      }
                       onChange={(e) =>
                         setForm({ ...form, responsavel_id: e.target.value })
                       }
+                      disabled={Boolean(agendaFormulario?.responsavel_id)}
                     >
                       <option value="">Sem responsável</option>
-                      {resps.map((r) => (
+                      {responsaveisDisponiveis.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.nome}
                         </option>
                       ))}
                     </select>
+                    {agendaFormulario?.responsavel_id ? (
+                      <small className={styles.fieldHelp}>
+                        Responsável fixo definido nas configurações deste
+                        calendário.
+                      </small>
+                    ) : null}
                   </div>
                   <div className="field">
                     <label>Prioridade</label>
@@ -3103,6 +3225,113 @@ function Page() {
                   />
                 </div>
               </div>
+
+              <section className={styles.capacityConfigCard}>
+                <div className={styles.capacityConfigHeader}>
+                  <div>
+                    <h3>Responsável e capacidade</h3>
+                    <p>
+                      Vincule este calendário a um usuário e, quando necessário,
+                      compartilhe a mesma ocupação com calendários de outros
+                      serviços.
+                    </p>
+                  </div>
+                  <UsersRound size={18} />
+                </div>
+
+                <div className={styles.capacityConfigGrid}>
+                  <div className="field">
+                    <label>Responsável fixo</label>
+                    <select
+                      value={af.responsavel_id}
+                      onChange={(event) =>
+                        setAf({
+                          ...af,
+                          responsavel_id: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Sem responsável fixo</option>
+                      {responsaveisDisponiveis.map((responsavel) => (
+                        <option key={responsavel.id} value={responsavel.id}>
+                          {responsavel.nome}
+                          {responsavel.email
+                            ? ` · ${responsavel.email}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <small className={styles.fieldHelp}>
+                      Novos compromissos deste calendário serão atribuídos
+                      automaticamente a este usuário.
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label>Ocupação compartilhada</label>
+                    <div className={styles.mergedCalendarList}>
+                      {agendas
+                        .filter(
+                          (calendar) =>
+                            calendar.id !== (configNew ? "" : agendaId) &&
+                            calendar.status !== "arquivado",
+                        )
+                        .map((calendar) => {
+                          const checked =
+                            calendariosMescladosIds.includes(calendar.id);
+                          return (
+                            <label
+                              key={calendar.id}
+                              className={[
+                                styles.mergedCalendarOption,
+                                checked
+                                  ? styles.mergedCalendarOptionActive
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setCalendariosMescladosIds((atual) =>
+                                    checked
+                                      ? atual.filter(
+                                          (id) => id !== calendar.id,
+                                        )
+                                      : [...atual, calendar.id],
+                                  )
+                                }
+                              />
+                              <span>
+                                <strong>{calendar.nome}</strong>
+                                <small>
+                                  {calendar.duracao_minutos} min por atendimento
+                                </small>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      {agendas.filter(
+                        (calendar) =>
+                          calendar.id !== agendaId &&
+                          calendar.status !== "arquivado",
+                      ).length === 0 ? (
+                        <div className={styles.mergedCalendarEmpty}>
+                          Crie outro calendário para compartilhar a ocupação.
+                        </div>
+                      ) : null}
+                    </div>
+                    <small className={styles.fieldHelp}>
+                      Um agendamento em qualquer calendário selecionado bloqueia
+                      o mesmo período nos demais. Os calendários continuam com
+                      durações e disponibilidades próprias.
+                    </small>
+                  </div>
+                </div>
+              </section>
+
               <section className={styles.googleConfigCard}>
                 <span className={styles.googleConfigMark} aria-hidden="true" />
                 <h3>Google Calendar</h3>

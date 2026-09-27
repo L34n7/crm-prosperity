@@ -793,6 +793,7 @@ function FluxosPageContent() {
     carregandoIntegracoesWhatsapp,
     carregarIntegracoesWhatsapp,
     agendasOpcoes,
+    gruposDistribuicaoAgenda,
     carregandoAgendasOpcoes,
     carregarAgendasOpcoes,
     setores,
@@ -1150,6 +1151,8 @@ function FluxosPageContent() {
     useState<"horas" | "dias">("horas");
   const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
   const [agendaIdNode, setAgendaIdNode] = useState("");
+  const [agendaGrupoDistribuicaoIdNode, setAgendaGrupoDistribuicaoIdNode] =
+    useState("");
   const [agendaUsarContextoNode, setAgendaUsarContextoNode] = useState(false);
   const [agendaListarAgendamentosNode, setAgendaListarAgendamentosNode] =
     useState(false);
@@ -2758,6 +2761,9 @@ function offsetLabelConexao(edgeId: string) {
     );
 
     setAgendaIdNode(String(configuracaoJson?.agenda_id || ""));
+    setAgendaGrupoDistribuicaoIdNode(
+      String(configuracaoJson?.grupo_distribuicao_id || "")
+    );
     setAgendaUsarContextoNode(
       configuracaoJson?.usar_agenda_contexto === true ||
         configuracaoJson?.usar_agenda_contexto === "true"
@@ -3351,9 +3357,13 @@ async function aplicarEdicaoNoInterno() {
         return;
       }
 
-      if (!usarCalendarioContexto && !agendaIdNode.trim()) {
+      if (
+        !usarCalendarioContexto &&
+        !agendaIdNode.trim() &&
+        !agendaGrupoDistribuicaoIdNode.trim()
+      ) {
         setErro(
-          'Selecione um calendário ativo no bloco "Escolher horário".'
+          'Selecione um calendário ativo ou um grupo de distribuição no bloco "Escolher horário".'
         );
         return;
       }
@@ -3462,7 +3472,12 @@ async function aplicarEdicaoNoInterno() {
 
         configuracao_json.agenda_id = usarCalendarioContexto
           ? ""
-          : agendaIdNode;
+          : agendaGrupoDistribuicaoIdNode
+            ? ""
+            : agendaIdNode;
+        configuracao_json.grupo_distribuicao_id = usarCalendarioContexto
+          ? ""
+          : agendaGrupoDistribuicaoIdNode;
 
         configuracao_json.usar_agenda_contexto = usarCalendarioContexto;
         configuracao_json.mensagem =
@@ -4556,7 +4571,12 @@ const nodesParaPreviaWhatsapp = useMemo(() => {
 
       configuracao.agenda_id = usarCalendarioContexto
         ? ""
-        : agendaIdNode;
+        : agendaGrupoDistribuicaoIdNode
+          ? ""
+          : agendaIdNode;
+      configuracao.grupo_distribuicao_id = usarCalendarioContexto
+        ? ""
+        : agendaGrupoDistribuicaoIdNode;
 
       configuracao.usar_agenda_contexto = usarCalendarioContexto;
 
@@ -5364,8 +5384,10 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             fluxoSistemaCalendario={fluxoSistemaCalendario}
             fluxoTemBuscaQualquerCalendario={fluxoTemBuscaQualquerCalendario}
             agendas={agendasOpcoes}
+            gruposDistribuicao={gruposDistribuicaoAgenda}
             carregandoAgendas={carregandoAgendasOpcoes}
             agendaId={agendaIdNode}
+            grupoDistribuicaoId={agendaGrupoDistribuicaoIdNode}
             usarContexto={agendaUsarContextoNode}
             listarAgendamentos={agendaListarAgendamentosNode}
             quantidadeOpcoes={agendaQuantidadeOpcoesNode}
@@ -5400,6 +5422,7 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             loadingCusto={loadingPreviewCustoAgendarDisparo}
             custo={previewCustoAgendarDisparo}
             onAgendaIdChange={setAgendaIdNode}
+            onGrupoDistribuicaoIdChange={setAgendaGrupoDistribuicaoIdNode}
             onUsarContextoChange={setAgendaUsarContextoNode}
             onListarAgendamentosChange={setAgendaListarAgendamentosNode}
             onQuantidadeOpcoesChange={setAgendaQuantidadeOpcoesNode}

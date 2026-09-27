@@ -6,6 +6,10 @@ import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { excluirEventosVinculadosGoogleCalendar } from "@/lib/agendas/google-calendar";
 import { normalizeIntegrationIds, withCalendarIntegrationIds } from "@/lib/agendas/integration-scope";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  obterCalendariosMesclados,
+  sincronizarOcupacaoCompartilhada,
+} from "@/lib/agendas/capacidade";
 
 const TIMEZONE_PADRAO = "America/Sao_Paulo";
 
@@ -44,6 +48,32 @@ async function validarIntegracoes(
   return { ids, error: "" };
 }
 
+async function validarResponsavel(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  empresaId: string,
+  value: unknown,
+) {
+  const responsavelId = String(value || "").trim();
+  if (!responsavelId) return { id: null as string | null, error: "" };
+
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("id", responsavelId)
+    .eq("status", "ativo")
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      id: null as string | null,
+      error: "O responsável precisa ser um usuário ativo da empresa.",
+    };
+  }
+
+  return { id: responsavelId, error: "" };
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -79,7 +109,20 @@ export async function GET(
       .eq("agenda_id", id)
       .order("dia_semana", { ascending: true });
 
-    return NextResponse.json({ ok: true, agenda, disponibilidades: disponibilidades || [] });
+    const calendariosMescladosIds = await obterCalendariosMesclados({
+      supabase,
+      empresaId: usuario.empresa_id,
+      agendaId: id,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      agenda: {
+        ...agenda,
+        calendarios_mesclados_ids: calendariosMescladosIds,
+      },
+      disponibilidades: disponibilidades || [],
+    });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error?.message || "Erro interno ao buscar agenda." }, { status: 500 });
   }
@@ -110,7 +153,7 @@ export async function PATCH(
     const supabase = getSupabaseAdmin();
     const { data: current, error: currentError } = await supabase
       .from("calendarios")
-      .select("id, metadata_json")
+.select("id, metadata_json, responsavel_id")
       .eq("empresa_id", usuario.empresa_id)
       .eq("id", id)
       .maybeSingle();
@@ -151,6 +194,20 @@ export async function PATCH(
       const status = String(body.status || "ativo");
       atualizacao.status = ["ativo", "inativo", "arquivado"].includes(status) ? status : "ativo";
     }
+    if (body?.responsavel_id !== undefined) {
+      const responsavel = await validarResponsavel(
+        supabase,
+        usuario.empresa_id,
+        body.responsavel_id,
+      );
+      if (responsavel.error) {
+        return NextResponse.json(
+          { ok: false, error: responsavel.error },
+          { status: 400 },
+        );
+      }
+      atualizacao.responsavel_id = responsavel.id;
+    }
     if (body?.integracao_whatsapp_ids !== undefined) {
       const validation = await validarIntegracoes(
         supabase,
@@ -177,7 +234,31 @@ export async function PATCH(
     if (error) {
       return NextResponse.json({ ok: false, error: `Erro ao atualizar agenda: ${error.message}` }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, agenda: data });
+
+    let calendariosMescladosIds: string[] | undefined;
+    if (body?.calendarios_mesclados_ids !== undefined) {
+      calendariosMescladosIds = await sincronizarOcupacaoCompartilhada({
+        supabase,
+        empresaId: usuario.empresa_id,
+        agendaId: id,
+        agendaIds: body.calendarios_mesclados_ids,
+        usuarioId: usuario.id,
+      });
+    } else {
+      calendariosMescladosIds = await obterCalendariosMesclados({
+        supabase,
+        empresaId: usuario.empresa_id,
+        agendaId: id,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      agenda: {
+        ...data,
+        calendarios_mesclados_ids: calendariosMescladosIds,
+      },
+    });
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error?.message || "Erro interno ao atualizar agenda." }, { status: 500 });
   }

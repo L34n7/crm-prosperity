@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type {
+  AgendaGrupoDistribuicaoOpcao,
   AgendaOpcao,
   AtendenteOpcao,
   IntegracaoWhatsappOpcao,
@@ -36,6 +37,9 @@ export default function useFluxoResources({
 
   const [agendasOpcoes, setAgendasOpcoes] = useState<AgendaOpcao[]>([]);
   const [carregandoAgendasOpcoes, setCarregandoAgendasOpcoes] = useState(false);
+  const [gruposDistribuicaoAgenda, setGruposDistribuicaoAgenda] = useState<
+    AgendaGrupoDistribuicaoOpcao[]
+  >([]);
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [atendentes, setAtendentes] = useState<AtendenteOpcao[]>([]);
@@ -126,6 +130,7 @@ export default function useFluxoResources({
       }
 
       setAgendasOpcoes(json.agendas || []);
+      setGruposDistribuicaoAgenda(json.grupos_distribuicao || []);
     } catch (error: unknown) {
       onError(
         error instanceof Error ? error.message : "Erro ao carregar agendas."
@@ -169,6 +174,7 @@ export default function useFluxoResources({
     carregandoIntegracoesWhatsapp,
     carregarIntegracoesWhatsapp,
     agendasOpcoes,
+    gruposDistribuicaoAgenda,
     carregandoAgendasOpcoes,
     carregarAgendasOpcoes,
     setores,
