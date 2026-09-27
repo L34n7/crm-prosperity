@@ -1589,6 +1589,16 @@ function Page() {
             ))}
           </select>
 
+          <AgendaCapacityControls
+            calendars={agendas}
+            selectedIds={agendaIdsVisiveis}
+            primaryId={agendaId}
+            canEdit={podeEditarAgenda}
+            onSelectedIdsChange={setAgendaIdsVisiveis}
+            onSuccess={setOk}
+            onError={setErr}
+          />
+
           <button
             className="btn"
             onClick={() => openConfig(false)}
@@ -1946,6 +1956,12 @@ function Page() {
                               it.responsavel?.nome ||
                               labels[it.status]}
                           </span>
+                          {visualizacaoMultipla ? (
+                            <small className={styles.eventCalendarName}>
+                              {agendas.find((calendar) => calendar.id === it.agenda_id)
+                                ?.nome || "Calendário"}
+                            </small>
+                          ) : null}
                         </button>
                       ),
                     )}
@@ -1984,6 +2000,12 @@ function Page() {
                       a.contato?.nome ||
                       `${customerLabel} não informado`}
                     {a.responsavel?.nome ? ` · ${a.responsavel.nome}` : ""}
+                    {visualizacaoMultipla
+                      ? ` · ${
+                          agendas.find((calendar) => calendar.id === a.agenda_id)
+                            ?.nome || "Calendário"
+                        }`
+                      : ""}
                   </div>
                 </div>
               ))}
@@ -2175,10 +2197,14 @@ function Page() {
                   <div className="field">
                     <label>Responsável</label>
                     <select
-                      value={form.responsavel_id}
+                      value={
+                        agendaFormulario?.responsavel_id ||
+                        form.responsavel_id
+                      }
                       onChange={(e) =>
                         setForm({ ...form, responsavel_id: e.target.value })
                       }
+                      disabled={Boolean(agendaFormulario?.responsavel_id)}
                     >
                       <option value="">Sem responsável</option>
                       {resps.map((r) => (
@@ -2187,6 +2213,12 @@ function Page() {
                         </option>
                       ))}
                     </select>
+                    {agendaFormulario?.responsavel_id ? (
+                      <small className={styles.fieldHelp}>
+                        Responsável fixo definido nas configurações deste
+                        calendário.
+                      </small>
+                    ) : null}
                   </div>
                   <div className="field">
                     <label>Prioridade</label>
@@ -3164,6 +3196,113 @@ function Page() {
                   />
                 </div>
               </div>
+
+              <section className={styles.capacityConfigCard}>
+                <div className={styles.capacityConfigHeader}>
+                  <div>
+                    <h3>Responsável e capacidade</h3>
+                    <p>
+                      Vincule este calendário a um usuário e, quando necessário,
+                      compartilhe a mesma ocupação com calendários de outros
+                      serviços.
+                    </p>
+                  </div>
+                  <UsersRound size={18} />
+                </div>
+
+                <div className={styles.capacityConfigGrid}>
+                  <div className="field">
+                    <label>Responsável fixo</label>
+                    <select
+                      value={af.responsavel_id}
+                      onChange={(event) =>
+                        setAf({
+                          ...af,
+                          responsavel_id: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Sem responsável fixo</option>
+                      {resps.map((responsavel) => (
+                        <option key={responsavel.id} value={responsavel.id}>
+                          {responsavel.nome}
+                          {responsavel.email
+                            ? ` · ${responsavel.email}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <small className={styles.fieldHelp}>
+                      Novos compromissos deste calendário serão atribuídos
+                      automaticamente a este usuário.
+                    </small>
+                  </div>
+
+                  <div className="field">
+                    <label>Ocupação compartilhada</label>
+                    <div className={styles.mergedCalendarList}>
+                      {agendas
+                        .filter(
+                          (calendar) =>
+                            calendar.id !== agendaId &&
+                            calendar.status !== "arquivado",
+                        )
+                        .map((calendar) => {
+                          const checked =
+                            calendariosMescladosIds.includes(calendar.id);
+                          return (
+                            <label
+                              key={calendar.id}
+                              className={[
+                                styles.mergedCalendarOption,
+                                checked
+                                  ? styles.mergedCalendarOptionActive
+                                  : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setCalendariosMescladosIds((atual) =>
+                                    checked
+                                      ? atual.filter(
+                                          (id) => id !== calendar.id,
+                                        )
+                                      : [...atual, calendar.id],
+                                  )
+                                }
+                              />
+                              <span>
+                                <strong>{calendar.nome}</strong>
+                                <small>
+                                  {calendar.duracao_minutos} min por atendimento
+                                </small>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      {agendas.filter(
+                        (calendar) =>
+                          calendar.id !== agendaId &&
+                          calendar.status !== "arquivado",
+                      ).length === 0 ? (
+                        <div className={styles.mergedCalendarEmpty}>
+                          Crie outro calendário para compartilhar a ocupação.
+                        </div>
+                      ) : null}
+                    </div>
+                    <small className={styles.fieldHelp}>
+                      Um agendamento em qualquer calendário selecionado bloqueia
+                      o mesmo período nos demais. Os calendários continuam com
+                      durações e disponibilidades próprias.
+                    </small>
+                  </div>
+                </div>
+              </section>
+
               <section className={styles.googleConfigCard}>
                 <span className={styles.googleConfigMark} aria-hidden="true" />
                 <h3>Google Calendar</h3>
