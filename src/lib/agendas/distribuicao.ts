@@ -240,7 +240,7 @@ export async function listarSlotsGrupoDistribuicao(params: {
   }
 
   const candidatos = resultados.flatMap(({ agenda, resultado }) =>
-    resultado.slots.map((slot) => ({
+    resultado.slots.map((slot: AgendaSlot) => ({
       ...slot,
       agenda_id: String(agenda.id),
       agenda_nome: String(agenda.nome),
