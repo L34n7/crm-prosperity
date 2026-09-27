@@ -674,22 +674,23 @@ function Page() {
             .filter(Boolean),
         ),
       );
+      type AgendaRpcData = {
+        agendamentos?: Ag[];
+        tipos?: Tipo[];
+        responsaveis?: Resp[];
+        usuario_atual_id?: string;
+      };
       const resultados = await Promise.all(
         ids.map(async (agendaConsultaId) => ({
           agenda_id: agendaConsultaId,
-          data: await agendaRpcContextual<{
-            agendamentos?: Ag[];
-            tipos?: Tipo[];
-            responsaveis?: Resp[];
-            usuario_atual_id?: string;
-          }>("listar", {
+          data: await agendaRpcContextual<AgendaRpcData>("listar", {
             agenda_id: agendaConsultaId,
             inicio: rg.start,
             fim: rg.end,
           }),
         })),
       );
-      const principal =
+      const principal: AgendaRpcData =
         resultados.find((item) => item.agenda_id === id)?.data ||
         resultados[0]?.data ||
         {};
