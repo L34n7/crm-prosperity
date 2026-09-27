@@ -868,14 +868,27 @@ function Page() {
   useEffect(() => {
     let active = true;
 
-    fetch("/api/agendas/capacidade", { cache: "no-store" })
+    fetch("/api/agendas/responsaveis", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json();
-        if (active && response.ok && data?.ok) {
-          setResponsaveisCalendario(data.responsaveis || []);
+        if (!active) return;
+
+        if (!response.ok || !data?.ok) {
+          throw new Error(
+            data?.error || "Não foi possível carregar os usuários da empresa.",
+          );
         }
+
+        setResponsaveisCalendario(data.responsaveis || []);
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        if (!active) return;
+        setErr(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar os usuários da empresa.",
+        );
+      });
 
     return () => {
       active = false;
@@ -1594,9 +1607,7 @@ function Page() {
       setConfig(false);
       await loadAgendas(id);
       setAgendaId(id);
-      setAgendaIdsVisiveis(
-        Array.from(new Set([id, ...calendariosMescladosIds])),
-      );
+      setAgendaIdsVisiveis(id ? [id] : []);
       setOk(configNew ? "Agenda criada." : "Agenda atualizada.");
     } catch (e: any) {
       setErr(e.message);
@@ -1674,7 +1685,13 @@ function Page() {
           <select
             className={`select ${styles.calendarSelect}`}
             value={agendaId}
-            onChange={(event) => setAgendaId(event.target.value)}
+            onChange={(event) => {
+              const proximoAgendaId = event.target.value;
+              setAgendaId(proximoAgendaId);
+              setAgendaIdsVisiveis(
+                proximoAgendaId ? [proximoAgendaId] : [],
+              );
+            }}
           >
             {agendas.length === 0 ? (
               <option value="">Nenhum calendário</option>
@@ -3352,7 +3369,8 @@ function Page() {
                     </select>
                     <small className={styles.fieldHelp}>
                       Novos compromissos deste calendário serão atribuídos
-                      automaticamente a este usuário.
+                      automaticamente a este usuário. O mesmo usuário pode ser
+                      responsável por vários calendários.
                     </small>
                   </div>
 
