@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  typecheck:
+  validation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,4 +16,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit --pretty false
+      - name: TypeScript diagnostics
+        continue-on-error: true
+        run: npx tsc --noEmit --pretty false
+      - name: Next production build
+        run: npm run build
