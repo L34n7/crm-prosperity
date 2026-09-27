@@ -391,12 +391,15 @@ export async function POST(request: NextRequest) {
       .filter((id: string | null): id is string => Boolean(id));
 
     const conversaPorContatoId = new Map<string, string>();
+    const ultimaEntradaPorContatoId = new Map<string, string>();
 
     if (contatosIds.length > 0) {
       const { data: conversasDosContatos, error: conversasError } =
         await supabase
           .from("conversas")
-          .select("id, contato_id, integracao_whatsapp_id, last_message_at")
+          .select(
+            "id, contato_id, integracao_whatsapp_id, last_message_at, last_inbound_message_at"
+          )
           .eq("empresa_id", usuario.empresa_id)
           .eq("integracao_whatsapp_id", integracaoWhatsappId)
           .in("contato_id", contatosIds)
@@ -426,6 +429,17 @@ export async function POST(request: NextRequest) {
           !conversaPorContatoId.has(conversa.contato_id)
         ) {
           conversaPorContatoId.set(conversa.contato_id, conversa.id);
+        }
+
+        if (
+          conversa.contato_id &&
+          conversa.last_inbound_message_at &&
+          !ultimaEntradaPorContatoId.has(conversa.contato_id)
+        ) {
+          ultimaEntradaPorContatoId.set(
+            conversa.contato_id,
+            conversa.last_inbound_message_at
+          );
         }
       }
     }
