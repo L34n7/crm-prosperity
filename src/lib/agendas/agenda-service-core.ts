@@ -4,6 +4,7 @@ import {
   listarOcupacoesGoogleCalendar,
   reconciliarExclusoesGoogleCalendar,
 } from "@/lib/agendas/google-calendar";
+import { listarAgendaIdsBloqueio } from "@/lib/agendas/capacidade";
 
 export type AgendaSlot = {
   indice: number;
@@ -692,18 +693,28 @@ export async function existeConflitoAgenda(params: {
     return true;
   }
 
-  await reconciliarExclusoesGoogleCalendar({
+  const agendaIdsBloqueio = await listarAgendaIdsBloqueio({
+    supabase: params.supabase,
     empresaId: params.empresaId,
     agendaId: params.agendaId,
-    inicioAt: params.inicioAt,
-    fimAt: params.fimAt,
   });
+
+  await Promise.all(
+    agendaIdsBloqueio.map((agendaId) =>
+      reconciliarExclusoesGoogleCalendar({
+        empresaId: params.empresaId,
+        agendaId,
+        inicioAt: params.inicioAt,
+        fimAt: params.fimAt,
+      }),
+    ),
+  );
 
   let query = params.supabase
     .from("agenda_agendamentos")
     .select("id")
     .eq("empresa_id", params.empresaId)
-    .eq("agenda_id", params.agendaId)
+    .in("agenda_id", agendaIdsBloqueio)
     .in("status", ["agendado", "confirmado"])
     .lt("inicio_at", params.fimAt)
     .gt("fim_at", params.inicioAt)
@@ -713,13 +724,34 @@ export async function existeConflitoAgenda(params: {
     query = query.neq("id", params.ignorarAgendamentoId);
   }
 
-  const { data, error } = await query;
+  const [{ data, error }, ocupacoesGoogle] = await Promise.all([
+    query,
+    Promise.all(
+      agendaIdsBloqueio.map((agendaId) =>
+        listarOcupacoesGoogleCalendar({
+          empresaId: params.empresaId,
+          agendaId,
+          inicioAt: params.inicioAt,
+          fimAt: params.fimAt,
+        }),
+      ),
+    ),
+  ]);
 
   if (error) {
     throw new Error(`Erro ao verificar conflito de agenda: ${error.message}`);
   }
 
-  return (data || []).length > 0;
+  if ((data || []).length > 0) return true;
+
+  const inicioMs = new Date(params.inicioAt).getTime();
+  const fimMs = new Date(params.fimAt).getTime();
+
+  return ocupacoesGoogle.flat().some((ocupacao) => {
+    const ocupadoInicio = new Date(ocupacao.start).getTime();
+    const ocupadoFim = new Date(ocupacao.end).getTime();
+    return inicioMs < ocupadoFim && fimMs > ocupadoInicio;
+  });
 }
 
 export async function listarSlotsDisponiveis(params: {
