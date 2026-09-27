@@ -2882,6 +2882,51 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
       return { ok: true, status: "sem_gatilho" };
     }
 
+    const {
+      data: execucaoFluxoPadraoAnterior,
+      error: execucaoFluxoPadraoAnteriorError,
+    } = await supabaseAdmin
+      .from("automacao_execucoes")
+      .select("id, status, created_at")
+      .eq("empresa_id", empresaId)
+      .eq("conversa_id", conversaId)
+      .eq("fluxo_id", fluxoPadrao.id)
+      .eq("metadata_json->>tipo_inicio", "fluxo_padrao")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (execucaoFluxoPadraoAnteriorError) {
+      console.error(
+        "[AUTOMATION_ENGINE] Erro ao verificar execução anterior do fluxo padrão:",
+        execucaoFluxoPadraoAnteriorError
+      );
+      return {
+        ok: false,
+        error: "Erro ao verificar histórico do fluxo padrão da conversa.",
+      };
+    }
+
+    if (execucaoFluxoPadraoAnterior) {
+      console.log(
+        "[AUTOMATION_ENGINE] Fluxo padrão já executado nesta conversa. Novo início ignorado.",
+        {
+          empresaId,
+          conversaId,
+          fluxoId: fluxoPadrao.id,
+          execucaoAnteriorId: execucaoFluxoPadraoAnterior.id,
+          execucaoAnteriorStatus: execucaoFluxoPadraoAnterior.status,
+        }
+      );
+
+      return {
+        ok: true,
+        status: "fluxo_padrao_ja_executado_conversa",
+        execucaoId: execucaoFluxoPadraoAnterior.id,
+        fluxoId: fluxoPadrao.id,
+      };
+    }
+
     fluxoIdParaExecutar = fluxoPadrao.id;
     tipoInicioExecucao = "fluxo_padrao";
   }
