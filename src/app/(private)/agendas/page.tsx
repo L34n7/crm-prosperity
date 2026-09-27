@@ -157,6 +157,7 @@ type GEvent = {
   inicio_at: string;
   fim_at: string;
   dia_inteiro: boolean;
+  agenda_id?: string;
 };
 type AgendaNiche = {
   codigo: string;
@@ -625,44 +626,109 @@ function Page() {
   );
   const loadGoogle = useCallback(
     async (id: string) => {
+      const ids = Array.from(
+        new Set(
+          [id, ...agendaIdsVisiveis]
+            .map((value) => String(value || "").trim())
+            .filter(Boolean),
+        ),
+      );
+
       try {
-        const r = await fetch(`/api/agendas/${id}/google-calendar`, {
-            cache: "no-store",
+        const integracaoResponse = await fetch(
+          `/api/agendas/${id}/google-calendar`,
+          { cache: "no-store" },
+        );
+        const integracaoJson = await integracaoResponse.json();
+        setGoogle(
+          integracaoResponse.ok && integracaoJson.ok
+            ? integracaoJson.integracao
+            : { conectado: false },
+        );
+
+        const rg = range(month);
+        const q = new URLSearchParams({ inicio_at: rg.start, fim_at: rg.end });
+        const resultados = await Promise.all(
+          ids.map(async (agendaConsultaId) => {
+            try {
+              const [eventosResponse, vinculosResponse] = await Promise.all([
+                fetch(
+                  `/api/agendas/${agendaConsultaId}/google-calendar/ocupacoes?${q}`,
+                  { cache: "no-store" },
+                ),
+                fetch(
+                  `/api/agendas/${agendaConsultaId}/google-calendar/vinculos`,
+                  { cache: "no-store" },
+                ),
+              ]);
+              const [eventosJson, vinculosJson] = await Promise.all([
+                eventosResponse.json(),
+                vinculosResponse.json(),
+              ]);
+
+              return {
+                agenda_id: agendaConsultaId,
+                eventos:
+                  eventosResponse.ok && eventosJson.ok
+                    ? (eventosJson.eventos || []).map((evento: GEvent) => ({
+                        ...evento,
+                        agenda_id: agendaConsultaId,
+                      }))
+                    : [],
+                vinculos:
+                  vinculosResponse.ok && vinculosJson.ok
+                    ? vinculosJson.vinculos || []
+                    : [],
+              };
+            } catch {
+              return {
+                agenda_id: agendaConsultaId,
+                eventos: [] as GEvent[],
+                vinculos: [] as Array<{
+                  agendamento_id?: string;
+                  google_html_link?: string;
+                }>,
+              };
+            }
           }),
-          j = await r.json();
-        setGoogle(r.ok && j.ok ? j.integracao : { conectado: false });
-        const rg = range(month),
-          q = new URLSearchParams({ inicio_at: rg.start, fim_at: rg.end }),
-          [er, vr] = await Promise.all([
-            fetch(`/api/agendas/${id}/google-calendar/ocupacoes?${q}`, {
-              cache: "no-store",
-            }),
-            fetch(`/api/agendas/${id}/google-calendar/vinculos`, {
-              cache: "no-store",
-            }),
-          ]),
-          [ej, vj] = await Promise.all([er.json(), vr.json()]);
-        setGevents(er.ok && ej.ok ? ej.eventos || [] : []);
+        );
+
+        setGevents(
+          Array.from(
+            new Map(
+              resultados
+                .flatMap((resultado) => resultado.eventos)
+                .map((evento) => [
+                  `${evento.agenda_id || "google"}:${evento.id}`,
+                  evento,
+                ]),
+            ).values(),
+          ),
+        );
         setGoogleLinks(
-          vr.ok && vj.ok
-            ? Object.fromEntries(
-                (vj.vinculos || [])
-                  .filter((item: { agendamento_id?: string; google_html_link?: string }) =>
-                    Boolean(item.agendamento_id && item.google_html_link),
-                  )
-                  .map((item: { agendamento_id: string; google_html_link: string }) => [
-                    item.agendamento_id,
-                    item.google_html_link,
-                  ]),
+          Object.fromEntries(
+            resultados
+              .flatMap((resultado) => resultado.vinculos)
+              .filter(
+                (item: {
+                  agendamento_id?: string;
+                  google_html_link?: string;
+                }) => Boolean(item.agendamento_id && item.google_html_link),
               )
-            : {},
+              .map(
+                (item: {
+                  agendamento_id: string;
+                  google_html_link: string;
+                }) => [item.agendamento_id, item.google_html_link],
+              ),
+          ),
         );
       } catch {
         setGevents([]);
         setGoogleLinks({});
       }
     },
-    [month],
+    [agendaIdsVisiveis, month],
   );
   const loadData = useCallback(
     async (id: string) => {
@@ -1954,13 +2020,23 @@ function Page() {
                     </div>
                     {items.map((it) =>
                       "dia_inteiro" in it ? (
-                        <div className="event g" key={`g${it.id}`}>
+                        <div
+                          className="event g"
+                          key={`g${it.agenda_id || "google"}:${it.id}`}
+                        >
                           <b>
                             {it.dia_inteiro
                               ? "Dia inteiro"
                               : time(it.inicio_at)}
                           </b>
                           <span>{it.titulo} · Google</span>
+                          {visualizacaoMultipla ? (
+                            <small className={styles.eventCalendarName}>
+                              {agendas.find(
+                                (calendar) => calendar.id === it.agenda_id,
+                              )?.nome || "Calendário"}
+                            </small>
+                          ) : null}
                         </div>
                       ) : (
                         <button
@@ -2039,7 +2115,10 @@ function Page() {
                 </div>
               ))}
               {(gby.get(day) || []).map((g) => (
-                <div className="item" key={g.id}>
+                <div
+                  className="item"
+                  key={`${g.agenda_id || "google"}:${g.id}`}
+                >
                   <span className="pill agendaSideBadge agendaSideBadge-google">
                     Google
                   </span>
@@ -2048,6 +2127,13 @@ function Page() {
                     {g.dia_inteiro
                       ? "Dia inteiro"
                       : `${time(g.inicio_at)} – ${time(g.fim_at)}`}
+                    {visualizacaoMultipla
+                      ? ` · ${
+                          agendas.find(
+                            (calendar) => calendar.id === g.agenda_id,
+                          )?.nome || "Calendário"
+                        }`
+                      : ""}
                   </div>
                 </div>
               ))}
