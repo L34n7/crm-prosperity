@@ -69,6 +69,16 @@ alter table public.agenda_grupos_ocupacao_calendarios enable row level security;
 alter table public.agenda_grupos_distribuicao enable row level security;
 alter table public.agenda_grupos_distribuicao_calendarios enable row level security;
 
+-- Estas tabelas são acessadas exclusivamente pelo backend com service_role.
+-- O GRANT explícito evita depender do comportamento padrão do projeto para
+-- tabelas criadas depois da configuração inicial do Supabase.
+grant select, insert, update, delete
+  on table public.agenda_grupos_ocupacao,
+           public.agenda_grupos_ocupacao_calendarios,
+           public.agenda_grupos_distribuicao,
+           public.agenda_grupos_distribuicao_calendarios
+  to service_role;
+
 create or replace function public.agenda_validar_calendario_responsavel()
 returns trigger
 language plpgsql
@@ -90,6 +100,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.agenda_validar_calendario_responsavel()
+  from public, anon, authenticated;
 
 drop trigger if exists calendarios_validar_responsavel on public.calendarios;
 create trigger calendarios_validar_responsavel
@@ -129,6 +142,9 @@ begin
 end;
 $$;
 
+revoke all on function public.agenda_validar_membro_grupo_ocupacao()
+  from public, anon, authenticated;
+
 drop trigger if exists agenda_grupo_ocupacao_validar_membro
   on public.agenda_grupos_ocupacao_calendarios;
 create trigger agenda_grupo_ocupacao_validar_membro
@@ -167,6 +183,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.agenda_validar_membro_grupo_distribuicao()
+  from public, anon, authenticated;
 
 drop trigger if exists agenda_grupo_distribuicao_validar_membro
   on public.agenda_grupos_distribuicao_calendarios;
@@ -282,6 +301,9 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.agenda_agendamentos_aplicar_capacidade()
+  from public, anon, authenticated;
 
 drop trigger if exists agenda_agendamentos_aplicar_capacidade
   on public.agenda_agendamentos;
