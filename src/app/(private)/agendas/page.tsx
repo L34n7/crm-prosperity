@@ -48,6 +48,7 @@ import AgendaTemplateConfiguration, {
 } from "./AgendaTemplateConfiguration";
 import AgendaRelatedRecords from "./AgendaRelatedRecords";
 import AgendaAppointmentDetails from "./AgendaAppointmentDetails";
+import AgendaCapacityControls from "./AgendaCapacityControls";
 
 import styles from "./page.module.css";
 
@@ -60,6 +61,8 @@ type Agenda = {
   antecedencia_minutos: number;
   janela_dias: number;
   status: "ativo" | "inativo" | "arquivado";
+  responsavel_id?: string | null;
+  calendarios_mesclados_ids?: string[];
 };
 type Tipo = { id: string; nome: string; cor: string };
 type Resp = { id: string; nome: string; email: string | null };
@@ -419,6 +422,7 @@ function Page() {
   const sp = useSearchParams();
   const [agendas, setAgendas] = useState<Agenda[]>([]),
     [agendaId, setAgendaId] = useState(""),
+    [agendaIdsVisiveis, setAgendaIdsVisiveis] = useState<string[]>([]),
     [ags, setAgs] = useState<Ag[]>([]),
     [tipos, setTipos] = useState<Tipo[]>([]),
     [resps, setResps] = useState<Resp[]>([]),
@@ -471,6 +475,7 @@ function Page() {
       antecedencia_minutos: "120",
       janela_dias: "14",
       status: "ativo",
+      responsavel_id: "",
     }),
     [disp, setDisp] = useState<Disp[]>(
       dias.map((_, i) => ({
@@ -493,6 +498,9 @@ function Page() {
     >(() => automationCardsFromRules([])),
     [configDetailsLoading, setConfigDetailsLoading] = useState(false),
     [configDetailsError, setConfigDetailsError] = useState("");
+  const [calendariosMescladosIds, setCalendariosMescladosIds] = useState<
+    string[]
+  >([]);
   const [unidadeDuracaoAgenda, setUnidadeDuracaoAgenda] = useState<
       "minutos" | "horas"
     >("minutos"),
@@ -503,6 +511,10 @@ function Page() {
       "minutos" | "horas"
     >("minutos");
   const agenda = agendas.find((a) => a.id === agendaId),
+    agendaFormulario = agendas.find(
+      (item) => item.id === (form.id ? viewing?.agenda_id || agendaId : agendaId),
+    ),
+    visualizacaoMultipla = agendaIdsVisiveis.length > 1,
     days = useMemo(() => cal(month), [month]),
     isHealthNiche = ["medicina", "odontologia"].includes(
       niche?.codigo || "",
