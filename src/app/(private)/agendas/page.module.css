@@ -1923,3 +1923,471 @@
     flex: 1;
   }
 }
+
+
+/* CRM_AGENDA_CAPACIDADE_MULTICALENDARIO_V1 */
+.multiCalendarControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.multiCalendarPicker {
+  position: relative;
+}
+
+.multiCalendarCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-strong);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.multiCalendarMenu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(390px, calc(100vw - 32px));
+  max-height: 470px;
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+  box-shadow: 0 18px 46px color-mix(in srgb, var(--crm-text-strong) 18%, transparent);
+}
+
+.multiCalendarMenuHeader,
+.multiCalendarMenuFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+}
+
+.multiCalendarMenuHeader {
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.multiCalendarMenuHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.multiCalendarMenuHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.multiCalendarMenuHeader small,
+.fieldHelp {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.iconButtonBare {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--crm-text-muted);
+  cursor: pointer;
+}
+
+.iconButtonBare:hover {
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
+}
+
+.multiCalendarOptions {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.multiCalendarOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  cursor: pointer;
+}
+
+.multiCalendarOptionActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.multiCalendarOption > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.multiCalendarOption strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multiCalendarOption small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.multiCalendarMenuFooter {
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+
+.distributionModal {
+  width: min(980px, calc(100vw - 28px)) !important;
+  max-width: 980px !important;
+}
+
+.distributionBody {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.7fr);
+  min-height: 470px;
+}
+
+.distributionList {
+  padding: 15px;
+  border-right: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+
+.distributionListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.distributionListHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.distributionEmpty {
+  padding: 24px 12px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.distributionGroupItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 7px;
+  padding: 11px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.distributionGroupItemActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.distributionGroupItem > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.distributionGroupItem strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.distributionGroupItem small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.distributionStatus {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.distributionStatusActive {
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.distributionEditor {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 18px;
+}
+
+.distributionCalendars {
+  display: grid;
+  gap: 7px;
+}
+
+.distributionCalendars > strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.distributionCalendars > small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.distributionCalendarGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.distributionCalendarCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  cursor: pointer;
+}
+
+.distributionCalendarCardActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.distributionCalendarCard > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.distributionCalendarCard strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.distributionCalendarCard small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.distributionActiveToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.distributionActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--crm-border);
+}
+
+.capacityConfigCard {
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 15px;
+  margin: 18px 0 8px;
+  padding: 17px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 18px;
+  background: linear-gradient(
+    145deg,
+    var(--crm-surface),
+    color-mix(in srgb, var(--crm-primary-soft) 38%, var(--crm-surface))
+  );
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--crm-primary-strong) 7%, transparent);
+}
+
+.capacityConfigHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.capacityConfigHeader h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.capacityConfigHeader p {
+  max-width: 650px;
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.capacityConfigHeader svg {
+  flex: 0 0 auto;
+  color: var(--crm-primary-strong);
+}
+
+.capacityConfigGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.3fr);
+  gap: 14px;
+}
+
+.mergedCalendarList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 190px;
+  padding: 7px;
+  overflow-y: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+}
+
+.mergedCalendarOption {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.mergedCalendarOptionActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.mergedCalendarOption > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mergedCalendarOption strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mergedCalendarOption small {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+}
+
+.mergedCalendarEmpty {
+  grid-column: 1 / -1;
+  padding: 16px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.eventCalendarName {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--c, var(--crm-primary-strong)) 78%, var(--crm-text-muted));
+  font-size: 9px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .distributionBody,
+  .capacityConfigGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .distributionList {
+    max-height: 220px;
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--crm-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .multiCalendarControls {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .multiCalendarPicker {
+    flex: 1 1 auto;
+  }
+
+  .multiCalendarPicker > :global(.btn) {
+    width: 100%;
+  }
+
+  .distributionCalendarGrid,
+  .mergedCalendarList {
+    grid-template-columns: 1fr;
+  }
+
+  .distributionModal {
+    width: calc(100vw - 14px) !important;
+  }
+}

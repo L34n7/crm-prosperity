@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { listarGruposDistribuicao } from "@/lib/agendas/capacidade";
 
 export async function GET() {
   try {
@@ -29,12 +30,19 @@ export async function GET() {
 
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase
-      .from("calendarios")
-      .select("id, nome, timezone, duracao_minutos, intervalo_minutos, janela_dias, status")
-      .eq("empresa_id", usuario.empresa_id)
-      .eq("status", "ativo")
-      .order("nome", { ascending: true });
+    const [{ data, error }, gruposDistribuicao] = await Promise.all([
+      supabase
+        .from("calendarios")
+        .select("id, nome, timezone, duracao_minutos, intervalo_minutos, janela_dias, responsavel_id, status")
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("status", "ativo")
+        .order("nome", { ascending: true }),
+      listarGruposDistribuicao({
+        supabase,
+        empresaId: usuario.empresa_id,
+        somenteAtivos: true,
+      }),
+    ]);
 
     if (error) {
       return NextResponse.json(
@@ -46,6 +54,7 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       agendas: data || [],
+      grupos_distribuicao: gruposDistribuicao,
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -38,6 +38,11 @@ import {
   type PreferenciaHorarioAgenda,
 } from "@/lib/agendas/agenda-service";
 import { sincronizarAgendamentoGoogleCalendar } from "@/lib/agendas/google-calendar";
+import {
+  listarSlotsGrupoDistribuicao,
+  obterGrupoDistribuicao,
+} from "@/lib/agendas/distribuicao";
+import { registrarUsoGrupoDistribuicao } from "@/lib/agendas/capacidade";
 import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -5457,7 +5462,7 @@ async function obterAgendaAutomacao(empresaId: string, agendaId: string) {
 
   const { data } = await supabaseAdmin
     .from("calendarios")
-    .select("id, nome, timezone")
+    .select("id, nome, timezone, responsavel_id")
     .eq("id", agendaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -6011,9 +6016,14 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       ? agendaIdContexto || config.agenda_id || ""
       : config.agenda_id || ""
   ).trim();
+  const grupoDistribuicaoId = String(
+    config.usar_agenda_contexto === true
+      ? ""
+      : config.grupo_distribuicao_id || ""
+  ).trim();
   const agendaEstado = metadataAtual.agenda_estado || {};
 
-  if (!agendaId) {
+  if (!agendaId && !grupoDistribuicaoId) {
     await registrarLog({
       empresaId,
       execucaoId: execucao.id,
@@ -6028,7 +6038,17 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
     return { ok: false, aguardando: false, error: "Bloco sem calendário configurado ou resolvido." };
   }
 
-  const agenda = await obterAgendaAutomacao(empresaId, agendaId);
+  const grupoDistribuicao = grupoDistribuicaoId
+    ? await obterGrupoDistribuicao({
+        supabase: supabaseAdmin,
+        empresaId,
+        grupoId: grupoDistribuicaoId,
+      })
+    : null;
+  const agenda = agendaId
+    ? await obterAgendaAutomacao(empresaId, agendaId)
+    : grupoDistribuicao?.calendarios?.[0] || null;
+  const agendaContextoId = agendaId || String(agenda?.id || "");
   const interpretacao = interpretarDataHorarioAgenda(
     mensagemTexto,
     agenda?.timezone || "America/Sao_Paulo"
@@ -6066,7 +6086,8 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
           ...agendaEstado,
           [no.id]: {
             etapa: "aguardando_data",
-            agenda_id: agendaId,
+            agenda_id: agendaContextoId,
+            grupo_distribuicao_id: grupoDistribuicaoId || null,
             data_invalida_motivo: interpretacao.data_invalida_motivo,
             data_informada: interpretacao.data_informada,
           },
@@ -6120,7 +6141,8 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
           ...agendaEstado,
           [no.id]: {
             etapa: "aguardando_data",
-            agenda_id: agendaId,
+            agenda_id: agendaContextoId,
+            grupo_distribuicao_id: grupoDistribuicaoId || null,
           },
         },
       },
@@ -6148,14 +6170,23 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
     return { ok: true, aguardando: true };
   }
 
-  const resultadoSlots = await listarSlotsDisponiveis({
-    supabase: supabaseAdmin,
-    empresaId,
-    agendaId,
-    data: dataEscolhida,
-    janelaDias: 1,
-    limite: 50,
-  });
+  const resultadoSlots = grupoDistribuicaoId
+    ? await listarSlotsGrupoDistribuicao({
+        supabase: supabaseAdmin,
+        empresaId,
+        grupoId: grupoDistribuicaoId,
+        data: dataEscolhida,
+        janelaDias: 1,
+        limite: 50,
+      })
+    : await listarSlotsDisponiveis({
+        supabase: supabaseAdmin,
+        empresaId,
+        agendaId,
+        data: dataEscolhida,
+        janelaDias: 1,
+        limite: 50,
+      });
 
   const limite = Math.max(1, Math.min(10, Number(config.quantidade_opcoes || 6)));
   const timezone =
@@ -6258,7 +6289,8 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
           preferencia_horario: interpretacao.preferencia,
         },
         saida: {
-          agenda_id: agendaId,
+          agenda_id: agendaContextoId,
+            grupo_distribuicao_id: grupoDistribuicaoId || null,
           data_escolhida: dataEscolhida,
           sem_expediente: Boolean(semExpedienteNoDia),
         },
@@ -6292,7 +6324,8 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
           ...agendaEstado,
           [no.id]: {
             etapa: "aguardando_data",
-            agenda_id: agendaId,
+            agenda_id: agendaContextoId,
+            grupo_distribuicao_id: grupoDistribuicaoId || null,
             data_escolhida: dataEscolhida,
             preferencia_horario: interpretacao.preferencia,
           },
@@ -6379,14 +6412,19 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
           label: slot.label,
           data_label: slot.data_label,
           hora_label: slot.hora_label,
-          agenda_id: agendaId,
+          agenda_id: String((slot as any).agenda_id || agendaContextoId),
+          grupo_distribuicao_id:
+            String((slot as any).grupo_distribuicao_id || grupoDistribuicaoId || "") ||
+            null,
+          agenda_nome: String((slot as any).agenda_nome || agenda?.nome || ""),
         })),
       },
       agenda_estado: {
         ...agendaEstado,
         [no.id]: {
           etapa: "aguardando_horario",
-          agenda_id: agendaId,
+          agenda_id: agendaContextoId,
+            grupo_distribuicao_id: grupoDistribuicaoId || null,
           data_escolhida: dataEscolhida,
           preferencia_horario: interpretacao.preferencia,
         },
@@ -6425,7 +6463,8 @@ async function enviarOpcoesEscolhaHorarioAgenda(params: {
       preferencia_horario: interpretacao.preferencia,
     },
     saida: {
-      agenda_id: agendaId,
+      agenda_id: agendaContextoId,
+      grupo_distribuicao_id: grupoDistribuicaoId || null,
       total_opcoes: slots.length,
       opcoes: slots,
     },
@@ -7427,6 +7466,13 @@ async function criarAgendamentoAutomacao(params: {
     return;
   }
 
+  await registrarUsoGrupoDistribuicao({
+    supabase: supabaseAdmin,
+    empresaId,
+    grupoId: String(slot.grupo_distribuicao_id || "").trim() || null,
+    agendaId,
+  });
+
   await sincronizarAgendamentoGoogleCalendar({
     empresaId,
     agendamentoId: agendamento.id,
@@ -7674,6 +7720,13 @@ async function remarcarAgendamentoAutomacao(params: {
     console.error("[AUTOMATION_ENGINE] Erro ao remarcar agendamento:", error);
     return;
   }
+
+  await registrarUsoGrupoDistribuicao({
+    supabase: supabaseAdmin,
+    empresaId,
+    grupoId: String(slot.grupo_distribuicao_id || "").trim() || null,
+    agendaId,
+  });
 
   await sincronizarAgendamentoGoogleCalendar({
     empresaId,

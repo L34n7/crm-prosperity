@@ -153,7 +153,16 @@ export type AgendaOpcao = {
   duracao_minutos: number;
   intervalo_minutos: number;
   janela_dias: number;
+  responsavel_id?: string | null;
   status: string;
+};
+
+export type AgendaGrupoDistribuicaoOpcao = {
+  id: string;
+  nome: string;
+  estrategia: "rodizio" | "menor_carga" | "primeiro_disponivel";
+  ativo: boolean;
+  agenda_ids: string[];
 };
 
 export type ResultadoEncerramentoFluxo = "positivo" | "negativo" | "neutro";

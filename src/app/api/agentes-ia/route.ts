@@ -5,6 +5,8 @@ import {
   FOLLOWUP_INATIVIDADE_PADRAO,
   normalizarFollowupInatividade,
 } from "@/lib/agentes-ia/followup-inatividade";
+import { listarGruposDistribuicao } from "@/lib/agendas/capacidade";
+import { obterGrupoDistribuicao } from "@/lib/agendas/distribuicao";
 
 const supabaseAdmin = getSupabaseAdmin();
 const MODELO_PADRAO = "gpt-5.6-luna";
@@ -212,55 +214,116 @@ function chaveGatilho(gatilho: { condicao?: unknown; valor?: unknown }) {
     .toLocaleLowerCase("pt-BR")}`;
 }
 
-function agendaConfiguradaNasFerramentas(ferramentas: FerramentaBody[]) {
+function origemAgendaConfiguradaNasFerramentas(
+  ferramentas: FerramentaBody[],
+) {
   const ferramentasAgendaAtivas = ferramentas.filter(
-    (item) => item.ativo && FERRAMENTAS_AGENDA.has(item.tipo)
+    (item) => item.ativo && FERRAMENTAS_AGENDA.has(item.tipo),
   );
   if (!ferramentasAgendaAtivas.length) {
-    return { usaAgenda: false, agendaId: null as string | null };
+    return {
+      usaAgenda: false,
+      agendaId: null as string | null,
+      grupoDistribuicaoId: null as string | null,
+    };
   }
 
-  const ids = ferramentasAgendaAtivas.map((item) =>
-    String(item.config_json?.agenda_id || "").trim()
-  );
-  if (ids.some((id) => !id)) {
-    return { usaAgenda: true, agendaId: null as string | null };
+  const origens = ferramentasAgendaAtivas.map((item) => {
+    const agendaId = String(item.config_json?.agenda_id || "").trim();
+    const grupoDistribuicaoId = String(
+      item.config_json?.grupo_distribuicao_id || "",
+    ).trim();
+    if (agendaId && !grupoDistribuicaoId) return `agenda:${agendaId}`;
+    if (grupoDistribuicaoId && !agendaId) {
+      return `grupo:${grupoDistribuicaoId}`;
+    }
+    return "";
+  });
+
+  if (origens.some((origem) => !origem)) {
+    return {
+      usaAgenda: true,
+      agendaId: null as string | null,
+      grupoDistribuicaoId: null as string | null,
+    };
   }
 
-  const unicos = Array.from(new Set(ids));
+  const unicos = Array.from(new Set(origens));
+  if (unicos.length !== 1) {
+    return {
+      usaAgenda: true,
+      agendaId: null as string | null,
+      grupoDistribuicaoId: null as string | null,
+    };
+  }
+
+  const [tipo, id] = unicos[0].split(":");
   return {
     usaAgenda: true,
-    agendaId: unicos.length === 1 ? unicos[0] : null,
+    agendaId: tipo === "agenda" ? id : null,
+    grupoDistribuicaoId: tipo === "grupo" ? id : null,
   };
 }
 
-function normalizarAgendaNasFerramentas(
+function normalizarOrigemAgendaNasFerramentas(
   ferramentas: FerramentaBody[],
-  agendaId: string | null
+  origem: {
+    agendaId: string | null;
+    grupoDistribuicaoId: string | null;
+  },
 ) {
-  if (!agendaId) return ferramentas;
+  if (!origem.agendaId && !origem.grupoDistribuicaoId) return ferramentas;
   return ferramentas.map((item) =>
     FERRAMENTAS_AGENDA.has(item.tipo)
       ? {
           ...item,
-          config_json: { ...(item.config_json || {}), agenda_id: agendaId },
+          config_json: {
+            ...(item.config_json || {}),
+            agenda_id: origem.agendaId,
+            grupo_distribuicao_id: origem.grupoDistribuicaoId,
+          },
         }
-      : item
+      : item,
   );
 }
 
 async function validarAgendaObrigatoria(
   empresaId: string,
-  ferramentas: FerramentaBody[]
+  ferramentas: FerramentaBody[],
 ) {
-  const configuracao = agendaConfiguradaNasFerramentas(ferramentas);
+  const configuracao = origemAgendaConfiguradaNasFerramentas(ferramentas);
   if (!configuracao.usaAgenda) {
-    return { ok: true as const, agendaId: null as string | null };
+    return {
+      ok: true as const,
+      agendaId: null as string | null,
+      grupoDistribuicaoId: null as string | null,
+    };
   }
-  if (!configuracao.agendaId) {
+  if (!configuracao.agendaId && !configuracao.grupoDistribuicaoId) {
     return {
       ok: false as const,
-      error: "Selecione uma única agenda obrigatória para usar as ferramentas de agenda.",
+      error:
+        "Selecione uma única agenda ou grupo de distribuição para usar as ferramentas de agenda.",
+    };
+  }
+
+  if (configuracao.grupoDistribuicaoId) {
+    const grupo = await obterGrupoDistribuicao({
+      supabase: supabaseAdmin,
+      empresaId,
+      grupoId: configuracao.grupoDistribuicaoId,
+    });
+    if (!grupo || grupo.calendarios.length < 2) {
+      return {
+        ok: false as const,
+        error:
+          "O grupo de distribuição configurado não existe, está inativo ou precisa ter pelo menos dois calendários ativos.",
+      };
+    }
+    return {
+      ok: true as const,
+      agendaId: null as string | null,
+      grupoDistribuicaoId: grupo.id,
     };
   }
 
@@ -275,10 +338,15 @@ async function validarAgendaObrigatoria(
   if (!agenda) {
     return {
       ok: false as const,
-      error: "A agenda configurada não existe, está inativa ou não pertence à empresa.",
+      error:
+        "A agenda configurada não existe, está inativa ou não pertence à empresa.",
     };
   }
-  return { ok: true as const, agendaId: agenda.id };
+  return {
+    ok: true as const,
+    agendaId: agenda.id,
+    grupoDistribuicaoId: null as string | null,
+  };
 }
 
 async function carregarFerramentasAgente(empresaId: string, agenteId: string) {
@@ -573,6 +641,7 @@ export async function GET() {
       agendasResult,
       usuariosResult,
       vinculosResult,
+      gruposDistribuicao,
     ] = await Promise.all([
       carregarAgentes(contexto.empresaId),
       supabaseAdmin
@@ -605,6 +674,10 @@ export async function GET() {
         .eq("status", "ativo")
         .order("nome", { ascending: true }),
       supabaseAdmin.from("usuarios_setores").select("usuario_id, setor_id"),
+      listarGruposDistribuicao({
+        supabase: supabaseAdmin,
+        empresaId: contexto.empresaId,
+      }),
     ]);
 
     const vinculos = vinculosResult.data || [];
@@ -627,6 +700,7 @@ export async function GET() {
           (item) => item.ativo !== false && item.status !== "inativo"
         ),
         agendas: agendasResult.data || [],
+        grupos_distribuicao: gruposDistribuicao,
         atendentes,
       },
     });
@@ -996,9 +1070,12 @@ export async function PATCH(request: Request) {
           { status: 400 }
         );
       }
-      ferramentasNormalizadas = normalizarAgendaNasFerramentas(
+      ferramentasNormalizadas = normalizarOrigemAgendaNasFerramentas(
         ferramentas,
-        validacaoAgenda.agendaId
+        {
+          agendaId: validacaoAgenda.agendaId,
+          grupoDistribuicaoId: validacaoAgenda.grupoDistribuicaoId,
+        },
       );
     }
 
