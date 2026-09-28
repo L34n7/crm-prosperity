@@ -496,7 +496,10 @@ export default function WhatsAppDisparoProgressCard() {
 
       <div className={styles.metrics}>
         <span>
-          Enviados <strong>{campanha.enviados}</strong>
+          Enviados{" "}
+          <strong>
+            {campanha.enviados}/{campanha.total}
+          </strong>
         </span>
         <span>
           Falhas <strong>{campanha.falhas}</strong>
