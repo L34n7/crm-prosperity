@@ -373,6 +373,61 @@ type TotaisHistorico = {
   falha: number;
 };
 
+type LinhaRelatorioCampanha = {
+  numero?: string | null;
+  nome_contato?: string | null;
+  status_disparo?: string | null;
+  status_final?: string | null;
+  status_label?: string | null;
+  situacao?: string | null;
+  primeira_resposta?: string | null;
+  enviado_em?: string | null;
+  lido_em?: string | null;
+  resposta_em?: string | null;
+  status_mensagem?: string | null;
+  erro?: string | null;
+};
+
+type RelatorioCampanhaDetalhado = {
+  campanha: {
+    id: string;
+    nome: string;
+    template_nome?: string | null;
+    template_categoria?: string | null;
+    status?: string | null;
+    total_itens: number;
+    total_enviados: number;
+    total_falhas: number;
+    total_cancelados: number;
+    created_at?: string | null;
+    finished_at?: string | null;
+  };
+  totais: {
+    total: number;
+    enviado: number;
+    entregue: number;
+    lido: number;
+    falha: number;
+    cancelado: number;
+    pendente: number;
+    respondido: number;
+  };
+  custo_estimado: {
+    disponivel: boolean;
+    categoria?: string | null;
+    quantidadeCobravelEstimada: number;
+    valorUnitarioUsd: number;
+    valorTotalUsd: number;
+    cotacaoUsdBrl: number;
+    valorTotalBrlEstimado: number;
+    fonteCotacao?: string | null;
+    cotacaoDataHora?: string | null;
+    cotacaoFallback?: boolean;
+    criterio?: string | null;
+  };
+  linhas: LinhaRelatorioCampanha[];
+};
+
 type PaginaHistoricoCache = {
   resultados: ResultadoDisparo[];
   temMais: boolean;
@@ -1907,6 +1962,7 @@ function disparoTeveFalha(item: ResultadoDisparo) {
 
 
 const ITENS_HISTORICO_POR_PAGINA = 7;
+const ITENS_RELATORIO_CAMPANHA_POR_PAGINA = 50;
 
 export default function DisparosWhatsAppPage() {
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
@@ -1996,6 +2052,11 @@ export default function DisparosWhatsAppPage() {
   const [historicoTemMais, setHistoricoTemMais] = useState(false);
   const [exportandoRelatorioCampanha, setExportandoRelatorioCampanha] =
     useState(false);
+  const [loadingRelatorioCampanhaDetalhado, setLoadingRelatorioCampanhaDetalhado] =
+    useState(false);
+  const [relatorioCampanhaDetalhado, setRelatorioCampanhaDetalhado] =
+    useState<RelatorioCampanhaDetalhado | null>(null);
+  const [paginaRelatorioCampanha, setPaginaRelatorioCampanha] = useState(1);
   const [campanhasHistorico, setCampanhasHistorico] = useState<
     CampanhaHistoricoFiltro[]
   >([]);
@@ -2135,6 +2196,54 @@ export default function DisparosWhatsAppPage() {
       }
     },
     [aplicarCampanhaPagina]
+  );
+
+  const carregarRelatorioCampanhaDetalhado = useCallback(
+    async (campanhaId: string) => {
+      const id = campanhaId.trim();
+
+      if (!id) {
+        setRelatorioCampanhaDetalhado(null);
+        return;
+      }
+
+      try {
+        setLoadingRelatorioCampanhaDetalhado(true);
+
+        const params = new URLSearchParams({
+          campanha_id: id,
+          formato: "json",
+        });
+        const res = await fetch(
+          `/api/whatsapp/disparos/relatorio?${params.toString()}`,
+          { cache: "no-store" }
+        );
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          throw new Error(
+            json?.error || "Não foi possível carregar o relatório da campanha."
+          );
+        }
+
+        setRelatorioCampanhaDetalhado({
+          campanha: json.campanha,
+          totais: json.totais,
+          custo_estimado: json.custo_estimado,
+          linhas: Array.isArray(json.linhas) ? json.linhas : [],
+        });
+      } catch (error) {
+        setRelatorioCampanhaDetalhado(null);
+        setErro(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar o relatório da campanha."
+        );
+      } finally {
+        setLoadingRelatorioCampanhaDetalhado(false);
+      }
+    },
+    []
   );
 
   async function gerarRelatorioExcelCampanha() {
@@ -2849,6 +2958,17 @@ export default function DisparosWhatsAppPage() {
   }, [carregarCampanhaPagina]);
 
   useEffect(() => {
+    setPaginaRelatorioCampanha(1);
+
+    if (!filtroHistoricoCampanha) {
+      setRelatorioCampanhaDetalhado(null);
+      return;
+    }
+
+    void carregarRelatorioCampanhaDetalhado(filtroHistoricoCampanha);
+  }, [filtroHistoricoCampanha, carregarRelatorioCampanhaDetalhado]);
+
+  useEffect(() => {
     const handleAndamento = (event: Event) => {
       const detalhe = (event as CustomEvent<DisparoAndamentoPayload>).detail;
       setDisparoEmMassaProcessando(detalhe?.bloquear_disparos === true);
@@ -3486,6 +3606,17 @@ export default function DisparosWhatsAppPage() {
     return ids.size;
   }, [gruposConflitoAtivos]);
 
+  const campanhaHistoricoSelecionada = useMemo(
+    () =>
+      campanhasHistorico.find(
+        (campanha) => campanha.id === filtroHistoricoCampanha
+      ) || null,
+    [campanhasHistorico, filtroHistoricoCampanha]
+  );
+  const nomeCampanhaRelatorioSelecionada = campanhaHistoricoSelecionada
+    ? nomeCampanhaHistorico(campanhaHistoricoSelecionada)
+    : relatorioCampanhaDetalhado?.campanha.nome || "Disparo em massa";
+
   const totalSucesso = totaisHistorico.sucesso;
   const totalFalha = totaisHistorico.falha;
   const totalProcessando = totaisHistorico.processando;
@@ -3507,6 +3638,64 @@ export default function DisparosWhatsAppPage() {
   }, [totalResultadosFiltroAtivo]);
 
   const resultadoHistoricoPaginado = resultadoFiltrado;
+
+  const linhasRelatorioCampanhaFiltradas = useMemo(() => {
+    const linhas = relatorioCampanhaDetalhado?.linhas || [];
+    const termo = buscaHistorico.trim().toLocaleLowerCase("pt-BR");
+
+    if (!termo) return linhas;
+
+    return linhas.filter((linha) =>
+      [
+        linha.numero,
+        linha.nome_contato,
+        linha.status_label,
+        linha.situacao,
+        linha.primeira_resposta,
+      ].some((valor) =>
+        String(valor || "")
+          .toLocaleLowerCase("pt-BR")
+          .includes(termo)
+      )
+    );
+  }, [relatorioCampanhaDetalhado, buscaHistorico]);
+
+  const totalPaginasRelatorioCampanha = Math.max(
+    1,
+    Math.ceil(
+      linhasRelatorioCampanhaFiltradas.length /
+        ITENS_RELATORIO_CAMPANHA_POR_PAGINA
+    )
+  );
+  const paginaRelatorioCampanhaSegura = Math.min(
+    paginaRelatorioCampanha,
+    totalPaginasRelatorioCampanha
+  );
+  const linhasRelatorioCampanhaPaginadas = useMemo(() => {
+    const inicio =
+      (paginaRelatorioCampanhaSegura - 1) *
+      ITENS_RELATORIO_CAMPANHA_POR_PAGINA;
+
+    return linhasRelatorioCampanhaFiltradas.slice(
+      inicio,
+      inicio + ITENS_RELATORIO_CAMPANHA_POR_PAGINA
+    );
+  }, [
+    linhasRelatorioCampanhaFiltradas,
+    paginaRelatorioCampanhaSegura,
+  ]);
+  const primeiroItemRelatorioCampanha =
+    linhasRelatorioCampanhaFiltradas.length === 0
+      ? 0
+      : (paginaRelatorioCampanhaSegura - 1) *
+          ITENS_RELATORIO_CAMPANHA_POR_PAGINA +
+        1;
+  const ultimoItemRelatorioCampanha = Math.min(
+    primeiroItemRelatorioCampanha +
+      linhasRelatorioCampanhaPaginadas.length -
+      1,
+    linhasRelatorioCampanhaFiltradas.length
+  );
 
   const primeiroItemHistorico =
     totalResultadosFiltroAtivo === 0
@@ -4719,7 +4908,13 @@ export default function DisparosWhatsAppPage() {
         subtitle="Selecione a conexão WhatsApp, o template aprovado e os contatos salvos para enviar mensagens."
       />
 
-      <div className={styles.pageContent}>
+      <div
+        className={
+          filtroHistoricoCampanha
+            ? `${styles.pageContent} ${styles.pageContentCampaignReport}`
+            : styles.pageContent
+        }
+      >
         <div className={styles.layout}>
           <section className={styles.formCard}>
             <div className={styles.cardHeader}>
@@ -6168,7 +6363,8 @@ export default function DisparosWhatsAppPage() {
           </div>
         </div>
 
-          <div className={styles.resultsSummary}>
+          {!filtroHistoricoCampanha ? (
+<div className={styles.resultsSummary}>
             <button
               type="button"
               className={
@@ -6223,13 +6419,19 @@ export default function DisparosWhatsAppPage() {
               <strong className={styles.summaryValue}>{totalFalha}</strong>
             </button>
           </div>
+          ) : null}
 
           <div className={styles.historySearchBar}>
             <div className={styles.historySearchField}>
               <label className={styles.label}>Busca</label>
               <input
                 value={buscaHistorico}
-                onChange={(e) => setBuscaHistorico(e.target.value)}
+                onChange={(e) => {
+                  setBuscaHistorico(e.target.value);
+                  if (filtroHistoricoCampanha) {
+                    setPaginaRelatorioCampanha(1);
+                  }
+                }}
                 className={styles.input}
                 placeholder="Busque por número, nome ou template..."
               />
@@ -6255,13 +6457,16 @@ export default function DisparosWhatsAppPage() {
             </div>
 
             <div className={styles.historyMassFilter}>
-              <label className={styles.label}>Disparo em massa</label>
+              <label className={styles.label}>Campanha do relatório</label>
               <select
                 value={filtroHistoricoCampanha}
-                onChange={(e) => setFiltroHistoricoCampanha(e.target.value)}
+                onChange={(e) => {
+                  setFiltroHistoricoCampanha(e.target.value);
+                  setPaginaRelatorioCampanha(1);
+                }}
                 className={styles.input}
               >
-                <option value="">Todos os disparos em massa</option>
+                <option value="">Histórico geral de disparos</option>
                 {campanhasHistoricoFiltradas.map((campanha) => (
                   <option key={campanha.id} value={campanha.id}>
                     {nomeCampanhaHistorico(campanha)}
@@ -6292,7 +6497,252 @@ export default function DisparosWhatsAppPage() {
             </div>
           </div>
 
-            {loadingHistorico ? (
+            {filtroHistoricoCampanha ? (
+              <div className={styles.campaignReport}>
+                {loadingRelatorioCampanhaDetalhado ? (
+                  <div className={styles.emptyState}>
+                    Carregando relatório detalhado da campanha...
+                  </div>
+                ) : !relatorioCampanhaDetalhado ? (
+                  <div className={styles.emptyState}>
+                    Não foi possível carregar os detalhes desta campanha.
+                  </div>
+                ) : (
+                  <>
+                    <div className={styles.campaignReportHeader}>
+                      <div className={styles.campaignReportHeading}>
+                        <div>
+                          <p className={styles.campaignReportEyebrow}>
+                            Relatório por campanha
+                          </p>
+                          <h3 className={styles.campaignReportTitle}>
+                            {nomeCampanhaRelatorioSelecionada}
+                          </h3>
+                          <p className={styles.campaignReportMeta}>
+                            Template:{" "}
+                            {relatorioCampanhaDetalhado.campanha.template_nome || "-"}
+                            {" • "}
+                            Categoria:{" "}
+                            {formatarCategoriaMeta(
+                              relatorioCampanhaDetalhado.campanha.template_categoria
+                            )}
+                            {" • "}
+                            Criada em:{" "}
+                            {formatarDataHora(
+                              relatorioCampanhaDetalhado.campanha.created_at
+                            ) || "-"}
+                          </p>
+                        </div>
+
+                        <div className={styles.campaignReportCost}>
+                          <span>Custo estimado</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.custo_estimado.disponivel
+                              ? formatarMoedaBRL(
+                                  relatorioCampanhaDetalhado.custo_estimado
+                                    .valorTotalBrlEstimado
+                                )
+                              : "Não disponível"}
+                          </strong>
+                          <small>
+                            {relatorioCampanhaDetalhado.custo_estimado
+                              .quantidadeCobravelEstimada}{" "}
+                            envios considerados
+                          </small>
+                        </div>
+                      </div>
+
+                      <div className={styles.campaignReportMetrics}>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Total</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.total}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Enviados</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.enviado}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Entregues</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.entregue}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Lidos</span>
+                          <strong>{relatorioCampanhaDetalhado.totais.lido}</strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Respondidos</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.respondido}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Falhas</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.falha}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Pendentes</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.pendente}
+                          </strong>
+                        </div>
+                        <div className={styles.campaignReportMetric}>
+                          <span>Cancelados</span>
+                          <strong>
+                            {relatorioCampanhaDetalhado.totais.cancelado}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <p className={styles.campaignReportCostNote}>
+                        {relatorioCampanhaDetalhado.custo_estimado.criterio}
+                      </p>
+                    </div>
+
+                    {linhasRelatorioCampanhaFiltradas.length === 0 ? (
+                      <div className={styles.emptyState}>
+                        Nenhum contato encontrado nesta campanha para a busca atual.
+                      </div>
+                    ) : (
+                      <>
+                        <div className={styles.campaignReportTableWrap}>
+                          <table className={styles.campaignReportTable}>
+                            <thead>
+                              <tr>
+                                <th>Número</th>
+                                <th>Nome</th>
+                                <th>Status</th>
+                                <th>1ª mensagem respondida</th>
+                                <th>Enviado em</th>
+                                <th>Lido em</th>
+                                <th>Respondido em</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {linhasRelatorioCampanhaPaginadas.map(
+                                (item, index) => {
+                                  const status = String(
+                                    item.status_final || "pendente"
+                                  ).toLowerCase();
+
+                                  return (
+                                    <tr
+                                      key={`${item.numero || "sem-numero"}-${item.enviado_em || index}`}
+                                    >
+                                      <td className={styles.campaignReportPhone}>
+                                        {item.numero || "-"}
+                                      </td>
+                                      <td className={styles.campaignReportName}>
+                                        {item.nome_contato || "Sem nome"}
+                                      </td>
+                                      <td>
+                                        <span
+                                          className={`${styles.campaignReportStatus} ${
+                                            status === "lido"
+                                              ? styles.campaignReportStatusRead
+                                              : status === "entregue"
+                                              ? styles.campaignReportStatusDelivered
+                                              : status === "falha"
+                                              ? styles.campaignReportStatusFailed
+                                              : status === "cancelado"
+                                              ? styles.campaignReportStatusCancelled
+                                              : status === "enviado"
+                                              ? styles.campaignReportStatusSent
+                                              : styles.campaignReportStatusPending
+                                          }`}
+                                        >
+                                          {item.status_label || "Pendente"}
+                                        </span>
+                                        {item.erro ? (
+                                          <span
+                                            className={styles.campaignReportError}
+                                            title={item.erro}
+                                          >
+                                            {item.erro}
+                                          </span>
+                                        ) : null}
+                                      </td>
+                                      <td className={styles.campaignReportReply}>
+                                        {item.primeira_resposta || "—"}
+                                      </td>
+                                      <td>
+                                        {formatarDataHora(item.enviado_em) || "—"}
+                                      </td>
+                                      <td>
+                                        {formatarDataHora(item.lido_em) || "—"}
+                                      </td>
+                                      <td>
+                                        {formatarDataHora(item.resposta_em) || "—"}
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className={styles.paginationBar}>
+                          <span className={styles.paginationInfo}>
+                            Mostrando {primeiroItemRelatorioCampanha} a{" "}
+                            {ultimoItemRelatorioCampanha} de{" "}
+                            {linhasRelatorioCampanhaFiltradas.length} contatos
+                          </span>
+
+                          <div className={styles.paginationActions}>
+                            <button
+                              type="button"
+                              className={styles.paginationButton}
+                              onClick={() =>
+                                setPaginaRelatorioCampanha((pagina) =>
+                                  Math.max(1, pagina - 1)
+                                )
+                              }
+                              disabled={paginaRelatorioCampanhaSegura <= 1}
+                            >
+                              Anterior
+                            </button>
+
+                            <span className={styles.paginationCurrent}>
+                              Página {paginaRelatorioCampanhaSegura} de{" "}
+                              {totalPaginasRelatorioCampanha}
+                            </span>
+
+                            <button
+                              type="button"
+                              className={styles.paginationButton}
+                              onClick={() =>
+                                setPaginaRelatorioCampanha((pagina) =>
+                                  Math.min(
+                                    totalPaginasRelatorioCampanha,
+                                    pagina + 1
+                                  )
+                                )
+                              }
+                              disabled={
+                                paginaRelatorioCampanhaSegura >=
+                                totalPaginasRelatorioCampanha
+                              }
+                            >
+                              Próxima
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                {loadingHistorico ? (
               <div className={styles.emptyState}>Carregando histórico...</div>
             ) : resultadoFiltrado.length === 0 ? (
               <div className={styles.emptyState}>
@@ -6544,6 +6994,8 @@ export default function DisparosWhatsAppPage() {
                   </div>
                 ) : null}
               </div>
+            )}
+              </>
             )}
           </section>
         </div>

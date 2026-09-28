@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/whatsapp/disparos/relatorio": [
+      "./public/android-chrome-192x192.png",
+    ],
+  },
   async redirects() {
     return [
       {
