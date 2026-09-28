@@ -3733,22 +3733,26 @@
 
 /* CRM_DISPAROS_TABS_CAMPAIGN_MODAL_V3 */
 .pageTabs {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   align-self: center;
-  gap: 3px;
+  gap: 2px;
   min-height: 30px;
-  padding: 2px 3px 3px;
+  margin-bottom: -1px;
+  padding: 3px 4px 4px;
   border: 1px solid var(--crm-border);
-  border-radius: 12px;
-  background: var(--crm-surface-soft);
-  box-shadow: var(--crm-shadow-xs);
+  border-bottom-color: var(--header);
+  border-radius: 13px 13px 0 0;
+  background: var(--header);
+  box-shadow: none;
 }
 
 .pageTab {
   position: relative;
-  min-height: 25px;
+  min-height: 24px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -3762,24 +3766,34 @@
   transition:
     color 0.18s ease,
     background 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
+    border-color 0.18s ease;
 }
 
 .pageTab::after {
-  display: none;
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -5px;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.18s ease;
 }
 
 .pageTab:hover {
   color: var(--crm-text-strong);
-  background: color-mix(in srgb, var(--crm-surface) 72%, transparent);
+  background: color-mix(in srgb, var(--crm-surface) 42%, transparent);
 }
 
 .pageTabActive {
   color: var(--crm-text-strong);
-  border-color: var(--crm-border);
-  background: var(--crm-surface);
-  box-shadow: var(--crm-shadow-xs);
+  border-color: color-mix(in srgb, var(--crm-border) 76%, transparent);
+  background: color-mix(in srgb, var(--crm-surface) 68%, var(--header));
+}
+
+.pageTabActive::after {
+  background: var(--crm-primary-strong);
 }
 
 .tabPanelHidden {
@@ -3790,29 +3804,6 @@
   position: relative;
   z-index: 2;
   margin-top: 0;
-}
-
-.pageTabs {
-  position: relative;
-  z-index: 1;
-  margin-bottom: -32px;
-  padding-bottom: 10px;
-  border-radius: 12px 12px 9px 9px;
-}
-
-.pageTabs::before {
-  content: "";
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 0;
-  height: 12px;
-  border-radius: 0 0 10px 10px;
-  background: var(--crm-surface-soft);
-  border-left: 1px solid var(--crm-border);
-  border-right: 1px solid var(--crm-border);
-  border-bottom: 1px solid var(--crm-border);
-  z-index: -1;
 }
 
 .layout {
@@ -4436,14 +4427,10 @@
 }
 
 
-/* CRM_DISPAROS_TABS_TRAY_V7 */
+/* CRM_DISPAROS_TABS_TRAY_V8 */
 @media (max-width: 768px) {
   .pageTabs {
-    margin-bottom: -24px;
-    padding-bottom: 7px;
-  }
-
-  .pageTabs::before {
-    height: 9px;
+    margin-bottom: -1px;
+    padding: 3px 4px 4px;
   }
 }
