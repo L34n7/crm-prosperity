@@ -332,9 +332,49 @@ async function inserirItensCampanha(params: {
   destinatarios: DestinatarioEntrada[];
   telefonesQueConsomemLimite: Set<string>;
 }) {
+  const nomesPorContatoId = new Map<string, string>();
+  const contatoIds = Array.from(
+    new Set(
+      params.destinatarios
+        .map((destinatario) => String(destinatario.contato_id || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  for (let inicio = 0; inicio < contatoIds.length; inicio += 500) {
+    const ids = contatoIds.slice(inicio, inicio + 500);
+    const { data, error } = await supabaseAdmin
+      .from("contatos")
+      .select("id, nome, whatsapp_profile_name")
+      .eq("empresa_id", params.empresaId)
+      .in("id", ids);
+
+    if (error) {
+      throw new Error(
+        `Erro ao buscar nomes dos contatos da campanha: ${error.message}`
+      );
+    }
+
+    for (const contato of data || []) {
+      const nomeCadastro = String(contato.nome || "").trim();
+      const nomeWhatsapp = String(contato.whatsapp_profile_name || "").trim();
+      const nome =
+        nomeCadastro && !["sem nome", "nao informado", "não informado"].includes(
+          nomeCadastro.toLowerCase()
+        )
+          ? nomeCadastro
+          : nomeWhatsapp;
+
+      if (nome) {
+        nomesPorContatoId.set(contato.id, nome);
+      }
+    }
+  }
+
   const payload = params.destinatarios.map((destinatario, index) => {
     const numero = limparNumero(destinatario.numero || "");
     const telefoneNormalizado = normalizarTelefoneItemDisparo(numero);
+    const contatoId = String(destinatario.contato_id || "").trim() || null;
     const variaveis = Array.isArray(destinatario.variaveis)
       ? destinatario.variaveis.map((item) => String(item || ""))
       : [];
@@ -345,10 +385,10 @@ async function inserirItensCampanha(params: {
       integracao_whatsapp_id: params.integracaoWhatsappId,
       template_id: params.templateId,
       usuario_id: params.usuarioId,
-      contato_id: destinatario.contato_id || null,
+      contato_id: contatoId,
       numero,
       telefone_normalizado: telefoneNormalizado,
-      nome_contato: variaveis[0] || null,
+      nome_contato: contatoId ? nomesPorContatoId.get(contatoId) || null : null,
       variaveis,
       status: "pendente",
       consome_limite_meta:
