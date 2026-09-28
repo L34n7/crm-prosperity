@@ -3928,575 +3928,363 @@
 }
 
 
-/* CRM_CAMPAIGN_PROGRESS_PREMIUM_V4 */
+/* CRM_CAMPAIGN_PROGRESS_NATIVE_V5 */
 .campaignProgressOverlay {
   position: fixed;
   inset: 0;
   z-index: 1450;
   display: grid;
   place-items: center;
-  padding: 26px;
-  background: rgba(8, 24, 34, 0.44);
-  backdrop-filter: blur(7px) saturate(0.9);
-  -webkit-backdrop-filter: blur(7px) saturate(0.9);
+  padding: 24px;
+  background: rgba(8, 24, 34, 0.38);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
 }
 
 .campaignProgressModal {
-  --campaign-accent: #0788c5;
-  --campaign-accent-soft: #e9f6fc;
-  width: min(930px, calc(100vw - 40px));
-  max-height: calc(100vh - 52px);
+  width: min(820px, calc(100vw - 40px));
+  max-height: calc(100vh - 48px);
   overflow-y: auto;
-  border: 1px solid rgba(164, 184, 197, 0.52);
-  border-radius: 26px;
-  background:
-    radial-gradient(
-      circle at 7% 0%,
-      color-mix(in srgb, var(--campaign-accent-soft) 64%, transparent) 0,
-      transparent 34%
-    ),
-    var(--crm-surface);
-  box-shadow:
-    0 34px 80px rgba(7, 24, 35, 0.24),
-    0 12px 30px rgba(7, 24, 35, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  padding: 28px 30px 22px;
-  display: grid;
-  gap: 22px;
-  position: relative;
-  isolation: isolate;
-}
-
-.campaignProgressModal::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 4px;
-  border-radius: 26px 26px 0 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--campaign-accent) 24%,
-    color-mix(in srgb, var(--campaign-accent) 72%, white) 76%,
-    transparent
-  );
-  opacity: 0.82;
-  pointer-events: none;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  box-shadow: var(--crm-shadow-lg);
 }
 
 .campaignProgressModalActive {
-  --campaign-accent: #0788c5;
-  --campaign-accent-soft: #e8f6fd;
+  border-color: var(--crm-primary-border);
 }
 
 .campaignProgressModalSuccess {
-  --campaign-accent: #179b72;
-  --campaign-accent-soft: #eaf9f3;
+  border-color: var(--crm-success-border);
 }
 
 .campaignProgressModalWarning {
-  --campaign-accent: #d04b4b;
-  --campaign-accent-soft: #fff1f1;
+  border-color: var(--crm-danger-border);
 }
 
-.campaignPremiumHeader {
+.campaignProgressHeader {
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid var(--crm-border);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: 18px;
 }
 
-.campaignPremiumIdentity {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 15px;
-}
-
-.campaignPremiumIcon {
-  width: 54px;
-  height: 54px;
-  flex: 0 0 54px;
-  display: grid;
-  place-items: center;
-  border-radius: 17px;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--campaign-accent) 15%, transparent),
-    0 8px 20px color-mix(in srgb, var(--campaign-accent) 14%, transparent);
-}
-
-.campaignPremiumIconActive {
-  color: #0788c5;
-  background: linear-gradient(145deg, #edf8ff, #dff1fb);
-}
-
-.campaignPremiumIconSuccess {
-  color: #148c69;
-  background: linear-gradient(145deg, #eefaf6, #ddf3eb);
-}
-
-.campaignPremiumIconWarning {
-  color: #c23f3f;
-  background: linear-gradient(145deg, #fff5f5, #ffe7e7);
-}
-
-.campaignPremiumHeading {
+.campaignProgressHeading {
   min-width: 0;
 }
 
-.campaignPremiumEyebrow {
-  margin: 1px 0 7px;
+.campaignProgressEyebrow {
+  margin: 0 0 6px;
   color: var(--crm-text-muted);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.campaignPremiumTitle {
+.campaignProgressTitle {
   margin: 0;
   color: var(--crm-text-strong);
-  font-size: clamp(20px, 2vw, 25px);
-  line-height: 1.2;
+  font-size: 22px;
+  line-height: 1.25;
   font-weight: 800;
-  letter-spacing: -0.025em;
   overflow-wrap: anywhere;
 }
 
-.campaignPremiumMeta {
-  margin-top: 11px;
+.campaignProgressMeta {
+  margin-top: 10px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
+  gap: 9px 14px;
   flex-wrap: wrap;
   color: var(--crm-text-muted);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
-.campaignPremiumState,
-.campaignPremiumMetaItem {
+.campaignProgressState,
+.campaignProgressMetaItem {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-width: 0;
 }
 
-.campaignPremiumState {
+.campaignProgressState {
   font-weight: 800;
 }
 
-.campaignPremiumStateActive {
-  color: #087fb8;
+.campaignProgressStateActive {
+  color: var(--crm-primary-text);
 }
 
-.campaignPremiumStateSuccess {
-  color: #148561;
+.campaignProgressStateSuccess {
+  color: var(--crm-success-text);
 }
 
-.campaignPremiumStateWarning {
-  color: #ba3d3d;
+.campaignProgressStateWarning {
+  color: var(--crm-danger-text);
 }
 
-.campaignPremiumStateDot {
+.campaignProgressStateDot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
   background: currentColor;
-  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
 }
 
-.campaignPremiumStateActive .campaignPremiumStateDot {
-  animation: campaignPremiumPulse 1.8s ease-in-out infinite;
+.campaignProgressStateActive .campaignProgressStateDot {
+  animation: campaignProgressPulse 1.6s ease-in-out infinite;
 }
 
-.campaignPremiumMetaItem svg {
+.campaignProgressMetaItem svg {
   flex: 0 0 auto;
-  opacity: 0.78;
 }
 
-.campaignPremiumMetaItem span {
-  overflow-wrap: anywhere;
-}
-
-.campaignPremiumMetaDivider {
-  width: 1px;
-  height: 15px;
-  background: var(--crm-border);
-}
-
-.campaignPremiumHeaderActions {
+.campaignProgressHeaderActions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
 }
 
-.campaignPremiumCounter {
+.campaignProgressCounter {
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  min-width: 88px;
-  border: 1px solid color-mix(in srgb, var(--campaign-accent) 17%, var(--crm-border));
+  border: 1px solid var(--crm-primary-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--campaign-accent-soft) 78%, var(--crm-surface));
-  color: var(--crm-text-strong);
-  padding: 0 14px;
-  font-size: 13px;
-  font-weight: 900;
-  white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.campaignPremiumMinimize {
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--crm-border-strong);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--crm-surface) 92%, var(--crm-surface-soft));
-  color: var(--crm-text-strong);
-  padding: 0 14px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  padding: 0 12px;
   font-size: 12px;
   font-weight: 800;
-  cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  white-space: nowrap;
 }
 
-.campaignPremiumMinimize:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--campaign-accent) 35%, var(--crm-border));
+.campaignProgressMinimize {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.campaignProgressMinimize:hover {
   background: var(--crm-surface-soft);
 }
 
-.campaignPremiumMetrics {
+.campaignProgressMetrics {
+  padding: 18px 22px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.campaignPremiumMetric {
+.campaignProgressMetric {
   min-width: 0;
-  min-height: 96px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  border: 1px solid color-mix(in srgb, var(--crm-border) 82%, transparent);
-  border-radius: 18px;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--crm-surface) 96%, white),
-      color-mix(in srgb, var(--crm-surface-soft) 68%, var(--crm-surface))
-    );
-  padding: 15px 16px;
-  box-shadow:
-    0 8px 20px rgba(8, 28, 40, 0.045),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface-soft);
+  padding: 13px 14px;
 }
 
-.campaignPremiumMetricIcon {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 15px;
-}
-
-.campaignPremiumMetricIconTotal {
-  color: #087ec0;
-  background: #e7f4fc;
-}
-
-.campaignPremiumMetricIconProcessed {
-  color: #15946c;
-  background: #e2f5ed;
-}
-
-.campaignPremiumMetricIconRemaining {
-  color: #d58c00;
-  background: #fff3dc;
-}
-
-.campaignPremiumMetricIconProcessing {
-  color: #61778a;
-  background: #edf2f6;
-}
-
-.campaignPremiumMetricIconFailure,
-.campaignPremiumMetricIconCancelled {
-  color: #c24848;
-  background: #ffeded;
-}
-
-.campaignPremiumMetric strong {
+.campaignProgressMetric span {
   display: block;
-  color: var(--crm-text-strong);
-  font-size: 27px;
-  line-height: 1;
-  font-weight: 850;
-  letter-spacing: -0.03em;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.campaignPremiumMetric span:last-child {
+.campaignProgressMetric strong {
   display: block;
   margin-top: 7px;
-  color: var(--crm-text-muted);
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1.25;
+  color: var(--crm-text-strong);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 900;
 }
 
-.campaignPremiumMetricSpinner {
-  animation: massProgressSpin 1.15s linear infinite;
+.campaignProgressMetricSuccess {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
 }
 
-.campaignPremiumProgress {
+.campaignProgressMetricSuccess strong {
+  color: var(--crm-success-text);
+}
+
+.campaignProgressMetricDanger {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.campaignProgressMetricDanger strong {
+  color: var(--crm-danger-text);
+}
+
+.campaignProgressBarRow {
+  padding: 0 22px 18px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
-  padding: 1px 4px 0;
+  gap: 12px;
 }
 
-.campaignPremiumProgressTrack {
-  height: 10px;
+.campaignProgressBar {
+  height: 7px;
   overflow: hidden;
   border-radius: 999px;
-  background: linear-gradient(90deg, #e9f0f4, #dfe8ee);
-  box-shadow: inset 0 1px 2px rgba(17, 50, 67, 0.08);
+  background: var(--crm-surface-muted);
 }
 
-.campaignPremiumProgressTrack span {
+.campaignProgressBar span {
   display: block;
   height: 100%;
-  min-width: 5px;
+  min-width: 4px;
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--campaign-accent) 76%, #0c6e94),
-    var(--campaign-accent)
-  );
-  box-shadow: 0 0 14px color-mix(in srgb, var(--campaign-accent) 24%, transparent);
-  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--crm-primary-strong);
+  transition: width 0.3s ease;
 }
 
-.campaignPremiumProgress > strong {
-  min-width: 58px;
+.campaignProgressModalSuccess .campaignProgressBar span {
+  background: var(--crm-success-strong);
+}
+
+.campaignProgressModalWarning .campaignProgressBar span {
+  background: var(--crm-danger-strong);
+}
+
+.campaignProgressBarRow > strong {
+  min-width: 42px;
   color: var(--crm-text-muted);
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
   text-align: right;
 }
 
-.campaignPremiumInfo {
+.campaignProgressInfo {
+  margin: 0 22px 18px;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  border-radius: 15px;
-  background: color-mix(in srgb, var(--crm-surface-soft) 66%, transparent);
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
   padding: 11px 13px;
-}
-
-.campaignPremiumInfoIcon {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: #e8eff4;
-  color: #6f8797;
-}
-
-.campaignPremiumInfoSuccess .campaignPremiumInfoIcon {
-  color: #158762;
-  background: #e4f5ed;
-}
-
-.campaignPremiumInfoWarning .campaignPremiumInfoIcon {
-  color: #bd4141;
-  background: #ffebeb;
-}
-
-.campaignPremiumInfo p {
-  margin: 0;
   color: var(--crm-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.55;
 }
 
-.campaignPremiumFooter {
+.campaignProgressInfo svg {
+  margin-top: 1px;
+}
+
+.campaignProgressInfo p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.campaignProgressInfoSuccess {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.campaignProgressInfoWarning {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.campaignProgressFooter {
+  padding: 16px 22px 22px;
+  border-top: 1px solid var(--crm-border);
   display: flex;
   justify-content: flex-end;
-  padding-top: 16px;
-  border-top: 1px solid var(--crm-border);
+  gap: 10px;
 }
 
-.campaignPremiumCancelButton,
-.campaignPremiumDoneButton {
-  min-height: 42px;
+.campaignProgressCancel {
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 12px;
-  padding: 0 16px;
+  gap: 7px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 10px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  padding: 0 13px;
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
   cursor: pointer;
-  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
 }
 
-.campaignPremiumCancelButton {
-  border: 1px solid #efaaaa;
-  background: #fff7f7;
-  color: #b82929;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+.campaignProgressCancel:hover:not(:disabled) {
+  filter: brightness(0.985);
 }
 
-.campaignPremiumCancelButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: #e47e7e;
-  background: #fff0f0;
-}
-
-.campaignPremiumCancelButton:disabled {
+.campaignProgressCancel:disabled {
   opacity: 0.6;
   cursor: wait;
 }
 
-.campaignPremiumDoneButton {
-  border: 1px solid var(--crm-border-strong);
-  background: var(--crm-surface);
-  color: var(--crm-text-strong);
+@keyframes campaignProgressPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
-.campaignPremiumDoneButton:hover {
-  transform: translateY(-1px);
-  background: var(--crm-surface-soft);
-}
-
-@keyframes campaignPremiumPulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
+@media (max-width: 760px) {
+  .campaignProgressOverlay {
+    padding: 12px;
   }
 
-  50% {
-    opacity: 0.62;
-    transform: scale(0.86);
-  }
-}
-
-@media (max-width: 900px) {
   .campaignProgressModal {
-    width: min(720px, calc(100vw - 24px));
-    padding: 22px;
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    border-radius: 18px;
   }
 
-  .campaignPremiumHeader {
+  .campaignProgressHeader {
+    padding: 18px;
     flex-direction: column;
   }
 
-  .campaignPremiumHeaderActions {
+  .campaignProgressHeaderActions {
     width: 100%;
-    justify-content: flex-end;
-  }
-
-  .campaignPremiumMetrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .campaignProgressOverlay {
-    padding: 10px;
-  }
-
-  .campaignProgressModal {
-    width: 100%;
-    max-height: calc(100vh - 20px);
-    padding: 18px 16px;
-    border-radius: 20px;
-    gap: 18px;
-  }
-
-  .campaignPremiumIdentity {
-    gap: 11px;
-  }
-
-  .campaignPremiumIcon {
-    width: 46px;
-    height: 46px;
-    flex-basis: 46px;
-    border-radius: 14px;
-  }
-
-  .campaignPremiumTitle {
-    font-size: 18px;
-  }
-
-  .campaignPremiumMetaDivider {
-    display: none;
-  }
-
-  .campaignPremiumMetaItem {
-    width: 100%;
-  }
-
-  .campaignPremiumHeaderActions {
     justify-content: space-between;
   }
 
-  .campaignPremiumCounter {
-    min-width: 0;
+  .campaignProgressMetrics {
+    padding: 16px 18px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .campaignPremiumMetrics {
-    grid-template-columns: 1fr 1fr;
-    gap: 9px;
+  .campaignProgressBarRow {
+    padding: 0 18px 16px;
   }
 
-  .campaignPremiumMetric {
-    min-height: 88px;
-    padding: 12px;
-    gap: 10px;
+  .campaignProgressInfo {
+    margin: 0 18px 16px;
   }
 
-  .campaignPremiumMetricIcon {
-    width: 38px;
-    height: 38px;
-    flex-basis: 38px;
-    border-radius: 12px;
-  }
-
-  .campaignPremiumMetric strong {
-    font-size: 22px;
-  }
-
-  .campaignPremiumProgress {
-    gap: 8px;
-  }
-
-  .campaignPremiumInfo {
-    grid-template-columns: 28px minmax(0, 1fr);
-    padding: 10px;
-  }
-
-  .campaignPremiumInfoIcon {
-    width: 28px;
-    height: 28px;
-  }
-
-  .campaignPremiumCancelButton,
-  .campaignPremiumDoneButton {
-    width: 100%;
+  .campaignProgressFooter {
+    padding: 14px 18px 18px;
   }
 }

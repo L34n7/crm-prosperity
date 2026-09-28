@@ -10,19 +10,14 @@ import {
 } from "react";
 import {
   Check,
-  CheckCircle2,
   ChevronDown,
   CircleStop,
-  Clock3,
   FileSpreadsheet,
   FileText,
   Info,
   Link2,
-  LoaderCircle,
   Minus,
   Search,
-  Send,
-  UsersRound,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
@@ -7086,10 +7081,7 @@ export default function DisparosWhatsAppPage() {
       ) : null}
 
       {campanhaPagina && modalCampanhaAberto ? (
-        <div
-          className={styles.campaignProgressOverlay}
-          role="presentation"
-        >
+        <div className={styles.campaignProgressOverlay} role="presentation">
           <section
             className={`${styles.campaignProgressModal} ${
               campanhaPaginaAtiva
@@ -7102,87 +7094,55 @@ export default function DisparosWhatsAppPage() {
             aria-modal="true"
             aria-labelledby="campanha-progresso-titulo"
           >
-            <header className={styles.campaignPremiumHeader}>
-              <div className={styles.campaignPremiumIdentity}>
-                <div
-                  className={`${styles.campaignPremiumIcon} ${
-                    campanhaPaginaAtiva
-                      ? styles.campaignPremiumIconActive
-                      : campanhaPaginaSucesso
-                      ? styles.campaignPremiumIconSuccess
-                      : styles.campaignPremiumIconWarning
-                  }`}
-                  aria-hidden="true"
+            <header className={styles.campaignProgressHeader}>
+              <div className={styles.campaignProgressHeading}>
+                <p className={styles.campaignProgressEyebrow}>Disparo em massa</p>
+                <h2
+                  id="campanha-progresso-titulo"
+                  className={styles.campaignProgressTitle}
                 >
-                  <Send size={22} strokeWidth={2.2} />
-                </div>
+                  {campanhaPagina.nome || rotuloStatusCampanha(campanhaPagina)}
+                </h2>
 
-                <div className={styles.campaignPremiumHeading}>
-                  <p className={styles.campaignPremiumEyebrow}>
-                    Disparo em massa
-                  </p>
-
-                  <h2
-                    id="campanha-progresso-titulo"
-                    className={styles.campaignPremiumTitle}
+                <div className={styles.campaignProgressMeta}>
+                  <span
+                    className={`${styles.campaignProgressState} ${
+                      campanhaPaginaAtiva
+                        ? styles.campaignProgressStateActive
+                        : campanhaPaginaSucesso
+                        ? styles.campaignProgressStateSuccess
+                        : styles.campaignProgressStateWarning
+                    }`}
                   >
-                    {campanhaPagina.nome || rotuloStatusCampanha(campanhaPagina)}
-                  </h2>
+                    <span className={styles.campaignProgressStateDot} />
+                    {rotuloStatusCampanha(campanhaPagina)}
+                  </span>
 
-                  <div className={styles.campaignPremiumMeta}>
-                    <span
-                      className={`${styles.campaignPremiumState} ${
-                        campanhaPaginaAtiva
-                          ? styles.campaignPremiumStateActive
-                          : campanhaPaginaSucesso
-                          ? styles.campaignPremiumStateSuccess
-                          : styles.campaignPremiumStateWarning
-                      }`}
-                    >
-                      <span className={styles.campaignPremiumStateDot} />
-                      {rotuloStatusCampanha(campanhaPagina)}
-                    </span>
+                  <span className={styles.campaignProgressMetaItem}>
+                    <FileText size={14} aria-hidden="true" />
+                    Template: {campanhaPagina.template_nome || "-"}
+                  </span>
 
-                    <span
-                      className={styles.campaignPremiumMetaDivider}
-                      aria-hidden="true"
-                    />
-
-                    <span className={styles.campaignPremiumMetaItem}>
-                      <FileText size={14} aria-hidden="true" />
-                      <span>
-                        Template: {campanhaPagina.template_nome || "-"}
-                      </span>
-                    </span>
-
-                    <span
-                      className={styles.campaignPremiumMetaDivider}
-                      aria-hidden="true"
-                    />
-
-                    <span className={styles.campaignPremiumMetaItem}>
-                      <Link2 size={14} aria-hidden="true" />
-                      <span>
-                        Integração:{" "}
-                        {integracaoCampanhaPagina?.nome_conexao ||
-                          integracaoCampanhaPagina?.numero ||
-                          "WhatsApp"}
-                      </span>
-                    </span>
-                  </div>
+                  <span className={styles.campaignProgressMetaItem}>
+                    <Link2 size={14} aria-hidden="true" />
+                    Integração:{" "}
+                    {integracaoCampanhaPagina?.nome_conexao ||
+                      integracaoCampanhaPagina?.numero ||
+                      "WhatsApp"}
+                  </span>
                 </div>
               </div>
 
-              <div className={styles.campaignPremiumHeaderActions}>
-                <span className={styles.campaignPremiumCounter}>
+              <div className={styles.campaignProgressHeaderActions}>
+                <span className={styles.campaignProgressCounter}>
                   {campanhaPaginaAtiva
-                    ? `${processadosCampanhaPagina}/${totalCampanhaPagina}`
+                    ? `${inteiroCampanha(campanhaPagina.enviados)}/${totalCampanhaPagina}`
                     : rotuloStatusCampanha(campanhaPagina)}
                 </span>
 
                 <button
                   type="button"
-                  className={styles.campaignPremiumMinimize}
+                  className={styles.campaignProgressMinimize}
                   onClick={() => setModalCampanhaAberto(false)}
                 >
                   <Minus size={16} aria-hidden="true" />
@@ -7191,133 +7151,48 @@ export default function DisparosWhatsAppPage() {
               </div>
             </header>
 
-            <div className={styles.campaignPremiumMetrics}>
-              <article className={styles.campaignPremiumMetric}>
-                <span
-                  className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconTotal}`}
-                >
-                  <UsersRound size={22} aria-hidden="true" />
-                </span>
-                <div>
-                  <strong>{totalCampanhaPagina}</strong>
-                  <span>Total</span>
-                </div>
+            <div className={styles.campaignProgressMetrics}>
+              <article className={styles.campaignProgressMetric}>
+                <span>Total</span>
+                <strong>{totalCampanhaPagina}</strong>
+              </article>
+
+              <article
+                className={`${styles.campaignProgressMetric} ${styles.campaignProgressMetricSuccess}`}
+              >
+                <span>Enviados</span>
+                <strong>{inteiroCampanha(campanhaPagina.enviados)}</strong>
+              </article>
+
+              <article
+                className={`${styles.campaignProgressMetric} ${styles.campaignProgressMetricDanger}`}
+              >
+                <span>Falhas</span>
+                <strong>{inteiroCampanha(campanhaPagina.falhas)}</strong>
               </article>
 
               {campanhaPaginaAtiva ? (
-                <>
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconProcessed}`}
-                    >
-                      <CheckCircle2 size={22} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <strong>{inteiroCampanha(campanhaPagina.enviados)}</strong>
-                      <span>Enviados</span>
-                    </div>
-                  </article>
-
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconFailure}`}
-                    >
-                      <CircleStop size={22} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <strong>{inteiroCampanha(campanhaPagina.falhas)}</strong>
-                      <span>Falhas</span>
-                    </div>
-                  </article>
-
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconProcessed}`}
-                    >
-                      <CheckCircle2 size={22} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <strong>{processadosCampanhaPagina}</strong>
-                      <span>Processados</span>
-                    </div>
-                  </article>
-
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconRemaining}`}
-                    >
-                      <Clock3 size={22} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <strong>{restantesCampanhaPagina}</strong>
-                      <span>Restantes</span>
-                    </div>
-                  </article>
-
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconProcessing}`}
-                    >
-                      <LoaderCircle
-                        size={22}
-                        className={styles.campaignPremiumMetricSpinner}
-                        aria-hidden="true"
-                      />
-                    </span>
-                    <div>
-                      <strong>
-                        {inteiroCampanha(campanhaPagina.processando)}
-                      </strong>
-                      <span>Em processamento</span>
-                    </div>
-                  </article>
-                </>
+                <article className={styles.campaignProgressMetric}>
+                  <span>Restantes</span>
+                  <strong>{restantesCampanhaPagina}</strong>
+                </article>
               ) : (
-                <>
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconProcessed}`}
-                    >
-                      <CheckCircle2 size={22} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <strong>{inteiroCampanha(campanhaPagina.enviados)}</strong>
-                      <span>Enviados</span>
-                    </div>
-                  </article>
-
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconFailure}`}
-                    >
-                      <CircleStop size={22} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <strong>{inteiroCampanha(campanhaPagina.falhas)}</strong>
-                      <span>Falhas</span>
-                    </div>
-                  </article>
-
-                  <article className={styles.campaignPremiumMetric}>
-                    <span
-                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconCancelled}`}
-                    >
-                      <CircleStop size={22} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <strong>
-                        {inteiroCampanha(campanhaPagina.cancelados)}
-                      </strong>
-                      <span>Cancelados</span>
-                    </div>
-                  </article>
-                </>
+                <article
+                  className={`${styles.campaignProgressMetric} ${
+                    inteiroCampanha(campanhaPagina.cancelados) > 0
+                      ? styles.campaignProgressMetricDanger
+                      : ""
+                  }`}
+                >
+                  <span>Cancelados</span>
+                  <strong>{inteiroCampanha(campanhaPagina.cancelados)}</strong>
+                </article>
               )}
             </div>
 
-            <div className={styles.campaignPremiumProgress}>
+            <div className={styles.campaignProgressBarRow}>
               <div
-                className={styles.campaignPremiumProgressTrack}
+                className={styles.campaignProgressBar}
                 role="progressbar"
                 aria-label="Progresso do disparo em massa"
                 aria-valuemin={0}
@@ -7326,47 +7201,41 @@ export default function DisparosWhatsAppPage() {
               >
                 <span style={{ width: `${progressoCampanhaPagina}%` }} />
               </div>
-              <strong>
-                {campanhaPaginaAtiva
-                  ? `${processadosCampanhaPagina}/${totalCampanhaPagina}`
-                  : `${progressoCampanhaPagina}%`}
-              </strong>
+              <strong>{progressoCampanhaPagina}%</strong>
             </div>
 
             <div
-              className={`${styles.campaignPremiumInfo} ${
+              className={`${styles.campaignProgressInfo} ${
                 !campanhaPaginaAtiva
                   ? campanhaPaginaSucesso
-                    ? styles.campaignPremiumInfoSuccess
-                    : styles.campaignPremiumInfoWarning
+                    ? styles.campaignProgressInfoSuccess
+                    : styles.campaignProgressInfoWarning
                   : ""
               }`}
             >
-              <span className={styles.campaignPremiumInfoIcon}>
-                <Info size={17} aria-hidden="true" />
-              </span>
+              <Info size={17} aria-hidden="true" />
               <p>
                 {campanhaPaginaAtiva
-                  ? "Os números são atualizados em tempo real durante o processamento. Enviados e falhas mostram o resultado confirmado até o momento; os totais definitivos são consolidados quando a campanha terminar."
+                  ? "Enviados, falhas e restantes são atualizados conforme a campanha avança. Os totais definitivos são consolidados ao final do processamento."
                   : descricaoCampanhaTerminal(campanhaPagina)}
               </p>
             </div>
 
-            <footer className={styles.campaignPremiumFooter}>
+            <footer className={styles.campaignProgressFooter}>
               {campanhaPaginaAtiva && podeDisparar ? (
                 <button
                   type="button"
-                  className={styles.campaignPremiumCancelButton}
+                  className={styles.campaignProgressCancel}
                   onClick={() => setModalCancelarCampanhaAberto(true)}
                   disabled={cancelandoCampanha}
                 >
-                  <CircleStop size={17} aria-hidden="true" />
+                  <CircleStop size={16} aria-hidden="true" />
                   {cancelandoCampanha ? "Cancelando..." : "Cancelar disparo"}
                 </button>
               ) : (
                 <button
                   type="button"
-                  className={styles.campaignPremiumDoneButton}
+                  className={styles.secondaryButton}
                   onClick={() => setModalCampanhaAberto(false)}
                 >
                   Fechar

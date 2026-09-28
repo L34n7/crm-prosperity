@@ -453,10 +453,6 @@ export default function WhatsAppDisparoProgressCard() {
         )
       )
     : 0;
-  const restantes = campanha
-    ? Math.max(inteiro(campanha.total) - processados, 0)
-    : 0;
-
   function abrirDetalhes() {
     if (typeof window === "undefined") return;
 
@@ -499,30 +495,17 @@ export default function WhatsAppDisparoProgressCard() {
       </div>
 
       <div className={styles.metrics}>
-        {statusAtivo ? (
-          <>
-            <span>
-              Processados <strong>{processados}/{campanha.total}</strong>
-            </span>
-            <span>
-              Restantes <strong>{restantes}</strong>
-            </span>
-          </>
-        ) : (
-          <>
-            <span>
-              Enviados <strong>{campanha.enviados}</strong>
-            </span>
-            <span>
-              Falhas <strong>{campanha.falhas}</strong>
-            </span>
-            {campanha.cancelados > 0 ? (
-              <span>
-                Cancelados <strong>{campanha.cancelados}</strong>
-              </span>
-            ) : null}
-          </>
-        )}
+        <span>
+          Enviados <strong>{campanha.enviados}</strong>
+        </span>
+        <span>
+          Falhas <strong>{campanha.falhas}</strong>
+        </span>
+        {!statusAtivo && campanha.cancelados > 0 ? (
+          <span>
+            Cancelados <strong>{campanha.cancelados}</strong>
+          </span>
+        ) : null}
       </div>
 
       <div className={styles.progressTrack} aria-hidden="true">
