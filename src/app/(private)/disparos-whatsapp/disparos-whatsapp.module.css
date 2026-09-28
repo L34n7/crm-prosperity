@@ -3759,7 +3759,7 @@
   background: transparent;
   color: var(--crm-text-muted);
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.15;
   font-weight: 800;
   display: inline-flex;
@@ -3792,7 +3792,7 @@
 .pageTabs + .layout {
   position: relative;
   z-index: 2;
-  margin-top: -35px;
+  margin-top: -29px;
 }
 
 .layout {
@@ -4416,10 +4416,10 @@
 }
 
 
-/* CRM_DISPAROS_TABS_TRAY_V10 */
+/* CRM_DISPAROS_TABS_TRAY_V11 */
 @media (max-width: 768px) {
   .pageTabs + .layout {
-    margin-top: -31px;
+    margin-top: -25px;
   }
 
   .pageTabs {
@@ -4430,7 +4430,7 @@
   .pageTab {
     min-height: 27px;
     padding: 4px 12px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
   }
 }
