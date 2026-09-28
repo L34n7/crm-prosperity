@@ -323,3 +323,100 @@
     max-width: 48vw;
   }
 }
+
+
+/* CRM_DISPAROS_CENTRAL_COLOR_V2 */
+.cardActive {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--crm-primary) 7%, var(--crm-surface)),
+      var(--crm-surface) 62%
+    );
+  box-shadow:
+    inset 3px 0 0 var(--crm-primary-strong),
+    var(--crm-shadow-lg);
+}
+
+.cardActive .header strong {
+  color: var(--crm-primary-text);
+}
+
+.center {
+  border-color: var(--crm-primary-border);
+  box-shadow:
+    inset 0 3px 0 var(--crm-primary-strong),
+    var(--crm-shadow-lg);
+}
+
+.centerHeader {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--crm-primary) 8%, var(--crm-surface)),
+      var(--crm-surface) 72%
+    );
+}
+
+.centerHeader strong {
+  color: var(--crm-primary-text);
+}
+
+.centerSummary {
+  background:
+    color-mix(in srgb, var(--crm-primary) 5%, var(--crm-surface-soft));
+}
+
+.centerSummary strong {
+  color: var(--crm-primary-text);
+}
+
+.rowActive {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--crm-primary) 6%, var(--crm-surface)),
+      var(--crm-surface) 58%
+    );
+  box-shadow: inset 3px 0 0 var(--crm-primary-strong);
+}
+
+.rowSuccess {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--crm-success-strong) 5%, var(--crm-surface)),
+      var(--crm-surface) 58%
+    );
+  box-shadow: inset 3px 0 0 var(--crm-success-strong);
+}
+
+.rowWarning {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--crm-danger-strong) 5%, var(--crm-surface)),
+      var(--crm-surface) 58%
+    );
+  box-shadow: inset 3px 0 0 var(--crm-danger-strong);
+}
+
+.openButton {
+  border-color: var(--crm-primary-border);
+  background: color-mix(in srgb, var(--crm-primary) 7%, var(--crm-surface));
+  color: var(--crm-primary-text);
+}
+
+.openButton:hover {
+  border-color: var(--crm-primary-strong);
+  background: color-mix(in srgb, var(--crm-primary) 12%, var(--crm-surface));
+}
+
+.minimizeButton:hover {
+  border-color: var(--crm-primary-border);
+  color: var(--crm-primary-text);
+}
+
+.center .progressTrack {
+  background: color-mix(in srgb, var(--crm-primary) 10%, var(--crm-surface-muted));
+}

@@ -417,8 +417,19 @@ export default function WhatsAppDisparoProgressCard() {
           ? styles.cardSuccess
           : styles.cardWarning
       }`}
-      onClick={() => setExpandido(true)}
-      aria-label="Abrir central de disparos em massa"
+      onClick={() => {
+        if (listaVisivel.length === 1) {
+          abrirCampanha(listaVisivel[0].id);
+          return;
+        }
+
+        setExpandido(true);
+      }}
+      aria-label={
+        listaVisivel.length === 1
+          ? "Abrir detalhes do disparo em massa"
+          : "Abrir central de disparos em massa"
+      }
     >
       <div className={styles.header}>
         <span className={possuiAtivas ? styles.spinner : styles.statusDot} />
