@@ -6,6 +6,10 @@ import styles from "./WhatsAppDisparoProgressCard.module.css";
 
 type CampanhaProgresso = {
   id: string;
+  nome?: string | null;
+  integracao_whatsapp_id?: string | null;
+  integracao_nome?: string | null;
+  integracao_numero?: string | null;
   status: string | null;
   template_nome?: string | null;
   total: number;
@@ -16,6 +20,7 @@ type CampanhaProgresso = {
   processando: number;
   processados: number;
   motivo?: string | null;
+  updated_at?: string | null;
 };
 
 type ProgressoResponse = {
@@ -24,42 +29,23 @@ type ProgressoResponse = {
   empresa_id?: string | null;
   bloquear_disparos?: boolean;
   campanha?: CampanhaProgresso | null;
+  campanhas?: CampanhaProgresso[];
 };
 
 type RealtimeContexto = {
-  usuarioId: string;
   empresaId: string;
-};
-
-type CampanhaRealtimeRow = {
-  id?: unknown;
-  empresa_id?: unknown;
-  usuario_id?: unknown;
-  status?: unknown;
-  template_nome?: unknown;
-  total_itens?: unknown;
-  total_pendentes?: unknown;
-  total_processando?: unknown;
-  total_enviados?: unknown;
-  total_falhas?: unknown;
-  total_cancelados?: unknown;
-  pausa_motivo?: unknown;
-  erro?: unknown;
-  created_at?: unknown;
-  updated_at?: unknown;
-  started_at?: unknown;
-  paused_at?: unknown;
-  finished_at?: unknown;
 };
 
 const EVENTO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_REFRESH = "crm:whatsapp-disparo-refresh";
-const TEST_MODE_STORAGE_KEY = "crm-whatsapp-disparo-card-test";
-const POLLING_FALLBACK_MS = 2 * 60_000;
+const POLLING_ATIVO_MS = 6000;
 const TERMINAL_DISMISS_MS = 8000;
-
 const STATUS_ATIVOS = new Set(["pendente", "enviando"]);
-const TEST_MODE_ENABLED = process.env.NODE_ENV !== "production";
+
+function inteiro(valor: unknown) {
+  const numero = Number(valor || 0);
+  return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
+}
 
 function isStatusAtivo(status?: string | null) {
   return STATUS_ATIVOS.has(String(status || ""));
@@ -73,186 +59,63 @@ function isCampanhaSucesso(campanha?: CampanhaProgresso | null) {
   );
 }
 
-function getDismissKey(campanhaId: string) {
-  return `crm-whatsapp-disparo-terminal:${campanhaId}`;
-}
-
-function isCampanhaTeste(campanhaId?: string | null) {
-  return String(campanhaId || "").startsWith("teste-card-");
-}
-
-function inteiro(valor: unknown) {
-  const numero = Number(valor || 0);
-  return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
-}
-
-function texto(valor: unknown) {
-  return typeof valor === "string" && valor.trim() ? valor : null;
-}
-
-function motivoCampanha(row: CampanhaRealtimeRow) {
-  const motivo = texto(row.pausa_motivo) || texto(row.erro);
-
-  if (motivo) return motivo;
-
-  switch (texto(row.status)) {
-    case "pausada_por_conta_bloqueada":
-      return "A Meta bloqueou ou desativou a conta WhatsApp Business durante o disparo.";
-    case "pausada_por_lista_invalida":
-      return "A lista apresentou muitos numeros invalidos ou indisponiveis.";
-    case "pausada_por_erro_meta":
-      return "A Meta retornou erros que exigem pausa operacional.";
-    case "pausada_por_falhas":
-      return "Muitas mensagens falharam no lote processado.";
-    case "cancelada":
-      return "O disparo foi cancelado antes de concluir todos os envios.";
-    case "erro":
-      return "O disparo foi interrompido por erro operacional.";
-    default:
-      return null;
-  }
-}
-
-function normalizarCampanhaRealtime(row: unknown): CampanhaProgresso | null {
-  if (!row || typeof row !== "object") return null;
-
-  const campanha = row as CampanhaRealtimeRow;
-  const id = texto(campanha.id);
-
-  if (!id) return null;
-
-  const total = inteiro(campanha.total_itens);
-  const enviados = inteiro(campanha.total_enviados);
-  const falhas = inteiro(campanha.total_falhas);
-  const cancelados = inteiro(campanha.total_cancelados);
-  const pendentes = inteiro(campanha.total_pendentes);
-  const processando = inteiro(campanha.total_processando);
-
-  return {
-    id,
-    status: texto(campanha.status),
-    template_nome: texto(campanha.template_nome),
-    total,
-    enviados,
-    falhas,
-    cancelados,
-    pendentes,
-    processando,
-    processados: Math.min(total, enviados + falhas + cancelados),
-    motivo: motivoCampanha(campanha),
-  };
-}
-
-function criarCampanhaTeste(modo: string): CampanhaProgresso | null {
-  if (!TEST_MODE_ENABLED) return null;
-
-  const valor = modo.trim().toLowerCase();
-
-  if (!valor) return null;
-
-  if (valor === "success" || valor === "sucesso") {
-    return {
-      id: "teste-card-sucesso",
-      status: "concluida",
-      template_nome: "teste_visual",
-      total: 500,
-      enviados: 492,
-      falhas: 8,
-      cancelados: 0,
-      pendentes: 0,
-      processando: 0,
-      processados: 500,
-      motivo: null,
-    };
-  }
-
-  if (
-    valor === "paused" ||
-    valor === "pausado" ||
-    valor === "breaker" ||
-    valor === "erro"
-  ) {
-    return {
-      id: "teste-card-pausado",
-      status: "pausada_por_falhas",
-      template_nome: "teste_visual",
-      total: 500,
-      enviados: 137,
-      falhas: 12,
-      cancelados: 351,
-      pendentes: 351,
-      processando: 0,
-      processados: 149,
-      motivo:
-        "Campanha pausada automaticamente porque muitas mensagens falharam no ultimo lote.",
-    };
-  }
-
-  return {
-    id: "teste-card-ativo",
-    status: "enviando",
-    template_nome: "teste_visual",
-    total: 500,
-    enviados: 184,
-    falhas: 3,
-    cancelados: 0,
-    pendentes: 313,
-    processando: 1,
-    processados: 187,
-    motivo: null,
-  };
-}
-
 function percentual(campanha: CampanhaProgresso) {
   if (!campanha.total) return 0;
 
   const processados = Math.min(
     campanha.total,
-    Math.max(campanha.processados, campanha.enviados + campanha.falhas)
+    Math.max(
+      inteiro(campanha.processados),
+      inteiro(campanha.enviados) +
+        inteiro(campanha.falhas) +
+        inteiro(campanha.cancelados)
+    )
   );
 
-  return Math.max(4, Math.min(100, Math.round((processados / campanha.total) * 100)));
+  return Math.max(
+    4,
+    Math.min(100, Math.round((processados / campanha.total) * 100))
+  );
 }
 
 function rotuloStatus(campanha: CampanhaProgresso) {
   if (isStatusAtivo(campanha.status)) return "Processando";
   if (isCampanhaSucesso(campanha)) return "Concluído";
-  if (String(campanha.status || "") === "concluida") return "Concluído com falhas";
+  if (String(campanha.status || "") === "concluida") {
+    return "Concluído com falhas";
+  }
   return "Interrompido";
 }
 
-function descricaoTerminal(campanha: CampanhaProgresso) {
-  if (isCampanhaSucesso(campanha)) {
-    return "Disparo em massa finalizado com sucesso.";
-  }
-
-  if (String(campanha.status || "") === "concluida") {
-    return `Finalizado com ${inteiro(campanha.falhas)} falha(s) e ${inteiro(
-      campanha.cancelados
-    )} cancelado(s).`;
-  }
-
-  return (
-    campanha.motivo ||
-    "Disparo em massa interrompido pelo sistema de segurança."
-  );
-}
-
-function emitirAndamento(data: ProgressoResponse | null) {
+function emitirAndamento(campanhas: CampanhaProgresso[]) {
   if (typeof window === "undefined") return;
+
+  const ativas = campanhas.filter((campanha) =>
+    isStatusAtivo(campanha.status)
+  );
 
   window.dispatchEvent(
     new CustomEvent(EVENTO_ANDAMENTO, {
       detail: {
-        bloquear_disparos: data?.bloquear_disparos === true,
-        campanha: data?.campanha || null,
+        bloquear_disparos: ativas.length > 0,
+        campanha: campanhas[0] || null,
+        campanhas,
       },
     })
   );
 }
 
+function labelIntegracao(campanha: CampanhaProgresso) {
+  return (
+    campanha.integracao_nome ||
+    campanha.integracao_numero ||
+    "Integração WhatsApp"
+  );
+}
+
 export default function WhatsAppDisparoProgressCard() {
-  const [campanha, setCampanha] = useState<CampanhaProgresso | null>(null);
+  const [campanhas, setCampanhas] = useState<CampanhaProgresso[]>([]);
+  const [expandido, setExpandido] = useState(false);
   const [contextoRealtime, setContextoRealtime] =
     useState<RealtimeContexto | null>(null);
   const terminalTimerRef = useRef<number | null>(null);
@@ -268,86 +131,65 @@ export default function WhatsAppDisparoProgressCard() {
     return supabaseRealtimeRef.current;
   }
 
-  const aplicarCampanha = useCallback(
-    (campanhaAtual: CampanhaProgresso | null, bloquearDisparos?: boolean) => {
-      if (
-        campanhaAtual &&
-        !isStatusAtivo(campanhaAtual.status) &&
-        window.sessionStorage.getItem(getDismissKey(campanhaAtual.id))
-      ) {
-        setCampanha(null);
-        emitirAndamento({
-          ok: true,
-          bloquear_disparos: false,
-          campanha: null,
-        });
-        return;
-      }
+  const aplicarCampanhas = useCallback((lista: CampanhaProgresso[]) => {
+    const ordenadas = [...lista].sort((a, b) => {
+      const ativoA = isStatusAtivo(a.status) ? 1 : 0;
+      const ativoB = isStatusAtivo(b.status) ? 1 : 0;
 
-      setCampanha(campanhaAtual);
-      emitirAndamento({
-        ok: true,
-        bloquear_disparos:
-          bloquearDisparos ?? isStatusAtivo(campanhaAtual?.status),
-        campanha: campanhaAtual,
-      });
-    },
-    []
-  );
+      if (ativoA !== ativoB) return ativoB - ativoA;
+
+      return (
+        new Date(b.updated_at || 0).getTime() -
+        new Date(a.updated_at || 0).getTime()
+      );
+    });
+
+    setCampanhas(ordenadas);
+    emitirAndamento(ordenadas);
+  }, []);
 
   const carregarStatus = useCallback(async () => {
-    if (TEST_MODE_ENABLED) {
-      const campanhaTeste = criarCampanhaTeste(
-        window.localStorage.getItem(TEST_MODE_STORAGE_KEY) || ""
+    try {
+      const response = await fetch(
+        "/api/whatsapp/disparos/andamento?escopo=empresa",
+        {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        }
       );
 
-      if (campanhaTeste) {
-        aplicarCampanha(campanhaTeste, isStatusAtivo(campanhaTeste.status));
-        return;
-      }
-    }
-
-    try {
-      const response = await fetch("/api/whatsapp/disparos/andamento", {
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: {
-          Accept: "application/json",
-        },
-      });
-
       if (response.status === 401 || response.status === 403) {
-        setCampanha(null);
-        emitirAndamento(null);
+        aplicarCampanhas([]);
         return;
       }
 
       const json = (await response.json()) as ProgressoResponse;
 
-      if (!response.ok || !json.ok) {
-        return;
+      if (!response.ok || !json.ok) return;
+
+      if (json.empresa_id) {
+        setContextoRealtime({ empresaId: json.empresa_id });
       }
 
-      if (json.usuario_id && json.empresa_id) {
-        setContextoRealtime({
-          usuarioId: json.usuario_id,
-          empresaId: json.empresa_id,
-        });
-      }
+      const lista = Array.isArray(json.campanhas)
+        ? json.campanhas
+        : json.campanha
+        ? [json.campanha]
+        : [];
 
-      aplicarCampanha(json.campanha || null, json.bloquear_disparos);
+      aplicarCampanhas(lista);
     } catch {
       return;
     }
-  }, [aplicarCampanha]);
+  }, [aplicarCampanhas]);
 
   useEffect(() => {
     const initialTimeoutId = window.setTimeout(() => {
-      carregarStatus();
+      void carregarStatus();
     }, 0);
 
-    const refreshHandler = () => carregarStatus();
-
+    const refreshHandler = () => void carregarStatus();
     window.addEventListener(EVENTO_REFRESH, refreshHandler);
 
     return () => {
@@ -356,36 +198,23 @@ export default function WhatsAppDisparoProgressCard() {
     };
   }, [carregarStatus]);
 
-  const statusAtivo = isStatusAtivo(campanha?.status);
-  const statusSucesso = isCampanhaSucesso(campanha);
-  const campanhaId = campanha?.id || "";
-
   useEffect(() => {
-    const usuarioId = contextoRealtime?.usuarioId;
     const empresaId = contextoRealtime?.empresaId;
-
-    if (!usuarioId || !empresaId) return;
+    if (!empresaId) return;
 
     const supabase = getSupabaseRealtime();
     const channel = supabase
-      .channel(`crm-whatsapp-disparo-progress:${usuarioId}`)
+      .channel(`crm-whatsapp-disparos-central:${empresaId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "whatsapp_disparo_campanhas",
-          filter: `usuario_id=eq.${usuarioId}`,
+          filter: `empresa_id=eq.${empresaId}`,
         },
-        (payload) => {
-          const row = payload.new || payload.old;
-
-          if (!row || typeof row !== "object") return;
-
-          const empresaRow = (row as CampanhaRealtimeRow).empresa_id;
-          if (String(empresaRow || "") !== empresaId) return;
-
-          aplicarCampanha(normalizarCampanhaRealtime(row));
+        () => {
+          void carregarStatus();
         }
       )
       .subscribe();
@@ -393,29 +222,31 @@ export default function WhatsAppDisparoProgressCard() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [contextoRealtime?.usuarioId, contextoRealtime?.empresaId, aplicarCampanha]);
+  }, [contextoRealtime?.empresaId, carregarStatus]);
+
+  const campanhasAtivas = useMemo(
+    () => campanhas.filter((campanha) => isStatusAtivo(campanha.status)),
+    [campanhas]
+  );
+  const possuiAtivas = campanhasAtivas.length > 0;
 
   useEffect(() => {
-    if (!statusAtivo) return;
+    if (!possuiAtivas) return;
 
-    const fallbackIntervalId = window.setInterval(
-      carregarStatus,
-      POLLING_FALLBACK_MS
-    );
-
-    const handleVisibilityChange = () => {
+    const atualizar = () => {
       if (document.visibilityState === "visible") {
         void carregarStatus();
       }
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const timer = window.setInterval(atualizar, POLLING_ATIVO_MS);
+    document.addEventListener("visibilitychange", atualizar);
 
     return () => {
-      window.clearInterval(fallbackIntervalId);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", atualizar);
     };
-  }, [statusAtivo, carregarStatus]);
+  }, [possuiAtivas, carregarStatus]);
 
   useEffect(() => {
     if (terminalTimerRef.current) {
@@ -423,12 +254,12 @@ export default function WhatsAppDisparoProgressCard() {
       terminalTimerRef.current = null;
     }
 
-    if (!campanhaId || statusAtivo || isCampanhaTeste(campanhaId)) return;
+    if (campanhas.length === 0 || possuiAtivas) return;
 
     terminalTimerRef.current = window.setTimeout(() => {
-      window.sessionStorage.setItem(getDismissKey(campanhaId), "1");
-      setCampanha(null);
-      emitirAndamento({ ok: true, bloquear_disparos: false, campanha: null });
+      setCampanhas([]);
+      setExpandido(false);
+      emitirAndamento([]);
     }, TERMINAL_DISMISS_MS);
 
     return () => {
@@ -437,87 +268,181 @@ export default function WhatsAppDisparoProgressCard() {
         terminalTimerRef.current = null;
       }
     };
-  }, [campanhaId, statusAtivo]);
+  }, [campanhas.length, possuiAtivas]);
 
-  const progresso = useMemo(() => {
-    return campanha ? percentual(campanha) : 0;
-  }, [campanha]);
-  const processados = campanha
-    ? Math.min(
+  const listaVisivel = possuiAtivas ? campanhasAtivas : campanhas;
+  const total = listaVisivel.reduce(
+    (soma, campanha) => soma + inteiro(campanha.total),
+    0
+  );
+  const enviados = listaVisivel.reduce(
+    (soma, campanha) => soma + inteiro(campanha.enviados),
+    0
+  );
+  const falhas = listaVisivel.reduce(
+    (soma, campanha) => soma + inteiro(campanha.falhas),
+    0
+  );
+  const processados = listaVisivel.reduce(
+    (soma, campanha) =>
+      soma +
+      Math.min(
         inteiro(campanha.total),
-        Math.max(
-          inteiro(campanha.processados),
-          inteiro(campanha.enviados) +
-            inteiro(campanha.falhas) +
-            inteiro(campanha.cancelados)
-        )
-      )
-    : 0;
-  function abrirDetalhes() {
+        inteiro(campanha.enviados) +
+          inteiro(campanha.falhas) +
+          inteiro(campanha.cancelados)
+      ),
+    0
+  );
+  const progressoGeral =
+    total > 0 ? Math.max(4, Math.min(100, Math.round((processados / total) * 100))) : 0;
+
+  function abrirCampanha(campanhaId: string) {
     if (typeof window === "undefined") return;
 
     if (window.location.pathname === "/disparos-whatsapp") {
-      window.dispatchEvent(new CustomEvent("crm:whatsapp-disparo-abrir"));
+      window.dispatchEvent(
+        new CustomEvent("crm:whatsapp-disparo-abrir", {
+          detail: { campanhaId },
+        })
+      );
+      setExpandido(false);
       return;
     }
 
-    window.location.assign("/disparos-whatsapp?campanha=1");
+    window.location.assign(
+      `/disparos-whatsapp?campanha=${encodeURIComponent(campanhaId)}`
+    );
   }
 
-  if (!campanha) return null;
+  if (listaVisivel.length === 0) return null;
+
+  if (expandido) {
+    return (
+      <section className={styles.center} aria-label="Disparos em andamento">
+        <div className={styles.centerHeader}>
+          <div>
+            <strong>Disparos em massa</strong>
+            <small>
+              {possuiAtivas
+                ? `${campanhasAtivas.length} ${campanhasAtivas.length === 1 ? "ativo" : "ativos"}`
+                : "Últimos disparos"}
+            </small>
+          </div>
+
+          <button
+            type="button"
+            className={styles.minimizeButton}
+            onClick={() => setExpandido(false)}
+          >
+            Minimizar
+          </button>
+        </div>
+
+        <div className={styles.centerSummary}>
+          <span>
+            Enviados <strong>{enviados}/{total}</strong>
+          </span>
+          <span>
+            Falhas <strong>{falhas}</strong>
+          </span>
+          <span>
+            Progresso <strong>{progressoGeral}%</strong>
+          </span>
+        </div>
+
+        <div className={styles.campaignList}>
+          {listaVisivel.map((campanha) => (
+            <article
+              key={campanha.id}
+              className={`${styles.campaignRow} ${
+                isStatusAtivo(campanha.status)
+                  ? styles.rowActive
+                  : isCampanhaSucesso(campanha)
+                  ? styles.rowSuccess
+                  : styles.rowWarning
+              }`}
+            >
+              <div className={styles.rowTop}>
+                <div className={styles.rowIdentity}>
+                  <span
+                    className={
+                      isStatusAtivo(campanha.status)
+                        ? styles.spinner
+                        : styles.statusDot
+                    }
+                  />
+                  <div>
+                    <strong>{labelIntegracao(campanha)}</strong>
+                    <small>{campanha.nome || campanha.template_nome || "Disparo em massa"}</small>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.openButton}
+                  onClick={() => abrirCampanha(campanha.id)}
+                >
+                  Abrir
+                </button>
+              </div>
+
+              <div className={styles.rowMetrics}>
+                <span>
+                  Enviados <strong>{campanha.enviados}/{campanha.total}</strong>
+                </span>
+                <span>
+                  Falhas <strong>{campanha.falhas}</strong>
+                </span>
+                <span className={styles.rowStatus}>{rotuloStatus(campanha)}</span>
+              </div>
+
+              <div className={styles.progressTrack} aria-hidden="true">
+                <span style={{ width: `${percentual(campanha)}%` }} />
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section
+    <button
+      type="button"
       className={`${styles.card} ${
-        statusAtivo
+        possuiAtivas
           ? styles.cardActive
-          : statusSucesso
+          : listaVisivel.every(isCampanhaSucesso)
           ? styles.cardSuccess
           : styles.cardWarning
       }`}
-      role="button"
-      tabIndex={0}
-      aria-label="Abrir detalhes do disparo em massa"
-      onClick={abrirDetalhes}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          abrirDetalhes();
-        }
-      }}
+      onClick={() => setExpandido(true)}
+      aria-label="Abrir central de disparos em massa"
     >
       <div className={styles.header}>
-        <span className={statusAtivo ? styles.spinner : styles.statusDot} />
+        <span className={possuiAtivas ? styles.spinner : styles.statusDot} />
         <div>
-          <strong>Disparo em massa</strong>
-          <small>{rotuloStatus(campanha)}</small>
+          <strong>
+            Disparos em massa
+            {campanhasAtivas.length > 1 ? ` · ${campanhasAtivas.length} ativos` : ""}
+          </strong>
+          <small>{possuiAtivas ? "Processando" : rotuloStatus(listaVisivel[0])}</small>
         </div>
       </div>
 
       <div className={styles.metrics}>
         <span>
-          Enviados{" "}
-          <strong>
-            {campanha.enviados}/{campanha.total}
-          </strong>
+          Enviados <strong>{enviados}/{total}</strong>
         </span>
         <span>
-          Falhas <strong>{campanha.falhas}</strong>
+          Falhas <strong>{falhas}</strong>
         </span>
-        {!statusAtivo && campanha.cancelados > 0 ? (
-          <span>
-            Cancelados <strong>{campanha.cancelados}</strong>
-          </span>
-        ) : null}
       </div>
 
       <div className={styles.progressTrack} aria-hidden="true">
-        <span style={{ width: `${progresso}%` }} />
+        <span style={{ width: `${progressoGeral}%` }} />
       </div>
-
-      {!statusAtivo ? (
-        <p className={styles.message}>{descricaoTerminal(campanha)}</p>
-      ) : null}
-    </section>
+    </button>
   );
 }

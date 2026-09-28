@@ -1,20 +1,56 @@
-.card {
+.card,
+.center {
   position: fixed;
   left: 304px;
   bottom: 16px;
   z-index: 980;
-  width: min(292px, calc(100vw - 328px));
   border: 1px solid var(--crm-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--crm-surface) 94%, transparent);
+  background: color-mix(in srgb, var(--crm-surface) 96%, transparent);
   box-shadow: var(--crm-shadow-lg);
-  padding: 10px;
   backdrop-filter: blur(10px);
 }
 
-:global(html[data-sidebar-collapsed="true"]) .card {
+.card {
+  width: min(308px, calc(100vw - 332px));
+  border-radius: 10px;
+  padding: 10px 11px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  outline: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.center {
+  width: min(420px, calc(100vw - 328px));
+  max-height: min(520px, calc(100vh - 92px));
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+:global(html[data-sidebar-collapsed="true"]) .card,
+:global(html[data-sidebar-collapsed="true"]) .center {
   left: 104px;
-  width: min(292px, calc(100vw - 128px));
+}
+
+:global(html[data-sidebar-collapsed="true"]) .card {
+  width: min(308px, calc(100vw - 128px));
+}
+
+:global(html[data-sidebar-collapsed="true"]) .center {
+  width: min(420px, calc(100vw - 128px));
+}
+
+.card:hover,
+.card:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--crm-shadow-xl, var(--crm-shadow-lg));
+  border-color: var(--crm-primary-strong);
+}
+
+.card:focus-visible {
+  box-shadow: var(--crm-focus-ring), var(--crm-shadow-lg);
 }
 
 .cardActive {
@@ -35,21 +71,23 @@
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
-.header strong {
+.header strong,
+.centerHeader strong {
   display: block;
   color: var(--crm-text-strong);
   font-size: 13px;
   line-height: 1.2;
 }
 
-.header small {
+.header small,
+.centerHeader small {
   display: block;
   margin-top: 2px;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -58,6 +96,7 @@
   width: 14px;
   height: 14px;
   border-radius: 999px;
+  flex: 0 0 14px;
 }
 
 .spinner {
@@ -70,30 +109,32 @@
   background: var(--crm-success-strong);
 }
 
-.cardWarning .statusDot {
+.cardWarning .statusDot,
+.rowWarning .statusDot {
   background: var(--crm-danger-strong);
 }
 
-.metrics {
+.metrics,
+.centerSummary,
+.rowMetrics {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
-.metrics span {
-  min-width: 0;
-  white-space: nowrap;
+.metrics {
+  justify-content: space-between;
+  margin-top: 8px;
 }
 
-.metrics strong {
-  margin-left: 4px;
+.metrics strong,
+.centerSummary strong,
+.rowMetrics strong {
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .progressTrack {
@@ -112,20 +153,136 @@
   transition: width 0.25s ease;
 }
 
-.cardSuccess .progressTrack span {
+.cardSuccess .progressTrack span,
+.rowSuccess .progressTrack span {
   background: var(--crm-success-strong);
 }
 
-.cardWarning .progressTrack span {
+.cardWarning .progressTrack span,
+.rowWarning .progressTrack span {
   background: var(--crm-danger-strong);
 }
 
-.message {
-  margin: 8px 0 0;
-  color: var(--crm-text);
+.centerHeader {
+  min-height: 58px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--crm-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--crm-surface);
+}
+
+.minimizeButton,
+.openButton {
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 9px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.minimizeButton {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.openButton {
+  min-height: 30px;
+  padding: 0 11px;
+}
+
+.minimizeButton:hover,
+.openButton:hover {
+  background: var(--crm-surface-soft);
+}
+
+.centerSummary {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  justify-content: space-between;
+}
+
+.campaignList {
+  max-height: 390px;
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+}
+
+.campaignRow {
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  padding: 10px;
+}
+
+.rowActive {
+  border-color: var(--crm-primary-border);
+}
+
+.rowSuccess {
+  border-color: var(--crm-success-border);
+}
+
+.rowWarning {
+  border-color: var(--crm-danger-border);
+}
+
+.rowTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rowIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowIdentity > div {
+  min-width: 0;
+}
+
+.rowIdentity strong {
+  display: block;
+  color: var(--crm-text-strong);
   font-size: 12px;
+  line-height: 1.2;
+}
+
+.rowIdentity small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  font-size: 10px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 250px;
+}
+
+.rowMetrics {
+  margin-top: 8px;
+  justify-content: flex-start;
+}
+
+.rowStatus {
+  margin-left: auto;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 @keyframes spin {
@@ -135,41 +292,34 @@
 }
 
 @media (max-width: 1024px) {
-  .card {
+  .card,
+  .center {
     left: 104px;
-    width: min(292px, calc(100vw - 128px));
+  }
+
+  .card {
+    width: min(308px, calc(100vw - 128px));
+  }
+
+  .center {
+    width: min(420px, calc(100vw - 128px));
   }
 }
 
 @media (max-width: 768px) {
-  .card {
+  .card,
+  .center {
     left: 12px;
     right: 12px;
     bottom: calc(84px + env(safe-area-inset-bottom));
     width: auto;
   }
-}
 
+  .center {
+    max-height: min(480px, calc(100vh - 116px));
+  }
 
-/* CRM_DISPARO_PROGRESS_OPEN_DETAILS_V2 */
-.card {
-  cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-  outline: none;
-}
-
-.card:hover,
-.card:focus-visible {
-  transform: translateY(-2px);
-  box-shadow: var(--crm-shadow-xl, var(--crm-shadow-lg));
-  border-color: var(--crm-primary-strong);
-}
-
-.card:focus-visible {
-  box-shadow: var(--crm-focus-ring), var(--crm-shadow-lg);
-}
-
-.cardWarning:hover,
-.cardWarning:focus-visible {
-  border-color: var(--crm-danger-text);
+  .rowIdentity small {
+    max-width: 48vw;
+  }
 }

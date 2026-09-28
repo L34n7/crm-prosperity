@@ -4434,3 +4434,31 @@
     font-weight: 800;
   }
 }
+
+
+/* CRM_MULTI_DISPAROS_V1 */
+.campaignProgressSwitcher {
+  min-height: 36px;
+  max-width: 190px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  padding: 0 30px 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  outline: none;
+  cursor: pointer;
+}
+
+.campaignProgressSwitcher:focus {
+  border-color: var(--crm-primary);
+  box-shadow: var(--crm-focus-ring);
+}
+
+@media (max-width: 760px) {
+  .campaignProgressSwitcher {
+    max-width: 46vw;
+  }
+}

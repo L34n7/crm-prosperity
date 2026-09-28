@@ -39,6 +39,12 @@ type CampanhaDisparo = {
   finished_at: string | null;
 };
 
+type IntegracaoResumo = {
+  id: string;
+  nome_conexao: string | null;
+  numero: string | null;
+};
+
 function inteiro(valor: unknown) {
   const numero = Number(valor || 0);
   return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
@@ -67,7 +73,10 @@ function motivoCampanha(campanha: CampanhaDisparo) {
   }
 }
 
-function mapearCampanha(campanha: CampanhaDisparo) {
+function mapearCampanha(
+  campanha: CampanhaDisparo,
+  integracoes: Map<string, IntegracaoResumo>
+) {
   const total = inteiro(campanha.total_itens);
   const enviados = inteiro(campanha.total_enviados);
   const falhas = inteiro(campanha.total_falhas);
@@ -75,11 +84,16 @@ function mapearCampanha(campanha: CampanhaDisparo) {
   const pendentes = inteiro(campanha.total_pendentes);
   const processando = inteiro(campanha.total_processando);
   const processados = Math.min(total, enviados + falhas + cancelados);
+  const integracao = campanha.integracao_whatsapp_id
+    ? integracoes.get(campanha.integracao_whatsapp_id) || null
+    : null;
 
   return {
     id: campanha.id,
     nome: campanha.nome,
     integracao_whatsapp_id: campanha.integracao_whatsapp_id,
+    integracao_nome: integracao?.nome_conexao || null,
+    integracao_numero: integracao?.numero || null,
     usuario_id: campanha.usuario_id,
     status: campanha.status,
     template_nome: campanha.template_nome,
@@ -125,10 +139,7 @@ export async function GET(request: NextRequest) {
 
     if (!podeVisualizarDisparos(usuario)) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "Voce nao tem permissao para visualizar disparos.",
-        },
+        { ok: false, error: "Voce nao tem permissao para visualizar disparos." },
         { status: 403 }
       );
     }
@@ -145,6 +156,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const bloqueioEscopo = integracaoId
+      ? "integracao"
+      : escopoEmpresa
+      ? "empresa"
+      : "usuario";
+
     if (!integracaoId && acessoIntegracoes.idsPermitidos.length === 0) {
       return NextResponse.json({
         ok: true,
@@ -152,10 +169,27 @@ export async function GET(request: NextRequest) {
         empresa_id: usuario.empresa_id,
         integracao_id: null,
         bloquear_disparos: false,
-        bloqueio_escopo: escopoEmpresa ? "empresa" : "usuario",
+        bloqueio_escopo: bloqueioEscopo,
         campanha: null,
+        campanhas: [],
       });
     }
+
+    const { data: integracoesData } = await supabaseAdmin
+      .from("integracoes_whatsapp")
+      .select("id, nome_conexao, numero")
+      .eq("empresa_id", usuario.empresa_id)
+      .in(
+        "id",
+        integracaoId ? [integracaoId] : acessoIntegracoes.idsPermitidos
+      );
+
+    const integracoes = new Map<string, IntegracaoResumo>(
+      ((integracoesData || []) as IntegracaoResumo[]).map((item) => [
+        item.id,
+        item,
+      ])
+    );
 
     const campos = `
       id,
@@ -179,62 +213,60 @@ export async function GET(request: NextRequest) {
       finished_at
     `;
 
-    let queryCampanhaAtiva = supabaseAdmin
+    let queryAtivas = supabaseAdmin
       .from("whatsapp_disparo_campanhas")
       .select(campos)
       .eq("empresa_id", usuario.empresa_id)
       .in("status", STATUS_ATIVOS);
 
     if (integracaoId) {
-      queryCampanhaAtiva = queryCampanhaAtiva.eq(
-        "integracao_whatsapp_id",
-        integracaoId
-      );
+      queryAtivas = queryAtivas.eq("integracao_whatsapp_id", integracaoId);
     } else {
-      queryCampanhaAtiva = queryCampanhaAtiva.in(
+      queryAtivas = queryAtivas.in(
         "integracao_whatsapp_id",
         acessoIntegracoes.idsPermitidos
       );
+
       if (!escopoEmpresa) {
-      queryCampanhaAtiva = queryCampanhaAtiva.eq("usuario_id", usuario.id);
+        queryAtivas = queryAtivas.eq("usuario_id", usuario.id);
       }
     }
 
-    const { data: campanhaAtiva, error: campanhaAtivaError } =
-      await queryCampanhaAtiva
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: campanhasAtivas, error: campanhasAtivasError } =
+      await queryAtivas.order("created_at", { ascending: false }).limit(25);
 
-    if (campanhaAtivaError) {
+    if (campanhasAtivasError) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Erro ao buscar disparo em andamento: ${campanhaAtivaError.message}`,
+          error: `Erro ao buscar disparos em andamento: ${campanhasAtivasError.message}`,
         },
         { status: 500 }
       );
     }
 
-    if (campanhaAtiva) {
+    const ativas = ((campanhasAtivas || []) as CampanhaDisparo[]).map(
+      (campanha) => mapearCampanha(campanha, integracoes)
+    );
+
+    if (ativas.length > 0) {
       return NextResponse.json({
         ok: true,
         usuario_id: usuario.id,
         empresa_id: usuario.empresa_id,
         integracao_id: integracaoId || null,
         bloquear_disparos: true,
-        bloqueio_escopo: integracaoId
-          ? "integracao"
-          : escopoEmpresa
-          ? "empresa"
-          : "usuario",
-        campanha: mapearCampanha(campanhaAtiva as CampanhaDisparo),
+        bloqueio_escopo: bloqueioEscopo,
+        campanha: ativas[0],
+        campanhas: ativas,
       });
     }
 
-    const atualizadoDepoisDe = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const atualizadoDepoisDe = new Date(
+      Date.now() - 10 * 60 * 1000
+    ).toISOString();
 
-    let queryCampanhaRecente = supabaseAdmin
+    let queryRecentes = supabaseAdmin
       .from("whatsapp_disparo_campanhas")
       .select(campos)
       .eq("empresa_id", usuario.empresa_id)
@@ -242,35 +274,34 @@ export async function GET(request: NextRequest) {
       .gte("updated_at", atualizadoDepoisDe);
 
     if (integracaoId) {
-      queryCampanhaRecente = queryCampanhaRecente.eq(
-        "integracao_whatsapp_id",
-        integracaoId
-      );
+      queryRecentes = queryRecentes.eq("integracao_whatsapp_id", integracaoId);
     } else {
-      queryCampanhaRecente = queryCampanhaRecente.in(
+      queryRecentes = queryRecentes.in(
         "integracao_whatsapp_id",
         acessoIntegracoes.idsPermitidos
       );
+
       if (!escopoEmpresa) {
-      queryCampanhaRecente = queryCampanhaRecente.eq("usuario_id", usuario.id);
+        queryRecentes = queryRecentes.eq("usuario_id", usuario.id);
       }
     }
 
-    const { data: campanhaRecente, error: campanhaRecenteError } =
-      await queryCampanhaRecente
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: campanhasRecentes, error: campanhasRecentesError } =
+      await queryRecentes.order("updated_at", { ascending: false }).limit(5);
 
-    if (campanhaRecenteError) {
+    if (campanhasRecentesError) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Erro ao buscar disparo recente: ${campanhaRecenteError.message}`,
+          error: `Erro ao buscar disparos recentes: ${campanhasRecentesError.message}`,
         },
         { status: 500 }
       );
     }
+
+    const recentes = ((campanhasRecentes || []) as CampanhaDisparo[]).map(
+      (campanha) => mapearCampanha(campanha, integracoes)
+    );
 
     return NextResponse.json({
       ok: true,
@@ -278,14 +309,9 @@ export async function GET(request: NextRequest) {
       empresa_id: usuario.empresa_id,
       integracao_id: integracaoId || null,
       bloquear_disparos: false,
-      bloqueio_escopo: integracaoId
-        ? "integracao"
-        : escopoEmpresa
-        ? "empresa"
-        : "usuario",
-      campanha: campanhaRecente
-        ? mapearCampanha(campanhaRecente as CampanhaDisparo)
-        : null,
+      bloqueio_escopo: bloqueioEscopo,
+      campanha: recentes[0] || null,
+      campanhas: recentes,
     });
   } catch (error) {
     return NextResponse.json(
@@ -294,7 +320,7 @@ export async function GET(request: NextRequest) {
         error:
           error instanceof Error
             ? error.message
-            : "Erro interno ao buscar disparo em andamento.",
+            : "Erro interno ao buscar disparos em andamento.",
       },
       { status: 500 }
     );

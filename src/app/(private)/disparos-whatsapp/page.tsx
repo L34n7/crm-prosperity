@@ -148,6 +148,8 @@ type CampanhaDisparoAndamento = {
   id: string;
   nome?: string | null;
   integracao_whatsapp_id?: string | null;
+  integracao_nome?: string | null;
+  integracao_numero?: string | null;
   usuario_id?: string | null;
   status: string | null;
   template_nome?: string | null;
@@ -171,6 +173,7 @@ type DisparoAndamentoPayload = {
   bloquear_disparos?: boolean;
   bloqueio_escopo?: "usuario" | "integracao" | "empresa";
   campanha?: CampanhaDisparoAndamento | null;
+  campanhas?: CampanhaDisparoAndamento[];
 };
 
 type CampanhaDisparoRealtimeRow = {
@@ -2019,6 +2022,9 @@ export default function DisparosWhatsAppPage() {
     useState(false);
   const [campanhaPagina, setCampanhaPagina] =
     useState<CampanhaDisparoAndamento | null>(null);
+  const [campanhasPagina, setCampanhasPagina] = useState<
+    CampanhaDisparoAndamento[]
+  >([]);
   const [modalCampanhaAberto, setModalCampanhaAberto] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"disparo" | "resultados">("disparo");
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
@@ -2174,6 +2180,15 @@ export default function DisparosWhatsAppPage() {
 
   const aplicarCampanhaPagina = useCallback(
     (campanhaAtual: CampanhaDisparoAndamento | null) => {
+      if (campanhaAtual) {
+        setCampanhasPagina((atuais) => {
+          const restantes = atuais.filter(
+            (campanha) => campanha.id !== campanhaAtual.id
+          );
+          return [campanhaAtual, ...restantes].slice(0, 25);
+        });
+      }
+
       setCampanhaPagina((atual) => {
         if (!campanhaAtual) return null;
         if (!atual || atual.id !== campanhaAtual.id) return campanhaAtual;
@@ -2198,8 +2213,9 @@ export default function DisparosWhatsAppPage() {
   );
 
   const carregarCampanhaPagina = useCallback(
-    async (integracaoWhatsappId = "") => {
+    async (integracaoWhatsappId = "", campanhaPreferidaId = "") => {
       const integracaoConsultaId = integracaoWhatsappId.trim();
+      const campanhaPreferida = campanhaPreferidaId.trim();
       const params = new URLSearchParams();
       const campanhaTeste =
         typeof window !== "undefined"
@@ -2231,24 +2247,64 @@ export default function DisparosWhatsAppPage() {
 
         if (!res.ok || json.ok === false) return;
 
-        aplicarCampanhaPagina(json.campanha || null);
+        const lista = Array.isArray(json.campanhas)
+          ? json.campanhas
+          : json.campanha
+          ? [json.campanha]
+          : [];
+
+        if (integracaoConsultaId) {
+          setCampanhasPagina((atuais) => {
+            const semIntegracao = atuais.filter(
+              (campanha) =>
+                campanha.integracao_whatsapp_id !== integracaoConsultaId
+            );
+            return [...lista, ...semIntegracao].slice(0, 25);
+          });
+        } else {
+          setCampanhasPagina(lista);
+        }
+
+        setCampanhaPagina((atual) => {
+          const preferida = campanhaPreferida
+            ? lista.find((campanha) => campanha.id === campanhaPreferida) || null
+            : null;
+          const atualAtualizada = atual
+            ? lista.find((campanha) => campanha.id === atual.id) || null
+            : null;
+
+          if (preferida) return preferida;
+          if (atualAtualizada) return atualAtualizada;
+          if (integracaoConsultaId) return json.campanha || atual;
+          return lista[0] || null;
+        });
       } catch {
         return;
       }
     },
-    [aplicarCampanhaPagina]
+    []
   );
 
   useEffect(() => {
-    const abrirModalCampanha = () => {
+    const abrirModalCampanha = (event?: Event) => {
+      const campanhaIdEvento =
+        (event as CustomEvent<{ campanhaId?: string }> | undefined)?.detail
+          ?.campanhaId || "";
+
       setAbaAtiva("disparo");
       setModalCampanhaAberto(true);
-      void carregarCampanhaPagina();
+      void carregarCampanhaPagina("", campanhaIdEvento);
     };
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get("campanha") === "1") {
-      abrirModalCampanha();
+    const campanhaParam = params.get("campanha") || "";
+
+    if (campanhaParam) {
+      const campanhaId = campanhaParam === "1" ? "" : campanhaParam;
+      setAbaAtiva("disparo");
+      setModalCampanhaAberto(true);
+      void carregarCampanhaPagina("", campanhaId);
+
       params.delete("campanha");
       const query = params.toString();
       window.history.replaceState(
@@ -3041,8 +3097,29 @@ export default function DisparosWhatsAppPage() {
   useEffect(() => {
     const handleAndamento = (event: Event) => {
       const detalhe = (event as CustomEvent<DisparoAndamentoPayload>).detail;
-      setDisparoEmMassaProcessando(detalhe?.bloquear_disparos === true);
-      carregarCampanhaPagina(integracaoId);
+      const lista = Array.isArray(detalhe?.campanhas)
+        ? detalhe.campanhas
+        : detalhe?.campanha
+        ? [detalhe.campanha]
+        : [];
+
+      const campanhasAtivas = lista.filter(campanhaEstaAtiva);
+      setDisparoEmMassaProcessando(campanhasAtivas.length > 0);
+      setCampanhasPagina(lista);
+      setIntegracaoDisparoProcessando(
+        Boolean(
+          integracaoId &&
+            campanhasAtivas.some(
+              (campanha) =>
+                campanha.integracao_whatsapp_id === integracaoId
+            )
+        )
+      );
+
+      setCampanhaPagina((atual) => {
+        if (!atual) return lista[0] || null;
+        return lista.find((campanha) => campanha.id === atual.id) || atual;
+      });
     };
 
     window.addEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
@@ -3050,7 +3127,7 @@ export default function DisparosWhatsAppPage() {
     return () => {
       window.removeEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
     };
-  }, [carregarCampanhaPagina, integracaoId]);
+  }, [integracaoId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -3177,14 +3254,24 @@ export default function DisparosWhatsAppPage() {
 
           if (!campanhaRealtime) return;
 
-          if (
-            integracaoId &&
-            campanhaRealtime.integracao_whatsapp_id !== integracaoId
-          ) {
-            return;
-          }
+          setCampanhasPagina((atuais) => {
+            const restantes = atuais.filter(
+              (campanha) => campanha.id !== campanhaRealtime.id
+            );
+            return [campanhaRealtime, ...restantes].slice(0, 25);
+          });
 
-          aplicarCampanhaPagina(campanhaRealtime);
+          setCampanhaPagina((atual) =>
+            atual?.id === campanhaRealtime.id ? campanhaRealtime : atual
+          );
+
+          if (
+            campanhaRealtime.integracao_whatsapp_id === integracaoId
+          ) {
+            setIntegracaoDisparoProcessando(
+              campanhaEstaAtiva(campanhaRealtime)
+            );
+          }
 
           if (!campanhaEstaAtiva(campanhaRealtime)) {
             void carregarHistorico();
@@ -3199,7 +3286,6 @@ export default function DisparosWhatsAppPage() {
   }, [
     usuarioLogado?.empresa_id,
     integracaoId,
-    aplicarCampanhaPagina,
     carregarHistorico,
   ]);
 
@@ -3239,7 +3325,9 @@ export default function DisparosWhatsAppPage() {
 
     const atualizarCampanhaAtiva = () => {
       if (document.visibilityState !== "visible") return;
-      void carregarCampanhaPagina(integracaoId);
+      void carregarCampanhaPagina(
+        campanhaPagina?.integracao_whatsapp_id || ""
+      );
     };
 
     atualizarCampanhaAtiva();
@@ -3255,18 +3343,15 @@ export default function DisparosWhatsAppPage() {
   }, [
     campanhaPagina?.id,
     campanhaPagina?.status,
-    integracaoId,
+    campanhaPagina?.integracao_whatsapp_id,
     carregarCampanhaPagina,
   ]);
 
   const permissoes = usuarioLogado?.permissoes || [];
   const podeDisparar = usuarioPodeRealizarDisparos({ permissoes });
 
-  const disparoBloqueado =
-    disparoEmMassaProcessando || integracaoDisparoProcessando;
-  const textoDisparoBloqueado = integracaoDisparoProcessando
-    ? "Integracao em processamento"
-    : "Disparo em processamento";
+  const disparoBloqueado = integracaoDisparoProcessando;
+  const textoDisparoBloqueado = "Integração em processamento";
 
   const integracaoSelecionada = useMemo(() => {
     return integracoes.find((item) => item.id === integracaoId) || null;
@@ -4457,9 +4542,7 @@ export default function DisparosWhatsAppPage() {
 
     if (disparoBloqueado && !agendarDisparo) {
       setErro(
-        integracaoDisparoProcessando
-          ? "Ja existe um disparo em massa em processamento nesta integracao WhatsApp. Aguarde a finalizacao antes de iniciar outro."
-          : "Ja existe um disparo em massa em processamento. Aguarde a finalizacao antes de iniciar outro."
+        "Já existe um disparo em massa em processamento nesta integração WhatsApp. Selecione outra integração ou aguarde a finalização."
       );
       return;
     }
@@ -4691,7 +4774,8 @@ export default function DisparosWhatsAppPage() {
         setIntegracaoDisparoProcessando(true);
         setAbaAtiva("disparo");
         setModalCampanhaAberto(true);
-        carregarCampanhaPagina(integracaoId);
+        await carregarCampanhaPagina(integracaoId);
+        void carregarCampanhaPagina("", String(json.campanha_id || ""));
         emitirRefreshDisparoEmMassa();
 
         setMensagem(
@@ -7132,6 +7216,39 @@ export default function DisparosWhatsAppPage() {
               </div>
 
               <div className={styles.campaignProgressHeaderActions}>
+                {campanhasPagina.length > 1 ? (
+                  <select
+                    className={styles.campaignProgressSwitcher}
+                    value={campanhaPagina.id}
+                    onChange={(event) => {
+                      const selecionada = campanhasPagina.find(
+                        (campanha) => campanha.id === event.target.value
+                      );
+
+                      if (selecionada) {
+                        setCampanhaPagina(selecionada);
+                      }
+                    }}
+                    aria-label="Alternar campanha em andamento"
+                  >
+                    {campanhasPagina.map((campanha, index) => {
+                      const integracaoCampanha = integracoes.find(
+                        (item) =>
+                          item.id === campanha.integracao_whatsapp_id
+                      );
+
+                      return (
+                        <option key={campanha.id} value={campanha.id}>
+                          {index + 1}/{campanhasPagina.length} ·{" "}
+                          {integracaoCampanha?.nome_conexao ||
+                            campanha.integracao_nome ||
+                            "Integração"}
+                        </option>
+                      );
+                    })}
+                  </select>
+                ) : null}
+
                 <span className={styles.campaignProgressCounter}>
                   {campanhaPaginaAtiva
                     ? `${inteiroCampanha(campanhaPagina.enviados)}/${totalCampanhaPagina}`
