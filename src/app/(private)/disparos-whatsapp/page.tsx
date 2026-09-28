@@ -3237,24 +3237,22 @@ export default function DisparosWhatsAppPage() {
   useEffect(() => {
     if (!campanhaEstaAtiva(campanhaPagina)) return;
 
-    const timer = window.setInterval(() => {
-      carregarCampanhaPagina(integracaoId);
-    }, 2 * 60 * 1000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void carregarCampanhaPagina(integracaoId);
-      }
+    const atualizarCampanhaAtiva = () => {
+      if (document.visibilityState !== "visible") return;
+      void carregarCampanhaPagina(integracaoId);
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    atualizarCampanhaAtiva();
+
+    const timer = window.setInterval(atualizarCampanhaAtiva, 4 * 1000);
+
+    document.addEventListener("visibilitychange", atualizarCampanhaAtiva);
 
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", atualizarCampanhaAtiva);
     };
   }, [
-    campanhaPagina,
     campanhaPagina?.id,
     campanhaPagina?.status,
     integracaoId,
@@ -7201,7 +7199,16 @@ export default function DisparosWhatsAppPage() {
               >
                 <span style={{ width: `${progressoCampanhaPagina}%` }} />
               </div>
-              <strong>{progressoCampanhaPagina}%</strong>
+
+              <div className={styles.campaignProgressPercent}>
+                <strong>{progressoCampanhaPagina}%</strong>
+                {campanhaPaginaAtiva ? (
+                  <span
+                    className={styles.campaignProgressLoading}
+                    aria-label="Atualizando progresso"
+                  />
+                ) : null}
+              </div>
             </div>
 
             <div

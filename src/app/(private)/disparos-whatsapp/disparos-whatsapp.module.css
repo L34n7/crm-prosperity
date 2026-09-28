@@ -4296,3 +4296,105 @@
     padding: 14px 18px 18px;
   }
 }
+
+
+/* CRM_CAMPAIGN_PROGRESS_COMPACT_LIVE_V6 */
+.campaignProgressModal {
+  width: min(720px, calc(100vw - 40px));
+}
+
+.campaignProgressHeader {
+  padding: 18px 20px 15px;
+  gap: 14px;
+}
+
+.campaignProgressTitle {
+  font-size: 20px;
+}
+
+.campaignProgressMeta {
+  margin-top: 7px;
+  gap: 7px 12px;
+}
+
+.campaignProgressMetrics {
+  padding: 14px 20px;
+  gap: 9px;
+}
+
+.campaignProgressMetric {
+  padding: 11px 12px;
+  border-radius: 14px;
+}
+
+.campaignProgressMetric strong {
+  margin-top: 5px;
+  font-size: 21px;
+}
+
+.campaignProgressBarRow {
+  padding: 0 20px 14px;
+  gap: 12px;
+}
+
+.campaignProgressPercent {
+  min-width: 72px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.campaignProgressPercent strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-align: right;
+}
+
+.campaignProgressLoading {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid var(--crm-primary-border);
+  border-top-color: var(--crm-primary-strong);
+  border-radius: 999px;
+  animation: massProgressSpin 0.8s linear infinite;
+}
+
+.campaignProgressInfo {
+  margin: 0 20px 14px;
+  padding: 9px 11px;
+}
+
+.campaignProgressFooter {
+  padding: 13px 20px 17px;
+}
+
+@media (max-width: 760px) {
+  .campaignProgressModal {
+    width: 100%;
+  }
+
+  .campaignProgressHeader {
+    padding: 16px;
+  }
+
+  .campaignProgressMetrics {
+    padding: 13px 16px;
+  }
+
+  .campaignProgressBarRow {
+    padding: 0 16px 13px;
+  }
+
+  .campaignProgressInfo {
+    margin: 0 16px 13px;
+  }
+
+  .campaignProgressFooter {
+    padding: 12px 16px 16px;
+  }
+}
