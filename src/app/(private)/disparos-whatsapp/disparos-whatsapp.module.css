@@ -3741,7 +3741,7 @@
   align-self: center;
   gap: 2px;
   min-height: 30px;
-  margin-bottom: -1px;
+  margin-bottom: 0;
   padding: 3px 4px 4px;
   border: 1px solid var(--crm-border);
   border-bottom-color: var(--header);
@@ -3803,7 +3803,7 @@
 .pageTabs + .layout {
   position: relative;
   z-index: 2;
-  margin-top: 0;
+  margin-top: -32px;
 }
 
 .layout {
@@ -4427,10 +4427,14 @@
 }
 
 
-/* CRM_DISPAROS_TABS_TRAY_V8 */
+/* CRM_DISPAROS_TABS_TRAY_V9 */
 @media (max-width: 768px) {
+  .pageTabs + .layout {
+    margin-top: -26px;
+  }
+
   .pageTabs {
-    margin-bottom: -1px;
+    margin-bottom: 0;
     padding: 3px 4px 4px;
   }
 }
