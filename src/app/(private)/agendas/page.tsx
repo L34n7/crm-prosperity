@@ -503,6 +503,8 @@ function Page() {
   const [calendariosMescladosIds, setCalendariosMescladosIds] = useState<
     string[]
   >([]);
+  const [buscaCalendariosMesclados, setBuscaCalendariosMesclados] =
+    useState("");
   const [unidadeDuracaoAgenda, setUnidadeDuracaoAgenda] = useState<
       "minutos" | "horas"
     >("minutos"),
@@ -512,6 +514,26 @@ function Page() {
     [unidadeAntecedenciaAgenda, setUnidadeAntecedenciaAgenda] = useState<
       "minutos" | "horas"
     >("minutos");
+  const calendariosDisponiveisParaMesclar = useMemo(
+    () =>
+      agendas.filter(
+        (calendar) =>
+          calendar.id !== (configNew ? "" : agendaId) &&
+          calendar.status !== "arquivado",
+      ),
+    [agendas, agendaId, configNew],
+  );
+  const calendariosMescladosFiltrados = useMemo(() => {
+    const busca = buscaCalendariosMesclados.trim().toLocaleLowerCase("pt-BR");
+    if (!busca) return calendariosDisponiveisParaMesclar;
+
+    return calendariosDisponiveisParaMesclar.filter((calendar) =>
+      [calendar.nome, String(calendar.duracao_minutos)]
+        .join(" ")
+        .toLocaleLowerCase("pt-BR")
+        .includes(busca),
+    );
+  }, [buscaCalendariosMesclados, calendariosDisponiveisParaMesclar]);
   const responsaveisDisponiveis = useMemo(() => {
       const mapa = new Map<string, Resp>();
       for (const item of [...responsaveisCalendario, ...resps]) {
@@ -1456,6 +1478,7 @@ function Page() {
       return;
     }
     setConfigNew(isNew);
+    setBuscaCalendariosMesclados("");
     setUnidadeDuracaoAgenda("minutos");
     setUnidadeIntervaloAgenda("minutos");
     setUnidadeAntecedenciaAgenda("minutos");
@@ -3346,8 +3369,18 @@ function Page() {
                 </div>
 
                 <div className={styles.capacityConfigGrid}>
-                  <div className="field">
-                    <label>Responsável fixo</label>
+                  <div className={`field ${styles.capacityResponsiblePanel}`}>
+                    <div className={styles.capacityPanelHeading}>
+                      <div>
+                        <strong>Responsável fixo</strong>
+                        <span>
+                          Defina quem receberá automaticamente os novos
+                          compromissos deste calendário.
+                        </span>
+                      </div>
+                      <UserRound size={17} />
+                    </div>
+
                     <select
                       value={af.responsavel_id}
                       onChange={(event) =>
@@ -3368,72 +3401,114 @@ function Page() {
                       ))}
                     </select>
                     <small className={styles.fieldHelp}>
-                      Novos compromissos deste calendário serão atribuídos
-                      automaticamente a este usuário. O mesmo usuário pode ser
-                      responsável por vários calendários.
+                      O mesmo usuário pode ser responsável por vários
+                      calendários.
                     </small>
                   </div>
 
-                  <div className="field">
-                    <label>Ocupação compartilhada</label>
+                  <div className={styles.mergedCalendarPanel}>
+                    <div className={styles.mergedCalendarHeader}>
+                      <div>
+                        <strong>Ocupação compartilhada</strong>
+                        <span>
+                          Selecione calendários que consomem a mesma capacidade.
+                        </span>
+                      </div>
+                      <span className={styles.mergedCalendarCounter}>
+                        {calendariosMescladosIds.length} selecionado
+                        {calendariosMescladosIds.length === 1 ? "" : "s"} ·{" "}
+                        {calendariosDisponiveisParaMesclar.length} disponível
+                        {calendariosDisponiveisParaMesclar.length === 1
+                          ? ""
+                          : "is"}
+                      </span>
+                    </div>
+
+                    {calendariosDisponiveisParaMesclar.length > 0 ? (
+                      <div className={styles.mergedCalendarSearch}>
+                        <Search size={14} aria-hidden="true" />
+                        <input
+                          type="search"
+                          value={buscaCalendariosMesclados}
+                          onChange={(event) =>
+                            setBuscaCalendariosMesclados(event.target.value)
+                          }
+                          placeholder="Buscar calendário..."
+                          aria-label="Buscar calendário para ocupação compartilhada"
+                        />
+                        {buscaCalendariosMesclados ? (
+                          <button
+                            type="button"
+                            onClick={() => setBuscaCalendariosMesclados("")}
+                            aria-label="Limpar busca de calendário"
+                          >
+                            <X size={13} />
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <div className={styles.mergedCalendarList}>
-                      {agendas
-                        .filter(
-                          (calendar) =>
-                            calendar.id !== (configNew ? "" : agendaId) &&
-                            calendar.status !== "arquivado",
-                        )
-                        .map((calendar) => {
-                          const checked =
-                            calendariosMescladosIds.includes(calendar.id);
-                          return (
-                            <label
-                              key={calendar.id}
-                              className={[
-                                styles.mergedCalendarOption,
-                                checked
-                                  ? styles.mergedCalendarOptionActive
-                                  : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() =>
-                                  setCalendariosMescladosIds((atual) =>
-                                    checked
-                                      ? atual.filter(
-                                          (id) => id !== calendar.id,
-                                        )
-                                      : [...atual, calendar.id],
-                                  )
-                                }
-                              />
-                              <span>
-                                <strong>{calendar.nome}</strong>
-                                <small>
-                                  {calendar.duracao_minutos} min por atendimento
-                                </small>
-                              </span>
-                            </label>
-                          );
-                        })}
-                      {agendas.filter(
-                        (calendar) =>
-                          calendar.id !== agendaId &&
-                          calendar.status !== "arquivado",
-                      ).length === 0 ? (
+                      {calendariosMescladosFiltrados.map((calendar) => {
+                        const checked =
+                          calendariosMescladosIds.includes(calendar.id);
+                        const responsavel = responsaveisDisponiveis.find(
+                          (item) => item.id === calendar.responsavel_id,
+                        );
+
+                        return (
+                          <label
+                            key={calendar.id}
+                            className={[
+                              styles.mergedCalendarOption,
+                              checked
+                                ? styles.mergedCalendarOptionActive
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setCalendariosMescladosIds((atual) =>
+                                  checked
+                                    ? atual.filter(
+                                        (id) => id !== calendar.id,
+                                      )
+                                    : [...atual, calendar.id],
+                                )
+                              }
+                            />
+                            <span>
+                              <strong>{calendar.nome}</strong>
+                              <small>
+                                {calendar.duracao_minutos} min
+                                {responsavel?.nome
+                                  ? ` · ${responsavel.nome}`
+                                  : ""}
+                              </small>
+                            </span>
+                          </label>
+                        );
+                      })}
+
+                      {calendariosDisponiveisParaMesclar.length === 0 ? (
                         <div className={styles.mergedCalendarEmpty}>
                           Crie outro calendário para compartilhar a ocupação.
                         </div>
+                      ) : calendariosMescladosFiltrados.length === 0 ? (
+                        <div className={styles.mergedCalendarEmpty}>
+                          Nenhum calendário encontrado para esta busca.
+                        </div>
                       ) : null}
                     </div>
+
                     <small className={styles.fieldHelp}>
                       Um agendamento em qualquer calendário selecionado bloqueia
-                      o mesmo período nos demais. Os calendários continuam com
-                      durações e disponibilidades próprias.
+                      o mesmo período nos demais. Cada calendário mantém sua
+                      própria duração e disponibilidade.
                     </small>
                   </div>
                 </div>
