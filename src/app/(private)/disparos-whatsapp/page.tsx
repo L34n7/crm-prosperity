@@ -246,7 +246,6 @@ type FiltrosConsultaContatos = {
   busca?: string;
   origem?: string;
   campanha?: string;
-  listaId?: string;
   interesse?: string;
   classificacao?: string;
   disparoAnteriorId?: string;
@@ -1966,7 +1965,6 @@ export default function DisparosWhatsAppPage() {
 
   const [campanhaFiltro, setCampanhaFiltro] = useState("");
   const [campanhasDisponiveis, setCampanhasDisponiveis] = useState<string[]>([]);
-  const [listaFiltro, setListaFiltro] = useState("");
   const [listasDisponiveis, setListasDisponiveis] = useState<ListaContatoFiltro[]>([]);
   const [interesseFiltro, setInteresseFiltro] = useState("");
   const [interessesDisponiveis, setInteressesDisponiveis] = useState<string[]>([]);
@@ -2298,7 +2296,6 @@ export default function DisparosWhatsAppPage() {
         busca = "",
         origem = "",
         campanha = "",
-        listaId = "",
         interesse = "",
         classificacao = "",
         disparoAnteriorId = "",
@@ -2333,10 +2330,6 @@ export default function DisparosWhatsAppPage() {
 
         if (campanha.trim()) {
           params.set("campanha", campanha.trim());
-        }
-
-        if (listaId.trim() && !listaIdDaOrigem) {
-          params.set("lista_id", listaId.trim());
         }
 
         if (interesse.trim()) {
@@ -2875,7 +2868,6 @@ export default function DisparosWhatsAppPage() {
         busca: buscaContato,
         origem: origemFiltro,
         campanha: campanhaFiltro,
-        listaId: listaFiltro,
         interesse: interesseFiltro,
         classificacao: classificacaoFiltro,
         disparoAnteriorId: disparoAnteriorFiltroContatos,
@@ -2894,7 +2886,6 @@ export default function DisparosWhatsAppPage() {
     buscaContato,
     origemFiltro,
     campanhaFiltro,
-    listaFiltro,
     interesseFiltro,
     classificacaoFiltro,
     disparoAnteriorFiltroContatos,
@@ -3259,7 +3250,6 @@ export default function DisparosWhatsAppPage() {
     buscaContato ||
       origemFiltro ||
       campanhaFiltro ||
-      listaFiltro ||
       interesseFiltro ||
       classificacaoFiltro ||
       disparoAnteriorFiltroContatos ||
@@ -3268,7 +3258,7 @@ export default function DisparosWhatsAppPage() {
   );
 
   const filtrosServidorContatosAtivos = Boolean(
-    listaFiltro ||
+    origemFiltro.startsWith("lista:") ||
       disparoAnteriorFiltroContatos ||
       mensagemDataInicioFiltro ||
       mensagemDataFimFiltro ||
@@ -3338,6 +3328,7 @@ export default function DisparosWhatsAppPage() {
 
       if (
         origemFiltro &&
+        !origemFiltro.startsWith("lista:") &&
         obterOrigemContato(contato) !== origemFiltro
       ) {
         return false;
@@ -3619,9 +3610,6 @@ export default function DisparosWhatsAppPage() {
     }
 
     if (campanhaFiltro.trim()) params.set("campanha", campanhaFiltro.trim());
-    if (listaFiltro.trim() && !listaIdDaOrigem) {
-      params.set("lista_id", listaFiltro.trim());
-    }
     if (interesseFiltro.trim()) params.set("interesse", interesseFiltro.trim());
     if (classificacaoFiltro.trim()) params.set("classificacoes", classificacaoFiltro.trim());
     if (disparoAnteriorFiltroContatos.trim()) params.set("disparo_anterior_id", disparoAnteriorFiltroContatos.trim());
@@ -5150,7 +5138,6 @@ export default function DisparosWhatsAppPage() {
                           setBuscaContato("");
                           setOrigemFiltro("");
                           setCampanhaFiltro("");
-                          setListaFiltro("");
                           setInteresseFiltro("");
                           setClassificacaoFiltro("");
                           setDisparoAnteriorFiltroContatos("");
@@ -5189,11 +5176,6 @@ export default function DisparosWhatsAppPage() {
 
                           contatosConsultaAtivaRef.current += 1;
                           setOrigemFiltro(valor);
-
-                          if (valor.startsWith("lista:")) {
-                            setListaFiltro("");
-                          }
-
                           setContatos([]);
                           setTotalContatosDisponiveis(0);
                           setLoadingContatos(true);
@@ -5261,31 +5243,6 @@ export default function DisparosWhatsAppPage() {
                         ) : (
                           <option value="">Nenhuma campanha encontrada</option>
                         )}
-                      </select>
-                    </div>
-
-                    <div className={styles.field}>
-                      <label className={styles.label}>Filtrar por lista</label>
-                      <select
-                        value={listaFiltro}
-                        onChange={(e) => {
-                          contatosConsultaAtivaRef.current += 1;
-                          setListaFiltro(e.target.value);
-                          setContatos([]);
-                          setTotalContatosDisponiveis(0);
-                          setLoadingContatos(true);
-                        }}
-                        className={styles.input}
-                      >
-                        <option value="">Todas as listas</option>
-                        {listasDisponiveis.map((lista) => (
-                          <option key={lista.id} value={lista.id}>
-                            {lista.nome}
-                            {typeof lista.total_contatos === "number"
-                              ? ` (${lista.total_contatos})`
-                              : ""}
-                          </option>
-                        ))}
                       </select>
                     </div>
 
