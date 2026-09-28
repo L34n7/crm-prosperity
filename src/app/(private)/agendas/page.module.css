@@ -2090,7 +2090,7 @@
 
 .distributionModal :global(.dhead p) {
   margin-top: 3px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .distributionBody {
@@ -2124,16 +2124,16 @@
 
 .distributionListHeader strong {
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
 }
 
 .distributionListHeader :global(.btn) {
-  min-height: 34px !important;
-  height: 34px !important;
-  padding-inline: 11px !important;
+  min-height: 36px !important;
+  height: 36px !important;
+  padding-inline: 12px !important;
   border-radius: 10px !important;
-  font-size: 11px !important;
+  font-size: 13px !important;
 }
 
 .distributionEmpty {
@@ -2157,12 +2157,12 @@
 
 .distributionEmpty strong {
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .distributionEmpty span {
   max-width: 185px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -2209,7 +2209,7 @@
 .distributionGroupItem strong {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2217,7 +2217,7 @@
 
 .distributionGroupItem small {
   color: var(--crm-text-muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .distributionStatus {
@@ -2227,7 +2227,7 @@
   border-radius: 999px;
   background: var(--crm-surface-soft);
   color: var(--crm-text-muted);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -2272,7 +2272,7 @@
 
 .distributionEyebrow {
   color: var(--crm-primary-text);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2282,7 +2282,7 @@
   margin: 2px 0 0;
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2291,8 +2291,8 @@
 .distributionEditorHeader p {
   margin: 3px 0 0;
   color: var(--crm-text-muted);
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .distributionFormGrid {
@@ -2308,22 +2308,23 @@
 
 .distributionFormGrid :global(.field label) {
   color: var(--crm-text-strong);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
 }
 
 .distributionFormGrid :global(.field input),
 .distributionFormGrid :global(.field select) {
   width: 100%;
-  height: 40px;
+  height: 42px;
   min-width: 0;
   border-radius: 11px;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .distributionStrategyHint {
-  min-height: 36px;
-  padding: 9px 10px;
+  min-height: 40px;
+  padding: 10px 11px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 11px;
   background: color-mix(
@@ -2335,8 +2336,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .distributionStrategyHint svg {
@@ -2365,23 +2366,23 @@
 
 .distributionCalendarsHeader strong {
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
 }
 
 .distributionCalendarsHeader small {
   color: var(--crm-text-muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .distributionSelectionCount {
   flex: 0 0 auto;
-  padding: 4px 8px;
+  padding: 5px 9px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 999px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -2457,7 +2458,7 @@
 .distributionCalendarCard strong {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2466,7 +2467,7 @@
 .distributionCalendarCard small {
   overflow: hidden;
   color: var(--crm-text-muted);
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2496,14 +2497,14 @@
 
 .distributionActiveToggle strong {
   color: var(--crm-text-strong);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
 }
 
 .distributionActiveToggle small {
   color: var(--crm-text-muted);
-  font-size: 9.5px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .distributionActiveToggle > input {
@@ -2523,10 +2524,10 @@
 }
 
 .distributionActions :global(.btn) {
-  min-height: 38px !important;
-  height: 38px !important;
+  min-height: 40px !important;
+  height: 40px !important;
   border-radius: 11px !important;
-  font-size: 11px !important;
+  font-size: 13px !important;
 }
 
 @media (max-width: 760px) {
