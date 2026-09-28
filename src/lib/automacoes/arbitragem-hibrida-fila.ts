@@ -4,9 +4,7 @@ import type { AutomationEngineInput } from "./types";
 
 const supabaseAdmin = getSupabaseAdmin();
 const TIPO_JOB_ARBITRAGEM_HIBRIDA = "arbitragem_hibrida";
-const DELAY_REAVALIACAO_PADRAO_MS = 2_000;
 const JANELA_FLUXO_EM_EXECUCAO_PADRAO_MS = 15_000;
-const DELAY_REAVALIACAO_MAXIMO_MS = 10_000;
 
 type JobArbitragemHibrida = {
   id: string;
@@ -37,7 +35,6 @@ type ResultadoProcessamentoCallback =
 
 type ContextoReavaliacao = {
   fluxoAindaRodando: boolean;
-  excedeuJanelaAtiva: boolean;
   tentativas: number;
 };
 
@@ -56,15 +53,6 @@ function inteiroAmbiente(
   const numero = Number(valor);
   if (!Number.isFinite(numero)) return fallback;
   return Math.min(maximo, Math.max(minimo, Math.floor(numero)));
-}
-
-function delayReavaliacaoMs() {
-  return inteiroAmbiente(
-    process.env.AUTOMACAO_ARBITRAGEM_REAVALIACAO_MS,
-    DELAY_REAVALIACAO_PADRAO_MS,
-    1_000,
-    10_000
-  );
 }
 
 function janelaFluxoEmExecucaoMs() {
@@ -97,7 +85,7 @@ async function publicarJobQstash(jobId: string, delayMs: number) {
 
   if (!token || !url) {
     console.warn(
-      "[ARBITRAGEM HIBRIDA] QStash indisponivel; cron da fila fara a reavaliacao.",
+      "[ARBITRAGEM HIBRIDA] QStash indisponivel; arbitragem aguardara novo evento de estado.",
       { jobId }
     );
     return null;
@@ -235,8 +223,7 @@ export async function deferirMensagemSeFluxoRodando(
     return null;
   }
 
-  const delayMs = delayReavaliacaoMs();
-  const executarEm = new Date(Date.now() + delayMs).toISOString();
+  const executarEm = new Date().toISOString();
   const idempotencyKey = `arbitragem_hibrida:${input.empresaId}:${mensagemId}`;
   const payload = {
     mensagem_id: mensagemId,
@@ -298,8 +285,6 @@ export async function deferirMensagemSeFluxoRodando(
     }
 
     job = existente as JobArbitragemHibrida;
-  } else {
-    await publicarJobQstash(job.id, delayMs);
   }
 
   console.info("[ARBITRAGEM HIBRIDA] Mensagem diferida enquanto fluxo esta rodando", {
@@ -319,42 +304,39 @@ export async function deferirMensagemSeFluxoRodando(
   };
 }
 
-async function reagendarJob(params: {
+async function estacionarJobAguardandoEvento(params: {
   job: JobArbitragemHibrida;
   payload: Record<string, unknown>;
-  delayMs: number;
   motivo: string;
 }) {
-  const executarEm = new Date(Date.now() + params.delayMs).toISOString();
   const reavaliacoes = Number(params.payload.reavaliacoes || 0) + 1;
+  const agora = new Date().toISOString();
 
   await supabaseAdmin
     .from("fila_processamento_auto")
     .update({
       status: "pendente",
-      executar_em: executarEm,
       payload_json: {
         ...params.payload,
         reavaliacoes,
-        ultima_reavaliacao_em: new Date().toISOString(),
+        ultima_reavaliacao_em: agora,
         ultimo_motivo_adiamento: params.motivo,
       },
+      qstash_message_id: null,
+      qstash_publicado_at: null,
       locked_at: null,
       erro: null,
-      updated_at: new Date().toISOString(),
+      updated_at: agora,
     })
     .eq("id", params.job.id)
     .eq("status", "executando");
 
-  await publicarJobQstash(params.job.id, params.delayMs);
-
   return {
     ok: true,
     processado: false,
-    adiado: true,
+    aguardandoEvento: true,
     motivo: params.motivo,
     jobId: params.job.id,
-    executarEm,
   };
 }
 
@@ -557,22 +539,71 @@ export async function processarJobArbitragemHibrida(params: {
       );
     }
 
-    const fluxoAindaRodando =
-      execucao?.status === "rodando" && !execucao.finished_at;
-    const criadoEmMs = new Date(job.created_at).getTime();
-    const tempoDecorridoMs = Number.isFinite(criadoEmMs)
-      ? Date.now() - criadoEmMs
-      : 0;
-    const excedeuJanelaAtiva =
-      fluxoAindaRodando && tempoDecorridoMs >= janelaFluxoEmExecucaoMs();
+    if (
+      !execucao ||
+      execucao.status === "cancelado" ||
+      execucao.status === "erro"
+    ) {
+      const agora = new Date().toISOString();
+      const motivo = !execucao
+        ? "execucao_nao_encontrada"
+        : `execucao_${execucao.status}`;
 
-    if (fluxoAindaRodando && !excedeuJanelaAtiva) {
-      return reagendarJob({
+      await supabaseAdmin
+        .from("fila_processamento_auto")
+        .update({
+          status: "cancelado",
+          locked_at: null,
+          executed_at: agora,
+          updated_at: agora,
+          payload_json: {
+            ...payload,
+            motivo_cancelamento: motivo,
+            cancelado_em: agora,
+          },
+        })
+        .eq("id", job.id)
+        .eq("status", "executando");
+
+      return {
+        ok: true,
+        processado: false,
+        cancelado: true,
+        motivo,
+        jobId: job.id,
+      };
+    }
+
+    const fluxoAindaRodando =
+      execucao.status === "rodando" && !execucao.finished_at;
+
+    if (fluxoAindaRodando) {
+      const resultadoAguardando = await estacionarJobAguardandoEvento({
         job,
         payload,
-        delayMs: delayReavaliacaoMs(),
-        motivo: "fluxo_ainda_rodando",
+        motivo: "fluxo_ainda_rodando_aguardando_evento",
       });
+
+      // Fecha a corrida em que a execução muda de estado exatamente enquanto
+      // um worker antigo ainda estava verificando o job.
+      const { data: execucaoDepois } = await supabaseAdmin
+        .from("automacao_execucoes")
+        .select("status, finished_at")
+        .eq("id", job.execucao_id)
+        .eq("empresa_id", job.empresa_id)
+        .maybeSingle();
+
+      if (
+        execucaoDepois &&
+        (execucaoDepois.status !== "rodando" || execucaoDepois.finished_at)
+      ) {
+        await acordarArbitragensHibridasPendentes({
+          empresaId: job.empresa_id,
+          execucaoId: job.execucao_id,
+        });
+      }
+
+      return resultadoAguardando;
     }
 
     // A mensagem foi recebida no meio de uma sequência. Se a mesma execução
@@ -621,22 +652,14 @@ export async function processarJobArbitragemHibrida(params: {
     const input = await carregarInputOriginal(job);
     const decisao = await params.processar(input, {
       fluxoAindaRodando,
-      excedeuJanelaAtiva,
       tentativas: job.tentativas || 1,
     });
 
     if (decisao.acao === "adiar") {
-      const reavaliacoes = Number(payload.reavaliacoes || 0);
-      const atrasoProgressivo = Math.min(
-        DELAY_REAVALIACAO_MAXIMO_MS,
-        delayReavaliacaoMs() + Math.max(0, reavaliacoes - 4) * 1_000
-      );
-
-      return reagendarJob({
+      return estacionarJobAguardandoEvento({
         job,
         payload,
-        delayMs: decisao.delayMs || atrasoProgressivo,
-        motivo: decisao.motivo || "fluxo_nao_estabilizou",
+        motivo: decisao.motivo || "aguardando_novo_evento_de_estado",
       });
     }
 
@@ -659,16 +682,12 @@ export async function processarJobArbitragemHibrida(params: {
     const errosAnteriores = Number(payload.erros_processamento || 0);
     const errosProcessamento = errosAnteriores + 1;
     const status = errosProcessamento >= 3 ? "erro" : "pendente";
-    const delayMs = delayReavaliacaoMs();
 
     await supabaseAdmin
       .from("fila_processamento_auto")
       .update({
         status,
-        executar_em:
-          status === "pendente"
-            ? new Date(Date.now() + delayMs).toISOString()
-            : job.executar_em,
+        executar_em: job.executar_em,
         payload_json: {
           ...payload,
           erros_processamento: errosProcessamento,
@@ -682,10 +701,6 @@ export async function processarJobArbitragemHibrida(params: {
       .eq("id", job.id)
       .eq("status", "executando");
 
-    if (status === "pendente") {
-      await publicarJobQstash(job.id, delayMs);
-    }
-
     throw error;
   }
 }
@@ -697,29 +712,101 @@ export async function acordarArbitragensHibridasPendentes(params: {
   const execucaoId = String(params.execucaoId || "").trim();
   if (!execucaoId) return 0;
 
-  const { data: jobs, error } = await supabaseAdmin
-    .from("fila_processamento_auto")
-    .select("id")
+  const { data: execucao, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, status, finished_at")
     .eq("empresa_id", params.empresaId)
-    .eq("execucao_id", execucaoId)
-    .eq("tipo_job", TIPO_JOB_ARBITRAGEM_HIBRIDA)
-    .eq("status", "pendente");
+    .eq("id", execucaoId)
+    .maybeSingle();
 
-  if (error || !jobs?.length) return 0;
+  if (execucaoError) {
+    console.error(
+      "[ARBITRAGEM HIBRIDA] Erro ao verificar mudança de estado da execução:",
+      execucaoError
+    );
+    return 0;
+  }
+
+  if (!execucao || execucao.status === "cancelado" || execucao.status === "erro") {
+    const agora = new Date().toISOString();
+
+    const { data: cancelados, error: cancelamentoError } = await supabaseAdmin
+      .from("fila_processamento_auto")
+      .update({
+        status: "cancelado",
+        locked_at: null,
+        executed_at: agora,
+        updated_at: agora,
+      })
+      .eq("empresa_id", params.empresaId)
+      .eq("execucao_id", execucaoId)
+      .eq("tipo_job", TIPO_JOB_ARBITRAGEM_HIBRIDA)
+      .eq("status", "pendente")
+      .select("id");
+
+    if (cancelamentoError) {
+      console.error(
+        "[ARBITRAGEM HIBRIDA] Erro ao cancelar jobs após encerramento da execução:",
+        cancelamentoError
+      );
+      return 0;
+    }
+
+    return cancelados?.length || 0;
+  }
+
+  if (execucao.status === "rodando" && !execucao.finished_at) {
+    return 0;
+  }
 
   const agora = new Date().toISOString();
-  await supabaseAdmin
+  const { data: jobs, error } = await supabaseAdmin
     .from("fila_processamento_auto")
     .update({
       executar_em: agora,
+      qstash_publicado_at: agora,
       updated_at: agora,
     })
     .eq("empresa_id", params.empresaId)
     .eq("execucao_id", execucaoId)
     .eq("tipo_job", TIPO_JOB_ARBITRAGEM_HIBRIDA)
-    .eq("status", "pendente");
+    .eq("status", "pendente")
+    .is("qstash_publicado_at", null)
+    .select("id");
 
-  await Promise.all(jobs.map((job) => publicarJobQstash(job.id, 1_000)));
+  if (error || !jobs?.length) {
+    if (error) {
+      console.error(
+        "[ARBITRAGEM HIBRIDA] Erro ao preparar jobs para evento de estado:",
+        error
+      );
+    }
+    return 0;
+  }
+
+  const falhas: string[] = [];
+
+  for (const job of jobs) {
+    const messageId = await publicarJobQstash(job.id, 1_000);
+    if (!messageId) {
+      falhas.push(job.id);
+      await supabaseAdmin
+        .from("fila_processamento_auto")
+        .update({
+          qstash_message_id: null,
+          qstash_publicado_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.id)
+        .eq("status", "pendente");
+    }
+  }
+
+  if (falhas.length > 0) {
+    throw new Error(
+      `Falha ao publicar arbitragem por evento de estado: ${falhas.join(",")}`
+    );
+  }
 
   return jobs.length;
 }

@@ -562,6 +562,7 @@ export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
       .from("fila_processamento_auto")
       .select("id")
       .eq("status", "pendente")
+      .neq("tipo_job", "arbitragem_hibrida")
       .lte("executar_em", new Date().toISOString())
       .order("executar_em", { ascending: true })
       .limit(limite),
