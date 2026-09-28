@@ -3729,3 +3729,200 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+/* CRM_DISPAROS_TABS_CAMPAIGN_MODAL_V3 */
+.pageTabs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  gap: 24px;
+  min-height: 42px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.pageTab {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: var(--crm-text-muted);
+  padding: 10px 4px 11px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.pageTab::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  right: 50%;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--crm-primary-strong);
+  transition: left 0.18s ease, right 0.18s ease;
+}
+
+.pageTab:hover {
+  color: var(--crm-text-strong);
+}
+
+.pageTabActive {
+  color: var(--crm-text-strong);
+}
+
+.pageTabActive::after {
+  left: 0;
+  right: 0;
+}
+
+.tabPanelHidden {
+  display: none !important;
+}
+
+.campaignPreparingOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1700;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--crm-overlay, #071721) 44%, transparent);
+  backdrop-filter: blur(5px);
+}
+
+.campaignPreparingBox {
+  width: min(520px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  border: 1px solid var(--crm-border);
+  border-radius: 18px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.campaignPreparingBox strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.campaignPreparingBox p {
+  margin: 6px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.campaignPreparingSpinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--crm-primary-border);
+  border-top-color: var(--crm-primary-strong);
+  border-radius: 999px;
+  animation: massProgressSpin 0.8s linear infinite;
+}
+
+.campaignProgressOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1450;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--crm-overlay, #071721) 38%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.campaignProgressModal {
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 22px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+
+.campaignProgressModal.massProgressActive {
+  border-color: var(--crm-primary-border);
+}
+
+.campaignProgressModal.massProgressSuccess {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+}
+
+.campaignProgressModal.massProgressWarning {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.campaignMinimizeButton {
+  min-height: 34px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 9px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.campaignMinimizeButton:hover {
+  background: var(--crm-surface-soft);
+}
+
+.campaignProgressHint {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.campaignProgressFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+@media (max-width: 768px) {
+  .pageTabs {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .pageTab {
+    flex: 1;
+    text-align: center;
+  }
+
+  .campaignProgressOverlay,
+  .campaignPreparingOverlay {
+    padding: 12px;
+  }
+
+  .campaignProgressModal {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .campaignPreparingBox {
+    width: 100%;
+    padding: 18px;
+  }
+}

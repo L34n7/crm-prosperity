@@ -149,3 +149,27 @@
     width: auto;
   }
 }
+
+
+/* CRM_DISPARO_PROGRESS_OPEN_DETAILS_V2 */
+.card {
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  outline: none;
+}
+
+.card:hover,
+.card:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--crm-shadow-xl, var(--crm-shadow-lg));
+  border-color: var(--crm-primary-strong);
+}
+
+.card:focus-visible {
+  box-shadow: var(--crm-focus-ring), var(--crm-shadow-lg);
+}
+
+.cardWarning:hover,
+.cardWarning:focus-visible {
+  border-color: var(--crm-danger-text);
+}

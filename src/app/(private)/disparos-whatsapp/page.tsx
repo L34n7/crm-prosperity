@@ -1657,6 +1657,16 @@ function campanhaFoiConcluida(campanha?: CampanhaDisparoAndamento | null) {
   return String(campanha?.status || "") === "concluida";
 }
 
+function campanhaFoiConcluidaComSucesso(
+  campanha?: CampanhaDisparoAndamento | null
+) {
+  return (
+    campanhaFoiConcluida(campanha) &&
+    inteiroCampanha(campanha?.falhas) === 0 &&
+    inteiroCampanha(campanha?.cancelados) === 0
+  );
+}
+
 function motivoCampanhaRealtime(row: CampanhaDisparoRealtimeRow) {
   const motivo = textoCampanha(row.pausa_motivo) || textoCampanha(row.erro);
 
@@ -1738,18 +1748,25 @@ function progressoCampanha(campanha: CampanhaDisparoAndamento) {
 
 function rotuloStatusCampanha(campanha: CampanhaDisparoAndamento) {
   if (campanhaEstaAtiva(campanha)) return "Processando";
-  if (campanhaFoiConcluida(campanha)) return "Concluido";
+  if (campanhaFoiConcluidaComSucesso(campanha)) return "Concluído";
+  if (campanhaFoiConcluida(campanha)) return "Concluído com falhas";
   return "Interrompido";
 }
 
 function descricaoCampanhaTerminal(campanha: CampanhaDisparoAndamento) {
-  if (campanhaFoiConcluida(campanha)) {
+  if (campanhaFoiConcluidaComSucesso(campanha)) {
     return "Disparo em massa finalizado com sucesso.";
+  }
+
+  if (campanhaFoiConcluida(campanha)) {
+    return `Finalizado com ${inteiroCampanha(campanha.falhas)} falha(s) e ${inteiroCampanha(
+      campanha.cancelados
+    )} cancelado(s).`;
   }
 
   return (
     campanha.motivo ||
-    "Disparo em massa interrompido pelo sistema de seguranca."
+    "Disparo em massa interrompido pelo sistema de segurança."
   );
 }
 
@@ -1998,6 +2015,8 @@ export default function DisparosWhatsAppPage() {
     useState(false);
   const [campanhaPagina, setCampanhaPagina] =
     useState<CampanhaDisparoAndamento | null>(null);
+  const [modalCampanhaAberto, setModalCampanhaAberto] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<"disparo" | "resultados">("disparo");
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
   const [saudeMetaIntegracao, setSaudeMetaIntegracao] =
@@ -2151,7 +2170,25 @@ export default function DisparosWhatsAppPage() {
 
   const aplicarCampanhaPagina = useCallback(
     (campanhaAtual: CampanhaDisparoAndamento | null) => {
-      setCampanhaPagina(campanhaAtual);
+      setCampanhaPagina((atual) => {
+        if (!campanhaAtual) return null;
+        if (!atual || atual.id !== campanhaAtual.id) return campanhaAtual;
+
+        const atualMs = new Date(atual.updated_at || 0).getTime();
+        const novoMs = new Date(campanhaAtual.updated_at || 0).getTime();
+
+        if (
+          Number.isFinite(atualMs) &&
+          Number.isFinite(novoMs) &&
+          atualMs > 0 &&
+          novoMs > 0 &&
+          novoMs < atualMs
+        ) {
+          return atual;
+        }
+
+        return campanhaAtual;
+      });
     },
     []
   );
@@ -2197,6 +2234,35 @@ export default function DisparosWhatsAppPage() {
     },
     [aplicarCampanhaPagina]
   );
+
+  useEffect(() => {
+    const abrirModalCampanha = () => {
+      setAbaAtiva("disparo");
+      setModalCampanhaAberto(true);
+      void carregarCampanhaPagina();
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("campanha") === "1") {
+      abrirModalCampanha();
+      params.delete("campanha");
+      const query = params.toString();
+      window.history.replaceState(
+        {},
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`
+      );
+    }
+
+    window.addEventListener("crm:whatsapp-disparo-abrir", abrirModalCampanha);
+
+    return () => {
+      window.removeEventListener(
+        "crm:whatsapp-disparo-abrir",
+        abrirModalCampanha
+      );
+    };
+  }, [carregarCampanhaPagina]);
 
   const carregarRelatorioCampanhaDetalhado = useCallback(
     async (campanhaId: string) => {
@@ -3139,7 +3205,13 @@ export default function DisparosWhatsAppPage() {
       timerCardCampanhaRef.current = null;
     }
 
-    if (!campanhaPagina || campanhaEstaAtiva(campanhaPagina)) return;
+    if (
+      !campanhaPagina ||
+      campanhaEstaAtiva(campanhaPagina) ||
+      modalCampanhaAberto
+    ) {
+      return;
+    }
 
     timerCardCampanhaRef.current = window.setTimeout(() => {
       setCampanhaPagina(null);
@@ -3151,7 +3223,12 @@ export default function DisparosWhatsAppPage() {
         timerCardCampanhaRef.current = null;
       }
     };
-  }, [campanhaPagina, campanhaPagina?.id, campanhaPagina?.status]);
+  }, [
+    campanhaPagina,
+    campanhaPagina?.id,
+    campanhaPagina?.status,
+    modalCampanhaAberto,
+  ]);
 
   useEffect(() => {
     if (!campanhaEstaAtiva(campanhaPagina)) return;
@@ -3711,9 +3788,27 @@ export default function DisparosWhatsAppPage() {
 
   const campanhaPaginaAtiva = campanhaEstaAtiva(campanhaPagina);
   const campanhaPaginaConcluida = campanhaFoiConcluida(campanhaPagina);
+  const campanhaPaginaSucesso =
+    campanhaFoiConcluidaComSucesso(campanhaPagina);
   const progressoCampanhaPagina = campanhaPagina
     ? progressoCampanha(campanhaPagina)
     : 0;
+  const totalCampanhaPagina = inteiroCampanha(campanhaPagina?.total);
+  const processadosCampanhaPagina = campanhaPagina
+    ? Math.min(
+        totalCampanhaPagina,
+        Math.max(
+          inteiroCampanha(campanhaPagina.processados),
+          inteiroCampanha(campanhaPagina.enviados) +
+            inteiroCampanha(campanhaPagina.falhas) +
+            inteiroCampanha(campanhaPagina.cancelados)
+        )
+      )
+    : 0;
+  const restantesCampanhaPagina = Math.max(
+    totalCampanhaPagina - processadosCampanhaPagina,
+    0
+  );
   const integracaoCampanhaPagina = useMemo(() => {
     if (!campanhaPagina?.integracao_whatsapp_id) return null;
 
@@ -4592,6 +4687,8 @@ export default function DisparosWhatsAppPage() {
       if (json.queued) {
         setDisparoEmMassaProcessando(true);
         setIntegracaoDisparoProcessando(true);
+        setAbaAtiva("disparo");
+        setModalCampanhaAberto(true);
         carregarCampanhaPagina(integracaoId);
         emitirRefreshDisparoEmMassa();
 
@@ -4925,13 +5022,42 @@ export default function DisparosWhatsAppPage() {
 
       <div
         className={
-          filtroHistoricoCampanha
+          abaAtiva === "resultados" && filtroHistoricoCampanha
             ? `${styles.pageContent} ${styles.pageContentCampaignReport}`
             : styles.pageContent
         }
       >
+        <nav className={styles.pageTabs} aria-label="Seções de disparos">
+          <button
+            type="button"
+            className={
+              abaAtiva === "disparo"
+                ? `${styles.pageTab} ${styles.pageTabActive}`
+                : styles.pageTab
+            }
+            onClick={() => setAbaAtiva("disparo")}
+          >
+            Disparos
+          </button>
+          <button
+            type="button"
+            className={
+              abaAtiva === "resultados"
+                ? `${styles.pageTab} ${styles.pageTabActive}`
+                : styles.pageTab
+            }
+            onClick={() => setAbaAtiva("resultados")}
+          >
+            Resultados dos disparos
+          </button>
+        </nav>
+
         <div className={styles.layout}>
-          <section className={styles.formCard}>
+          <section
+            className={`${styles.formCard} ${
+              abaAtiva !== "disparo" ? styles.tabPanelHidden : ""
+            }`}
+          >
             <div className={styles.cardHeader}>
               <div className={styles.cardHeaderContent}>
                 <div>
@@ -6276,99 +6402,12 @@ export default function DisparosWhatsAppPage() {
             )}
           </section>
 
-          {campanhaPagina ? (
-            <section
-              className={`${styles.massProgressCard} ${
-                campanhaPaginaAtiva
-                  ? styles.massProgressActive
-                  : campanhaPaginaConcluida
-                  ? styles.massProgressSuccess
-                  : styles.massProgressWarning
-              }`}
-              role="status"
-              aria-live="polite"
-            >
-              <div className={styles.massProgressHeader}>
-                <span
-                  className={
-                    campanhaPaginaAtiva
-                      ? styles.massProgressSpinner
-                      : styles.massProgressDot
-                  }
-                />
 
-                <div className={styles.massProgressTitleGroup}>
-                  <p className={styles.eyebrow}>Disparo em massa</p>
-                  <h2 className={styles.massProgressTitle}>
-                    {campanhaPagina.nome || rotuloStatusCampanha(campanhaPagina)}
-                  </h2>
-                  <p className={styles.massProgressSubtitle}>
-                    {rotuloStatusCampanha(campanhaPagina)}
-                    {" - "}
-                    Template: {campanhaPagina.template_nome || "-"}
-                    {" - "}
-                    Integracao:{" "}
-                    {integracaoCampanhaPagina?.nome_conexao ||
-                      integracaoCampanhaPagina?.numero ||
-                      "WhatsApp"}
-                  </p>
-                </div>
-
-                <div className={styles.massProgressHeaderActions}>
-                  <span className={styles.massProgressStatus}>
-                    {campanhaPagina.enviados || 0}/{campanhaPagina.total || 0}
-                  </span>
-
-                  {campanhaPaginaAtiva && podeDisparar ? (
-                    <button
-                      type="button"
-                      className={styles.massProgressCancelButton}
-                      onClick={() => setModalCancelarCampanhaAberto(true)}
-                      disabled={cancelandoCampanha}
-                      aria-label="Cancelar disparo em massa"
-                    >
-                      <CircleStop size={16} aria-hidden="true" />
-                      {cancelandoCampanha ? "Cancelando..." : "Cancelar disparo"}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className={styles.massProgressMetrics}>
-                <div>
-                  <strong>{campanhaPagina.total || 0}</strong>
-                  <span>Total</span>
-                </div>
-
-                <div>
-                  <strong>{campanhaPagina.enviados || 0}</strong>
-                  <span>Enviados</span>
-                </div>
-
-                <div>
-                  <strong>{campanhaPagina.falhas || 0}</strong>
-                  <span>Falhas</span>
-                </div>
-
-                <div>
-                  <strong>{campanhaPagina.cancelados || 0}</strong>
-                  <span>Cancelados</span>
-                </div>
-              </div>
-
-              <div className={styles.massProgressTrack} aria-hidden="true">
-                <span style={{ width: `${progressoCampanhaPagina}%` }} />
-              </div>
-
-              {!campanhaPaginaAtiva ? (
-                <p className={styles.massProgressMessage}>
-                  {descricaoCampanhaTerminal(campanhaPagina)}
-                </p>
-              ) : null}
-            </section>
-          ) : null}
-
-      <section className={styles.resultsCard}>
+      <section
+        className={`${styles.resultsCard} ${
+          abaAtiva !== "resultados" ? styles.tabPanelHidden : ""
+        }`}
+      >
         <div className={styles.cardHeader}>
           <div>
             <p className={styles.eyebrow}>Histórico</p>
@@ -7016,6 +7055,163 @@ export default function DisparosWhatsAppPage() {
           </section>
         </div>
       </div>
+
+      {disparando && !agendarDisparo ? (
+        <div
+          className={styles.campaignPreparingOverlay}
+          role="status"
+          aria-live="assertive"
+          aria-label="Preparando campanha de disparo"
+        >
+          <div className={styles.campaignPreparingBox}>
+            <span className={styles.campaignPreparingSpinner} aria-hidden="true" />
+            <div>
+              <strong>Preparando campanha de disparo</strong>
+              <p>
+                Validando os contatos, a capacidade da Meta e preparando a fila
+                de envio. Esse processo pode levar alguns instantes.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {campanhaPagina && modalCampanhaAberto ? (
+        <div
+          className={styles.campaignProgressOverlay}
+          role="presentation"
+        >
+          <section
+            className={`${styles.campaignProgressModal} ${
+              campanhaPaginaAtiva
+                ? styles.massProgressActive
+                : campanhaPaginaSucesso
+                ? styles.massProgressSuccess
+                : styles.massProgressWarning
+            }`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="campanha-progresso-titulo"
+          >
+            <div className={styles.massProgressHeader}>
+              <span
+                className={
+                  campanhaPaginaAtiva
+                    ? styles.massProgressSpinner
+                    : styles.massProgressDot
+                }
+              />
+
+              <div className={styles.massProgressTitleGroup}>
+                <p className={styles.eyebrow}>Disparo em massa</p>
+                <h2
+                  id="campanha-progresso-titulo"
+                  className={styles.massProgressTitle}
+                >
+                  {campanhaPagina.nome || rotuloStatusCampanha(campanhaPagina)}
+                </h2>
+                <p className={styles.massProgressSubtitle}>
+                  {rotuloStatusCampanha(campanhaPagina)}
+                  {" • "}
+                  Template: {campanhaPagina.template_nome || "-"}
+                  {" • "}
+                  Integração:{" "}
+                  {integracaoCampanhaPagina?.nome_conexao ||
+                    integracaoCampanhaPagina?.numero ||
+                    "WhatsApp"}
+                </p>
+              </div>
+
+              <div className={styles.massProgressHeaderActions}>
+                <span className={styles.massProgressStatus}>
+                  {campanhaPaginaAtiva
+                    ? `${processadosCampanhaPagina}/${totalCampanhaPagina}`
+                    : rotuloStatusCampanha(campanhaPagina)}
+                </span>
+                <button
+                  type="button"
+                  className={styles.campaignMinimizeButton}
+                  onClick={() => setModalCampanhaAberto(false)}
+                >
+                  Minimizar
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.massProgressMetrics}>
+              {campanhaPaginaAtiva ? (
+                <>
+                  <div>
+                    <strong>{totalCampanhaPagina}</strong>
+                    <span>Total</span>
+                  </div>
+                  <div>
+                    <strong>{processadosCampanhaPagina}</strong>
+                    <span>Processados</span>
+                  </div>
+                  <div>
+                    <strong>{restantesCampanhaPagina}</strong>
+                    <span>Restantes</span>
+                  </div>
+                  <div>
+                    <strong>{inteiroCampanha(campanhaPagina.processando)}</strong>
+                    <span>Em processamento</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <strong>{totalCampanhaPagina}</strong>
+                    <span>Total</span>
+                  </div>
+                  <div>
+                    <strong>{inteiroCampanha(campanhaPagina.enviados)}</strong>
+                    <span>Enviados</span>
+                  </div>
+                  <div>
+                    <strong>{inteiroCampanha(campanhaPagina.falhas)}</strong>
+                    <span>Falhas</span>
+                  </div>
+                  <div>
+                    <strong>{inteiroCampanha(campanhaPagina.cancelados)}</strong>
+                    <span>Cancelados</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className={styles.massProgressTrack} aria-hidden="true">
+              <span style={{ width: `${progressoCampanhaPagina}%` }} />
+            </div>
+
+            {campanhaPaginaAtiva ? (
+              <p className={styles.campaignProgressHint}>
+                Durante o processamento exibimos apenas o avanço geral. Os
+                totais finais de enviados, falhas e cancelados são apresentados
+                quando a campanha terminar.
+              </p>
+            ) : (
+              <p className={styles.massProgressMessage}>
+                {descricaoCampanhaTerminal(campanhaPagina)}
+              </p>
+            )}
+
+            {campanhaPaginaAtiva && podeDisparar ? (
+              <div className={styles.campaignProgressFooter}>
+                <button
+                  type="button"
+                  className={styles.massProgressCancelButton}
+                  onClick={() => setModalCancelarCampanhaAberto(true)}
+                  disabled={cancelandoCampanha}
+                >
+                  <CircleStop size={16} aria-hidden="true" />
+                  {cancelandoCampanha ? "Cancelando..." : "Cancelar disparo"}
+                </button>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
 
       {modalVariaveisAberto && (
         <div

@@ -65,8 +65,12 @@ function isStatusAtivo(status?: string | null) {
   return STATUS_ATIVOS.has(String(status || ""));
 }
 
-function isStatusSucesso(status?: string | null) {
-  return String(status || "") === "concluida";
+function isCampanhaSucesso(campanha?: CampanhaProgresso | null) {
+  return (
+    String(campanha?.status || "") === "concluida" &&
+    inteiro(campanha?.falhas) === 0 &&
+    inteiro(campanha?.cancelados) === 0
+  );
 }
 
 function getDismissKey(campanhaId: string) {
@@ -212,18 +216,25 @@ function percentual(campanha: CampanhaProgresso) {
 
 function rotuloStatus(campanha: CampanhaProgresso) {
   if (isStatusAtivo(campanha.status)) return "Processando";
-  if (isStatusSucesso(campanha.status)) return "Concluido";
+  if (isCampanhaSucesso(campanha)) return "Concluído";
+  if (String(campanha.status || "") === "concluida") return "Concluído com falhas";
   return "Interrompido";
 }
 
 function descricaoTerminal(campanha: CampanhaProgresso) {
-  if (isStatusSucesso(campanha.status)) {
+  if (isCampanhaSucesso(campanha)) {
     return "Disparo em massa finalizado com sucesso.";
+  }
+
+  if (String(campanha.status || "") === "concluida") {
+    return `Finalizado com ${inteiro(campanha.falhas)} falha(s) e ${inteiro(
+      campanha.cancelados
+    )} cancelado(s).`;
   }
 
   return (
     campanha.motivo ||
-    "Disparo em massa interrompido pelo sistema de seguranca."
+    "Disparo em massa interrompido pelo sistema de segurança."
   );
 }
 
@@ -346,7 +357,7 @@ export default function WhatsAppDisparoProgressCard() {
   }, [carregarStatus]);
 
   const statusAtivo = isStatusAtivo(campanha?.status);
-  const statusSucesso = isStatusSucesso(campanha?.status);
+  const statusSucesso = isCampanhaSucesso(campanha);
   const campanhaId = campanha?.id || "";
 
   useEffect(() => {
@@ -431,6 +442,31 @@ export default function WhatsAppDisparoProgressCard() {
   const progresso = useMemo(() => {
     return campanha ? percentual(campanha) : 0;
   }, [campanha]);
+  const processados = campanha
+    ? Math.min(
+        inteiro(campanha.total),
+        Math.max(
+          inteiro(campanha.processados),
+          inteiro(campanha.enviados) +
+            inteiro(campanha.falhas) +
+            inteiro(campanha.cancelados)
+        )
+      )
+    : 0;
+  const restantes = campanha
+    ? Math.max(inteiro(campanha.total) - processados, 0)
+    : 0;
+
+  function abrirDetalhes() {
+    if (typeof window === "undefined") return;
+
+    if (window.location.pathname === "/disparos-whatsapp") {
+      window.dispatchEvent(new CustomEvent("crm:whatsapp-disparo-abrir"));
+      return;
+    }
+
+    window.location.assign("/disparos-whatsapp?campanha=1");
+  }
 
   if (!campanha) return null;
 
@@ -443,8 +479,16 @@ export default function WhatsAppDisparoProgressCard() {
           ? styles.cardSuccess
           : styles.cardWarning
       }`}
-      role="status"
-      aria-live="polite"
+      role="button"
+      tabIndex={0}
+      aria-label="Abrir detalhes do disparo em massa"
+      onClick={abrirDetalhes}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          abrirDetalhes();
+        }
+      }}
     >
       <div className={styles.header}>
         <span className={statusAtivo ? styles.spinner : styles.statusDot} />
@@ -455,12 +499,30 @@ export default function WhatsAppDisparoProgressCard() {
       </div>
 
       <div className={styles.metrics}>
-        <span>
-          Enviados <strong>{campanha.enviados}/{campanha.total}</strong>
-        </span>
-        <span>
-          Falhas <strong>{campanha.falhas}</strong>
-        </span>
+        {statusAtivo ? (
+          <>
+            <span>
+              Processados <strong>{processados}/{campanha.total}</strong>
+            </span>
+            <span>
+              Restantes <strong>{restantes}</strong>
+            </span>
+          </>
+        ) : (
+          <>
+            <span>
+              Enviados <strong>{campanha.enviados}</strong>
+            </span>
+            <span>
+              Falhas <strong>{campanha.falhas}</strong>
+            </span>
+            {campanha.cancelados > 0 ? (
+              <span>
+                Cancelados <strong>{campanha.cancelados}</strong>
+              </span>
+            ) : null}
+          </>
+        )}
       </div>
 
       <div className={styles.progressTrack} aria-hidden="true">
