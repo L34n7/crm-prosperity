@@ -3984,6 +3984,8 @@ export default function DisparosWhatsAppPage() {
   }
 
   function removerGrupoConflitoDoEnvio(grupo: GrupoConflitoDisparo) {
+    const scrollXAntes = window.scrollX;
+    const scrollYAntes = window.scrollY;
     const contatoIdsGrupo = grupo.contatos_ids.filter((contatoId) =>
       contatosSelecionados.some((contato) => contato.id === contatoId)
     );
@@ -4020,6 +4022,19 @@ export default function DisparosWhatsAppPage() {
         prev.filter((contato) => !contatoIdsParaRemover.has(contato.id))
       );
     }
+
+    const restaurarScroll = () => {
+      window.scrollTo({
+        left: scrollXAntes,
+        top: scrollYAntes,
+        behavior: "auto",
+      });
+    };
+
+    requestAnimationFrame(() => {
+      restaurarScroll();
+      requestAnimationFrame(restaurarScroll);
+    });
   }
 
   function formatarMoedaBRL(valor?: number | null) {
@@ -6027,6 +6042,7 @@ export default function DisparosWhatsAppPage() {
                                 <button
                                   type="button"
                                   className={styles.removerButton}
+                                  onMouseDown={(event) => event.preventDefault()}
                                   onClick={() =>
                                     removerGrupoConflitoDoEnvio(grupo)
                                   }
