@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Layers3, Plus, Shuffle, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  Layers3,
+  Plus,
+  Shuffle,
+  Trash2,
+  UsersRound,
+  X,
+} from "lucide-react";
 import styles from "./page.module.css";
 
 type CalendarOption = {
@@ -354,7 +364,11 @@ export default function AgendaCapacityControls({
                   <div className={styles.distributionEmpty}>Carregando...</div>
                 ) : groups.length === 0 ? (
                   <div className={styles.distributionEmpty}>
-                    Nenhum grupo criado.
+                    <Shuffle size={20} />
+                    <strong>Nenhum grupo criado</strong>
+                    <span>
+                      Crie um grupo para distribuir agendamentos entre calendários.
+                    </span>
                   </div>
                 ) : (
                   groups.map((group) => (
@@ -390,49 +404,83 @@ export default function AgendaCapacityControls({
               </aside>
 
               <section className={styles.distributionEditor}>
-                <div className="field">
-                  <label>Nome do grupo</label>
-                  <input
-                    value={draft.nome}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        nome: event.target.value,
-                      }))
-                    }
-                    placeholder="Ex.: Equipe comercial"
-                  />
+                <div className={styles.distributionEditorHeader}>
+                  <div className={styles.distributionEditorIcon}>
+                    <UsersRound size={18} />
+                  </div>
+                  <div>
+                    <span className={styles.distributionEyebrow}>
+                      {draft.id ? "Editar grupo" : "Novo grupo"}
+                    </span>
+                    <h3>
+                      {draft.id
+                        ? draft.nome || "Configurar distribuição"
+                        : "Configurar distribuição"}
+                    </h3>
+                    <p>
+                      Defina a estratégia e os calendários que receberão os
+                      agendamentos deste grupo.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="field">
-                  <label>Estratégia</label>
-                  <select
-                    value={draft.estrategia}
-                    onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
-                        estrategia: event.target.value as DistributionStrategy,
-                      }))
-                    }
-                  >
-                    <option value="rodizio">Rodízio</option>
-                    <option value="menor_carga">Menor carga</option>
-                    <option value="primeiro_disponivel">
-                      Primeiro disponível
-                    </option>
-                  </select>
-                  <small className={styles.fieldHelp}>
+                <div className={styles.distributionFormGrid}>
+                  <div className="field">
+                    <label>Nome do grupo</label>
+                    <input
+                      value={draft.nome}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          nome: event.target.value,
+                        }))
+                      }
+                      placeholder="Ex.: Equipe comercial"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Estratégia</label>
+                    <select
+                      value={draft.estrategia}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          estrategia: event.target.value as DistributionStrategy,
+                        }))
+                      }
+                    >
+                      <option value="rodizio">Rodízio</option>
+                      <option value="menor_carga">Menor carga</option>
+                      <option value="primeiro_disponivel">
+                        Primeiro disponível
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className={styles.distributionStrategyHint}>
+                  <Shuffle size={14} />
+                  <span>
                     {draft.estrategia === "rodizio"
                       ? "Alterna a preferência entre os calendários disponíveis."
                       : draft.estrategia === "menor_carga"
-                        ? "Prioriza quem possui menor percentual de ocupação no dia."
-                        : "Oferece o horário mais próximo entre os calendários do grupo."}
-                  </small>
+                        ? "Prioriza o calendário com menor carga no dia."
+                        : "Escolhe o calendário com o horário disponível mais próximo."}
+                  </span>
                 </div>
 
                 <div className={styles.distributionCalendars}>
-                  <strong>Calendários participantes</strong>
-                  <small>Selecione no mínimo dois.</small>
+                  <div className={styles.distributionCalendarsHeader}>
+                    <div>
+                      <strong>Calendários participantes</strong>
+                      <small>Selecione pelo menos dois calendários.</small>
+                    </div>
+                    <span className={styles.distributionSelectionCount}>
+                      {draft.agenda_ids.length} selecionado
+                      {draft.agenda_ids.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
 
                   <div className={styles.distributionCalendarGrid}>
                     {activeCalendars.map((calendar) => {
@@ -452,6 +500,9 @@ export default function AgendaCapacityControls({
                             checked={checked}
                             onChange={() => toggleGroupCalendar(calendar.id)}
                           />
+                          <span className={styles.distributionCalendarIcon}>
+                            <CalendarDays size={15} />
+                          </span>
                           <span>
                             <strong>{calendar.nome}</strong>
                             <small>
@@ -468,6 +519,12 @@ export default function AgendaCapacityControls({
                 </div>
 
                 <label className={styles.distributionActiveToggle}>
+                  <span>
+                    <strong>Grupo ativo</strong>
+                    <small>
+                      Permitir que novos agendamentos sejam distribuídos por este grupo.
+                    </small>
+                  </span>
                   <input
                     type="checkbox"
                     checked={draft.ativo}
@@ -478,7 +535,6 @@ export default function AgendaCapacityControls({
                       }))
                     }
                   />
-                  <span>Grupo ativo para novos agendamentos</span>
                 </label>
 
                 <div className={styles.distributionActions}>

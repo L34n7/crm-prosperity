@@ -2062,20 +2062,56 @@
 }
 
 .distributionModal {
-  width: min(980px, calc(100vw - 28px)) !important;
-  max-width: 980px !important;
+  width: min(920px, calc(100vw - 28px)) !important;
+  max-width: 920px !important;
+  height: auto !important;
+  max-height: min(720px, calc(100dvh - 32px)) !important;
+  overflow: hidden !important;
+  border-radius: 24px !important;
+  box-shadow: 0 28px 70px
+    color-mix(in srgb, var(--crm-text-strong) 20%, transparent) !important;
+}
+
+.distributionModal :global(.dhead) {
+  min-height: 72px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--crm-border);
+  background: linear-gradient(
+    135deg,
+    var(--crm-surface) 0%,
+    color-mix(in srgb, var(--crm-primary-soft) 35%, var(--crm-surface)) 100%
+  );
+}
+
+.distributionModal :global(.dhead h2) {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.distributionModal :global(.dhead p) {
+  margin-top: 3px;
+  font-size: 11px;
 }
 
 .distributionBody {
   display: grid;
-  grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.7fr);
-  min-height: 470px;
+  grid-template-columns: 255px minmax(0, 1fr);
+  min-height: 0;
+  max-height: min(610px, calc(100dvh - 106px));
+  overflow: hidden;
+  background: var(--crm-surface);
 }
 
 .distributionList {
-  padding: 15px;
+  min-width: 0;
+  padding: 16px;
+  overflow-y: auto;
   border-right: 1px solid var(--crm-border);
-  background: var(--crm-surface-soft);
+  background: color-mix(
+    in srgb,
+    var(--crm-surface-soft) 82%,
+    var(--crm-primary-soft)
+  );
 }
 
 .distributionListHeader {
@@ -2083,39 +2119,85 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .distributionListHeader strong {
   color: var(--crm-text-strong);
   font-size: 13px;
+  font-weight: 900;
+}
+
+.distributionListHeader :global(.btn) {
+  min-height: 34px !important;
+  height: 34px !important;
+  padding-inline: 11px !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
 }
 
 .distributionEmpty {
-  padding: 24px 12px;
+  min-height: 170px;
+  padding: 24px 14px;
+  border: 1px dashed var(--crm-border-strong);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--crm-surface) 82%, transparent);
   color: var(--crm-text-muted);
-  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   text-align: center;
 }
 
+.distributionEmpty svg {
+  color: var(--crm-primary-strong);
+}
+
+.distributionEmpty strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.distributionEmpty span {
+  max-width: 185px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .distributionGroupItem {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  margin-bottom: 7px;
-  padding: 11px;
+  margin-bottom: 8px;
+  padding: 12px 11px;
+  overflow: hidden;
   border: 1px solid var(--crm-border);
-  border-radius: 11px;
+  border-radius: 13px;
   background: var(--crm-surface);
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.distributionGroupItem:hover {
+  border-color: var(--crm-primary-border);
+  transform: translateY(-1px);
+  box-shadow: var(--crm-shadow-xs);
 }
 
 .distributionGroupItemActive {
-  border-color: var(--crm-primary-border);
+  border-color: var(--crm-primary-strong);
   background: var(--crm-primary-soft);
+  box-shadow: inset 3px 0 0 var(--crm-primary-strong);
 }
 
 .distributionGroupItem > span:first-child {
@@ -2128,6 +2210,7 @@
   overflow: hidden;
   color: var(--crm-text-strong);
   font-size: 12px;
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2140,6 +2223,7 @@
 .distributionStatus {
   flex: 0 0 auto;
   padding: 4px 7px;
+  border: 1px solid var(--crm-border);
   border-radius: 999px;
   background: var(--crm-surface-soft);
   color: var(--crm-text-muted);
@@ -2148,59 +2232,223 @@
 }
 
 .distributionStatusActive {
+  border-color: var(--crm-success-border);
   background: var(--crm-success-bg);
   color: var(--crm-success-text);
 }
 
 .distributionEditor {
+  min-width: 0;
+  padding: 20px 22px;
+  overflow-y: auto;
   display: grid;
   align-content: start;
-  gap: 16px;
-  padding: 18px;
+  gap: 14px;
+  background: var(--crm-surface);
+}
+
+.distributionEditorHeader {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding-bottom: 2px;
+}
+
+.distributionEditorIcon {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 13px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  display: grid;
+  place-items: center;
+}
+
+.distributionEditorHeader > div:last-child {
+  min-width: 0;
+}
+
+.distributionEyebrow {
+  color: var(--crm-primary-text);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.distributionEditorHeader h3 {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.distributionEditorHeader p {
+  margin: 3px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.distributionFormGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(180px, 0.75fr);
+  gap: 10px;
+}
+
+.distributionFormGrid :global(.field) {
+  min-width: 0;
+  gap: 6px;
+}
+
+.distributionFormGrid :global(.field label) {
+  color: var(--crm-text-strong);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.distributionFormGrid :global(.field input),
+.distributionFormGrid :global(.field select) {
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  border-radius: 11px;
+  font-size: 12px;
+}
+
+.distributionStrategyHint {
+  min-height: 36px;
+  padding: 9px 10px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 11px;
+  background: color-mix(
+    in srgb,
+    var(--crm-primary-soft) 55%,
+    var(--crm-surface)
+  );
+  color: var(--crm-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.distributionStrategyHint svg {
+  flex: 0 0 auto;
+  color: var(--crm-primary-strong);
 }
 
 .distributionCalendars {
+  min-width: 0;
   display: grid;
-  gap: 7px;
+  gap: 9px;
 }
 
-.distributionCalendars > strong {
+.distributionCalendarsHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.distributionCalendarsHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.distributionCalendarsHeader strong {
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 900;
 }
 
-.distributionCalendars > small {
+.distributionCalendarsHeader small {
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 10px;
+}
+
+.distributionSelectionCount {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 9px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .distributionCalendarGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  max-height: 220px;
+  max-height: 225px;
+  padding: 2px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .distributionCalendarCard {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto 32px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
-  padding: 10px;
+  min-height: 58px;
+  padding: 8px 10px;
   border: 1px solid var(--crm-border);
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--crm-surface);
   cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.distributionCalendarCard:hover {
+  border-color: var(--crm-primary-border);
+  background: color-mix(in srgb, var(--crm-primary-soft) 35%, var(--crm-surface));
 }
 
 .distributionCalendarCardActive {
-  border-color: var(--crm-primary-border);
+  border-color: var(--crm-primary-strong);
   background: var(--crm-primary-soft);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--crm-primary-strong) 14%, transparent);
 }
 
-.distributionCalendarCard > span {
+.distributionCalendarCard > input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--crm-primary-strong);
+}
+
+.distributionCalendarIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-primary-strong);
+  display: grid;
+  place-items: center;
+}
+
+.distributionCalendarCardActive .distributionCalendarIcon {
+  background: var(--crm-surface);
+}
+
+.distributionCalendarCard > span:not(.distributionCalendarIcon) {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -2210,22 +2458,59 @@
   overflow: hidden;
   color: var(--crm-text-strong);
   font-size: 12px;
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .distributionCalendarCard small {
+  overflow: hidden;
   color: var(--crm-text-muted);
   font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.distributionCalendarCard > svg {
+  color: var(--crm-primary-strong);
 }
 
 .distributionActiveToggle {
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+}
+
+.distributionActiveToggle > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.distributionActiveToggle strong {
   color: var(--crm-text-strong);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.distributionActiveToggle small {
+  color: var(--crm-text-muted);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.distributionActiveToggle > input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--crm-primary-strong);
 }
 
 .distributionActions {
@@ -2233,8 +2518,51 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding-top: 4px;
+  padding-top: 12px;
   border-top: 1px solid var(--crm-border);
+}
+
+.distributionActions :global(.btn) {
+  min-height: 38px !important;
+  height: 38px !important;
+  border-radius: 11px !important;
+  font-size: 11px !important;
+}
+
+@media (max-width: 760px) {
+  .distributionModal {
+    width: calc(100vw - 14px) !important;
+    max-height: calc(100dvh - 14px) !important;
+    border-radius: 18px !important;
+  }
+
+  .distributionBody {
+    grid-template-columns: 1fr;
+    max-height: calc(100dvh - 86px);
+    overflow-y: auto;
+  }
+
+  .distributionList {
+    max-height: 210px;
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--crm-border);
+  }
+
+  .distributionEditor {
+    overflow: visible;
+    padding: 16px;
+  }
+
+  .distributionFormGrid,
+  .distributionCalendarGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .distributionCalendarsHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .capacityConfigCard {
