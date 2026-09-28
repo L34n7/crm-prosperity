@@ -7213,6 +7213,30 @@ export default function DisparosWhatsAppPage() {
                       <CheckCircle2 size={22} aria-hidden="true" />
                     </span>
                     <div>
+                      <strong>{inteiroCampanha(campanhaPagina.enviados)}</strong>
+                      <span>Enviados</span>
+                    </div>
+                  </article>
+
+                  <article className={styles.campaignPremiumMetric}>
+                    <span
+                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconFailure}`}
+                    >
+                      <CircleStop size={22} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <strong>{inteiroCampanha(campanhaPagina.falhas)}</strong>
+                      <span>Falhas</span>
+                    </div>
+                  </article>
+
+                  <article className={styles.campaignPremiumMetric}>
+                    <span
+                      className={`${styles.campaignPremiumMetricIcon} ${styles.campaignPremiumMetricIconProcessed}`}
+                    >
+                      <CheckCircle2 size={22} aria-hidden="true" />
+                    </span>
+                    <div>
                       <strong>{processadosCampanhaPagina}</strong>
                       <span>Processados</span>
                     </div>
@@ -7323,7 +7347,7 @@ export default function DisparosWhatsAppPage() {
               </span>
               <p>
                 {campanhaPaginaAtiva
-                  ? "Durante o processamento exibimos apenas o avanço geral. Os totais finais de enviados, falhas e cancelados são apresentados quando a campanha terminar."
+                  ? "Os números são atualizados em tempo real durante o processamento. Enviados e falhas mostram o resultado confirmado até o momento; os totais definitivos são consolidados quando a campanha terminar."
                   : descricaoCampanhaTerminal(campanhaPagina)}
               </p>
             </div>
