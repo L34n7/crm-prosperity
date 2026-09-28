@@ -3243,7 +3243,6 @@ export default function DisparosWhatsAppPage() {
     ultimoAtendenteFiltro,
     optInFiltro,
     optOutFiltro,
-    somenteIntegracaoFiltro,
   ].filter(Boolean).length;
 
   const temFiltrosContatosAtivos = Boolean(
@@ -5314,25 +5313,25 @@ export default function DisparosWhatsAppPage() {
                         <option value="true">⚠ revisão</option>
                       </select>
                     </div>
+
+                    <div className={styles.field}>
+                      <label className={styles.label}>Vínculo da integração</label>
+                      <select
+                        value={somenteIntegracaoFiltro ? "true" : "false"}
+                        onChange={(e) =>
+                          setSomenteIntegracaoFiltro(e.target.value === "true")
+                        }
+                        className={styles.input}
+                        disabled={!integracaoId}
+                      >
+                        <option value="false">Todos os contatos</option>
+                        <option value="true">Somente desta integração</option>
+                      </select>
+                    </div>
                   </div>
 
                   {filtrosAvancadosAbertos ? (
                     <div className={styles.advancedContactFilters}>
-                      <div className={styles.field}>
-                        <label className={styles.label}>Vínculo da integração</label>
-                        <select
-                          value={somenteIntegracaoFiltro ? "true" : "false"}
-                          onChange={(e) =>
-                            setSomenteIntegracaoFiltro(e.target.value === "true")
-                          }
-                          className={styles.input}
-                          disabled={!integracaoId}
-                        >
-                          <option value="false">Todos os contatos</option>
-                          <option value="true">Somente desta integração</option>
-                        </select>
-                      </div>
-
                       <div className={styles.field}>
                         <label className={styles.label}>Contato enviou de</label>
                         <input
