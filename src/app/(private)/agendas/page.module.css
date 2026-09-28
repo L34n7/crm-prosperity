@@ -2310,6 +2310,13 @@
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+  font-size: 13px !important;
+}
+
+.capacityResponsiblePanel .fieldHelp,
+.mergedCalendarPanel .fieldHelp {
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .capacityPanelHeading,
@@ -2331,15 +2338,15 @@
 .capacityPanelHeading strong,
 .mergedCalendarHeader strong {
   color: var(--crm-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
 }
 
 .capacityPanelHeading span,
 .mergedCalendarHeader span {
   color: var(--crm-text-muted);
-  font-size: 10px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .capacityPanelHeading svg {
@@ -2361,7 +2368,7 @@
   border-radius: 999px;
   background: var(--crm-primary-soft);
   color: var(--crm-primary-text) !important;
-  font-size: 9px !important;
+  font-size: 11px !important;
   font-weight: 900;
   white-space: nowrap;
 }
@@ -2389,7 +2396,7 @@
   border-radius: 10px !important;
   background: var(--crm-surface) !important;
   color: var(--crm-text-strong) !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
   outline: none;
   box-sizing: border-box;
 }
@@ -2483,7 +2490,7 @@
 .mergedCalendarOption strong {
   overflow: hidden;
   color: var(--crm-text-strong);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2492,7 +2499,8 @@
 .mergedCalendarOption small {
   overflow: hidden;
   color: var(--crm-text-muted);
-  font-size: 9px;
+  font-size: 11px;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
