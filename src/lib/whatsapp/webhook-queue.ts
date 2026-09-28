@@ -11,8 +11,16 @@ import { extrairIdentificadoresWebhookWhatsapp } from "@/lib/whatsapp/webhook-re
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function logOperacional(...args: unknown[]) {
+  if (String(process.env.LOG_OPERACIONAL_DEBUG || "").toLowerCase() !== "true") {
+    return;
+  }
+
+  console.log(...args);
+}
+
 function perf(label: string, inicio: number, extra?: Record<string, unknown>) {
-  console.log(`[PERF] ${label}`, {
+  logOperacional(`[PERF] ${label}`, {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
   });
@@ -310,7 +318,7 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
       })
       .eq("id", evento.id);
 
-    console.log("[WEBHOOK QUEUE] Evento processado por ID", {
+    logOperacional("[WEBHOOK QUEUE] Evento processado por ID", {
       eventoId: evento.id,
       tempo_ms: Date.now() - inicioTotal,
     });

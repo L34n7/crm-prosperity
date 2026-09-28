@@ -3,6 +3,14 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { AutomationEngineInput } from "./types";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+function infoOperacional(...args: unknown[]) {
+  if (String(process.env.LOG_OPERACIONAL_DEBUG || "").toLowerCase() !== "true") {
+    return;
+  }
+
+  console.info(...args);
+}
 const TIPO_JOB_ARBITRAGEM_HIBRIDA = "arbitragem_hibrida";
 const JANELA_FLUXO_EM_EXECUCAO_PADRAO_MS = 15_000;
 
@@ -287,7 +295,7 @@ export async function deferirMensagemSeFluxoRodando(
     job = existente as JobArbitragemHibrida;
   }
 
-  console.info("[ARBITRAGEM HIBRIDA] Mensagem diferida enquanto fluxo esta rodando", {
+  infoOperacional("[ARBITRAGEM HIBRIDA] Mensagem diferida enquanto fluxo esta rodando", {
     mensagemId,
     conversaId: input.conversaId,
     execucaoId: execucao.id,
@@ -625,7 +633,7 @@ export async function processarJobArbitragemHibrida(params: {
           },
         });
 
-        console.info(
+        infoOperacional(
           "[ARBITRAGEM HIBRIDA] Mensagem não reprocessada porque o fluxo respondeu depois dela",
           {
             jobId: job.id,

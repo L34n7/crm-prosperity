@@ -25,8 +25,16 @@ export const runtime = "nodejs";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
 
+function logOperacional(...args: unknown[]) {
+  if (String(process.env.LOG_OPERACIONAL_DEBUG || "").toLowerCase() !== "true") {
+    return;
+  }
+
+  console.log(...args);
+}
+
 function perf(label: string, inicio: number, extra?: Record<string, unknown>) {
-  console.log(`[PERF] ${label}`, {
+  logOperacional(`[PERF] ${label}`, {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
   });
@@ -131,7 +139,7 @@ export async function POST(req: NextRequest) {
           phoneNumberIdsSuspensos
         );
 
-        console.log(
+        logOperacional(
           "[WEBHOOK WHATSAPP] Mensagens ignoradas por inadimplencia prolongada",
           {
             phoneNumberIds: Array.from(phoneNumberIdsSuspensos),
@@ -162,7 +170,7 @@ export async function POST(req: NextRequest) {
       ].includes(String(field))
     );
 
-    console.log("[WEBHOOK WHATSAPP] Evento recebido:", {
+    logOperacional("[WEBHOOK WHATSAPP] Evento recebido:", {
       incomingMessages: rawIncomingMessages.length,
       incomingStatuses: rawIncomingStatuses.length,
       coexistenceItems: rawCoexistenceItems,
@@ -176,7 +184,7 @@ export async function POST(req: NextRequest) {
       specialCounts.total === 0 &&
       !temEventoAdministrativo
     ) {
-      console.log("[WEBHOOK WHATSAPP] Evento recebido sem mensagens/status/coex:", {
+      logOperacional("[WEBHOOK WHATSAPP] Evento recebido sem mensagens/status/coex:", {
         fields: camposWebhook,
       });
 
@@ -262,7 +270,7 @@ export async function POST(req: NextRequest) {
               retries: 3,
             });
 
-            console.log("[QSTASH] Evento publicado por pico de mensagens", {
+            logOperacional("[QSTASH] Evento publicado por pico de mensagens", {
               eventoId: eventoFila.evento.id,
               totalMensagensNoSegundo: volumeSegundo.totalMensagens,
               totalStatusesNoSegundo: volumeSegundo.totalStatuses,
@@ -285,7 +293,7 @@ export async function POST(req: NextRequest) {
             );
 
             if (resultado.ok && resultado.processado) {
-              console.log(
+              logOperacional(
                 "[WEBHOOK WHATSAPP] Evento processado direto na Vercel",
                 {
                   eventoId: eventoFila.evento.id,

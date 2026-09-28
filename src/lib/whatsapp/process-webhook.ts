@@ -28,10 +28,18 @@ import { empresaComRecebimentoWhatsappSuspenso } from "@/lib/whatsapp/inadimplen
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function logOperacional(...args: unknown[]) {
+  if (String(process.env.LOG_OPERACIONAL_DEBUG || "").toLowerCase() !== "true") {
+    return;
+  }
+
+  console.log(...args);
+}
+
 class OptOutCriticalError extends Error {}
 
 function perf(label: string, inicio: number, extra?: Record<string, any>) {
-  console.log(`[PERF] ${label}`, {
+  logOperacional(`[PERF] ${label}`, {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
   });
@@ -674,7 +682,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       });
 
       if (message.referral) {
-        console.log("[META REFERRAL]", {
+        logOperacional("[META REFERRAL]", {
           messageId: message.messageId,
           sourceId: message.referral?.source_id ?? null,
           ctwaClid: message.referral?.ctwa_clid ?? null,

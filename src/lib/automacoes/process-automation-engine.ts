@@ -42,6 +42,152 @@ type TimeoutSemRespostaParams = Parameters<
   typeof processarTimeoutSemRespostaAgendadoBase
 >[0];
 
+const LIMITE_EXECUCAO_ORFA_PADRAO_MS = 2 * 60 * 1000;
+
+function limiteExecucaoOrfaMs() {
+  const configurado = Number(process.env.AUTOMACAO_EXECUCAO_ORFA_MS);
+
+  if (!Number.isFinite(configurado)) {
+    return LIMITE_EXECUCAO_ORFA_PADRAO_MS;
+  }
+
+  return Math.min(
+    15 * 60 * 1000,
+    Math.max(30 * 1000, Math.floor(configurado))
+  );
+}
+
+async function recuperarExecucaoRodandoOrfa(params: {
+  empresaId: string;
+  conversaId: string;
+}) {
+  const limiteMs = limiteExecucaoOrfaMs();
+  const limiteIso = new Date(Date.now() - limiteMs).toISOString();
+
+  const { data: execucao, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, fluxo_id, no_atual_id, metadata_json, updated_at")
+    .eq("empresa_id", params.empresaId)
+    .eq("conversa_id", params.conversaId)
+    .eq("status", "rodando")
+    .lt("updated_at", limiteIso)
+    .order("updated_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (execucaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao verificar execução órfã:",
+      execucaoError
+    );
+    return null;
+  }
+
+  if (!execucao?.id) return null;
+
+  const [filaAtiva, agendamentoAtivo] = await Promise.all([
+    supabaseAdmin
+      .from("fila_processamento_auto")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("execucao_id", execucao.id)
+      .in("status", ["pendente", "executando"])
+      .neq("tipo_job", "arbitragem_hibrida")
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("automacao_agendamentos")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("execucao_id", execucao.id)
+      .in("status", ["pendente", "executando"])
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (filaAtiva.error || agendamentoAtivo.error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao validar execução órfã:", {
+      fila: filaAtiva.error,
+      agendamento: agendamentoAtivo.error,
+    });
+    return null;
+  }
+
+  if (filaAtiva.data?.id || agendamentoAtivo.data?.id) {
+    return null;
+  }
+
+  const agora = new Date().toISOString();
+  const metadataAtual =
+    execucao.metadata_json &&
+    typeof execucao.metadata_json === "object" &&
+    !Array.isArray(execucao.metadata_json)
+      ? execucao.metadata_json
+      : {};
+
+  const { data: recuperada, error: recuperacaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "erro",
+      finished_at: agora,
+      updated_at: agora,
+      metadata_json: {
+        ...metadataAtual,
+        motivo_erro: "execucao_rodando_orfa",
+        execucao_orfa: {
+          detectada_em: agora,
+          ultima_atividade_em: execucao.updated_at,
+          limite_ms: limiteMs,
+        },
+      },
+    })
+    .eq("empresa_id", params.empresaId)
+    .eq("id", execucao.id)
+    .eq("status", "rodando")
+    .lt("updated_at", limiteIso)
+    .select("id, fluxo_id, no_atual_id")
+    .maybeSingle();
+
+  if (recuperacaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao recuperar execução órfã:",
+      recuperacaoError
+    );
+    return null;
+  }
+
+  if (!recuperada?.id) return null;
+
+  const { error: logError } = await supabaseAdmin
+    .from("automacao_execucao_logs")
+    .insert({
+      empresa_id: params.empresaId,
+      execucao_id: recuperada.id,
+      fluxo_id: recuperada.fluxo_id || null,
+      no_id: recuperada.no_atual_id || null,
+      tipo_evento: "execucao_rodando_orfa_recuperada",
+      descricao:
+        "Execução marcada como erro porque permaneceu em rodando sem atividade, job ou agendamento ativo.",
+      entrada_json: {
+        ultima_atividade_em: execucao.updated_at,
+        limite_ms: limiteMs,
+      },
+      saida_json: {
+        status: "erro",
+        recuperada_em: agora,
+      },
+    });
+
+  if (logError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao registrar recuperação de execução órfã:",
+      logError
+    );
+  }
+
+  return recuperada.id;
+}
+
 function normalizarAtrasoMaximoMensagemAutomacaoMs() {
   const configurado = Number(
     process.env.WHATSAPP_AUTOMACAO_MAX_ATRASO_MENSAGEM_SEGUNDOS
@@ -432,6 +578,11 @@ async function processarDepoisDasRotinas(
 export async function processAutomationEngine(input: AutomationEngineInput) {
   const resultadoTemporal = await ignorarMensagemTemporalmenteInvalida(input);
   if (resultadoTemporal) return resultadoTemporal;
+
+  await recuperarExecucaoRodandoOrfa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+  });
 
   const checkoutPendente = await interceptarMensagemCheckoutPendente({
     empresaId: input.empresaId,

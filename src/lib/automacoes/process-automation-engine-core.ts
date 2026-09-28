@@ -57,6 +57,14 @@ import { validarCaptura } from "./captura-normalizacao";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+function logOperacional(...args: unknown[]) {
+  if (String(process.env.LOG_OPERACIONAL_DEBUG || "").toLowerCase() !== "true") {
+    return;
+  }
+
+  console.log(...args);
+}
+
 function normalizarInteiroAmbiente(
   valor: string | undefined,
   fallback: number,
@@ -93,7 +101,7 @@ const RETRY_ENVIO_AUTOMACAO_MAX_TENTATIVAS = normalizarInteiroAmbiente(
 );
 
 function perf(label: string, inicio: number, extra?: Record<string, any>) {
-  console.log(`[PERF] ${label}`, {
+  logOperacional(`[PERF] ${label}`, {
     tempo_ms: Date.now() - inicio,
     ...(extra || {}),
   });
@@ -2117,7 +2125,7 @@ async function agendarEncerramentoInatividadeFluxoSeAtivo(params: {
 export async function processAutomationEngine(input: AutomationEngineInput) {
   const { empresaId, conversaId, contatoId, mensagemTexto, numeroDestino } = input;
 
-  console.log("[AUTOMATION_ENGINE] Iniciando motor", {
+  logOperacional("[AUTOMATION_ENGINE] Iniciando motor", {
     empresaId,
     conversaId,
     contatoId,
@@ -2127,7 +2135,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   const assinatura = await buscarAssinaturaEmpresa(empresaId);
 
   if (assinatura?.status === "bloqueada") {
-    console.log("[AUTOMATION_ENGINE] Automacao ignorada: assinatura bloqueada.", {
+    logOperacional("[AUTOMATION_ENGINE] Automacao ignorada: assinatura bloqueada.", {
       empresaId,
       conversaId,
       status: assinatura.status,
@@ -2211,7 +2219,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         .eq("status", "pendente");
     }
 
-    console.log(
+    logOperacional(
       "[AUTOMATION_ENGINE] Automação ignorada/cancelada: conversa sob atendimento humano.",
       {
         conversaId,
@@ -2372,7 +2380,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   }
 
   if (execucaoExistente) {
-    console.log("[AUTOMATION_ENGINE] Continuando execução existente", {
+    logOperacional("[AUTOMATION_ENGINE] Continuando execução existente", {
       execucaoId: execucaoExistente.id,
       noAtualId: execucaoExistente.no_atual_id,
       status: execucaoExistente.status,
@@ -2854,7 +2862,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     fluxoIdParaExecutar = gatilhoEncontrado.fluxo_id;
     gatilhoIdParaMetadata = gatilhoEncontrado.id;
   } else {
-    console.log("[AUTOMATION_ENGINE] Nenhum gatilho encontrado. Buscando fluxo padrão.");
+    logOperacional("[AUTOMATION_ENGINE] Nenhum gatilho encontrado. Buscando fluxo padrão.");
 
     const { data: fluxosPadrao, error: fluxoPadraoError } = await supabaseAdmin
       .from("automacao_fluxos")
@@ -2878,7 +2886,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     );
 
     if (!fluxoPadrao) {
-      console.log("[AUTOMATION_ENGINE] Nenhum fluxo padrão ativo encontrado.");
+      logOperacional("[AUTOMATION_ENGINE] Nenhum fluxo padrão ativo encontrado.");
       return { ok: true, status: "sem_gatilho" };
     }
 
@@ -2900,7 +2908,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   }
 
   if (!fluxo) {
-    console.log("[AUTOMATION_ENGINE] Fluxo encontrado, mas não está ativo.");
+    logOperacional("[AUTOMATION_ENGINE] Fluxo encontrado, mas não está ativo.");
     return { ok: true, status: "fluxo_inativo" };
   }
 
@@ -2939,7 +2947,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     }
 
     if (execucaoAnteriorDoFluxo) {
-      console.log(
+      logOperacional(
         "[AUTOMATION_ENGINE] Fluxo configurado para uma execução por conversa já foi executado. Novo início ignorado.",
         {
           empresaId,
@@ -2974,7 +2982,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   }
 
   if (!noInicial) {
-    console.log("[AUTOMATION_ENGINE] Fluxo não possui nó inicial.");
+    logOperacional("[AUTOMATION_ENGINE] Fluxo não possui nó inicial.");
     return { ok: false, error: "Fluxo sem nó inicial." };
   }
 
@@ -3188,7 +3196,7 @@ export async function executarNo(params: {
     return;
   }
 
-  console.log("[AUTOMATION_ENGINE] Executando nó", {
+  logOperacional("[AUTOMATION_ENGINE] Executando nó", {
     noId: no.id,
     tipoNo: no.tipo_no,
   });
@@ -8859,7 +8867,7 @@ async function seguirParaProximoNo(params: {
             },
           });
 
-          console.log("[IA CONEXÃO]", resultadoIA);
+          logOperacional("[IA CONEXÃO]", resultadoIA);
 
           const conexaoIA = conexoesComIA.find(
             (conexao) => conexao.id === resultadoIA.conexao_id
@@ -9528,7 +9536,7 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
   const { empresaId, conversaId, execucaoId, fluxoId, noId, numeroDestino } =
     params;
 
-  console.log("[AUTOMATION_TIMEOUT] Verificando timeout", {
+  logOperacional("[AUTOMATION_TIMEOUT] Verificando timeout", {
     empresaId,
     conversaId,
     execucaoId,
@@ -9550,7 +9558,7 @@ async function agendarTimeoutSemRespostaSeExistir(params: {
     return false;
   }
 
-  console.log("[AUTOMATION_TIMEOUT] Conexões encontradas", {
+  logOperacional("[AUTOMATION_TIMEOUT] Conexões encontradas", {
     quantidade: conexoesTimeout?.length || 0,
     conexoesTimeout,
   });

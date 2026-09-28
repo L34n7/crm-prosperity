@@ -3,6 +3,14 @@ import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarFilaProcessamentoAutoPendentes } from "@/lib/automacoes/process-automation-engine";
 import { processarPendenciasAgenteIaVencidas } from "@/lib/agentes-ia/processar-pendencias-vencidas";
 
+function logOperacional(...args: unknown[]) {
+  if (String(process.env.LOG_OPERACIONAL_DEBUG || "").toLowerCase() !== "true") {
+    return;
+  }
+
+  console.log(...args);
+}
+
 function obterLimite(request: Request) {
   const valor = Number(new URL(request.url).searchParams.get("limit") || 50);
 
@@ -47,7 +55,7 @@ export async function GET(request: Request) {
     ]);
 
     if (encontrouTrabalho(resultado) || agentesIa.encontrados > 0 || agentesIa.erros > 0) {
-      console.log("[CRON FILA PROCESSAMENTO AUTO] Processamento concluido:", {
+      logOperacional("[CRON FILA PROCESSAMENTO AUTO] Processamento concluido:", {
         agora,
         resultado,
         agentesIa,
