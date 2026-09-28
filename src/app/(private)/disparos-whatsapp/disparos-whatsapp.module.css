@@ -3737,51 +3737,57 @@
   align-items: center;
   justify-content: center;
   align-self: center;
-  gap: 24px;
-  min-height: 42px;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--crm-border);
+  gap: 3px;
+  min-height: 32px;
+  padding: 3px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+  box-shadow: var(--crm-shadow-xs);
 }
 
 .pageTab {
   position: relative;
-  border: 0;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: 9px;
   background: transparent;
   color: var(--crm-text-muted);
-  padding: 10px 4px 11px;
-  font-size: 13px;
+  padding: 4px 12px;
+  font-size: 12px;
+  line-height: 1.15;
   font-weight: 700;
   cursor: pointer;
-  transition: color 0.18s ease;
+  white-space: nowrap;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .pageTab::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  right: 50%;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--crm-primary-strong);
-  transition: left 0.18s ease, right 0.18s ease;
+  display: none;
 }
 
 .pageTab:hover {
   color: var(--crm-text-strong);
+  background: color-mix(in srgb, var(--crm-surface) 72%, transparent);
 }
 
 .pageTabActive {
   color: var(--crm-text-strong);
-}
-
-.pageTabActive::after {
-  left: 0;
-  right: 0;
+  border-color: var(--crm-border);
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-xs);
 }
 
 .tabPanelHidden {
   display: none !important;
+}
+
+.pageTabs + .layout {
+  margin-top: -8px;
 }
 
 .campaignPreparingOverlay {
@@ -3900,13 +3906,15 @@
 
 @media (max-width: 768px) {
   .pageTabs {
-    width: 100%;
-    gap: 12px;
+    width: auto;
+    max-width: 100%;
+    gap: 3px;
   }
 
   .pageTab {
-    flex: 1;
+    flex: 0 1 auto;
     text-align: center;
+    padding-inline: 10px;
   }
 
   .campaignProgressOverlay,
