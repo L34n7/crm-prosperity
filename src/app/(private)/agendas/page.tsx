@@ -660,8 +660,8 @@ function Page() {
             .filter((calendar) => calendar.status !== "arquivado")
             .map((calendar) => calendar.id),
         );
-        const fixedIds = Array.from(
-          new Set(
+        const fixedIds: string[] = Array.from(
+          new Set<string>(
             (Array.isArray(data.agenda_ids) ? data.agenda_ids : [])
               .map((id: unknown) => String(id || "").trim())
               .filter((id: string) => activeIds.has(id)),
