@@ -95,7 +95,6 @@ export default function WhatsappWebLocalPage() {
   const [message, setMessage] = useState("");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
-  const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
@@ -113,7 +112,6 @@ export default function WhatsappWebLocalPage() {
   }, [groups, search]);
 
   const activeQueue = busy === "execute";
-  const currentItem = queueIndex >= 0 ? queue[queueIndex] : null;
 
   useEffect(() => {
     setToken(window.localStorage.getItem(TOKEN_KEY) || "");
@@ -279,7 +277,6 @@ export default function WhatsappWebLocalPage() {
     }));
 
     setQueue(nextQueue);
-    setPrepared(null);
     setQueueIndex(0);
     setBusy("execute");
     setFeedback(
@@ -309,7 +306,6 @@ export default function WhatsappWebLocalPage() {
           body: JSON.stringify({ group, message }),
         });
 
-        setPrepared(next);
         setQueue((current) =>
           current.map((item, itemIndex) =>
             itemIndex === index ? { ...item, status: "ready" } : item,
@@ -346,8 +342,7 @@ export default function WhatsappWebLocalPage() {
             itemIndex === index ? { ...item, status: "sent" } : item,
           ),
         );
-        setPrepared(null);
-      } catch (nextError) {
+          } catch (nextError) {
         const text = errorMessage(
           nextError,
           "Não foi possível executar neste grupo.",
@@ -367,7 +362,6 @@ export default function WhatsappWebLocalPage() {
 
     const cancelled = cancelRequestedRef.current;
     cancelRequestedRef.current = false;
-    setPrepared(null);
     setQueueIndex(-1);
     setBusy("");
 
