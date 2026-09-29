@@ -11,6 +11,7 @@ import { usuarioConfirmouAvisoMetaWhatsapp } from "@/lib/avisos/meta-whatsapp-co
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import type { NichoCodigo } from "@/lib/nichos/config";
+import { empresaPodeAcessarWhatsappWebLocal } from "@/lib/whatsapp-web/acesso";
 
 export default async function PrivateLayout({
   children,
@@ -28,6 +29,7 @@ export default async function PrivateLayout({
   let isAdmin = false;
   let nichoCodigo: NichoCodigo = "comercio";
   let exibirAvisoMetaWhatsapp = false;
+  let podeAcessarWhatsappWebLocal = false;
 
   const resultado = await getUsuarioContexto();
 
@@ -64,10 +66,15 @@ export default async function PrivateLayout({
 
   if (resultado.usuario.empresa_id) {
     try {
-      const nicho = await buscarNichoEmpresa(resultado.usuario.empresa_id);
+      const [nicho, acessoWhatsappWebLocal] = await Promise.all([
+        buscarNichoEmpresa(resultado.usuario.empresa_id),
+        empresaPodeAcessarWhatsappWebLocal(resultado.usuario.empresa_id),
+      ]);
+
       nichoCodigo = nicho.codigo;
+      podeAcessarWhatsappWebLocal = acessoWhatsappWebLocal;
     } catch (error) {
-      console.error("Erro ao carregar nicho da empresa:", error);
+      console.error("Erro ao carregar contexto da empresa:", error);
     }
   }
 
@@ -80,6 +87,7 @@ export default async function PrivateLayout({
       assinatura={assinatura}
       isAdmin={isAdmin}
       nichoCodigo={nichoCodigo}
+      podeAcessarWhatsappWebLocal={podeAcessarWhatsappWebLocal}
     >
       {acessoTemporario && (
         <AcessoTemporarioEmpresaBanner acesso={acessoTemporario} />
