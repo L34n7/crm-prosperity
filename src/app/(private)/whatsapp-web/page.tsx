@@ -197,16 +197,18 @@ export default function WhatsappWebLocalPage() {
 
   async function refreshStatus(showFeedback = true) {
     if (!token.trim()) return;
-    if (showFeedback) clearFeedback();
-    setBusy("status");
+    if (showFeedback) {
+      clearFeedback();
+      setBusy("status");
+    }
 
     try {
       const next = await agentRequest<AgentStatus>("/status");
       setStatus(next);
       if (showFeedback) setFeedback("Agente local localizado.");
     } catch (nextError) {
-      setStatus(null);
       if (showFeedback) {
+        setStatus(null);
         setError(
           errorMessage(
             nextError,
@@ -215,7 +217,7 @@ export default function WhatsappWebLocalPage() {
         );
       }
     } finally {
-      setBusy("");
+      if (showFeedback) setBusy("");
     }
   }
 
@@ -502,7 +504,7 @@ export default function WhatsappWebLocalPage() {
               type="button"
               className={styles.secondary}
               onClick={() => void refreshStatus()}
-              disabled={!token.trim() || busy === "status"}
+              disabled={!token.trim() || busy === "status" || activeQueue}
             >
               {busy === "status" ? (
                 <Loader2 className={styles.spin} size={16} />
@@ -515,7 +517,7 @@ export default function WhatsappWebLocalPage() {
               type="button"
               className={styles.primary}
               onClick={() => void openBrowser()}
-              disabled={!token.trim() || busy === "browser"}
+              disabled={!token.trim() || busy === "browser" || activeQueue}
             >
               {busy === "browser" ? (
                 <Loader2 className={styles.spin} size={16} />
