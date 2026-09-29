@@ -913,12 +913,61 @@ async function clickForwardSelectionButton(page) {
   await waitStage(page);
 }
 
-async function findForwardSearchBox(page) {
+async function findForwardDialog(page) {
+  const dialogs = page.locator('[role="dialog"]');
+  const count = await dialogs.count().catch(() => 0);
+
+  for (let index = 0; index < count; index += 1) {
+    const dialog = dialogs.nth(index);
+
+    try {
+      if (!(await dialog.isVisible({ timeout: 220 }))) continue;
+
+      const text = String(
+        await dialog.evaluate((node) => node.textContent || "").catch(() => ""),
+      );
+
+      if (/encaminhar mensagem para|forward message to/i.test(text)) {
+        return dialog;
+      }
+    } catch {}
+  }
+
+  const headings = [
+    page.getByText(/^encaminhar mensagem para$/i),
+    page.getByText(/^forward message to$/i),
+  ];
+
+  for (const locator of headings) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const heading = locator.nth(index);
+
+      try {
+        if (!(await heading.isVisible({ timeout: 180 }))) continue;
+
+        const dialog = heading.locator('xpath=ancestor::*[@role="dialog"][1]');
+        if (
+          (await dialog.count().catch(() => 0)) > 0 &&
+          (await dialog.first().isVisible({ timeout: 180 }).catch(() => false))
+        ) {
+          return dialog.first();
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+async function findForwardSearchBox(scope) {
   const candidates = [
-    page.getByPlaceholder(/pesquisar nome, número ou @nomedeusuário/i),
-    page.getByPlaceholder(/search name, number or username/i),
-    page.locator('input[placeholder*="Pesquisar nome" i]'),
-    page.locator('input[placeholder*="Search name" i]'),
+    scope.getByPlaceholder(/pesquisar nome, número ou @nomedeusuário/i),
+    scope.getByPlaceholder(/search name, number or username/i),
+    scope.locator('input[placeholder*="Pesquisar nome" i]'),
+    scope.locator('input[placeholder*="Search name" i]'),
+    scope.locator('input[type="text"]').first(),
   ];
 
   for (const locator of candidates) {
@@ -926,6 +975,7 @@ async function findForwardSearchBox(page) {
 
     for (let index = 0; index < count; index += 1) {
       const candidate = locator.nth(index);
+
       try {
         if (await candidate.isVisible({ timeout: 250 })) return candidate;
       } catch {}
@@ -935,18 +985,28 @@ async function findForwardSearchBox(page) {
   return null;
 }
 
-async function selectForwardTarget(page, searchBox, targetGroup) {
+async function selectForwardTarget(page, dialog, targetGroup) {
+  let searchBox = await findForwardSearchBox(dialog);
+
+  if (!searchBox) {
+    throw new Error(
+      "Abri o modal Encaminhar mensagem para, mas não encontrei a busca de destinatários.",
+    );
+  }
+
   await searchBox.fill("");
   await searchBox.fill(targetGroup);
   await waitStage(page);
 
-  const searchBoxBounds = await searchBox.boundingBox();
-  const candidates = [
-    page.getByTitle(targetGroup, { exact: true }),
-    page.getByText(targetGroup, { exact: true }),
-  ];
+  // O WhatsApp recria partes do modal após a pesquisa. Rebusca o modal
+  // e o resultado em vez de manter referências antigas do DOM.
+  const currentDialog = (await findForwardDialog(page)) || dialog;
+  searchBox = await findForwardSearchBox(currentDialog);
 
-  const visible = [];
+  const candidates = [
+    currentDialog.getByTitle(targetGroup, { exact: true }),
+    currentDialog.getByText(targetGroup, { exact: true }),
+  ];
 
   for (const locator of candidates) {
     const count = await locator.count().catch(() => 0);
@@ -955,39 +1015,38 @@ async function selectForwardTarget(page, searchBox, targetGroup) {
       const candidate = locator.nth(index);
 
       try {
-        if (!(await candidate.isVisible({ timeout: 220 }))) continue;
-        const box = await candidate.boundingBox();
-        if (!box) continue;
+        if (!(await candidate.isVisible({ timeout: 300 }))) continue;
+
+        const row = candidate.locator(
+          'xpath=ancestor::*[@role="listitem" or @role="row"][1]',
+        );
 
         if (
-          searchBoxBounds &&
-          (box.x < searchBoxBounds.x - 60 ||
-            box.x > searchBoxBounds.x + searchBoxBounds.width + 80)
+          (await row.count().catch(() => 0)) > 0 &&
+          (await row.first().isVisible({ timeout: 180 }).catch(() => false))
         ) {
-          continue;
+          await row.first().click({ timeout: 2200 });
+        } else {
+          await candidate.click({ timeout: 2200 });
         }
 
-        visible.push({ candidate, box });
+        await waitStage(page);
+        return currentDialog;
       } catch {}
     }
   }
 
-  visible.sort((a, b) => a.box.y - b.box.y);
-
-  if (!visible.length) {
-    throw new Error("Não encontrei o grupo de destino: " + targetGroup);
-  }
-
-  await visible[0].candidate.click({ timeout: 2200 });
-  await waitStage(page);
+  throw new Error("Não encontrei o grupo de destino: " + targetGroup);
 }
 
-async function clickForwardSendButton(page) {
+async function clickForwardSendButton(page, dialog) {
+  const currentDialog = (await findForwardDialog(page)) || dialog;
+
   const locators = [
-    page.locator('[data-icon="send"]'),
-    page.getByRole("button", { name: /^(enviar|send)$/i }),
-    page.locator('[aria-label*="Enviar" i]'),
-    page.locator('[aria-label*="Send" i]'),
+    currentDialog.locator('[data-icon="send"]'),
+    currentDialog.getByRole("button", { name: /^(enviar|send)$/i }),
+    currentDialog.locator('[aria-label*="Enviar" i]'),
+    currentDialog.locator('[aria-label*="Send" i]'),
   ];
 
   const visible = [];
@@ -997,8 +1056,9 @@ async function clickForwardSendButton(page) {
 
     for (let index = 0; index < count; index += 1) {
       const icon = locator.nth(index);
+
       try {
-        if (!(await icon.isVisible({ timeout: 180 }))) continue;
+        if (!(await icon.isVisible({ timeout: 220 }))) continue;
 
         const clickable = icon.locator(
           'xpath=ancestor-or-self::*[@role="button" or self::button][1]',
@@ -1007,7 +1067,8 @@ async function clickForwardSendButton(page) {
           (await clickable.count().catch(() => 0)) > 0
             ? clickable.first()
             : icon;
-        const box = await target.boundingBox();
+
+        const box = await target.boundingBox().catch(() => null);
         if (!box) continue;
 
         visible.push({ target, y: box.y, x: box.x });
@@ -1066,15 +1127,15 @@ async function forwardLastMessage(body) {
 
   await clickForwardSelectionButton(page);
 
-  const searchBox = await findForwardSearchBox(page);
-  if (!searchBox) {
+  const dialog = await findForwardDialog(page);
+  if (!dialog) {
     throw new Error(
-      "Abri o modal Encaminhar mensagem para, mas não encontrei a busca de destinatários.",
+      "A seta de encaminhamento foi acionada, mas o modal Encaminhar mensagem para não abriu.",
     );
   }
 
-  await selectForwardTarget(page, searchBox, targetGroup);
-  await clickForwardSendButton(page);
+  const currentDialog = await selectForwardTarget(page, dialog, targetGroup);
+  await clickForwardSendButton(page, currentDialog);
 
   return {
     ok: true,
