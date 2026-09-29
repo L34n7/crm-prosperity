@@ -3136,11 +3136,13 @@ export default function DisparosWhatsAppPage() {
   useEffect(() => {
     const handleAndamento = (event: Event) => {
       const detalhe = (event as CustomEvent<DisparoAndamentoPayload>).detail;
-      const lista = Array.isArray(detalhe?.campanhas)
-        ? detalhe.campanhas
-        : detalhe?.campanha
-        ? [detalhe.campanha]
-        : [];
+      const lista = ordenarCampanhasPaginaPorCriacao(
+        Array.isArray(detalhe?.campanhas)
+          ? detalhe.campanhas
+          : detalhe?.campanha
+          ? [detalhe.campanha]
+          : []
+      );
 
       const campanhasAtivas = lista.filter(campanhaEstaAtiva);
       setDisparoEmMassaProcessando(campanhasAtivas.length > 0);
