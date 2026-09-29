@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
@@ -102,6 +102,7 @@ export default function WhatsappWebLocalPage() {
   const [simulationOpen, setSimulationOpen] = useState(false);
   const [simulationStep, setSimulationStep] = useState(0);
   const [history, setHistory] = useState<ExecutionHistoryItem[]>([]);
+  const cancelRequestedRef = useRef(false);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
@@ -111,7 +112,7 @@ export default function WhatsappWebLocalPage() {
     );
   }, [groups, search]);
 
-  const activeQueue = queue.length > 0;
+  const activeQueue = busy === "execute";
   const currentItem = queueIndex >= 0 ? queue[queueIndex] : null;
 
   useEffect(() => {
@@ -255,42 +256,7 @@ export default function WhatsappWebLocalPage() {
     );
   }
 
-  async function prepareGroup(group: string, index: number) {
-    setBusy("prepare");
-    setPrepared(null);
-    setQueueIndex(index);
-
-    try {
-      const next = await agentRequest<Prepared>("/messages/prepare", {
-        method: "POST",
-        body: JSON.stringify({
-          group,
-          message,
-        }),
-      });
-      setPrepared(next);
-      setQueue((current) =>
-        current.map((item, itemIndex) =>
-          itemIndex === index ? { ...item, status: "ready" } : item,
-        ),
-      );
-      setFeedback("Mensagem preparada em “" + group + "”. Revise no navegador.");
-    } catch (nextError) {
-      const text = errorMessage(nextError, "Falha ao preparar a mensagem.");
-      setQueue((current) =>
-        current.map((item, itemIndex) =>
-          itemIndex === index
-            ? { ...item, status: "error", error: text }
-            : item,
-        ),
-      );
-      setError(text);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function startQueue() {
+  async function executeQueue() {
     clearFeedback();
 
     if (!status?.whatsappConnected) {
@@ -306,77 +272,120 @@ export default function WhatsappWebLocalPage() {
       return;
     }
 
+    cancelRequestedRef.current = false;
     const nextQueue: QueueItem[] = selected.map((group) => ({
       group,
       status: "pending",
     }));
+
     setQueue(nextQueue);
-    await prepareGroup(nextQueue[0].group, 0);
-  }
+    setPrepared(null);
+    setQueueIndex(0);
+    setBusy("execute");
+    setFeedback(
+      "Execução iniciada em " + nextQueue.length + " grupo(s).",
+    );
 
-  async function sendAndAdvance() {
-    if (!prepared || queueIndex < 0) return;
-    clearFeedback();
-    setBusy("send");
+    let sentCount = 0;
 
-    try {
-      const sent = await agentRequest<{
-        ok: boolean;
-        group: string;
-        sentAt: string;
-      }>("/messages/send", {
-        method: "POST",
-        body: JSON.stringify({
-          confirmationId: prepared.confirmationId,
-        }),
-      });
+    for (let index = 0; index < nextQueue.length; index += 1) {
+      if (cancelRequestedRef.current) break;
 
-      appendHistory({
-        id: prepared.confirmationId,
-        group: sent.group,
-        sentAt: sent.sentAt,
-        status: "sent",
-      });
-
-      setQueue((current) =>
-        current.map((item, index) =>
-          index === queueIndex ? { ...item, status: "sent" } : item,
-        ),
+      const group = nextQueue[index].group;
+      setQueueIndex(index);
+      setFeedback(
+        "Executando " +
+          (index + 1) +
+          " de " +
+          nextQueue.length +
+          ": “" +
+          group +
+          "”.",
       );
 
-      const sentGroup = prepared.group;
-      const nextIndex = queueIndex + 1;
-      setPrepared(null);
+      try {
+        const next = await agentRequest<Prepared>("/messages/prepare", {
+          method: "POST",
+          body: JSON.stringify({ group, message }),
+        });
 
-      if (nextIndex < queue.length) {
-        setFeedback("Enviado para “" + sentGroup + "”. Preparando o próximo.");
-        await prepareGroup(queue[nextIndex].group, nextIndex);
-      } else {
-        setQueueIndex(-1);
-        setFeedback("Sequência concluída.");
+        setPrepared(next);
+        setQueue((current) =>
+          current.map((item, itemIndex) =>
+            itemIndex === index ? { ...item, status: "ready" } : item,
+          ),
+        );
+
+        if (cancelRequestedRef.current) {
+          await agentRequest("/messages/cancel", {
+            method: "POST",
+            body: JSON.stringify({ confirmationId: next.confirmationId }),
+          }).catch(() => null);
+          break;
+        }
+
+        const sent = await agentRequest<{
+          ok: boolean;
+          group: string;
+          sentAt: string;
+        }>("/messages/send", {
+          method: "POST",
+          body: JSON.stringify({ confirmationId: next.confirmationId }),
+        });
+
+        appendHistory({
+          id: next.confirmationId,
+          group: sent.group,
+          sentAt: sent.sentAt,
+          status: "sent",
+        });
+
+        sentCount += 1;
+        setQueue((current) =>
+          current.map((item, itemIndex) =>
+            itemIndex === index ? { ...item, status: "sent" } : item,
+          ),
+        );
+        setPrepared(null);
+      } catch (nextError) {
+        const text = errorMessage(
+          nextError,
+          "Não foi possível executar neste grupo.",
+        );
+
+        setQueue((current) =>
+          current.map((item, itemIndex) =>
+            itemIndex === index
+              ? { ...item, status: "error", error: text }
+              : item,
+          ),
+        );
+        setError(text);
+        break;
       }
-    } catch (nextError) {
-      setError(errorMessage(nextError, "Não foi possível enviar a mensagem."));
-    } finally {
-      setBusy("");
+    }
+
+    const cancelled = cancelRequestedRef.current;
+    cancelRequestedRef.current = false;
+    setPrepared(null);
+    setQueueIndex(-1);
+    setBusy("");
+
+    if (cancelled) {
+      setFeedback(
+        "Execução cancelada após " + sentCount + " envio(s) concluído(s).",
+      );
+    } else if (sentCount === nextQueue.length) {
+      setError("");
+      setFeedback(
+        "Execução concluída em " + sentCount + " grupo(s).",
+      );
     }
   }
 
   async function cancelQueue() {
-    clearFeedback();
-    try {
-      if (prepared) {
-        await agentRequest("/messages/cancel", {
-          method: "POST",
-          body: JSON.stringify({ confirmationId: prepared.confirmationId }),
-        });
-      }
-    } catch {}
-
-    setPrepared(null);
-    setQueue([]);
-    setQueueIndex(-1);
-    setFeedback("Sequência cancelada.");
+    cancelRequestedRef.current = true;
+    setFeedback("Cancelamento solicitado. Finalizando a etapa atual...");
   }
 
   return (
@@ -392,8 +401,8 @@ export default function WhatsappWebLocalPage() {
           <div>
             <strong>Execução local</strong>
             <p>
-              A sessão fica no computador do operador. O agente prepara cada
-              mensagem e exige confirmação antes do envio.
+              A sessão fica no computador do operador. O agente percorre os
+              grupos selecionados e executa a sequência automaticamente.
             </p>
           </div>
         </section>
@@ -620,7 +629,7 @@ export default function WhatsappWebLocalPage() {
                         {item.status === "sent"
                           ? "Enviado"
                           : item.status === "ready"
-                            ? "Preparado no navegador"
+                            ? "Preparado / enviando"
                             : item.status === "error"
                               ? item.error || "Erro"
                               : "Aguardando"}
@@ -632,61 +641,29 @@ export default function WhatsappWebLocalPage() {
             )}
 
             <div className={styles.actions}>
-              {!queue.length ? (
+              {activeQueue ? (
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={() => void cancelQueue()}
+                >
+                  <Square size={14} />
+                  Cancelar
+                </button>
+              ) : (
                 <button
                   type="button"
                   className={styles.primary}
-                  onClick={() => void startQueue()}
+                  onClick={() => void executeQueue()}
                   disabled={
                     !selected.length ||
                     !message.trim() ||
-                    !status?.whatsappConnected ||
-                    busy === "prepare"
+                    !status?.whatsappConnected
                   }
                 >
                   <Send size={16} />
-                  Preparar sequência
+                  Executar
                 </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className={styles.secondary}
-                    onClick={() => void cancelQueue()}
-                    disabled={busy === "send" || busy === "prepare"}
-                  >
-                    <Square size={14} />
-                    Cancelar
-                  </button>
-
-                  {currentItem?.status === "error" ? (
-                    <button
-                      type="button"
-                      className={styles.primary}
-                      onClick={() =>
-                        void prepareGroup(currentItem.group, queueIndex)
-                      }
-                      disabled={busy === "prepare"}
-                    >
-                      <RefreshCw size={16} />
-                      Tentar novamente
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.primary}
-                      onClick={() => void sendAndAdvance()}
-                      disabled={!prepared || busy === "send" || busy === "prepare"}
-                    >
-                      {busy === "send" ? (
-                        <Loader2 className={styles.spin} size={16} />
-                      ) : (
-                        <CheckCircle2 size={16} />
-                      )}
-                      Confirmar envio e avançar
-                    </button>
-                  )}
-                </>
               )}
             </div>
           </section>
