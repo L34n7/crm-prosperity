@@ -2285,7 +2285,7 @@ async function preExecutarConsultasObvias(
   if (consultaConhecimento && ctx.ferramentasAtivas.has("consultar_conhecimento")) {
     try {
       const argumentos = { consulta: consultaConhecimento };
-      const resultado = await executarFerramenta("consultar_conhecimento", argumentos, ctx);
+      const resultado: any = await executarFerramenta("consultar_conhecimento", argumentos, ctx);
       if (resultado?.ok && Array.isArray(resultado.resultados) && resultado.resultados.length) {
         const item = { nome: "consultar_conhecimento" as const, argumentos, resultado };
         executadas.push(item);
@@ -2306,7 +2306,7 @@ async function preExecutarConsultasObvias(
     if (!recusaTemporal && temIntencaoAgenda && interpretacao.data && referencias <= 1) {
       try {
         const argumentos = { data: interpretacao.data };
-        const resultado = await executarFerramenta("consultar_agenda", argumentos, ctx);
+        const resultado: any = await executarFerramenta("consultar_agenda", argumentos, ctx);
         if (resultado?.ok) {
           const item = { nome: "consultar_agenda" as const, argumentos, resultado };
           executadas.push(item);
