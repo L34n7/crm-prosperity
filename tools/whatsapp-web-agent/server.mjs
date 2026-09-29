@@ -1,0 +1,543 @@
+import { createServer } from "node:http";
+import { randomBytes, randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+import { chromium } from "playwright";
+
+const HOST = "127.0.0.1";
+const PORT = Number(process.env.PORT || 3784);
+const ROOT_DIR = path.resolve(process.cwd());
+const DATA_DIR = path.join(ROOT_DIR, ".data");
+const PROFILE_DIR = path.join(DATA_DIR, "whatsapp-profile");
+const TOKEN_FILE = path.join(DATA_DIR, "agent-token.txt");
+const WHATSAPP_URL = "https://web.whatsapp.com/";
+const MAX_BODY_BYTES = 256 * 1024;
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://crmprosperity.com",
+  "https://www.crmprosperity.com",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+];
+
+const allowedOrigins = new Set(
+  String(process.env.CRM_ORIGINS || DEFAULT_ALLOWED_ORIGINS.join(","))
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean),
+);
+
+let browserContext = null;
+let whatsappPage = null;
+let preparedMessage = null;
+let agentToken = "";
+
+async function loadOrCreateToken() {
+  await mkdir(DATA_DIR, { recursive: true });
+
+  try {
+    const existing = (await readFile(TOKEN_FILE, "utf8")).trim();
+    if (existing) return existing;
+  } catch {}
+
+  const nextToken = randomBytes(24).toString("hex");
+  await writeFile(TOKEN_FILE, nextToken + "\n", { mode: 0o600 });
+  return nextToken;
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  return allowedOrigins.has(origin);
+}
+
+function applyCors(req, res) {
+  const origin = String(req.headers.origin || "");
+
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, X-Prosperity-Agent-Token",
+  );
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+  res.setHeader("Access-Control-Max-Age", "600");
+  res.setHeader("Cache-Control", "no-store");
+}
+
+function sendJson(res, statusCode, payload) {
+  res.statusCode = statusCode;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
+}
+
+function ensureAuthorized(req, res) {
+  const received = String(req.headers["x-prosperity-agent-token"] || "").trim();
+
+  if (!received || received !== agentToken) {
+    sendJson(res, 401, { ok: false, error: "Token do agente local inválido." });
+    return false;
+  }
+
+  return true;
+}
+
+async function readJsonBody(req) {
+  const chunks = [];
+  let total = 0;
+
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > MAX_BODY_BYTES) {
+      throw new Error("Corpo da requisição excede o limite permitido.");
+    }
+    chunks.push(chunk);
+  }
+
+  if (!chunks.length) return {};
+  const raw = Buffer.concat(chunks).toString("utf8");
+  return raw ? JSON.parse(raw) : {};
+}
+
+async function getWhatsappPage() {
+  if (!browserContext) return null;
+
+  const pages = browserContext.pages().filter((item) => !item.isClosed());
+  if (
+    whatsappPage &&
+    !whatsappPage.isClosed() &&
+    whatsappPage.url().includes("web.whatsapp.com")
+  ) {
+    return whatsappPage;
+  }
+
+  whatsappPage =
+    pages.find((item) => item.url().includes("web.whatsapp.com")) ||
+    pages[0] ||
+    (await browserContext.newPage());
+
+  return whatsappPage;
+}
+
+async function launchBrowser() {
+  if (browserContext) {
+    const existingPage = await getWhatsappPage();
+    if (existingPage) {
+      if (!existingPage.url().includes("web.whatsapp.com")) {
+        await existingPage.goto(WHATSAPP_URL, { waitUntil: "domcontentloaded" });
+      }
+      await existingPage.bringToFront();
+      return existingPage;
+    }
+  }
+
+  await mkdir(PROFILE_DIR, { recursive: true });
+
+  browserContext = await chromium.launchPersistentContext(PROFILE_DIR, {
+    headless: false,
+    viewport: null,
+    args: ["--start-maximized"],
+  });
+
+  browserContext.on("close", () => {
+    browserContext = null;
+    whatsappPage = null;
+    preparedMessage = null;
+  });
+
+  const pages = browserContext.pages();
+  whatsappPage = pages[0] || (await browserContext.newPage());
+
+  if (!whatsappPage.url().includes("web.whatsapp.com")) {
+    await whatsappPage.goto(WHATSAPP_URL, { waitUntil: "domcontentloaded" });
+  }
+
+  await whatsappPage.bringToFront();
+  return whatsappPage;
+}
+
+async function isWhatsappConnected() {
+  const page = await getWhatsappPage();
+  if (!page) return false;
+
+  try {
+    return await page
+      .locator("#pane-side, [data-testid='chat-list']")
+      .first()
+      .isVisible({ timeout: 1000 });
+  } catch {
+    return false;
+  }
+}
+
+async function getStatus() {
+  return {
+    ok: true,
+    browserOpen: Boolean(browserContext),
+    whatsappConnected: await isWhatsappConnected(),
+    currentChat: preparedMessage?.group || null,
+    prepared: Boolean(preparedMessage),
+  };
+}
+
+async function findGroupsFilter(page) {
+  const candidates = [
+    page.getByRole("button", { name: /^grupos$/i }),
+    page.getByRole("tab", { name: /^grupos$/i }),
+    page.getByText(/^grupos$/i),
+    page.getByRole("button", { name: /^groups$/i }),
+    page.getByRole("tab", { name: /^groups$/i }),
+    page.getByText(/^groups$/i),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (await candidate.first().isVisible({ timeout: 350 })) {
+        return candidate.first();
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+async function listGroups() {
+  const page = await launchBrowser();
+
+  if (!(await isWhatsappConnected())) {
+    throw new Error("WhatsApp Web ainda não está conectado.");
+  }
+
+  const groupsFilter = await findGroupsFilter(page);
+  if (!groupsFilter) {
+    throw new Error(
+      "Não encontrei o filtro de grupos. Abra a lista de conversas e tente novamente.",
+    );
+  }
+
+  await groupsFilter.click();
+  await page.waitForTimeout(350);
+
+  const pane = page.locator("#pane-side").first();
+  if (!(await pane.isVisible({ timeout: 1500 }))) {
+    throw new Error("Não encontrei a lista de conversas do WhatsApp Web.");
+  }
+
+  const groups = new Set();
+  let previousSize = -1;
+  let stablePasses = 0;
+
+  for (let pass = 0; pass < 80; pass += 1) {
+    const titles = await pane
+      .locator("div[role='listitem'] span[title], div[role='row'] span[title]")
+      .evaluateAll((nodes) =>
+        nodes
+          .map((node) => String(node.getAttribute("title") || "").trim())
+          .filter(Boolean),
+      )
+      .catch(() => []);
+
+    if (!titles.length) {
+      const fallbackTitles = await pane
+        .locator("span[title]")
+        .evaluateAll((nodes) =>
+          nodes
+            .map((node) => String(node.getAttribute("title") || "").trim())
+            .filter(Boolean),
+        )
+        .catch(() => []);
+      fallbackTitles.forEach((title) => groups.add(title));
+    } else {
+      titles.forEach((title) => groups.add(title));
+    }
+
+    if (groups.size === previousSize) {
+      stablePasses += 1;
+    } else {
+      stablePasses = 0;
+      previousSize = groups.size;
+    }
+
+    if (stablePasses >= 4) break;
+
+    await pane.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await page.waitForTimeout(220);
+  }
+
+  return [...groups].sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base", numeric: true }),
+  );
+}
+
+async function findSearchBox(page) {
+  const candidates = [
+    page.locator("#side div[contenteditable='true'][role='textbox']").first(),
+    page.getByPlaceholder(/pesquisar ou iniciar nova conversa/i).first(),
+    page.getByPlaceholder(/search or start new chat/i).first(),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (await candidate.isVisible({ timeout: 350 })) return candidate;
+    } catch {}
+  }
+
+  return null;
+}
+
+async function findComposer(page) {
+  const candidates = [
+    page.locator("footer div[contenteditable='true'][role='textbox']").first(),
+    page.locator("div[contenteditable='true'][data-tab='10']").first(),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (await candidate.isVisible({ timeout: 500 })) return candidate;
+    } catch {}
+  }
+
+  return null;
+}
+
+async function openGroup(page, group) {
+  const searchBox = await findSearchBox(page);
+
+  if (!searchBox) {
+    throw new Error("Não encontrei a busca de conversas do WhatsApp Web.");
+  }
+
+  await searchBox.fill("");
+  await searchBox.fill(group);
+  await page.waitForTimeout(450);
+
+  const byTitle = page.locator(`span[title="${CSS.escape(group)}"]`).first();
+  let clicked = false;
+
+  try {
+    if (await byTitle.isVisible({ timeout: 700 })) {
+      await byTitle.click();
+      clicked = true;
+    }
+  } catch {}
+
+  if (!clicked) {
+    const exactText = page.getByText(group, { exact: true }).first();
+    if (await exactText.isVisible({ timeout: 900 })) {
+      await exactText.click();
+      clicked = true;
+    }
+  }
+
+  if (!clicked) {
+    throw new Error("Grupo não encontrado: " + group);
+  }
+
+  await page.waitForTimeout(300);
+  await searchBox.fill("").catch(() => {});
+}
+
+async function prepareMessage(body) {
+  const group = String(body?.group || "").trim();
+  const message = String(body?.message || "");
+
+  if (!group) throw new Error("Informe o grupo.");
+  if (!message.trim()) throw new Error("Informe a mensagem.");
+  if (message.length > 8000) {
+    throw new Error("A mensagem excede o limite de 8000 caracteres.");
+  }
+
+  const page = await launchBrowser();
+
+  if (!(await isWhatsappConnected())) {
+    throw new Error("WhatsApp Web ainda não está conectado.");
+  }
+
+  await openGroup(page, group);
+
+  const composer = await findComposer(page);
+  if (!composer) {
+    throw new Error("Não encontrei o campo de mensagem do grupo.");
+  }
+
+  await composer.fill("");
+  await composer.fill(message);
+  await page.bringToFront();
+
+  preparedMessage = {
+    id: randomUUID(),
+    group,
+    message,
+    preparedAt: new Date().toISOString(),
+  };
+
+  return {
+    ok: true,
+    confirmationId: preparedMessage.id,
+    group,
+    preparedAt: preparedMessage.preparedAt,
+  };
+}
+
+async function sendPreparedMessage(body) {
+  const confirmationId = String(body?.confirmationId || "").trim();
+
+  if (!preparedMessage || preparedMessage.id !== confirmationId) {
+    throw new Error("A confirmação não corresponde à mensagem preparada.");
+  }
+
+  const page = await getWhatsappPage();
+  if (!page) throw new Error("Navegador do WhatsApp Web não está aberto.");
+
+  const composer = await findComposer(page);
+  if (!composer) {
+    throw new Error("Não encontrei a mensagem preparada no navegador.");
+  }
+
+  await page.bringToFront();
+  await composer.press("Enter");
+
+  const sent = preparedMessage;
+  preparedMessage = null;
+
+  return {
+    ok: true,
+    group: sent.group,
+    sentAt: new Date().toISOString(),
+  };
+}
+
+async function cancelPreparedMessage(body) {
+  const confirmationId = String(body?.confirmationId || "").trim();
+
+  if (
+    preparedMessage &&
+    confirmationId &&
+    preparedMessage.id !== confirmationId
+  ) {
+    throw new Error("A confirmação não corresponde à mensagem preparada.");
+  }
+
+  const page = await getWhatsappPage();
+  const composer = page ? await findComposer(page) : null;
+  await composer?.fill("").catch(() => {});
+  preparedMessage = null;
+
+  return { ok: true };
+}
+
+async function closeBrowser() {
+  preparedMessage = null;
+
+  if (browserContext) {
+    await browserContext.close();
+  }
+
+  browserContext = null;
+  whatsappPage = null;
+
+  return { ok: true };
+}
+
+async function route(req, res) {
+  applyCors(req, res);
+
+  const origin = String(req.headers.origin || "");
+  if (origin && !isAllowedOrigin(origin)) {
+    sendJson(res, 403, { ok: false, error: "Origem não autorizada." });
+    return;
+  }
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
+  if (!ensureAuthorized(req, res)) return;
+
+  const url = new URL(req.url || "/", `http://${HOST}:${PORT}`);
+
+  if (req.method === "GET" && url.pathname === "/status") {
+    sendJson(res, 200, await getStatus());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/browser/start") {
+    await launchBrowser();
+    sendJson(res, 200, await getStatus());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/browser/close") {
+    sendJson(res, 200, await closeBrowser());
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/groups") {
+    sendJson(res, 200, { ok: true, groups: await listGroups() });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/messages/prepare") {
+    sendJson(res, 200, await prepareMessage(await readJsonBody(req)));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/messages/send") {
+    sendJson(res, 200, await sendPreparedMessage(await readJsonBody(req)));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/messages/cancel") {
+    sendJson(res, 200, await cancelPreparedMessage(await readJsonBody(req)));
+    return;
+  }
+
+  sendJson(res, 404, { ok: false, error: "Rota não encontrada." });
+}
+
+async function main() {
+  agentToken = await loadOrCreateToken();
+
+  const server = createServer((req, res) => {
+    route(req, res).catch((error) => {
+      console.error("[Prosperity WhatsApp Web Agent]", error);
+      if (!res.headersSent) applyCors(req, res);
+      sendJson(res, 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Erro interno do agente.",
+      });
+    });
+  });
+
+  server.listen(PORT, HOST, () => {
+    console.log("");
+    console.log("Prosperity WhatsApp Web Agent");
+    console.log("---------------------------------------------");
+    console.log(`Local: http://${HOST}:${PORT}`);
+    console.log(`Token: ${agentToken}`);
+    console.log("Origens permitidas:");
+    [...allowedOrigins].forEach((origin) => console.log(" - " + origin));
+    console.log("---------------------------------------------");
+    console.log("A sessão do WhatsApp permanece somente nesta máquina.");
+    console.log("");
+  });
+
+  const shutdown = async () => {
+    console.log("\nEncerrando agente local...");
+    if (browserContext) await browserContext.close().catch(() => {});
+    server.close(() => process.exit(0));
+  };
+
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+}
+
+await main();
