@@ -14,6 +14,7 @@ import {
   interceptarMensagemCheckoutPendente,
 } from "./process-automation-engine-checkout-runtime";
 import { aplicarTipoAgendamentoFluxo } from "./aplicar-tipo-agendamento-fluxo";
+import { recuperarFluxoConversaPorUltimaMensagem } from "./recuperar-fluxo-conversa";
 import { processarIntencoesMensagem } from "./intencoes-runtime";
 import {
   acordarArbitragensHibridasPendentes,
@@ -575,8 +576,13 @@ async function processarDepoisDasRotinas(
   return resultado;
 }
 
-export async function processAutomationEngine(input: AutomationEngineInput) {
-  const resultadoTemporal = await ignorarMensagemTemporalmenteInvalida(input);
+export async function processAutomationEngine(
+  input: AutomationEngineInput,
+  options: { ignorarValidacaoTemporal?: boolean } = {}
+) {
+  const resultadoTemporal = options.ignorarValidacaoTemporal
+    ? null
+    : await ignorarMensagemTemporalmenteInvalida(input);
   if (resultadoTemporal) return resultadoTemporal;
 
   await recuperarExecucaoRodandoOrfa({
@@ -613,7 +619,133 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   return processarDepoisDasRotinas(input);
 }
 
+async function processarJobRecuperacaoFluxo(jobId: string) {
+  const { data: job, error: jobError } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .select("id, empresa_id, conversa_id, tipo_job, status, executar_em, payload_json, tentativas")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (jobError) {
+    throw new Error(`Erro ao buscar job de recuperação: ${jobError.message}`);
+  }
+
+  if (!job || job.tipo_job !== "recuperar_fluxo_conversa") {
+    return null;
+  }
+
+  if (job.status !== "pendente") {
+    return {
+      ok: true,
+      processado: job.status === "executado",
+      ignorado: true,
+      motivo: "job_ja_resolvido",
+      status: job.status,
+    };
+  }
+
+  if (job.executar_em && new Date(job.executar_em).getTime() > Date.now() + 1000) {
+    return {
+      ok: true,
+      processado: false,
+      ignorado: true,
+      motivo: "job_ainda_nao_venceu",
+    };
+  }
+
+  const agora = new Date().toISOString();
+  const { data: travado, error: lockError } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .update({
+      status: "executando",
+      tentativas: Number(job.tentativas || 0) + 1,
+      locked_at: agora,
+      updated_at: agora,
+    })
+    .eq("id", jobId)
+    .eq("status", "pendente")
+    .select("id, empresa_id, conversa_id, payload_json, tentativas")
+    .maybeSingle();
+
+  if (lockError) {
+    throw new Error(`Erro ao travar job de recuperação: ${lockError.message}`);
+  }
+
+  if (!travado) {
+    return {
+      ok: true,
+      processado: false,
+      ignorado: true,
+      motivo: "job_travado_por_outro_worker",
+    };
+  }
+
+  const payload =
+    travado.payload_json &&
+    typeof travado.payload_json === "object" &&
+    !Array.isArray(travado.payload_json)
+      ? travado.payload_json
+      : {};
+
+  try {
+    const resultado = await recuperarFluxoConversaPorUltimaMensagem({
+      conversaId: travado.conversa_id,
+      origem: String(payload.origem || "fila_recuperacao_fluxo"),
+      permitirReprocessarSemGatilho: true,
+    });
+
+    const finalizadoEm = new Date().toISOString();
+    await supabaseAdmin
+      .from("fila_processamento_auto")
+      .update({
+        status: "executado",
+        executed_at: finalizadoEm,
+        locked_at: null,
+        erro: null,
+        updated_at: finalizadoEm,
+        payload_json: {
+          ...payload,
+          resultado_recuperacao: resultado,
+          processado_em: finalizadoEm,
+        },
+      })
+      .eq("id", jobId);
+
+    return {
+      ok: resultado.ok,
+      processado: resultado.iniciado === true,
+      ignorado: resultado.iniciado !== true,
+      motivo: resultado.motivo || null,
+      resultado,
+    };
+  } catch (error) {
+    const mensagem = error instanceof Error ? error.message : String(error);
+    const tentativas = Number(travado.tentativas || 1);
+    const status = tentativas >= 3 ? "erro" : "pendente";
+
+    await supabaseAdmin
+      .from("fila_processamento_auto")
+      .update({
+        status,
+        locked_at: null,
+        erro: mensagem,
+        executed_at: status === "erro" ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+        payload_json: {
+          ...payload,
+          erro_recuperacao: mensagem,
+          ultima_tentativa_em: new Date().toISOString(),
+        },
+      })
+      .eq("id", jobId);
+
+    throw error;
+  }
+}
+
 export async function processarFilaProcessamentoAutoPorId(jobId: string) {
+  const recuperacao = await processarJobRecuperacaoFluxo(jobId);
+  if (recuperacao) return recuperacao;
   const preparacaoHorario = await prepararAgendamentoHorarioFluxo(jobId);
 
   if (preparacaoHorario.encontrado) {

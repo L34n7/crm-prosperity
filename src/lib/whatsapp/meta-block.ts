@@ -136,41 +136,9 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     }
   }
 
-  const { data: fluxosWhatsapp, error: fluxosSelectError } = await supabaseAdmin
-    .from("automacao_fluxos")
-    .select("id, status")
-    .eq("empresa_id", empresaId)
-    .eq("canal", "whatsapp")
-    .neq("status", "arquivado");
-
-  if (fluxosSelectError) {
-    console.warn("[WHATSAPP META BLOCK] Erro ao buscar fluxos:", fluxosSelectError);
-  }
-
-  const fluxoIdsWhatsapp = (fluxosWhatsapp || [])
-    .map((item) => item.id)
-    .filter(Boolean);
-  const fluxoIdsAtivos = (fluxosWhatsapp || [])
-    .filter((item) => item.status === "ativo")
-    .map((item) => item.id)
-    .filter(Boolean);
-
-  if (fluxoIdsAtivos.length > 0) {
-    const { error: fluxosError } = await supabaseAdmin
-      .from("automacao_fluxos")
-      .update({
-        status: "pausado",
-        updated_at: agora,
-      })
-      .eq("empresa_id", empresaId)
-      .in("id", fluxoIdsAtivos)
-      .eq("status", "ativo");
-
-    if (fluxosError) {
-      console.warn("[WHATSAPP META BLOCK] Erro ao pausar fluxos:", fluxosError);
-    }
-  }
-
+  // Um bloqueio da Meta pertence à integração/número afetado.
+  // O fluxo pode atender outras integrações saudáveis, portanto seu status
+  // global nunca deve ser pausado por causa de um único número bloqueado.
   const { data: conversasDaIntegracao, error: conversasIntegracaoError } =
     await supabaseAdmin
       .from("conversas")
@@ -189,27 +157,6 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     .map((item) => item.id)
     .filter(Boolean);
   const execucoesPorId = new Map<string, { id: string; metadata_json: unknown }>();
-
-  if (fluxoIdsWhatsapp.length > 0) {
-    const { data: execucoesPorFluxo, error: execucoesFluxoError } =
-      await supabaseAdmin
-        .from("automacao_execucoes")
-        .select("id, metadata_json")
-        .eq("empresa_id", empresaId)
-        .in("status", ["rodando", "aguardando", "pausado"])
-        .in("fluxo_id", fluxoIdsWhatsapp);
-
-    if (execucoesFluxoError) {
-      console.warn(
-        "[WHATSAPP META BLOCK] Erro ao buscar execucoes por fluxo:",
-        execucoesFluxoError
-      );
-    }
-
-    for (const execucao of execucoesPorFluxo || []) {
-      execucoesPorId.set(execucao.id, execucao);
-    }
-  }
 
   if (conversaIdsIntegracao.length > 0) {
     const { data: execucoesPorConversa, error: execucoesConversaError } =
@@ -321,7 +268,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
 
   return {
     conversasEncerradas: conversaIds.length,
-    fluxosPausados: fluxoIdsAtivos.length,
+    fluxosPausados: 0,
     execucoesCanceladas: execucaoIds.length,
     agendamentosCancelados: agendamentoIds.length,
   };

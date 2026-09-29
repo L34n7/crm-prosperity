@@ -64,11 +64,12 @@ function extrairArquivoNome(metadata: Record<string, unknown>) {
 export async function recuperarFluxoConversaPorUltimaMensagem(params: {
   conversaId: string;
   origem: string;
+  permitirReprocessarSemGatilho?: boolean;
 }) {
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select(
-      "id, empresa_id, contato_id, status, bot_ativo, aguardando_atendente, last_inbound_message_at"
+      "id, empresa_id, contato_id, status, bot_ativo, aguardando_atendente, responsavel_id, setor_id, last_inbound_message_at"
     )
     .eq("id", params.conversaId)
     .maybeSingle();
@@ -157,11 +158,27 @@ export async function recuperarFluxoConversaPorUltimaMensagem(params: {
   const metadataAtual = isRecord(mensagem.metadata_json)
     ? mensagem.metadata_json
     : {};
+  const resultadoAnterior = getRecordField(metadataAtual, "automacao_resultado");
+  const statusAnterior = getStringField(resultadoAnterior, "status");
+  const falhaInicioRecuperavel =
+    statusAnterior === "sem_gatilho" || statusAnterior === "fluxo_inativo";
+  const recuperacaoExplicita =
+    params.permitirReprocessarSemGatilho === true &&
+    (falhaInicioRecuperavel || metadataAtual.automacao_processada !== true);
+  const conversaSemAtendente =
+    !conversa.responsavel_id &&
+    conversa.aguardando_atendente !== true &&
+    (conversa.status === "aberta" || conversa.status === "fila");
+
   const elegibilidade = avaliarElegibilidadeRecuperacaoFluxo({
-    conversaStatus: conversa.status,
+    conversaStatus:
+      recuperacaoExplicita && conversaSemAtendente ? "fila" : conversa.status,
     aguardandoAtendente: conversa.aguardando_atendente,
     mensagemRecebidaEm: mensagem.created_at,
-    automacaoProcessada: metadataAtual.automacao_processada === true,
+    automacaoProcessada:
+      recuperacaoExplicita && falhaInicioRecuperavel
+        ? false
+        : metadataAtual.automacao_processada === true,
     possuiExecucaoAtiva: !!execucaoAtiva,
   });
 
@@ -218,18 +235,23 @@ export async function recuperarFluxoConversaPorUltimaMensagem(params: {
     String(mensagem.conteudo || "").trim() ||
     arquivoNome ||
     "mensagem_recebida";
-  const automationResultRaw = await processAutomationEngine({
-    empresaId: conversa.empresa_id,
-    conversaId: conversa.id,
-    contatoId: conversa.contato_id,
-    mensagemTexto,
-    numeroDestino: contato.telefone,
-    mensagemTipo: tipoMensagemParaAutomacao(mensagem.tipo_mensagem),
-    mediaId,
-    mimeType,
-    arquivoNome,
-    mensagemId: mensagem.id,
-  });
+  const automationResultRaw = await processAutomationEngine(
+    {
+      empresaId: conversa.empresa_id,
+      conversaId: conversa.id,
+      contatoId: conversa.contato_id,
+      mensagemTexto,
+      numeroDestino: contato.telefone,
+      mensagemTipo: tipoMensagemParaAutomacao(mensagem.tipo_mensagem),
+      mediaId,
+      mimeType,
+      arquivoNome,
+      mensagemId: mensagem.id,
+    },
+    {
+      ignorarValidacaoTemporal: recuperacaoExplicita,
+    }
+  );
   const automationResult: Record<string, unknown> = isRecord(
     automationResultRaw
   )
