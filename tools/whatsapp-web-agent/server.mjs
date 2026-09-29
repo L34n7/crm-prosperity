@@ -445,16 +445,14 @@ async function listGroups() {
   }
 
   const groups = new Set();
-  let previousSize = -1;
-  let stablePasses = 0;
 
-  for (let pass = 0; pass < 80; pass += 1) {
+  async function collectVisibleGroupTitles() {
     const listItems = pane.locator("div[role='listitem']");
     const rowItems = pane.locator("div[role='row']");
     const listItemCount = await listItems.count().catch(() => 0);
     const rows = listItemCount > 0 ? listItems : rowItems;
 
-    const titles = await rows
+    return rows
       .evaluateAll((rowNodes) =>
         rowNodes
           .map((row) => {
@@ -479,21 +477,105 @@ async function listGroups() {
           .filter(Boolean),
       )
       .catch(() => []);
+  }
 
+  async function scrollGroupList(direction = 1, reset = false) {
+    return pane.evaluate(
+      (root, options) => {
+        const nodes = [root, ...root.querySelectorAll("*")];
+        const scrollable = nodes
+          .filter(
+            (node) =>
+              node.scrollHeight > node.clientHeight + 20 &&
+              node.clientHeight > 120,
+          )
+          .sort(
+            (a, b) =>
+              b.scrollHeight -
+              b.clientHeight -
+              (a.scrollHeight - a.clientHeight),
+          )[0];
+
+        const target = scrollable || root;
+
+        if (options.reset) {
+          target.scrollTop = options.direction > 0 ? 0 : target.scrollHeight;
+        } else {
+          const step = Math.max(180, Math.floor(target.clientHeight * 0.7));
+          target.scrollTop = Math.max(
+            0,
+            Math.min(
+              target.scrollHeight,
+              target.scrollTop + step * options.direction,
+            ),
+          );
+        }
+
+        const maxScrollTop = Math.max(
+          0,
+          target.scrollHeight - target.clientHeight,
+        );
+
+        return {
+          scrollTop: target.scrollTop,
+          maxScrollTop,
+          clientHeight: target.clientHeight,
+          scrollHeight: target.scrollHeight,
+          atStart: target.scrollTop <= 2,
+          atEnd: target.scrollTop >= maxScrollTop - 2,
+        };
+      },
+      { direction, reset },
+    );
+  }
+
+  await scrollGroupList(1, true);
+  await page.waitForTimeout(350);
+
+  let endStablePasses = 0;
+  let lastScrollTop = -1;
+
+  for (let pass = 0; pass < 220; pass += 1) {
+    const titles = await collectVisibleGroupTitles();
     titles.forEach((title) => groups.add(title));
 
-    if (groups.size === previousSize) {
-      stablePasses += 1;
+    const metrics = await scrollGroupList(1, false);
+
+    if (metrics.atEnd) {
+      if (Math.abs(metrics.scrollTop - lastScrollTop) < 2) {
+        endStablePasses += 1;
+      } else {
+        endStablePasses = 0;
+      }
+
+      if (endStablePasses >= 3) {
+        const finalTitles = await collectVisibleGroupTitles();
+        finalTitles.forEach((title) => groups.add(title));
+        break;
+      }
     } else {
-      stablePasses = 0;
-      previousSize = groups.size;
+      endStablePasses = 0;
     }
 
-    if (stablePasses >= 4) break;
+    lastScrollTop = metrics.scrollTop;
+    await page.waitForTimeout(260);
+  }
 
-    await pane.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
+  await scrollGroupList(-1, true);
+  await page.waitForTimeout(300);
+
+  for (let pass = 0; pass < 220; pass += 1) {
+    const titles = await collectVisibleGroupTitles();
+    titles.forEach((title) => groups.add(title));
+
+    const metrics = await scrollGroupList(-1, false);
+
+    if (metrics.atStart) {
+      const finalTitles = await collectVisibleGroupTitles();
+      finalTitles.forEach((title) => groups.add(title));
+      break;
+    }
+
     await page.waitForTimeout(220);
   }
 
