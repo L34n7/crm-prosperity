@@ -6712,7 +6712,8 @@ export default function DisparosWhatsAppPage() {
                         <div className={styles.campaignReportMetric}>
                           <span>Total</span>
                           <strong>
-                            {relatorioCampanhaDetalhado.totais.total}
+                            {relatorioCampanhaDetalhado.campanha.total_enviados}/
+                            {relatorioCampanhaDetalhado.campanha.total_itens}
                           </strong>
                         </div>
                         <div className={styles.campaignReportMetric}>
