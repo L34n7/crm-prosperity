@@ -3,6 +3,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
+import { formatarErroMetaWhatsApp } from "@/lib/whatsapp/meta-error-messages";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -114,27 +115,7 @@ function traduzirErroMetaWhatsApp(
   codigo?: number | string | null,
   erroTecnico?: string | null
 ) {
-  const code = Number(codigo || 0);
-
-  switch (code) {
-    case 131031:
-      return "A conta WhatsApp Business foi bloqueada ou desativada pela Meta. Enquanto o numero estiver bloqueado, nao e possivel enviar mensagens por essa integracao.";
-
-    case 131042:
-      return "A conta WhatsApp Business possui pendencias financeiras na Meta. Regularize o pagamento no Gerenciador de Negocios antes de tentar novamente.";
-
-    case 131026:
-      return "O numero do destinatario esta invalido, indisponivel ou nao pode receber mensagens pelo WhatsApp.";
-
-    case 470:
-      return "A janela de atendimento de 24 horas foi encerrada. Envie um template aprovado para iniciar uma nova conversa.";
-
-    case 368:
-      return "A conta WhatsApp esta temporariamente bloqueada pela Meta.";
-
-    default:
-      return erroTecnico || "Falha ao enviar mensagem pelo WhatsApp.";
-  }
+  return formatarErroMetaWhatsApp(codigo, erroTecnico);
 }
 
 async function buscarCampanhasFiltroHistorico(
