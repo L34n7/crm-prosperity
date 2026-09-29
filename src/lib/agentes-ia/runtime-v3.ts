@@ -46,7 +46,6 @@ const TIPOS_FERRAMENTAS = [
   "cancelar_agendamento",
   "consultar_contato",
   "transferir_humano",
-  "encaminhar_agendamento_manual",
 ] as const;
 const FERRAMENTAS_AGENDA = new Set<string>([
   "consultar_agenda",
@@ -59,7 +58,6 @@ const FERRAMENTAS_CRITICAS = new Set<string>([
   "remarcar_agendamento",
   "cancelar_agendamento",
   "transferir_humano",
-  "encaminhar_agendamento_manual",
 ]);
 
 type TipoFerramenta = (typeof TIPOS_FERRAMENTAS)[number];
@@ -862,46 +860,6 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
       },
     });
   }
-  if (ativas.has("encaminhar_agendamento_manual")) {
-    const config = ativas.get("encaminhar_agendamento_manual") || {};
-    const condicao = condicaoModoAgendamento(config, "manual");
-    defs.push({
-      type: "function",
-      name: "encaminhar_agendamento_manual",
-      description: `Finaliza a coleta do agendamento manual sem criar compromisso. Use somente após confirmar data/hora com o cliente e cumprir a condição: ${condicao || "nenhuma condição adicional"}.`,
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          data: { type: "string", description: "Data desejada YYYY-MM-DD local" },
-          hora: { type: "string", description: "Hora desejada HH:mm local" },
-          resumo: {
-            type: "string",
-            description:
-              "Resumo curto dos dados coletados que o atendente humano encontrará na conversa.",
-          },
-          condicao_atendida: {
-            type: "boolean",
-            description:
-              "true somente quando a condição manual configurada, se existir, já foi cumprida.",
-          },
-          mensagem_cliente: {
-            anyOf: [{ type: "string" }, { type: "null" }],
-            description:
-              "Mensagem curta informando que os dados foram confirmados e o atendimento será encaminhado para conclusão manual. Nunca diga que o horário já foi agendado.",
-          },
-        },
-        required: [
-          "data",
-          "hora",
-          "resumo",
-          "condicao_atendida",
-          "mensagem_cliente",
-        ],
-        additionalProperties: false,
-      },
-    });
-  }
   if (ativas.has("remarcar_agendamento")) {
     defs.push({
       type: "function",
@@ -946,24 +904,66 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     });
   }
   if (ativas.has("transferir_humano")) {
+    const config = ativas.get("transferir_humano") || {};
+    const modoManual =
+      normalizarModoExecucaoAgendamento(config.modo_execucao) === "manual";
+    const condicaoManual = modoManual
+      ? condicaoModoAgendamento(config, "manual")
+      : "";
     defs.push({
       type: "function",
       name: "transferir_humano",
-      description: "Transfere para humano no destino já configurado. Use somente quando a transferência for realmente necessária.",
+      description: modoManual
+        ? `Conclui o processo de agendamento manual SEM criar compromisso. Use apenas depois de confirmar data/hora com o cliente e cumprir a condição: ${condicaoManual || "nenhuma condição adicional"}.`
+        : "Transfere para humano no destino já configurado. Use somente quando a transferência for realmente necessária.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
           mensagem_cliente: {
             anyOf: [{ type: "string" }, { type: "null" }],
-            description: "Mensagem curta enviada DIRETAMENTE ao cliente ao transferir. Nunca use este campo como anotação interna nem repita a solicitação do cliente como se fosse uma mensagem da equipe.",
+            description: modoManual
+              ? "Mensagem curta informando que os dados foram confirmados e o atendimento será encaminhado para conclusão manual. Nunca diga que o horário já foi agendado."
+              : "Mensagem curta enviada DIRETAMENTE ao cliente ao transferir. Nunca use este campo como anotação interna nem repita a solicitação do cliente como se fosse uma mensagem da equipe.",
           },
           motivo_interno: {
             anyOf: [{ type: "string" }, { type: "null" }],
             description: "Motivo interno da transferência; este campo não é enviado ao cliente.",
           },
+          ...(modoManual
+            ? {
+                data: {
+                  type: "string",
+                  description: "Data desejada YYYY-MM-DD local",
+                },
+                hora: {
+                  type: "string",
+                  description: "Hora desejada HH:mm local",
+                },
+                resumo: {
+                  type: "string",
+                  description:
+                    "Resumo curto dos dados coletados para o atendente humano.",
+                },
+                condicao_atendida: {
+                  type: "boolean",
+                  description:
+                    "true somente quando a condição manual configurada, se existir, já foi cumprida.",
+                },
+              }
+            : {}),
         },
-        required: ["mensagem_cliente", "motivo_interno"], additionalProperties: false,
+        required: modoManual
+          ? [
+              "mensagem_cliente",
+              "motivo_interno",
+              "data",
+              "hora",
+              "resumo",
+              "condicao_atendida",
+            ]
+          : ["mensagem_cliente", "motivo_interno"],
+        additionalProperties: false,
       },
     });
   }
@@ -1154,7 +1154,7 @@ function selecionarFerramentasParaModelo(params: {
     if (!config) return;
     const modo = normalizarModoExecucaoAgendamento(config.modo_execucao);
     if (modo === "manual") {
-      selecionadas.set("encaminhar_agendamento_manual", config);
+      selecionadas.set("transferir_humano", config);
       return;
     }
     selecionadas.set("criar_agendamento", config);
@@ -1811,7 +1811,7 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
         ok: false,
         code: "MODO_AGENDAMENTO_MANUAL",
         error:
-          "Este agente está configurado para agendamento manual. Não crie o compromisso; confirme os dados e use encaminhar_agendamento_manual.",
+          "Este agente está configurado para agendamento manual. Não crie o compromisso; confirme os dados e use transferir_humano.",
       };
     }
     if (modoExecucao === "apos_confirmacao") {
@@ -2133,22 +2133,17 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     return { ok: true, agendamento_id: atual.id, status: "cancelado" };
   }
 
-  if (nome === "encaminhar_agendamento_manual") {
+  if (nome === "transferir_humano") {
     const configCriar = ctx.ferramentasAtivas.get("criar_agendamento") || {};
     if (
-      normalizarModoExecucaoAgendamento(configCriar.modo_execucao) !==
-      "manual"
+      normalizarModoExecucaoAgendamento(configCriar.modo_execucao) ===
+      "manual" &&
+      args?.data &&
+      args?.hora
     ) {
-      return {
-        ok: false,
-        code: "MODO_AGENDAMENTO_INVALIDO",
-        error: "O agente não está configurado para agendamento manual.",
-      };
+      return encaminharAgendamentoManual(args, ctx);
     }
-    return encaminharAgendamentoManual(args, ctx);
-  }
 
-  if (nome === "transferir_humano") {
     const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
       .from("conversas")
       .select("id, status, setor_id, responsavel_id, bot_ativo, aguardando_atendente")
@@ -2356,10 +2351,7 @@ function ferramentaExecutadaComSucesso(ctx: ContextoExecucao, nome: TipoFerramen
 }
 
 function transferenciaExecutadaComSucesso(ctx: ContextoExecucao) {
-  return (
-    ferramentaExecutadaComSucesso(ctx, "transferir_humano") ||
-    ferramentaExecutadaComSucesso(ctx, "encaminhar_agendamento_manual")
-  );
+  return ferramentaExecutadaComSucesso(ctx, "transferir_humano");
 }
 
 function promessaOperacionalNaoExecutada(
@@ -2382,9 +2374,7 @@ function promessaOperacionalNaoExecutada(
     const modo = normalizarModoExecucaoAgendamento(
       ctx.ferramentasAtivas.get("criar_agendamento")?.modo_execucao,
     );
-    return modo === "manual"
-      ? "encaminhar_agendamento_manual"
-      : "transferir_humano";
+    return "transferir_humano";
   }
 
   const afirmouNovoAgendamento =
@@ -2480,7 +2470,7 @@ function regrasModoAgendamento(
         ? `- Antes de confirmar e transferir, cumpra esta condição: ${condicao}`
         : "- Colete ao menos a data e o horário desejados; não há condição adicional configurada.",
       "- Confirme os dados coletados com o cliente e aguarde uma confirmação explícita.",
-      "- Após a confirmação, execute encaminhar_agendamento_manual. O atendimento humano concluirá o agendamento.",
+      "- Após a confirmação, execute transferir_humano com data, hora e resumo. O atendimento humano concluirá o agendamento.",
       "- Ao transferir, nunca diga que o horário já está agendado, reservado ou confirmado no calendário.",
     ];
   }
@@ -2807,10 +2797,14 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         if (promessaPendente && rodada < MAX_RODADAS_FERRAMENTAS - 1) {
           correcoesPromessaOperacional += 1;
           if (promessaPendente !== "acao_sem_ferramenta") {
-            const config =
-              promessaPendente === "encaminhar_agendamento_manual"
-                ? ferramentasAtivas.get("criar_agendamento")
-                : ferramentasAtivas.get(promessaPendente);
+            const modoManual =
+              promessaPendente === "transferir_humano" &&
+              normalizarModoExecucaoAgendamento(
+                ferramentasAtivas.get("criar_agendamento")?.modo_execucao,
+              ) === "manual";
+            const config = modoManual
+              ? ferramentasAtivas.get("criar_agendamento")
+              : ferramentasAtivas.get(promessaPendente);
             if (config) ferramentasParaModelo.set(promessaPendente, config);
           }
           inputIa.push({
