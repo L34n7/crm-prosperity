@@ -292,28 +292,38 @@ async function listGroups() {
   let stablePasses = 0;
 
   for (let pass = 0; pass < 80; pass += 1) {
-    const titles = await pane
-      .locator("div[role='listitem'] span[title], div[role='row'] span[title]")
-      .evaluateAll((nodes) =>
-        nodes
-          .map((node) => String(node.getAttribute("title") || "").trim())
+    const listItems = pane.locator("div[role='listitem']");
+    const rowItems = pane.locator("div[role='row']");
+    const listItemCount = await listItems.count().catch(() => 0);
+    const rows = listItemCount > 0 ? listItems : rowItems;
+
+    const titles = await rows
+      .evaluateAll((rowNodes) =>
+        rowNodes
+          .map((row) => {
+            const candidates = Array.from(row.querySelectorAll("span[title]"))
+              .filter((node) => {
+                const title = String(node.getAttribute("title") || "").trim();
+                if (!title) return false;
+
+                const rect = node.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+              });
+
+            if (!candidates.length) return "";
+
+            const preferred =
+              candidates.find(
+                (node) => String(node.getAttribute("dir") || "") === "auto",
+              ) || candidates[0];
+
+            return String(preferred.getAttribute("title") || "").trim();
+          })
           .filter(Boolean),
       )
       .catch(() => []);
 
-    if (!titles.length) {
-      const fallbackTitles = await pane
-        .locator("span[title]")
-        .evaluateAll((nodes) =>
-          nodes
-            .map((node) => String(node.getAttribute("title") || "").trim())
-            .filter(Boolean),
-        )
-        .catch(() => []);
-      fallbackTitles.forEach((title) => groups.add(title));
-    } else {
-      titles.forEach((title) => groups.add(title));
-    }
+    titles.forEach((title) => groups.add(title));
 
     if (groups.size === previousSize) {
       stablePasses += 1;
