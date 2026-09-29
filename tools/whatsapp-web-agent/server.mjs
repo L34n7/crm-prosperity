@@ -242,25 +242,101 @@ async function dismissBlockingDialogs(page) {
   }
 }
 
-async function findGroupsFilter(page) {
+async function findVisibleGroupOption(page) {
   const candidates = [
-    page.getByRole("button", { name: /^grupos$/i }),
-    page.getByRole("tab", { name: /^grupos$/i }),
-    page.getByText(/^grupos$/i),
-    page.getByRole("button", { name: /^groups$/i }),
-    page.getByRole("tab", { name: /^groups$/i }),
-    page.getByText(/^groups$/i),
+    page.getByRole("button", { name: /^(grupos|groups)(\s+\d+)?$/i }),
+    page.getByRole("tab", { name: /^(grupos|groups)(\s+\d+)?$/i }),
+    page.getByRole("menuitem", { name: /^(grupos|groups)(\s+\d+)?$/i }),
+    page.getByText(/^(grupos|groups)(\s+\d+)?$/i),
   ];
 
   for (const candidate of candidates) {
     try {
-      if (await candidate.first().isVisible({ timeout: 350 })) {
-        return candidate.first();
-      }
+      const target = candidate.first();
+      if (await target.isVisible({ timeout: 300 })) return target;
     } catch {}
   }
 
   return null;
+}
+
+async function openFiltersOverflow(page) {
+  const side = page.locator("#side").first();
+
+  const semanticCandidates = [
+    side.locator('[aria-haspopup="menu"]'),
+    side.locator('[aria-haspopup="listbox"]'),
+    side.locator('button[aria-expanded]'),
+    side.locator('[role="button"][aria-expanded]'),
+  ];
+
+  for (const locator of semanticCandidates) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const candidate = locator.nth(index);
+
+      try {
+        if (!(await candidate.isVisible({ timeout: 150 }))) continue;
+
+        const box = await candidate.boundingBox();
+        if (!box || box.y > 190 || box.x > 520) continue;
+
+        await candidate.click({ timeout: 1500 });
+        await page.waitForTimeout(180);
+
+        const groupOption = await findVisibleGroupOption(page);
+        if (groupOption) return groupOption;
+
+        await page.keyboard.press("Escape").catch(() => {});
+      } catch {}
+    }
+  }
+
+  const topButtons = side.locator('button, [role="button"]');
+  const count = await topButtons.count().catch(() => 0);
+
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const candidate = topButtons.nth(index);
+
+    try {
+      if (!(await candidate.isVisible({ timeout: 120 }))) continue;
+
+      const box = await candidate.boundingBox();
+      if (!box || box.y < 85 || box.y > 165 || box.x < 250 || box.x > 520) {
+        continue;
+      }
+
+      await candidate.click({ timeout: 1200 });
+      await page.waitForTimeout(180);
+
+      const groupOption = await findVisibleGroupOption(page);
+      if (groupOption) return groupOption;
+
+      await page.keyboard.press("Escape").catch(() => {});
+    } catch {}
+  }
+
+  return null;
+}
+
+async function ensureGroupsFilterActive(page) {
+  await dismissBlockingDialogs(page);
+
+  let groupOption = await findVisibleGroupOption(page);
+
+  if (!groupOption) {
+    groupOption = await openFiltersOverflow(page);
+  }
+
+  if (!groupOption) {
+    throw new Error(
+      "Não encontrei o filtro de grupos do WhatsApp Web. Abra a lista de conversas e tente novamente.",
+    );
+  }
+
+  await groupOption.click({ timeout: 3000 });
+  await page.waitForTimeout(300);
 }
 
 async function listGroups() {
@@ -270,17 +346,7 @@ async function listGroups() {
     throw new Error("WhatsApp Web ainda não está conectado.");
   }
 
-  await dismissBlockingDialogs(page);
-
-  const groupsFilter = await findGroupsFilter(page);
-  if (!groupsFilter) {
-    throw new Error(
-      "Não encontrei o filtro de grupos. Abra a lista de conversas e tente novamente.",
-    );
-  }
-
-  await groupsFilter.click();
-  await page.waitForTimeout(350);
+  await ensureGroupsFilterActive(page);
 
   const pane = page.locator("#pane-side").first();
   if (!(await pane.isVisible({ timeout: 1500 }))) {
@@ -346,15 +412,20 @@ async function listGroups() {
 }
 
 async function findSearchBox(page) {
+  const side = page.locator("#side").first();
+
   const candidates = [
-    page.locator("#side div[contenteditable='true'][role='textbox']").first(),
-    page.getByPlaceholder(/pesquisar ou iniciar nova conversa/i).first(),
-    page.getByPlaceholder(/search or start new chat/i).first(),
+    side.getByPlaceholder(/pesquisar.*(conversa|grupo)/i).first(),
+    side.getByPlaceholder(/search.*(chat|group)/i).first(),
+    side.locator("input[placeholder*='Pesquisar' i]").first(),
+    side.locator("input[placeholder*='Search' i]").first(),
+    side.locator("[contenteditable='true'][role='textbox']").first(),
+    side.locator("[role='textbox']").first(),
   ];
 
   for (const candidate of candidates) {
     try {
-      if (await candidate.isVisible({ timeout: 350 })) return candidate;
+      if (await candidate.isVisible({ timeout: 400 })) return candidate;
     } catch {}
   }
 
@@ -377,7 +448,7 @@ async function findComposer(page) {
 }
 
 async function openGroup(page, group) {
-  await dismissBlockingDialogs(page);
+  await ensureGroupsFilterActive(page);
 
   const searchBox = await findSearchBox(page);
 
