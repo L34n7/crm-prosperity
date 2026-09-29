@@ -397,6 +397,58 @@
   font-size: 9px;
 }
 
+.cadence {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface-muted);
+}
+
+.cadence > div {
+  min-width: 0;
+}
+
+.cadence strong,
+.cadence span {
+  display: block;
+}
+
+.cadence strong {
+  color: var(--crm-text-strong);
+  font-size: 11px;
+}
+
+.cadence span {
+  margin-top: 2px;
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.cadence select {
+  min-width: 130px;
+  height: 34px;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  padding: 0 9px;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  outline: none;
+}
+
+.cadence select:focus {
+  border-color: var(--crm-primary-border);
+  box-shadow: 0 0 0 3px var(--crm-primary-soft);
+}
+
 .queue {
   max-height: 245px;
   display: grid;
@@ -490,6 +542,15 @@
 
   .tokenRow {
     grid-template-columns: 1fr;
+  }
+
+  .cadence {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cadence select {
+    width: 100%;
   }
 
   .primary,
