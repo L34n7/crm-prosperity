@@ -125,7 +125,15 @@ export default function WhatsappWebLocalPage() {
 
     try {
       const saved = window.localStorage.getItem(HISTORY_KEY);
-      setHistory(saved ? JSON.parse(saved) : []);
+      const parsed = saved ? JSON.parse(saved) : [];
+      setHistory(
+        Array.isArray(parsed)
+          ? parsed.map((item) => ({
+              ...item,
+              mode: item?.mode === "forwarded" ? "forwarded" : "typed",
+            }))
+          : [],
+      );
     } catch {
       setHistory([]);
     }
