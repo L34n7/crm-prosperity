@@ -20,6 +20,7 @@ type CampanhaProgresso = {
   processando: number;
   processados: number;
   motivo?: string | null;
+  created_at?: string | null;
   updated_at?: string | null;
 };
 
@@ -133,15 +134,26 @@ export default function WhatsAppDisparoProgressCard() {
 
   const aplicarCampanhas = useCallback((lista: CampanhaProgresso[]) => {
     const ordenadas = [...lista].sort((a, b) => {
-      const ativoA = isStatusAtivo(a.status) ? 1 : 0;
-      const ativoB = isStatusAtivo(b.status) ? 1 : 0;
+      const criadaA = String(a.created_at || "");
+      const criadaB = String(b.created_at || "");
+      const criadaAMs = Date.parse(criadaA);
+      const criadaBMs = Date.parse(criadaB);
 
-      if (ativoA !== ativoB) return ativoB - ativoA;
+      if (Number.isFinite(criadaAMs) && Number.isFinite(criadaBMs)) {
+        const diferenca = criadaAMs - criadaBMs;
 
-      return (
-        new Date(b.updated_at || 0).getTime() -
-        new Date(a.updated_at || 0).getTime()
-      );
+        if (diferenca !== 0) return diferenca;
+
+        if (criadaA !== criadaB) {
+          return criadaA.localeCompare(criadaB, "pt-BR");
+        }
+      } else if (Number.isFinite(criadaAMs)) {
+        return -1;
+      } else if (Number.isFinite(criadaBMs)) {
+        return 1;
+      }
+
+      return String(a.id || "").localeCompare(String(b.id || ""), "pt-BR");
     });
 
     setCampanhas(ordenadas);
