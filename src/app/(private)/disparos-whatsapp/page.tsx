@@ -7164,8 +7164,56 @@ export default function DisparosWhatsAppPage() {
 
       {campanhaPagina && modalCampanhaAberto ? (
         <div className={styles.campaignProgressOverlay} role="presentation">
-          <section
-            className={`${styles.campaignProgressModal} ${
+          <div className={styles.campaignProgressShell}>
+            {campanhasPagina.length > 1 ? (
+              <div
+                className={styles.campaignProgressCampaignTabs}
+                role="tablist"
+                aria-label="Campanhas em andamento"
+              >
+                {campanhasPagina.map((campanha) => {
+                  const integracaoCampanha = integracoes.find(
+                    (item) => item.id === campanha.integracao_whatsapp_id
+                  );
+                  const ativa = campanha.id === campanhaPagina.id;
+                  const label =
+                    integracaoCampanha?.nome_conexao ||
+                    campanha.integracao_nome ||
+                    campanha.integracao_numero ||
+                    "Integração";
+
+                  return (
+                    <button
+                      key={campanha.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={ativa}
+                      className={`${styles.campaignProgressCampaignTab} ${
+                        ativa
+                          ? styles.campaignProgressCampaignTabActive
+                          : ""
+                      }`}
+                      onClick={() => setCampanhaPagina(campanha)}
+                    >
+                      <span
+                        className={`${styles.campaignProgressCampaignTabDot} ${
+                          campanhaEstaAtiva(campanha)
+                            ? styles.campaignProgressCampaignTabDotActive
+                            : campanhaFoiConcluidaComSucesso(campanha)
+                            ? styles.campaignProgressCampaignTabDotSuccess
+                            : styles.campaignProgressCampaignTabDotWarning
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <section
+              className={`${styles.campaignProgressModal} ${
               campanhaPaginaAtiva
                 ? styles.campaignProgressModalActive
                 : campanhaPaginaSucesso
@@ -7216,39 +7264,6 @@ export default function DisparosWhatsAppPage() {
               </div>
 
               <div className={styles.campaignProgressHeaderActions}>
-                {campanhasPagina.length > 1 ? (
-                  <select
-                    className={styles.campaignProgressSwitcher}
-                    value={campanhaPagina.id}
-                    onChange={(event) => {
-                      const selecionada = campanhasPagina.find(
-                        (campanha) => campanha.id === event.target.value
-                      );
-
-                      if (selecionada) {
-                        setCampanhaPagina(selecionada);
-                      }
-                    }}
-                    aria-label="Alternar campanha em andamento"
-                  >
-                    {campanhasPagina.map((campanha, index) => {
-                      const integracaoCampanha = integracoes.find(
-                        (item) =>
-                          item.id === campanha.integracao_whatsapp_id
-                      );
-
-                      return (
-                        <option key={campanha.id} value={campanha.id}>
-                          {index + 1}/{campanhasPagina.length} ·{" "}
-                          {integracaoCampanha?.nome_conexao ||
-                            campanha.integracao_nome ||
-                            "Integração"}
-                        </option>
-                      );
-                    })}
-                  </select>
-                ) : null}
-
                 <span className={styles.campaignProgressCounter}>
                   {campanhaPaginaAtiva
                     ? `${inteiroCampanha(campanhaPagina.enviados)}/${totalCampanhaPagina}`
@@ -7366,7 +7381,8 @@ export default function DisparosWhatsAppPage() {
                 </button>
               )}
             </footer>
-          </section>
+            </section>
+          </div>
         </div>
       ) : null}
 
