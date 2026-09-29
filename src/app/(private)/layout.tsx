@@ -66,15 +66,20 @@ export default async function PrivateLayout({
 
   if (resultado.usuario.empresa_id) {
     try {
-      const [nicho, acessoWhatsappWebLocal] = await Promise.all([
-        buscarNichoEmpresa(resultado.usuario.empresa_id),
-        empresaPodeAcessarWhatsappWebLocal(resultado.usuario.empresa_id),
-      ]);
-
-      nichoCodigo = nicho.codigo;
-      podeAcessarWhatsappWebLocal = acessoWhatsappWebLocal;
+      podeAcessarWhatsappWebLocal =
+        await empresaPodeAcessarWhatsappWebLocal(resultado.usuario.empresa_id);
     } catch (error) {
-      console.error("Erro ao carregar contexto da empresa:", error);
+      console.error(
+        "[WHATSAPP_WEB_LOCAL] Erro ao validar acesso da empresa:",
+        error
+      );
+    }
+
+    try {
+      const nicho = await buscarNichoEmpresa(resultado.usuario.empresa_id);
+      nichoCodigo = nicho.codigo;
+    } catch (error) {
+      console.error("Erro ao carregar nicho da empresa:", error);
     }
   }
 
