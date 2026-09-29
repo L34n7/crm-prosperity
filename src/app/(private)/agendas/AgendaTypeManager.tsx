@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { CalendarPlus, Check, Loader2, Pencil, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./AgendaTypeManager.module.css";
 
@@ -188,8 +188,10 @@ export default function AgendaTypeManager({
         aria-labelledby="agenda-type-manager-title"
       >
         <header className={styles.header}>
-          <div>
-            <span>Tipos de agendamento</span>
+          <div className={styles.headerIcon} aria-hidden="true">
+            <CalendarPlus size={19} />
+          </div>
+          <div className={styles.headerContent}>
             <h2 id="agenda-type-manager-title">Tipos criados</h2>
             <p>
               Edite o nome ou exclua tipos personalizados. Agendamentos antigos
