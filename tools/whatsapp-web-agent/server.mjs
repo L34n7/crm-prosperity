@@ -103,6 +103,15 @@ async function readJsonBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function normalizeCadenceSeconds(value) {
+  const numeric = Number(value);
+  return [3, 5, 10, 20].includes(numeric) ? numeric : 5;
+}
+
+async function waitStage(page, cadenceSeconds) {
+  await page.waitForTimeout(normalizeCadenceSeconds(cadenceSeconds) * 1000);
+}
+
 async function getWhatsappPage() {
   if (!browserContext) return null;
 
@@ -447,8 +456,9 @@ async function findComposer(page) {
   return null;
 }
 
-async function openGroup(page, group) {
+async function openGroup(page, group, cadenceSeconds) {
   await ensureGroupsFilterActive(page);
+  await waitStage(page, cadenceSeconds);
 
   const searchBox = await findSearchBox(page);
 
@@ -458,7 +468,7 @@ async function openGroup(page, group) {
 
   await searchBox.fill("");
   await searchBox.fill(group);
-  await page.waitForTimeout(450);
+  await waitStage(page, cadenceSeconds);
 
   const byTitle = page.getByTitle(group, { exact: true }).first();
   let clicked = false;
@@ -482,13 +492,14 @@ async function openGroup(page, group) {
     throw new Error("Grupo não encontrado: " + group);
   }
 
-  await page.waitForTimeout(300);
+  await waitStage(page, cadenceSeconds);
   await searchBox.fill("").catch(() => {});
 }
 
 async function prepareMessage(body) {
   const group = String(body?.group || "").trim();
   const message = String(body?.message || "");
+  const cadenceSeconds = normalizeCadenceSeconds(body?.cadenceSeconds);
 
   if (!group) throw new Error("Informe o grupo.");
   if (!message.trim()) throw new Error("Informe a mensagem.");
@@ -502,21 +513,23 @@ async function prepareMessage(body) {
     throw new Error("WhatsApp Web ainda não está conectado.");
   }
 
-  await openGroup(page, group);
+  await openGroup(page, group, cadenceSeconds);
 
   const composer = await findComposer(page);
   if (!composer) {
     throw new Error("Não encontrei o campo de mensagem do grupo.");
   }
 
+  await page.bringToFront();
+  await waitStage(page, cadenceSeconds);
   await composer.fill("");
   await composer.fill(message);
-  await page.bringToFront();
 
   preparedMessage = {
     id: randomUUID(),
     group,
     message,
+    cadenceSeconds,
     preparedAt: new Date().toISOString(),
   };
 
@@ -544,6 +557,10 @@ async function sendPreparedMessage(body) {
   }
 
   await page.bringToFront();
+  await waitStage(
+    page,
+    body?.cadenceSeconds ?? preparedMessage.cadenceSeconds,
+  );
   await composer.press("Enter");
 
   const sent = preparedMessage;
