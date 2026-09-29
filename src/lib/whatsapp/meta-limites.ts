@@ -354,23 +354,18 @@ export async function obterDisponibilidadeAgendamentoMeta(params: {
     };
   }
 
-  const resumo = await obterResumoLimiteMeta({
+  await obterResumoLimiteMeta({
     empresaId: params.empresaId,
     integracao: params.integracao,
   });
-  const portfolioId =
-    resumo.portfolioId || params.integracao.business_portfolio_id || null;
 
-  let query = supabaseAdmin
+  const query = supabaseAdmin
     .from("whatsapp_meta_conversas_iniciadas")
     .select("telefone_normalizado, janela_expira_em")
     .eq("empresa_id", params.empresaId)
+    .eq("integracao_whatsapp_id", params.integracao.id)
     .gt("janela_expira_em", horarioConsultado)
     .in("status", ["reservado", "processando", "enviado"]);
-
-  query = portfolioId
-    ? query.eq("business_portfolio_id", portfolioId)
-    : query.eq("integracao_whatsapp_id", params.integracao.id);
 
   const { data, error } = await query;
 
@@ -604,7 +599,7 @@ export function montarRespostaLimiteMetaExcedido(resultado: {
     code: "WHATSAPP_META_LIMITE_EXCEDIDO",
     error:
       "Este envio ultrapassaria o limite de conversas iniciadas pela empresa em uma janela movel de 24 horas definida pela Meta.",
-    detalhe: `Limite atual: ${resultado.limite}. Ja usados/reservados no portfolio empresarial: ${resultado.usados}. Restantes agora: ${resultado.restantes}.`,
+    detalhe: `Limite atual: ${resultado.limite}. Ja usados/reservados nesta integração: ${resultado.usados}. Restantes agora: ${resultado.restantes}.`,
     limite: resultado.limite,
     usados: resultado.usados,
     restantes: resultado.restantes,

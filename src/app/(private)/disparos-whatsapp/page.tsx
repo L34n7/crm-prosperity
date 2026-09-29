@@ -6318,8 +6318,8 @@ export default function DisparosWhatsAppPage() {
                         <strong>Capacidade segura para este disparo</strong>
                         <p>
                           O CRM acompanha o limite de contatos únicos iniciados
-                          pela empresa nas últimas 24 horas e bloqueia envios
-                          que poderiam ultrapassar esse teto.
+                          por esta integração nas últimas 24 horas e bloqueia
+                          envios que poderiam ultrapassar esse teto.
                         </p>
                       </div>
 
