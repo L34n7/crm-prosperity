@@ -2101,20 +2101,20 @@
 }
 
 .multiCalendarMenuFooter {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 8px;
   border-top: 1px solid var(--crm-border);
   background: var(--crm-surface-soft);
 }
 
-.multiCalendarMenuShortcuts {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+.multiCalendarMenuFooter :global(.btn) {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .multiCalendarApply {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .distributionModal {

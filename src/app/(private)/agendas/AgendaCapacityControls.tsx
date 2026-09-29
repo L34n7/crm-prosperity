@@ -413,29 +413,28 @@ export default function AgendaCapacityControls({
               </div>
 
               <div className={styles.multiCalendarMenuFooter}>
-                <div className={styles.multiCalendarMenuShortcuts}>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={restorePinnedView}
-                    disabled={savingView}
-                    title="Restaurar a seleção para os calendários fixados"
-                  >
-                    Somente principal
-                  </button>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() =>
-                      setDraftSelectedIds(
-                        activeCalendars.map((calendar) => calendar.id),
-                      )
-                    }
-                    disabled={savingView}
-                  >
-                    Mostrar todos
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    setDraftSelectedIds(
+                      activeCalendars.map((calendar) => calendar.id),
+                    )
+                  }
+                  disabled={savingView}
+                >
+                  Mostrar todos
+                </button>
+
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={restorePinnedView}
+                  disabled={savingView}
+                  title="Restaurar a seleção para os calendários fixados"
+                >
+                  Resetar
+                </button>
 
                 <button
                   type="button"

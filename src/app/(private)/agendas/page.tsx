@@ -419,6 +419,8 @@ function Page() {
     [agendaId, setAgendaId] = useState(""),
     [agendaIdsVisiveis, setAgendaIdsVisiveis] = useState<string[]>([]),
     [agendaIdsFixados, setAgendaIdsFixados] = useState<string[]>([]),
+    [agendaVisualizacaoInicializada, setAgendaVisualizacaoInicializada] =
+      useState(false),
     [ags, setAgs] = useState<Ag[]>([]),
     [tipos, setTipos] = useState<Tipo[]>([]),
     [resps, setResps] = useState<Resp[]>([]),
@@ -625,21 +627,24 @@ function Page() {
   );
 
   const loadAgendas = useCallback(
-    async (prefer?: string) => {
+    async (prefer?: string, definirSelecao = true) => {
       const r = await fetch("/api/agendas?status=todos", { cache: "no-store" }),
         j = await r.json();
       if (!r.ok || !j.ok) throw Error(j.error || "Erro ao carregar agendas.");
 
       const lista = (j.agendas || []) as Agenda[];
       setAgendas(lista);
-      setAgendaId((v) => {
-        const x = prefer || v || sp.get("agenda") || "";
-        return lista.some((a: Agenda) => a.id === x)
-          ? x
-          : lista.find((a: Agenda) => a.status === "ativo")?.id ||
-              lista[0]?.id ||
-              "";
-      });
+
+      if (definirSelecao) {
+        setAgendaId((v) => {
+          const x = prefer || v || sp.get("agenda") || "";
+          return lista.some((a: Agenda) => a.id === x)
+            ? x
+            : lista.find((a: Agenda) => a.status === "ativo")?.id ||
+                lista[0]?.id ||
+                "";
+        });
+      }
 
       return lista;
     },
@@ -648,44 +653,50 @@ function Page() {
 
   const loadAgendaViewPreferences = useCallback(
     async (calendars: Agenda[]) => {
+      const activeCalendars = calendars.filter(
+        (calendar) => calendar.status !== "arquivado",
+      );
+      const activeIds = new Set(activeCalendars.map((calendar) => calendar.id));
+      let fixedIds: string[] = [];
+
       try {
         const response = await fetch("/api/agendas/visualizacao", {
           cache: "no-store",
         });
         const data = await response.json();
-        if (!response.ok || !data?.ok) return;
 
-        const activeIds = new Set(
-          calendars
-            .filter((calendar) => calendar.status !== "arquivado")
-            .map((calendar) => calendar.id),
-        );
-        const fixedIds: string[] = Array.from(
-          new Set<string>(
-            (Array.isArray(data.agenda_ids) ? data.agenda_ids : [])
-              .map((id: unknown) => String(id || "").trim())
-              .filter((id: string) => activeIds.has(id)),
-          ),
-        );
-
-        setAgendaIdsFixados(fixedIds);
-
-        const explicitAgendaId = String(sp.get("agenda") || "").trim();
-        if (explicitAgendaId && activeIds.has(explicitAgendaId)) {
-          setAgendaId(explicitAgendaId);
-          setAgendaIdsVisiveis([explicitAgendaId]);
-          return;
-        }
-
-        if (fixedIds.length > 0) {
-          setAgendaId((current) =>
-            fixedIds.includes(current) ? current : fixedIds[0],
+        if (response.ok && data?.ok) {
+          fixedIds = Array.from(
+            new Set<string>(
+              (Array.isArray(data.agenda_ids) ? data.agenda_ids : [])
+                .map((id: unknown) => String(id || "").trim())
+                .filter((id: string) => activeIds.has(id)),
+            ),
           );
-          setAgendaIdsVisiveis(fixedIds);
         }
       } catch {
-        // A preferência é complementar: a agenda continua funcional sem ela.
+        fixedIds = [];
       }
+
+      setAgendaIdsFixados(fixedIds);
+
+      // O padrão fixado pelo usuário sempre vence o parâmetro antigo da URL.
+      if (fixedIds.length > 0) {
+        setAgendaId(fixedIds[0]);
+        setAgendaIdsVisiveis(fixedIds);
+        setAgendaVisualizacaoInicializada(true);
+        return;
+      }
+
+      const explicitAgendaId = String(sp.get("agenda") || "").trim();
+      const fallbackId =
+        (explicitAgendaId && activeIds.has(explicitAgendaId)
+          ? explicitAgendaId
+          : activeCalendars[0]?.id) || "";
+
+      setAgendaId(fallbackId);
+      setAgendaIdsVisiveis(fallbackId ? [fallbackId] : []);
+      setAgendaVisualizacaoInicializada(true);
     },
     [sp],
   );
@@ -927,7 +938,9 @@ function Page() {
   }, []);
   useEffect(() => {
     Promise.all([
-      loadAgendas().then((calendars) => loadAgendaViewPreferences(calendars)),
+      loadAgendas(undefined, false).then((calendars) =>
+        loadAgendaViewPreferences(calendars),
+      ),
       loadFeedback(),
     ])
       .catch((e) => setErr(e.message))
@@ -977,6 +990,8 @@ function Page() {
     };
   }, []);
   useEffect(() => {
+    if (!agendaVisualizacaoInicializada) return;
+
     if (!agendaId) {
       setAgendaIdsVisiveis([]);
       return;
@@ -986,10 +1001,10 @@ function Page() {
       if (atual.includes(agendaId)) return atual;
       return [agendaId];
     });
-  }, [agendaId]);
+  }, [agendaId, agendaVisualizacaoInicializada]);
 
   useEffect(() => {
-    if (!agendaId) return;
+    if (!agendaVisualizacaoInicializada || !agendaId) return;
     setLoad(true);
     loadData(agendaId)
       .catch((e) => setErr(e.message))
@@ -997,7 +1012,7 @@ function Page() {
     const q = new URLSearchParams(location.search);
     q.set("agenda", agendaId);
     history.replaceState({}, "", `${location.pathname}?${q}`);
-  }, [agendaId, loadData]);
+  }, [agendaId, agendaVisualizacaoInicializada, loadData]);
   useEffect(() => {
     if (!open || cq.trim().length < 2) {
       setContacts([]);
