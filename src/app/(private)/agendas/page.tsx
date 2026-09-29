@@ -2076,7 +2076,23 @@ function Page() {
                 </select>
               </div>
             </div>
-            <div className="grid">
+            <div className={styles.calendarGridShell}>
+              {load ? (
+                <div
+                  className={styles.calendarLoadingOverlay}
+                  role="status"
+                  aria-live="polite"
+                  aria-label="Carregando agendamentos"
+                >
+                  <span
+                    className={styles.calendarLoadingSpinner}
+                    aria-hidden="true"
+                  />
+                  <span>Carregando agendamentos...</span>
+                </div>
+              ) : null}
+
+              <div className="grid">
               {dias.map((x) => (
                 <div className="wd" key={x}>
                   {x}
@@ -2167,6 +2183,7 @@ function Page() {
                   </div>
                 );
               })}
+              </div>
             </div>
           </section>
           <aside className="aside">

@@ -2960,3 +2960,55 @@
     width: calc(100vw - 14px) !important;
   }
 }
+
+
+/* CRM_AGENDA_LOADING_CALENDARIO_V1 */
+.calendarGridShell {
+  position: relative;
+  min-height: 420px;
+}
+
+.calendarLoadingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 0 0 15px 15px;
+  background: color-mix(in srgb, var(--crm-surface) 76%, transparent);
+  backdrop-filter: blur(1.5px);
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: wait;
+}
+
+.calendarLoadingSpinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--crm-border);
+  border-top-color: var(--crm-primary-strong);
+  border-radius: 999px;
+  animation: agendaCalendarLoadingSpin 0.75s linear infinite;
+  box-shadow: 0 0 0 5px
+    color-mix(in srgb, var(--crm-primary-soft) 58%, transparent);
+}
+
+@keyframes agendaCalendarLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .calendarLoadingOverlay {
+    position: sticky;
+    left: 0;
+    width: 100vw;
+    min-height: 360px;
+  }
+}
