@@ -856,77 +856,71 @@ function Page() {
           ),
         ),
       );
-      const propertyDetails = new Map<string, Record<string, string>>();
-      const contactIdsWithoutConversation = Array.from(
-        new Set(
-          appointments
-            .filter((appointment) => !appointment.conversa_id && appointment.contato_id)
-            .map((appointment) => appointment.contato_id as string),
-        ),
-      );
-      const conversationsByContact = new Map<string, string>();
-      await Promise.all([
-        ...contactIdsWithoutConversation.map(async (contactId) => {
-          try {
-            const response = await fetch(
-              `/api/conversas?contato_id=${encodeURIComponent(contactId)}&limit=1`,
-              { cache: "no-store" },
-            );
-            const result = await response.json();
-            const conversationId = result?.conversas?.[0]?.id;
-            if (response.ok && conversationId) {
-              conversationsByContact.set(contactId, conversationId);
-            }
-          } catch {
-          }
-        }),
-        ...propertyIds.map(async (catalogId) => {
-          try {
-            const response = await fetch(
-              `/api/imoveis/catalogo?imovel=${encodeURIComponent(catalogId)}&limite=1`,
-              { cache: "no-store" },
-            );
-            const result = await response.json();
-            const property = result?.imoveis?.[0];
-            if (!response.ok || !property) return;
-            propertyDetails.set(catalogId, {
-              codigo: property.codigo || "",
-              tipo: property.tipo || "",
-              finalidade: property.finalidade || "",
-              valor: String(property.valor || ""),
-              cep: property.cep || "",
-              logradouro: property.logradouro || "",
-              numero: property.numero || "",
-              complemento: property.complemento || "",
-              bairro: property.bairro || "",
-              cidade: property.cidade || "",
-              estado: property.estado || "",
-              href: `/imoveis?imovel=${encodeURIComponent(catalogId)}`,
-            });
-          } catch {
-          }
-        }),
-      ]);
-      for (const appointment of appointments) {
-        if (!appointment.conversa_id && appointment.contato_id) {
-          appointment.conversa_id =
-            conversationsByContact.get(appointment.contato_id) || null;
-        }
-        appointment.vinculos = appointment.vinculos.map((link) => {
-          const details = propertyDetails.get(link.dados_json?.catalogo_id || "");
-          return details
-            ? { ...link, dados_json: { ...link.dados_json, ...details } }
-            : link;
-        });
-      }
+      // Libera a grade assim que a RPC principal termina.
+      // Dados acessórios são enriquecidos em segundo plano e não seguram o loading.
       setAgs(appointments);
       setTipos(principal?.tipos || []);
       setResps(principal?.responsaveis || []);
       setUserId(principal?.usuario_atual_id || "");
-      await loadGoogle(id);
+
+      if (propertyIds.length > 0) {
+        void (async () => {
+          const propertyDetails = new Map<string, Record<string, string>>();
+
+          await Promise.all(
+            propertyIds.map(async (catalogId) => {
+              try {
+                const response = await fetch(
+                  `/api/imoveis/catalogo?imovel=${encodeURIComponent(catalogId)}&limite=1`,
+                  { cache: "no-store" },
+                );
+                const result = await response.json();
+                const property = result?.imoveis?.[0];
+                if (!response.ok || !property) return;
+
+                propertyDetails.set(catalogId, {
+                  codigo: property.codigo || "",
+                  tipo: property.tipo || "",
+                  finalidade: property.finalidade || "",
+                  valor: String(property.valor || ""),
+                  cep: property.cep || "",
+                  logradouro: property.logradouro || "",
+                  numero: property.numero || "",
+                  complemento: property.complemento || "",
+                  bairro: property.bairro || "",
+                  cidade: property.cidade || "",
+                  estado: property.estado || "",
+                  href: `/imoveis?imovel=${encodeURIComponent(catalogId)}`,
+                });
+              } catch {
+              }
+            }),
+          );
+
+          if (propertyDetails.size === 0) return;
+
+          setAgs((current) =>
+            current.map((appointment) => ({
+              ...appointment,
+              vinculos: appointment.vinculos.map((link) => {
+                const details = propertyDetails.get(
+                  link.dados_json?.catalogo_id || "",
+                );
+                return details
+                  ? {
+                      ...link,
+                      dados_json: { ...link.dados_json, ...details },
+                    }
+                  : link;
+              }),
+            })),
+          );
+        })();
+      }
+
       return appointments;
     },
-    [agendaIdsVisiveis, loadGoogle, month],
+    [agendaIdsVisiveis, month],
   );
   const loadFeedback = useCallback(async () => {
     try {
@@ -1005,14 +999,24 @@ function Page() {
 
   useEffect(() => {
     if (!agendaVisualizacaoInicializada || !agendaId) return;
+
     setLoad(true);
     loadData(agendaId)
       .catch((e) => setErr(e.message))
       .finally(() => setLoad(false));
+
     const q = new URLSearchParams(location.search);
     q.set("agenda", agendaId);
     history.replaceState({}, "", `${location.pathname}?${q}`);
   }, [agendaId, agendaVisualizacaoInicializada, loadData]);
+
+  useEffect(() => {
+    if (!agendaVisualizacaoInicializada || !agendaId) return;
+
+    // Google Calendar é complementar à grade principal:
+    // carrega em paralelo sem manter o calendário bloqueado.
+    void loadGoogle(agendaId);
+  }, [agendaId, agendaVisualizacaoInicializada, loadGoogle]);
   useEffect(() => {
     if (!open || cq.trim().length < 2) {
       setContacts([]);
