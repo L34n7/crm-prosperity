@@ -824,14 +824,14 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     defs.push({
       type: "function",
       name: "criar_agendamento",
-      description: "Cria compromisso na agenda autorizada com data/hora LOCAL confirmadas.",
+      description: "Cria imediatamente o compromisso quando o cliente escolheu data/hora LOCAL disponíveis. Não peça nova confirmação, nome, email, telefone ou assunto antes de criar. Se não houver assunto padrão configurado, título com no máximo 2 palavras.",
       strict: true,
       parameters: {
         type: "object",
         properties: {
           data: { type: "string", description: "YYYY-MM-DD local" },
           hora: { type: "string", description: "HH:mm local" },
-          titulo: { type: "string" },
+          titulo: { type: "string", description: "Assunto contextual com no máximo 2 palavras quando não houver assunto padrão configurado." },
         },
         required: ["data", "hora", "titulo"], additionalProperties: false,
       },
@@ -954,8 +954,27 @@ function mensagemEhCurtaDeContinuidade(mensagem: string) {
 }
 
 function estadoTemAgendaEmAndamento(estado: EstadoConversa) {
-  return /agend|remarc|reagend|demonstr|reuni|aguardar escolha|disponibilidade/i.test(
-    `${estado.estagio} ${estado.proxima_acao || ""}`
+  const estagio = normalizarTextoIntencao(estado.estagio || "");
+  const proximaAcao = normalizarTextoIntencao(estado.proxima_acao || "");
+
+  if (
+    /\b(agendamento confirmado|agendamento remarcado|agendamento cancelado|remarcacao concluida|reagendamento concluido)\b/.test(
+      estagio,
+    ) &&
+    !/^aguardar\b/.test(proximaAcao)
+  ) {
+    return false;
+  }
+
+  return (
+    /\b(agendamento|remarcacao|reagendamento) em andamento\b/.test(estagio) ||
+    /\b(remarcacao|reagendamento) sem agendamento ativo\b/.test(estagio) ||
+    /\baguardando confirmacao de (?:agendamento|remarcacao|reagendamento)\b/.test(estagio) ||
+    /\b(demonstracao|reuniao)\b/.test(estagio) ||
+    (/^aguardar\b/.test(proximaAcao) &&
+      /\b(escolha|preferencia|dia|periodo|horario|hora|confirmacao|disponibilidade)\b/.test(
+        proximaAcao,
+      ))
   );
 }
 
@@ -1391,6 +1410,48 @@ async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[])
   return { supersedido: false, mensagensEnviadas };
 }
 
+function tituloContextualAgendamento(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(" ");
+}
+
+function resolverTituloAgendamentoAgente(args: any, ctx: ContextoExecucao) {
+  const config = ctx.ferramentasAtivas.get("criar_agendamento") || {};
+  const assuntoPadrao = String(config.assunto_padrao || "").trim();
+  if (assuntoPadrao) return assuntoPadrao.slice(0, 120);
+
+  const tituloModelo = tituloContextualAgendamento(args?.titulo);
+  if (tituloModelo) return tituloModelo.slice(0, 120);
+
+  const interesse = ctx.estadoConversa.interesses.at(-1);
+  const tituloInteresse = tituloContextualAgendamento(interesse);
+  if (tituloInteresse) return tituloInteresse.slice(0, 120);
+
+  const tituloNegocio = tituloContextualAgendamento(ctx.estadoConversa.tipo_negocio);
+  return (tituloNegocio || "Demonstração CRM").slice(0, 120);
+}
+
+async function resolverResponsavelAgendamentoAgente(ctx: ContextoExecucao) {
+  const config = ctx.ferramentasAtivas.get("criar_agendamento") || {};
+  const responsavelId = String(config.responsavel_id || "").trim();
+  if (!responsavelId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("usuarios")
+    .select("id")
+    .eq("empresa_id", ctx.pendencia.empresa_id)
+    .eq("id", responsavelId)
+    .eq("status", "ativo")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id ? String(data.id) : null;
+}
+
 async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: ContextoExecucao) {
   const empresaId = ctx.pendencia.empresa_id;
   const conversaId = ctx.pendencia.conversa_id;
@@ -1571,6 +1632,8 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     }
 
     const agora = new Date().toISOString();
+    const tituloAgendamento = resolverTituloAgendamentoAgente(args, ctx);
+    const responsavelId = await resolverResponsavelAgendamentoAgente(ctx);
     const { data: criado, error } = await supabaseAdmin
       .from("agenda_agendamentos")
       .insert({
@@ -1578,11 +1641,12 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
         agenda_id: agendaId,
         contato_id: ctx.pendencia.contato_id || null,
         conversa_id: conversaId,
-        titulo: String(args.titulo || "Agendamento").trim() || "Agendamento",
+        titulo: tituloAgendamento,
         nome_cliente: ctx.contato?.nome || null,
         telefone_cliente:
           ctx.contato?.telefone || ctx.pendencia.numero_destino || null,
         email_cliente: ctx.contato?.email || null,
+        responsavel_id: responsavelId,
         inicio_at: inicioAt,
         fim_at: fimAt,
         status: "agendado",
@@ -2003,9 +2067,19 @@ function promessaOperacionalNaoExecutada(
     return "transferir_humano";
   }
 
-  if (/\b(?:vou|irei)\s+(?:agendar|marcar|reservar)\b/.test(texto) &&
-      !ferramentaExecutadaComSucesso(ctx, "criar_agendamento")) {
-    return "criar_agendamento";
+  const afirmouNovoAgendamento =
+    /\b(?:vou|irei)\s+(?:agendar|marcar|reservar)\b/.test(texto) ||
+    /\b(?:ficou|esta)\s+(?:agendad[oa]|marcad[oa]|reservad[oa]|confirmad[oa])\b/.test(texto);
+
+  if (
+    afirmouNovoAgendamento &&
+    ctx.agendamentosAtivos.length === 0 &&
+    !ferramentaExecutadaComSucesso(ctx, "criar_agendamento") &&
+    !ferramentaExecutadaComSucesso(ctx, "remarcar_agendamento")
+  ) {
+    return estadoIndicaReagendamento(ctx.estadoConversa)
+      ? "remarcar_agendamento"
+      : "criar_agendamento";
   }
 
   if (/\b(?:vou|irei)\s+(?:remarcar|reagendar)\b/.test(texto) &&
@@ -2082,6 +2156,10 @@ function promptDoAgente(
     "- Memória/histórico dão continuidade, mas agenda ativa só existe se estiver no ESTADO OPERACIONAL abaixo.",
     "- Produto, preço, plano, integração, recurso, endereço e localização: use a base consultada/ferramenta e não invente.",
     "- Agenda: use data/hora LOCAL, consulte disponibilidade antes de criar/remarcar e só confirme ação após ok=true.",
+    "- Quando o cliente informar ou escolher uma data e um horário de forma inequívoca, isso já autoriza o agendamento: se estiver disponível, crie/remarque no mesmo turno. Não peça 'posso confirmar?' novamente.",
+    "- Para reservar o horário, não peça nome, email, telefone ou assunto. Use os dados já existentes e a configuração da ferramenta. Se não houver assunto padrão, gere um título contextual com no máximo 2 palavras.",
+    "- Depois de criar/remarcar com sucesso, respostas como 'ok', 'obrigado', 'perfeito' ou equivalentes não devem executar a criação novamente.",
+    "- Nunca diga que algo ficou agendado, marcado, reservado ou confirmado sem sucesso real de criar_agendamento/remarcar_agendamento.",
     "- Nunca prometa uma ação operacional para depois (ex.: 'vou consultar', 'vou verificar', 'vou transferir', 'vou agendar'). Execute a ferramenta no mesmo turno ou peça objetivamente a informação que falta.",
     "- Em reagendamento use remarcar_agendamento; não crie outro. Cancelar/remarcar usam o compromisso ativo do backend, sem UUID inventado.",
     "- Transferência usa o destino configurado. mensagem_cliente é enviada ao cliente; nunca use esse campo como anotação interna nem para repetir a pergunta dele.",

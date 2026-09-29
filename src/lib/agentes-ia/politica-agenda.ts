@@ -63,6 +63,8 @@ type Ctx = {
   agenda: any;
   agendaId: string;
   tipoId: string | null;
+  assuntoPadrao: string | null;
+  responsavelId: string | null;
   estado: Estado;
   ativos: any[];
   slot: Slot | null;
@@ -186,8 +188,33 @@ function ordinal(valor: string) {
   return null;
 }
 
-function tituloAgenda(valor: unknown) {
-  return String(valor || "").replace(/^agenda\s+/i, "").trim() || "Agendamento";
+function limitarDuasPalavras(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(" ");
+}
+
+function tituloContextualAgenda(estado: Estado) {
+  const interesses = Array.isArray(estado.interesses)
+    ? estado.interesses.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const interesse = interesses.at(-1);
+  if (interesse) return limitarDuasPalavras(interesse) || "Demonstração CRM";
+
+  const tipoNegocio = String(estado.tipo_negocio || "").trim();
+  if (tipoNegocio) return limitarDuasPalavras(tipoNegocio) || "Demonstração CRM";
+
+  return "Demonstração CRM";
+}
+
+function tituloAgendamento(ctx: Ctx) {
+  const configurado = String(ctx.assuntoPadrao || "").trim();
+  if (configurado) return configurado.slice(0, 120);
+  return tituloContextualAgenda(ctx.estado).slice(0, 120);
 }
 
 function label(slot: any, timezone: string) {
@@ -279,7 +306,11 @@ async function configAgenda(empresaId: string, agenteId: string) {
 
   const criarConfig = mapa.get("criar_agendamento") as Record<string, unknown> | undefined;
   const tipoIdConfigurado = String(criarConfig?.tipo_id || "").trim();
+  const assuntoPadrao =
+    String(criarConfig?.assunto_padrao || "").trim().slice(0, 120) || null;
+  const responsavelConfigurado = String(criarConfig?.responsavel_id || "").trim();
   let tipoId: string | null = null;
+  let responsavelId: string | null = null;
 
   if (tipoIdConfigurado) {
     const { data: tipo, error: tipoError } = await db
@@ -294,10 +325,24 @@ async function configAgenda(empresaId: string, agenteId: string) {
     tipoId = String(tipo.id);
   }
 
+  if (responsavelConfigurado) {
+    const { data: responsavel, error: responsavelError } = await db
+      .from("usuarios")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("id", responsavelConfigurado)
+      .eq("status", "ativo")
+      .maybeSingle();
+    if (responsavelError) throw new Error(responsavelError.message);
+    responsavelId = responsavel?.id ? String(responsavel.id) : null;
+  }
+
   return {
     agendaId,
     agenda,
     tipoId,
+    assuntoPadrao,
+    responsavelId,
     podeRemarcar: mapa.has("remarcar_agendamento"),
   };
 }
@@ -626,7 +671,7 @@ async function criar(ctx: Ctx, slotEscolhido: Slot) {
   await garantirAutomacaoAtiva(ctx);
 
   const agora = new Date().toISOString();
-  const titulo = tituloAgenda(ctx.agenda.nome);
+  const titulo = tituloAgendamento(ctx);
   const { data: contato } = ctx.pendencia.contato_id
     ? await db
         .from("contatos")
@@ -668,6 +713,7 @@ async function criar(ctx: Ctx, slotEscolhido: Slot) {
       nome_cliente: contato?.nome || null,
       telefone_cliente: contato?.telefone || ctx.pendencia.numero_destino || null,
       email_cliente: contato?.email || null,
+      responsavel_id: ctx.responsavelId,
       inicio_at: slot.inicio_at,
       fim_at: slot.fim_at,
       status: "agendado",
@@ -790,58 +836,15 @@ async function concluir(
     .eq("id", ctx.execucaoId);
 }
 
-async function prepararConfirmacao(ctx: Ctx, slotEscolhido: Slot) {
-  const slotValido = await revalidar(ctx, slotEscolhido);
-
-  if (!slotValido) {
-    const estado = {
-      ...limparConfirmacao(ctx.estado),
-      estagio: ctx.remarcacao ? "remarcação em andamento" : "agendamento em andamento",
-      proxima_acao: "aguardar nova escolha de horário",
-    };
-    return {
-      resposta: "Esse horário não está mais disponível. Me diga outro horário que fique bom para você.",
-      ferramenta: "consultar_agenda",
-      resultado: { ok: false, code: "HORARIO_INDISPONIVEL" },
-      estado,
-    };
-  }
-
-  const confirmacao: ConfirmacaoAgendamento = {
+async function executarSlotSelecionado(ctx: Ctx, slotEscolhido: Slot) {
+  return executarConfirmacao(ctx, {
     agenda_id: ctx.agendaId,
     data: slotEscolhido.data,
     hora: slotEscolhido.hora,
     remarcacao: ctx.remarcacao,
     agendamento_id:
       ctx.remarcacao && ctx.ativos.length === 1 ? String(ctx.ativos[0].id) : null,
-  };
-
-  const estado: Estado = {
-    ...ctx.estado,
-    confirmacao_agendamento: confirmacao,
-    estagio: ctx.remarcacao
-      ? "aguardando confirmação de remarcação"
-      : "aguardando confirmação de agendamento",
-    proxima_acao: "aguardar confirmação do cliente",
-  };
-
-  const diaHora = resumoDiaHora(slotEscolhido);
-  const resposta = ctx.remarcacao
-    ? `Só confirmando a remarcação: ${diaHora}. Posso confirmar?`
-    : `Só confirmando o agendamento: ${diaHora}. Posso confirmar?`;
-
-  return {
-    resposta,
-    ferramenta: "revisar_agendamento",
-    resultado: {
-      ok: true,
-      aguardando_confirmacao: true,
-      data: slotEscolhido.data,
-      hora: slotEscolhido.hora,
-      remarcacao: ctx.remarcacao,
-    },
-    estado,
-  };
+  });
 }
 
 async function respostaParaNovaPreferencia(ctx: Ctx) {
@@ -985,7 +988,7 @@ async function executar(ctx: Ctx) {
         resultado = conclusao.resultado;
         estado = conclusao.estado;
       } else if (ctx.slot && !mesmoSlot(ctx.slot, pendenteSlot)) {
-        const novaConfirmacao = await prepararConfirmacao(ctx, ctx.slot);
+        const novaConfirmacao = await executarSlotSelecionado(ctx, ctx.slot);
         resposta = novaConfirmacao.resposta;
         ferramenta = novaConfirmacao.ferramenta;
         resultado = novaConfirmacao.resultado;
@@ -1019,7 +1022,7 @@ async function executar(ctx: Ctx) {
           proxima_acao: "identificar qual agendamento ativo deve ser remarcado",
         };
       } else {
-        const revisao = await prepararConfirmacao(ctx, ctx.slot);
+        const revisao = await executarSlotSelecionado(ctx, ctx.slot);
         resposta = revisao.resposta;
         ferramenta = revisao.ferramenta;
         resultado = revisao.resultado;
@@ -1195,8 +1198,12 @@ export async function processarPoliticaAgendaPendencia(
   );
   const decisao = decisaoConfirmacao(pendencia.conteudo_agregado);
 
+  const confirmacaoDeveSerTratada =
+    Boolean(confirmacaoPendente) &&
+    (decisao !== "indefinida" || referenciaTemporal);
+
   if (
-    !confirmacaoPendente &&
+    !confirmacaoDeveSerTratada &&
     !remarcacaoExplicita &&
     !(remarcacao && referenciaTemporal) &&
     !(emCurso && slot)
@@ -1260,6 +1267,8 @@ export async function processarPoliticaAgendaPendencia(
     agenda: configuracao.agenda,
     agendaId: configuracao.agendaId,
     tipoId: configuracao.tipoId,
+    assuntoPadrao: configuracao.assuntoPadrao,
+    responsavelId: configuracao.responsavelId,
     estado,
     ativos: agendamentosAtivos,
     slot,

@@ -794,6 +794,7 @@ function FluxosPageContent() {
     carregarIntegracoesWhatsapp,
     agendasOpcoes,
     gruposDistribuicaoAgenda,
+    responsaveisAgenda,
     carregandoAgendasOpcoes,
     carregarAgendasOpcoes,
     setores,
@@ -1155,6 +1156,8 @@ function FluxosPageContent() {
     useState<"horas" | "dias">("horas");
   const [agendarDisparoVariaveisNode, setAgendarDisparoVariaveisNode] = useState("");
   const [agendaIdNode, setAgendaIdNode] = useState("");
+  const [agendaNomeAgendamentoNode, setAgendaNomeAgendamentoNode] = useState("");
+  const [agendaResponsavelIdNode, setAgendaResponsavelIdNode] = useState("");
   const [agendaGrupoDistribuicaoIdNode, setAgendaGrupoDistribuicaoIdNode] =
     useState("");
   const [agendaUsarContextoNode, setAgendaUsarContextoNode] = useState(false);
@@ -2427,6 +2430,8 @@ const onConnect = useCallback(
           : tipoNo === "agenda_criar_agendamento"
           ? {
               agenda_id: "",
+              titulo_agendamento: "",
+              responsavel_id: null,
               status_inicial: "agendado",
               mensagem:
                 "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato.",
@@ -2765,6 +2770,12 @@ function offsetLabelConexao(edgeId: string) {
     );
 
     setAgendaIdNode(String(configuracaoJson?.agenda_id || ""));
+    setAgendaNomeAgendamentoNode(
+      String(configuracaoJson?.titulo_agendamento || "")
+    );
+    setAgendaResponsavelIdNode(
+      String(configuracaoJson?.responsavel_id || "")
+    );
     setAgendaGrupoDistribuicaoIdNode(
       String(configuracaoJson?.grupo_distribuicao_id || "")
     );
@@ -3514,6 +3525,10 @@ async function aplicarEdicaoNoInterno() {
 
       if (tipoFinal === "agenda_criar_agendamento") {
         configuracao_json.agenda_id = agendaIdNode;
+        configuracao_json.titulo_agendamento =
+          agendaNomeAgendamentoNode.trim().slice(0, 120);
+        configuracao_json.responsavel_id =
+          agendaResponsavelIdNode.trim() || null;
         configuracao_json.status_inicial =
           agendaStatusAgendamentoNode === "confirmado" ? "confirmado" : "agendado";
         configuracao_json.mensagem =
@@ -4604,6 +4619,12 @@ const nodesParaPreviaWhatsapp = useMemo(() => {
       tipoFinal === "agenda_remarcar_agendamento" ||
       tipoFinal === "agenda_cancelar_agendamento"
     ) {
+      if (tipoFinal === "agenda_criar_agendamento") {
+        configuracao.titulo_agendamento =
+          agendaNomeAgendamentoNode.trim().slice(0, 120);
+        configuracao.responsavel_id =
+          agendaResponsavelIdNode.trim() || null;
+      }
       configuracao.mensagem = mensagemNode;
       configuracao.mensagem_conflito = agendaMensagemConflitoNode.trim();
       configuracao.lembrete_agendamento_ativo = agendaLembreteAtivoNode;
@@ -4665,6 +4686,8 @@ const nodesParaPreviaWhatsapp = useMemo(() => {
   agendaMensagemDataInvalidaNode,
   agendaMensagemSemExpedienteNode,
   agendaMensagemConflitoNode,
+  agendaNomeAgendamentoNode,
+  agendaResponsavelIdNode,
   agendaLembreteAtivoNode,
   agendaLembreteWhatsappNode,
   agendaLembreteTemplateIdNode,
@@ -5110,6 +5133,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
               setMensagemNode(
                 "Agendado! Seu horário ficou marcado para {{agenda_data}} às {{agenda_hora}}. Qualquer dúvida e so entrar em contato."
               );
+              setAgendaNomeAgendamentoNode("");
+              setAgendaResponsavelIdNode("");
               setAgendaEnviarEmailNode(true);
               setAgendaEmailOrigemNode("contato");
               setAgendaEmailVariavelNode("email");
@@ -5390,8 +5415,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             agendas={agendasOpcoes}
             gruposDistribuicao={gruposDistribuicaoAgenda}
             carregandoAgendas={carregandoAgendasOpcoes}
+            atendentes={responsaveisAgenda}
             agendaId={agendaIdNode}
             grupoDistribuicaoId={agendaGrupoDistribuicaoIdNode}
+            nomeAgendamento={agendaNomeAgendamentoNode}
+            responsavelId={agendaResponsavelIdNode}
             usarContexto={agendaUsarContextoNode}
             listarAgendamentos={agendaListarAgendamentosNode}
             quantidadeOpcoes={agendaQuantidadeOpcoesNode}
@@ -5427,6 +5455,8 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             custo={previewCustoAgendarDisparo}
             onAgendaIdChange={setAgendaIdNode}
             onGrupoDistribuicaoIdChange={setAgendaGrupoDistribuicaoIdNode}
+            onNomeAgendamentoChange={setAgendaNomeAgendamentoNode}
+            onResponsavelIdChange={setAgendaResponsavelIdNode}
             onUsarContextoChange={setAgendaUsarContextoNode}
             onListarAgendamentosChange={setAgendaListarAgendamentosNode}
             onQuantidadeOpcoesChange={setAgendaQuantidadeOpcoesNode}

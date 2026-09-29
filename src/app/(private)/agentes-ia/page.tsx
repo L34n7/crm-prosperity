@@ -2051,53 +2051,108 @@ export default function AgentesIaPage() {
                     <strong>Consumo de contexto:</strong> ferramentas que a IA pode chamar adicionam uma definição curta somente quando forem relevantes para a mensagem. O registro de interesses é automático e não exige uma chamada extra da IA. Ative somente o necessário.
                   </div>
                   {usaFerramentasAgenda && (
-                    <div className={styles.formGrid}>
-                      <label className={styles.field}>
-                        <span>Origem dos agendamentos</span>
-                        <select
-                          value={origemAgendaConfiguradaValor}
-                          onChange={(event) =>
-                            atualizarOrigemAgendaFerramentas(event.target.value)
-                          }
-                        >
-                          <option value="">
-                            Selecione uma agenda ou grupo de distribuição
-                          </option>
-                          {agendas.length ? (
-                            <optgroup label="Calendários">
-                              {agendas.map((agenda) => (
-                                <option
-                                  key={agenda.id}
-                                  value={`agenda:${agenda.id}`}
-                                >
-                                  {agenda.nome}
-                                  {agenda.duracao_minutos
-                                    ? ` · ${agenda.duracao_minutos} min`
-                                    : ""}
+                    <>
+                      <div className={styles.formGrid}>
+                        <label className={styles.field}>
+                          <span>Origem dos agendamentos</span>
+                          <select
+                            value={origemAgendaConfiguradaValor}
+                            onChange={(event) =>
+                              atualizarOrigemAgendaFerramentas(event.target.value)
+                            }
+                          >
+                            <option value="">
+                              Selecione uma agenda ou grupo de distribuição
+                            </option>
+                            {agendas.length ? (
+                              <optgroup label="Calendários">
+                                {agendas.map((agenda) => (
+                                  <option
+                                    key={agenda.id}
+                                    value={`agenda:${agenda.id}`}
+                                  >
+                                    {agenda.nome}
+                                    {agenda.duracao_minutos
+                                      ? ` · ${agenda.duracao_minutos} min`
+                                      : ""}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ) : null}
+                            {gruposDistribuicao.length ? (
+                              <optgroup label="Grupos de distribuição">
+                                {gruposDistribuicao.map((grupo) => (
+                                  <option
+                                    key={grupo.id}
+                                    value={`grupo:${grupo.id}`}
+                                  >
+                                    {grupo.nome} ·{" "}
+                                    {grupo.estrategia === "rodizio"
+                                      ? "Rodízio"
+                                      : grupo.estrategia === "menor_carga"
+                                        ? "Menor carga"
+                                        : "Primeiro disponível"}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ) : null}
+                          </select>
+                        </label>
+                      </div>
+
+                      {ferramentaAtiva("criar_agendamento") && (
+                        <div className={styles.formGrid}>
+                          <label className={styles.field}>
+                            <span>Assunto padrão · opcional</span>
+                            <input
+                              value={String(
+                                configFerramenta("criar_agendamento").assunto_padrao || ""
+                              )}
+                              onChange={(event) =>
+                                atualizarConfigFerramenta(
+                                  "criar_agendamento",
+                                  "assunto_padrao",
+                                  event.target.value
+                                )
+                              }
+                              placeholder="Ex.: Demonstração CRM"
+                              maxLength={120}
+                            />
+                            <small>
+                              Se ficar em branco, o agente cria o assunto pelo contexto
+                              com no máximo 2 palavras.
+                            </small>
+                          </label>
+
+                          <label className={styles.field}>
+                            <span>Responsável da agenda · opcional</span>
+                            <select
+                              value={String(
+                                configFerramenta("criar_agendamento").responsavel_id || ""
+                              )}
+                              onChange={(event) =>
+                                atualizarConfigFerramenta(
+                                  "criar_agendamento",
+                                  "responsavel_id",
+                                  event.target.value || null
+                                )
+                              }
+                            >
+                              <option value="">Sem responsável</option>
+                              {atendentes.map((atendente) => (
+                                <option key={atendente.id} value={atendente.id}>
+                                  {atendente.nome || atendente.email || "Usuário"}
                                 </option>
                               ))}
-                            </optgroup>
-                          ) : null}
-                          {gruposDistribuicao.length ? (
-                            <optgroup label="Grupos de distribuição">
-                              {gruposDistribuicao.map((grupo) => (
-                                <option
-                                  key={grupo.id}
-                                  value={`grupo:${grupo.id}`}
-                                >
-                                  {grupo.nome} ·{" "}
-                                  {grupo.estrategia === "rodizio"
-                                    ? "Rodízio"
-                                    : grupo.estrategia === "menor_carga"
-                                      ? "Menor carga"
-                                      : "Primeiro disponível"}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ) : null}
-                        </select>
-                      </label>
-                    </div>
+                            </select>
+                            <small>
+                              Se não selecionar ninguém, o agendamento será criado sem
+                              responsável.
+                            </small>
+                          </label>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div className={styles.toolsGrid}>
                     {ferramentasDisponiveis.map((ferramenta) => (

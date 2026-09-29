@@ -40,6 +40,9 @@ export default function useFluxoResources({
   const [gruposDistribuicaoAgenda, setGruposDistribuicaoAgenda] = useState<
     AgendaGrupoDistribuicaoOpcao[]
   >([]);
+  const [responsaveisAgenda, setResponsaveisAgenda] = useState<
+    AtendenteOpcao[]
+  >([]);
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [atendentes, setAtendentes] = useState<AtendenteOpcao[]>([]);
@@ -119,18 +122,39 @@ export default function useFluxoResources({
     try {
       setCarregandoAgendasOpcoes(true);
 
-      const res = await fetch("/api/agendas/opcoes", {
-        cache: "no-store",
-      });
+      const [res, resResponsaveis] = await Promise.all([
+        fetch("/api/agendas/opcoes", {
+          cache: "no-store",
+        }),
+        fetch("/api/agendas/responsaveis", {
+          cache: "no-store",
+        }),
+      ]);
 
-      const json = await res.json();
+      const [json, jsonResponsaveis] = await Promise.all([
+        res.json(),
+        resResponsaveis.json(),
+      ]);
 
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Erro ao carregar agendas.");
       }
+      if (!resResponsaveis.ok || !jsonResponsaveis.ok) {
+        throw new Error(
+          jsonResponsaveis.error || "Erro ao carregar responsáveis da agenda."
+        );
+      }
 
       setAgendasOpcoes(json.agendas || []);
       setGruposDistribuicaoAgenda(json.grupos_distribuicao || []);
+      setResponsaveisAgenda(
+        (jsonResponsaveis.responsaveis || []).map(
+          (responsavel: { id: string; nome: string; email?: string | null }) => ({
+            ...responsavel,
+            setor_ids: [],
+          })
+        )
+      );
     } catch (error: unknown) {
       onError(
         error instanceof Error ? error.message : "Erro ao carregar agendas."
@@ -175,6 +199,7 @@ export default function useFluxoResources({
     carregarIntegracoesWhatsapp,
     agendasOpcoes,
     gruposDistribuicaoAgenda,
+    responsaveisAgenda,
     carregandoAgendasOpcoes,
     carregarAgendasOpcoes,
     setores,

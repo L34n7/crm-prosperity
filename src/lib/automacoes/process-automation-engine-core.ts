@@ -5533,6 +5533,35 @@ async function obterAgendaAutomacao(empresaId: string, agendaId: string) {
   return data || null;
 }
 
+async function obterNomeFluxoAutomacao(empresaId: string, fluxoId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("automacao_fluxos")
+    .select("nome")
+    .eq("empresa_id", empresaId)
+    .eq("id", fluxoId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return String(data?.nome || "").trim();
+}
+
+async function resolverResponsavelAgendamentoAutomacao(
+  empresaId: string,
+  valor: unknown,
+) {
+  const responsavelId = String(valor || "").trim();
+  if (!responsavelId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("usuarios")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("id", responsavelId)
+    .eq("status", "ativo")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id ? String(data.id) : null;
+}
+
 function emailLembreteValido(valor: string | null | undefined) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(
     String(valor || "").trim()
@@ -7479,8 +7508,19 @@ async function criarAgendamentoAutomacao(params: {
     return;
   }
 
-  const contato = await obterContatoAutomacao(empresaId, execucao);
-  const agenda = await obterAgendaAutomacao(empresaId, agendaId);
+  const [contato, agenda, nomeFluxo, responsavelId] = await Promise.all([
+    obterContatoAutomacao(empresaId, execucao),
+    obterAgendaAutomacao(empresaId, agendaId),
+    obterNomeFluxoAutomacao(empresaId, fluxoId),
+    resolverResponsavelAgendamentoAutomacao(
+      empresaId,
+      config.responsavel_id,
+    ),
+  ]);
+  const tituloAgendamento =
+    String(config.titulo_agendamento || "").trim().slice(0, 120) ||
+    nomeFluxo.slice(0, 120) ||
+    "Agendamento";
   const emailAgendamento = resolverEmailAgendamentoAutomacao({
     contato,
     metadata: metadataAtual,
@@ -7502,10 +7542,11 @@ async function criarAgendamentoAutomacao(params: {
       automacao_execucao_id: execucao.id,
       automacao_fluxo_id: execucao.fluxo_id,
       automacao_no_id: no.id,
-      titulo: String(config.titulo_agendamento || "").trim() || agenda?.nome || no.titulo || "Agendamento",
+      titulo: tituloAgendamento,
       nome_cliente: contato?.nome || null,
       telefone_cliente: contato?.telefone || numeroDestino || null,
       email_cliente: emailAgendamento.email || null,
+      responsavel_id: responsavelId,
       inicio_at: inicioAt,
       fim_at: fimAt,
       status: statusInicial,

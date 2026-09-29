@@ -6,6 +6,7 @@ import TemplateVariableCombobox, {
 import type {
   AgendaGrupoDistribuicaoOpcao,
   AgendaOpcao,
+  AtendenteOpcao,
   PreviewTemplateWhatsapp,
   TemplateWhatsappOpcao,
 } from "../../types";
@@ -28,8 +29,11 @@ type AgendaConfigProps = {
   agendas: AgendaOpcao[];
   gruposDistribuicao: AgendaGrupoDistribuicaoOpcao[];
   carregandoAgendas: boolean;
+  atendentes: AtendenteOpcao[];
   agendaId: string;
   grupoDistribuicaoId: string;
+  nomeAgendamento: string;
+  responsavelId: string;
   usarContexto: boolean;
   listarAgendamentos: boolean;
   quantidadeOpcoes: string;
@@ -65,6 +69,8 @@ type AgendaConfigProps = {
   custo: CustoPreview | null;
   onAgendaIdChange: (valor: string) => void;
   onGrupoDistribuicaoIdChange: (valor: string) => void;
+  onNomeAgendamentoChange: (valor: string) => void;
+  onResponsavelIdChange: (valor: string) => void;
   onUsarContextoChange: (valor: boolean) => void;
   onListarAgendamentosChange: (valor: boolean) => void;
   onQuantidadeOpcoesChange: (valor: string) => void;
@@ -104,8 +110,11 @@ export default function AgendaConfig(props: AgendaConfigProps) {
     agendas,
     gruposDistribuicao,
     carregandoAgendas,
+    atendentes,
     agendaId,
     grupoDistribuicaoId,
+    nomeAgendamento,
+    responsavelId,
     usarContexto,
     listarAgendamentos,
     quantidadeOpcoes,
@@ -277,7 +286,42 @@ export default function AgendaConfig(props: AgendaConfigProps) {
         )}
 
       {tipoNode === "agenda_criar_agendamento" && (
-        <AgendaTipoAgendamentoConfig />
+        <>
+          <label className={styles.field}>
+            <span className={styles.label}>Nome do agendamento · opcional</span>
+            <input
+              className={styles.input}
+              value={nomeAgendamento}
+              onChange={(event) => props.onNomeAgendamentoChange(event.target.value)}
+              placeholder="Em branco, usa o nome do fluxo"
+              maxLength={120}
+            />
+            <span className={styles.help}>
+              Se não informar um nome, o agendamento será salvo com o nome do fluxo.
+            </span>
+          </label>
+
+          <label className={styles.field}>
+            <span className={styles.label}>Responsável · opcional</span>
+            <select
+              className={styles.input}
+              value={responsavelId}
+              onChange={(event) => props.onResponsavelIdChange(event.target.value)}
+            >
+              <option value="">Sem responsável</option>
+              {atendentes.map((atendente) => (
+                <option key={atendente.id} value={atendente.id}>
+                  {atendente.nome || atendente.email || "Usuário"}
+                </option>
+              ))}
+            </select>
+            <span className={styles.help}>
+              Se não selecionar ninguém, o agendamento fica sem responsável.
+            </span>
+          </label>
+
+          <AgendaTipoAgendamentoConfig />
+        </>
       )}
 
       {tipoNode === "agenda_escolher_horario" && (
