@@ -512,6 +512,312 @@
   flex-wrap: wrap;
 }
 
+.simulationOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1800;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .52);
+  backdrop-filter: blur(8px);
+}
+
+.simulationModal {
+  width: min(1120px, 96vw);
+  max-height: min(820px, 94vh);
+  overflow: hidden;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 18px;
+  background: var(--crm-surface);
+  box-shadow: 0 30px 90px rgba(15, 23, 42, .28);
+}
+
+.simulationHeader,
+.simulationFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.simulationHeader {
+  border-bottom: 1px solid var(--crm-border);
+  background: linear-gradient(135deg, var(--crm-primary-soft), var(--crm-surface));
+}
+
+.simulationHeader span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.simulationHeader h2 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 19px;
+}
+
+.simulationHeader p {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.simulationBody {
+  min-height: 430px;
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  background: var(--crm-ui-private-surface-hex-f4f7fb);
+}
+
+.mockSidebar {
+  position: relative;
+  padding: 16px;
+  border-right: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+
+.mockBrand {
+  margin-bottom: 16px;
+  color: var(--crm-primary-text);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.mockSearch {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-muted);
+  font-size: 11px;
+}
+
+.mockFilters {
+  display: flex;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.mockFilters > span,
+.mockOverflow {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.mockOverflow {
+  width: 30px;
+  padding: 0;
+}
+
+.mockMenu {
+  position: absolute;
+  top: 112px;
+  right: 16px;
+  z-index: 2;
+  width: 150px;
+  display: grid;
+  gap: 2px;
+  padding: 7px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.mockMenu > * {
+  padding: 7px 8px;
+  border-radius: 7px;
+  color: var(--crm-text-strong);
+  font-size: 10px;
+}
+
+.mockMenu strong {
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.mockConversationList {
+  display: grid;
+  gap: 5px;
+  margin-top: 16px;
+}
+
+.mockConversation {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+
+.mockConversation strong,
+.mockConversation span {
+  display: block;
+}
+
+.mockConversation strong {
+  color: var(--crm-text-strong);
+  font-size: 11px;
+}
+
+.mockConversation div span {
+  margin-top: 2px;
+  color: var(--crm-text-muted);
+  font-size: 9px;
+}
+
+.mockAvatar {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.mockChat {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  background:
+    radial-gradient(circle at 20% 20%, var(--crm-primary-soft), transparent 22%),
+    var(--crm-surface-muted);
+}
+
+.mockChatHeader {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+
+.mockChatHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 11px;
+}
+
+.mockMessages {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 20px;
+}
+
+.mockSentBubble {
+  max-width: 68%;
+  padding: 10px 12px;
+  border-radius: 12px 12px 3px 12px;
+  color: var(--crm-text-strong);
+  background: var(--crm-primary-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.mockComposer {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px;
+  padding: 0 13px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+  font-size: 11px;
+}
+
+.mockComposer span {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.mockHighlight {
+  position: relative;
+  border-color: var(--crm-primary) !important;
+  box-shadow: 0 0 0 4px var(--crm-primary-soft);
+}
+
+.mockHighlight::after {
+  content: "Ação atual";
+  position: absolute;
+  top: -9px;
+  right: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--crm-text-inverse);
+  background: var(--crm-primary);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.simulationFooter {
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+
+.simulationStepInfo {
+  min-width: 0;
+}
+
+.simulationStepInfo span,
+.simulationStepInfo strong,
+.simulationStepInfo p {
+  display: block;
+}
+
+.simulationStepInfo span {
+  color: var(--crm-primary-text);
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.simulationStepInfo strong {
+  margin-top: 2px;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.simulationStepInfo p {
+  margin: 3px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.simulationActions {
+  display: flex;
+  gap: 8px;
+}
+
 .spin {
   animation: spin .8s linear infinite;
 }
@@ -527,6 +833,27 @@
 
   .groupList {
     height: 340px;
+  }
+}
+
+@media (max-width: 900px) {
+  .simulationBody {
+    grid-template-columns: 1fr;
+  }
+
+  .mockSidebar {
+    min-height: 290px;
+    border-right: 0;
+    border-bottom: 1px solid var(--crm-border);
+  }
+
+  .simulationFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .simulationActions {
+    justify-content: flex-end;
   }
 }
 
