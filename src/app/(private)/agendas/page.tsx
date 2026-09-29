@@ -1,6 +1,13 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Archive,
@@ -438,6 +445,7 @@ function Page() {
     [gevents, setGevents] = useState<GEvent[]>([]),
     [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [niche, setNiche] = useState<AgendaNiche | null>(null);
+  const ultimoCarregamentoAgendaRef = useRef("");
   const [month, setMonth] = useState(new Date()),
     [day, setDay] = useState(key(new Date())),
     [load, setLoad] = useState(true),
@@ -936,9 +944,10 @@ function Page() {
         loadAgendaViewPreferences(calendars),
       ),
       loadFeedback(),
-    ])
-      .catch((e) => setErr(e.message))
-      .finally(() => setLoad(false));
+    ]).catch((e) => {
+      setErr(e.message);
+      setLoad(false);
+    });
   }, [loadAgendaViewPreferences, loadAgendas, loadFeedback]);
   useEffect(() => {
     let active = true;
@@ -998,17 +1007,40 @@ function Page() {
   }, [agendaId, agendaVisualizacaoInicializada]);
 
   useEffect(() => {
-    if (!agendaVisualizacaoInicializada || !agendaId) return;
+    if (!agendaVisualizacaoInicializada) return;
+
+    if (!agendaId) {
+      setLoad(false);
+      return;
+    }
+
+    const monthKey = `${month.getFullYear()}-${String(
+      month.getMonth() + 1,
+    ).padStart(2, "0")}`;
+    const visibleKey = [...agendaIdsVisiveis].sort().join(",");
+    const loadKey = `${agendaId}|${visibleKey}|${monthKey}`;
+
+    if (ultimoCarregamentoAgendaRef.current === loadKey) return;
+    ultimoCarregamentoAgendaRef.current = loadKey;
 
     setLoad(true);
     loadData(agendaId)
-      .catch((e) => setErr(e.message))
+      .catch((e) => {
+        ultimoCarregamentoAgendaRef.current = "";
+        setErr(e.message);
+      })
       .finally(() => setLoad(false));
 
     const q = new URLSearchParams(location.search);
     q.set("agenda", agendaId);
     history.replaceState({}, "", `${location.pathname}?${q}`);
-  }, [agendaId, agendaVisualizacaoInicializada, loadData]);
+  }, [
+    agendaId,
+    agendaIdsVisiveis,
+    agendaVisualizacaoInicializada,
+    loadData,
+    month,
+  ]);
 
   useEffect(() => {
     if (!agendaVisualizacaoInicializada || !agendaId) return;
