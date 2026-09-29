@@ -29,6 +29,10 @@ import HorarioAtendimentoEditor from "@/components/agentes-ia/HorarioAtendimento
 import AgenteTesteModal from "./components/AgenteTesteModal";
 import ConhecimentoEditorModal from "./components/ConhecimentoEditorModal";
 import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerramentaSelect";
+import {
+  normalizarModoExecucaoAgendamento,
+  type ModoExecucaoAgendamento,
+} from "@/lib/agentes-ia/modo-agendamento";
 import styles from "./page.module.css";
 
 type ModoAtendimento = "economico" | "geral";
@@ -533,6 +537,10 @@ export default function AgentesIaPage() {
   const origemAgendaConfiguradaValor = origemAgendaConfigurada
     ? `${origemAgendaConfigurada.tipo}:${origemAgendaConfigurada.id}`
     : "";
+  const configCriarAgendamento = configFerramenta("criar_agendamento");
+  const modoExecucaoAgendamento = normalizarModoExecucaoAgendamento(
+    configCriarAgendamento.modo_execucao,
+  );
 
   const transferencia = useMemo(
     () => ({ ...TRANSFERENCIA_PADRAO, ...(editor?.fallback_transferencia_json || {}) }),
@@ -2101,56 +2109,167 @@ export default function AgentesIaPage() {
                       </div>
 
                       {ferramentaAtiva("criar_agendamento") && (
-                        <div className={styles.formGrid}>
-                          <label className={styles.field}>
-                            <span>Assunto padrão · opcional</span>
-                            <input
-                              value={String(
-                                configFerramenta("criar_agendamento").assunto_padrao || ""
-                              )}
-                              onChange={(event) =>
-                                atualizarConfigFerramenta(
-                                  "criar_agendamento",
-                                  "assunto_padrao",
-                                  event.target.value
-                                )
-                              }
-                              placeholder="Ex.: Demonstração CRM"
-                              maxLength={120}
-                            />
-                            <small>
-                              Se ficar em branco, o agente cria o assunto pelo contexto
-                              com no máximo 2 palavras.
-                            </small>
-                          </label>
+                        <>
+                          <div className={styles.scopeHint}>
+                            <strong>Estilo de agendamento:</strong> esta regra tem
+                            prioridade operacional sobre o prompt geral do agente.
+                          </div>
 
-                          <label className={styles.field}>
-                            <span>Responsável da agenda · opcional</span>
-                            <select
-                              value={String(
-                                configFerramenta("criar_agendamento").responsavel_id || ""
-                              )}
-                              onChange={(event) =>
-                                atualizarConfigFerramenta(
-                                  "criar_agendamento",
-                                  "responsavel_id",
-                                  event.target.value || null
-                                )
-                              }
-                            >
-                              <option value="">Sem responsável</option>
-                              {atendentes.map((atendente) => (
-                                <option key={atendente.id} value={atendente.id}>
-                                  {atendente.nome || atendente.email || "Usuário"}
-                                </option>
-                              ))}
-                            </select>
-                            <small>
-                              Se não selecionar ninguém, o agendamento será criado sem
-                              responsável.
-                            </small>
-                          </label>
-                        </div>
+                          <div className={styles.toolsGrid}>
+                            {(
+                              [
+                                {
+                                  valor: "imediato",
+                                  titulo: "Agendar imediatamente",
+                                  descricao:
+                                    "Padrão. Assim que o cliente escolher um dia e horário disponível, o agente cria o agendamento sem perguntas extras.",
+                                },
+                                {
+                                  valor: "apos_confirmacao",
+                                  titulo: "Agendar após confirmação",
+                                  descricao:
+                                    "O agente cumpre a condição configurada, confirma os dados com o cliente e só então cria o agendamento.",
+                                },
+                                {
+                                  valor: "manual",
+                                  titulo: "Agendamento manual",
+                                  descricao:
+                                    "O agente coleta e confirma os dados, mas não cria o agendamento. A conversa é transferida para atendimento humano.",
+                                },
+                              ] as Array<{
+                                valor: ModoExecucaoAgendamento;
+                                titulo: string;
+                                descricao: string;
+                              }>
+                            ).map((opcao) => (
+                              <label
+                                key={opcao.valor}
+                                className={`${styles.toolCard} ${
+                                  modoExecucaoAgendamento === opcao.valor
+                                    ? styles.toolCardActive
+                                    : ""
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="modo_execucao_agendamento"
+                                  checked={modoExecucaoAgendamento === opcao.valor}
+                                  onChange={() =>
+                                    atualizarConfigFerramenta(
+                                      "criar_agendamento",
+                                      "modo_execucao",
+                                      opcao.valor,
+                                    )
+                                  }
+                                />
+                                <div>
+                                  <strong>{opcao.titulo}</strong>
+                                  <p>{opcao.descricao}</p>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+
+                          {modoExecucaoAgendamento === "apos_confirmacao" && (
+                            <label className={styles.field}>
+                              <span>Condição antes da confirmação</span>
+                              <textarea
+                                rows={4}
+                                value={String(
+                                  configCriarAgendamento.condicao_confirmacao_prompt || ""
+                                )}
+                                onChange={(event) =>
+                                  atualizarConfigFerramenta(
+                                    "criar_agendamento",
+                                    "condicao_confirmacao_prompt",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Ex.: Antes de confirmar, pergunte a placa do veículo e o modelo. Só peça a confirmação final depois de receber essas informações."
+                                maxLength={1800}
+                              />
+                              <small>
+                                O agente deve cumprir esta condição antes de pedir a
+                                confirmação final. Se ficar em branco, exige apenas a
+                                confirmação explícita do cliente.
+                              </small>
+                            </label>
+                          )}
+
+                          {modoExecucaoAgendamento === "manual" && (
+                            <label className={styles.field}>
+                              <span>Condição para transferência · opcional</span>
+                              <textarea
+                                rows={4}
+                                value={String(
+                                  configCriarAgendamento.condicao_manual_prompt || ""
+                                )}
+                                onChange={(event) =>
+                                  atualizarConfigFerramenta(
+                                    "criar_agendamento",
+                                    "condicao_manual_prompt",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Ex.: Colete placa, modelo do veículo e serviço desejado antes de confirmar e transferir."
+                                maxLength={1800}
+                              />
+                              <small>
+                                O agente coleta o que estiver definido aqui, confirma com
+                                o cliente e transfere. Ele nunca cria o agendamento nesse
+                                modo.
+                              </small>
+                            </label>
+                          )}
+
+                          <div className={styles.formGrid}>
+                            <label className={styles.field}>
+                              <span>Assunto padrão · opcional</span>
+                              <input
+                                value={String(configCriarAgendamento.assunto_padrao || "")}
+                                onChange={(event) =>
+                                  atualizarConfigFerramenta(
+                                    "criar_agendamento",
+                                    "assunto_padrao",
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="Ex.: Demonstração CRM"
+                                maxLength={120}
+                              />
+                              <small>
+                                Se ficar em branco, o agente cria o assunto pelo contexto
+                                com no máximo 2 palavras.
+                              </small>
+                            </label>
+
+                            <label className={styles.field}>
+                              <span>Responsável da agenda · opcional</span>
+                              <select
+                                value={String(configCriarAgendamento.responsavel_id || "")}
+                                onChange={(event) =>
+                                  atualizarConfigFerramenta(
+                                    "criar_agendamento",
+                                    "responsavel_id",
+                                    event.target.value || null
+                                  )
+                                }
+                              >
+                                <option value="">Sem responsável</option>
+                                {atendentes.map((atendente) => (
+                                  <option key={atendente.id} value={atendente.id}>
+                                    {atendente.nome || atendente.email || "Usuário"}
+                                  </option>
+                                ))}
+                              </select>
+                              <small>
+                                {modoExecucaoAgendamento === "manual"
+                                  ? "No modo manual, se houver responsável selecionado, a conversa será transferida diretamente para esse usuário. Sem responsável, vai para a fila humana configurada ou fila geral."
+                                  : "Se não selecionar ninguém, o agendamento será criado sem responsável."}
+                              </small>
+                            </label>
+                          </div>
+                        </>
                       )}
                     </>
                   )}

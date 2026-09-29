@@ -27,6 +27,10 @@ import {
   agendarFollowupAgenteIa,
   cancelarFollowupsPendentesAgenteIa,
 } from "./followup-inatividade";
+import {
+  condicaoModoAgendamento,
+  normalizarModoExecucaoAgendamento,
+} from "./modo-agendamento";
 
 const supabaseAdmin = getSupabaseAdmin();
 const MODELO_PADRAO = process.env.OPENAI_AGENT_MODEL?.trim() || "gpt-5.6-luna";
@@ -42,6 +46,7 @@ const TIPOS_FERRAMENTAS = [
   "cancelar_agendamento",
   "consultar_contato",
   "transferir_humano",
+  "encaminhar_agendamento_manual",
 ] as const;
 const FERRAMENTAS_AGENDA = new Set<string>([
   "consultar_agenda",
@@ -54,6 +59,7 @@ const FERRAMENTAS_CRITICAS = new Set<string>([
   "remarcar_agendamento",
   "cancelar_agendamento",
   "transferir_humano",
+  "encaminhar_agendamento_manual",
 ]);
 
 type TipoFerramenta = (typeof TIPOS_FERRAMENTAS)[number];
@@ -821,10 +827,17 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
     });
   }
   if (ativas.has("criar_agendamento")) {
+    const config = ativas.get("criar_agendamento") || {};
+    const modo = normalizarModoExecucaoAgendamento(config.modo_execucao);
+    const condicao = condicaoModoAgendamento(config, modo);
+    const exigeConfirmacao = modo === "apos_confirmacao";
     defs.push({
       type: "function",
       name: "criar_agendamento",
-      description: "Cria imediatamente o compromisso quando o cliente escolheu data/hora LOCAL disponíveis. Não peça nova confirmação, nome, email, telefone ou assunto antes de criar. Se não houver assunto padrão configurado, título com no máximo 2 palavras.",
+      description:
+        modo === "apos_confirmacao"
+          ? `Cria o compromisso SOMENTE depois de cumprir a condição configurada e receber confirmação explícita do cliente. Condição: ${condicao || "nenhuma condição adicional"}.`
+          : "Cria imediatamente o compromisso quando o cliente escolheu data/hora LOCAL disponíveis. Não peça nova confirmação, nome, email, telefone ou assunto antes de criar. Se não houver assunto padrão configurado, título com no máximo 2 palavras.",
       strict: true,
       parameters: {
         type: "object",
@@ -832,8 +845,60 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
           data: { type: "string", description: "YYYY-MM-DD local" },
           hora: { type: "string", description: "HH:mm local" },
           titulo: { type: "string", description: "Assunto contextual com no máximo 2 palavras quando não houver assunto padrão configurado." },
+          ...(exigeConfirmacao
+            ? {
+                condicao_atendida: {
+                  type: "boolean",
+                  description:
+                    "true somente quando todos os requisitos da condição configurada já foram coletados/atendidos.",
+                },
+              }
+            : {}),
         },
-        required: ["data", "hora", "titulo"], additionalProperties: false,
+        required: exigeConfirmacao
+          ? ["data", "hora", "titulo", "condicao_atendida"]
+          : ["data", "hora", "titulo"],
+        additionalProperties: false,
+      },
+    });
+  }
+  if (ativas.has("encaminhar_agendamento_manual")) {
+    const config = ativas.get("encaminhar_agendamento_manual") || {};
+    const condicao = condicaoModoAgendamento(config, "manual");
+    defs.push({
+      type: "function",
+      name: "encaminhar_agendamento_manual",
+      description: `Finaliza a coleta do agendamento manual sem criar compromisso. Use somente após confirmar data/hora com o cliente e cumprir a condição: ${condicao || "nenhuma condição adicional"}.`,
+      strict: true,
+      parameters: {
+        type: "object",
+        properties: {
+          data: { type: "string", description: "Data desejada YYYY-MM-DD local" },
+          hora: { type: "string", description: "Hora desejada HH:mm local" },
+          resumo: {
+            type: "string",
+            description:
+              "Resumo curto dos dados coletados que o atendente humano encontrará na conversa.",
+          },
+          condicao_atendida: {
+            type: "boolean",
+            description:
+              "true somente quando a condição manual configurada, se existir, já foi cumprida.",
+          },
+          mensagem_cliente: {
+            anyOf: [{ type: "string" }, { type: "null" }],
+            description:
+              "Mensagem curta informando que os dados foram confirmados e o atendimento será encaminhado para conclusão manual. Nunca diga que o horário já foi agendado.",
+          },
+        },
+        required: [
+          "data",
+          "hora",
+          "resumo",
+          "condicao_atendida",
+          "mensagem_cliente",
+        ],
+        additionalProperties: false,
       },
     });
   }
@@ -912,6 +977,17 @@ function normalizarTextoIntencao(valor: unknown) {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function mensagemConfirmaAgendamento(valor: unknown) {
+  const texto = normalizarTextoIntencao(valor);
+  if (!texto) return false;
+  return (
+    /\b(confirmo|confirmado|pode confirmar|pode agendar|pode marcar|pode reservar|pode ser|vamos agendar|fecha|fechado)\b/.test(
+      texto,
+    ) ||
+    /^(sim|ok|okay|certo|perfeito|beleza|blz|pode|confirmo)$/.test(texto)
+  );
 }
 
 function consultaConhecimentoAutomatica(mensagem: string) {
@@ -1073,6 +1149,16 @@ function selecionarFerramentasParaModelo(params: {
     const config = ativas.get(tipo);
     if (config) selecionadas.set(tipo, config);
   };
+  const adicionarCriacaoAgendamento = () => {
+    const config = ativas.get("criar_agendamento");
+    if (!config) return;
+    const modo = normalizarModoExecucaoAgendamento(config.modo_execucao);
+    if (modo === "manual") {
+      selecionadas.set("encaminhar_agendamento_manual", config);
+      return;
+    }
+    selecionadas.set("criar_agendamento", config);
+  };
 
   const statusAgenda = `${estado.estagio} ${estado.proxima_acao || ""}`.toLowerCase();
   const estadoAgendaEmAndamento = estadoTemAgendaEmAndamento(estado);
@@ -1104,7 +1190,7 @@ function selecionarFerramentasParaModelo(params: {
     adicionar("remarcar_agendamento");
   } else if (!recusaTemporal && (intencaoAgendaExplicita || continuacaoAgenda)) {
     adicionar("consultar_agenda");
-    if (querAgendar) adicionar("criar_agendamento");
+    if (querAgendar) adicionarCriacaoAgendamento();
   }
 
   if (!preexecutadas.has("consultar_conhecimento") && (consultaBase || (perguntaGeral && !intencaoAgendaExplicita && !continuacaoAgenda))) {
@@ -1452,6 +1538,176 @@ async function resolverResponsavelAgendamentoAgente(ctx: ContextoExecucao) {
   return data?.id ? String(data.id) : null;
 }
 
+async function encaminharAgendamentoManual(
+  args: any,
+  ctx: ContextoExecucao,
+) {
+  const empresaId = ctx.pendencia.empresa_id;
+  const conversaId = ctx.pendencia.conversa_id;
+  const configCriar = ctx.ferramentasAtivas.get("criar_agendamento") || {};
+  const condicao = condicaoModoAgendamento(configCriar, "manual");
+
+  if (condicao && args.condicao_atendida !== true) {
+    return {
+      ok: false,
+      code: "CONDICAO_MANUAL_PENDENTE",
+      error:
+        "A condição para transferência manual ainda não foi atendida. Colete o que falta antes de confirmar e transferir.",
+    };
+  }
+
+  if (!mensagemConfirmaAgendamento(ctx.pendencia.conteudo_agregado)) {
+    return {
+      ok: false,
+      code: "CONFIRMACAO_CLIENTE_NECESSARIA",
+      error:
+        "Confirme os dados com o cliente e aguarde uma confirmação explícita antes da transferência manual.",
+    };
+  }
+
+  const origem = origemAgendaConfiguradaFerramentas(ctx.ferramentasAtivas);
+  const slot = await resolverSlotLocal({
+    empresaId,
+    agendaId: origem.agendaId,
+    grupoDistribuicaoId: origem.grupoDistribuicaoId,
+    data: String(args.data || ""),
+    hora: String(args.hora || ""),
+  });
+  if (!slot.ok) return slot;
+
+  const { data: conversaAtual, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select("id, status, setor_id, responsavel_id, bot_ativo, aguardando_atendente")
+    .eq("empresa_id", empresaId)
+    .eq("id", conversaId)
+    .maybeSingle();
+  if (conversaError) throw new Error(conversaError.message);
+  if (!conversaAtual) {
+    return { ok: false, error: "Conversa não encontrada para transferência." };
+  }
+
+  if (conversaEstaComHumano(conversaAtual)) {
+    ctx.acaoCriticaExecutada = true;
+    ctx.transferidoHumano = true;
+    return {
+      ok: true,
+      transferido: true,
+      agendamento_criado: false,
+      idempotente: true,
+      responsavel_id: conversaAtual.responsavel_id || null,
+      setor_id: conversaAtual.setor_id || null,
+    };
+  }
+
+  const responsavelDireto = await resolverResponsavelAgendamentoAgente(ctx);
+  const configTransferencia =
+    ctx.ferramentasAtivas.get("transferir_humano") || {};
+
+  let atribuicao: {
+    setorId: string | null;
+    escopoFila: "setor" | "geral";
+    responsavelId: string | null;
+    fallbackMotivo: string | null;
+  };
+
+  if (responsavelDireto) {
+    atribuicao = {
+      setorId: null,
+      escopoFila: "geral",
+      responsavelId: responsavelDireto,
+      fallbackMotivo: null,
+    };
+  } else {
+    const setorId =
+      String(configTransferencia.setor_id || "").trim() || null;
+    const resolvida = await resolverAtribuicaoTransferencia({
+      empresaId,
+      setorId,
+      escopoFila: setorId ? "setor" : "geral",
+      estrategia:
+        configTransferencia.estrategia_transferencia || "fila_setor",
+      atendenteId: configTransferencia.atendente_id,
+      incluirAdministradores:
+        configTransferencia.incluir_administradores,
+    });
+    atribuicao = {
+      setorId: resolvida.setorId,
+      escopoFila: resolvida.escopoFila,
+      responsavelId: resolvida.responsavelId,
+      fallbackMotivo: resolvida.fallbackMotivo,
+    };
+  }
+
+  if (await execucaoFoiSupersedida(ctx.pendencia)) {
+    return {
+      ok: false,
+      code: "EXECUCAO_SUPERSEDIDA",
+      supersedido: true,
+      error:
+        "Chegou uma nova mensagem antes da transferência; a conversa permaneceu com o agente para processar o contexto mais recente.",
+    };
+  }
+
+  const agora = new Date().toISOString();
+  const { data: conversaTransferida, error: transferenciaError } =
+    await supabaseAdmin
+      .from("conversas")
+      .update({
+        setor_id: atribuicao.setorId,
+        escopo_fila: atribuicao.escopoFila,
+        status: atribuicao.responsavelId ? "em_atendimento" : "fila",
+        responsavel_id: atribuicao.responsavelId,
+        bot_ativo: false,
+        aguardando_atendente: !atribuicao.responsavelId,
+        updated_at: agora,
+      })
+      .eq("empresa_id", empresaId)
+      .eq("id", conversaId)
+      .select("id, status, setor_id, responsavel_id, bot_ativo, aguardando_atendente")
+      .single();
+
+  if (transferenciaError || !conversaTransferida) {
+    return {
+      ok: false,
+      error:
+        transferenciaError?.message ||
+        "Não foi possível concluir a transferência manual.",
+    };
+  }
+
+  ctx.acaoCriticaExecutada = true;
+  ctx.transferidoHumano = true;
+
+  const mensagemCliente = textoCurto(
+    args.mensagem_cliente ||
+      "Perfeito. Confirmei os dados com você e vou encaminhar o atendimento para concluirmos o agendamento manualmente.",
+    320,
+  );
+  if (mensagemCliente && ctx.pendencia.numero_destino) {
+    await enviarMensagemAgente({
+      empresaId,
+      conversaId,
+      agenteId: ctx.agente.id,
+      execucaoId: ctx.execucaoId,
+      numeroDestino: ctx.pendencia.numero_destino,
+      texto: mensagemCliente,
+    });
+    ctx.respostaEnviada = true;
+  }
+
+  return {
+    ok: true,
+    transferido: true,
+    agendamento_criado: false,
+    data: String(args.data || ""),
+    hora: String(args.hora || ""),
+    resumo: textoCurto(args.resumo, 500),
+    setor_id: atribuicao.setorId,
+    responsavel_id: atribuicao.responsavelId,
+    fallback_motivo: atribuicao.fallbackMotivo,
+  };
+}
+
 async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: ContextoExecucao) {
   const empresaId = ctx.pendencia.empresa_id;
   const conversaId = ctx.pendencia.conversa_id;
@@ -1546,6 +1802,41 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   }
 
   if (nome === "criar_agendamento") {
+    const configCriar = ctx.ferramentasAtivas.get("criar_agendamento") || {};
+    const modoExecucao = normalizarModoExecucaoAgendamento(
+      configCriar.modo_execucao,
+    );
+    if (modoExecucao === "manual") {
+      return {
+        ok: false,
+        code: "MODO_AGENDAMENTO_MANUAL",
+        error:
+          "Este agente está configurado para agendamento manual. Não crie o compromisso; confirme os dados e use encaminhar_agendamento_manual.",
+      };
+    }
+    if (modoExecucao === "apos_confirmacao") {
+      const condicao = condicaoModoAgendamento(
+        configCriar,
+        "apos_confirmacao",
+      );
+      if (condicao && args.condicao_atendida !== true) {
+        return {
+          ok: false,
+          code: "CONDICAO_AGENDAMENTO_PENDENTE",
+          error:
+            "A condição configurada ainda não foi marcada como atendida. Colete o que falta antes de pedir a confirmação final.",
+        };
+      }
+      if (!mensagemConfirmaAgendamento(ctx.pendencia.conteudo_agregado)) {
+        return {
+          ok: false,
+          code: "CONFIRMACAO_CLIENTE_NECESSARIA",
+          error:
+            "O modo exige confirmação explícita do cliente na mensagem atual antes de criar o agendamento.",
+        };
+      }
+    }
+
     const origem = origemAgendaConfiguradaFerramentas(ctx.ferramentasAtivas);
     if (!origem.agendaId && !origem.grupoDistribuicaoId) {
       return { ok: false, error: "Origem de agenda não configurada." };
@@ -1842,6 +2133,21 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     return { ok: true, agendamento_id: atual.id, status: "cancelado" };
   }
 
+  if (nome === "encaminhar_agendamento_manual") {
+    const configCriar = ctx.ferramentasAtivas.get("criar_agendamento") || {};
+    if (
+      normalizarModoExecucaoAgendamento(configCriar.modo_execucao) !==
+      "manual"
+    ) {
+      return {
+        ok: false,
+        code: "MODO_AGENDAMENTO_INVALIDO",
+        error: "O agente não está configurado para agendamento manual.",
+      };
+    }
+    return encaminharAgendamentoManual(args, ctx);
+  }
+
   if (nome === "transferir_humano") {
     const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
       .from("conversas")
@@ -2049,6 +2355,13 @@ function ferramentaExecutadaComSucesso(ctx: ContextoExecucao, nome: TipoFerramen
   );
 }
 
+function transferenciaExecutadaComSucesso(ctx: ContextoExecucao) {
+  return (
+    ferramentaExecutadaComSucesso(ctx, "transferir_humano") ||
+    ferramentaExecutadaComSucesso(ctx, "encaminhar_agendamento_manual")
+  );
+}
+
 function promessaOperacionalNaoExecutada(
   mensagens: string[],
   ctx: ContextoExecucao
@@ -2062,9 +2375,16 @@ function promessaOperacionalNaoExecutada(
     !ferramentaExecutadaComSucesso(ctx, "consultar_agenda")
   ) return "consultar_agenda";
 
-  if (/\b(?:vou|irei)\s+(?:te\s+)?(?:encaminhar|transferir)\b/.test(texto) &&
-      !ferramentaExecutadaComSucesso(ctx, "transferir_humano")) {
-    return "transferir_humano";
+  if (
+    /\b(?:vou|irei)\s+(?:te\s+)?(?:encaminhar|transferir)\b/.test(texto) &&
+    !transferenciaExecutadaComSucesso(ctx)
+  ) {
+    const modo = normalizarModoExecucaoAgendamento(
+      ctx.ferramentasAtivas.get("criar_agendamento")?.modo_execucao,
+    );
+    return modo === "manual"
+      ? "encaminhar_agendamento_manual"
+      : "transferir_humano";
   }
 
   const afirmouNovoAgendamento =
@@ -2077,6 +2397,10 @@ function promessaOperacionalNaoExecutada(
     !ferramentaExecutadaComSucesso(ctx, "criar_agendamento") &&
     !ferramentaExecutadaComSucesso(ctx, "remarcar_agendamento")
   ) {
+    const modo = normalizarModoExecucaoAgendamento(
+      ctx.ferramentasAtivas.get("criar_agendamento")?.modo_execucao,
+    );
+    if (modo === "manual") return "acao_sem_ferramenta";
     return estadoIndicaReagendamento(ctx.estadoConversa)
       ? "remarcar_agendamento"
       : "criar_agendamento";
@@ -2128,11 +2452,52 @@ function dataAtualAgenda(agenda: any) {
   }).format(new Date());
 }
 
+function regrasModoAgendamento(
+  ferramentasAtivas: Map<TipoFerramenta, Record<string, unknown>>,
+) {
+  const config = ferramentasAtivas.get("criar_agendamento");
+  if (!config) return [] as string[];
+
+  const modo = normalizarModoExecucaoAgendamento(config.modo_execucao);
+  if (modo === "apos_confirmacao") {
+    const condicao = condicaoModoAgendamento(config, modo);
+    return [
+      "- REGRA PRIORITÁRIA DE AGENDA: modo Agendar após confirmação. Esta regra prevalece sobre instruções conflitantes do prompt geral.",
+      condicao
+        ? `- Antes da confirmação final, cumpra obrigatoriamente esta condição: ${condicao}`
+        : "- Não há condição adicional; ainda assim é obrigatória uma confirmação final explícita do cliente.",
+      "- Depois de cumprir a condição, apresente os dados essenciais do agendamento e faça uma única pergunta objetiva de confirmação.",
+      "- Só execute criar_agendamento após uma mensagem explícita de confirmação do cliente. Não trate a simples escolha do horário como confirmação final neste modo.",
+    ];
+  }
+
+  if (modo === "manual") {
+    const condicao = condicaoModoAgendamento(config, modo);
+    return [
+      "- REGRA PRIORITÁRIA DE AGENDA: modo Agendamento manual. Esta regra prevalece sobre instruções conflitantes do prompt geral.",
+      "- NUNCA crie um novo agendamento neste modo.",
+      condicao
+        ? `- Antes de confirmar e transferir, cumpra esta condição: ${condicao}`
+        : "- Colete ao menos a data e o horário desejados; não há condição adicional configurada.",
+      "- Confirme os dados coletados com o cliente e aguarde uma confirmação explícita.",
+      "- Após a confirmação, execute encaminhar_agendamento_manual. O atendimento humano concluirá o agendamento.",
+      "- Ao transferir, nunca diga que o horário já está agendado, reservado ou confirmado no calendário.",
+    ];
+  }
+
+  return [
+    "- REGRA PRIORITÁRIA DE AGENDA: modo Agendar imediatamente. Esta regra prevalece sobre instruções conflitantes do prompt geral.",
+    "- Quando o cliente informar ou escolher uma data e um horário de forma inequívoca, isso já autoriza o agendamento: se estiver disponível, crie/remarque no mesmo turno. Não peça 'posso confirmar?' novamente.",
+    "- Para reservar o horário, não peça nome, email, telefone ou assunto. Use os dados já existentes e a configuração da ferramenta. Se não houver assunto padrão, gere um título contextual com no máximo 2 palavras.",
+  ];
+}
+
 function promptDoAgente(
   agente: AgenteRow,
   estado: EstadoConversa,
   agendas: any[],
-  agendamentosAtivos: any[]
+  agendamentosAtivos: any[],
+  ferramentasAtivas: Map<TipoFerramenta, Record<string, unknown>>,
 ) {
   const agenda = agendas[0] || null;
   const agendaInfo = agenda
@@ -2156,8 +2521,7 @@ function promptDoAgente(
     "- Memória/histórico dão continuidade, mas agenda ativa só existe se estiver no ESTADO OPERACIONAL abaixo.",
     "- Produto, preço, plano, integração, recurso, endereço e localização: use a base consultada/ferramenta e não invente.",
     "- Agenda: use data/hora LOCAL, consulte disponibilidade antes de criar/remarcar e só confirme ação após ok=true.",
-    "- Quando o cliente informar ou escolher uma data e um horário de forma inequívoca, isso já autoriza o agendamento: se estiver disponível, crie/remarque no mesmo turno. Não peça 'posso confirmar?' novamente.",
-    "- Para reservar o horário, não peça nome, email, telefone ou assunto. Use os dados já existentes e a configuração da ferramenta. Se não houver assunto padrão, gere um título contextual com no máximo 2 palavras.",
+    ...regrasModoAgendamento(ferramentasAtivas),
     "- Depois de criar/remarcar com sucesso, respostas como 'ok', 'obrigado', 'perfeito' ou equivalentes não devem executar a criação novamente.",
     "- Nunca diga que algo ficou agendado, marcado, reservado ou confirmado sem sucesso real de criar_agendamento/remarcar_agendamento.",
     "- Nunca prometa uma ação operacional para depois (ex.: 'vou consultar', 'vou verificar', 'vou transferir', 'vou agendar'). Execute a ferramenta no mesmo turno ou peça objetivamente a informação que falta.",
@@ -2405,7 +2769,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       agente as AgenteRow,
       contexto.estado,
       contexto.agendas,
-      contexto.agendamentosAtivos
+      contexto.agendamentosAtivos,
+      ferramentasAtivas,
     );
     let tokensInput = 0;
     let tokensOutput = 0;
@@ -2442,7 +2807,10 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         if (promessaPendente && rodada < MAX_RODADAS_FERRAMENTAS - 1) {
           correcoesPromessaOperacional += 1;
           if (promessaPendente !== "acao_sem_ferramenta") {
-            const config = ferramentasAtivas.get(promessaPendente);
+            const config =
+              promessaPendente === "encaminhar_agendamento_manual"
+                ? ferramentasAtivas.get("criar_agendamento")
+                : ferramentasAtivas.get(promessaPendente);
             if (config) ferramentasParaModelo.set(promessaPendente, config);
           }
           inputIa.push({

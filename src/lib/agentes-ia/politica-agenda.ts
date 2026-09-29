@@ -18,6 +18,7 @@ import {
   agendarFollowupAgenteIa,
   cancelarFollowupsPendentesAgenteIa,
 } from "./followup-inatividade";
+import { normalizarModoExecucaoAgendamento } from "./modo-agendamento";
 
 const db = getSupabaseAdmin();
 
@@ -305,6 +306,9 @@ async function configAgenda(empresaId: string, agenteId: string) {
   if (!agenda) return null;
 
   const criarConfig = mapa.get("criar_agendamento") as Record<string, unknown> | undefined;
+  const modoExecucao = normalizarModoExecucaoAgendamento(
+    criarConfig?.modo_execucao,
+  );
   const tipoIdConfigurado = String(criarConfig?.tipo_id || "").trim();
   const assuntoPadrao =
     String(criarConfig?.assunto_padrao || "").trim().slice(0, 120) || null;
@@ -343,6 +347,8 @@ async function configAgenda(empresaId: string, agenteId: string) {
     tipoId,
     assuntoPadrao,
     responsavelId,
+    modoExecucao,
+    podeCriar: mapa.has("criar_agendamento"),
     podeRemarcar: mapa.has("remarcar_agendamento"),
   };
 }
@@ -1173,11 +1179,21 @@ export async function processarPoliticaAgendaPendencia(
   const configuracao = await configAgenda(pendencia.empresa_id, pendencia.agente_id);
   if (!configuracao) return { tratado: false };
 
+  // A política determinística só cria imediatamente no modo padrão.
+  // Nos modos com confirmação ou transferência manual, o runtime do agente
+  // precisa conduzir a coleta/condição antes da ação final.
+  if (configuracao.modoExecucao !== "imediato") {
+    return { tratado: false };
+  }
+
   const estado = await estadoAtual(pendencia);
   const confirmacaoPendente = confirmacaoDoEstado(estado, configuracao.agendaId);
   const remarcacaoExplicita = pedidoRemarca(pendencia.conteudo_agregado);
   const remarcacao =
     remarcacaoExplicita || confirmacaoPendente?.remarcacao === true || estadoRemarca(estado);
+  if (!remarcacao && !configuracao.podeCriar) {
+    return { tratado: false };
+  }
   const emCurso = agendaEmCurso(estado);
   const recentes = await slotsRecentes(pendencia);
   const slot = await slotEscolhido(
