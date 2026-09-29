@@ -40,6 +40,7 @@ type Prepared = {
 type QueueState = "pending" | "ready" | "sent" | "error";
 type QueueItem = { group: string; status: QueueState; error?: string };
 type CadenceSeconds = 3 | 5 | 10 | 20;
+type TypingDelayMs = 40 | 80 | 140 | 220;
 
 const SIMULATION_STEPS = [
   {
@@ -88,6 +89,7 @@ export default function WhatsappWebLocalPage() {
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [cadenceSeconds, setCadenceSeconds] = useState<CadenceSeconds>(5);
+  const [typingDelayMs, setTypingDelayMs] = useState<TypingDelayMs>(80);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
@@ -237,7 +239,12 @@ export default function WhatsappWebLocalPage() {
     try {
       const next = await agentRequest<Prepared>("/messages/prepare", {
         method: "POST",
-        body: JSON.stringify({ group, message, cadenceSeconds }),
+        body: JSON.stringify({
+          group,
+          message,
+          cadenceSeconds,
+          typingDelayMs,
+        }),
       });
       setPrepared(next);
       setQueue((current) =>
@@ -554,28 +561,54 @@ export default function WhatsappWebLocalPage() {
               <small>{message.length}/8000</small>
             </label>
 
-            <div className={styles.cadence}>
-              <div>
-                <strong>Cadência entre etapas</strong>
-                <span>
-                  Intervalo fixo aplicado à navegação, preparação e confirmação.
-                </span>
+            <div className={styles.timingGrid}>
+              <div className={styles.cadence}>
+                <div>
+                  <strong>Cadência entre etapas</strong>
+                  <span>
+                    Intervalo fixo aplicado à navegação, preparação e confirmação.
+                  </span>
+                </div>
+                <select
+                  value={cadenceSeconds}
+                  onChange={(event) =>
+                    setCadenceSeconds(
+                      Number(event.target.value) as CadenceSeconds,
+                    )
+                  }
+                  disabled={activeQueue}
+                  aria-label="Cadência entre etapas"
+                >
+                  <option value={3}>3 segundos</option>
+                  <option value={5}>5 segundos</option>
+                  <option value={10}>10 segundos</option>
+                  <option value={20}>20 segundos</option>
+                </select>
               </div>
-              <select
-                value={cadenceSeconds}
-                onChange={(event) =>
-                  setCadenceSeconds(
-                    Number(event.target.value) as CadenceSeconds,
-                  )
-                }
-                disabled={activeQueue}
-                aria-label="Cadência entre etapas"
-              >
-                <option value={3}>3 segundos</option>
-                <option value={5}>5 segundos</option>
-                <option value={10}>10 segundos</option>
-                <option value={20}>20 segundos</option>
-              </select>
+
+              <div className={styles.cadence}>
+                <div>
+                  <strong>Velocidade de digitação</strong>
+                  <span>
+                    A mensagem é escrita caractere por caractere no campo do WhatsApp.
+                  </span>
+                </div>
+                <select
+                  value={typingDelayMs}
+                  onChange={(event) =>
+                    setTypingDelayMs(
+                      Number(event.target.value) as TypingDelayMs,
+                    )
+                  }
+                  disabled={activeQueue}
+                  aria-label="Velocidade de digitação"
+                >
+                  <option value={40}>Rápida</option>
+                  <option value={80}>Normal</option>
+                  <option value={140}>Lenta</option>
+                  <option value={220}>Muito lenta</option>
+                </select>
+              </div>
             </div>
 
             {queue.length > 0 && (
