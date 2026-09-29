@@ -31,6 +31,7 @@ const allowedOrigins = new Set(
 let browserContext = null;
 let whatsappPage = null;
 let preparedMessage = null;
+let lastSentMessage = null;
 let agentToken = "";
 
 async function loadOrCreateToken() {
@@ -159,6 +160,7 @@ async function launchBrowser() {
     browserContext = null;
     whatsappPage = null;
     preparedMessage = null;
+    lastSentMessage = null;
   });
 
   const pages = browserContext.pages();
@@ -691,12 +693,15 @@ async function prepareMessage(body) {
 
   const lines = message.split("\n");
 
-  for (let index = 0; index < lines.length; index += 1) {
-    if (lines[index]) {
-      await composer.pressSequentially(lines[index], { delay: typingDelayMs });
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const characters = Array.from(lines[lineIndex]);
+
+    for (const character of characters) {
+      await page.keyboard.insertText(character);
+      await page.waitForTimeout(typingDelayMs);
     }
 
-    if (index < lines.length - 1) {
+    if (lineIndex < lines.length - 1) {
       await composer.press("Shift+Enter");
       await page.waitForTimeout(typingDelayMs * 2);
     }
@@ -725,6 +730,8 @@ async function sendPreparedMessage(body) {
     throw new Error("A confirmação não corresponde à mensagem preparada.");
   }
 
+  const sent = { ...preparedMessage };
+
   const page = await getWhatsappPage();
   if (!page) throw new Error("Navegador do WhatsApp Web não está aberto.");
 
@@ -736,22 +743,27 @@ async function sendPreparedMessage(body) {
   await page.bringToFront();
   await waitStage(page);
   await composer.press("Enter");
+  await page.waitForTimeout(700);
 
-  const sent = preparedMessage;
   preparedMessage = null;
+  lastSentMessage = {
+    group: sent.group,
+    message: sent.message,
+    sentAt: new Date().toISOString(),
+  };
 
   return {
     ok: true,
     group: sent.group,
-    sentAt: new Date().toISOString(),
+    sentAt: lastSentMessage.sentAt,
   };
 }
 
 async function findVisibleForwardAction(page) {
   const candidates = [
-    page.getByRole("menuitem", { name: /(encaminhar|forward)/i }),
-    page.getByRole("button", { name: /(encaminhar|forward)/i }),
-    page.getByText(/(encaminhar|forward)/i, { exact: true }),
+    page.getByRole("menuitem").filter({ hasText: /(encaminhar|forward)/i }),
+    page.getByRole("button").filter({ hasText: /(encaminhar|forward)/i }),
+    page.getByText(/^(encaminhar|forward)( mensagem)?$/i),
   ];
 
   for (const locator of candidates) {
@@ -760,7 +772,7 @@ async function findVisibleForwardAction(page) {
     for (let index = 0; index < count; index += 1) {
       const candidate = locator.nth(index);
       try {
-        if (await candidate.isVisible({ timeout: 180 })) return candidate;
+        if (await candidate.isVisible({ timeout: 220 })) return candidate;
       } catch {}
     }
   }
@@ -768,53 +780,262 @@ async function findVisibleForwardAction(page) {
   return null;
 }
 
-async function openForwardPicker(page) {
-  const visibleForward = await findVisibleForwardAction(page);
-  if (visibleForward) {
-    await visibleForward.click({ timeout: 2500 });
-    await waitStage(page);
+async function findLastSentBubble(page) {
+  const message = String(lastSentMessage?.message || "").trim();
+  const snippet = message.replace(/\s+/g, " ").slice(0, 70).trim();
+
+  const candidates = [];
+
+  if (snippet) {
+    candidates.push(
+      page.locator("div.message-out").filter({ hasText: snippet }).last(),
+      page
+        .locator('[data-testid="msg-container"]')
+        .filter({ hasText: snippet })
+        .last(),
+    );
   }
 
-  const dialogs = page.locator('[role="dialog"][aria-modal="true"]');
-  const dialogCount = await dialogs.count().catch(() => 0);
+  candidates.push(
+    page.locator("div.message-out").last(),
+    page.locator('[data-testid="msg-container"].message-out').last(),
+  );
 
-  for (let index = 0; index < dialogCount; index += 1) {
-    const dialog = dialogs.nth(index);
+  for (const candidate of candidates) {
     try {
-      if (await dialog.isVisible({ timeout: 180 })) return dialog;
+      if (await candidate.isVisible({ timeout: 700 })) return candidate;
     } catch {}
   }
 
-  const forwardButtons = [
-    page.getByRole("button", { name: /(encaminhar|forward)/i }),
-    page.locator('[aria-label*="Encaminhar" i]').first(),
-    page.locator('[aria-label*="Forward" i]').first(),
-    page.locator('[data-icon="forward"]').first(),
-  ];
+  if (message) {
+    const textMatches = page.getByText(message, { exact: true });
+    const count = await textMatches.count().catch(() => 0);
 
-  for (const button of forwardButtons) {
-    try {
-      if (!(await button.isVisible({ timeout: 220 }))) continue;
-      await button.click({ timeout: 2500 });
-      await waitStage(page);
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const textNode = textMatches.nth(index);
+      try {
+        if (!(await textNode.isVisible({ timeout: 180 }))) continue;
 
-      const nextDialogs = page.locator('[role="dialog"][aria-modal="true"]');
-      const nextCount = await nextDialogs.count().catch(() => 0);
-      for (let index = 0; index < nextCount; index += 1) {
-        const dialog = nextDialogs.nth(index);
-        if (await dialog.isVisible({ timeout: 180 }).catch(() => false)) {
-          return dialog;
+        const outgoing = textNode.locator(
+          'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " message-out ")][1]',
+        );
+
+        if (
+          (await outgoing.count().catch(() => 0)) > 0 &&
+          (await outgoing.first().isVisible({ timeout: 180 }).catch(() => false))
+        ) {
+          return outgoing.first();
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   return null;
 }
 
+async function clickMessageMenu(page, outgoing) {
+  await outgoing.hover();
+  await page.waitForTimeout(350);
+
+  const triggers = [
+    outgoing.locator('[data-icon="down-context"]').first(),
+    outgoing.locator('[aria-label*="Menu" i]').first(),
+    outgoing.locator('[aria-label*="Mais" i]').first(),
+    outgoing.locator('[role="button"]').last(),
+  ];
+
+  for (const trigger of triggers) {
+    try {
+      if (!(await trigger.isVisible({ timeout: 220 }))) continue;
+      await trigger.click({ timeout: 1800 });
+      await page.waitForTimeout(300);
+
+      if (await findVisibleForwardAction(page)) return;
+    } catch {}
+  }
+
+  const box = await outgoing.boundingBox();
+  if (box) {
+    await page.mouse.move(box.x + box.width - 14, box.y + 14);
+    await page.waitForTimeout(250);
+    await page.mouse.click(box.x + box.width - 14, box.y + 14);
+    await page.waitForTimeout(350);
+
+    if (await findVisibleForwardAction(page)) return;
+  }
+
+  throw new Error(
+    "Não consegui abrir o menu da última mensagem enviada.",
+  );
+}
+
+async function clickForwardSelectionButton(page) {
+  const locators = [
+    page.locator('[data-icon="forward"]'),
+    page.locator('[aria-label*="Encaminhar" i]'),
+    page.locator('[aria-label*="Forward" i]'),
+  ];
+
+  const visible = [];
+
+  for (const locator of locators) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const icon = locator.nth(index);
+      try {
+        if (!(await icon.isVisible({ timeout: 180 }))) continue;
+
+        const clickable = icon.locator(
+          'xpath=ancestor-or-self::*[@role="button" or self::button][1]',
+        );
+        const target =
+          (await clickable.count().catch(() => 0)) > 0
+            ? clickable.first()
+            : icon;
+        const box = await target.boundingBox();
+        if (!box) continue;
+
+        visible.push({ target, y: box.y, x: box.x });
+      } catch {}
+    }
+  }
+
+  visible.sort((a, b) => b.y - a.y || b.x - a.x);
+
+  if (!visible.length) {
+    throw new Error(
+      "A mensagem foi selecionada, mas não encontrei a seta de encaminhamento no canto inferior direito.",
+    );
+  }
+
+  await visible[0].target.click({ timeout: 2200 });
+  await waitStage(page);
+}
+
+async function findForwardSearchBox(page) {
+  const candidates = [
+    page.getByPlaceholder(/pesquisar nome, número ou @nomedeusuário/i),
+    page.getByPlaceholder(/search name, number or username/i),
+    page.locator('input[placeholder*="Pesquisar nome" i]'),
+    page.locator('input[placeholder*="Search name" i]'),
+  ];
+
+  for (const locator of candidates) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const candidate = locator.nth(index);
+      try {
+        if (await candidate.isVisible({ timeout: 250 })) return candidate;
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+async function selectForwardTarget(page, searchBox, targetGroup) {
+  await searchBox.fill("");
+  await searchBox.fill(targetGroup);
+  await waitStage(page);
+
+  const searchBoxBounds = await searchBox.boundingBox();
+  const candidates = [
+    page.getByTitle(targetGroup, { exact: true }),
+    page.getByText(targetGroup, { exact: true }),
+  ];
+
+  const visible = [];
+
+  for (const locator of candidates) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const candidate = locator.nth(index);
+
+      try {
+        if (!(await candidate.isVisible({ timeout: 220 }))) continue;
+        const box = await candidate.boundingBox();
+        if (!box) continue;
+
+        if (
+          searchBoxBounds &&
+          (box.x < searchBoxBounds.x - 60 ||
+            box.x > searchBoxBounds.x + searchBoxBounds.width + 80)
+        ) {
+          continue;
+        }
+
+        visible.push({ candidate, box });
+      } catch {}
+    }
+  }
+
+  visible.sort((a, b) => a.box.y - b.box.y);
+
+  if (!visible.length) {
+    throw new Error("Não encontrei o grupo de destino: " + targetGroup);
+  }
+
+  await visible[0].candidate.click({ timeout: 2200 });
+  await waitStage(page);
+}
+
+async function clickForwardSendButton(page) {
+  const locators = [
+    page.locator('[data-icon="send"]'),
+    page.getByRole("button", { name: /^(enviar|send)$/i }),
+    page.locator('[aria-label*="Enviar" i]'),
+    page.locator('[aria-label*="Send" i]'),
+  ];
+
+  const visible = [];
+
+  for (const locator of locators) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const icon = locator.nth(index);
+      try {
+        if (!(await icon.isVisible({ timeout: 180 }))) continue;
+
+        const clickable = icon.locator(
+          'xpath=ancestor-or-self::*[@role="button" or self::button][1]',
+        );
+        const target =
+          (await clickable.count().catch(() => 0)) > 0
+            ? clickable.first()
+            : icon;
+        const box = await target.boundingBox();
+        if (!box) continue;
+
+        visible.push({ target, y: box.y, x: box.x });
+      } catch {}
+    }
+  }
+
+  visible.sort((a, b) => b.y - a.y || b.x - a.x);
+
+  if (!visible.length) {
+    throw new Error(
+      "Selecionei o grupo, mas não encontrei o botão verde para concluir o encaminhamento.",
+    );
+  }
+
+  await visible[0].target.click({ timeout: 2200 });
+  await waitStage(page);
+}
+
 async function forwardLastMessage(body) {
   const targetGroup = String(body?.group || "").trim();
+
   if (!targetGroup) throw new Error("Informe o grupo de destino.");
+  if (!lastSentMessage?.message) {
+    throw new Error(
+      "Não existe uma mensagem-base enviada para encaminhar.",
+    );
+  }
 
   const page = await launchBrowser();
 
@@ -823,178 +1044,37 @@ async function forwardLastMessage(body) {
   }
 
   await page.bringToFront();
-  await waitStage(page);
 
-  const outgoingCandidates = [
-    page.locator("div.message-out").last(),
-    page.locator('[data-testid="msg-container"].message-out').last(),
-  ];
-
-  let outgoing = null;
-
-  for (const candidate of outgoingCandidates) {
-    try {
-      if (await candidate.isVisible({ timeout: 600 })) {
-        outgoing = candidate;
-        break;
-      }
-    } catch {}
-  }
-
+  const outgoing = await findLastSentBubble(page);
   if (!outgoing) {
     throw new Error(
       "Não encontrei a última mensagem enviada para iniciar o encaminhamento.",
     );
   }
 
-  await outgoing.hover();
-  await waitStage(page);
-
-  const menuTriggers = [
-    outgoing.locator('[data-icon="down-context"]').first(),
-    outgoing.locator('[aria-label*="Menu" i]').first(),
-    outgoing.locator('[role="button"]').filter({ has: outgoing.locator("svg") }).last(),
-  ];
-
-  let menuOpened = false;
-
-  for (const trigger of menuTriggers) {
-    try {
-      if (!(await trigger.isVisible({ timeout: 250 }))) continue;
-      await trigger.click({ timeout: 2000 });
-      menuOpened = true;
-      break;
-    } catch {}
-  }
-
-  if (!menuOpened) {
-    await outgoing.click({ button: "right", timeout: 2000 }).catch(() => {});
-  }
-
-  await waitStage(page);
+  await clickMessageMenu(page, outgoing);
 
   const forwardAction = await findVisibleForwardAction(page);
   if (!forwardAction) {
     throw new Error(
-      "Abri a mensagem, mas não encontrei a opção Encaminhar no WhatsApp Web.",
+      "Abri o menu da mensagem, mas não encontrei a opção Encaminhar.",
     );
   }
 
-  await forwardAction.click({ timeout: 2500 });
+  await forwardAction.click({ timeout: 2200 });
   await waitStage(page);
 
-  let dialog = await openForwardPicker(page);
+  await clickForwardSelectionButton(page);
 
-  if (!dialog) {
-    const visibleDialogs = page.locator('[role="dialog"][aria-modal="true"]');
-    const count = await visibleDialogs.count().catch(() => 0);
-    for (let index = 0; index < count; index += 1) {
-      const candidate = visibleDialogs.nth(index);
-      if (await candidate.isVisible({ timeout: 180 }).catch(() => false)) {
-        dialog = candidate;
-        break;
-      }
-    }
-  }
-
-  const scope = dialog || page;
-
-  const searchCandidates = [
-    scope.getByPlaceholder(/pesquisar/i).first(),
-    scope.getByPlaceholder(/search/i).first(),
-    scope.locator('input[placeholder*="Pesquisar" i]').first(),
-    scope.locator('input[placeholder*="Search" i]').first(),
-    scope.locator('[contenteditable="true"][role="textbox"]').first(),
-    scope.locator('[role="textbox"]').first(),
-  ];
-
-  let searchBox = null;
-
-  for (const candidate of searchCandidates) {
-    try {
-      if (await candidate.isVisible({ timeout: 250 })) {
-        searchBox = candidate;
-        break;
-      }
-    } catch {}
-  }
-
+  const searchBox = await findForwardSearchBox(page);
   if (!searchBox) {
     throw new Error(
-      "A opção Encaminhar abriu, mas não encontrei a busca de destinatários.",
+      "Abri o modal Encaminhar mensagem para, mas não encontrei a busca de destinatários.",
     );
   }
 
-  await searchBox.fill("");
-  await searchBox.fill(targetGroup);
-  await waitStage(page);
-
-  const targetCandidates = [
-    scope.getByTitle(targetGroup, { exact: true }),
-    scope.getByText(targetGroup, { exact: true }),
-    page.getByTitle(targetGroup, { exact: true }),
-    page.getByText(targetGroup, { exact: true }),
-  ];
-
-  let targetClicked = false;
-
-  for (const locator of targetCandidates) {
-    const count = await locator.count().catch(() => 0);
-    for (let index = 0; index < count; index += 1) {
-      const candidate = locator.nth(index);
-      try {
-        if (!(await candidate.isVisible({ timeout: 250 }))) continue;
-        await candidate.click({ timeout: 2000 });
-        targetClicked = true;
-        break;
-      } catch {}
-    }
-    if (targetClicked) break;
-  }
-
-  if (!targetClicked) {
-    throw new Error("Não encontrei o grupo de destino: " + targetGroup);
-  }
-
-  await waitStage(page);
-
-  const confirmCandidates = [
-    page.getByRole("button", { name: /^(encaminhar|forward|enviar|send)$/i }),
-    page.locator('[aria-label*="Encaminhar" i]'),
-    page.locator('[aria-label*="Forward" i]'),
-    page.locator('[data-icon="send"]'),
-    page.locator('[data-icon="forward"]'),
-  ];
-
-  let confirmed = false;
-
-  for (const locator of confirmCandidates) {
-    const count = await locator.count().catch(() => 0);
-
-    for (let index = count - 1; index >= 0; index -= 1) {
-      const candidate = locator.nth(index);
-      try {
-        if (!(await candidate.isVisible({ timeout: 220 }))) continue;
-
-        const box = await candidate.boundingBox();
-        if (!box || box.width <= 0 || box.height <= 0) continue;
-
-        await candidate.click({ timeout: 2500 });
-        confirmed = true;
-        break;
-      } catch {}
-    }
-
-    if (confirmed) break;
-  }
-
-  if (!confirmed) {
-    throw new Error(
-      "Selecionei o grupo, mas não encontrei o botão final de encaminhamento.",
-    );
-  }
-
-  await waitStage(page);
+  await selectForwardTarget(page, searchBox, targetGroup);
+  await clickForwardSendButton(page);
 
   return {
     ok: true,
@@ -1025,6 +1105,7 @@ async function cancelPreparedMessage(body) {
 
 async function closeBrowser() {
   preparedMessage = null;
+  lastSentMessage = null;
 
   if (browserContext) {
     await browserContext.close();
