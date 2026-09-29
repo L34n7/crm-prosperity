@@ -28,6 +28,7 @@ type LinhaRelatorio = {
   resposta_em?: string | null;
   status_mensagem?: string | null;
   erro?: string | null;
+  erro_codigo_meta?: number | string | null;
 };
 
 type TotaisRelatorio = {
@@ -427,7 +428,49 @@ export async function GET(req: NextRequest) {
     const linhas = Array.isArray(linhasData)
       ? (linhasData as LinhaRelatorio[])
       : [];
-    const totais = calcularTotais(linhas);
+
+    const { data: itensErroData, error: itensErroError } = await supabaseAdmin
+      .from("whatsapp_disparo_itens")
+      .select("numero,erro,erro_codigo_meta,created_at")
+      .eq("empresa_id", empresaId)
+      .eq("campanha_id", campanhaId)
+      .order("created_at", { ascending: true });
+
+    if (itensErroError) {
+      console.warn(
+        "[RELATORIO DISPAROS] Não foi possível enriquecer os códigos de erro:",
+        itensErroError
+      );
+    }
+
+    const errosPorNumero = new Map<
+      string,
+      Array<{ erro?: string | null; erro_codigo_meta?: number | string | null }>
+    >();
+
+    for (const item of itensErroData || []) {
+      const chave = String(item.numero || "");
+      const fila = errosPorNumero.get(chave) || [];
+      fila.push({
+        erro: item.erro || null,
+        erro_codigo_meta: item.erro_codigo_meta || null,
+      });
+      errosPorNumero.set(chave, fila);
+    }
+
+    const linhasComCodigos = linhas.map((linha) => {
+      const chave = String(linha.numero || "");
+      const fila = errosPorNumero.get(chave) || [];
+      const itemErro = fila.shift() || null;
+
+      return {
+        ...linha,
+        erro: linha.erro || itemErro?.erro || null,
+        erro_codigo_meta: itemErro?.erro_codigo_meta || null,
+      };
+    });
+
+    const totais = calcularTotais(linhasComCodigos);
     const quantidadeBaseCusto = Math.max(
       0,
       Number(campanha.total_enviados || 0),
@@ -439,7 +482,7 @@ export async function GET(req: NextRequest) {
     });
     const nomeCampanha = nomeCampanhaRelatorio(campanha);
 
-    const linhasDetalhadas = linhas.map((linha) => ({
+    const linhasDetalhadas = linhasComCodigos.map((linha) => ({
       ...linha,
       status_final: statusDetalhado(linha),
       status_label: statusDetalhadoLabel(linha),
