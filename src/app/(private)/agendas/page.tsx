@@ -23,6 +23,7 @@ import {
   History,
   Link2,
   MessageCircle,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -56,6 +57,7 @@ import AgendaTemplateConfiguration, {
 import AgendaRelatedRecords from "./AgendaRelatedRecords";
 import AgendaAppointmentDetails from "./AgendaAppointmentDetails";
 import AgendaCapacityControls from "./AgendaCapacityControls";
+import AgendaTypeManager from "./AgendaTypeManager";
 
 import styles from "./page.module.css";
 
@@ -469,6 +471,7 @@ function Page() {
   const [participantResults, setParticipantResults] = useState<Contato[]>([]);
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [typeModal, setTypeModal] = useState(false),
+    [typeManagerOpen, setTypeManagerOpen] = useState(false),
     [typeDraft, setTypeDraft] = useState({ nome: "", cor: "#22c55e" }),
     [typeBusy, setTypeBusy] = useState(false),
     [typeError, setTypeError] = useState("");
@@ -2421,8 +2424,23 @@ function Page() {
                           </option>
                         ))}
                       </select>
-                      <button className="btn" onClick={customType}>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={customType}
+                        aria-label="Criar novo tipo"
+                        title="Criar novo tipo"
+                      >
                         <Plus size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => setTypeManagerOpen(true)}
+                        aria-label="Gerenciar tipos criados"
+                        title="Gerenciar tipos criados"
+                      >
+                        <Pencil size={14} />
                       </button>
                     </div>
                   </div>
@@ -3295,6 +3313,25 @@ function Page() {
           </div>
         </div>
       )}
+      <AgendaTypeManager
+        open={typeManagerOpen}
+        onOpenChange={setTypeManagerOpen}
+        onTypeUpdated={(updatedType) => {
+          setTipos((current) =>
+            current.map((type) =>
+              type.id === updatedType.id ? updatedType : type,
+            ),
+          );
+        }}
+        onTypeDeleted={(typeId) => {
+          setTipos((current) => current.filter((type) => type.id !== typeId));
+          setForm((current) =>
+            current.tipo_id === typeId
+              ? { ...current, tipo_id: "" }
+              : current,
+          );
+        }}
+      />
       {typeModal && (
         <div
           className="modalbg typeModalBg"

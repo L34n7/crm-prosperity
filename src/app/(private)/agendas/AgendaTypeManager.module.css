@@ -1,31 +1,3 @@
-.trigger {
-  position: fixed;
-  right: 28px;
-  bottom: 28px;
-  z-index: 55;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 40px;
-  padding: 0 13px;
-  border: 1px solid var(--crm-danger-border);
-  border-radius: 12px;
-  background: var(--crm-surface);
-  color: var(--crm-danger-text);
-  box-shadow: var(--crm-shadow-sm);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: transform .16s ease, background .16s ease, border-color .16s ease;
-}
-
-.trigger:hover {
-  transform: translateY(-1px);
-  background: var(--crm-danger-bg);
-}
-
 .overlay {
   position: fixed;
   inset: 0;
@@ -60,7 +32,7 @@
 .header span {
   display: block;
   margin-bottom: 3px;
-  color: var(--crm-danger-text);
+  color: var(--crm-primary-text);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: .06em;
@@ -122,6 +94,11 @@
   padding: 11px 12px;
 }
 
+.rowEditing {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
 .typeIdentity {
   display: flex;
   align-items: center;
@@ -139,6 +116,38 @@
 
 .typeIdentity div {
   min-width: 0;
+}
+
+.typeNameArea {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.editInput {
+  width: min(250px, 100%);
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 9px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.editInput:focus {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex: 0 0 auto;
 }
 
 .typeIdentity strong {
@@ -159,6 +168,8 @@
 }
 
 .deleteButton,
+.editButton,
+.applyButton,
 .secondaryButton,
 .dangerButton {
   display: inline-flex;
@@ -179,6 +190,37 @@
   border: 1px solid var(--crm-danger-border);
   background: var(--crm-danger-bg);
   color: var(--crm-danger-text);
+}
+
+.editButton {
+  width: 36px;
+  padding: 0;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+}
+
+.editButton:hover {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.applyButton {
+  border: 1px solid var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.applyButton:hover {
+  background: var(--crm-primary-strong-hover);
+}
+
+.editButton:disabled,
+.applyButton:disabled,
+.deleteButton:disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }
 
 .deleteButton:hover,
@@ -249,11 +291,6 @@
 }
 
 @media (max-width: 720px) {
-  .trigger {
-    right: 14px;
-    bottom: 18px;
-  }
-
   .overlay {
     padding: 12px;
   }
@@ -263,8 +300,13 @@
     flex-direction: column;
   }
 
-  .deleteButton {
+  .rowActions {
     width: 100%;
+  }
+
+  .deleteButton,
+  .applyButton {
+    flex: 1 1 auto;
   }
 
   .confirmActions {
