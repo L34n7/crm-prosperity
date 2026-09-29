@@ -667,9 +667,9 @@ async function sendPreparedMessage(body) {
 
 async function findVisibleForwardAction(page) {
   const candidates = [
-    page.getByRole("menuitem", { name: /^(encaminhar|forward)$/i }),
-    page.getByRole("button", { name: /^(encaminhar|forward)$/i }),
-    page.getByText(/^(encaminhar|forward)$/i, { exact: true }),
+    page.getByRole("menuitem", { name: /(encaminhar|forward)/i }),
+    page.getByRole("button", { name: /(encaminhar|forward)/i }),
+    page.getByText(/(encaminhar|forward)/i, { exact: true }),
   ];
 
   for (const locator of candidates) {
@@ -704,7 +704,7 @@ async function openForwardPicker(page) {
   }
 
   const forwardButtons = [
-    page.getByRole("button", { name: /^(encaminhar|forward)$/i }),
+    page.getByRole("button", { name: /(encaminhar|forward)/i }),
     page.locator('[aria-label*="Encaminhar" i]').first(),
     page.locator('[aria-label*="Forward" i]').first(),
     page.locator('[data-icon="forward"]').first(),
