@@ -68,12 +68,12 @@ const SIMULATION_STEPS = [
     description: "Preencha a mensagem no campo da conversa.",
   },
   {
-    title: "Revisar",
-    description: "Confira o grupo e o conteúdo antes de confirmar.",
+    title: "Preparar envio",
+    description: "Confira visualmente o grupo e a mensagem preparada.",
   },
   {
-    title: "Enviar",
-    description: "Confirme o envio e avance para o próximo grupo.",
+    title: "Enviar e avançar",
+    description: "O agente envia e segue automaticamente para o próximo grupo.",
   },
 ] as const;
 
@@ -569,7 +569,7 @@ export default function WhatsappWebLocalPage() {
             <div className={styles.sectionTitle}>
               <div>
                 <span>3. Mensagem</span>
-                <h2>Sequência controlada</h2>
+                <h2>Execução automática</h2>
               </div>
               <button
                 type="button"
