@@ -397,63 +397,29 @@
   font-size: 9px;
 }
 
-.timingGrid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 9px;
+.rhythmInfo {
   margin-top: 12px;
-}
-
-.cadence {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 0;
   padding: 11px 12px;
   border: 1px solid var(--crm-border);
   border-radius: 10px;
   background: var(--crm-surface-muted);
 }
 
-.cadence > div {
-  min-width: 0;
-}
-
-.cadence strong,
-.cadence span {
+.rhythmInfo strong,
+.rhythmInfo span {
   display: block;
 }
 
-.cadence strong {
+.rhythmInfo strong {
   color: var(--crm-text-strong);
   font-size: 11px;
 }
 
-.cadence span {
+.rhythmInfo span {
   margin-top: 2px;
   color: var(--crm-text-muted);
   font-size: 9px;
-  line-height: 1.4;
-}
-
-.cadence select {
-  min-width: 130px;
-  height: 34px;
-  border: 1px solid var(--crm-border);
-  border-radius: 8px;
-  padding: 0 9px;
-  color: var(--crm-text-strong);
-  background: var(--crm-surface);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 750;
-  outline: none;
-}
-
-.cadence select:focus {
-  border-color: var(--crm-primary-border);
-  box-shadow: 0 0 0 3px var(--crm-primary-soft);
+  line-height: 1.45;
 }
 
 .queue {
@@ -517,6 +483,69 @@
   gap: 8px;
   margin-top: 13px;
   flex-wrap: wrap;
+}
+
+.historyCard {
+  max-width: 1560px;
+  margin: 14px auto 0;
+  padding: 17px;
+  border: 1px solid var(--crm-border);
+  border-radius: 15px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.historyEmpty {
+  margin-top: 14px;
+  padding: 22px;
+  border: 1px dashed var(--crm-border-strong);
+  border-radius: 10px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.historyList {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.historyRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 9px;
+  background: var(--crm-surface-muted);
+}
+
+.historyRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historyRow > span:last-child {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.historyStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--crm-primary-text);
+  font-size: 10px;
+  font-weight: 850;
 }
 
 .simulationOverlay {
@@ -878,13 +907,13 @@
     grid-template-columns: 1fr;
   }
 
-  .cadence {
-    align-items: stretch;
-    flex-direction: column;
+  .historyRow {
+    grid-template-columns: 1fr;
+    gap: 5px;
   }
 
-  .cadence select {
-    width: 100%;
+  .historyRow > span:last-child {
+    white-space: normal;
   }
 
   .primary,
