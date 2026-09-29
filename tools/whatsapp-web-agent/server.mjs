@@ -317,7 +317,7 @@ async function openGroup(page, group) {
   await searchBox.fill(group);
   await page.waitForTimeout(450);
 
-  const byTitle = page.locator(`span[title="${CSS.escape(group)}"]`).first();
+  const byTitle = page.getByTitle(group, { exact: true }).first();
   let clicked = false;
 
   try {
