@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Layers3,
+  Pin,
   Plus,
   Shuffle,
   Trash2,
@@ -37,9 +38,11 @@ type DistributionGroup = {
 type AgendaCapacityControlsProps = {
   calendars: CalendarOption[];
   selectedIds: string[];
+  pinnedIds: string[];
   primaryId: string;
   canEdit: boolean;
-  onSelectedIdsChange: (ids: string[]) => void;
+  onApplySelectedIds: (ids: string[]) => void;
+  onPinnedIdsChange: (ids: string[]) => void;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
 };
@@ -63,13 +66,18 @@ function emptyDraft() {
 export default function AgendaCapacityControls({
   calendars,
   selectedIds,
+  pinnedIds,
   primaryId,
   canEdit,
-  onSelectedIdsChange,
+  onApplySelectedIds,
+  onPinnedIdsChange,
   onSuccess,
   onError,
 }: AgendaCapacityControlsProps) {
   const [viewOpen, setViewOpen] = useState(false);
+  const [draftSelectedIds, setDraftSelectedIds] = useState<string[]>(selectedIds);
+  const [draftPinnedIds, setDraftPinnedIds] = useState<string[]>(pinnedIds);
+  const [savingView, setSavingView] = useState(false);
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [groups, setGroups] = useState<DistributionGroup[]>([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
@@ -82,9 +90,10 @@ export default function AgendaCapacityControls({
   );
 
   useEffect(() => {
-    if (!primaryId || selectedIds.includes(primaryId)) return;
-    onSelectedIdsChange([primaryId, ...selectedIds]);
-  }, [primaryId, selectedIds, onSelectedIdsChange]);
+    if (viewOpen) return;
+    setDraftSelectedIds(selectedIds);
+    setDraftPinnedIds(pinnedIds);
+  }, [pinnedIds, selectedIds, viewOpen]);
 
   async function loadGroups() {
     try {
@@ -116,16 +125,105 @@ export default function AgendaCapacityControls({
     await loadGroups();
   }
 
-  function toggleVisible(id: string) {
-    if (id === primaryId && selectedIds.includes(id)) return;
+  function toggleViewMenu() {
+    if (!viewOpen) {
+      setDraftSelectedIds(selectedIds);
+      setDraftPinnedIds(pinnedIds);
+    }
+    setViewOpen((value) => !value);
+  }
 
-    if (selectedIds.includes(id)) {
-      const next = selectedIds.filter((item) => item !== id);
-      onSelectedIdsChange(next.length > 0 ? next : primaryId ? [primaryId] : []);
+  function toggleVisible(id: string) {
+    setDraftSelectedIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  }
+
+  function togglePinned(id: string) {
+    setDraftPinnedIds((current) => {
+      const isPinned = current.includes(id);
+      if (!isPinned) {
+        setDraftSelectedIds((selected) =>
+          selected.includes(id) ? selected : [...selected, id],
+        );
+      }
+      return isPinned
+        ? current.filter((item) => item !== id)
+        : [...current, id];
+    });
+  }
+
+  function restorePinnedView() {
+    const fixed = activeCalendars
+      .filter((calendar) => pinnedIds.includes(calendar.id))
+      .map((calendar) => calendar.id);
+
+    if (fixed.length > 0) {
+      setDraftSelectedIds(fixed);
       return;
     }
 
-    onSelectedIdsChange([...selectedIds, id]);
+    const fallback =
+      activeCalendars.find((calendar) => calendar.id === primaryId)?.id ||
+      activeCalendars[0]?.id ||
+      "";
+    setDraftSelectedIds(fallback ? [fallback] : []);
+  }
+
+  async function applyView() {
+    const nextSelected = activeCalendars
+      .filter((calendar) => draftSelectedIds.includes(calendar.id))
+      .map((calendar) => calendar.id);
+    const nextPinned = activeCalendars
+      .filter((calendar) => draftPinnedIds.includes(calendar.id))
+      .map((calendar) => calendar.id);
+    const currentPinned = activeCalendars
+      .filter((calendar) => pinnedIds.includes(calendar.id))
+      .map((calendar) => calendar.id);
+
+    if (nextSelected.length === 0) {
+      onError("Selecione pelo menos um calendário para visualizar.");
+      return;
+    }
+
+    const pinnedChanged = nextPinned.join("|") !== currentPinned.join("|");
+
+    try {
+      setSavingView(true);
+
+      if (pinnedChanged) {
+        const response = await fetch("/api/agendas/visualizacao", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agenda_ids: nextPinned }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.ok) {
+          throw new Error(
+            data?.error || "Não foi possível salvar os calendários fixados.",
+          );
+        }
+      }
+
+      onPinnedIdsChange(nextPinned);
+      onApplySelectedIds(nextSelected);
+      setViewOpen(false);
+      onSuccess(
+        pinnedChanged
+          ? "Visualização e calendários fixados atualizados."
+          : "Visualização atualizada.",
+      );
+    } catch (error) {
+      onError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar a visualização.",
+      );
+    } finally {
+      setSavingView(false);
+    }
   }
 
   function editGroup(group: DistributionGroup) {
@@ -228,10 +326,10 @@ export default function AgendaCapacityControls({
           <button
             type="button"
             className="btn"
-            onClick={() => setViewOpen((value) => !value)}
+            onClick={toggleViewMenu}
           >
             <Layers3 size={15} />
-            Visualizar juntos
+            Visualizar
             <span className={styles.multiCalendarCount}>
               {selectedIds.length}
             </span>
@@ -244,7 +342,7 @@ export default function AgendaCapacityControls({
                 <div>
                   <strong>Calendários exibidos</strong>
                   <small>
-                    Apenas visualização. Isso não altera regras de ocupação.
+                    Selecione os calendários, fixe seu padrão e clique em Aplicar.
                   </small>
                 </div>
                 <button
@@ -259,55 +357,94 @@ export default function AgendaCapacityControls({
 
               <div className={styles.multiCalendarOptions}>
                 {activeCalendars.map((calendar) => {
-                  const checked = selectedIds.includes(calendar.id);
+                  const checked = draftSelectedIds.includes(calendar.id);
+                  const pinned = draftPinnedIds.includes(calendar.id);
+
                   return (
-                    <label
+                    <div
                       key={calendar.id}
                       className={[
                         styles.multiCalendarOption,
                         checked ? styles.multiCalendarOptionActive : "",
                       ].filter(Boolean).join(" ")}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleVisible(calendar.id)}
-                      />
-                      <span>
-                        <strong>{calendar.nome}</strong>
-                        {calendar.id === primaryId ? (
-                          <small>Calendário principal</small>
-                        ) : null}
-                      </span>
-                    </label>
+                      <label className={styles.multiCalendarOptionChoice}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleVisible(calendar.id)}
+                        />
+                        <span>
+                          <strong>{calendar.nome}</strong>
+                          <small>
+                            {calendar.id === primaryId
+                              ? "Calendário principal"
+                              : pinned
+                                ? "Fixado para abrir automaticamente"
+                                : "Disponível para visualização"}
+                          </small>
+                        </span>
+                      </label>
+
+                      <button
+                        type="button"
+                        className={[
+                          styles.multiCalendarPin,
+                          pinned ? styles.multiCalendarPinActive : "",
+                        ].filter(Boolean).join(" ")}
+                        onClick={() => togglePinned(calendar.id)}
+                        aria-pressed={pinned}
+                        aria-label={
+                          pinned
+                            ? `Desafixar ${calendar.nome}`
+                            : `Fixar ${calendar.nome}`
+                        }
+                        title={
+                          pinned
+                            ? "Remover da visualização fixa"
+                            : "Fixar para abrir sempre com este calendário"
+                        }
+                      >
+                        <Pin size={15} />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
 
               <div className={styles.multiCalendarMenuFooter}>
+                <div className={styles.multiCalendarMenuShortcuts}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={restorePinnedView}
+                    disabled={savingView}
+                    title="Restaurar a seleção para os calendários fixados"
+                  >
+                    Somente principal
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() =>
+                      setDraftSelectedIds(
+                        activeCalendars.map((calendar) => calendar.id),
+                      )
+                    }
+                    disabled={savingView}
+                  >
+                    Mostrar todos
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  className="btn"
-                  onClick={() =>
-                    onSelectedIdsChange(
-                      primaryId
-                        ? [primaryId]
-                        : activeCalendars.slice(0, 1).map((calendar) => calendar.id),
-                    )
-                  }
+                  className={`btn primary ${styles.multiCalendarApply}`}
+                  onClick={() => void applyView()}
+                  disabled={savingView || draftSelectedIds.length === 0}
                 >
-                  Somente principal
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() =>
-                    onSelectedIdsChange(
-                      activeCalendars.map((calendar) => calendar.id),
-                    )
-                  }
-                >
-                  Mostrar todos
+                  <Check size={14} />
+                  {savingView ? "Salvando..." : "Aplicar"}
                 </button>
               </div>
             </div>

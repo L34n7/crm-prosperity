@@ -2024,12 +2024,12 @@
 .multiCalendarOption {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 11px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 5px 4px 11px;
   border: 1px solid var(--crm-border);
   border-radius: 11px;
   background: var(--crm-surface);
-  cursor: pointer;
 }
 
 .multiCalendarOptionActive {
@@ -2037,7 +2037,17 @@
   background: var(--crm-primary-soft);
 }
 
-.multiCalendarOption > span {
+.multiCalendarOptionChoice {
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.multiCalendarOptionChoice > span {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -2056,9 +2066,55 @@
   font-size: 10px;
 }
 
+.multiCalendarPin {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--crm-text-muted);
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.multiCalendarPin:hover {
+  border-color: var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+}
+
+.multiCalendarPinActive {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-surface);
+  color: var(--crm-primary-strong);
+}
+
+.multiCalendarPinActive svg {
+  fill: currentColor;
+}
+
 .multiCalendarMenuFooter {
+  flex-wrap: wrap;
   border-top: 1px solid var(--crm-border);
   background: var(--crm-surface-soft);
+}
+
+.multiCalendarMenuShortcuts {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.multiCalendarApply {
+  margin-left: auto;
 }
 
 .distributionModal {

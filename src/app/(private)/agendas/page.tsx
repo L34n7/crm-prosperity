@@ -263,12 +263,6 @@ const relatedTypeLabels: Record<string, string> = {
   processo: "Processo",
   outro: "Outro",
 };
-const calendarLabel = (value: string) =>
-  value
-    .replace(/\bAgendas\b/g, "Calendários")
-    .replace(/\bagendas\b/g, "calendários")
-    .replace(/\bAgenda\b/g, "Calendário")
-    .replace(/\bagenda\b/g, "calendário");
 const p = (n: number) => String(n).padStart(2, "0"),
   key = (d: Date) =>
     `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
@@ -424,6 +418,7 @@ function Page() {
   const [agendas, setAgendas] = useState<Agenda[]>([]),
     [agendaId, setAgendaId] = useState(""),
     [agendaIdsVisiveis, setAgendaIdsVisiveis] = useState<string[]>([]),
+    [agendaIdsFixados, setAgendaIdsFixados] = useState<string[]>([]),
     [ags, setAgs] = useState<Ag[]>([]),
     [tipos, setTipos] = useState<Tipo[]>([]),
     [resps, setResps] = useState<Resp[]>([]),
@@ -634,15 +629,63 @@ function Page() {
       const r = await fetch("/api/agendas?status=todos", { cache: "no-store" }),
         j = await r.json();
       if (!r.ok || !j.ok) throw Error(j.error || "Erro ao carregar agendas.");
-      setAgendas(j.agendas || []);
+
+      const lista = (j.agendas || []) as Agenda[];
+      setAgendas(lista);
       setAgendaId((v) => {
         const x = prefer || v || sp.get("agenda") || "";
-        return j.agendas.some((a: Agenda) => a.id === x)
+        return lista.some((a: Agenda) => a.id === x)
           ? x
-          : j.agendas.find((a: Agenda) => a.status === "ativo")?.id ||
-              j.agendas[0]?.id ||
+          : lista.find((a: Agenda) => a.status === "ativo")?.id ||
+              lista[0]?.id ||
               "";
       });
+
+      return lista;
+    },
+    [sp],
+  );
+
+  const loadAgendaViewPreferences = useCallback(
+    async (calendars: Agenda[]) => {
+      try {
+        const response = await fetch("/api/agendas/visualizacao", {
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.ok) return;
+
+        const activeIds = new Set(
+          calendars
+            .filter((calendar) => calendar.status !== "arquivado")
+            .map((calendar) => calendar.id),
+        );
+        const fixedIds = Array.from(
+          new Set(
+            (Array.isArray(data.agenda_ids) ? data.agenda_ids : [])
+              .map((id: unknown) => String(id || "").trim())
+              .filter((id: string) => activeIds.has(id)),
+          ),
+        );
+
+        setAgendaIdsFixados(fixedIds);
+
+        const explicitAgendaId = String(sp.get("agenda") || "").trim();
+        if (explicitAgendaId && activeIds.has(explicitAgendaId)) {
+          setAgendaId(explicitAgendaId);
+          setAgendaIdsVisiveis([explicitAgendaId]);
+          return;
+        }
+
+        if (fixedIds.length > 0) {
+          setAgendaId((current) =>
+            fixedIds.includes(current) ? current : fixedIds[0],
+          );
+          setAgendaIdsVisiveis(fixedIds);
+        }
+      } catch {
+        // A preferência é complementar: a agenda continua funcional sem ela.
+      }
     },
     [sp],
   );
@@ -883,10 +926,13 @@ function Page() {
     }
   }, []);
   useEffect(() => {
-    Promise.all([loadAgendas(), loadFeedback()])
+    Promise.all([
+      loadAgendas().then((calendars) => loadAgendaViewPreferences(calendars)),
+      loadFeedback(),
+    ])
       .catch((e) => setErr(e.message))
       .finally(() => setLoad(false));
-  }, [loadAgendas, loadFeedback]);
+  }, [loadAgendaViewPreferences, loadAgendas, loadFeedback]);
   useEffect(() => {
     let active = true;
 
@@ -1705,34 +1751,19 @@ function Page() {
       />
       <main className="wrap">
         <div className={`head ${styles.calendarManagementBar}`}>
-          <select
-            className={`select ${styles.calendarSelect}`}
-            value={agendaId}
-            onChange={(event) => {
-              const proximoAgendaId = event.target.value;
-              setAgendaId(proximoAgendaId);
-              setAgendaIdsVisiveis(
-                proximoAgendaId ? [proximoAgendaId] : [],
-              );
-            }}
-          >
-            {agendas.length === 0 ? (
-              <option value="">Nenhum calendário</option>
-            ) : null}
-            {agendas.map((item) => (
-              <option key={item.id} value={item.id}>
-                {calendarLabel(item.nome)}
-                {item.status === "arquivado" ? " (arquivado)" : ""}
-              </option>
-            ))}
-          </select>
-
           <AgendaCapacityControls
             calendars={agendas}
             selectedIds={agendaIdsVisiveis}
+            pinnedIds={agendaIdsFixados}
             primaryId={agendaId}
             canEdit={podeEditarAgenda}
-            onSelectedIdsChange={setAgendaIdsVisiveis}
+            onApplySelectedIds={(ids) => {
+              setAgendaIdsVisiveis(ids);
+              setAgendaId((current) =>
+                ids.includes(current) ? current : ids[0] || "",
+              );
+            }}
+            onPinnedIdsChange={setAgendaIdsFixados}
             onSuccess={setOk}
             onError={setErr}
           />
