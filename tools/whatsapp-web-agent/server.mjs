@@ -372,7 +372,7 @@ async function openFiltersOverflow(page) {
   for (const candidate of candidates) {
     try {
       await candidate.locator.click({ timeout: 1500 });
-      await page.waitForTimeout(220);
+      await page.waitForTimeout(450);
 
       const groupOption = await findVisibleGroupOption(page);
       if (groupOption) return groupOption;
@@ -609,7 +609,19 @@ async function prepareMessage(body) {
   await waitStage(page, cadenceSeconds);
   await composer.fill("");
   await composer.click();
-  await composer.pressSequentially(message, { delay: typingDelayMs });
+
+  const lines = message.split("\n");
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index]) {
+      await composer.pressSequentially(lines[index], { delay: typingDelayMs });
+    }
+
+    if (index < lines.length - 1) {
+      await composer.press("Shift+Enter");
+      await page.waitForTimeout(typingDelayMs * 2);
+    }
+  }
 
   preparedMessage = {
     id: randomUUID(),
