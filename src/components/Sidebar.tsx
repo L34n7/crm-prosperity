@@ -211,6 +211,12 @@ const menuItems: MenuItem[] = [
     permissao: PERMISSAO_RELATORIOS_INTERNOS,
   },
   {
+    label: "WhatsApp Web local",
+    href: "/whatsapp-web",
+    icon: MessageCircle,
+    permissao: PERMISSAO_VISUALIZAR_DISPAROS,
+  },
+  {
     label: "Perfil WhatsApp",
     href: "/perfil-whatsapp",
     icon: Settings2,
