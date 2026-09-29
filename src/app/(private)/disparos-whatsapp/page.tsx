@@ -1697,6 +1697,33 @@ function motivoCampanhaRealtime(row: CampanhaDisparoRealtimeRow) {
   }
 }
 
+function ordenarCampanhasPaginaPorCriacao(
+  campanhas: CampanhaDisparoAndamento[]
+) {
+  return [...campanhas].sort((a, b) => {
+    const criadaA = String(a.created_at || "");
+    const criadaB = String(b.created_at || "");
+    const criadaAMs = Date.parse(criadaA);
+    const criadaBMs = Date.parse(criadaB);
+
+    if (Number.isFinite(criadaAMs) && Number.isFinite(criadaBMs)) {
+      const diferenca = criadaAMs - criadaBMs;
+
+      if (diferenca !== 0) return diferenca;
+
+      if (criadaA !== criadaB) {
+        return criadaA.localeCompare(criadaB, "pt-BR");
+      }
+    } else if (Number.isFinite(criadaAMs)) {
+      return -1;
+    } else if (Number.isFinite(criadaBMs)) {
+      return 1;
+    }
+
+    return String(a.id || "").localeCompare(String(b.id || ""), "pt-BR");
+  });
+}
+
 function normalizarCampanhaRealtime(
   row: unknown
 ): CampanhaDisparoAndamento | null {
@@ -2185,7 +2212,10 @@ export default function DisparosWhatsAppPage() {
           const restantes = atuais.filter(
             (campanha) => campanha.id !== campanhaAtual.id
           );
-          return [campanhaAtual, ...restantes].slice(0, 25);
+          return ordenarCampanhasPaginaPorCriacao([
+            campanhaAtual,
+            ...restantes,
+          ]).slice(0, 25);
         });
       }
 
@@ -2247,11 +2277,13 @@ export default function DisparosWhatsAppPage() {
 
         if (!res.ok || json.ok === false) return;
 
-        const lista = Array.isArray(json.campanhas)
-          ? json.campanhas
-          : json.campanha
-          ? [json.campanha]
-          : [];
+        const lista = ordenarCampanhasPaginaPorCriacao(
+          Array.isArray(json.campanhas)
+            ? json.campanhas
+            : json.campanha
+            ? [json.campanha]
+            : []
+        );
 
         if (integracaoConsultaId) {
           setCampanhasPagina((atuais) => {
@@ -2259,7 +2291,10 @@ export default function DisparosWhatsAppPage() {
               (campanha) =>
                 campanha.integracao_whatsapp_id !== integracaoConsultaId
             );
-            return [...lista, ...semIntegracao].slice(0, 25);
+            return ordenarCampanhasPaginaPorCriacao([
+              ...lista,
+              ...semIntegracao,
+            ]).slice(0, 25);
           });
         } else {
           setCampanhasPagina(lista);
@@ -3262,7 +3297,10 @@ export default function DisparosWhatsAppPage() {
             const restantes = atuais.filter(
               (campanha) => campanha.id !== campanhaRealtime.id
             );
-            return [campanhaRealtime, ...restantes].slice(0, 25);
+            return ordenarCampanhasPaginaPorCriacao([
+              campanhaRealtime,
+              ...restantes,
+            ]).slice(0, 25);
           });
 
           setCampanhaPagina((atual) =>
