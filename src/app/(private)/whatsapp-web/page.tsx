@@ -39,8 +39,12 @@ type Prepared = {
 
 type QueueState = "pending" | "ready" | "sent" | "error";
 type QueueItem = { group: string; status: QueueState; error?: string };
-type CadenceSeconds = 3 | 5 | 10 | 20;
-type TypingDelayMs = 40 | 80 | 140 | 220;
+type ExecutionHistoryItem = {
+  id: string;
+  group: string;
+  sentAt: string;
+  status: "sent";
+};
 
 const SIMULATION_STEPS = [
   {
@@ -76,6 +80,7 @@ const SIMULATION_STEPS = [
 const AGENT_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_WEB_AGENT_URL || "http://127.0.0.1:3784";
 const TOKEN_KEY = "prosperity-whatsapp-web-agent-token";
+const HISTORY_KEY = "prosperity-whatsapp-web-history";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -88,8 +93,6 @@ export default function WhatsappWebLocalPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
-  const [cadenceSeconds, setCadenceSeconds] = useState<CadenceSeconds>(5);
-  const [typingDelayMs, setTypingDelayMs] = useState<TypingDelayMs>(80);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
@@ -98,6 +101,7 @@ export default function WhatsappWebLocalPage() {
   const [error, setError] = useState("");
   const [simulationOpen, setSimulationOpen] = useState(false);
   const [simulationStep, setSimulationStep] = useState(0);
+  const [history, setHistory] = useState<ExecutionHistoryItem[]>([]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
@@ -112,6 +116,13 @@ export default function WhatsappWebLocalPage() {
 
   useEffect(() => {
     setToken(window.localStorage.getItem(TOKEN_KEY) || "");
+
+    try {
+      const saved = window.localStorage.getItem(HISTORY_KEY);
+      setHistory(saved ? JSON.parse(saved) : []);
+    } catch {
+      setHistory([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -155,6 +166,19 @@ export default function WhatsappWebLocalPage() {
   function saveToken(value: string) {
     setToken(value);
     window.localStorage.setItem(TOKEN_KEY, value.trim());
+  }
+
+  function appendHistory(item: ExecutionHistoryItem) {
+    setHistory((current) => {
+      const next = [item, ...current].slice(0, 100);
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function clearHistory() {
+    setHistory([]);
+    window.localStorage.removeItem(HISTORY_KEY);
   }
 
   async function refreshStatus(showFeedback = true) {
@@ -242,8 +266,6 @@ export default function WhatsappWebLocalPage() {
         body: JSON.stringify({
           group,
           message,
-          cadenceSeconds,
-          typingDelayMs,
         }),
       });
       setPrepared(next);
@@ -298,12 +320,22 @@ export default function WhatsappWebLocalPage() {
     setBusy("send");
 
     try {
-      await agentRequest("/messages/send", {
+      const sent = await agentRequest<{
+        ok: boolean;
+        group: string;
+        sentAt: string;
+      }>("/messages/send", {
         method: "POST",
         body: JSON.stringify({
           confirmationId: prepared.confirmationId,
-          cadenceSeconds,
         }),
+      });
+
+      appendHistory({
+        id: prepared.confirmationId,
+        group: sent.group,
+        sentAt: sent.sentAt,
+        status: "sent",
       });
 
       setQueue((current) =>
@@ -561,53 +593,13 @@ export default function WhatsappWebLocalPage() {
               <small>{message.length}/8000</small>
             </label>
 
-            <div className={styles.timingGrid}>
-              <div className={styles.cadence}>
-                <div>
-                  <strong>Cadência entre etapas</strong>
-                  <span>
-                    Intervalo fixo aplicado à navegação, preparação e confirmação.
-                  </span>
-                </div>
-                <select
-                  value={cadenceSeconds}
-                  onChange={(event) =>
-                    setCadenceSeconds(
-                      Number(event.target.value) as CadenceSeconds,
-                    )
-                  }
-                  disabled={activeQueue}
-                  aria-label="Cadência entre etapas"
-                >
-                  <option value={3}>3 segundos</option>
-                  <option value={5}>5 segundos</option>
-                  <option value={10}>10 segundos</option>
-                  <option value={20}>20 segundos</option>
-                </select>
-              </div>
-
-              <div className={styles.cadence}>
-                <div>
-                  <strong>Velocidade de digitação</strong>
-                  <span>
-                    A mensagem é escrita caractere por caractere no campo do WhatsApp.
-                  </span>
-                </div>
-                <select
-                  value={typingDelayMs}
-                  onChange={(event) =>
-                    setTypingDelayMs(
-                      Number(event.target.value) as TypingDelayMs,
-                    )
-                  }
-                  disabled={activeQueue}
-                  aria-label="Velocidade de digitação"
-                >
-                  <option value={40}>Rápida</option>
-                  <option value={80}>Normal</option>
-                  <option value={140}>Lenta</option>
-                  <option value={220}>Muito lenta</option>
-                </select>
+            <div className={styles.rhythmInfo}>
+              <div>
+                <strong>Ritmo automático</strong>
+                <span>
+                  O agente alterna pausas curtas entre as etapas e mantém a digitação
+                  sequencial para facilitar o acompanhamento visual da operação.
+                </span>
               </div>
             </div>
 
@@ -699,6 +691,49 @@ export default function WhatsappWebLocalPage() {
             </div>
           </section>
         </div>
+
+        <section className={styles.historyCard}>
+          <div className={styles.sectionTitle}>
+            <div>
+              <span>4. Histórico</span>
+              <h2>Execuções recentes</h2>
+            </div>
+            {history.length > 0 && (
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={clearHistory}
+                disabled={activeQueue}
+              >
+                Limpar histórico
+              </button>
+            )}
+          </div>
+
+          {history.length === 0 ? (
+            <div className={styles.historyEmpty}>
+              Nenhuma execução registrada nesta máquina.
+            </div>
+          ) : (
+            <div className={styles.historyList}>
+              {history.map((item) => (
+                <div className={styles.historyRow} key={item.id + item.sentAt}>
+                  <span className={styles.historyStatus}>
+                    <CheckCircle2 size={15} />
+                    Enviado
+                  </span>
+                  <strong>{item.group}</strong>
+                  <span>
+                    {new Date(item.sentAt).toLocaleString("pt-BR", {
+                      dateStyle: "short",
+                      timeStyle: "medium",
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {simulationOpen && (
           <div
