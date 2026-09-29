@@ -38,10 +38,17 @@ type Prepared = {
 };
 
 type QueueState = "pending" | "ready" | "sent" | "error";
-type QueueItem = { group: string; status: QueueState; error?: string };
+type ExecutionMode = "typed" | "forwarded";
+type QueueItem = {
+  group: string;
+  mode: ExecutionMode;
+  status: QueueState;
+  error?: string;
+};
 type ExecutionHistoryItem = {
   id: string;
   group: string;
+  mode: ExecutionMode;
   sentAt: string;
   status: "sent";
 };
@@ -271,8 +278,9 @@ export default function WhatsappWebLocalPage() {
     }
 
     cancelRequestedRef.current = false;
-    const nextQueue: QueueItem[] = selected.map((group) => ({
+    const nextQueue: QueueItem[] = selected.map((group, index) => ({
       group,
+      mode: index % 2 === 0 ? "typed" : "forwarded",
       status: "pending",
     }));
 
@@ -295,46 +303,77 @@ export default function WhatsappWebLocalPage() {
           (index + 1) +
           " de " +
           nextQueue.length +
+          " · " +
+          (nextQueue[index].mode === "typed" ? "Digitando" : "Encaminhando") +
           ": “" +
           group +
           "”.",
       );
 
       try {
-        const next = await agentRequest<Prepared>("/messages/prepare", {
-          method: "POST",
-          body: JSON.stringify({ group, message }),
-        });
+        const mode = nextQueue[index].mode;
 
-        setQueue((current) =>
-          current.map((item, itemIndex) =>
-            itemIndex === index ? { ...item, status: "ready" } : item,
-          ),
-        );
+        if (mode === "typed") {
+          const next = await agentRequest<Prepared>("/messages/prepare", {
+            method: "POST",
+            body: JSON.stringify({ group, message }),
+          });
 
-        if (cancelRequestedRef.current) {
-          await agentRequest("/messages/cancel", {
+          setQueue((current) =>
+            current.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, status: "ready" } : item,
+            ),
+          );
+
+          if (cancelRequestedRef.current) {
+            await agentRequest("/messages/cancel", {
+              method: "POST",
+              body: JSON.stringify({ confirmationId: next.confirmationId }),
+            }).catch(() => null);
+            break;
+          }
+
+          const sent = await agentRequest<{
+            ok: boolean;
+            group: string;
+            sentAt: string;
+          }>("/messages/send", {
             method: "POST",
             body: JSON.stringify({ confirmationId: next.confirmationId }),
-          }).catch(() => null);
-          break;
+          });
+
+          appendHistory({
+            id: next.confirmationId,
+            group: sent.group,
+            mode: "typed",
+            sentAt: sent.sentAt,
+            status: "sent",
+          });
+        } else {
+          setQueue((current) =>
+            current.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, status: "ready" } : item,
+            ),
+          );
+
+          const sent = await agentRequest<{
+            ok: boolean;
+            group: string;
+            sentAt: string;
+            mode: "forwarded";
+          }>("/messages/forward", {
+            method: "POST",
+            body: JSON.stringify({ group }),
+          });
+
+          appendHistory({
+            id: "forward-" + index + "-" + sent.sentAt,
+            group: sent.group,
+            mode: "forwarded",
+            sentAt: sent.sentAt,
+            status: "sent",
+          });
         }
-
-        const sent = await agentRequest<{
-          ok: boolean;
-          group: string;
-          sentAt: string;
-        }>("/messages/send", {
-          method: "POST",
-          body: JSON.stringify({ confirmationId: next.confirmationId }),
-        });
-
-        appendHistory({
-          id: next.confirmationId,
-          group: sent.group,
-          sentAt: sent.sentAt,
-          status: "sent",
-        });
 
         sentCount += 1;
         setQueue((current) =>
@@ -342,7 +381,7 @@ export default function WhatsappWebLocalPage() {
             itemIndex === index ? { ...item, status: "sent" } : item,
           ),
         );
-          } catch (nextError) {
+      } catch (nextError) {
         const text = errorMessage(
           nextError,
           "Não foi possível executar neste grupo.",
@@ -600,8 +639,9 @@ export default function WhatsappWebLocalPage() {
               <div>
                 <strong>Ritmo automático</strong>
                 <span>
-                  O agente alterna pausas curtas entre as etapas e mantém a digitação
-                  sequencial para facilitar o acompanhamento visual da operação.
+                  A execução segue um padrão fixo: um grupo recebe a mensagem digitada
+                  e o próximo recebe a mesma mensagem por encaminhamento. O ciclo se
+                  repete até finalizar todos os grupos selecionados.
                 </span>
               </div>
             </div>
@@ -620,10 +660,13 @@ export default function WhatsappWebLocalPage() {
                     <div>
                       <strong>{item.group}</strong>
                       <span>
+                        {item.mode === "typed" ? "Digitado" : "Encaminhado"} ·{" "}
                         {item.status === "sent"
                           ? "Enviado"
                           : item.status === "ready"
-                            ? "Preparado / enviando"
+                            ? item.mode === "typed"
+                              ? "Preparando envio"
+                              : "Preparando encaminhamento"
                             : item.status === "error"
                               ? item.error || "Erro"
                               : "Aguardando"}
@@ -691,7 +734,7 @@ export default function WhatsappWebLocalPage() {
                 <div className={styles.historyRow} key={item.id + item.sentAt}>
                   <span className={styles.historyStatus}>
                     <CheckCircle2 size={15} />
-                    Enviado
+                    {item.mode === "typed" ? "Digitado" : "Encaminhado"}
                   </span>
                   <strong>{item.group}</strong>
                   <span>
