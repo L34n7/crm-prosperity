@@ -25,6 +25,10 @@ import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summar
 import styles from "./disparos-whatsapp.module.css";
 import { createClient } from "@/lib/supabase/client";
 import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import {
+  descreverErroMetaWhatsApp,
+  formatarErroMetaWhatsApp,
+} from "@/lib/whatsapp/meta-error-messages";
 
 type IntegracaoWhatsApp = {
   id: string;
@@ -130,6 +134,7 @@ type ResultadoDisparo = {
   conversa_id?: string | null;
   conversa_protocolo_id?: string | null;
   erro?: string | null;
+  erro_codigo_meta?: number | string | null;
   erro_amigavel?: string | null;
   erro_tecnico?: string | null;
   metadata_json?: any;
@@ -393,6 +398,7 @@ type LinhaRelatorioCampanha = {
   resposta_em?: string | null;
   status_mensagem?: string | null;
   erro?: string | null;
+  erro_codigo_meta?: number | string | null;
 };
 
 type RelatorioCampanhaDetalhado = {
@@ -1350,13 +1356,17 @@ function obterFeedbackErroDisparo(item: ResultadoDisparo) {
   if (disparoTeveSucesso(item)) return null;
 
   const metadata = normalizarMetadataJson(item.metadata_json);
-
   const erroMeta =
     metadata?.whatsapp_status?.raw_status?.errors?.[0] ||
     metadata?.meta_response?.error ||
+    metadata?.meta_error ||
     null;
 
-  const codigo = Number(erroMeta?.code || 0);
+  const codigo =
+    item.erro_codigo_meta ||
+    erroMeta?.code ||
+    metadata?.whatsapp_status?.error_code ||
+    null;
 
   const mensagemTecnica =
     item.erro_tecnico ||
@@ -1364,65 +1374,18 @@ function obterFeedbackErroDisparo(item: ResultadoDisparo) {
     metadata?.whatsapp_status?.error_message ||
     erroMeta?.message ||
     erroMeta?.title ||
-    "Falha ao enviar mensagem.";
+    null;
 
-  switch (codigo) {
-    case 131031:
-      return {
-        titulo: "Conta WhatsApp Business bloqueada pela Meta",
-        descricao:
-          "A Meta bloqueou ou desativou a conta WhatsApp Business vinculada a este número. Enquanto o status estiver desativado/bloqueado, o CRM não consegue enviar mensagens por essa integração. Acesse o Gerenciador do WhatsApp na Meta e solicite uma análise se acreditar que foi um engano.",
-        detalhe: mensagemTecnica,
-      };
+  const descricao = descreverErroMetaWhatsApp(codigo, mensagemTecnica);
 
-    case 131042:
-      return {
-        titulo: "Falha por pendência financeira na Meta",
-        descricao:
-          "A conta WhatsApp Business possui pendências financeiras ou não configurou um metodo de pagamento na Meta. Para regularizar, acesse o Gerenciador de Negócios da Meta, vá em Cobrança/Pagamentos, selecione a conta WhatsApp Business e quite o valor pendente. Depois da confirmação do pagamento, tente enviar o disparo novamente.",        detalhe: mensagemTecnica,
-      };
-
-    case 131026:
-      return {
-        titulo: "Número indisponível no WhatsApp",
-        descricao:
-          "O número do destinatário pode estar inválido, bloqueado ou indisponível para receber mensagens pelo WhatsApp.",
-        detalhe: mensagemTecnica,
-      };
-
-    case 470:
-      return {
-        titulo: "Janela de atendimento encerrada",
-        descricao:
-          "A janela de 24 horas com este contato foi encerrada. Para iniciar uma nova conversa, envie um template aprovado.",
-        detalhe: mensagemTecnica,
-      };
-
-    case 368:
-      return {
-        titulo: "Conta temporariamente bloqueada pela Meta",
-        descricao:
-          "A Meta bloqueou temporariamente o envio de mensagens desta conta WhatsApp.",
-        detalhe: mensagemTecnica,
-      };
-
-    default:
-      if (item.erro_amigavel) {
-        return {
-          titulo: "Falha no envio",
-          descricao: item.erro_amigavel,
-          detalhe: mensagemTecnica,
-        };
-      }
-
-      return {
-        titulo: "Falha no envio",
-        descricao: mensagemTecnica,
-        detalhe: mensagemTecnica,
-      };
-  }
+  return {
+    titulo: descricao.codigo
+      ? `${descricao.codigo} · ${descricao.nome}`
+      : `Código não informado · ${descricao.nome}`,
+    descricao: descricao.significado,
+    acao: descricao.acao,
+  };
 }
-
 
 function getTemplateStatusClass(status: string | null | undefined) {
   if (!status) return styles.badgeGray;
@@ -6828,6 +6791,12 @@ export default function DisparosWhatsAppPage() {
                                   const status = String(
                                     item.status_final || "pendente"
                                   ).toLowerCase();
+                                  const erroFormatado = item.erro
+                                    ? formatarErroMetaWhatsApp(
+                                        item.erro_codigo_meta,
+                                        item.erro
+                                      )
+                                    : null;
 
                                   return (
                                     <tr
@@ -6857,12 +6826,12 @@ export default function DisparosWhatsAppPage() {
                                         >
                                           {item.status_label || "Pendente"}
                                         </span>
-                                        {item.erro ? (
+                                        {erroFormatado ? (
                                           <span
                                             className={styles.campaignReportError}
-                                            title={item.erro}
+                                            title={item.erro || erroFormatado}
                                           >
-                                            {item.erro}
+                                            {erroFormatado}
                                           </span>
                                         ) : null}
                                       </td>
@@ -7131,14 +7100,14 @@ export default function DisparosWhatsAppPage() {
                           </strong>
 
                           <p className={styles.resultErrorDescription}>
+                            <strong>O que significa:</strong>{" "}
                             {feedbackErro.descricao}
                           </p>
 
-                          {feedbackErro.detalhe ? (
-                            <p className={styles.resultErrorDetail}>
-                              Detalhe técnico: {feedbackErro.detalhe}
-                            </p>
-                          ) : null}
+                          <p className={styles.resultErrorDetail}>
+                            <strong>O que fazer:</strong>{" "}
+                            {feedbackErro.acao}
+                          </p>
                         </div>
                       );
                     })()}
