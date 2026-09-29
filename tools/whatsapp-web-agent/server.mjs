@@ -665,6 +665,263 @@ async function sendPreparedMessage(body) {
   };
 }
 
+async function findVisibleForwardAction(page) {
+  const candidates = [
+    page.getByRole("menuitem", { name: /^(encaminhar|forward)$/i }),
+    page.getByRole("button", { name: /^(encaminhar|forward)$/i }),
+    page.getByText(/^(encaminhar|forward)$/i, { exact: true }),
+  ];
+
+  for (const locator of candidates) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const candidate = locator.nth(index);
+      try {
+        if (await candidate.isVisible({ timeout: 180 })) return candidate;
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+async function openForwardPicker(page) {
+  const visibleForward = await findVisibleForwardAction(page);
+  if (visibleForward) {
+    await visibleForward.click({ timeout: 2500 });
+    await waitStage(page);
+  }
+
+  const dialogs = page.locator('[role="dialog"][aria-modal="true"]');
+  const dialogCount = await dialogs.count().catch(() => 0);
+
+  for (let index = 0; index < dialogCount; index += 1) {
+    const dialog = dialogs.nth(index);
+    try {
+      if (await dialog.isVisible({ timeout: 180 })) return dialog;
+    } catch {}
+  }
+
+  const forwardButtons = [
+    page.getByRole("button", { name: /^(encaminhar|forward)$/i }),
+    page.locator('[aria-label*="Encaminhar" i]').first(),
+    page.locator('[aria-label*="Forward" i]').first(),
+    page.locator('[data-icon="forward"]').first(),
+  ];
+
+  for (const button of forwardButtons) {
+    try {
+      if (!(await button.isVisible({ timeout: 220 }))) continue;
+      await button.click({ timeout: 2500 });
+      await waitStage(page);
+
+      const nextDialogs = page.locator('[role="dialog"][aria-modal="true"]');
+      const nextCount = await nextDialogs.count().catch(() => 0);
+      for (let index = 0; index < nextCount; index += 1) {
+        const dialog = nextDialogs.nth(index);
+        if (await dialog.isVisible({ timeout: 180 }).catch(() => false)) {
+          return dialog;
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+async function forwardLastMessage(body) {
+  const targetGroup = String(body?.group || "").trim();
+  if (!targetGroup) throw new Error("Informe o grupo de destino.");
+
+  const page = await launchBrowser();
+
+  if (!(await isWhatsappConnected())) {
+    throw new Error("WhatsApp Web ainda não está conectado.");
+  }
+
+  await page.bringToFront();
+  await waitStage(page);
+
+  const outgoingCandidates = [
+    page.locator("div.message-out").last(),
+    page.locator('[data-testid="msg-container"].message-out').last(),
+  ];
+
+  let outgoing = null;
+
+  for (const candidate of outgoingCandidates) {
+    try {
+      if (await candidate.isVisible({ timeout: 600 })) {
+        outgoing = candidate;
+        break;
+      }
+    } catch {}
+  }
+
+  if (!outgoing) {
+    throw new Error(
+      "Não encontrei a última mensagem enviada para iniciar o encaminhamento.",
+    );
+  }
+
+  await outgoing.hover();
+  await waitStage(page);
+
+  const menuTriggers = [
+    outgoing.locator('[data-icon="down-context"]').first(),
+    outgoing.locator('[aria-label*="Menu" i]').first(),
+    outgoing.locator('[role="button"]').filter({ has: outgoing.locator("svg") }).last(),
+  ];
+
+  let menuOpened = false;
+
+  for (const trigger of menuTriggers) {
+    try {
+      if (!(await trigger.isVisible({ timeout: 250 }))) continue;
+      await trigger.click({ timeout: 2000 });
+      menuOpened = true;
+      break;
+    } catch {}
+  }
+
+  if (!menuOpened) {
+    await outgoing.click({ button: "right", timeout: 2000 }).catch(() => {});
+  }
+
+  await waitStage(page);
+
+  const forwardAction = await findVisibleForwardAction(page);
+  if (!forwardAction) {
+    throw new Error(
+      "Abri a mensagem, mas não encontrei a opção Encaminhar no WhatsApp Web.",
+    );
+  }
+
+  await forwardAction.click({ timeout: 2500 });
+  await waitStage(page);
+
+  let dialog = await openForwardPicker(page);
+
+  if (!dialog) {
+    const visibleDialogs = page.locator('[role="dialog"][aria-modal="true"]');
+    const count = await visibleDialogs.count().catch(() => 0);
+    for (let index = 0; index < count; index += 1) {
+      const candidate = visibleDialogs.nth(index);
+      if (await candidate.isVisible({ timeout: 180 }).catch(() => false)) {
+        dialog = candidate;
+        break;
+      }
+    }
+  }
+
+  const scope = dialog || page;
+
+  const searchCandidates = [
+    scope.getByPlaceholder(/pesquisar/i).first(),
+    scope.getByPlaceholder(/search/i).first(),
+    scope.locator('input[placeholder*="Pesquisar" i]').first(),
+    scope.locator('input[placeholder*="Search" i]').first(),
+    scope.locator('[contenteditable="true"][role="textbox"]').first(),
+    scope.locator('[role="textbox"]').first(),
+  ];
+
+  let searchBox = null;
+
+  for (const candidate of searchCandidates) {
+    try {
+      if (await candidate.isVisible({ timeout: 250 })) {
+        searchBox = candidate;
+        break;
+      }
+    } catch {}
+  }
+
+  if (!searchBox) {
+    throw new Error(
+      "A opção Encaminhar abriu, mas não encontrei a busca de destinatários.",
+    );
+  }
+
+  await searchBox.fill("");
+  await searchBox.fill(targetGroup);
+  await waitStage(page);
+
+  const targetCandidates = [
+    scope.getByTitle(targetGroup, { exact: true }),
+    scope.getByText(targetGroup, { exact: true }),
+    page.getByTitle(targetGroup, { exact: true }),
+    page.getByText(targetGroup, { exact: true }),
+  ];
+
+  let targetClicked = false;
+
+  for (const locator of targetCandidates) {
+    const count = await locator.count().catch(() => 0);
+    for (let index = 0; index < count; index += 1) {
+      const candidate = locator.nth(index);
+      try {
+        if (!(await candidate.isVisible({ timeout: 250 }))) continue;
+        await candidate.click({ timeout: 2000 });
+        targetClicked = true;
+        break;
+      } catch {}
+    }
+    if (targetClicked) break;
+  }
+
+  if (!targetClicked) {
+    throw new Error("Não encontrei o grupo de destino: " + targetGroup);
+  }
+
+  await waitStage(page);
+
+  const confirmCandidates = [
+    page.getByRole("button", { name: /^(encaminhar|forward|enviar|send)$/i }),
+    page.locator('[aria-label*="Encaminhar" i]'),
+    page.locator('[aria-label*="Forward" i]'),
+    page.locator('[data-icon="send"]'),
+    page.locator('[data-icon="forward"]'),
+  ];
+
+  let confirmed = false;
+
+  for (const locator of confirmCandidates) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const candidate = locator.nth(index);
+      try {
+        if (!(await candidate.isVisible({ timeout: 220 }))) continue;
+
+        const box = await candidate.boundingBox();
+        if (!box || box.width <= 0 || box.height <= 0) continue;
+
+        await candidate.click({ timeout: 2500 });
+        confirmed = true;
+        break;
+      } catch {}
+    }
+
+    if (confirmed) break;
+  }
+
+  if (!confirmed) {
+    throw new Error(
+      "Selecionei o grupo, mas não encontrei o botão final de encaminhamento.",
+    );
+  }
+
+  await waitStage(page);
+
+  return {
+    ok: true,
+    group: targetGroup,
+    sentAt: new Date().toISOString(),
+    mode: "forwarded",
+  };
+}
+
 async function cancelPreparedMessage(body) {
   const confirmationId = String(body?.confirmationId || "").trim();
 
@@ -744,6 +1001,11 @@ async function route(req, res) {
 
   if (req.method === "POST" && url.pathname === "/messages/send") {
     sendJson(res, 200, await sendPreparedMessage(await readJsonBody(req)));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/messages/forward") {
+    sendJson(res, 200, await forwardLastMessage(await readJsonBody(req)));
     return;
   }
 
