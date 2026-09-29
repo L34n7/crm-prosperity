@@ -103,18 +103,16 @@ async function readJsonBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
-function normalizeCadenceSeconds(value) {
-  const numeric = Number(value);
-  return [3, 5, 10, 20].includes(numeric) ? numeric : 5;
-}
+const OPERATION_DELAYS_MS = [1200, 1800, 2600, 1500, 2200];
+const TYPING_DELAY_MS = 80;
+let operationDelayIndex = 0;
 
-function normalizeTypingDelayMs(value) {
-  const numeric = Number(value);
-  return [40, 80, 140, 220].includes(numeric) ? numeric : 80;
-}
-
-async function waitStage(page, cadenceSeconds) {
-  await page.waitForTimeout(normalizeCadenceSeconds(cadenceSeconds) * 1000);
+async function waitStage(page) {
+  const delay =
+    OPERATION_DELAYS_MS[operationDelayIndex % OPERATION_DELAYS_MS.length];
+  operationDelayIndex =
+    (operationDelayIndex + 1) % OPERATION_DELAYS_MS.length;
+  await page.waitForTimeout(delay);
 }
 
 async function getWhatsappPage() {
@@ -540,9 +538,9 @@ async function findComposer(page) {
   return null;
 }
 
-async function openGroup(page, group, cadenceSeconds) {
+async function openGroup(page, group) {
   await ensureGroupsFilterActive(page);
-  await waitStage(page, cadenceSeconds);
+  await waitStage(page);
 
   const searchBox = await findSearchBox(page);
 
@@ -552,7 +550,7 @@ async function openGroup(page, group, cadenceSeconds) {
 
   await searchBox.fill("");
   await searchBox.fill(group);
-  await waitStage(page, cadenceSeconds);
+  await waitStage(page);
 
   const byTitle = page.getByTitle(group, { exact: true }).first();
   let clicked = false;
@@ -576,15 +574,14 @@ async function openGroup(page, group, cadenceSeconds) {
     throw new Error("Grupo não encontrado: " + group);
   }
 
-  await waitStage(page, cadenceSeconds);
+  await waitStage(page);
   await searchBox.fill("").catch(() => {});
 }
 
 async function prepareMessage(body) {
   const group = String(body?.group || "").trim();
   const message = String(body?.message || "");
-  const cadenceSeconds = normalizeCadenceSeconds(body?.cadenceSeconds);
-  const typingDelayMs = normalizeTypingDelayMs(body?.typingDelayMs);
+  const typingDelayMs = TYPING_DELAY_MS;
 
   if (!group) throw new Error("Informe o grupo.");
   if (!message.trim()) throw new Error("Informe a mensagem.");
@@ -598,7 +595,7 @@ async function prepareMessage(body) {
     throw new Error("WhatsApp Web ainda não está conectado.");
   }
 
-  await openGroup(page, group, cadenceSeconds);
+  await openGroup(page, group);
 
   const composer = await findComposer(page);
   if (!composer) {
@@ -606,7 +603,7 @@ async function prepareMessage(body) {
   }
 
   await page.bringToFront();
-  await waitStage(page, cadenceSeconds);
+  await waitStage(page);
   await composer.fill("");
   await composer.click();
 
@@ -627,7 +624,6 @@ async function prepareMessage(body) {
     id: randomUUID(),
     group,
     message,
-    cadenceSeconds,
     typingDelayMs,
     preparedAt: new Date().toISOString(),
   };
@@ -656,10 +652,7 @@ async function sendPreparedMessage(body) {
   }
 
   await page.bringToFront();
-  await waitStage(
-    page,
-    body?.cadenceSeconds ?? preparedMessage.cadenceSeconds,
-  );
+  await waitStage(page);
   await composer.press("Enter");
 
   const sent = preparedMessage;
