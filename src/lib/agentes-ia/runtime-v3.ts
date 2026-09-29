@@ -1021,6 +1021,13 @@ function consultaConhecimentoAutomatica(mensagem: string) {
   if (/\b(funcionalidade|funcionalidades|recurso|recursos)\b/.test(texto)) {
     return textoCurto(mensagem, 120);
   }
+  if (
+    /\b(proposta|propostas|bandeira|bandeiras|pauta|pautas|prioridade|prioridades|candidatura|objetivo|objetivos|posicionamento|partido|biografia|trajetoria|historia|plano de governo|defende|defender|informacao|informacoes|detalhe|detalhes)\b/.test(
+      texto,
+    )
+  ) {
+    return textoCurto(mensagem, 140);
+  }
   return null;
 }
 
@@ -2406,8 +2413,16 @@ function promessaOperacionalNaoExecutada(
     return "cancelar_agendamento";
   }
 
-  if (/\b(?:vou|irei)\s+(?:consultar|verificar|checar)\b.{0,100}\b(?:preco|plano|informacao|detalhe|recurso|funcionalidade)\b/.test(texto) &&
+  if (/\b(?:vou|irei)\s+(?:consultar|verificar|checar)\b.{0,100}\b(?:preco|plano|informacao|detalhe|recurso|funcionalidade|proposta|bandeira)\b/.test(texto) &&
       !ferramentaExecutadaComSucesso(ctx, "consultar_conhecimento")) {
+    return "consultar_conhecimento";
+  }
+
+  if (
+    /\b(?:nao tenho acesso|sem acesso|nao consigo acessar)\b.{0,120}\b(?:base|base oficial|base de conhecimento|informacao|informacoes|proposta|propostas)\b/.test(texto) &&
+    ctx.ferramentasAtivas.has("consultar_conhecimento") &&
+    !ferramentaExecutadaComSucesso(ctx, "consultar_conhecimento")
+  ) {
     return "consultar_conhecimento";
   }
 
