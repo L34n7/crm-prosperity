@@ -35,6 +35,7 @@ type Prepared = {
 
 type QueueState = "pending" | "ready" | "sent" | "error";
 type QueueItem = { group: string; status: QueueState; error?: string };
+type CadenceSeconds = 3 | 5 | 10 | 20;
 
 const AGENT_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_WEB_AGENT_URL || "http://127.0.0.1:3784";
@@ -51,6 +52,7 @@ export default function WhatsappWebLocalPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
+  const [cadenceSeconds, setCadenceSeconds] = useState<CadenceSeconds>(5);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
@@ -198,7 +200,7 @@ export default function WhatsappWebLocalPage() {
     try {
       const next = await agentRequest<Prepared>("/messages/prepare", {
         method: "POST",
-        body: JSON.stringify({ group, message }),
+        body: JSON.stringify({ group, message, cadenceSeconds }),
       });
       setPrepared(next);
       setQueue((current) =>
@@ -254,7 +256,10 @@ export default function WhatsappWebLocalPage() {
     try {
       await agentRequest("/messages/send", {
         method: "POST",
-        body: JSON.stringify({ confirmationId: prepared.confirmationId }),
+        body: JSON.stringify({
+          confirmationId: prepared.confirmationId,
+          cadenceSeconds,
+        }),
       });
 
       setQueue((current) =>
@@ -500,6 +505,30 @@ export default function WhatsappWebLocalPage() {
               />
               <small>{message.length}/8000</small>
             </label>
+
+            <div className={styles.cadence}>
+              <div>
+                <strong>Cadência entre etapas</strong>
+                <span>
+                  Intervalo fixo aplicado à navegação, preparação e confirmação.
+                </span>
+              </div>
+              <select
+                value={cadenceSeconds}
+                onChange={(event) =>
+                  setCadenceSeconds(
+                    Number(event.target.value) as CadenceSeconds,
+                  )
+                }
+                disabled={activeQueue}
+                aria-label="Cadência entre etapas"
+              >
+                <option value={3}>3 segundos</option>
+                <option value={5}>5 segundos</option>
+                <option value={10}>10 segundos</option>
+                <option value={20}>20 segundos</option>
+              </select>
+            </div>
 
             {queue.length > 0 && (
               <div className={styles.queue}>
