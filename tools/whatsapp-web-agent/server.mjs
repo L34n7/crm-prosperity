@@ -184,6 +184,64 @@ async function getStatus() {
   };
 }
 
+async function dismissBlockingDialogs(page) {
+  const dialogs = page.locator('[role="dialog"][aria-modal="true"]');
+  const count = await dialogs.count().catch(() => 0);
+
+  for (let index = 0; index < count; index += 1) {
+    const dialog = dialogs.nth(index);
+
+    try {
+      if (!(await dialog.isVisible({ timeout: 250 }))) continue;
+    } catch {
+      continue;
+    }
+
+    const primaryActions = [
+      dialog.getByRole("button", { name: /^continuar$/i }),
+      dialog.getByRole("button", { name: /^continue$/i }),
+      dialog.getByText(/^continuar$/i),
+      dialog.getByText(/^continue$/i),
+    ];
+
+    let dismissed = false;
+
+    for (const action of primaryActions) {
+      try {
+        const target = action.first();
+        if (await target.isVisible({ timeout: 250 })) {
+          await target.click({ timeout: 2000 });
+          dismissed = true;
+          break;
+        }
+      } catch {}
+    }
+
+    if (!dismissed) {
+      const closeCandidates = [
+        dialog.getByRole("button", { name: /^(fechar|close)$/i }),
+        dialog.locator('[aria-label="Fechar"]').first(),
+        dialog.locator('[aria-label="Close"]').first(),
+        dialog.locator('button').filter({ has: dialog.locator('svg') }).first(),
+      ];
+
+      for (const action of closeCandidates) {
+        try {
+          if (await action.isVisible({ timeout: 250 })) {
+            await action.click({ timeout: 2000 });
+            dismissed = true;
+            break;
+          }
+        } catch {}
+      }
+    }
+
+    if (dismissed) {
+      await page.waitForTimeout(250);
+    }
+  }
+}
+
 async function findGroupsFilter(page) {
   const candidates = [
     page.getByRole("button", { name: /^grupos$/i }),
@@ -211,6 +269,8 @@ async function listGroups() {
   if (!(await isWhatsappConnected())) {
     throw new Error("WhatsApp Web ainda não está conectado.");
   }
+
+  await dismissBlockingDialogs(page);
 
   const groupsFilter = await findGroupsFilter(page);
   if (!groupsFilter) {
@@ -307,6 +367,8 @@ async function findComposer(page) {
 }
 
 async function openGroup(page, group) {
+  await dismissBlockingDialogs(page);
+
   const searchBox = await findSearchBox(page);
 
   if (!searchBox) {
