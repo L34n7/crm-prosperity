@@ -253,16 +253,27 @@ async function dismissBlockingDialogs(page) {
 
 async function findVisibleGroupOption(page) {
   const candidates = [
+    page.getByRole("menuitem").filter({ hasText: /^(grupos|groups)\b/i }),
     page.getByRole("button", { name: /^(grupos|groups)(\s+\d+)?$/i }),
     page.getByRole("tab", { name: /^(grupos|groups)(\s+\d+)?$/i }),
-    page.getByRole("menuitem", { name: /^(grupos|groups)(\s+\d+)?$/i }),
-    page.getByText(/^(grupos|groups)(\s+\d+)?$/i),
+    page.getByText(/^(grupos|groups)$/i),
+    page.getByText(/^(grupos|groups)\s+\d+$/i),
   ];
 
   for (const candidate of candidates) {
     try {
       const target = candidate.first();
-      if (await target.isVisible({ timeout: 300 })) return target;
+      if (!(await target.isVisible({ timeout: 300 }))) continue;
+
+      const menuItem = target.locator(
+        'xpath=ancestor-or-self::*[@role="menuitem" or @role="button" or @role="tab"][1]',
+      );
+
+      if (await menuItem.count().catch(() => 0)) {
+        return menuItem.first();
+      }
+
+      return target;
     } catch {}
   }
 
@@ -272,27 +283,85 @@ async function findVisibleGroupOption(page) {
 async function openFiltersOverflow(page) {
   const side = page.locator("#side").first();
 
+  const buttons = side.locator('button, [role="button"]');
+  const count = await buttons.count().catch(() => 0);
+  const candidates = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const candidate = buttons.nth(index);
+
+    try {
+      if (!(await candidate.isVisible({ timeout: 120 }))) continue;
+
+      const box = await candidate.boundingBox();
+      if (!box) continue;
+
+      const text = String(
+        await candidate
+          .evaluate((node) => node.textContent || "")
+          .catch(() => ""),
+      ).trim();
+
+      const ariaLabel = String(
+        (await candidate.getAttribute("aria-label").catch(() => "")) || "",
+      ).trim();
+
+      const inFilterRow = box.y >= 95 && box.y <= 165;
+      const compactTrigger =
+        box.width >= 26 &&
+        box.width <= 52 &&
+        box.height >= 26 &&
+        box.height <= 52;
+      const notNamedFilter =
+        !/^(tudo|all|não lidas|unread|favoritas|favorites|crm|grupos|groups)(\s+\d+)?$/i.test(
+          text,
+        );
+
+      if (inFilterRow && compactTrigger && notNamedFilter) {
+        candidates.push({
+          locator: candidate,
+          x: box.x,
+          text,
+          ariaLabel,
+        });
+      }
+    } catch {}
+  }
+
+  candidates.sort((a, b) => b.x - a.x);
+
+  for (const candidate of candidates) {
+    try {
+      await candidate.locator.click({ timeout: 1500 });
+      await page.waitForTimeout(220);
+
+      const groupOption = await findVisibleGroupOption(page);
+      if (groupOption) return groupOption;
+
+      await page.keyboard.press("Escape").catch(() => {});
+      await page.waitForTimeout(120);
+    } catch {}
+  }
+
   const semanticCandidates = [
     side.locator('[aria-haspopup="menu"]'),
     side.locator('[aria-haspopup="listbox"]'),
-    side.locator('button[aria-expanded]'),
-    side.locator('[role="button"][aria-expanded]'),
   ];
 
   for (const locator of semanticCandidates) {
-    const count = await locator.count().catch(() => 0);
+    const semanticCount = await locator.count().catch(() => 0);
 
-    for (let index = count - 1; index >= 0; index -= 1) {
+    for (let index = semanticCount - 1; index >= 0; index -= 1) {
       const candidate = locator.nth(index);
 
       try {
         if (!(await candidate.isVisible({ timeout: 150 }))) continue;
 
         const box = await candidate.boundingBox();
-        if (!box || box.y > 190 || box.x > 520) continue;
+        if (!box || box.y < 95 || box.y > 165) continue;
 
         await candidate.click({ timeout: 1500 });
-        await page.waitForTimeout(180);
+        await page.waitForTimeout(220);
 
         const groupOption = await findVisibleGroupOption(page);
         if (groupOption) return groupOption;
@@ -300,30 +369,6 @@ async function openFiltersOverflow(page) {
         await page.keyboard.press("Escape").catch(() => {});
       } catch {}
     }
-  }
-
-  const topButtons = side.locator('button, [role="button"]');
-  const count = await topButtons.count().catch(() => 0);
-
-  for (let index = count - 1; index >= 0; index -= 1) {
-    const candidate = topButtons.nth(index);
-
-    try {
-      if (!(await candidate.isVisible({ timeout: 120 }))) continue;
-
-      const box = await candidate.boundingBox();
-      if (!box || box.y < 85 || box.y > 165 || box.x < 250 || box.x > 520) {
-        continue;
-      }
-
-      await candidate.click({ timeout: 1200 });
-      await page.waitForTimeout(180);
-
-      const groupOption = await findVisibleGroupOption(page);
-      if (groupOption) return groupOption;
-
-      await page.keyboard.press("Escape").catch(() => {});
-    } catch {}
   }
 
   return null;
