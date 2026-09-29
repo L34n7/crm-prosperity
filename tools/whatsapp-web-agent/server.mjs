@@ -108,6 +108,11 @@ function normalizeCadenceSeconds(value) {
   return [3, 5, 10, 20].includes(numeric) ? numeric : 5;
 }
 
+function normalizeTypingDelayMs(value) {
+  const numeric = Number(value);
+  return [40, 80, 140, 220].includes(numeric) ? numeric : 80;
+}
+
 async function waitStage(page, cadenceSeconds) {
   await page.waitForTimeout(normalizeCadenceSeconds(cadenceSeconds) * 1000);
 }
@@ -252,26 +257,60 @@ async function dismissBlockingDialogs(page) {
 }
 
 async function findVisibleGroupOption(page) {
-  const candidates = [
+  const candidateLocators = [
     page.getByRole("menuitem").filter({ hasText: /^(grupos|groups)\b/i }),
     page.getByRole("button", { name: /^(grupos|groups)(\s+\d+)?$/i }),
     page.getByRole("tab", { name: /^(grupos|groups)(\s+\d+)?$/i }),
-    page.getByText(/^(grupos|groups)$/i),
-    page.getByText(/^(grupos|groups)\s+\d+$/i),
+    page.getByText(/^(grupos|groups)$/i, { exact: true }),
   ];
 
-  for (const candidate of candidates) {
+  for (const locator of candidateLocators) {
+    const count = await locator.count().catch(() => 0);
+
+    for (let index = 0; index < count; index += 1) {
+      const target = locator.nth(index);
+
+      try {
+        if (!(await target.isVisible({ timeout: 180 }))) continue;
+
+        const box = await target.boundingBox();
+        if (!box || box.width <= 0 || box.height <= 0) continue;
+
+        const clickable = target.locator(
+          'xpath=ancestor-or-self::*[@role="menuitem" or @role="button" or @role="tab"][1]',
+        );
+
+        if (await clickable.count().catch(() => 0)) {
+          const clickableTarget = clickable.first();
+          if (await clickableTarget.isVisible({ timeout: 180 }).catch(() => false)) {
+            return clickableTarget;
+          }
+        }
+
+        return target;
+      } catch {}
+    }
+  }
+
+  const visibleTextCandidates = page.locator("span, div").filter({
+    hasText: /^(grupos|groups)$/i,
+  });
+  const textCount = await visibleTextCandidates.count().catch(() => 0);
+
+  for (let index = 0; index < textCount; index += 1) {
+    const target = visibleTextCandidates.nth(index);
+
     try {
-      const target = candidate.first();
-      if (!(await target.isVisible({ timeout: 300 }))) continue;
+      if (!(await target.isVisible({ timeout: 120 }))) continue;
 
-      const menuItem = target.locator(
-        'xpath=ancestor-or-self::*[@role="menuitem" or @role="button" or @role="tab"][1]',
-      );
+      const ownText = String(
+        await target.evaluate((node) => node.textContent || "").catch(() => ""),
+      ).trim();
 
-      if (await menuItem.count().catch(() => 0)) {
-        return menuItem.first();
-      }
+      if (!/^(grupos|groups)$/i.test(ownText)) continue;
+
+      const box = await target.boundingBox();
+      if (!box || box.width <= 0 || box.height <= 0) continue;
 
       return target;
     } catch {}
@@ -361,7 +400,7 @@ async function openFiltersOverflow(page) {
         if (!box || box.y < 95 || box.y > 165) continue;
 
         await candidate.click({ timeout: 1500 });
-        await page.waitForTimeout(220);
+        await page.waitForTimeout(450);
 
         const groupOption = await findVisibleGroupOption(page);
         if (groupOption) return groupOption;
@@ -545,6 +584,7 @@ async function prepareMessage(body) {
   const group = String(body?.group || "").trim();
   const message = String(body?.message || "");
   const cadenceSeconds = normalizeCadenceSeconds(body?.cadenceSeconds);
+  const typingDelayMs = normalizeTypingDelayMs(body?.typingDelayMs);
 
   if (!group) throw new Error("Informe o grupo.");
   if (!message.trim()) throw new Error("Informe a mensagem.");
@@ -568,13 +608,15 @@ async function prepareMessage(body) {
   await page.bringToFront();
   await waitStage(page, cadenceSeconds);
   await composer.fill("");
-  await composer.fill(message);
+  await composer.click();
+  await composer.pressSequentially(message, { delay: typingDelayMs });
 
   preparedMessage = {
     id: randomUUID(),
     group,
     message,
     cadenceSeconds,
+    typingDelayMs,
     preparedAt: new Date().toISOString(),
   };
 
