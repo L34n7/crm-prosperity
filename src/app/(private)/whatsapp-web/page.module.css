@@ -397,12 +397,19 @@
   font-size: 9px;
 }
 
+.timingGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin-top: 12px;
+}
+
 .cadence {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 0;
   padding: 11px 12px;
   border: 1px solid var(--crm-border);
   border-radius: 10px;
