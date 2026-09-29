@@ -63,6 +63,7 @@ type SidebarProps = {
   assinatura?: AssinaturaEmpresa | null;
   isAdmin?: boolean;
   nichoCodigo?: NichoCodigo;
+  podeAcessarWhatsappWebLocal?: boolean;
 };
 
 type WhatsappSidebarPerfil = {
@@ -249,6 +250,7 @@ export default function Sidebar({
   assinatura = null,
   isAdmin = false,
   nichoCodigo = "comercio",
+  podeAcessarWhatsappWebLocal = false,
 }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -344,6 +346,10 @@ export default function Sidebar({
   const visibleMenuItems = menuItemsComCadastro.filter((item) => {
     if (assinaturaBloqueada) {
       return isAdmin && item.href === "/conversas";
+    }
+
+    if (item.href === "/whatsapp-web" && !podeAcessarWhatsappWebLocal) {
+      return false;
     }
 
     return !item.permissao || permissoes.includes(item.permissao);
