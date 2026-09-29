@@ -19,6 +19,7 @@ type CrmShellProps = {
   assinatura?: AssinaturaEmpresa | null;
   isAdmin?: boolean;
   nichoCodigo?: NichoCodigo;
+  podeAcessarWhatsappWebLocal?: boolean;
 };
 
 export default function CrmShell({
@@ -30,6 +31,7 @@ export default function CrmShell({
   assinatura = null,
   isAdmin = false,
   nichoCodigo = "comercio",
+  podeAcessarWhatsappWebLocal = false,
 }: CrmShellProps) {
   return (
     <HeaderUserProvider
@@ -45,6 +47,7 @@ export default function CrmShell({
             assinatura={assinatura}
             isAdmin={isAdmin}
             nichoCodigo={nichoCodigo}
+            podeAcessarWhatsappWebLocal={podeAcessarWhatsappWebLocal}
           />
 
           <div className={styles.contentArea}>
