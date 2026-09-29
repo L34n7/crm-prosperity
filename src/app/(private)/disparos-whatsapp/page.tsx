@@ -2275,7 +2275,11 @@ export default function DisparosWhatsAppPage() {
 
           if (preferida) return preferida;
           if (atualAtualizada) return atualAtualizada;
-          if (integracaoConsultaId) return json.campanha || atual;
+
+          if (integracaoConsultaId) {
+            return atual || json.campanha || null;
+          }
+
           return lista[0] || null;
         });
       } catch {
@@ -7269,15 +7273,6 @@ export default function DisparosWhatsAppPage() {
                     ? `${inteiroCampanha(campanhaPagina.enviados)}/${totalCampanhaPagina}`
                     : rotuloStatusCampanha(campanhaPagina)}
                 </span>
-
-                <button
-                  type="button"
-                  className={styles.campaignProgressMinimize}
-                  onClick={() => setModalCampanhaAberto(false)}
-                >
-                  <Minus size={16} aria-hidden="true" />
-                  Minimizar
-                </button>
               </div>
             </header>
 
@@ -7361,25 +7356,28 @@ export default function DisparosWhatsAppPage() {
             </div>
 
             <footer className={styles.campaignProgressFooter}>
-              {campanhaPaginaAtiva && podeDisparar ? (
-                <button
-                  type="button"
-                  className={styles.campaignProgressCancel}
-                  onClick={() => setModalCancelarCampanhaAberto(true)}
-                  disabled={cancelandoCampanha}
-                >
-                  <CircleStop size={16} aria-hidden="true" />
-                  {cancelandoCampanha ? "Cancelando..." : "Cancelar disparo"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => setModalCampanhaAberto(false)}
-                >
-                  Fechar
-                </button>
-              )}
+              <div className={styles.campaignProgressFooterLeft}>
+                {campanhaPaginaAtiva && podeDisparar ? (
+                  <button
+                    type="button"
+                    className={styles.campaignProgressCancel}
+                    onClick={() => setModalCancelarCampanhaAberto(true)}
+                    disabled={cancelandoCampanha}
+                  >
+                    <CircleStop size={16} aria-hidden="true" />
+                    {cancelandoCampanha ? "Cancelando..." : "Cancelar disparo"}
+                  </button>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                className={styles.campaignProgressMinimize}
+                onClick={() => setModalCampanhaAberto(false)}
+              >
+                <Minus size={16} aria-hidden="true" />
+                Minimizar
+              </button>
             </footer>
             </section>
           </div>

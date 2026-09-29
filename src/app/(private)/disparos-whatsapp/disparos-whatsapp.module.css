@@ -4566,3 +4566,21 @@
     padding-inline: 11px;
   }
 }
+
+
+/* CRM_CAMPAIGN_MODAL_FOOTER_ACTIONS_V3 */
+.campaignProgressFooter {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.campaignProgressFooterLeft {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.campaignProgressFooter > .campaignProgressMinimize {
+  margin-left: auto;
+}
