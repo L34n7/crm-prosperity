@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
   Laptop2,
   Loader2,
   MessageCircle,
@@ -14,6 +17,7 @@ import {
   Square,
   Wifi,
   WifiOff,
+  X,
 } from "lucide-react";
 import Header from "@/components/Header";
 import styles from "./page.module.css";
@@ -37,6 +41,37 @@ type QueueState = "pending" | "ready" | "sent" | "error";
 type QueueItem = { group: string; status: QueueState; error?: string };
 type CadenceSeconds = 3 | 5 | 10 | 20;
 
+const SIMULATION_STEPS = [
+  {
+    title: "Abrir menu de filtros",
+    description: "Localize o botão circular com a seta para baixo ao lado dos filtros.",
+  },
+  {
+    title: "Selecionar Grupos",
+    description: "Abra o menu e escolha a opção Grupos.",
+  },
+  {
+    title: "Pesquisar grupo",
+    description: "Use a busca já filtrada para localizar o grupo escolhido.",
+  },
+  {
+    title: "Abrir conversa",
+    description: "Abra a conversa do grupo encontrado.",
+  },
+  {
+    title: "Preparar mensagem",
+    description: "Preencha a mensagem no campo da conversa.",
+  },
+  {
+    title: "Revisar",
+    description: "Confira o grupo e o conteúdo antes de confirmar.",
+  },
+  {
+    title: "Enviar",
+    description: "Confirme o envio e avance para o próximo grupo.",
+  },
+] as const;
+
 const AGENT_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_WEB_AGENT_URL || "http://127.0.0.1:3784";
 const TOKEN_KEY = "prosperity-whatsapp-web-agent-token";
@@ -59,6 +94,8 @@ export default function WhatsappWebLocalPage() {
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const [simulationOpen, setSimulationOpen] = useState(false);
+  const [simulationStep, setSimulationStep] = useState(0);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
@@ -492,6 +529,17 @@ export default function WhatsappWebLocalPage() {
                 <span>3. Mensagem</span>
                 <h2>Sequência controlada</h2>
               </div>
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => {
+                  setSimulationStep(0);
+                  setSimulationOpen(true);
+                }}
+              >
+                <Eye size={16} />
+                Abrir simulação
+              </button>
             </div>
 
             <label className={styles.message}>
@@ -618,6 +666,173 @@ export default function WhatsappWebLocalPage() {
             </div>
           </section>
         </div>
+
+        {simulationOpen && (
+          <div
+            className={styles.simulationOverlay}
+            onClick={() => setSimulationOpen(false)}
+          >
+            <div
+              className={styles.simulationModal}
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="simulation-title"
+            >
+              <header className={styles.simulationHeader}>
+                <div>
+                  <span>Modo simulação</span>
+                  <h2 id="simulation-title">Exemplo do fluxo no WhatsApp Web</h2>
+                  <p>
+                    Esta visualização não executa nenhuma ação no WhatsApp real.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  onClick={() => setSimulationOpen(false)}
+                  aria-label="Fechar simulação"
+                >
+                  <X size={17} />
+                </button>
+              </header>
+
+              <div className={styles.simulationBody}>
+                <aside className={styles.mockSidebar}>
+                  <div className={styles.mockBrand}>WhatsApp</div>
+                  <div
+                    className={
+                      styles.mockSearch +
+                      (simulationStep === 2 ? " " + styles.mockHighlight : "")
+                    }
+                  >
+                    <Search size={15} />
+                    <span>
+                      {simulationStep >= 2
+                        ? selected[0] || "Grupo exemplo"
+                        : "Pesquisar ou começar uma nova conversa"}
+                    </span>
+                  </div>
+
+                  <div className={styles.mockFilters}>
+                    <span>Tudo</span>
+                    <span>Não lidas</span>
+                    <span>Favoritas</span>
+                    <button
+                      type="button"
+                      className={
+                        styles.mockOverflow +
+                        (simulationStep === 0
+                          ? " " + styles.mockHighlight
+                          : "")
+                      }
+                    >
+                      ▾
+                    </button>
+                  </div>
+
+                  {simulationStep === 1 && (
+                    <div className={styles.mockMenu}>
+                      <strong>Grupos</strong>
+                      <span>CRM</span>
+                      <span>Nova lista</span>
+                    </div>
+                  )}
+
+                  <div className={styles.mockConversationList}>
+                    <div
+                      className={
+                        styles.mockConversation +
+                        (simulationStep === 3
+                          ? " " + styles.mockHighlight
+                          : "")
+                      }
+                    >
+                      <span className={styles.mockAvatar}>G</span>
+                      <div>
+                        <strong>{selected[0] || "Grupo exemplo"}</strong>
+                        <span>Última mensagem do grupo</span>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+
+                <section className={styles.mockChat}>
+                  <div className={styles.mockChatHeader}>
+                    <span className={styles.mockAvatar}>G</span>
+                    <strong>{selected[0] || "Grupo exemplo"}</strong>
+                  </div>
+
+                  <div className={styles.mockMessages}>
+                    {simulationStep >= 6 && (
+                      <div className={styles.mockSentBubble}>
+                        {message.trim() || "Mensagem de exemplo"}
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    className={
+                      styles.mockComposer +
+                      (simulationStep === 4
+                        ? " " + styles.mockHighlight
+                        : "")
+                    }
+                  >
+                    <span>
+                      {simulationStep >= 4
+                        ? message.trim() || "Mensagem de exemplo"
+                        : "Digite uma mensagem"}
+                    </span>
+                    <Send size={16} />
+                  </div>
+                </section>
+              </div>
+
+              <footer className={styles.simulationFooter}>
+                <div className={styles.simulationStepInfo}>
+                  <span>
+                    Passo {simulationStep + 1} de {SIMULATION_STEPS.length}
+                  </span>
+                  <strong>{SIMULATION_STEPS[simulationStep].title}</strong>
+                  <p>{SIMULATION_STEPS[simulationStep].description}</p>
+                </div>
+
+                <div className={styles.simulationActions}>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    onClick={() =>
+                      setSimulationStep((current) => Math.max(0, current - 1))
+                    }
+                    disabled={simulationStep === 0}
+                  >
+                    <ChevronLeft size={16} />
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.primary}
+                    onClick={() => {
+                      if (simulationStep >= SIMULATION_STEPS.length - 1) {
+                        setSimulationOpen(false);
+                        return;
+                      }
+                      setSimulationStep((current) => current + 1);
+                    }}
+                  >
+                    {simulationStep >= SIMULATION_STEPS.length - 1
+                      ? "Concluir"
+                      : "Próximo"}
+                    {simulationStep < SIMULATION_STEPS.length - 1 && (
+                      <ChevronRight size={16} />
+                    )}
+                  </button>
+                </div>
+              </footer>
+            </div>
+          </div>
+        )}
       </main>
     </>
   );
