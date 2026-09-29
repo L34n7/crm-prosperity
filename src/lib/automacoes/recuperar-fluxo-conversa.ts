@@ -168,7 +168,7 @@ export async function recuperarFluxoConversaPorUltimaMensagem(params: {
   const conversaSemAtendente =
     !conversa.responsavel_id &&
     conversa.aguardando_atendente !== true &&
-    (conversa.status === "aberta" || conversa.status === "fila");
+    ["aberta", "fila", "bot"].includes(String(conversa.status || ""));
 
   const elegibilidade = avaliarElegibilidadeRecuperacaoFluxo({
     conversaStatus:
