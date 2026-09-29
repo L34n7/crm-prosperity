@@ -939,6 +939,11 @@ function Page() {
     }
   }, []);
   useEffect(() => {
+    // A preferência fixada define somente a visualização inicial.
+    // Depois que a Agenda abriu, uma seleção manual em "Visualizar" não pode
+    // ser sobrescrita novamente pelos calendários fixados.
+    if (agendaVisualizacaoInicializada) return;
+
     Promise.all([
       loadAgendas(undefined, false).then((calendars) =>
         loadAgendaViewPreferences(calendars),
@@ -948,7 +953,12 @@ function Page() {
       setErr(e.message);
       setLoad(false);
     });
-  }, [loadAgendaViewPreferences, loadAgendas, loadFeedback]);
+  }, [
+    agendaVisualizacaoInicializada,
+    loadAgendaViewPreferences,
+    loadAgendas,
+    loadFeedback,
+  ]);
   useEffect(() => {
     let active = true;
 
