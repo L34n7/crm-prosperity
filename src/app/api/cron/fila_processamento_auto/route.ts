@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarFilaProcessamentoAutoPendentes } from "@/lib/automacoes/process-automation-engine";
 import { processarPendenciasAgenteIaVencidas } from "@/lib/agentes-ia/processar-pendencias-vencidas";
+import { processarFilaRecuperacaoFluxoPendentes } from "@/lib/automacoes/recuperacao-fluxo-fila";
 
 function logOperacional(...args: unknown[]) {
   if (String(process.env.LOG_OPERACIONAL_DEBUG || "").toLowerCase() !== "true") {
@@ -49,15 +50,22 @@ export async function GET(request: Request) {
   try {
     const agora = new Date().toISOString();
     const limite = obterLimite(request);
-    const [resultado, agentesIa] = await Promise.all([
+    const [resultado, recuperacaoFluxos, agentesIa] = await Promise.all([
       processarFilaProcessamentoAutoPendentes(limite),
+      processarFilaRecuperacaoFluxoPendentes(Math.min(limite, 25)),
       processarPendenciasAgenteIaVencidas(Math.min(limite, 50)),
     ]);
 
-    if (encontrouTrabalho(resultado) || agentesIa.encontrados > 0 || agentesIa.erros > 0) {
+    if (
+      encontrouTrabalho(resultado) ||
+      encontrouTrabalho(recuperacaoFluxos) ||
+      agentesIa.encontrados > 0 ||
+      agentesIa.erros > 0
+    ) {
       logOperacional("[CRON FILA PROCESSAMENTO AUTO] Processamento concluido:", {
         agora,
         resultado,
+        recuperacaoFluxos,
         agentesIa,
       });
     }
@@ -65,6 +73,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       ...resultado,
+      recuperacao_fluxos: recuperacaoFluxos,
       agentes_ia: agentesIa,
     });
   } catch (error) {
