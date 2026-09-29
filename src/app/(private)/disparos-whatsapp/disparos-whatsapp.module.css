@@ -4436,7 +4436,7 @@
 }
 
 
-/* CRM_MULTI_DISPAROS_TAB_CONTROL_V4 */
+/* CRM_MULTI_DISPAROS_TAB_CONTROL_V5 */
 .campaignProgressShell {
   width: min(720px, calc(100vw - 40px));
   max-height: calc(100vh - 48px);
@@ -4450,29 +4450,27 @@
   max-height: calc(100vh - 96px);
   position: relative;
   z-index: 2;
-  border-top-left-radius: 18px;
-  border-top-right-radius: 18px;
   box-shadow: var(--crm-shadow-lg);
 }
 
 .campaignProgressCampaignTabs {
   position: relative;
   z-index: 3;
-  width: max-content;
-  max-width: calc(100% - 32px);
-  min-height: 38px;
-  margin: 0 auto 8px;
-  padding: 4px;
+  width: 100%;
+  min-height: 50px;
+  margin: 0;
+  padding: 8px 16px 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--crm-border);
-  border-radius: 13px;
-  background: var(--crm-surface-soft);
-  box-shadow: var(--crm-shadow-xs);
+  border-bottom-color: var(--crm-border);
+  border-radius: 18px 18px 0 0;
+  background: var(--crm-surface);
+  box-shadow: 0 -8px 24px rgba(8, 24, 34, 0.06);
   scrollbar-width: none;
 }
 
@@ -4483,15 +4481,16 @@
 .campaignProgressCampaignTab {
   position: relative;
   flex: 0 0 auto;
-  min-height: 29px;
-  max-width: 180px;
-  padding: 5px 13px;
+  min-height: 41px;
+  max-width: 190px;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   border: 0;
-  border-radius: 9px;
+  border-bottom: 3px solid transparent;
+  border-radius: 8px 8px 0 0;
   background: transparent;
   color: var(--crm-text-muted);
   font: inherit;
@@ -4503,43 +4502,39 @@
   transition:
     color 0.18s ease,
     background 0.18s ease,
-    box-shadow 0.18s ease;
+    border-color 0.18s ease;
 }
 
+.campaignProgressCampaignTab::before,
 .campaignProgressCampaignTab::after {
   display: none;
 }
 
 .campaignProgressCampaignTab > span:last-child {
-  max-width: 132px;
+  max-width: 142px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .campaignProgressCampaignTab:hover {
   color: var(--crm-text-strong);
-  background: color-mix(
-    in srgb,
-    var(--crm-surface) 82%,
-    var(--crm-surface-soft)
-  );
+  background: var(--crm-surface-soft);
+}
+
+.campaignProgressCampaignTab:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: -2px;
 }
 
 .campaignProgressCampaignTabActive {
-  background: var(--crm-surface);
+  border-bottom-color: var(--crm-primary-strong);
+  background: color-mix(
+    in srgb,
+    var(--crm-primary-soft) 40%,
+    var(--crm-surface)
+  );
   color: var(--crm-primary-text);
-  box-shadow: var(--crm-shadow-xs);
-}
-
-.campaignProgressCampaignTabActive::before {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 2px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--crm-primary-strong);
+  box-shadow: none;
 }
 
 .campaignProgressCampaignTabDot {
@@ -4566,6 +4561,9 @@
 
 .campaignProgressCampaignTabs + .campaignProgressModal {
   margin-top: 0;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 @media (max-width: 760px) {
@@ -4575,23 +4573,23 @@
   }
 
   .campaignProgressShell .campaignProgressModal {
-    max-height: calc(100vh - 72px);
+    max-height: calc(100vh - 74px);
   }
 
   .campaignProgressCampaignTabs {
-    max-width: calc(100% - 20px);
-    min-height: 36px;
-    margin-bottom: 6px;
+    min-height: 46px;
+    padding: 6px 10px 0;
+    border-radius: 16px 16px 0 0;
   }
 
   .campaignProgressCampaignTab {
-    min-height: 27px;
-    max-width: 145px;
-    padding: 4px 11px;
+    min-height: 39px;
+    max-width: 150px;
+    padding: 0 12px;
   }
 
   .campaignProgressCampaignTab > span:last-child {
-    max-width: 100px;
+    max-width: 106px;
   }
 }
 
