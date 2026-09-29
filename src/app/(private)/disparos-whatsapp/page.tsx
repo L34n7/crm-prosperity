@@ -6612,11 +6612,24 @@ export default function DisparosWhatsAppPage() {
                 className={styles.input}
               >
                 <option value="">Histórico geral de disparos</option>
-                {campanhasHistoricoFiltradas.map((campanha) => (
-                  <option key={campanha.id} value={campanha.id}>
-                    {nomeCampanhaHistorico(campanha)}
-                  </option>
-                ))}
+                {campanhasHistoricoFiltradas.map((campanha) => {
+                  const integracaoCampanha = integracoes.find(
+                    (item) => item.id === campanha.integracao_whatsapp_id
+                  );
+                  const nomeIntegracao = integracaoCampanha
+                    ? `${integracaoCampanha.nome_conexao || "Integração"}${
+                        integracaoCampanha.numero
+                          ? ` ${integracaoCampanha.numero}`
+                          : ""
+                      }`
+                    : "Integração";
+
+                  return (
+                    <option key={campanha.id} value={campanha.id}>
+                      {nomeIntegracao} — {nomeCampanhaHistorico(campanha)}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
