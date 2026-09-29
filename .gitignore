@@ -42,3 +42,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+# prosperity whatsapp web local agent
+/tools/whatsapp-web-agent/node_modules/
+/tools/whatsapp-web-agent/.data/
+
