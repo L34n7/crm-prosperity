@@ -4,7 +4,6 @@ import CrmShell from "@/components/CrmShell";
 import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
 import MobileEmpresaMenuLink from "@/components/MobileEmpresaMenuLink";
 import AgendaMenuLabel from "@/components/AgendaMenuLabel";
-import AcessoTemporarioEmpresaBanner from "@/components/AcessoTemporarioEmpresaBanner";
 import MetaWhatsAppPricingNotice from "@/components/MetaWhatsAppPricingNotice";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { usuarioConfirmouAvisoMetaWhatsapp } from "@/lib/avisos/meta-whatsapp-cobranca";
@@ -94,9 +93,6 @@ export default async function PrivateLayout({
       nichoCodigo={nichoCodigo}
       podeAcessarWhatsappWebLocal={podeAcessarWhatsappWebLocal}
     >
-      {acessoTemporario && (
-        <AcessoTemporarioEmpresaBanner acesso={acessoTemporario} />
-      )}
       <MetaWhatsAppPricingNotice initialOpen={exibirAvisoMetaWhatsapp} />
       {children}
       <AmbienteObrigatorioGuard />
