@@ -251,6 +251,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     email: cliente.email,
     plano: cliente.plano,
     data: data.format(new Date(cliente.primeiroPagamentoEm)),
+    dataOrdenacao: cliente.primeiroPagamentoEm,
     valor: moeda.format(cliente.valorMensal),
     status: cliente.status,
   });
@@ -265,6 +266,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       email: usuario?.email || "",
       plano: empresa ? rotuloPlano(empresa, pagamento, encontrarOferta(empresa, pagamento)) : pagamento.offer_titulo || "Não informado",
       data: data.format(new Date(dataPagamento(pagamento))),
+      dataOrdenacao: dataPagamento(pagamento),
       valor: moeda.format(valorPagamento(pagamento)),
       status: formatarStatus(pagamento.status),
     };
@@ -279,6 +281,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       email: usuario?.email || "",
       plano: rotuloPlano(empresa, pagamento, encontrarOferta(empresa, pagamento)),
       data: data.format(new Date(dataPagamento(pagamento))),
+      dataOrdenacao: dataPagamento(pagamento),
       valor: moeda.format(valorPagamento(pagamento)),
       status: formatarStatus(empresa.assinatura_status),
     };
