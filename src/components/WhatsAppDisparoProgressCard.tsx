@@ -550,7 +550,9 @@ export default function WhatsAppDisparoProgressCard() {
         <div>
           <strong>
             Disparos em massa
-            {campanhasAtivas.length > 1 ? ` · ${campanhasAtivas.length} ativos` : ""}
+            {campanhasAtivasVisiveis.length > 1
+              ? ` · ${campanhasAtivasVisiveis.length} ativos`
+              : ""}
           </strong>
           <small>{possuiAtivas ? "Processando" : rotuloStatus(listaVisivel[0])}</small>
         </div>
