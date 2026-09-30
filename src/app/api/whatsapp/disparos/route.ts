@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getUsuarioContexto,
@@ -67,6 +67,10 @@ type ConversaComContato = {
   last_inbound_message_at?: string | null;
   contatos?: ConversaContato | ConversaContato[] | null;
 };
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const supabaseAdmin = getSupabaseAdmin();
 const STATUS_CAMPANHAS_ATIVAS = ["pendente", "enviando"];
@@ -809,93 +813,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const telefonesSuprimidos = await buscarTelefonesSuprimidos({
-      empresaId,
-      telefones: destinatarios.map((destinatario) => destinatario.numero),
-      categoria: template.categoria,
-    });
-
-    if (telefonesSuprimidos.size > 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "WHATSAPP_OPT_OUT_ATIVO",
-          error:
-            "A selecao possui contatos com opt-out para a categoria do template. Remova-os para continuar.",
-          total_contatos_opt_out: telefonesSuprimidos.size,
-        },
-        { status: 422 }
-      );
-    }
-
-    const templateEhMarketing =
-      String(template.categoria || "").trim().toLowerCase() === "marketing";
-    const telefonesEmCooldown = templateEhMarketing
-      ? await buscarTelefonesEmCooldownDisparo({
-          empresaId,
-          telefones: destinatarios.map((destinatario) => destinatario.numero),
-          categoria: "marketing",
-        })
-      : new Set<string>();
-
-    if (templateEhMarketing && telefonesEmCooldown.size > 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "WHATSAPP_DISPARO_COOLDOWN_META",
-          error:
-            `A selecao possui ${telefonesEmCooldown.size} contato(s) em pausa temporaria para disparos de marketing porque a Meta recusou uma entrega recente por limite de qualidade/frequencia. Remova-os para continuar.`,
-          total_contatos_cooldown: telefonesEmCooldown.size,
-        },
-        { status: 422 }
-      );
-    }
-
-    const classificacaoLista = await classificarDestinatariosPorOptIn({
-      supabase: supabaseAdmin,
-      empresaId,
-      integracaoWhatsappId,
-      phoneNumberId: integracao.phone_number_id,
-      destinatarios: destinatarios.map((destinatario) => ({
-        contatoId: destinatario.contato_id,
-        telefone: destinatario.numero,
-      })),
-    });
-    const politicaLista = validarPoliticaListaDisparo({
-      categoria: template.categoria,
-      totalContatosFrios: classificacaoLista.totalFrios,
-      responsabilidadeListaFriaConfirmada,
-    });
-
-    if (
-      ["utility", "marketing"].includes(politicaLista.categoria) &&
-      classificacaoLista.totalFrios > 0 &&
-      template.opt_out_habilitado !== true
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "TEMPLATE_SEM_OPT_OUT",
-          error:
-            "Templates enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR.",
-        },
-        { status: 422 }
-      );
-    }
-
-    if (!politicaLista.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: politicaLista.code,
-          error: politicaLista.error,
-          total_contatos_frios: politicaLista.totalContatosFrios,
-          total_contatos_opt_in: classificacaoLista.totalOptIn,
-        },
-        { status: politicaLista.status }
-      );
-    }
-
     const configJson = (integracao.config_json || null) as ConfigJsonWhatsapp | null;
     const credenciais = obterCredenciaisBasicas({
       phoneNumberId: integracao.phone_number_id,
@@ -936,42 +853,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const telefonesQueConsomemLimite =
-      await obterTelefonesQueConsomemLimiteMeta({
-        empresaId,
-        categoria: String(template.categoria || ""),
-        telefones: destinatarios.map((item) => item.numero),
-      });
-    const telefonesQueConsomemLimiteSet = new Set(telefonesQueConsomemLimite);
-
-    const reservaLimite = await reservarLimiteMeta({
-      empresaId,
-      integracao,
-      telefones: telefonesQueConsomemLimite,
-      origem: "disparo_template_fila",
-      templateId: template.id,
-      templateNome: template.nome,
-      usuarioId: usuario.id,
-      metadataJson: {
-        total_destinatarios: destinatarios.length,
-        total_consumem_limite_meta: telefonesQueConsomemLimite.length,
-        rota: "/api/whatsapp/disparos",
-        modelo_processamento: "fila",
-      },
-    });
-
-    if (!reservaLimite.ok) {
-      return NextResponse.json(
-        montarRespostaLimiteMetaExcedido({
-          limite: reservaLimite.limite,
-          usados: reservaLimite.usados,
-          restantes: reservaLimite.restantes,
-          telefonesBloqueados: reservaLimite.telefonesBloqueados,
-        }),
-        { status: 429 }
-      );
-    }
-
     const campanhaCriadaEm = new Date();
     const nomeCampanha = montarNomeCampanhaDisparo({
       nomeInformado: nomeCampanhaInformado,
@@ -998,25 +879,14 @@ export async function POST(req: NextRequest) {
         total_enviados: 0,
         total_falhas: 0,
         total_cancelados: 0,
-        limite_meta: reservaLimite.limite,
-        limite_meta_usados: reservaLimite.usados,
-        limite_meta_restantes: reservaLimite.restantes,
-        limite_meta_reserva_ids: reservaLimite.reservaIds,
         processamento_modo: "qstash",
         qstash_flow_control_key: obterFlowControlKeyDisparo(integracaoWhatsappId),
         qstash_publicados: 0,
         metadata_json: {
-          template_payload: (template.payload || null) as TemplatePayloadDisparo | null,
+          preparacao_status: "aguardando",
           variaveis_config: variaveisConfig,
-          total_consumem_limite_meta: telefonesQueConsomemLimite.length,
-          total_contatos_frios: classificacaoLista.totalFrios,
-          total_contatos_opt_in: classificacaoLista.totalOptIn,
           responsabilidade_lista_fria_confirmada:
-            ["utility", "marketing"].includes(politicaLista.categoria) &&
-            classificacaoLista.totalFrios > 0 &&
             responsabilidadeListaFriaConfirmada,
-          limite_meta_origem: reservaLimite.limiteInfo?.origem || null,
-          limite_meta_tier: reservaLimite.limiteInfo?.tier || null,
           nome_campanha_informado: nomeCampanhaInformado || null,
         },
       })
@@ -1026,13 +896,6 @@ export async function POST(req: NextRequest) {
     if (campanhaError || !campanha) {
       const campanhaAtivaPorIntegracao =
         erroCampanhaAtivaPorIntegracao(campanhaError);
-
-      await cancelarReservasLimiteMetaPorIds(
-        reservaLimite.reservaIds,
-        campanhaAtivaPorIntegracao
-          ? "trava por integracao"
-          : "erro ao criar campanha"
-      );
 
       if (campanhaAtivaPorIntegracao) {
         const campanhaAtiva = await buscarCampanhaAtivaDaIntegracao({
@@ -1052,101 +915,347 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let itensCriados: Array<{
-      id: string;
-      campanha_id: string;
-      integracao_whatsapp_id: string;
-      ordem: number;
-    }> = [];
-    let publicacaoQstash: Awaited<
-      ReturnType<typeof publicarItensDisparoQstash>
-    > | null = null;
+    after(async () => {
+      const inicioPreparacao = Date.now();
+      let reservaIds: string[] = [];
 
-    try {
-      itensCriados = await inserirItensCampanha({
-        campanhaId: campanha.id,
-        empresaId,
-        integracaoWhatsappId,
-        templateId: template.id,
-        usuarioId: usuario.id,
-        destinatarios,
-        telefonesQueConsomemLimite: telefonesQueConsomemLimiteSet,
-      });
-
-      publicacaoQstash = await publicarItensDisparoQstash({
-        campanhaId: campanha.id,
-        integracaoWhatsappId,
-        itens: itensCriados,
-      });
-    } catch (errorItens) {
-      await cancelarReservasLimiteMetaPorIds(
-        reservaLimite.reservaIds,
-        "erro ao criar itens da campanha"
-      );
-
-      await supabaseAdmin
-        .from("whatsapp_disparo_campanhas")
-        .update({
-          status: "erro",
-          erro:
-            errorItens instanceof Error
-              ? errorItens.message
-              : "Erro ao criar itens da campanha.",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", campanha.id);
-
-      throw errorItens;
-    }
-
-    await registrarLogAuditoriaSeguro({
-      empresa_id: empresaId,
-      categoria: "disparos",
-      entidade: "disparo",
-      entidade_id: campanha.id,
-      acao: "disparo_em_massa_enfileirado",
-      descricao: `${destinatarios.length} disparos enfileirados`,
-      usuario_id: usuario.id,
-      usuario_nome: usuario.nome,
-      usuario_email: usuario.email,
-      depois: {
+      console.info("[DISPAROS WHATSAPP PREPARACAO] Iniciando", {
         campanha_id: campanha.id,
+        empresa_id: empresaId,
+        integracao_id: integracaoWhatsappId,
         total: destinatarios.length,
-        template_id: template.id,
-        template_nome: template.nome,
-        integracao_whatsapp_id: integracaoWhatsappId,
-        modelo_processamento: "fila",
-        total_contatos_frios: classificacaoLista.totalFrios,
-        total_contatos_opt_in: classificacaoLista.totalOptIn,
-        responsabilidade_lista_fria_confirmada:
+      });
+
+      try {
+        const { data: campanhaAtual } = await supabaseAdmin
+          .from("whatsapp_disparo_campanhas")
+          .select("status")
+          .eq("id", campanha.id)
+          .maybeSingle();
+
+        if (
+          !campanhaAtual ||
+          !["pendente", "enviando"].includes(String(campanhaAtual.status || ""))
+        ) {
+          console.info(
+            "[DISPAROS WHATSAPP PREPARACAO] Ignorada porque a campanha nao esta mais ativa",
+            {
+              campanha_id: campanha.id,
+              status: campanhaAtual?.status || null,
+            }
+          );
+          return;
+        }
+
+        await supabaseAdmin
+          .from("whatsapp_disparo_campanhas")
+          .update({
+            metadata_json: {
+              preparacao_status: "processando",
+              variaveis_config: variaveisConfig,
+              responsabilidade_lista_fria_confirmada:
+                responsabilidadeListaFriaConfirmada,
+              nome_campanha_informado: nomeCampanhaInformado || null,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", campanha.id);
+
+        const telefonesSuprimidos = await buscarTelefonesSuprimidos({
+          empresaId,
+          telefones: destinatarios.map((destinatario) => destinatario.numero),
+          categoria: template.categoria,
+        });
+
+        if (telefonesSuprimidos.size > 0) {
+          throw new Error(
+            `A selecao possui ${telefonesSuprimidos.size} contato(s) com opt-out para a categoria do template. Remova-os para continuar.`
+          );
+        }
+
+        const templateEhMarketing =
+          String(template.categoria || "").trim().toLowerCase() === "marketing";
+        const telefonesEmCooldown = templateEhMarketing
+          ? await buscarTelefonesEmCooldownDisparo({
+              empresaId,
+              telefones: destinatarios.map(
+                (destinatario) => destinatario.numero
+              ),
+              categoria: "marketing",
+            })
+          : new Set<string>();
+
+        if (templateEhMarketing && telefonesEmCooldown.size > 0) {
+          throw new Error(
+            `A selecao possui ${telefonesEmCooldown.size} contato(s) em pausa temporaria para disparos de marketing porque a Meta recusou uma entrega recente por limite de qualidade/frequencia. Remova-os para continuar.`
+          );
+        }
+
+        const classificacaoLista = await classificarDestinatariosPorOptIn({
+          supabase: supabaseAdmin,
+          empresaId,
+          integracaoWhatsappId,
+          phoneNumberId: integracao.phone_number_id,
+          destinatarios: destinatarios.map((destinatario) => ({
+            contatoId: destinatario.contato_id,
+            telefone: destinatario.numero,
+          })),
+        });
+        const politicaLista = validarPoliticaListaDisparo({
+          categoria: template.categoria,
+          totalContatosFrios: classificacaoLista.totalFrios,
+          responsabilidadeListaFriaConfirmada,
+        });
+
+        if (
           ["utility", "marketing"].includes(politicaLista.categoria) &&
           classificacaoLista.totalFrios > 0 &&
-          responsabilidadeListaFriaConfirmada,
-      },
-      ip: auditMeta.ip,
-      user_agent: auditMeta.user_agent,
+          template.opt_out_habilitado !== true
+        ) {
+          throw new Error(
+            "Templates enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR."
+          );
+        }
+
+        if (!politicaLista.ok) {
+          throw new Error(politicaLista.error);
+        }
+
+        const telefonesQueConsomemLimite =
+          await obterTelefonesQueConsomemLimiteMeta({
+            empresaId,
+            categoria: String(template.categoria || ""),
+            telefones: destinatarios.map((item) => item.numero),
+          });
+        const telefonesQueConsomemLimiteSet = new Set(
+          telefonesQueConsomemLimite
+        );
+
+        const reservaLimite = await reservarLimiteMeta({
+          empresaId,
+          integracao,
+          telefones: telefonesQueConsomemLimite,
+          origem: "disparo_template_fila",
+          templateId: template.id,
+          templateNome: template.nome,
+          usuarioId: usuario.id,
+          metadataJson: {
+            total_destinatarios: destinatarios.length,
+            total_consumem_limite_meta: telefonesQueConsomemLimite.length,
+            rota: "/api/whatsapp/disparos",
+            modelo_processamento: "fila_background",
+          },
+        });
+
+        if (!reservaLimite.ok) {
+          const respostaLimite = montarRespostaLimiteMetaExcedido({
+            limite: reservaLimite.limite,
+            usados: reservaLimite.usados,
+            restantes: reservaLimite.restantes,
+            telefonesBloqueados: reservaLimite.telefonesBloqueados,
+          });
+
+          throw new Error(
+            [respostaLimite.error, respostaLimite.detalhe]
+              .filter(Boolean)
+              .join(" ")
+          );
+        }
+
+        reservaIds = reservaLimite.reservaIds;
+
+        await supabaseAdmin
+          .from("whatsapp_disparo_campanhas")
+          .update({
+            limite_meta: reservaLimite.limite,
+            limite_meta_usados: reservaLimite.usados,
+            limite_meta_restantes: reservaLimite.restantes,
+            limite_meta_reserva_ids: reservaLimite.reservaIds,
+            metadata_json: {
+              preparacao_status: "criando_itens",
+              template_payload: (template.payload || null) as
+                | TemplatePayloadDisparo
+                | null,
+              variaveis_config: variaveisConfig,
+              total_consumem_limite_meta: telefonesQueConsomemLimite.length,
+              total_contatos_frios: classificacaoLista.totalFrios,
+              total_contatos_opt_in: classificacaoLista.totalOptIn,
+              responsabilidade_lista_fria_confirmada:
+                ["utility", "marketing"].includes(politicaLista.categoria) &&
+                classificacaoLista.totalFrios > 0 &&
+                responsabilidadeListaFriaConfirmada,
+              limite_meta_origem: reservaLimite.limiteInfo?.origem || null,
+              limite_meta_tier: reservaLimite.limiteInfo?.tier || null,
+              nome_campanha_informado: nomeCampanhaInformado || null,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", campanha.id);
+
+        const { data: campanhaAntesDosItens } = await supabaseAdmin
+          .from("whatsapp_disparo_campanhas")
+          .select("status")
+          .eq("id", campanha.id)
+          .maybeSingle();
+
+        if (
+          !campanhaAntesDosItens ||
+          !["pendente", "enviando"].includes(
+            String(campanhaAntesDosItens.status || "")
+          )
+        ) {
+          await cancelarReservasLimiteMetaPorIds(
+            reservaIds,
+            "campanha cancelada durante preparacao"
+          );
+          return;
+        }
+
+        const itensCriados = await inserirItensCampanha({
+          campanhaId: campanha.id,
+          empresaId,
+          integracaoWhatsappId,
+          templateId: template.id,
+          usuarioId: usuario.id,
+          destinatarios,
+          telefonesQueConsomemLimite: telefonesQueConsomemLimiteSet,
+        });
+
+        const publicacaoQstash = await publicarItensDisparoQstash({
+          campanhaId: campanha.id,
+          integracaoWhatsappId,
+          itens: itensCriados,
+        });
+
+        await supabaseAdmin
+          .from("whatsapp_disparo_campanhas")
+          .update({
+            processamento_modo: publicacaoQstash.ok
+              ? "qstash"
+              : "cron_fallback",
+            qstash_publicados: publicacaoQstash.publicados || 0,
+            qstash_flow_control_key:
+              publicacaoQstash.flowControlKey ||
+              obterFlowControlKeyDisparo(integracaoWhatsappId),
+            qstash_erro: publicacaoQstash.erro || null,
+            metadata_json: {
+              preparacao_status: "concluida",
+              template_payload: (template.payload || null) as
+                | TemplatePayloadDisparo
+                | null,
+              variaveis_config: variaveisConfig,
+              total_consumem_limite_meta: telefonesQueConsomemLimite.length,
+              total_contatos_frios: classificacaoLista.totalFrios,
+              total_contatos_opt_in: classificacaoLista.totalOptIn,
+              responsabilidade_lista_fria_confirmada:
+                ["utility", "marketing"].includes(politicaLista.categoria) &&
+                classificacaoLista.totalFrios > 0 &&
+                responsabilidadeListaFriaConfirmada,
+              limite_meta_origem: reservaLimite.limiteInfo?.origem || null,
+              limite_meta_tier: reservaLimite.limiteInfo?.tier || null,
+              nome_campanha_informado: nomeCampanhaInformado || null,
+              preparacao_concluida_em: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", campanha.id);
+
+        await registrarLogAuditoriaSeguro({
+          empresa_id: empresaId,
+          categoria: "disparos",
+          entidade: "disparo",
+          entidade_id: campanha.id,
+          acao: "disparo_em_massa_enfileirado",
+          descricao: `${destinatarios.length} disparos enfileirados`,
+          usuario_id: usuario.id,
+          usuario_nome: usuario.nome,
+          usuario_email: usuario.email,
+          depois: {
+            campanha_id: campanha.id,
+            total: destinatarios.length,
+            template_id: template.id,
+            template_nome: template.nome,
+            integracao_whatsapp_id: integracaoWhatsappId,
+            modelo_processamento: "fila_background",
+            total_contatos_frios: classificacaoLista.totalFrios,
+            total_contatos_opt_in: classificacaoLista.totalOptIn,
+            responsabilidade_lista_fria_confirmada:
+              ["utility", "marketing"].includes(politicaLista.categoria) &&
+              classificacaoLista.totalFrios > 0 &&
+              responsabilidadeListaFriaConfirmada,
+          },
+          ip: auditMeta.ip,
+          user_agent: auditMeta.user_agent,
+        });
+
+        console.info("[DISPAROS WHATSAPP PREPARACAO] Concluida", {
+          campanha_id: campanha.id,
+          total: destinatarios.length,
+          itens_criados: itensCriados.length,
+          qstash_publicados: publicacaoQstash.publicados || 0,
+          duracao_ms: Date.now() - inicioPreparacao,
+        });
+      } catch (errorPreparacao) {
+        const mensagem =
+          errorPreparacao instanceof Error
+            ? errorPreparacao.message
+            : "Erro ao preparar campanha de disparo.";
+
+        if (reservaIds.length > 0) {
+          await cancelarReservasLimiteMetaPorIds(
+            reservaIds,
+            "erro na preparacao em segundo plano"
+          ).catch(() => undefined);
+        }
+
+        await supabaseAdmin
+          .from("whatsapp_disparo_campanhas")
+          .update({
+            status: "erro",
+            total_pendentes: 0,
+            erro: mensagem,
+            metadata_json: {
+              preparacao_status: "erro",
+              preparacao_erro: mensagem,
+              variaveis_config: variaveisConfig,
+              responsabilidade_lista_fria_confirmada:
+                responsabilidadeListaFriaConfirmada,
+              nome_campanha_informado: nomeCampanhaInformado || null,
+              preparacao_falhou_em: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+            finished_at: new Date().toISOString(),
+          })
+          .eq("id", campanha.id);
+
+        console.error("[DISPAROS WHATSAPP PREPARACAO] Falhou", {
+          campanha_id: campanha.id,
+          empresa_id: empresaId,
+          integracao_id: integracaoWhatsappId,
+          total: destinatarios.length,
+          duracao_ms: Date.now() - inicioPreparacao,
+          erro: mensagem,
+        });
+      }
     });
 
     return NextResponse.json(
       {
         ok: true,
         queued: true,
+        preparing: true,
         campanha_id: campanha.id,
         campanha_nome: campanha.nome,
         status: campanha.status,
         total: destinatarios.length,
         total_pendentes: destinatarios.length,
-        total_consumem_limite_meta: telefonesQueConsomemLimite.length,
-        limite_meta: reservaLimite.limite,
-        limite_meta_restantes: reservaLimite.restantes,
-        processamento_modo: publicacaoQstash?.ok ? "qstash" : "cron_fallback",
-        qstash_publicados: publicacaoQstash?.publicados || 0,
+        processamento_modo: "background",
+        qstash_publicados: 0,
         qstash_flow_control_key:
-          publicacaoQstash?.flowControlKey ||
           obterFlowControlKeyDisparo(integracaoWhatsappId),
-        qstash_erro: publicacaoQstash?.erro || null,
+        qstash_erro: null,
         message:
-          "Campanha criada. Os disparos serão processados gradualmente em segundo plano.",
+          "Campanha criada. A fila esta sendo preparada em segundo plano.",
         resultados: [],
       },
       { status: 202 }
