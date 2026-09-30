@@ -27,6 +27,7 @@ import {
 } from "@/lib/whatsapp/disparo-cooldown";
 
 const supabaseAdmin = getSupabaseAdmin();
+export const QSTASH_DISPARO_CHAIN_PENDING = "chain_pending";
 
 type DisparoCampanhaRow = {
   id: string;
@@ -302,6 +303,34 @@ async function atualizarResumoPublicacaoCampanha(params: {
     .eq("id", params.campanhaId);
 }
 
+async function ativarFallbackCronCampanha(params: {
+  campanhaId: string;
+  flowControlKey: string;
+  erro: string;
+}) {
+  const agora = new Date().toISOString();
+
+  await supabaseAdmin
+    .from("whatsapp_disparo_itens")
+    .update({
+      qstash_message_id: null,
+      qstash_publicado_at: null,
+      qstash_erro: params.erro,
+      updated_at: agora,
+    })
+    .eq("campanha_id", params.campanhaId)
+    .eq("status", "pendente")
+    .eq("qstash_message_id", QSTASH_DISPARO_CHAIN_PENDING);
+
+  await atualizarResumoPublicacaoCampanha({
+    campanhaId: params.campanhaId,
+    flowControlKey: params.flowControlKey,
+    publicados: 0,
+    erro: params.erro,
+    modo: "cron_fallback",
+  });
+}
+
 async function publicarItemDisparoQstash(params: {
   item: ItemPublicacaoQstash;
   campanhaId: string;
@@ -408,12 +437,10 @@ export async function publicarItensDisparoQstash(params: {
       ? "QSTASH_TOKEN ausente. Cron fallback fara a retomada."
       : "URL do worker QStash ausente. Cron fallback fara a retomada.";
 
-    await atualizarResumoPublicacaoCampanha({
+    await ativarFallbackCronCampanha({
       campanhaId: params.campanhaId,
       flowControlKey,
-      publicados: 0,
       erro,
-      modo: "cron_fallback",
     });
 
     return {
@@ -451,13 +478,23 @@ export async function publicarItensDisparoQstash(params: {
     flowControlKey,
   });
 
-  await atualizarResumoPublicacaoCampanha({
-    campanhaId: params.campanhaId,
-    flowControlKey,
-    publicados: publicacao.ok ? 1 : 0,
-    erro: publicacao.erro,
-    modo: publicacao.ok ? "qstash" : "cron_fallback",
-  });
+  if (publicacao.ok) {
+    await atualizarResumoPublicacaoCampanha({
+      campanhaId: params.campanhaId,
+      flowControlKey,
+      publicados: 1,
+      erro: null,
+      modo: "qstash",
+    });
+  } else {
+    await ativarFallbackCronCampanha({
+      campanhaId: params.campanhaId,
+      flowControlKey,
+      erro:
+        publicacao.erro ||
+        "Falha ao iniciar a fila QStash. Cron fallback fara a retomada.",
+    });
+  }
 
   return {
     ok: publicacao.ok,
@@ -472,7 +509,16 @@ async function publicarProximoItemCampanhaQstash(params: {
   campanhaId: string;
   integracaoWhatsappId: string;
 }) {
+  const flowControlKey = obterFlowControlKeyDisparo(
+    params.integracaoWhatsappId
+  );
+
   if (!process.env.QSTASH_TOKEN || !obterUrlWorkerDisparoQstash()) {
+    await ativarFallbackCronCampanha({
+      campanhaId: params.campanhaId,
+      flowControlKey,
+      erro: "QStash indisponivel durante o encadeamento. Cron fallback fara a retomada.",
+    });
     return false;
   }
 
@@ -515,7 +561,12 @@ async function publicarProximoItemCampanhaQstash(params: {
   // Se o primeiro pendente já possui uma mensagem QStash, ele é uma
   // retentativa agendada. Não podemos ultrapassá-lo, pois isso quebraria a
   // ordem original dos contatos.
-  if (proximo.qstash_message_id) return true;
+  if (
+    proximo.qstash_message_id &&
+    proximo.qstash_message_id !== QSTASH_DISPARO_CHAIN_PENDING
+  ) {
+    return true;
+  }
 
   const proximaTentativaMs = proximo.next_attempt_at
     ? new Date(proximo.next_attempt_at).getTime()
@@ -528,9 +579,6 @@ async function publicarProximoItemCampanhaQstash(params: {
     return false;
   }
 
-  const flowControlKey = obterFlowControlKeyDisparo(
-    params.integracaoWhatsappId
-  );
   const publicacao = await publicarItemDisparoQstash({
     item: {
       id: String(proximo.id),
@@ -540,6 +588,16 @@ async function publicarProximoItemCampanhaQstash(params: {
     campanhaId: params.campanhaId,
     flowControlKey,
   });
+
+  if (!publicacao.ok) {
+    await ativarFallbackCronCampanha({
+      campanhaId: params.campanhaId,
+      flowControlKey,
+      erro:
+        publicacao.erro ||
+        "Falha ao publicar o próximo item. Cron fallback fara a retomada.",
+    });
+  }
 
   return publicacao.ok;
 }
@@ -561,33 +619,59 @@ async function republicarItemDisparoQstash(params: {
   const proximaTentativa = Number(params.item.tentativas || 0) + 1;
   const deduplicationId = dedupItemQstash(params.item.id, proximaTentativa);
 
-  const resultado = await qstash.publishJSON({
-    url,
-    body: {
+  try {
+    const resultado = await qstash.publishJSON({
+      url,
+      body: {
+        itemId: params.item.id,
+      },
+      delay: params.delaySegundos,
+      retries: obterRetryQstash(),
+      retryDelay: "30000 * (1 + retried)",
+      timeout: 60,
+      deduplicationId,
+      flowControl: {
+        key: flowControlKey,
+        rate: flowControl.rate,
+        period: flowControl.period,
+        parallelism: 1,
+      },
+      label: labelCampanhaQstash(params.item.campanha_id),
+    });
+
+    const messageId = extrairMessageIdQstash(resultado);
+
+    await atualizarPublicacaoItemQstash({
       itemId: params.item.id,
-    },
-    delay: params.delaySegundos,
-    retries: obterRetryQstash(),
-    retryDelay: "30000 * (1 + retried)",
-    timeout: 60,
-    deduplicationId,
-    flowControl: {
-      key: flowControlKey,
-      rate: flowControl.rate,
-      period: flowControl.period,
-      parallelism: flowControl.parallelism,
-    },
-    label: labelCampanhaQstash(params.item.campanha_id),
-  });
+      messageId,
+      flowControlKey,
+      deduplicationId,
+    });
 
-  await atualizarPublicacaoItemQstash({
-    itemId: params.item.id,
-    messageId: extrairMessageIdQstash(resultado),
-    flowControlKey,
-    deduplicationId,
-  });
+    if (!messageId) {
+      await ativarFallbackCronCampanha({
+        campanhaId: params.item.campanha_id,
+        flowControlKey,
+        erro: "QStash nao retornou messageId na retentativa. Cron fallback fara a retomada.",
+      });
+      return false;
+    }
 
-  return true;
+    return true;
+  } catch (error) {
+    const erro =
+      error instanceof Error
+        ? error.message
+        : "Falha ao republicar item no QStash.";
+
+    await ativarFallbackCronCampanha({
+      campanhaId: params.item.campanha_id,
+      flowControlKey,
+      erro,
+    });
+
+    return false;
+  }
 }
 
 async function cancelarMensagensCampanhaQstash(campanhaId: string) {
