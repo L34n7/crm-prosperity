@@ -1712,10 +1712,24 @@ export async function processarItemDisparoPorId(itemId: string) {
   try {
     const resultado = await processarItemDisparo(item);
 
-    await publicarProximoItemCampanhaQstash({
-      campanhaId: item.campanha_id,
-      integracaoWhatsappId: item.integracao_whatsapp_id,
-    });
+    try {
+      await publicarProximoItemCampanhaQstash({
+        campanhaId: item.campanha_id,
+        integracaoWhatsappId: item.integracao_whatsapp_id,
+      });
+    } catch (publicacaoError) {
+      console.error(
+        "[WHATSAPP DISPARO QSTASH] Item processado, mas o próximo não foi publicado:",
+        {
+          itemId: item.id,
+          campanhaId: item.campanha_id,
+          erro:
+            publicacaoError instanceof Error
+              ? publicacaoError.message
+              : "Erro desconhecido.",
+        }
+      );
+    }
 
     return {
       ok: true,
@@ -1756,10 +1770,24 @@ export async function processarItemDisparoPorId(itemId: string) {
       };
     }
 
-    await publicarProximoItemCampanhaQstash({
-      campanhaId: item.campanha_id,
-      integracaoWhatsappId: item.integracao_whatsapp_id,
-    });
+    try {
+      await publicarProximoItemCampanhaQstash({
+        campanhaId: item.campanha_id,
+        integracaoWhatsappId: item.integracao_whatsapp_id,
+      });
+    } catch (publicacaoError) {
+      console.error(
+        "[WHATSAPP DISPARO QSTASH] Falha final registrada, mas o próximo item não foi publicado:",
+        {
+          itemId: item.id,
+          campanhaId: item.campanha_id,
+          erro:
+            publicacaoError instanceof Error
+              ? publicacaoError.message
+              : "Erro desconhecido.",
+        }
+      );
+    }
 
     return {
       ok: true,
