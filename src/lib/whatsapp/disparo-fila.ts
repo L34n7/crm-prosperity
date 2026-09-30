@@ -236,15 +236,6 @@ function obterConfigFlowControlDisparo() {
   };
 }
 
-function obterBatchQstash() {
-  return normalizarInteiro(
-    process.env.WHATSAPP_DISPARO_QSTASH_BATCH_SIZE,
-    50,
-    1,
-    100
-  );
-}
-
 function obterRetryQstash() {
   return normalizarInteiro(
     process.env.WHATSAPP_DISPARO_QSTASH_RETRIES,
@@ -311,14 +302,98 @@ async function atualizarResumoPublicacaoCampanha(params: {
     .eq("id", params.campanhaId);
 }
 
+async function publicarItemDisparoQstash(params: {
+  item: ItemPublicacaoQstash;
+  campanhaId: string;
+  flowControlKey: string;
+  delaySegundos?: number;
+  tentativaPublicacao?: number;
+}) {
+  const url = obterUrlWorkerDisparoQstash();
+
+  if (!process.env.QSTASH_TOKEN || !url) {
+    return {
+      ok: false,
+      messageId: null as string | null,
+      erro: !process.env.QSTASH_TOKEN
+        ? "QSTASH_TOKEN ausente."
+        : "URL do worker QStash ausente.",
+    };
+  }
+
+  const flowControl = obterConfigFlowControlDisparo();
+  const tentativaPublicacao = Math.max(
+    0,
+    Number(params.tentativaPublicacao || 0)
+  );
+  const deduplicationId = dedupItemQstash(
+    params.item.id,
+    tentativaPublicacao
+  );
+
+  try {
+    const resultado = await qstash.publishJSON({
+      url,
+      body: {
+        itemId: params.item.id,
+      },
+      ...(Number(params.delaySegundos || 0) > 0
+        ? { delay: Number(params.delaySegundos) }
+        : {}),
+      retries: obterRetryQstash(),
+      retryDelay: "30000 * (1 + retried)",
+      timeout: 60,
+      deduplicationId,
+      flowControl: {
+        key: params.flowControlKey,
+        rate: flowControl.rate,
+        period: flowControl.period,
+        parallelism: 1,
+      },
+      label: labelCampanhaQstash(params.campanhaId),
+    });
+
+    const messageId = extrairMessageIdQstash(resultado);
+
+    await atualizarPublicacaoItemQstash({
+      itemId: params.item.id,
+      messageId,
+      flowControlKey: params.flowControlKey,
+      deduplicationId,
+      erro: messageId ? null : "QStash nao retornou messageId.",
+    });
+
+    return {
+      ok: Boolean(messageId),
+      messageId,
+      erro: messageId ? null : "QStash nao retornou messageId.",
+    };
+  } catch (error) {
+    const erro =
+      error instanceof Error ? error.message : "Erro ao publicar no QStash.";
+
+    await atualizarPublicacaoItemQstash({
+      itemId: params.item.id,
+      messageId: null,
+      flowControlKey: params.flowControlKey,
+      deduplicationId,
+      erro,
+    });
+
+    return {
+      ok: false,
+      messageId: null,
+      erro,
+    };
+  }
+}
+
 export async function publicarItensDisparoQstash(params: {
   campanhaId: string;
   integracaoWhatsappId: string;
   itens: ItemPublicacaoQstash[];
 }) {
   const flowControlKey = obterFlowControlKeyDisparo(params.integracaoWhatsappId);
-  const url = obterUrlWorkerDisparoQstash();
-  const qstashToken = process.env.QSTASH_TOKEN;
   const itensOrdenados = [...params.itens].sort((a, b) => {
     const ordemA = Number(a.ordem || 0);
     const ordemB = Number(b.ordem || 0);
@@ -328,15 +403,10 @@ export async function publicarItensDisparoQstash(params: {
     return String(a.id).localeCompare(String(b.id));
   });
 
-  if (!qstashToken || !url) {
-    const erro = !qstashToken
+  if (!process.env.QSTASH_TOKEN || !obterUrlWorkerDisparoQstash()) {
+    const erro = !process.env.QSTASH_TOKEN
       ? "QSTASH_TOKEN ausente. Cron fallback fara a retomada."
       : "URL do worker QStash ausente. Cron fallback fara a retomada.";
-
-    console.warn("[WHATSAPP DISPARO QSTASH]", {
-      campanhaId: params.campanhaId,
-      erro,
-    });
 
     await atualizarResumoPublicacaoCampanha({
       campanhaId: params.campanhaId,
@@ -355,94 +425,123 @@ export async function publicarItensDisparoQstash(params: {
     };
   }
 
-  const flowControl = obterConfigFlowControlDisparo();
-  const tamanhoBatch = obterBatchQstash();
-  const retries = obterRetryQstash();
-  let publicados = 0;
-  let ultimoErro: string | null = null;
+  const primeiroItem = itensOrdenados[0] || null;
 
-  for (let inicio = 0; inicio < itensOrdenados.length; inicio += tamanhoBatch) {
-    const lote = itensOrdenados.slice(inicio, inicio + tamanhoBatch);
+  if (!primeiroItem) {
+    await atualizarResumoPublicacaoCampanha({
+      campanhaId: params.campanhaId,
+      flowControlKey,
+      publicados: 0,
+      erro: null,
+      modo: "qstash",
+    });
 
-    try {
-      const requests = lote.map((item) => {
-        const deduplicationId = dedupItemQstash(item.id);
-
-        return {
-          url,
-          body: {
-            itemId: item.id,
-          },
-          retries,
-          retryDelay: "30000 * (1 + retried)",
-          timeout: 60,
-          deduplicationId,
-          flowControl: {
-            key: flowControlKey,
-            rate: flowControl.rate,
-            period: flowControl.period,
-            parallelism: flowControl.parallelism,
-          },
-          label: labelCampanhaQstash(params.campanhaId),
-        };
-      });
-
-      const resultados = await qstash.batchJSON(requests);
-
-      for (const [index, resultado] of resultados.entries()) {
-        const item = lote[index];
-        const messageId = extrairMessageIdQstash(resultado);
-        const deduplicationId = dedupItemQstash(item.id);
-
-        if (messageId) {
-          publicados += 1;
-        }
-
-        await atualizarPublicacaoItemQstash({
-          itemId: item.id,
-          messageId,
-          flowControlKey,
-          deduplicationId,
-          erro: messageId ? null : "QStash nao retornou messageId.",
-        });
-      }
-    } catch (error) {
-      ultimoErro =
-        error instanceof Error ? error.message : "Erro ao publicar no QStash.";
-      console.error("[WHATSAPP DISPARO QSTASH] Erro ao publicar lote:", {
-        campanhaId: params.campanhaId,
-        inicio,
-        quantidade: lote.length,
-        erro: ultimoErro,
-      });
-
-      for (const item of lote) {
-        await atualizarPublicacaoItemQstash({
-          itemId: item.id,
-          messageId: null,
-          flowControlKey,
-          deduplicationId: dedupItemQstash(item.id),
-          erro: ultimoErro,
-        });
-      }
-    }
+    return {
+      ok: true,
+      publicados: 0,
+      total: 0,
+      flowControlKey,
+      erro: null,
+    };
   }
+
+  const publicacao = await publicarItemDisparoQstash({
+    item: primeiroItem,
+    campanhaId: params.campanhaId,
+    flowControlKey,
+  });
 
   await atualizarResumoPublicacaoCampanha({
     campanhaId: params.campanhaId,
     flowControlKey,
-    publicados,
-    erro: ultimoErro,
-    modo: publicados > 0 ? "qstash" : "cron_fallback",
+    publicados: publicacao.ok ? 1 : 0,
+    erro: publicacao.erro,
+    modo: publicacao.ok ? "qstash" : "cron_fallback",
   });
 
   return {
-    ok: publicados > 0,
-    publicados,
+    ok: publicacao.ok,
+    publicados: publicacao.ok ? 1 : 0,
     total: itensOrdenados.length,
     flowControlKey,
-    erro: ultimoErro,
+    erro: publicacao.erro,
   };
+}
+
+async function publicarProximoItemCampanhaQstash(params: {
+  campanhaId: string;
+  integracaoWhatsappId: string;
+}) {
+  if (!process.env.QSTASH_TOKEN || !obterUrlWorkerDisparoQstash()) {
+    return false;
+  }
+
+  const { data: campanha, error: campanhaError } = await supabaseAdmin
+    .from("whatsapp_disparo_campanhas")
+    .select("id,status")
+    .eq("id", params.campanhaId)
+    .maybeSingle();
+
+  if (campanhaError) {
+    throw new Error(
+      `Erro ao validar campanha antes de publicar o próximo item: ${campanhaError.message}`
+    );
+  }
+
+  if (!campanha || !["pendente", "enviando"].includes(String(campanha.status))) {
+    return false;
+  }
+
+  const { data: proximo, error: proximoError } = await supabaseAdmin
+    .from("whatsapp_disparo_itens")
+    .select(
+      "id,campanha_id,integracao_whatsapp_id,qstash_message_id,next_attempt_at,created_at"
+    )
+    .eq("campanha_id", params.campanhaId)
+    .eq("status", "pendente")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (proximoError) {
+    throw new Error(
+      `Erro ao buscar próximo item da campanha: ${proximoError.message}`
+    );
+  }
+
+  if (!proximo) return false;
+
+  // Se o primeiro pendente já possui uma mensagem QStash, ele é uma
+  // retentativa agendada. Não podemos ultrapassá-lo, pois isso quebraria a
+  // ordem original dos contatos.
+  if (proximo.qstash_message_id) return true;
+
+  const proximaTentativaMs = proximo.next_attempt_at
+    ? new Date(proximo.next_attempt_at).getTime()
+    : 0;
+
+  if (
+    Number.isFinite(proximaTentativaMs) &&
+    proximaTentativaMs > Date.now() + 500
+  ) {
+    return false;
+  }
+
+  const flowControlKey = obterFlowControlKeyDisparo(
+    params.integracaoWhatsappId
+  );
+  const publicacao = await publicarItemDisparoQstash({
+    item: {
+      id: String(proximo.id),
+      campanha_id: String(proximo.campanha_id),
+      integracao_whatsapp_id: String(proximo.integracao_whatsapp_id),
+    },
+    campanhaId: params.campanhaId,
+    flowControlKey,
+  });
+
+  return publicacao.ok;
 }
 
 async function republicarItemDisparoQstash(params: {
@@ -1613,6 +1712,11 @@ export async function processarItemDisparoPorId(itemId: string) {
   try {
     const resultado = await processarItemDisparo(item);
 
+    await publicarProximoItemCampanhaQstash({
+      campanhaId: item.campanha_id,
+      integracaoWhatsappId: item.integracao_whatsapp_id,
+    });
+
     return {
       ok: true,
       processado: true,
@@ -1651,6 +1755,11 @@ export async function processarItemDisparoPorId(itemId: string) {
         proximaTentativaEmSegundos: delaySegundos,
       };
     }
+
+    await publicarProximoItemCampanhaQstash({
+      campanhaId: item.campanha_id,
+      integracaoWhatsappId: item.integracao_whatsapp_id,
+    });
 
     return {
       ok: true,
