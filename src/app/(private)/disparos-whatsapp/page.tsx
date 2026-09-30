@@ -2027,6 +2027,10 @@ export default function DisparosWhatsAppPage() {
   const [loadingHistorico, setLoadingHistorico] = useState(false);
   const [loadingSaudeMeta, setLoadingSaudeMeta] = useState(false);
   const [disparando, setDisparando] = useState(false);
+  const [
+    integracaoPreparandoEmSegundoPlanoId,
+    setIntegracaoPreparandoEmSegundoPlanoId,
+  ] = useState("");
   const [cancelandoCampanha, setCancelandoCampanha] = useState(false);
   const [modalCancelarCampanhaAberto, setModalCancelarCampanhaAberto] =
     useState(false);
@@ -3132,15 +3136,36 @@ export default function DisparosWhatsAppPage() {
       );
 
       const campanhasAtivas = lista.filter(campanhaEstaAtiva);
-      setDisparoEmMassaProcessando(campanhasAtivas.length > 0);
+      const preparacaoLocalAtiva = Boolean(
+        integracaoPreparandoEmSegundoPlanoId
+      );
+      const campanhaPreparadaJaApareceu = Boolean(
+        integracaoPreparandoEmSegundoPlanoId &&
+          lista.some(
+            (campanha) =>
+              campanha.integracao_whatsapp_id ===
+              integracaoPreparandoEmSegundoPlanoId
+          )
+      );
+
+      if (campanhaPreparadaJaApareceu) {
+        setIntegracaoPreparandoEmSegundoPlanoId("");
+      }
+
+      setDisparoEmMassaProcessando(
+        campanhasAtivas.length > 0 ||
+          (preparacaoLocalAtiva && !campanhaPreparadaJaApareceu)
+      );
       setCampanhasPagina(lista);
       setIntegracaoDisparoProcessando(
         Boolean(
           integracaoId &&
-            campanhasAtivas.some(
+            (campanhasAtivas.some(
               (campanha) =>
                 campanha.integracao_whatsapp_id === integracaoId
-            )
+            ) ||
+              (integracaoPreparandoEmSegundoPlanoId === integracaoId &&
+                !campanhaPreparadaJaApareceu))
         )
       );
 
@@ -3155,7 +3180,7 @@ export default function DisparosWhatsAppPage() {
     return () => {
       window.removeEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
     };
-  }, [integracaoId]);
+  }, [integracaoId, integracaoPreparandoEmSegundoPlanoId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -4694,6 +4719,7 @@ export default function DisparosWhatsAppPage() {
         timerPreparacao = window.setTimeout(() => {
           preparacaoTransferidaParaCard = true;
           setDisparando(false);
+          setIntegracaoPreparandoEmSegundoPlanoId(integracaoId);
           setDisparoEmMassaProcessando(true);
           setIntegracaoDisparoProcessando(true);
 
@@ -4886,6 +4912,7 @@ export default function DisparosWhatsAppPage() {
         ativo: false,
         integracaoWhatsappId: integracaoId,
       });
+      setIntegracaoPreparandoEmSegundoPlanoId("");
       setErro(error?.message || "Erro ao realizar disparo.");
     } finally {
       if (timerPreparacao !== null) {
