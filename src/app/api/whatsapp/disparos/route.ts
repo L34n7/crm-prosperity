@@ -21,6 +21,7 @@ import {
   normalizarTelefoneItemDisparo,
   obterFlowControlKeyDisparo,
   publicarItensDisparoQstash,
+  QSTASH_DISPARO_CHAIN_PENDING,
 } from "@/lib/whatsapp/disparo-fila";
 import type { TemplatePayloadDisparo } from "@/lib/whatsapp/send-template-disparo";
 import {
@@ -393,6 +394,7 @@ async function inserirItensCampanha(params: {
       nome_contato: contatoId ? nomesPorContatoId.get(contatoId) || null : null,
       variaveis,
       status: "pendente",
+      qstash_message_id: QSTASH_DISPARO_CHAIN_PENDING,
       consome_limite_meta:
         telefoneNormalizado.length >= 10 &&
         params.telefonesQueConsomemLimite.has(telefoneNormalizado),
