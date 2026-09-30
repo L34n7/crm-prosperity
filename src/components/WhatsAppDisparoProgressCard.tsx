@@ -37,11 +37,20 @@ type RealtimeContexto = {
   empresaId: string;
 };
 
+type PreparacaoLocal = {
+  integracao_whatsapp_id: string;
+  integracao_nome?: string | null;
+  total: number;
+  nome?: string | null;
+  created_at: string;
+};
+
 const EVENTO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_REFRESH = "crm:whatsapp-disparo-refresh";
+const EVENTO_PREPARANDO = "crm:whatsapp-disparo-preparando";
 const POLLING_ATIVO_MS = 6000;
 const TERMINAL_DISMISS_MS = 8000;
-const STATUS_ATIVOS = new Set(["pendente", "enviando"]);
+const STATUS_ATIVOS = new Set(["preparando", "pendente", "enviando"]);
 
 function inteiro(valor: unknown) {
   const numero = Number(valor || 0);
@@ -80,7 +89,9 @@ function percentual(campanha: CampanhaProgresso) {
 }
 
 function rotuloStatus(campanha: CampanhaProgresso) {
-  if (isStatusAtivo(campanha.status)) return "Processando";
+  if (String(campanha.status || "") === "preparando") return "Preparando fila";
+  if (String(campanha.status || "") === "pendente") return "Preparando fila";
+  if (String(campanha.status || "") === "enviando") return "Processando";
   if (isCampanhaSucesso(campanha)) return "Concluído";
   if (String(campanha.status || "") === "concluida") {
     return "Concluído com falhas";
@@ -119,6 +130,9 @@ export default function WhatsAppDisparoProgressCard() {
   const [expandido, setExpandido] = useState(false);
   const [contextoRealtime, setContextoRealtime] =
     useState<RealtimeContexto | null>(null);
+  const [preparacoesLocais, setPreparacoesLocais] = useState<PreparacaoLocal[]>(
+    []
+  );
   const terminalTimerRef = useRef<number | null>(null);
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
     null
@@ -157,6 +171,16 @@ export default function WhatsAppDisparoProgressCard() {
     });
 
     setCampanhas(ordenadas);
+    setPreparacoesLocais((atuais) =>
+      atuais.filter(
+        (preparacao) =>
+          !ordenadas.some(
+            (campanha) =>
+              campanha.integracao_whatsapp_id ===
+              preparacao.integracao_whatsapp_id
+          )
+      )
+    );
     emitirAndamento(ordenadas);
   }, []);
 
@@ -211,6 +235,51 @@ export default function WhatsAppDisparoProgressCard() {
   }, [carregarStatus]);
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detalhe = (
+        event as CustomEvent<{
+          ativo?: boolean;
+          integracao_whatsapp_id?: string;
+          integracao_nome?: string | null;
+          total?: number;
+          nome?: string | null;
+        }>
+      ).detail;
+
+      const integracaoWhatsappId = String(
+        detalhe?.integracao_whatsapp_id || ""
+      ).trim();
+
+      if (!integracaoWhatsappId) return;
+
+      setPreparacoesLocais((atuais) => {
+        const semAtual = atuais.filter(
+          (item) => item.integracao_whatsapp_id !== integracaoWhatsappId
+        );
+
+        if (detalhe?.ativo === false) return semAtual;
+
+        return [
+          ...semAtual,
+          {
+            integracao_whatsapp_id: integracaoWhatsappId,
+            integracao_nome: detalhe?.integracao_nome || null,
+            total: inteiro(detalhe?.total),
+            nome: detalhe?.nome || "Disparo em massa",
+            created_at: new Date().toISOString(),
+          },
+        ];
+      });
+    };
+
+    window.addEventListener(EVENTO_PREPARANDO, handler);
+
+    return () => {
+      window.removeEventListener(EVENTO_PREPARANDO, handler);
+    };
+  }, []);
+
+  useEffect(() => {
     const empresaId = contextoRealtime?.empresaId;
     if (!empresaId) return;
 
@@ -240,7 +309,32 @@ export default function WhatsAppDisparoProgressCard() {
     () => campanhas.filter((campanha) => isStatusAtivo(campanha.status)),
     [campanhas]
   );
-  const possuiAtivas = campanhasAtivas.length > 0;
+  const campanhasPreparando = useMemo<CampanhaProgresso[]>(
+    () =>
+      preparacoesLocais.map((preparacao) => ({
+        id: `preparando:${preparacao.integracao_whatsapp_id}`,
+        nome: preparacao.nome || "Disparo em massa",
+        integracao_whatsapp_id: preparacao.integracao_whatsapp_id,
+        integracao_nome: preparacao.integracao_nome || "Integração WhatsApp",
+        status: "preparando",
+        template_nome: null,
+        total: preparacao.total,
+        enviados: 0,
+        falhas: 0,
+        cancelados: 0,
+        pendentes: preparacao.total,
+        processando: 0,
+        processados: 0,
+        created_at: preparacao.created_at,
+        updated_at: preparacao.created_at,
+      })),
+    [preparacoesLocais]
+  );
+  const campanhasAtivasVisiveis = useMemo(
+    () => [...campanhasAtivas, ...campanhasPreparando],
+    [campanhasAtivas, campanhasPreparando]
+  );
+  const possuiAtivas = campanhasAtivasVisiveis.length > 0;
 
   useEffect(() => {
     if (!possuiAtivas) return;
@@ -282,7 +376,7 @@ export default function WhatsAppDisparoProgressCard() {
     };
   }, [campanhas.length, possuiAtivas]);
 
-  const listaVisivel = possuiAtivas ? campanhasAtivas : campanhas;
+  const listaVisivel = possuiAtivas ? campanhasAtivasVisiveis : campanhas;
   const total = listaVisivel.reduce(
     (soma, campanha) => soma + inteiro(campanha.total),
     0
@@ -311,6 +405,7 @@ export default function WhatsAppDisparoProgressCard() {
 
   function abrirCampanha(campanhaId: string) {
     if (typeof window === "undefined") return;
+    if (campanhaId.startsWith("preparando:")) return;
 
     if (window.location.pathname === "/disparos-whatsapp") {
       window.dispatchEvent(
@@ -337,7 +432,7 @@ export default function WhatsAppDisparoProgressCard() {
             <strong>Disparos em massa</strong>
             <small>
               {possuiAtivas
-                ? `${campanhasAtivas.length} ${campanhasAtivas.length === 1 ? "ativo" : "ativos"}`
+                ? `${campanhasAtivasVisiveis.length} ${campanhasAtivasVisiveis.length === 1 ? "ativo" : "ativos"}`
                 : "Últimos disparos"}
             </small>
           </div>
@@ -390,13 +485,17 @@ export default function WhatsAppDisparoProgressCard() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className={styles.openButton}
-                  onClick={() => abrirCampanha(campanha.id)}
-                >
-                  Abrir
-                </button>
+                {campanha.id.startsWith("preparando:") ? (
+                  <span className={styles.rowStatus}>Preparando fila</span>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.openButton}
+                    onClick={() => abrirCampanha(campanha.id)}
+                  >
+                    Abrir
+                  </button>
+                )}
               </div>
 
               <div className={styles.rowMetrics}>
@@ -430,7 +529,10 @@ export default function WhatsAppDisparoProgressCard() {
           : styles.cardWarning
       }`}
       onClick={() => {
-        if (listaVisivel.length === 1) {
+        if (
+          listaVisivel.length === 1 &&
+          !listaVisivel[0].id.startsWith("preparando:")
+        ) {
           abrirCampanha(listaVisivel[0].id);
           return;
         }
