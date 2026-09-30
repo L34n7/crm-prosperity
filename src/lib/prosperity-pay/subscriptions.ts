@@ -71,6 +71,23 @@ function affiliateRef(metadata: unknown) {
   return value && value.length <= 120 && /^[A-Za-z0-9_-]+$/.test(value) ? value : null;
 }
 
+async function sincronizarAfiliadoAssinatura(params: {
+  subscriptionId: string;
+  affiliateRefCode: string;
+}) {
+  return signedPost<{
+    ok: boolean;
+    subscription_id: string;
+    affiliate_ref: string;
+    affiliate_membership_id: string;
+    affiliate_link_id: string;
+    synced_at: string;
+  }>("/api/integrations/subscriptions/affiliate", {
+    subscriptionId: params.subscriptionId,
+    affiliateRefCode: params.affiliateRefCode,
+  });
+}
+
 async function ofertaProsperityPorPlanoValor(planoId: string, valorCentavos: number | null, metadata: unknown) {
   const metadataObj = obj(metadata);
   const refs = [
@@ -217,8 +234,7 @@ async function reconciliarComposicaoImportada(params: {
     Number(params.assinatura.base_amount_cents || 0) !== baseAmountCents ||
     currentWhatsappQuantity !== whatsappNumberQuantity ||
     String(params.assinatura.external_offer_reference || "") !==
-      String(oferta.referencia || "") ||
-    Boolean(affiliateRefCode);
+      String(oferta.referencia || "");
 
   if (!precisaReconciliar) {
     return params.assinatura;
@@ -313,11 +329,59 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
   if (mirror.error) throw mirror.error;
 
   if (mirror.data?.external_subscription_id) {
+    let assinaturaAtual = mirror.data;
+    const affiliateRefCode = affiliateRef(empresa.assinatura_metadata_json);
+
+    if (affiliateRefCode) {
+      const attribution = await sincronizarAfiliadoAssinatura({
+        subscriptionId: mirror.data.external_subscription_id,
+        affiliateRefCode,
+      });
+
+      const payloadAtual = obj(mirror.data.payload);
+      const { data: espelhoAtualizado, error: espelhoAtualizadoError } =
+        await supabase
+          .from("prosperity_pay_assinaturas")
+          .update({
+            payload: {
+              ...payloadAtual,
+              affiliate: {
+                ...obj(payloadAtual.affiliate),
+                ref: affiliateRefCode,
+                membership_id: attribution.affiliate_membership_id,
+                link_id: attribution.affiliate_link_id,
+              },
+              attribution: {
+                ...obj(payloadAtual.attribution),
+                source: "crm_prosperity_subscription_sync",
+                affiliate_ref: affiliateRefCode,
+                affiliate_membership_id: attribution.affiliate_membership_id,
+              },
+              renewal_affiliate_ref: affiliateRefCode,
+              affiliate_synced_at: attribution.synced_at,
+            },
+            synced_at: attribution.synced_at,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("empresa_id", empresaId)
+          .select("*")
+          .single();
+
+      if (espelhoAtualizadoError || !espelhoAtualizado) {
+        throw (
+          espelhoAtualizadoError ??
+          new Error("Falha ao registrar sincronização do afiliado da assinatura.")
+        );
+      }
+
+      assinaturaAtual = espelhoAtualizado;
+    }
+
     return reconciliarComposicaoImportada({
       empresaId,
       empresa,
       plano,
-      assinatura: mirror.data,
+      assinatura: assinaturaAtual,
     });
   }
 
