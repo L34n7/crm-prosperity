@@ -4709,7 +4709,6 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    let preparacaoTransferidaParaCard = false;
     let timerPreparacao: number | null = null;
 
     try {
@@ -4717,7 +4716,6 @@ export default function DisparosWhatsAppPage() {
 
       if (!agendarDisparo) {
         timerPreparacao = window.setTimeout(() => {
-          preparacaoTransferidaParaCard = true;
           setDisparando(false);
           setIntegracaoPreparandoEmSegundoPlanoId(integracaoId);
           setDisparoEmMassaProcessando(true);
