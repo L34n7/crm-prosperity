@@ -2490,11 +2490,6 @@ export default function DisparosWhatsAppPage() {
 
       const json = await res.json();
 
-      if (timerPreparacao !== null) {
-        window.clearTimeout(timerPreparacao);
-        timerPreparacao = null;
-      }
-
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Erro ao carregar integrações.");
       }
