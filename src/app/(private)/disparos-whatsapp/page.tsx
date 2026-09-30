@@ -488,6 +488,8 @@ type DecisaoConflitoDisparo = {
 
 const EVENTO_DISPARO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_DISPARO_REFRESH = "crm:whatsapp-disparo-refresh";
+const EVENTO_DISPARO_PREPARANDO = "crm:whatsapp-disparo-preparando";
+const TEMPO_MAXIMO_LOADING_PREPARACAO_MS = 15_000;
 const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
 const TEMPO_CARD_CAMPANHA_TERMINAL_MS = 8000;
 const TESTE_CARD_PAGINA_DISPARO_KEY =
@@ -1610,6 +1612,28 @@ function emitirRefreshDisparoEmMassa() {
   window.dispatchEvent(new Event(EVENTO_DISPARO_REFRESH));
 }
 
+function emitirPreparacaoDisparoEmMassa(params: {
+  ativo: boolean;
+  integracaoWhatsappId: string;
+  integracaoNome?: string | null;
+  total?: number;
+  nome?: string | null;
+}) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent(EVENTO_DISPARO_PREPARANDO, {
+      detail: {
+        ativo: params.ativo,
+        integracao_whatsapp_id: params.integracaoWhatsappId,
+        integracao_nome: params.integracaoNome || null,
+        total: Math.max(0, Number(params.total || 0)),
+        nome: params.nome || null,
+      },
+    })
+  );
+}
+
 function textoCampanha(valor: unknown) {
   return typeof valor === "string" && valor.trim() ? valor : null;
 }
@@ -2465,6 +2489,11 @@ export default function DisparosWhatsAppPage() {
       });
 
       const json = await res.json();
+
+      if (timerPreparacao !== null) {
+        window.clearTimeout(timerPreparacao);
+        timerPreparacao = null;
+      }
 
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Erro ao carregar integrações.");
@@ -4660,8 +4689,36 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    let preparacaoTransferidaParaCard = false;
+    let timerPreparacao: number | null = null;
+
     try {
       setDisparando(true);
+
+      if (!agendarDisparo) {
+        timerPreparacao = window.setTimeout(() => {
+          preparacaoTransferidaParaCard = true;
+          setDisparando(false);
+          setDisparoEmMassaProcessando(true);
+          setIntegracaoDisparoProcessando(true);
+
+          emitirPreparacaoDisparoEmMassa({
+            ativo: true,
+            integracaoWhatsappId: integracaoId,
+            integracaoNome:
+              integracaoSelecionada?.nome_conexao ||
+              integracaoSelecionada?.numero ||
+              "Integração WhatsApp",
+            total: contatosSelecionados.length,
+            nome: nomeCampanhaDisparo || "Disparo em massa",
+          });
+
+          emitirRefreshDisparoEmMassa();
+          setMensagem(
+            "A campanha continua sendo preparada em segundo plano. Você já pode continuar usando o sistema."
+          );
+        }, TEMPO_MAXIMO_LOADING_PREPARACAO_MS);
+      }
 
       if (agendarDisparo && executarEm) {
         const res = await fetch("/api/disparos-agendados/criar", {
@@ -4787,11 +4844,18 @@ export default function DisparosWhatsAppPage() {
       }
 
       if (json.queued) {
+        setDisparando(false);
         setDisparoEmMassaProcessando(true);
         setIntegracaoDisparoProcessando(true);
         setAbaAtiva("disparo");
-        setModalCampanhaAberto(true);
-        await carregarCampanhaPagina(integracaoId);
+
+        if (!preparacaoTransferidaParaCard) {
+          setModalCampanhaAberto(true);
+        } else {
+          setModalCampanhaAberto(false);
+        }
+
+        void carregarCampanhaPagina(integracaoId);
         void carregarCampanhaPagina("", String(json.campanha_id || ""));
         emitirRefreshDisparoEmMassa();
 
@@ -4801,7 +4865,7 @@ export default function DisparosWhatsAppPage() {
           )} disparos serão processados gradualmente em segundo plano.`
         );
 
-        await carregarHistorico();
+        void carregarHistorico();
 
         return;
       }
@@ -4818,8 +4882,15 @@ export default function DisparosWhatsAppPage() {
       await carregarHistorico();
 
     } catch (error: any) {
+      emitirPreparacaoDisparoEmMassa({
+        ativo: false,
+        integracaoWhatsappId: integracaoId,
+      });
       setErro(error?.message || "Erro ao realizar disparo.");
     } finally {
+      if (timerPreparacao !== null) {
+        window.clearTimeout(timerPreparacao);
+      }
       if (integracaoId) {
         carregarSaudeMeta(integracaoId);
         carregarBloqueioDisparoEmMassa(integracaoId);
