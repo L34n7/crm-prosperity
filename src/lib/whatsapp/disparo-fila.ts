@@ -69,6 +69,7 @@ type ItemPublicacaoQstash = {
   id: string;
   campanha_id: string;
   integracao_whatsapp_id: string;
+  ordem?: number;
 };
 
 type WebhookStatusUpdateParams = {
@@ -229,12 +230,9 @@ function obterConfigFlowControlDisparo() {
       100
     ),
     period: Math.max(1, periodoValor * multiplicador),
-    parallelism: normalizarInteiro(
-      process.env.WHATSAPP_DISPARO_QSTASH_PARALLELISM,
-      1,
-      1,
-      10
-    ),
+    // A fila de uma mesma integração precisa ser serial para preservar
+    // rigorosamente a ordem dos contatos da campanha.
+    parallelism: 1,
   };
 }
 
@@ -343,7 +341,7 @@ export async function publicarItensDisparoQstash(params: {
     return {
       ok: false,
       publicados: 0,
-      total: params.itens.length,
+      total: itensOrdenados.length,
       flowControlKey,
       erro,
     };
@@ -352,11 +350,19 @@ export async function publicarItensDisparoQstash(params: {
   const flowControl = obterConfigFlowControlDisparo();
   const tamanhoBatch = obterBatchQstash();
   const retries = obterRetryQstash();
+  const itensOrdenados = [...params.itens].sort((a, b) => {
+    const ordemA = Number(a.ordem || 0);
+    const ordemB = Number(b.ordem || 0);
+
+    if (ordemA !== ordemB) return ordemA - ordemB;
+
+    return String(a.id).localeCompare(String(b.id));
+  });
   let publicados = 0;
   let ultimoErro: string | null = null;
 
-  for (let inicio = 0; inicio < params.itens.length; inicio += tamanhoBatch) {
-    const lote = params.itens.slice(inicio, inicio + tamanhoBatch);
+  for (let inicio = 0; inicio < itensOrdenados.length; inicio += tamanhoBatch) {
+    const lote = itensOrdenados.slice(inicio, inicio + tamanhoBatch);
 
     try {
       const requests = lote.map((item) => {
@@ -433,7 +439,7 @@ export async function publicarItensDisparoQstash(params: {
   return {
     ok: publicados > 0,
     publicados,
-    total: params.itens.length,
+    total: itensOrdenados.length,
     flowControlKey,
     erro: ultimoErro,
   };
