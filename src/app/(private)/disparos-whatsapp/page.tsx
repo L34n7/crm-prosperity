@@ -4820,6 +4820,11 @@ export default function DisparosWhatsAppPage() {
 
       const json = await res.json();
 
+      if (timerPreparacao !== null) {
+        window.clearTimeout(timerPreparacao);
+        timerPreparacao = null;
+      }
+
       if (!res.ok || !json.ok) {
         if (json.bloquear_disparos) {
           if (json.bloqueio_escopo === "integracao") {
