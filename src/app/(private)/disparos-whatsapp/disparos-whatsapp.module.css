@@ -4245,7 +4245,7 @@
 }
 
 .campaignProgressCancel {
-  min-height: 38px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4254,9 +4254,11 @@
   border-radius: 10px;
   background: var(--crm-danger-bg);
   color: var(--crm-danger-text);
-  padding: 0 13px;
+  padding: 0 12px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
 }
 
