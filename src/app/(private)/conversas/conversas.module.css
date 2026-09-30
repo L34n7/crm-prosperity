@@ -861,7 +861,8 @@
 }
 
 .headerDropdownItem,
-.AtivarBot {
+.AtivarBot,
+.AtivarIa {
   width: 100%;
   border: none;
   background: transparent;
@@ -884,6 +885,14 @@
 
 .AtivarBot:hover {
   background: var(--AtivarBotHover);
+}
+
+.AtivarIa {
+  color: var(--crm-primary-strong);
+}
+
+.AtivarIa:hover {
+  background: var(--crm-primary-soft);
 }
 
 .dropdownItemContent {

@@ -266,6 +266,7 @@ export default function ConversasPageContent() {
   const [modalNovoProtocoloAberto, setModalNovoProtocoloAberto] =
     useState(false);
   const [modalAtivarBotAberto, setModalAtivarBotAberto] = useState(false);
+  const [ativandoIa, setAtivandoIa] = useState(false);
     
   const [infoExpandida, setInfoExpandida] = useState(false);
 
@@ -3729,6 +3730,55 @@ export default function ConversasPageContent() {
     }
   }
 
+  async function ativarIaNaConversa() {
+    if (!conversaSelecionada?.id || ativandoIa) return;
+
+    try {
+      setAtivandoIa(true);
+      setErro("");
+      setMensagemSucesso("");
+      setMenuContatoAberto(false);
+
+      const conversaId = conversaSelecionada.id;
+      const res = await fetch(`/api/conversas/${conversaId}/ativar-ia`, {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(data.error || "Erro ao ativar a IA nesta conversa.");
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          "IA ativada nesta conversa com o histórico existente como contexto."
+      );
+
+      const listaAtualizada = await atualizarConversasCarregadas();
+      const conversaAtualizada = listaAtualizada.find(
+        (conversa: Conversa) => conversa.id === conversaId
+      );
+
+      if (conversaAtualizada) {
+        selecionarConversa(conversaAtualizada);
+      }
+
+      await carregarMensagens(
+        conversaId,
+        true,
+        protocoloSelecionadoId,
+        inicioJanelaHistorico,
+        fimJanelaHistorico
+      );
+    } catch {
+      setErro("Erro ao ativar a IA nesta conversa.");
+    } finally {
+      setAtivandoIa(false);
+    }
+  }
+
+
   async function confirmarTransferencia() {
     if (!conversaSelecionada?.id) return;
 
@@ -6028,6 +6078,12 @@ async function baixarConversaPDF() {
     !!ultimaMensagemRecebidaDoContato &&
     (ehAdministrador || conversaEhMinha || conversaEhDeUmDosMeusSetores);
 
+  const podeAtivarIa =
+    !!conversaSelecionada &&
+    !conversaHistoricoImportado &&
+    !conversaEncerrada &&
+    (ehAdministrador || conversaEhMinha || conversaEhDeUmDosMeusSetores);
+
   const referenciaJanela24hComposer = useMemo(() => {
     if (janela24hConversa?.ultimaMensagemRecebidaEm) {
       return {
@@ -7592,9 +7648,20 @@ const templateFooterTexto = useMemo(() => {
                                     type="button"
                                     className={styles.AtivarBot}
                                     onClick={abrirModalAtivarBot}
-                                    disabled={salvandoAcao || assumindo}
+                                    disabled={salvandoAcao || assumindo || ativandoIa}
                                   >
                                     {salvandoAcao ? "Ativando..." : "Ativar bot"}
+                                  </button>
+                                )}
+
+                                {podeAtivarIa && (
+                                  <button
+                                    type="button"
+                                    className={styles.AtivarIa}
+                                    onClick={ativarIaNaConversa}
+                                    disabled={ativandoIa || salvandoAcao || assumindo}
+                                  >
+                                    {ativandoIa ? "Ativando IA..." : "Ativar IA"}
                                   </button>
                                 )}
 

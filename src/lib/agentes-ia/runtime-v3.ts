@@ -707,16 +707,95 @@ function mensagemAssistenteTemEstadoOperacionalAntigo(texto: string) {
     /\b(?:\d{1,2}[:h]\d{0,2}|segunda|terça|quarta|quinta|sexta|sábado|domingo|hoje|amanhã)\b/i.test(texto);
 }
 
-async function carregarContexto(ctx: ContextoExecucao) {
-  const limite = numeroInteiro(ctx.agente.max_mensagens_contexto, 4, 4, 40);
-  const [{ data: mensagens }, { data: estado }] = await Promise.all([
-    supabaseAdmin
+async function ativacaoManualContextoCompletoPendente(ctx: ContextoExecucao) {
+  const { data: marcador, error: marcadorError } = await supabaseAdmin
+    .from("mensagens")
+    .select("id, created_at, metadata_json")
+    .eq("empresa_id", ctx.pendencia.empresa_id)
+    .eq("conversa_id", ctx.pendencia.conversa_id)
+    .contains("metadata_json", {
+      agente_ia_ativacao_manual: { agente_id: ctx.agente.id },
+    })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (marcadorError) {
+    console.error("[AGENTE_IA] Falha ao localizar ativação manual:", marcadorError);
+    return false;
+  }
+  if (!marcador) return false;
+
+  const metadata = (marcador.metadata_json || {}) as Record<string, any>;
+  const configuracao = metadata.agente_ia_ativacao_manual || {};
+  const ativadoEm = String(configuracao.ativado_em || marcador.created_at || "").trim();
+  if (!ativadoEm) return false;
+
+  const { data: execucaoConsumidora, error: execucaoError } = await supabaseAdmin
+    .from("agente_ia_execucoes")
+    .select("id")
+    .eq("empresa_id", ctx.pendencia.empresa_id)
+    .eq("agente_id", ctx.agente.id)
+    .eq("conversa_id", ctx.pendencia.conversa_id)
+    .neq("id", ctx.execucaoId)
+    .gt("created_at", ativadoEm)
+    .in("status", ["concluido", "fallback"])
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (execucaoError) {
+    console.error("[AGENTE_IA] Falha ao verificar consumo da ativação manual:", execucaoError);
+    return false;
+  }
+
+  return !execucaoConsumidora;
+}
+
+async function carregarMensagensContextoCompleto(ctx: ContextoExecucao) {
+  const pagina = 500;
+  const mensagens: any[] = [];
+
+  for (let indice = 0; indice < 100; indice++) {
+    const inicio = indice * pagina;
+    const { data, error } = await supabaseAdmin
       .from("mensagens")
       .select("id, remetente_tipo, conteudo, tipo_mensagem, created_at")
       .eq("empresa_id", ctx.pendencia.empresa_id)
       .eq("conversa_id", ctx.pendencia.conversa_id)
-      .order("created_at", { ascending: false })
-      .limit(limite),
+      .order("created_at", { ascending: true })
+      .range(inicio, inicio + pagina - 1);
+
+    if (error) throw new Error(error.message);
+
+    const lote = data || [];
+    mensagens.push(...lote);
+    if (lote.length < pagina) break;
+  }
+
+  return mensagens;
+}
+
+async function carregarContexto(ctx: ContextoExecucao) {
+  const limite = numeroInteiro(ctx.agente.max_mensagens_contexto, 4, 4, 40);
+  const ativacaoManual = await ativacaoManualContextoCompletoPendente(ctx);
+
+  const mensagensPromise = ativacaoManual
+    ? carregarMensagensContextoCompleto(ctx)
+    : supabaseAdmin
+        .from("mensagens")
+        .select("id, remetente_tipo, conteudo, tipo_mensagem, created_at")
+        .eq("empresa_id", ctx.pendencia.empresa_id)
+        .eq("conversa_id", ctx.pendencia.conversa_id)
+        .order("created_at", { ascending: false })
+        .limit(limite)
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message);
+          return data || [];
+        });
+
+  const [mensagens, estadoResult] = await Promise.all([
+    mensagensPromise,
     supabaseAdmin
       .from("agente_ia_conversa_estados")
       .select("estado_json")
@@ -725,6 +804,9 @@ async function carregarContexto(ctx: ContextoExecucao) {
       .eq("conversa_id", ctx.pendencia.conversa_id)
       .maybeSingle(),
   ]);
+
+  if (estadoResult.error) throw new Error(estadoResult.error.message);
+  const estado = estadoResult.data;
 
   const origem = origemAgendaConfiguradaFerramentas(ctx.ferramentasAtivas);
   let agendas: any[] = [];
@@ -770,8 +852,11 @@ async function carregarContexto(ctx: ContextoExecucao) {
     });
   }
 
-  const historico = (mensagens || [])
-    .reverse()
+  const mensagensOrdenadas = ativacaoManual
+    ? mensagens
+    : [...(mensagens || [])].reverse();
+
+  const historico = mensagensOrdenadas
     .filter((item: any) => String(item.conteudo || "").trim())
     .filter((item: any) => {
       if (item.remetente_tipo === "contato") return true;
@@ -779,7 +864,7 @@ async function carregarContexto(ctx: ContextoExecucao) {
     })
     .map((item: any) => ({
       role: item.remetente_tipo === "contato" ? "user" : "assistant",
-      content: String(item.conteudo || "").slice(0, 500),
+      content: String(item.conteudo || "").slice(0, 1200),
     }));
 
   const timezone = agendas[0]?.timezone || "America/Sao_Paulo";
@@ -797,6 +882,7 @@ async function carregarContexto(ctx: ContextoExecucao) {
     agendas,
     grupoDistribuicao,
     agendamentosAtivos,
+    ativacaoManual,
   };
 }
 
@@ -2770,13 +2856,26 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     if (contextoPreconsultado) {
       inputIa.push({ role: "developer", content: contextoPreconsultado });
     }
-    const instructions = promptDoAgente(
-      agente as AgenteRow,
-      contexto.estado,
-      contexto.agendas,
-      contexto.agendamentosAtivos,
-      ferramentasAtivas,
-    );
+    const instructions = [
+      promptDoAgente(
+        agente as AgenteRow,
+        contexto.estado,
+        contexto.agendas,
+        contexto.agendamentosAtivos,
+        ferramentasAtivas,
+      ),
+      contexto.ativacaoManual
+        ? [
+            "ATIVAÇÃO MANUAL DA IA — REGRA PRIORITÁRIA:",
+            "Você está assumindo uma conversa que já estava em andamento.",
+            "Use todo o histórico fornecido para entender o contexto e continue exatamente do ponto em que o atendimento parou.",
+            "Não se apresente, não diga que é uma IA, não informe que foi ativado e não reinicie o atendimento.",
+            "Não repita saudações nem perguntas já respondidas. Apenas dê sequência natural à conversa.",
+          ].join("\n")
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     let tokensInput = 0;
     let tokensOutput = 0;
     let tokensTotal = 0;

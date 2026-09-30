@@ -29,7 +29,7 @@ async function esperar(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function cancelarFluxosConversacionaisAtivos(empresaId: string, conversaId: string) {
+export async function cancelarFluxosConversacionaisAtivos(empresaId: string, conversaId: string) {
   const { data: execucoes, error } = await supabaseAdmin
     .from("automacao_execucoes")
     .select("id, metadata_json")
@@ -83,6 +83,7 @@ export async function despacharMensagemParaAgente(params: {
   input: AutomationEngineInput;
   agente: AgenteDespacho;
   contatoId?: string | null;
+  ignorarHorario?: boolean;
 }) {
   const texto = String(params.input.mensagemTexto || "").trim();
   const mensagemId = String(params.input.mensagemId || "").trim() || null;
@@ -102,7 +103,11 @@ export async function despacharMensagemParaAgente(params: {
   if (configuracaoError) throw new Error(configuracaoError.message);
 
   const horario = normalizarHorarioAtendimento(configuracaoAgente?.horarios);
-  if (horario.ativo && !estaDentroHorarioAtendimento(horario)) {
+  if (
+    horario.ativo &&
+    params.ignorarHorario !== true &&
+    !estaDentroHorarioAtendimento(horario)
+  ) {
     const proximaAbertura = calcularProximaAbertura(horario);
     if (!proximaAbertura) {
       console.error("[AGENTE_IA] Horário ativo sem próxima abertura configurada", {
