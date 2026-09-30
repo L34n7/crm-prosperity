@@ -157,6 +157,7 @@ async function reconciliarComposicaoImportada(params: {
   assinatura: any;
 }) {
   const metadata = obj(params.empresa.assinatura_metadata_json);
+  const affiliateRefCode = affiliateRef(params.empresa.assinatura_metadata_json);
   const gatewayEmpresa = String(
     params.empresa.assinatura_gateway || ""
   ).trim().toLowerCase();
@@ -216,7 +217,8 @@ async function reconciliarComposicaoImportada(params: {
     Number(params.assinatura.base_amount_cents || 0) !== baseAmountCents ||
     currentWhatsappQuantity !== whatsappNumberQuantity ||
     String(params.assinatura.external_offer_reference || "") !==
-      String(oferta.referencia || "");
+      String(oferta.referencia || "") ||
+    Boolean(affiliateRefCode);
 
   if (!precisaReconciliar) {
     return params.assinatura;
@@ -229,6 +231,9 @@ async function reconciliarComposicaoImportada(params: {
       offer_reference: string;
       base_amount_cents: number;
       current_amount_cents: number;
+      affiliate_ref?: string | null;
+      affiliate_membership_id?: string | null;
+      affiliate_link_id?: string | null;
       items: unknown[];
     };
   }>("/api/integrations/subscriptions/reconcile", {
@@ -236,6 +241,7 @@ async function reconciliarComposicaoImportada(params: {
     offerReference: oferta.referencia,
     baseAmountCents,
     whatsappNumberQuantity,
+    ...(affiliateRefCode ? { affiliateRefCode } : {}),
   });
 
   const { data: atualizado, error } = await supabase
@@ -245,6 +251,27 @@ async function reconciliarComposicaoImportada(params: {
       base_amount_cents: resultado.subscription.base_amount_cents,
       current_amount_cents: resultado.subscription.current_amount_cents,
       items: resultado.subscription.items,
+      payload: affiliateRefCode
+        ? {
+            ...obj(params.assinatura.payload),
+            affiliate: {
+              ...obj(obj(params.assinatura.payload).affiliate),
+              ref: affiliateRefCode,
+              membership_id:
+                resultado.subscription.affiliate_membership_id ?? null,
+              link_id: resultado.subscription.affiliate_link_id ?? null,
+            },
+            attribution: {
+              ...obj(obj(params.assinatura.payload).attribution),
+              source: "crm_prosperity_subscription_sync",
+              affiliate_ref: affiliateRefCode,
+              affiliate_membership_id:
+                resultado.subscription.affiliate_membership_id ?? null,
+            },
+            renewal_affiliate_ref: affiliateRefCode,
+            affiliate_synced_at: new Date().toISOString(),
+          }
+        : params.assinatura.payload,
       synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -383,6 +410,66 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
     plano,
     assinatura: upsert.data,
   });
+}
+
+export async function sincronizarAfiliadosAssinaturasProsperityPay() {
+  const { data: mirrors, error: mirrorsError } = await supabase
+    .from("prosperity_pay_assinaturas")
+    .select("empresa_id,external_subscription_id")
+    .not("external_subscription_id", "is", null);
+
+  if (mirrorsError) throw mirrorsError;
+
+  const empresaIds = Array.from(
+    new Set(
+      (mirrors || [])
+        .map((item) => item.empresa_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  if (!empresaIds.length) {
+    return { encontradas: 0, sincronizadas: 0, erros: 0 };
+  }
+
+  const { data: empresas, error: empresasError } = await supabase
+    .from("empresas")
+    .select("id,assinatura_metadata_json")
+    .in("id", empresaIds);
+
+  if (empresasError) throw empresasError;
+
+  const targets = (empresas || []).filter((empresa) =>
+    Boolean(affiliateRef(empresa.assinatura_metadata_json)),
+  );
+
+  let sincronizadas = 0;
+  let erros = 0;
+
+  for (let index = 0; index < targets.length; index += 3) {
+    const lote = targets.slice(index, index + 3);
+    const resultados = await Promise.allSettled(
+      lote.map((empresa) => garantirAssinaturaProsperityPay(empresa.id)),
+    );
+
+    for (const resultado of resultados) {
+      if (resultado.status === "fulfilled") {
+        sincronizadas += 1;
+      } else {
+        erros += 1;
+        console.error(
+          "[PROSPERITY_PAY] Falha ao sincronizar afiliado de assinatura legada",
+          resultado.reason,
+        );
+      }
+    }
+  }
+
+  return {
+    encontradas: targets.length,
+    sincronizadas,
+    erros,
+  };
 }
 
 export async function criarCheckoutAssinaturaProsperityPay(
