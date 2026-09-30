@@ -609,6 +609,16 @@ async function republicarItemDisparoQstash(params: {
   const url = obterUrlWorkerDisparoQstash();
 
   if (!process.env.QSTASH_TOKEN || !url) {
+    const flowControlKey =
+      normalizarFlowControlKeyQstash(params.item.qstash_flow_control_key || "") ||
+      obterFlowControlKeyDisparo(params.item.integracao_whatsapp_id);
+
+    await ativarFallbackCronCampanha({
+      campanhaId: params.item.campanha_id,
+      flowControlKey,
+      erro: "QStash indisponível na retentativa. Cron fallback fará a retomada.",
+    });
+
     return false;
   }
 
@@ -1802,17 +1812,27 @@ export async function processarItemDisparoPorId(itemId: string) {
         integracaoWhatsappId: item.integracao_whatsapp_id,
       });
     } catch (publicacaoError) {
+      const erroPublicacao =
+        publicacaoError instanceof Error
+          ? publicacaoError.message
+          : "Erro desconhecido.";
+
       console.error(
         "[WHATSAPP DISPARO QSTASH] Item processado, mas o próximo não foi publicado:",
         {
           itemId: item.id,
           campanhaId: item.campanha_id,
-          erro:
-            publicacaoError instanceof Error
-              ? publicacaoError.message
-              : "Erro desconhecido.",
+          erro: erroPublicacao,
         }
       );
+
+      await ativarFallbackCronCampanha({
+        campanhaId: item.campanha_id,
+        flowControlKey: obterFlowControlKeyDisparo(
+          item.integracao_whatsapp_id
+        ),
+        erro: erroPublicacao,
+      }).catch(() => undefined);
     }
 
     return {
@@ -1860,17 +1880,27 @@ export async function processarItemDisparoPorId(itemId: string) {
         integracaoWhatsappId: item.integracao_whatsapp_id,
       });
     } catch (publicacaoError) {
+      const erroPublicacao =
+        publicacaoError instanceof Error
+          ? publicacaoError.message
+          : "Erro desconhecido.";
+
       console.error(
         "[WHATSAPP DISPARO QSTASH] Falha final registrada, mas o próximo item não foi publicado:",
         {
           itemId: item.id,
           campanhaId: item.campanha_id,
-          erro:
-            publicacaoError instanceof Error
-              ? publicacaoError.message
-              : "Erro desconhecido.",
+          erro: erroPublicacao,
         }
       );
+
+      await ativarFallbackCronCampanha({
+        campanhaId: item.campanha_id,
+        flowControlKey: obterFlowControlKeyDisparo(
+          item.integracao_whatsapp_id
+        ),
+        erro: erroPublicacao,
+      }).catch(() => undefined);
     }
 
     return {
