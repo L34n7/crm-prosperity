@@ -371,6 +371,8 @@ async function inserirItensCampanha(params: {
     }
   }
 
+  const ordemBaseMs = Date.now() - Math.max(1, params.destinatarios.length);
+
   const payload = params.destinatarios.map((destinatario, index) => {
     const numero = limparNumero(destinatario.numero || "");
     const telefoneNormalizado = normalizarTelefoneItemDisparo(numero);
@@ -398,6 +400,8 @@ async function inserirItensCampanha(params: {
         ordem: index + 1,
         origem: "/api/whatsapp/disparos",
       },
+      created_at: new Date(ordemBaseMs + index).toISOString(),
+      next_attempt_at: new Date(ordemBaseMs + index).toISOString(),
     };
   });
 
@@ -406,6 +410,7 @@ async function inserirItensCampanha(params: {
     id: string;
     campanha_id: string;
     integracao_whatsapp_id: string;
+    ordem: number;
   }> = [];
 
   for (let inicio = 0; inicio < payload.length; inicio += tamanhoLote) {
@@ -413,16 +418,32 @@ async function inserirItensCampanha(params: {
     const { data, error } = await supabaseAdmin
       .from("whatsapp_disparo_itens")
       .insert(lote)
-      .select("id, campanha_id, integracao_whatsapp_id");
+      .select("id, campanha_id, integracao_whatsapp_id, metadata_json");
 
     if (error) {
       throw new Error(`Erro ao criar itens da campanha: ${error.message}`);
     }
 
-    itensCriados.push(...(data || []));
+    itensCriados.push(
+      ...(data || []).map((item) => ({
+        id: String(item.id),
+        campanha_id: String(item.campanha_id),
+        integracao_whatsapp_id: String(item.integracao_whatsapp_id),
+        ordem: Math.max(
+          1,
+          Number(
+            item.metadata_json &&
+              typeof item.metadata_json === "object" &&
+              !Array.isArray(item.metadata_json)
+              ? (item.metadata_json as Record<string, unknown>).ordem
+              : 0
+          ) || 1
+        ),
+      }))
+    );
   }
 
-  return itensCriados;
+  return itensCriados.sort((a, b) => a.ordem - b.ordem);
 }
 
 export async function GET(req: NextRequest) {
@@ -1033,6 +1054,7 @@ export async function POST(req: NextRequest) {
       id: string;
       campanha_id: string;
       integracao_whatsapp_id: string;
+      ordem: number;
     }> = [];
     let publicacaoQstash: Awaited<
       ReturnType<typeof publicarItensDisparoQstash>
