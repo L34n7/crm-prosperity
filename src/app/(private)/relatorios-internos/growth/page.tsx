@@ -18,6 +18,7 @@ type EmpresaRow = {
   assinatura_status: string | null;
   assinatura_gateway: string | null;
   assinatura_referencia: string | null;
+  assinatura_metadata_json: unknown;
   planos: PlanoRelacao;
 };
 
@@ -33,6 +34,14 @@ type PagamentoRow = {
   metodo: string | null;
 };
 
+type AssinaturaProsperityRow = {
+  empresa_id: string | null;
+  status: string | null;
+  base_amount_cents: number | null;
+  current_amount_cents: number | null;
+  items: unknown;
+};
+
 type OfertaRow = { plano_id: string | null; empresa_id: string | null; referencia: string | null; nome: string | null };
 type UsuarioRow = { empresa_id: string | null; nome: string | null; email: string | null; created_at: string };
 type ClienteGrowth = {
@@ -44,7 +53,9 @@ type ClienteGrowth = {
   status: string;
   primeiroPagamentoEm: string;
   gateway: string;
-  valorMensal: number;
+  valorInicial: number;
+  valorMensalAtual: number;
+  adicionaisWhatsapp: number;
   diasConversao: number;
 };
 
@@ -140,6 +151,93 @@ function formatarStatus(status: string | null) {
   return texto ? texto.charAt(0).toUpperCase() + texto.slice(1) : "Não informado";
 }
 
+function objeto(valor: unknown): Record<string, any> {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, any>)
+    : {};
+}
+
+function itensAssinatura(valor: unknown) {
+  return Array.isArray(valor)
+    ? valor.filter((item) => item && typeof item === "object") as Record<string, any>[]
+    : [];
+}
+
+function quantidadeAdicionaisWhatsapp(
+  assinatura: AssinaturaProsperityRow | undefined,
+  empresa: EmpresaRow
+) {
+  const itens = itensAssinatura(assinatura?.items);
+  const quantidadeItens = itens
+    .filter((item) => {
+      const tipo = String(item.type || item.item_type || "").trim().toLowerCase();
+      const codigo = String(item.code || "").trim().toLowerCase();
+      const status = String(item.status || "active").trim().toLowerCase();
+
+      return (
+        tipo === "addon" &&
+        codigo === "whatsapp_number" &&
+        !["cancelled", "canceled", "ended", "inactive", "removed"].includes(status)
+      );
+    })
+    .reduce((total, item) => total + Math.max(0, Number(item.quantity || 0)), 0);
+
+  if (quantidadeItens > 0) return quantidadeItens;
+
+  const metadata = objeto(empresa.assinatura_metadata_json);
+  return Math.max(
+    0,
+    Number(
+      metadata.whatsapp_addon_quantity_effective ??
+        metadata.whatsapp_addon_quantity ??
+        0
+    )
+  );
+}
+
+function valorMensalAtual(
+  assinatura: AssinaturaProsperityRow | undefined,
+  empresa: EmpresaRow,
+  pagamentoInicial: PagamentoRow
+) {
+  const valorAssinatura = Number(assinatura?.current_amount_cents || 0);
+  if (Number.isFinite(valorAssinatura) && valorAssinatura > 0) {
+    return valorAssinatura / 100;
+  }
+
+  const metadata = objeto(empresa.assinatura_metadata_json);
+  const valorMetadata = Number(metadata.current_amount_cents || 0);
+  if (Number.isFinite(valorMetadata) && valorMetadata > 0) {
+    return valorMetadata / 100;
+  }
+
+  return valorPagamento(pagamentoInicial);
+}
+
+function rotuloComposicaoPlano(
+  empresa: EmpresaRow,
+  assinatura: AssinaturaProsperityRow | undefined,
+  pagamento: PagamentoRow,
+  oferta: OfertaRow | undefined
+) {
+  const planoBase = primeiroPlano(empresa.planos)?.nome?.trim() || "Plano não informado";
+  const adicionais = quantidadeAdicionaisWhatsapp(assinatura, empresa);
+  const valorAtual = valorMensalAtual(assinatura, empresa, pagamento);
+  const composicao =
+    adicionais > 0
+      ? `${planoBase} + ${adicionais} ${adicionais === 1 ? "número adicional" : "números adicionais"}`
+      : planoBase;
+
+  if (valorAtual > 0) {
+    return `${composicao} — ${moeda.format(valorAtual)}/mês`;
+  }
+
+  const titulo = pagamento.offer_titulo?.trim() || oferta?.nome?.trim() || "";
+  return titulo && titulo.toLowerCase() !== planoBase.toLowerCase()
+    ? `${composicao} — ${titulo}`
+    : composicao;
+}
+
 function noPeriodo(valor: string, inicio: Date, fim: Date) {
   const instante = new Date(valor).getTime();
   return instante >= inicio.getTime() && instante <= fim.getTime();
@@ -162,11 +260,18 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const periodo = resolverPeriodo(params);
   const supabase = getSupabaseAdmin();
 
-  const [{ data: empresasData }, { data: pagamentosData }, { data: ofertasData }, { data: usuariosData }] = await Promise.all([
-    supabase.from("empresas").select(`id, nome_fantasia, razao_social, created_at, plano_id, assinatura_status, assinatura_gateway, assinatura_referencia, planos (id, nome, slug)`),
+  const [
+    { data: empresasData },
+    { data: pagamentosData },
+    { data: ofertasData },
+    { data: usuariosData },
+    { data: assinaturasData },
+  ] = await Promise.all([
+    supabase.from("empresas").select(`id, nome_fantasia, razao_social, created_at, plano_id, assinatura_status, assinatura_gateway, assinatura_referencia, assinatura_metadata_json, planos (id, nome, slug)`),
     supabase.from("pagamentos").select("id, empresa_id, status, paid_at, created_at, valor, offer_hash, offer_titulo, metodo").not("empresa_id", "is", null).in("status", STATUS_PAGAMENTO_CONFIRMADO).order("paid_at", { ascending: true }).limit(20000),
     supabase.from("ia_token_ofertas").select("plano_id, empresa_id, referencia, nome").eq("tipo", "mensalidade").eq("ativa", true),
     supabase.from("usuarios").select("empresa_id, nome, email, created_at").order("created_at", { ascending: true }),
+    supabase.from("prosperity_pay_assinaturas").select("empresa_id,status,base_amount_cents,current_amount_cents,items"),
   ]);
 
   const empresas = (empresasData ?? []) as EmpresaRow[];
@@ -174,7 +279,13 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const pagamentos = pagamentosCarregados.filter(pagamentoComercial);
   const ofertas = (ofertasData ?? []) as OfertaRow[];
   const usuarios = (usuariosData ?? []) as UsuarioRow[];
+  const assinaturas = (assinaturasData ?? []) as AssinaturaProsperityRow[];
   const empresaPorId = new Map(empresas.map((empresa) => [empresa.id, empresa]));
+  const assinaturaPorEmpresa = new Map(
+    assinaturas
+      .filter((assinatura) => Boolean(assinatura.empresa_id))
+      .map((assinatura) => [assinatura.empresa_id as string, assinatura])
+  );
   const usuarioPorEmpresa = new Map<string, UsuarioRow>();
   for (const usuario of usuarios) if (usuario.empresa_id && !usuarioPorEmpresa.has(usuario.empresa_id)) usuarioPorEmpresa.set(usuario.empresa_id, usuario);
 
@@ -199,16 +310,28 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     const primeiroPagamento = pagamentosEmpresa[0];
     const primeiroPagamentoEm = dataPagamento(primeiroPagamento);
     const usuario = usuarioPorEmpresa.get(empresa.id);
+    const assinatura = assinaturaPorEmpresa.get(empresa.id);
+    const adicionaisWhatsapp = quantidadeAdicionaisWhatsapp(assinatura, empresa);
+    const valorInicial = valorPagamento(primeiroPagamento);
+    const valorAtual = valorMensalAtual(assinatura, empresa, primeiroPagamento);
+
     clientes.push({
       id: empresa.id,
       empresa: nomeEmpresa(empresa),
       responsavel: usuario?.nome?.trim() || "Não informado",
       email: usuario?.email?.trim() || "Não informado",
-      plano: rotuloPlano(empresa, primeiroPagamento, encontrarOferta(empresa, primeiroPagamento)),
+      plano: rotuloComposicaoPlano(
+        empresa,
+        assinatura,
+        primeiroPagamento,
+        encontrarOferta(empresa, primeiroPagamento)
+      ),
       status: formatarStatus(empresa.assinatura_status),
       primeiroPagamentoEm,
       gateway: empresa.assinatura_gateway?.trim() || "Não informado",
-      valorMensal: valorPagamento(primeiroPagamento),
+      valorInicial,
+      valorMensalAtual: valorAtual,
+      adicionaisWhatsapp,
       diasConversao: diferencaDias(empresa.created_at, primeiroPagamentoEm),
     });
   }
@@ -237,10 +360,12 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     return [{ empresa, pagamento: ultimoMesPassado }];
   });
 
-  const novoMrr = atuais.reduce((total, cliente) => total + cliente.valorMensal, 0);
+  const novoMrr = atuais.reduce((total, cliente) => total + cliente.valorMensalAtual, 0);
   const receitaPeriodo = pagamentosPeriodo.reduce((total, pagamento) => total + valorPagamento(pagamento), 0);
   const totalHistorico = pagamentos.reduce((total, pagamento) => total + valorPagamento(pagamento), 0);
-  const ticketMedio = atuais.length ? novoMrr / atuais.length : 0;
+  const ticketMedio = atuais.length
+    ? atuais.reduce((total, cliente) => total + cliente.valorInicial, 0) / atuais.length
+    : 0;
   const crescimento = anteriores.length ? ((atuais.length - anteriores.length) / anteriores.length) * 100 : atuais.length ? 100 : 0;
   const tempoMedio = atuais.length ? atuais.reduce((total, cliente) => total + cliente.diasConversao, 0) / atuais.length : 0;
 
@@ -252,8 +377,13 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     plano: cliente.plano,
     data: data.format(new Date(cliente.primeiroPagamentoEm)),
     dataOrdenacao: cliente.primeiroPagamentoEm,
-    valor: moeda.format(cliente.valorMensal),
+    valor: moeda.format(cliente.valorMensalAtual),
     status: cliente.status,
+  });
+
+  const detalheClienteInicial = (cliente: ClienteGrowth): GrowthDetailRow => ({
+    ...detalheCliente(cliente),
+    valor: moeda.format(cliente.valorInicial),
   });
 
   const detalhePagamento = (pagamento: PagamentoRow): GrowthDetailRow => {
@@ -264,7 +394,14 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       empresa: empresa ? nomeEmpresa(empresa) : "Empresa não localizada",
       responsavel: usuario?.nome || "Não informado",
       email: usuario?.email || "",
-      plano: empresa ? rotuloPlano(empresa, pagamento, encontrarOferta(empresa, pagamento)) : pagamento.offer_titulo || "Não informado",
+      plano: empresa
+        ? rotuloComposicaoPlano(
+            empresa,
+            assinaturaPorEmpresa.get(empresa.id),
+            pagamento,
+            encontrarOferta(empresa, pagamento)
+          )
+        : pagamento.offer_titulo || "Não informado",
       data: data.format(new Date(dataPagamento(pagamento))),
       dataOrdenacao: dataPagamento(pagamento),
       valor: moeda.format(valorPagamento(pagamento)),
@@ -279,7 +416,12 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       empresa: nomeEmpresa(empresa),
       responsavel: usuario?.nome || "Não informado",
       email: usuario?.email || "",
-      plano: rotuloPlano(empresa, pagamento, encontrarOferta(empresa, pagamento)),
+      plano: rotuloComposicaoPlano(
+        empresa,
+        assinaturaPorEmpresa.get(empresa.id),
+        pagamento,
+        encontrarOferta(empresa, pagamento)
+      ),
       data: data.format(new Date(dataPagamento(pagamento))),
       dataOrdenacao: dataPagamento(pagamento),
       valor: moeda.format(valorPagamento(pagamento)),
@@ -290,17 +432,17 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const cards: GrowthCardData[] = [
     { id: "novos", label: "Novos pagantes", value: numero.format(atuais.length), detail: `${crescimento >= 0 ? "+" : ""}${crescimento.toFixed(1)}% vs. período anterior`, icon: "users", modalTitle: "Novos pagantes", modalDescription: "Empresas pagantes cujo primeiro pagamento comercial ocorreu no período selecionado.", rows: atuais.map(detalheCliente) },
     { id: "renovacoes", label: "Renovações", value: numero.format(renovacoes.length), detail: "Pagamentos posteriores ao primeiro", icon: "refresh", modalTitle: "Renovações do período", modalDescription: "Pagamentos comerciais confirmados posteriores ao primeiro pagamento da empresa.", rows: renovacoes.map(detalhePagamento) },
-    { id: "novo-mrr", label: "Novo MRR", value: moeda.format(novoMrr), detail: "Primeiros pagamentos no período", icon: "money", modalTitle: "Novo MRR", modalDescription: "Valor mensal adicionado pelos novos clientes pagantes do período.", rows: atuais.map(detalheCliente) },
+    { id: "novo-mrr", label: "Novo MRR", value: moeda.format(novoMrr), detail: "Plano + adicionais recorrentes", icon: "money", modalTitle: "Novo MRR", modalDescription: "Valor recorrente mensal atual dos novos clientes do período, incluindo adicionais de números contratados.", rows: atuais.map(detalheCliente) },
     { id: "receita", label: "Receita do período", value: moeda.format(receitaPeriodo), detail: `${numero.format(pagamentosPeriodo.length)} pagamentos confirmados`, icon: "card", modalTitle: "Receita do período", modalDescription: "Todos os pagamentos comerciais confirmados dentro do filtro selecionado.", rows: pagamentosPeriodo.map(detalhePagamento) },
     { id: "historico", label: "Total geral recebido", value: moeda.format(totalHistorico), detail: "Pagamentos comerciais, independente do filtro", icon: "wallet", modalTitle: "Total geral recebido", modalDescription: "Histórico completo de pagamentos comerciais confirmados, sem clientes gratuitos.", rows: pagamentos.map(detalhePagamento).reverse() },
-    { id: "ticket", label: "Ticket médio inicial", value: moeda.format(ticketMedio), detail: `Conversão média: ${tempoMedio.toFixed(1)} dias`, icon: "trend", modalTitle: "Ticket médio inicial", modalDescription: "Novos clientes pagantes usados no cálculo do ticket médio do período.", rows: atuais.map(detalheCliente) },
+    { id: "ticket", label: "Ticket médio inicial", value: moeda.format(ticketMedio), detail: `Conversão média: ${tempoMedio.toFixed(1)} dias`, icon: "trend", modalTitle: "Ticket médio inicial", modalDescription: "Primeiro pagamento dos novos clientes do período. Adicionais contratados depois não alteram este indicador.", rows: atuais.map(detalheClienteInicial) },
     { id: "aguardando-renovacao", label: "Aguardando renovação", value: numero.format(renovacaoDetalhes.length), detail: "Pagaram no mês passado e ainda não renovaram", icon: "alert", modalTitle: "Aguardando renovação", modalDescription: "Clientes pagantes do mês passado sem pagamento comercial confirmado no mês atual. Inclui assinaturas ativas, vencidas e bloqueadas.", rows: renovacaoDetalhes },
   ];
 
   const porPlano = Array.from(atuais.reduce((mapa, cliente) => {
     const resumo = mapa.get(cliente.plano) ?? { clientes: 0, receita: 0 };
     resumo.clientes += 1;
-    resumo.receita += cliente.valorMensal;
+    resumo.receita += cliente.valorMensalAtual;
     mapa.set(cliente.plano, resumo);
     return mapa;
   }, new Map<string, { clientes: number; receita: number }>())).sort((a, b) => b[1].receita - a[1].receita);
