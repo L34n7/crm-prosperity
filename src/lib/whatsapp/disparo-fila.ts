@@ -319,6 +319,14 @@ export async function publicarItensDisparoQstash(params: {
   const flowControlKey = obterFlowControlKeyDisparo(params.integracaoWhatsappId);
   const url = obterUrlWorkerDisparoQstash();
   const qstashToken = process.env.QSTASH_TOKEN;
+  const itensOrdenados = [...params.itens].sort((a, b) => {
+    const ordemA = Number(a.ordem || 0);
+    const ordemB = Number(b.ordem || 0);
+
+    if (ordemA !== ordemB) return ordemA - ordemB;
+
+    return String(a.id).localeCompare(String(b.id));
+  });
 
   if (!qstashToken || !url) {
     const erro = !qstashToken
@@ -350,14 +358,6 @@ export async function publicarItensDisparoQstash(params: {
   const flowControl = obterConfigFlowControlDisparo();
   const tamanhoBatch = obterBatchQstash();
   const retries = obterRetryQstash();
-  const itensOrdenados = [...params.itens].sort((a, b) => {
-    const ordemA = Number(a.ordem || 0);
-    const ordemB = Number(b.ordem || 0);
-
-    if (ordemA !== ordemB) return ordemA - ordemB;
-
-    return String(a.id).localeCompare(String(b.id));
-  });
   let publicados = 0;
   let ultimoErro: string | null = null;
 
