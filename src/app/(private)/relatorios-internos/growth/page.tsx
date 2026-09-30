@@ -1,4 +1,5 @@
 import Header from "@/components/Header";
+import RelatoriosInternosTabs from "../RelatoriosInternosTabs";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import GrowthKpiCards, { type GrowthCardData, type GrowthDetailRow } from "./GrowthKpiCards";
 import styles from "./growth.module.css";
@@ -304,6 +305,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   return (
     <>
       <Header title="Growth Analytics" subtitle="Acompanhe somente clientes pagantes, renovações pendentes e pagamentos comerciais." />
+      <RelatoriosInternosTabs />
       <main className={styles.page}>
         <section className={styles.filterPanel}>
           <div className={styles.filterIntro}>
