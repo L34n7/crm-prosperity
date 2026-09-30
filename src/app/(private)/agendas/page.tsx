@@ -643,7 +643,14 @@ function Page() {
         j = await r.json();
       if (!r.ok || !j.ok) throw Error(j.error || "Erro ao carregar agendas.");
 
-      const lista = (j.agendas || []) as Agenda[];
+      const lista = ((j.agendas || []) as Agenda[]).filter(
+        (agenda) =>
+          String(agenda.nome || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim()
+            .toLocaleLowerCase("pt-BR") !== "sessao de suporte",
+      );
       setAgendas(lista);
 
       if (definirSelecao) {
