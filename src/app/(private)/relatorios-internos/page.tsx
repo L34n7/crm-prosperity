@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import Header from "@/components/Header";
+import RelatoriosInternosTabs from "./RelatoriosInternosTabs";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import FilterSubmitButton from "./FilterSubmitButton";
 import styles from "./relatorios-internos.module.css";
@@ -5286,6 +5287,8 @@ export default async function RelatoriosInternosPage({
         title="Relatórios Internos"
         subtitle="Visão interna por empresa, período, conversas, mensagens, disparos, contatos, usuários e planos."
       />
+
+      <RelatoriosInternosTabs />
 
       <main className={styles.pageContent}>
         <section className={styles.filterPanel}>
