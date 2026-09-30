@@ -4875,11 +4875,10 @@ export default function DisparosWhatsAppPage() {
         setIntegracaoDisparoProcessando(true);
         setAbaAtiva("disparo");
 
-        if (!preparacaoTransferidaParaCard) {
-          setModalCampanhaAberto(true);
-        } else {
-          setModalCampanhaAberto(false);
-        }
+        // Após criar a campanha, devolvemos o controle da página ao usuário.
+        // O acompanhamento continua no card flutuante e o modal só abre quando
+        // o usuário clicar no card.
+        setModalCampanhaAberto(false);
 
         void carregarCampanhaPagina(integracaoId);
         void carregarCampanhaPagina("", String(json.campanha_id || ""));
