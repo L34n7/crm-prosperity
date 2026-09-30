@@ -231,13 +231,17 @@ async function iaInterpretativaMantemFluxo(params: {
   }
 }
 
+// Esta função roda depois de deferir a pequena janela de execução do Fluxo.
+// Portanto, um status "rodando" que chega até aqui representa normalmente
+// um Fluxo estacionado em job/delay longo. Nesse cenário o modo econômico
+// precisa arbitrar a resposta do cliente imediatamente, sem esperar o job.
 async function avaliarFluxoAguardando(input: AutomationEngineInput) {
   const { data: execucao, error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
     .select("id, fluxo_id, no_atual_id, status")
     .eq("empresa_id", input.empresaId)
     .eq("conversa_id", input.conversaId)
-    .eq("status", "aguardando")
+    .in("status", ["aguardando", "rodando"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
