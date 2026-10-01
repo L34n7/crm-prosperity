@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Assinatura inválida" }, { status: 401 });
     }
 
-    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       // A assinatura QStash já foi validada. Encerramos esta tentativa com
       // sucesso sem consultar o banco; a pendência será reconciliada depois.
       return respostaContingenciaSupabase("whatsapp-mensagem-agendada");

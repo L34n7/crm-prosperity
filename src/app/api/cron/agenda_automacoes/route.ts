@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       return respostaContingenciaSupabase("agenda_automacoes");
     }
 
