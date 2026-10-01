@@ -153,6 +153,8 @@ export async function GET(request: Request) {
       ].includes(item)
     );
   const apenasNovos = searchParams.get("contato_novo") === "true";
+  const contagemOtimizada =
+    searchParams.get("contagem_otimizada") === "true";
 
   const pagina = Math.max(1, Number(searchParams.get("pagina") || "1"));
   const limiteMaximo = disparoAnteriorId || listaId ? 2000 : 500;
@@ -333,6 +335,30 @@ export async function GET(request: Request) {
       Boolean(integracaoWhatsappId) && filtrarPorIntegracao,
   };
 
+  const exigeContagemContextual =
+    Boolean(
+      busca ||
+        origem ||
+        campanha ||
+        rastreamentoCampanhaId ||
+        listaId ||
+        listaCompartilhadaId ||
+        disparoAnteriorId ||
+        mensagemDataInicio ||
+        mensagemDataFim ||
+        ultimoAtendenteId ||
+        filtrarPorIntegracao ||
+        optIn ||
+        optOut ||
+        statusConversa.length > 0
+    );
+
+  // Evita materializar toda a RPC contextual só para contar contatos.
+  // No módulo de disparos, filtros simples usam contagem direta em contatos;
+  // filtros contextuais contam apenas na primeira página.
+  const contarNaRpc =
+    exigeContagemContextual && (!contagemOtimizada || pagina === 1);
+
   let query = supabaseAdmin
     .rpc(
       "listar_contatos_operacionais_contexto_filtros_disparo",
@@ -342,7 +368,7 @@ export async function GET(request: Request) {
         p_lista_compartilhada_id: listaCompartilhadaId || null,
         p_campanha_id: disparoAnteriorId || null,
       },
-      { count: "exact" }
+      contarNaRpc ? { count: "exact" } : undefined
     )
     .select(camposContatosContexto);
 
@@ -436,6 +462,49 @@ export async function GET(request: Request) {
     );
   }
 
+  let totalContatos: number | null =
+    typeof count === "number" ? count : null;
+
+  if (!exigeContagemContextual && (!contagemOtimizada || pagina === 1)) {
+    let countQuery = supabaseAdmin
+      .from("contatos")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", usuario.empresa_id);
+
+    if (interesse) {
+      countQuery = countQuery.eq("interesse", interesse);
+    }
+
+    if (classificacoes.length > 0) {
+      countQuery = countQuery.in("classificacao", classificacoes);
+    } else if (statusLead && classificacaoLeadValida(statusLead)) {
+      countQuery = countQuery.eq(
+        "classificacao",
+        normalizarClassificacaoLead(statusLead, "novo")
+      );
+    }
+
+    if (apenasNovos) {
+      countQuery = countQuery.gte(
+        "created_at",
+        new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      );
+    }
+
+    if (telefoneRevisar === "true") {
+      countQuery = countQuery.eq("telefone_revisar", true);
+    } else if (telefoneRevisar === "false") {
+      countQuery = countQuery.eq("telefone_revisar", false);
+    }
+
+    const { count: countDireto, error: countDiretoError } =
+      await countQuery;
+
+    if (!countDiretoError && typeof countDireto === "number") {
+      totalContatos = countDireto;
+    }
+  }
+
   let contatos = (
     Array.isArray(data) ? data : data ? [data] : []
   ) as ContatoLista[];
@@ -525,10 +594,19 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     contatos,
-    total: count ?? 0,
+    total:
+      totalContatos ??
+      (pagina === 1 && contatos.length < limite ? contatos.length : 0),
     pagina,
     limite,
-    totalPaginas: Math.max(1, Math.ceil((count ?? 0) / limite)),
+    totalPaginas: Math.max(
+      1,
+      Math.ceil(
+        (totalContatos ??
+          (pagina === 1 && contatos.length < limite ? contatos.length : 0)) /
+          limite
+      )
+    ),
   });
 }
 
