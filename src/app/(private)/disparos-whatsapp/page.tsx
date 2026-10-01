@@ -2644,6 +2644,7 @@ export default function DisparosWhatsAppPage() {
 
         params.set("pagina", "1");
         params.set("limite", "2000");
+        params.set("contagem_otimizada", "true");
 
         const res = await fetch(`/api/contatos?${params.toString()}`, {
           cache: "no-store",
@@ -4132,6 +4133,7 @@ export default function DisparosWhatsAppPage() {
     if (integracaoId && optOutFiltro) params.set("opt_out", optOutFiltro);
     params.set("pagina", String(paginaAtual));
     params.set("limite", String(limite));
+    params.set("contagem_otimizada", "true");
     return params;
   }
 
