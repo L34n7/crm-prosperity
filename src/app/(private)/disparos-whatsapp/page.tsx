@@ -3760,6 +3760,15 @@ export default function DisparosWhatsAppPage() {
     [totalContatosDisponiveis, contatosSelecionadosFiltrados.length]
   );
 
+  // O "Add todos" nunca pode ultrapassar a capacidade ainda disponível
+  // da integração. O limite é cumulativo com os contatos já selecionados.
+  const capacidadeRestanteParaAdicionar = limiteMeta
+    ? Math.max(
+        Number(limiteMeta.restantes || 0) - contatosSelecionados.length,
+        0
+      )
+    : null;
+
   const gruposConflitoAtivos = useMemo(() => {
     const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
 
@@ -4103,9 +4112,24 @@ export default function DisparosWhatsAppPage() {
       quantidadeAdicionarContatos,
       totalContatosDisponiveis
     );
-    const quantidadeAlvo = quantidadeInformada > 0
+    const quantidadeSolicitada = quantidadeInformada > 0
       ? quantidadeInformada
       : Math.max(totalContatosDisponiveis, contatosDisponiveisValidos.length);
+    const capacidadeDisponivel = capacidadeRestanteParaAdicionar;
+    const quantidadeAlvo =
+      typeof capacidadeDisponivel === "number"
+        ? Math.min(quantidadeSolicitada, capacidadeDisponivel)
+        : quantidadeSolicitada;
+
+    if (
+      typeof capacidadeDisponivel === "number" &&
+      capacidadeDisponivel <= 0
+    ) {
+      setErro(
+        "A capacidade disponível desta integração já foi totalmente preenchida pelos contatos selecionados."
+      );
+      return;
+    }
 
     if (quantidadeAlvo <= 0 || totalContatosDisponiveisRestantes <= 0) {
       setErro("Nenhum contato válido disponível para adicionar.");
@@ -4135,8 +4159,16 @@ export default function DisparosWhatsAppPage() {
         return [...atuais, ...novos.filter((contato) => !ids.has(contato.id))];
       });
       setQuantidadeAdicionarContatos("");
+
+      const limitadoPelaCapacidade =
+        typeof capacidadeDisponivel === "number" &&
+        quantidadeSolicitada > capacidadeDisponivel;
+
       setMensagem(
-        quantidadeInformada > 0
+        limitadoPelaCapacidade
+          ? String(novos.length) +
+              " contato(s) adicionado(s). A seleção atingiu a capacidade disponível da integração."
+          : quantidadeInformada > 0
           ? String(novos.length) + " contato(s) adicionado(s)."
           : "Todos os " + String(novos.length) + " contato(s) disponíveis foram adicionados."
       );
@@ -5950,6 +5982,11 @@ export default function DisparosWhatsAppPage() {
                         <input
                           type="number"
                           min={0}
+                          max={
+                            typeof capacidadeRestanteParaAdicionar === "number"
+                              ? capacidadeRestanteParaAdicionar
+                              : undefined
+                          }
                           step={1}
                           inputMode="numeric"
                           value={quantidadeAdicionarContatos}
@@ -5960,8 +5997,8 @@ export default function DisparosWhatsAppPage() {
                           }
                           className={styles.bulkQuantityInput}
                           placeholder="Qtd."
-                          title="Informe a quantidade. Com 0 ou vazio, adiciona todos os contatos disponíveis."
-                          aria-label="Quantidade de contatos para adicionar; zero ou vazio adiciona todos"
+                          title="Informe a quantidade. Com 0 ou vazio, adiciona até o limite disponível da integração."
+                          aria-label="Quantidade de contatos para adicionar; zero ou vazio adiciona até o limite disponível"
                         />
                         <button
                           type="button"
@@ -5970,7 +6007,8 @@ export default function DisparosWhatsAppPage() {
                           disabled={
                             loadingContatos ||
                             adicionandoContatosEmMassa ||
-                            totalContatosDisponiveisRestantes === 0
+                            totalContatosDisponiveisRestantes === 0 ||
+                            capacidadeRestanteParaAdicionar === 0
                           }
                         >
                           {adicionandoContatosEmMassa ? "Adicionando..." : "Add todos"}
