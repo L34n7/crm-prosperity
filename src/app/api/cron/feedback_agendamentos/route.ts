@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const limite = obterLimite(request);
 
   try {
-    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       return respostaContingenciaSupabase("feedback_agendamentos");
     }
 

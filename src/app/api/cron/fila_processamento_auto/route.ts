@@ -49,7 +49,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       return respostaContingenciaSupabase("fila_processamento_auto");
     }
 

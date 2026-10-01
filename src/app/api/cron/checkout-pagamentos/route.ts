@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     : 50;
 
   try {
-    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       return respostaContingenciaSupabase("checkout-pagamentos");
     }
 

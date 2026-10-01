@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       // A assinatura QStash já foi validada. Encerramos esta tentativa com
       // sucesso sem consultar o banco; a pendência será reconciliada depois.
       return respostaContingenciaSupabase("processar-webhook-whatsapp");

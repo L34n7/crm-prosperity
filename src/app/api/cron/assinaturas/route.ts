@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const auth = validarChamadaCron(request, { exigirVercelCron: true });
   if (!auth.ok) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
-    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       return respostaContingenciaSupabase("assinaturas");
     }
 
