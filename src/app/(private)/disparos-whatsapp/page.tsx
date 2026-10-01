@@ -3303,8 +3303,16 @@ export default function DisparosWhatsAppPage() {
 
       setCampanhaPagina((atual) => {
         if (!atual) return lista[0] || null;
-        return lista.find((campanha) => campanha.id === atual.id) || atual;
+        return (
+          lista.find((campanha) => campanha.id === atual.id) ||
+          lista[0] ||
+          null
+        );
       });
+
+      if (lista.length === 0) {
+        setModalCampanhaAberto(false);
+      }
     };
 
     window.addEventListener(EVENTO_DISPARO_ANDAMENTO, handleAndamento);
@@ -6834,7 +6842,7 @@ export default function DisparosWhatsAppPage() {
             <p className={styles.eyebrow}>Histórico</p>
             <h2 className={styles.cardTitle}>Resultados dos disparos</h2>
             <p className={styles.cardSubtitle}>
-              Os disparos salvos ficam sempre visíveis aqui.
+              Cada disparo em massa aparece em um único card com os totais da campanha.
             </p>
           </div>
         </div>
@@ -7288,7 +7296,7 @@ export default function DisparosWhatsAppPage() {
         </div>
       ) : null}
 
-      {campanhaPagina && modalCampanhaAberto ? (
+      {campanhaPaginaAtiva && campanhaPagina && modalCampanhaAberto ? (
         <div className={styles.campaignProgressOverlay} role="presentation">
           <div className={styles.campaignProgressShell}>
             {campanhasPagina.length > 1 ? (
