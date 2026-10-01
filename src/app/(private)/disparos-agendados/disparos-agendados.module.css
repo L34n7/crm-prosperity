@@ -1864,7 +1864,7 @@
 
 /* CRM_DISPAROS_AGRUPADOS_STYLES_V1 */
 .searchBar {
-  grid-template-columns: minmax(0, 1fr) 190px auto;
+  grid-template-columns: minmax(0, 1fr) 190px 210px auto;
 }
 
 .groupsSummary {
@@ -1901,7 +1901,12 @@
 }
 
 .cardAccentWarning {
-  border-left: 5px solid var(--crm-warning-text);
+  border-left: 5px solid rgb(225, 181, 60);
+}
+
+.groupCard.cardAccentWarning:hover,
+.disparoCard.cardAccentWarning:hover {
+  border-left-color: rgb(225, 181, 60);
 }
 
 .cardAccentDanger {
