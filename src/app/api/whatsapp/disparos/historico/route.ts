@@ -159,7 +159,47 @@ async function buscarCampanhasFiltroHistorico(
     return [];
   }
 
-  return data || [];
+  const campanhas = data || [];
+  const idsComFalha = campanhas
+    .filter((campanha) => Number(campanha.total_falhas || 0) > 0)
+    .map((campanha) => campanha.id)
+    .filter(Boolean);
+
+  if (idsComFalha.length === 0) {
+    return campanhas;
+  }
+
+  const { data: errosCampanhas, error: errosCampanhasError } =
+    await supabaseAdmin.rpc("buscar_whatsapp_disparo_erros_campanhas", {
+      p_empresa_id: empresaId,
+      p_campanha_ids: idsComFalha,
+    });
+
+  if (errosCampanhasError) {
+    console.warn(
+      "[HISTORICO DISPAROS] Não foi possível enriquecer erros das campanhas:",
+      errosCampanhasError
+    );
+    return campanhas;
+  }
+
+  const errosPorCampanha = new Map(
+    (Array.isArray(errosCampanhas) ? errosCampanhas : []).map((item: any) => [
+      String(item.campanha_id || ""),
+      {
+        erro_exemplo: item.erro || null,
+        erro_codigo_meta_exemplo: item.erro_codigo_meta || null,
+      },
+    ])
+  );
+
+  return campanhas.map((campanha) => ({
+    ...campanha,
+    ...(errosPorCampanha.get(String(campanha.id || "")) || {
+      erro_exemplo: null,
+      erro_codigo_meta_exemplo: null,
+    }),
+  }));
 }
 
 export async function GET(req: NextRequest) {
