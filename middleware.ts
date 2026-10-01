@@ -4,6 +4,13 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // A tela de login precisa continuar acessível mesmo durante uma
+  // indisponibilidade temporária do Supabase. A sessão/autenticação será
+  // validada normalmente quando o usuário efetivamente tentar entrar.
+  if (pathname === "/login") {
+    return NextResponse.next();
+  }
+
   if (pathname === "/painel" && request.nextUrl.searchParams.size === 0) {
     const url = request.nextUrl.clone();
     url.pathname = "/painel/ao-vivo";
@@ -35,6 +42,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/api/mensagens",
-    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
