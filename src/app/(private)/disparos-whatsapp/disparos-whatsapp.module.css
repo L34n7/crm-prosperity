@@ -778,6 +778,52 @@
   background: var(--crm-success-bg);
 }
 
+.campaignHistoryCard {
+  width: 100%;
+  appearance: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.campaignHistoryCard:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--crm-shadow-sm);
+}
+
+.campaignHistoryCard:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: 2px;
+}
+
+.campaignHistoryCard .massCancelledMetric {
+  border-color: var(--crm-border);
+  background: color-mix(in srgb, var(--crm-surface) 82%, transparent);
+}
+
+.campaignHistoryCard.resultSuccess .massCancelledMetric {
+  border-color: var(--crm-success-border);
+}
+
+.campaignHistoryCard.resultProcessing .massCancelledMetric {
+  border-color: var(--crm-warning-border);
+}
+
+.campaignHistoryCard.resultError .massCancelledMetric {
+  border-color: var(--crm-danger-border);
+}
+
+.campaignHistoryCardAction {
+  display: inline-flex;
+  margin-top: 11px;
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .resultError {
   border-color: var(--crm-danger-border);
   background: var(--crm-danger-bg);
