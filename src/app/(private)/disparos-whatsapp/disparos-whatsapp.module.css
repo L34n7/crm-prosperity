@@ -794,6 +794,34 @@
   box-shadow: var(--crm-shadow-sm);
 }
 
+.campaignHistoryCard.resultError {
+  padding-left: 18px;
+  box-shadow: inset 4px 0 0 var(--crm-danger-text);
+}
+
+.campaignHistoryCard.resultError:hover {
+  box-shadow:
+    inset 4px 0 0 var(--crm-danger-text),
+    var(--crm-shadow-sm);
+}
+
+.campaignHistoryCard .resultErrorFeedback {
+  margin-top: 12px;
+  background: color-mix(
+    in srgb,
+    var(--crm-surface) 68%,
+    var(--crm-danger-bg)
+  );
+}
+
+.campaignHistoryCard .resultErrorDescription + .resultErrorDescription {
+  margin-top: 5px;
+}
+
+.campaignHistoryCard .resultErrorDetail {
+  margin-top: 7px;
+}
+
 .campaignHistoryCard:focus-visible {
   outline: 2px solid var(--crm-primary-strong);
   outline-offset: 2px;
