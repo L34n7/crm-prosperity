@@ -134,7 +134,15 @@ async function buscarCampanhasFiltroHistorico(
         integracao_whatsapp_id,
         total_itens,
         total_enviados,
+        total_falhas,
+        total_cancelados,
+        total_pendentes,
+        total_processando,
+        template_categoria,
+        pausa_motivo,
+        erro,
         created_at,
+        finished_at,
         status
       `
     )
@@ -211,6 +219,8 @@ export async function GET(req: NextRequest) {
     const incluirTotais = searchParams.get("incluir_totais") === "true";
     const incluirCampanhas =
       searchParams.get("incluir_campanhas") === "true";
+    const somenteCampanhas =
+      searchParams.get("somente_campanhas") === "true";
     const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
       usuario,
       empresaId: usuario.empresa_id,
@@ -226,7 +236,7 @@ export async function GET(req: NextRequest) {
           totais: incluirTotais
             ? { total: 0, sucesso: 0, processando: 0, falha: 0 }
             : null,
-          ...(incluirCampanhas ? { campanhas: [] } : {}),
+          ...((incluirCampanhas || somenteCampanhas) ? { campanhas: [] } : {}),
         },
         {
           headers: {
@@ -243,6 +253,29 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Sem acesso a esta integracao WhatsApp." },
         { status: 403 }
+      );
+    }
+
+    if (somenteCampanhas) {
+      const campanhas = await buscarCampanhasFiltroHistorico(
+        usuario.empresa_id,
+        acessoIntegracoes.idsPermitidos
+      );
+
+      return NextResponse.json(
+        {
+          ok: true,
+          resultados: [],
+          tem_mais: false,
+          proximo_cursor: null,
+          totais: null,
+          campanhas,
+        },
+        {
+          headers: {
+            "Cache-Control": "private, no-store",
+          },
+        }
       );
     }
 
