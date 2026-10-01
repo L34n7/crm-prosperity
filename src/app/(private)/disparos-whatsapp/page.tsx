@@ -395,6 +395,8 @@ type TotaisHistorico = {
   falha: number;
 };
 
+type FiltroRelatorioCampanha = "todos" | "enviado" | "entregue" | "falha";
+
 type LinhaRelatorioCampanha = {
   numero?: string | null;
   nome_contato?: string | null;
@@ -2227,6 +2229,8 @@ export default function DisparosWhatsAppPage() {
   const [relatorioCampanhaDetalhado, setRelatorioCampanhaDetalhado] =
     useState<RelatorioCampanhaDetalhado | null>(null);
   const [paginaRelatorioCampanha, setPaginaRelatorioCampanha] = useState(1);
+  const [filtroRelatorioCampanha, setFiltroRelatorioCampanha] =
+    useState<FiltroRelatorioCampanha>("todos");
   const [campanhasHistorico, setCampanhasHistorico] = useState<
     CampanhaHistoricoFiltro[]
   >([]);
@@ -3301,6 +3305,7 @@ export default function DisparosWhatsAppPage() {
 
   useEffect(() => {
     setPaginaRelatorioCampanha(1);
+    setFiltroRelatorioCampanha("todos");
 
     if (!filtroHistoricoCampanha) {
       setRelatorioCampanhaDetalhado(null);
@@ -4113,9 +4118,18 @@ export default function DisparosWhatsAppPage() {
   const resultadoHistoricoPaginado = resultadoFiltrado;
 
   const linhasRelatorioCampanhaFiltradas = useMemo(() => {
-    const linhas = ordenarLinhasRelatorioCampanha(
+    let linhas = ordenarLinhasRelatorioCampanha(
       relatorioCampanhaDetalhado?.linhas || []
     );
+
+    if (filtroRelatorioCampanha !== "todos") {
+      linhas = linhas.filter(
+        (linha) =>
+          String(linha.status_final || "pendente").toLowerCase() ===
+          filtroRelatorioCampanha
+      );
+    }
+
     const termo = buscaHistorico.trim().toLocaleLowerCase("pt-BR");
 
     if (!termo) return linhas;
@@ -4133,7 +4147,11 @@ export default function DisparosWhatsAppPage() {
           .includes(termo)
       )
     );
-  }, [relatorioCampanhaDetalhado, buscaHistorico]);
+  }, [
+    relatorioCampanhaDetalhado,
+    buscaHistorico,
+    filtroRelatorioCampanha,
+  ]);
 
   const totalPaginasRelatorioCampanha = Math.max(
     1,
@@ -7035,25 +7053,85 @@ export default function DisparosWhatsAppPage() {
                       </div>
 
                       <div className={styles.campaignReportMetrics}>
-                        <div className={styles.campaignReportMetric}>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "todos"}
+                          title="Exibir todos os registros da campanha"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("todos");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "todos"
+                                ? "inset 0 0 0 2px var(--crm-primary-strong)"
+                                : undefined,
+                          }}
+                        >
                           <span>Total</span>
                           <strong>
                             {relatorioCampanhaDetalhado.campanha.total_enviados}/
                             {relatorioCampanhaDetalhado.campanha.total_itens}
                           </strong>
-                        </div>
-                        <div className={styles.campaignReportMetric}>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "enviado"}
+                          title="Filtrar somente registros com status Enviado"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("enviado");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "enviado"
+                                ? "inset 0 0 0 2px var(--crm-primary-strong)"
+                                : undefined,
+                          }}
+                        >
                           <span>Enviados</span>
                           <strong>
                             {relatorioCampanhaDetalhado.totais.enviado}
                           </strong>
-                        </div>
-                        <div className={styles.campaignReportMetric}>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "entregue"}
+                          title="Filtrar somente registros com status Entregue"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("entregue");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "entregue"
+                                ? "inset 0 0 0 2px var(--crm-primary-strong)"
+                                : undefined,
+                          }}
+                        >
                           <span>Entregues</span>
                           <strong>
                             {relatorioCampanhaDetalhado.totais.entregue}
                           </strong>
-                        </div>
+                        </button>
                         <div className={styles.campaignReportMetric}>
                           <span>Lidos</span>
                           <strong>{relatorioCampanhaDetalhado.totais.lido}</strong>
@@ -7064,12 +7142,46 @@ export default function DisparosWhatsAppPage() {
                             {relatorioCampanhaDetalhado.totais.respondido}
                           </strong>
                         </div>
-                        <div className={styles.campaignReportMetric}>
-                          <span>Falhas</span>
-                          <strong>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "falha"}
+                          title="Filtrar somente registros com falha"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("falha");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "falha"
+                                ? "inset 0 0 0 2px var(--crm-danger-text)"
+                                : undefined,
+                          }}
+                        >
+                          <span
+                            style={
+                              filtroRelatorioCampanha === "falha"
+                                ? { color: "var(--crm-danger-text)" }
+                                : undefined
+                            }
+                          >
+                            Falhas
+                          </span>
+                          <strong
+                            style={
+                              relatorioCampanhaDetalhado.totais.falha > 0
+                                ? { color: "var(--crm-danger-text)" }
+                                : undefined
+                            }
+                          >
                             {relatorioCampanhaDetalhado.totais.falha}
                           </strong>
-                        </div>
+                        </button>
                         <div className={styles.campaignReportMetric}>
                           <span>Pendentes</span>
                           <strong>
@@ -7091,7 +7203,7 @@ export default function DisparosWhatsAppPage() {
 
                     {linhasRelatorioCampanhaFiltradas.length === 0 ? (
                       <div className={styles.emptyState}>
-                        Nenhum contato encontrado nesta campanha para a busca atual.
+                        Nenhum contato encontrado para os filtros atuais desta campanha.
                       </div>
                     ) : (
                       <>
@@ -7263,6 +7375,13 @@ export default function DisparosWhatsAppPage() {
                         integracao?.nome_conexao ||
                         integracao?.numero ||
                         "WhatsApp";
+                      const statusCampanha = String(
+                        campanha.status || ""
+                      ).toLowerCase();
+                      const campanhaCancelada = statusCampanha === "cancelada";
+                      const campanhaInterrompida =
+                        statusCampanha === "erro" ||
+                        statusCampanha.startsWith("pausada_");
                       const comProblema = campanhaHistoricoTemProblema(campanha);
                       const feedbackErro = comProblema
                         ? feedbackErroCampanhaHistorico(campanha)
@@ -7275,8 +7394,10 @@ export default function DisparosWhatsAppPage() {
                           className={`${styles.resultItem} ${styles.campaignHistoryCard} ${
                             emAndamento
                               ? styles.resultProcessing
-                              : comProblema
+                              : campanhaCancelada
                               ? `${styles.resultError} ${styles.resultMassCancelled}`
+                              : comProblema
+                              ? styles.resultProcessing
                               : styles.resultSuccess
                           }`}
                           onClick={() => {
@@ -7301,9 +7422,16 @@ export default function DisparosWhatsAppPage() {
                             </div>
 
                             <span
-                              className={`${styles.resultStatus} ${
-                                comProblema ? styles.massCancelledStatus : ""
-                              }`}
+                              className={styles.resultStatus}
+                              style={
+                                campanhaCancelada || campanhaInterrompida
+                                  ? {
+                                      border: "1px solid var(--crm-danger-border)",
+                                      color: "var(--crm-danger-text)",
+                                      background: "var(--crm-danger-bg)",
+                                    }
+                                  : undefined
+                              }
                             >
                               {statusCampanhaHistorico(campanha)}
                             </span>
@@ -7322,14 +7450,55 @@ export default function DisparosWhatsAppPage() {
                               <strong>{cancelados}</strong>
                               <span>Cancelados</span>
                             </div>
-                            <div className={styles.massCancelledMetric}>
-                              <strong>{falhas}</strong>
-                              <span>Falhas</span>
+                            <div
+                              className={styles.massCancelledMetric}
+                              style={
+                                falhas > 0 && !campanhaCancelada
+                                  ? {
+                                      borderColor: "var(--crm-danger-border)",
+                                      background: "var(--crm-danger-bg)",
+                                    }
+                                  : undefined
+                              }
+                            >
+                              <strong
+                                style={
+                                  falhas > 0
+                                    ? { color: "var(--crm-danger-text)" }
+                                    : undefined
+                                }
+                              >
+                                {falhas}
+                              </strong>
+                              <span
+                                style={
+                                  falhas > 0
+                                    ? { color: "var(--crm-danger-text)" }
+                                    : undefined
+                                }
+                              >
+                                Falhas
+                              </span>
                             </div>
                           </div>
 
                           {feedbackErro ? (
-                            <div className={styles.resultErrorFeedback}>
+                            <div
+                              className={
+                                campanhaCancelada
+                                  ? styles.resultErrorFeedback
+                                  : styles.resultText
+                              }
+                              style={
+                                campanhaCancelada
+                                  ? undefined
+                                  : {
+                                      padding: "10px 12px",
+                                      borderTop:
+                                        "1px solid var(--crm-warning-border)",
+                                    }
+                              }
+                            >
                               <strong className={styles.resultErrorTitle}>
                                 {feedbackErro.titulo}
                               </strong>
