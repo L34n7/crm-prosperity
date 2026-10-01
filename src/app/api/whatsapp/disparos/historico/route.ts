@@ -141,6 +141,7 @@ async function buscarCampanhasFiltroHistorico(
         template_categoria,
         pausa_motivo,
         erro,
+        metadata_json,
         created_at,
         finished_at,
         status
