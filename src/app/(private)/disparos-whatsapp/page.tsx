@@ -2019,6 +2019,7 @@ export default function DisparosWhatsAppPage() {
   const [quantidadeAdicionarContatos, setQuantidadeAdicionarContatos] = useState("");
   const [quantidadeRemoverContatos, setQuantidadeRemoverContatos] = useState("");
   const [adicionandoContatosEmMassa, setAdicionandoContatosEmMassa] = useState(false);
+  const [refreshContatosNonce, setRefreshContatosNonce] = useState(0);
 
   const [loadingUsuario, setLoadingUsuario] = useState(true);
   const [loadingIntegracoes, setLoadingIntegracoes] = useState(true);
@@ -2722,6 +2723,7 @@ export default function DisparosWhatsAppPage() {
         pagina?: number;
         forcar?: boolean;
         restaurarPagina?: boolean;
+        silencioso?: boolean;
       } = {}
     ) => {
       const empresaId = usuarioLogado?.empresa_id;
@@ -2895,11 +2897,19 @@ export default function DisparosWhatsAppPage() {
       } catch (error) {
         if (historicoConsultaAtivaRef.current !== requisicaoId) return;
 
-        setErro(
+        const mensagemErro =
           error instanceof Error
             ? error.message
-            : "Erro ao carregar histórico de disparos."
-        );
+            : "Erro ao carregar histórico de disparos.";
+
+        // O histórico é um painel secundário. Uma falha/timeout na consulta
+        // não deve aparecer como erro do formulário enquanto o usuário está
+        // preparando ou acompanhando um disparo.
+        if (opcoes.silencioso || abaAtiva !== "resultados") {
+          console.warn("[DISPAROS WHATSAPP] Falha ao atualizar histórico:", mensagemErro);
+        } else {
+          setErro(mensagemErro);
+        }
       } finally {
         if (historicoConsultaAtivaRef.current === requisicaoId) {
           setLoadingHistorico(false);
@@ -2912,6 +2922,7 @@ export default function DisparosWhatsAppPage() {
       filtroHistoricoIntegracao,
       filtroHistoricoCampanha,
       buscaHistoricoConsulta,
+      abaAtiva,
     ]
   );
 
@@ -3031,6 +3042,33 @@ export default function DisparosWhatsAppPage() {
         return;
       }
     }
+
+  const limparFormularioDisparo = useCallback(() => {
+    setContatosSelecionados([]);
+    setQuantidadeAdicionarContatos("");
+    setQuantidadeRemoverContatos("");
+    setTemplateId("");
+    setTemplateVariavel1("");
+    setTemplateVariavel2("");
+    setTemplateVariavel3("");
+    setTemplateVariavel4("");
+    setTemplateVariavel5("");
+    setTemplateVariavel6("");
+    setNomeCampanhaDisparo("");
+    setAgendarDisparo(false);
+    setAgendamentoData("");
+    setAgendamentoHora("");
+    setPreviewCusto(null);
+    setConfirmacaoCobranca(false);
+    setModalConfirmacaoAberto(false);
+    setConfirmacaoResponsabilidadeListaFria(false);
+    setModalResponsabilidadeListaFriaAberto(false);
+    setErroConflitos("");
+    setGruposConflitoDisparo([]);
+    setConflitosPorContato({});
+    setDecisoesConflitoDisparo({});
+    setErro("");
+  }, []);
 
   async function carregarBloqueioDisparoEmMassa(integracaoWhatsappId = "") {
     const integracaoConsultaId = integracaoWhatsappId.trim();
@@ -3218,6 +3256,7 @@ export default function DisparosWhatsAppPage() {
     optOutFiltro,
     somenteIntegracaoFiltro,
     carregarContatos,
+    refreshContatosNonce,
   ]);
 
   useEffect(() => {
@@ -3250,8 +3289,9 @@ export default function DisparosWhatsAppPage() {
     void carregarHistorico({
       forcar: false,
       restaurarPagina: true,
+      silencioso: abaAtiva !== "resultados",
     });
-  }, [usuarioLogado?.empresa_id, carregarHistorico]);
+  }, [usuarioLogado?.empresa_id, abaAtiva, carregarHistorico]);
 
   useEffect(() => {
     setTemplateId("");
@@ -3330,7 +3370,29 @@ export default function DisparosWhatsAppPage() {
           }
 
           if (!campanhaEstaAtiva(campanhaRealtime)) {
-            void carregarHistorico();
+            invalidarHistoricoCacheEmpresa(empresaId);
+
+            // Revalida os contatos após o término para incorporar imediatamente
+            // cooldowns/bloqueios registrados durante a campanha.
+            if (
+              campanhaRealtime.integracao_whatsapp_id === integracaoId
+            ) {
+              // Mesmo que o usuário tenha começado a montar uma nova seleção
+              // enquanto a campanha ainda processava, descartamos esse estado
+              // ao finalizar para não reaproveitar contatos com status antigo.
+              limparFormularioDisparo();
+              setRefreshContatosNonce((atual) => atual + 1);
+              void carregarSaudeMeta(integracaoId);
+            }
+
+            // O histórico só é atualizado automaticamente quando está visível.
+            // Isso impede um timeout do relatório de aparecer no formulário.
+            if (abaAtiva === "resultados") {
+              void carregarHistorico({
+                forcar: true,
+                silencioso: true,
+              });
+            }
           }
         }
       )
@@ -3342,7 +3404,9 @@ export default function DisparosWhatsAppPage() {
   }, [
     usuarioLogado?.empresa_id,
     integracaoId,
+    abaAtiva,
     carregarHistorico,
+    limparFormularioDisparo,
   ]);
 
   useEffect(() => {
@@ -4914,13 +4978,22 @@ export default function DisparosWhatsAppPage() {
         void carregarCampanhaPagina("", String(json.campanha_id || ""));
         emitirRefreshDisparoEmMassa();
 
-        setMensagem(
-          `Campanha criada e enfileirada. Os ${Number(
-            json.total || contatosSelecionados.length
-          )} disparos serão processados gradualmente em segundo plano.`
+        const totalCampanhaCriada = Number(
+          json.total || contatosSelecionados.length
         );
 
-        void carregarHistorico();
+        // Assim que a campanha foi aceita pela fila, o formulário deixa de
+        // representar um rascunho válido. Limpamos os dados para impedir que
+        // contatos enviados ou recém-bloqueados sejam reutilizados por engano.
+        limparFormularioDisparo();
+
+        if (usuarioLogado?.empresa_id) {
+          invalidarHistoricoCacheEmpresa(usuarioLogado.empresa_id);
+        }
+
+        setMensagem(
+          `Campanha criada e enfileirada. Os ${totalCampanhaCriada} disparos serão processados gradualmente em segundo plano.`
+        );
 
         return;
       }
@@ -4934,7 +5007,9 @@ export default function DisparosWhatsAppPage() {
         `Disparo enviado para a Meta. Aguardando confirmação de entrega pelo WhatsApp. Aceitos: ${sucesso}. Falhas imediatas: ${falha}.`
       );
 
-      await carregarHistorico();
+      await carregarHistorico({
+        silencioso: abaAtiva !== "resultados",
+      });
 
     } catch (error: any) {
       emitirPreparacaoDisparoEmMassa({
