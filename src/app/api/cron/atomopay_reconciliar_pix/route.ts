@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const idadeMinutos = Math.max(60, Number(params.get("idade_minutos") || 1560));
 
   try {
-    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       return respostaContingenciaSupabase("atomopay_reconciliar_pix");
     }
 
