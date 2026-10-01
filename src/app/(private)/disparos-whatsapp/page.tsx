@@ -3783,6 +3783,16 @@ export default function DisparosWhatsAppPage() {
     ]
   );
 
+  const temVariaveisObrigatoriasPendentes = useMemo(
+    () =>
+      totalVariaveis > 0 &&
+      variaveisTemplate
+        .slice(0, totalVariaveis)
+        .map((item) => normalizarVariavelTemplate(item))
+        .some((item) => !item),
+    [totalVariaveis, variaveisTemplate]
+  );
+
   const opcoesVariaveisTemplate = useMemo<OpcaoVariavelTemplate[]>(() => {
     const chavesAdicionadas = new Set<string>();
     const opcoes: OpcaoVariavelTemplate[] = [];
@@ -5398,6 +5408,13 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
+    if (temVariaveisObrigatoriasPendentes) {
+      setErro(
+        "Selecione todas as variáveis exigidas pelo template antes de continuar."
+      );
+      return;
+    }
+
     if (agendarDisparo) {
       const executarEm = new Date(
         `${agendamentoData}T${agendamentoHora}:00`
@@ -6929,7 +6946,8 @@ export default function DisparosWhatsAppPage() {
                         temConflitosPendentes ||
                         temContatosOptOut ||
                         temContatosCooldown ||
-                        listaFriaSemOptOut
+                        listaFriaSemOptOut ||
+                        temVariaveisObrigatoriasPendentes
                       }
                     >
                       {temContatosOptOut
@@ -6938,6 +6956,8 @@ export default function DisparosWhatsAppPage() {
                         ? "Pausa Meta"
                         : listaFriaSemOptOut
                         ? "Template sem opt-out"
+                        : temVariaveisObrigatoriasPendentes
+                        ? "Selecione as variáveis"
                         : temConflitosPendentes
                         ? "Resolver repetidos"
                         : !agendarDisparo && disparoBloqueado
@@ -8410,10 +8430,13 @@ export default function DisparosWhatsAppPage() {
                     (!agendamentoData || !agendamentoHora)) ||
                   agendamentoInvalidoPeloLimiteMeta ||
                   loadingConflitos ||
-                  temConflitosPendentes
+                  temConflitosPendentes ||
+                  temVariaveisObrigatoriasPendentes
                 }
               >
-                {temConflitosPendentes
+                {temVariaveisObrigatoriasPendentes
+                  ? "Selecione as variáveis"
+                  : temConflitosPendentes
                   ? "Resolver repetidos"
                   : !agendarDisparo && disparoBloqueado
                   ? textoDisparoBloqueado
