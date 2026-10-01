@@ -215,7 +215,7 @@ function normalizarFlowControlKeyQstash(valor: string) {
 
 function obterConfigFlowControlDisparo() {
   const periodoRaw = String(
-    process.env.WHATSAPP_DISPARO_QSTASH_PERIOD || "10s"
+    process.env.WHATSAPP_DISPARO_QSTASH_PERIOD || "2s"
   ).trim();
   const periodoMatch = periodoRaw.match(/^(\d+)(s|m|h|d)?$/i);
   const periodoValor = periodoMatch ? Number(periodoMatch[1]) : 60;
@@ -230,7 +230,17 @@ function obterConfigFlowControlDisparo() {
       1,
       100
     ),
-    period: Math.max(1, periodoValor * multiplicador),
+    // Mantemos a fila serial, mas evitamos espaçamento ocioso excessivo.
+    // O teto de 2s também neutraliza uma configuração legada de 10s em produção.
+    period: Math.min(
+      normalizarInteiro(
+        process.env.WHATSAPP_DISPARO_QSTASH_MAX_PERIOD_SECONDS,
+        2,
+        1,
+        10
+      ),
+      Math.max(1, periodoValor * multiplicador)
+    ),
     // A fila de uma mesma integração precisa ser serial para preservar
     // rigorosamente a ordem dos contatos da campanha.
     parallelism: 1,
