@@ -241,9 +241,15 @@ function obterConfigFlowControlDisparo() {
       ),
       Math.max(1, periodoValor * multiplicador)
     ),
-    // A fila de uma mesma integração precisa ser serial para preservar
-    // rigorosamente a ordem dos contatos da campanha.
-    parallelism: 1,
+    // No máximo dois workers por integração. O rate limit continua sendo
+    // aplicado pelo QStash, então o segundo worker reduz tempo ocioso sem
+    // criar uma rajada sem controle na Vercel ou na API da Meta.
+    parallelism: normalizarInteiro(
+      process.env.WHATSAPP_DISPARO_QSTASH_PARALLELISM,
+      2,
+      1,
+      2
+    ),
   };
 }
 
@@ -387,7 +393,7 @@ async function publicarItemDisparoQstash(params: {
         key: params.flowControlKey,
         rate: flowControl.rate,
         period: flowControl.period,
-        parallelism: 1,
+        parallelism: flowControl.parallelism,
       },
       label: labelCampanhaQstash(params.campanhaId),
     });
@@ -654,7 +660,7 @@ async function republicarItemDisparoQstash(params: {
         key: flowControlKey,
         rate: flowControl.rate,
         period: flowControl.period,
-        parallelism: 1,
+        parallelism: flowControl.parallelism,
       },
       label: labelCampanhaQstash(params.item.campanha_id),
     });
@@ -1814,8 +1820,9 @@ export async function processarItemDisparoPorId(itemId: string) {
   }
 
   try {
-    const resultado = await processarItemDisparo(item);
-
+    // Mantém uma esteira curta: assim que um worker começa, publica somente
+    // o próximo item. Com parallelism=2 haverá no máximo dois workers ativos
+    // por integração, sem enfileirar a campanha inteira de uma vez.
     try {
       await publicarProximoItemCampanhaQstash({
         campanhaId: item.campanha_id,
@@ -1828,7 +1835,7 @@ export async function processarItemDisparoPorId(itemId: string) {
           : "Erro desconhecido.";
 
       console.error(
-        "[WHATSAPP DISPARO QSTASH] Item processado, mas o próximo não foi publicado:",
+        "[WHATSAPP DISPARO QSTASH] Item iniciado, mas o próximo não foi publicado:",
         {
           itemId: item.id,
           campanhaId: item.campanha_id,
@@ -1844,6 +1851,8 @@ export async function processarItemDisparoPorId(itemId: string) {
         erro: erroPublicacao,
       }).catch(() => undefined);
     }
+
+    const resultado = await processarItemDisparo(item);
 
     return {
       ok: true,
@@ -1882,35 +1891,6 @@ export async function processarItemDisparoPorId(itemId: string) {
         republicado,
         proximaTentativaEmSegundos: delaySegundos,
       };
-    }
-
-    try {
-      await publicarProximoItemCampanhaQstash({
-        campanhaId: item.campanha_id,
-        integracaoWhatsappId: item.integracao_whatsapp_id,
-      });
-    } catch (publicacaoError) {
-      const erroPublicacao =
-        publicacaoError instanceof Error
-          ? publicacaoError.message
-          : "Erro desconhecido.";
-
-      console.error(
-        "[WHATSAPP DISPARO QSTASH] Falha final registrada, mas o próximo item não foi publicado:",
-        {
-          itemId: item.id,
-          campanhaId: item.campanha_id,
-          erro: erroPublicacao,
-        }
-      );
-
-      await ativarFallbackCronCampanha({
-        campanhaId: item.campanha_id,
-        flowControlKey: obterFlowControlKeyDisparo(
-          item.integracao_whatsapp_id
-        ),
-        erro: erroPublicacao,
-      }).catch(() => undefined);
     }
 
     return {
