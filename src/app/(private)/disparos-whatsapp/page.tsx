@@ -1689,29 +1689,15 @@ function ordenarLinhasRelatorioCampanha(
   linhas: LinhaRelatorioCampanha[]
 ) {
   return [...linhas].sort((a, b) => {
-    const grupoA = a.resposta_em ? 0 : a.lido_em ? 1 : 2;
-    const grupoB = b.resposta_em ? 0 : b.lido_em ? 1 : 2;
-
-    if (grupoA !== grupoB) return grupoA - grupoB;
-
-    const dataA =
-      grupoA === 0
-        ? timestampRelatorio(a.resposta_em)
-        : grupoA === 1
-        ? timestampRelatorio(a.lido_em)
-        : timestampRelatorio(a.enviado_em);
-    const dataB =
-      grupoB === 0
-        ? timestampRelatorio(b.resposta_em)
-        : grupoB === 1
-        ? timestampRelatorio(b.lido_em)
-        : timestampRelatorio(b.enviado_em);
-
-    if (dataA !== dataB) return dataB - dataA;
-
-    return (
+    const diferencaEnvio =
       timestampRelatorio(b.enviado_em) -
-      timestampRelatorio(a.enviado_em)
+      timestampRelatorio(a.enviado_em);
+
+    if (diferencaEnvio !== 0) return diferencaEnvio;
+
+    return String(b.numero || "").localeCompare(
+      String(a.numero || ""),
+      "pt-BR"
     );
   });
 }
@@ -7379,6 +7365,11 @@ export default function DisparosWhatsAppPage() {
                         campanha.status || ""
                       ).toLowerCase();
                       const campanhaCancelada = statusCampanha === "cancelada";
+                      const campanhaFalhouIntegralmente =
+                        statusCampanha === "concluida" &&
+                        total > 0 &&
+                        enviados === 0 &&
+                        falhas >= total;
                       const campanhaInterrompida =
                         statusCampanha === "erro" ||
                         statusCampanha.startsWith("pausada_");
@@ -7394,12 +7385,20 @@ export default function DisparosWhatsAppPage() {
                           className={`${styles.resultItem} ${styles.campaignHistoryCard} ${
                             emAndamento
                               ? styles.resultProcessing
-                              : campanhaCancelada
+                              : campanhaCancelada || campanhaFalhouIntegralmente
                               ? `${styles.resultError} ${styles.resultMassCancelled}`
                               : comProblema
                               ? styles.resultProcessing
                               : styles.resultSuccess
                           }`}
+                          style={{
+                            boxShadow:
+                              campanhaCancelada || campanhaFalhouIntegralmente
+                                ? "inset 4px 0 0 var(--crm-danger-text)"
+                                : comProblema || emAndamento
+                                ? "inset 4px 0 0 var(--crm-warning-text)"
+                                : "inset 4px 0 0 var(--crm-success-text)",
+                          }}
                           onClick={() => {
                             setFiltroHistoricoCampanha(campanha.id);
                             setPaginaRelatorioCampanha(1);
@@ -7424,7 +7423,9 @@ export default function DisparosWhatsAppPage() {
                             <span
                               className={styles.resultStatus}
                               style={
-                                campanhaCancelada || campanhaInterrompida
+                                campanhaCancelada ||
+                                campanhaFalhouIntegralmente ||
+                                campanhaInterrompida
                                   ? {
                                       border: "1px solid var(--crm-danger-border)",
                                       color: "var(--crm-danger-text)",
@@ -7453,7 +7454,9 @@ export default function DisparosWhatsAppPage() {
                             <div
                               className={styles.massCancelledMetric}
                               style={
-                                falhas > 0 && !campanhaCancelada
+                                falhas > 0 &&
+                                !campanhaCancelada &&
+                                !campanhaFalhouIntegralmente
                                   ? {
                                       borderColor: "var(--crm-danger-border)",
                                       background: "var(--crm-danger-bg)",
@@ -7485,12 +7488,12 @@ export default function DisparosWhatsAppPage() {
                           {feedbackErro ? (
                             <div
                               className={
-                                campanhaCancelada
+                                campanhaCancelada || campanhaFalhouIntegralmente
                                   ? styles.resultErrorFeedback
                                   : styles.resultText
                               }
                               style={
-                                campanhaCancelada
+                                campanhaCancelada || campanhaFalhouIntegralmente
                                   ? undefined
                                   : {
                                       padding: "10px 12px",
