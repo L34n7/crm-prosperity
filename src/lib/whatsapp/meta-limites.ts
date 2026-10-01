@@ -549,12 +549,30 @@ export async function atualizarReservaLimiteMeta({
     payload.enviado_em = new Date().toISOString();
   }
 
-  const { error } = await supabaseAdmin
+  const campanhaDisparoId = String(
+    metadataJson?.campanha_disparo_id || ""
+  ).trim();
+
+  let query = supabaseAdmin
     .from("whatsapp_meta_conversas_iniciadas")
     .update(payload)
-    .in("id", reservaIds)
     .eq("telefone_normalizado", telefoneNormalizado)
     .in("status", ["reservado", "processando", "enviado"]);
+
+  // Campanhas em massa podem possuir milhares de reservas. Enviar todos os
+  // UUIDs em um filtro `.in()` a cada mensagem cria URLs muito grandes no
+  // PostgREST e pode resultar em HTTP 400. A reserva já carrega o UUID único
+  // da campanha no metadata_json, então campanha + telefone identifica a
+  // reserva correta sem transportar a lista inteira em toda atualização.
+  if (campanhaDisparoId) {
+    query = query.contains("metadata_json", {
+      campanha_disparo_id: campanhaDisparoId,
+    });
+  } else {
+    query = query.in("id", reservaIds);
+  }
+
+  const { error } = await query;
 
   if (error) {
     console.warn("[WHATSAPP META LIMITE] Erro ao atualizar reserva:", error);
