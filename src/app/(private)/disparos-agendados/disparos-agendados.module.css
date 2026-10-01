@@ -300,8 +300,12 @@
 }
 
 .disparoCard {
-  border: 1px solid var(--crm-border);
-  background: var(--crm-surface);
+  border: 1px solid var(--crm-border-strong);
+  background: linear-gradient(
+    135deg,
+    var(--crm-surface) 0%,
+    var(--crm-surface-subtle) 100%
+  );
   border-radius: 20px;
   padding: 16px;
   display: flex;
@@ -309,6 +313,7 @@
   gap: 16px;
   cursor: pointer;
   transition: 0.2s ease;
+  box-shadow: 0 10px 26px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
 }
 
 .disparoCard:hover {
@@ -1878,17 +1883,48 @@
 }
 
 .groupCard {
-  border: 1px solid var(--crm-border);
+  border: 1px solid var(--crm-border-strong);
   border-radius: 20px;
-  background: var(--crm-surface);
+  background: linear-gradient(
+    135deg,
+    var(--crm-surface) 0%,
+    var(--crm-surface-subtle) 100%
+  );
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.2s ease;
+  box-shadow: 0 10px 26px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
+}
+
+.cardAccentSuccess {
+  border-left: 5px solid var(--crm-success-text);
+}
+
+.cardAccentWarning {
+  border-left: 5px solid var(--crm-warning-text);
+}
+
+.cardAccentDanger {
+  border-left: 5px solid var(--crm-danger-text);
+}
+
+.cardAccentPrimary {
+  border-left: 5px solid var(--crm-primary-strong);
 }
 
 .groupCard:hover,
 .groupCardSelected {
   border-color: var(--crm-primary-border);
-  box-shadow: 0 12px 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-06);
+  box-shadow: 0 16px 34px var(--crm-ui-private-shadow-rgb-15-23-42-0-09);
+  transform: translateY(-1px);
+}
+
+.manualCampaignCard {
+  cursor: pointer;
+}
+
+.manualCampaignCard .groupHeader {
+  cursor: pointer;
 }
 
 .groupHeader {
@@ -2256,7 +2292,187 @@
   font-size: 12px;
 }
 
+
+.manualCampaignModal {
+  max-width: 940px;
+}
+
+.manualCampaignToolbar {
+  padding: 16px 20px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(280px, 420px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+
+.manualCampaignSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manualCampaignSummary span {
+  border: 1px solid var(--crm-border-soft);
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.manualCampaignSummary strong {
+  color: var(--crm-text-strong);
+  font-weight: 900;
+}
+
+.manualCampaignList {
+  padding: 12px 20px 18px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  background: var(--crm-surface-soft);
+}
+
+.manualCampaignItem {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(210px, auto) 116px;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 15px;
+  padding: 11px 12px;
+  background: var(--crm-surface);
+  box-shadow: 0 5px 14px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
+}
+
+.manualCampaignContact {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.manualCampaignContact strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.manualCampaignContact span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manualCampaignItemMeta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.manualCampaignItemAction {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.manualCancelButton,
+.manualCancelConfirmButton {
+  width: 104px;
+  border-radius: 11px;
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.manualCancelButton {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-surface);
+  color: var(--crm-danger-text);
+}
+
+.manualCancelButton:hover {
+  background: var(--crm-danger-bg);
+}
+
+.manualCancelConfirmButton {
+  border: 1px solid var(--crm-danger-strong);
+  background: var(--crm-danger-strong);
+  color: var(--crm-text-inverse);
+}
+
+.manualCancelConfirmButton:hover {
+  transform: translateY(-1px);
+}
+
+.manualCancelButton:disabled,
+.manualCancelConfirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.manualCampaignDoneLabel {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.manualCampaignEmpty {
+  border: 1px dashed var(--crm-border-strong);
+  border-radius: 15px;
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.manualCampaignFooterInfo {
+  margin-right: auto;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
 @media (max-width: 760px) {
+  .manualCampaignToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .manualCampaignItem {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .manualCampaignItemMeta {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .manualCampaignItemAction {
+    justify-content: flex-start;
+  }
+
+  .manualCancelButton,
+  .manualCancelConfirmButton {
+    width: auto;
+    min-width: 112px;
+  }
+
   .searchBar {
     grid-template-columns: 1fr;
   }
