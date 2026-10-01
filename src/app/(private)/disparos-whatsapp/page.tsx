@@ -1689,6 +1689,33 @@ function ordenarLinhasRelatorioCampanha(
   linhas: LinhaRelatorioCampanha[]
 ) {
   return [...linhas].sort((a, b) => {
+    // Prioridade do relatório:
+    // 1) respondeu -> Respondido em mais recente primeiro;
+    // 2) leu e não respondeu -> Lido em mais recente primeiro;
+    // 3) não leu e não respondeu -> Enviado em mais recente primeiro.
+    const grupoA = a.resposta_em ? 0 : a.lido_em ? 1 : 2;
+    const grupoB = b.resposta_em ? 0 : b.lido_em ? 1 : 2;
+
+    if (grupoA !== grupoB) return grupoA - grupoB;
+
+    const dataPrioritariaA =
+      grupoA === 0
+        ? timestampRelatorio(a.resposta_em)
+        : grupoA === 1
+        ? timestampRelatorio(a.lido_em)
+        : timestampRelatorio(a.enviado_em);
+    const dataPrioritariaB =
+      grupoB === 0
+        ? timestampRelatorio(b.resposta_em)
+        : grupoB === 1
+        ? timestampRelatorio(b.lido_em)
+        : timestampRelatorio(b.enviado_em);
+
+    if (dataPrioritariaA !== dataPrioritariaB) {
+      return dataPrioritariaB - dataPrioritariaA;
+    }
+
+    // Desempate estável dentro do mesmo grupo.
     const diferencaEnvio =
       timestampRelatorio(b.enviado_em) -
       timestampRelatorio(a.enviado_em);
