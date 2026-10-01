@@ -145,6 +145,44 @@ function statusDetalhadoLabel(linha: LinhaRelatorio) {
   }
 }
 
+function timestampLinhaRelatorio(valor?: string | null) {
+  const timestamp = Date.parse(String(valor || ""));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function ordenarLinhasRelatorio(linhas: LinhaRelatorio[]) {
+  return [...linhas].sort((a, b) => {
+    // Prioridade visual:
+    // 1) contatos respondidos, resposta mais recente primeiro;
+    // 2) contatos lidos sem resposta, leitura mais recente primeiro;
+    // 3) demais contatos, envio mais recente primeiro.
+    const grupoA = a.resposta_em ? 0 : a.lido_em ? 1 : 2;
+    const grupoB = b.resposta_em ? 0 : b.lido_em ? 1 : 2;
+
+    if (grupoA !== grupoB) return grupoA - grupoB;
+
+    const dataA =
+      grupoA === 0
+        ? timestampLinhaRelatorio(a.resposta_em)
+        : grupoA === 1
+        ? timestampLinhaRelatorio(a.lido_em)
+        : timestampLinhaRelatorio(a.enviado_em);
+    const dataB =
+      grupoB === 0
+        ? timestampLinhaRelatorio(b.resposta_em)
+        : grupoB === 1
+        ? timestampLinhaRelatorio(b.lido_em)
+        : timestampLinhaRelatorio(b.enviado_em);
+
+    if (dataA !== dataB) return dataB - dataA;
+
+    return (
+      timestampLinhaRelatorio(b.enviado_em) -
+      timestampLinhaRelatorio(a.enviado_em)
+    );
+  });
+}
+
 function calcularTotais(linhas: LinhaRelatorio[]): TotaisRelatorio {
   const totais: TotaisRelatorio = {
     total: linhas.length,
@@ -482,11 +520,13 @@ export async function GET(req: NextRequest) {
     });
     const nomeCampanha = nomeCampanhaRelatorio(campanha);
 
-    const linhasDetalhadas = linhasComCodigos.map((linha) => ({
-      ...linha,
-      status_final: statusDetalhado(linha),
-      status_label: statusDetalhadoLabel(linha),
-    }));
+    const linhasDetalhadas = ordenarLinhasRelatorio(linhasComCodigos).map(
+      (linha) => ({
+        ...linha,
+        status_final: statusDetalhado(linha),
+        status_label: statusDetalhadoLabel(linha),
+      })
+    );
 
     if (formato === "json") {
       return NextResponse.json(
