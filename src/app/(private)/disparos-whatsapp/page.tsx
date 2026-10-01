@@ -371,10 +371,18 @@ type CampanhaHistoricoFiltro = {
   id: string;
   nome?: string | null;
   template_nome?: string | null;
+  template_categoria?: string | null;
   integracao_whatsapp_id?: string | null;
   total_itens?: number | null;
   total_enviados?: number | null;
+  total_falhas?: number | null;
+  total_cancelados?: number | null;
+  total_pendentes?: number | null;
+  total_processando?: number | null;
+  pausa_motivo?: string | null;
+  erro?: string | null;
   created_at?: string | null;
+  finished_at?: string | null;
   status?: string | null;
 };
 
@@ -491,7 +499,6 @@ const EVENTO_DISPARO_REFRESH = "crm:whatsapp-disparo-refresh";
 const EVENTO_DISPARO_PREPARANDO = "crm:whatsapp-disparo-preparando";
 const TEMPO_MAXIMO_LOADING_PREPARACAO_MS = 15_000;
 const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
-const TEMPO_CARD_CAMPANHA_TERMINAL_MS = 8000;
 const TESTE_CARD_PAGINA_DISPARO_KEY =
   "crm-whatsapp-disparo-page-card-test";
 const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v3";
@@ -1591,6 +1598,69 @@ function nomeCampanhaHistorico(campanha?: CampanhaHistoricoFiltro | null) {
   return `Disparo em massa - ${data} - ${total} ${unidade}`;
 }
 
+function statusCampanhaHistorico(campanha: CampanhaHistoricoFiltro) {
+  const status = String(campanha.status || "").trim().toLowerCase();
+
+  if (status === "pendente" || status === "enviando") return "Processando";
+  if (status === "concluida") {
+    const falhas = Math.max(0, Number(campanha.total_falhas || 0));
+    const cancelados = Math.max(0, Number(campanha.total_cancelados || 0));
+    return falhas > 0 || cancelados > 0 ? "Concluído com falhas" : "Concluído";
+  }
+  if (status === "cancelada") return "Cancelado";
+  if (status.startsWith("pausada_")) return "Interrompido";
+  if (status === "erro") return "Interrompido";
+
+  return status ? status : "Concluído";
+}
+
+function campanhaHistoricoTemProblema(campanha: CampanhaHistoricoFiltro) {
+  const status = String(campanha.status || "").trim().toLowerCase();
+  return (
+    status === "cancelada" ||
+    status === "erro" ||
+    status.startsWith("pausada_") ||
+    Number(campanha.total_falhas || 0) > 0 ||
+    Number(campanha.total_cancelados || 0) > 0
+  );
+}
+
+function timestampRelatorio(valor?: string | null) {
+  const timestamp = Date.parse(String(valor || ""));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function ordenarLinhasRelatorioCampanha(
+  linhas: LinhaRelatorioCampanha[]
+) {
+  return [...linhas].sort((a, b) => {
+    const grupoA = a.resposta_em ? 0 : a.lido_em ? 1 : 2;
+    const grupoB = b.resposta_em ? 0 : b.lido_em ? 1 : 2;
+
+    if (grupoA !== grupoB) return grupoA - grupoB;
+
+    const dataA =
+      grupoA === 0
+        ? timestampRelatorio(a.resposta_em)
+        : grupoA === 1
+        ? timestampRelatorio(a.lido_em)
+        : timestampRelatorio(a.enviado_em);
+    const dataB =
+      grupoB === 0
+        ? timestampRelatorio(b.resposta_em)
+        : grupoB === 1
+        ? timestampRelatorio(b.lido_em)
+        : timestampRelatorio(b.enviado_em);
+
+    if (dataA !== dataB) return dataB - dataA;
+
+    return (
+      timestampRelatorio(b.enviado_em) -
+      timestampRelatorio(a.enviado_em)
+    );
+  });
+}
+
 function truncarNomeBadge(valor: string, limite = 34) {
   const texto = String(valor || "").trim();
 
@@ -2006,7 +2076,6 @@ export default function DisparosWhatsAppPage() {
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
     null
   );
-  const timerCardCampanhaRef = useRef<number | null>(null);
   const historicoConsultaAtivaRef = useRef("");
   const contatosConsultaAtivaRef = useRef(0);
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
@@ -2199,6 +2268,17 @@ export default function DisparosWhatsAppPage() {
 
   const aplicarCampanhaPagina = useCallback(
     (campanhaAtual: CampanhaDisparoAndamento | null) => {
+      if (campanhaAtual && !campanhaEstaAtiva(campanhaAtual)) {
+        setCampanhasPagina((atuais) =>
+          atuais.filter((campanha) => campanha.id !== campanhaAtual.id)
+        );
+        setCampanhaPagina((atual) =>
+          atual?.id === campanhaAtual.id ? null : atual
+        );
+        setModalCampanhaAberto(false);
+        return;
+      }
+
       if (campanhaAtual) {
         setCampanhasPagina((atuais) => {
           const restantes = atuais.filter(
@@ -2270,11 +2350,13 @@ export default function DisparosWhatsAppPage() {
         if (!res.ok || json.ok === false) return;
 
         const lista = ordenarCampanhasPaginaPorCriacao(
-          Array.isArray(json.campanhas)
-            ? json.campanhas
-            : json.campanha
-            ? [json.campanha]
-            : []
+          (
+            Array.isArray(json.campanhas)
+              ? json.campanhas
+              : json.campanha
+              ? [json.campanha]
+              : []
+          ).filter(campanhaEstaAtiva)
         );
 
         if (integracaoConsultaId) {
@@ -2304,11 +2386,15 @@ export default function DisparosWhatsAppPage() {
           if (atualAtualizada) return atualAtualizada;
 
           if (integracaoConsultaId) {
-            return atual || json.campanha || null;
+            return atual && campanhaEstaAtiva(atual) ? atual : lista[0] || null;
           }
 
           return lista[0] || null;
         });
+
+        if (lista.length === 0) {
+          setModalCampanhaAberto(false);
+        }
       } catch {
         return;
       }
@@ -2806,6 +2892,7 @@ export default function DisparosWhatsAppPage() {
         const params = new URLSearchParams({
           limit: String(ITENS_HISTORICO_POR_PAGINA),
           status: filtroHistorico,
+          somente_campanhas: "true",
         });
 
         if (paginaAnterior?.proximoCursor) {
@@ -3347,29 +3434,39 @@ export default function DisparosWhatsAppPage() {
 
           if (!campanhaRealtime) return;
 
+          const campanhaAtiva = campanhaEstaAtiva(campanhaRealtime);
+
           setCampanhasPagina((atuais) => {
             const restantes = atuais.filter(
               (campanha) => campanha.id !== campanhaRealtime.id
             );
+
+            if (!campanhaAtiva) {
+              return restantes;
+            }
+
             return ordenarCampanhasPaginaPorCriacao([
               campanhaRealtime,
               ...restantes,
             ]).slice(0, 25);
           });
 
-          setCampanhaPagina((atual) =>
-            atual?.id === campanhaRealtime.id ? campanhaRealtime : atual
-          );
+          setCampanhaPagina((atual) => {
+            if (atual?.id !== campanhaRealtime.id) return atual;
+            return campanhaAtiva ? campanhaRealtime : null;
+          });
+
+          if (!campanhaAtiva) {
+            setModalCampanhaAberto(false);
+          }
 
           if (
             campanhaRealtime.integracao_whatsapp_id === integracaoId
           ) {
-            setIntegracaoDisparoProcessando(
-              campanhaEstaAtiva(campanhaRealtime)
-            );
+            setIntegracaoDisparoProcessando(campanhaAtiva);
           }
 
-          if (!campanhaEstaAtiva(campanhaRealtime)) {
+          if (!campanhaAtiva) {
             invalidarHistoricoCacheEmpresa(empresaId);
 
             // Revalida os contatos após o término para incorporar imediatamente
@@ -3407,37 +3504,6 @@ export default function DisparosWhatsAppPage() {
     abaAtiva,
     carregarHistorico,
     limparFormularioDisparo,
-  ]);
-
-  useEffect(() => {
-    if (timerCardCampanhaRef.current) {
-      window.clearTimeout(timerCardCampanhaRef.current);
-      timerCardCampanhaRef.current = null;
-    }
-
-    if (
-      !campanhaPagina ||
-      campanhaEstaAtiva(campanhaPagina) ||
-      modalCampanhaAberto
-    ) {
-      return;
-    }
-
-    timerCardCampanhaRef.current = window.setTimeout(() => {
-      setCampanhaPagina(null);
-    }, TEMPO_CARD_CAMPANHA_TERMINAL_MS);
-
-    return () => {
-      if (timerCardCampanhaRef.current) {
-        window.clearTimeout(timerCardCampanhaRef.current);
-        timerCardCampanhaRef.current = null;
-      }
-    };
-  }, [
-    campanhaPagina,
-    campanhaPagina?.id,
-    campanhaPagina?.status,
-    modalCampanhaAberto,
   ]);
 
   useEffect(() => {
@@ -3887,6 +3953,41 @@ export default function DisparosWhatsAppPage() {
     [campanhasHistorico, filtroHistoricoIntegracao]
   );
 
+  const campanhasHistoricoCards = useMemo(() => {
+    const termo = normalizarTextoBusca(buscaHistorico);
+
+    return campanhasHistoricoFiltradas
+      .filter((campanha) => {
+        if (!termo) return true;
+
+        const integracao = integracoes.find(
+          (item) => item.id === campanha.integracao_whatsapp_id
+        );
+
+        return normalizarTextoBusca(
+          [
+            campanha.nome,
+            campanha.template_nome,
+            campanha.template_categoria,
+            statusCampanhaHistorico(campanha),
+            integracao?.nome_conexao,
+            integracao?.numero,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        ).includes(termo);
+      })
+      .sort(
+        (a, b) =>
+          timestampRelatorio(b.created_at) -
+          timestampRelatorio(a.created_at)
+      );
+  }, [
+    campanhasHistoricoFiltradas,
+    buscaHistorico,
+    integracoes,
+  ]);
+
   const totalContatosComConflitoSelecionados = useMemo(() => {
     const ids = new Set<string>();
 
@@ -3943,7 +4044,9 @@ export default function DisparosWhatsAppPage() {
   const resultadoHistoricoPaginado = resultadoFiltrado;
 
   const linhasRelatorioCampanhaFiltradas = useMemo(() => {
-    const linhas = relatorioCampanhaDetalhado?.linhas || [];
+    const linhas = ordenarLinhasRelatorioCampanha(
+      relatorioCampanhaDetalhado?.linhas || []
+    );
     const termo = buscaHistorico.trim().toLocaleLowerCase("pt-BR");
 
     if (!termo) return linhas;
@@ -6729,64 +6832,6 @@ export default function DisparosWhatsAppPage() {
           </div>
         </div>
 
-          {!filtroHistoricoCampanha ? (
-<div className={styles.resultsSummary}>
-            <button
-              type="button"
-              className={
-                filtroHistorico === "todos"
-                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
-                  : styles.summaryCard
-              }
-              onClick={() => setFiltroHistorico("todos")}
-            >
-              <span className={styles.summaryLabel}>Total</span>
-              <strong className={styles.summaryValue}>
-                {totaisHistorico.total}
-              </strong>
-            </button>
-
-            <button
-              type="button"
-              className={
-                filtroHistorico === "sucesso"
-                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
-                  : styles.summaryCard
-              }
-              onClick={() => setFiltroHistorico("sucesso")}
-            >
-              <span className={styles.summaryLabel}>Enviados</span>
-              <strong className={styles.summaryValue}>{totalSucesso}</strong>
-            </button>
-
-            <button
-              type="button"
-              className={
-                filtroHistorico === "processando"
-                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
-                  : styles.summaryCard
-              }
-              onClick={() => setFiltroHistorico("processando")}
-            >
-              <span className={styles.summaryLabel}>Pendentes</span>
-              <strong className={styles.summaryValue}>{totalProcessando}</strong>
-            </button>
-
-            <button
-              type="button"
-              className={
-                filtroHistorico === "falha"
-                  ? `${styles.summaryCard} ${styles.summaryCardActive}`
-                  : styles.summaryCard
-              }
-              onClick={() => setFiltroHistorico("falha")}
-            >
-              <span className={styles.summaryLabel}>Falhas</span>
-              <strong className={styles.summaryValue}>{totalFalha}</strong>
-            </button>
-          </div>
-          ) : null}
-
           <div className={styles.historySearchBar}>
             <div className={styles.historySearchField}>
               <label className={styles.label}>Busca</label>
@@ -6799,7 +6844,7 @@ export default function DisparosWhatsAppPage() {
                   }
                 }}
                 className={styles.input}
-                placeholder="Busque por número, nome ou template..."
+                placeholder={filtroHistoricoCampanha ? "Busque por número, nome ou status..." : "Busque por campanha, template ou integração..."}
               />
             </div>
 
@@ -7117,258 +7162,93 @@ export default function DisparosWhatsAppPage() {
             ) : (
               <>
                 {loadingHistorico ? (
-              <div className={styles.emptyState}>Carregando histórico...</div>
-            ) : resultadoFiltrado.length === 0 ? (
-              <div className={styles.emptyState}>
-                Nenhum disparo encontrado para este filtro.
-              </div>
-            ) : (
-              <div className={styles.resultsList}>
-                {resultadoHistoricoPaginado.map((item, index) => {
-                  if (historicoEhCampanhaPausada(item)) {
-                    const totais = obterTotaisCampanhaPausada(item);
-                    const motivo = obterMotivoCampanhaPausada(item);
-
-                    return (
-                      <div
-                        key={item.id || item.campanha_id || `campanha-${index}`}
-                        className={`${styles.resultItem} ${styles.resultError} ${styles.resultMassCancelled}`}
-                      >
-                        <div className={styles.resultCompactHeader}>
-                          <div className={styles.resultCompactMain}>
-                            <strong className={styles.resultCompactName}>
-                              {obterTituloCampanhaPausada(item)}
-                            </strong>
-
-                            <p className={styles.resultCompactMeta}>
-                              Template: {item.template_nome || "-"}
-                              {" • "}
-                              Categoria: {formatarCategoriaMeta(obterCategoriaHistorico(item))}
-                              {" • "}
-                              Disparo interrompido pelo sistema de segurança
-                            </p>
-                          </div>
-
-                          <span
-                            className={`${styles.resultStatus} ${styles.massCancelledStatus}`}
-                          >
-                            {obterStatusCampanhaPausada(item)}
-                          </span>
-                        </div>
-
-                        <div className={styles.massCancelledMetrics}>
-                          <div className={styles.massCancelledMetric}>
-                            <strong>{totais.totalItens}</strong>
-                            <span>Total</span>
-                          </div>
-
-                          <div className={styles.massCancelledMetric}>
-                            <strong>{totais.totalEnviados}</strong>
-                            <span>Enviados</span>
-                          </div>
-
-                          <div className={styles.massCancelledMetric}>
-                            <strong>{totais.totalCancelados}</strong>
-                            <span>Cancelados</span>
-                          </div>
-
-                          <div className={styles.massCancelledMetric}>
-                            <strong>{totais.totalFalhas}</strong>
-                            <span>Falhas</span>
-                          </div>
-                        </div>
-
-                        <div className={styles.resultErrorFeedback}>
-                          <strong className={styles.resultErrorTitle}>
-                            Disparo em massa cancelado
-                          </strong>
-
-                          <p className={styles.resultErrorDescription}>
-                            {String(motivo)}
-                          </p>
-
-                          <p className={styles.resultErrorDetail}>
-                            Foram enviados {totais.totalEnviados} disparos.{" "}
-                            {totais.totalCancelados} disparos foram cancelados
-                            antes do envio.
-                            {totais.totalFalhas > 0
-                              ? ` ${totais.totalFalhas} disparos falharam durante o processamento.`
-                              : ""}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                  <div
-                    key={item.id || `${item.numero}-${index}`}
-                    className={`${styles.resultItem} ${
-                      disparoEstaProcessando(item)
-                        ? styles.resultProcessing
-                        : disparoTeveSucesso(item)
-                        ? styles.resultSuccess
-                        : styles.resultError
-                    }`}
-                  >
-                  <div className={styles.resultCompactHeader}>
-                    <div className={styles.resultCompactMain}>
-                      <strong className={styles.resultCompactName}>
-                        {item.nome_contato || "Sem nome"} • {item.numero}
-                      </strong>
-
-                        <p className={styles.resultCompactMeta}>
-                          Template: {item.template_nome || "-"}
-                          {" • "}
-                          Categoria: {formatarCategoriaMeta(obterCategoriaHistorico(item))}
-                          {" • "}
-                          {formatarDataHora(item.created_at)}
-
-                        {item.campanha_nome ? (
-                          <>
-                            {"   "}
-                            <span
-                              className={styles.badgeMassHistory}
-                              title={item.campanha_nome}
-                            >
-                              {truncarNomeBadge(item.campanha_nome, 42)}
-                            </span>
-                          </>
-                        ) : null}
-
-                        {item.origem_historico === "agendado" ? (
-                          <>
-                            {" • "}
-                            <span className={styles.badgeAgendado}>
-                              ⏰ Disparo agendado
-                            </span>
-                          </>
-                        ) : null}
-
-                        {item.origem_historico === "individual" ? (
-                          <>
-                            {" • "}
-                            <span className={styles.badgeIndividual}>
-                              👤 Disparo individual
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
-                    </div>
-
-                    <span className={styles.resultStatus}>
-                      {item.status_label ||
-                        (disparoEstaProcessando(item)
-                          ? "Aguardando confirmação"
-                          : disparoTeveSucesso(item)
-                          ? "Enviado"
-                          : "Falha")}
-                    </span>
+                  <div className={styles.emptyState}>Carregando campanhas...</div>
+                ) : campanhasHistoricoCards.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    Nenhuma campanha encontrada para este filtro.
                   </div>
-
-                    {item.mensagem_template ? (
-                      (() => {
-                        const chaveMensagem = item.id || `${item.numero}-${index}`;
-                        const expandida = mensagensExpandidas.includes(chaveMensagem);
-                        const mensagemExibida = expandida
-                          ? item.mensagem_template
-                          : resumirMensagem(item.mensagem_template);
-
-                        return (
-                          <div className={styles.resultCompactMessageRow}>
-                            <p
-                              className={`${styles.resultCompactMessage} ${
-                                !expandida ? styles.resultCompactMessageCollapsed : ""
-                              }`}
-                            >
-                              {mensagemExibida}
-                            </p>
-
-                            <button
-                              type="button"
-                              className={styles.expandMessageButton}
-                              onClick={() => alternarMensagemExpandida(chaveMensagem)}
-                            >
-                              {expandida ? "Ocultar" : "Ver mensagem"}
-                            </button>
-                          </div>
-                        );
-                      })()
-                    ) : null}
-
-                    {(() => {
-                      const feedbackErro = obterFeedbackErroDisparo(item);
-
-                      if (!feedbackErro) return null;
+                ) : (
+                  <div className={styles.resultsList}>
+                    {campanhasHistoricoCards.map((campanha) => {
+                      const total = Math.max(0, Number(campanha.total_itens || 0));
+                      const enviados = Math.max(0, Number(campanha.total_enviados || 0));
+                      const falhas = Math.max(0, Number(campanha.total_falhas || 0));
+                      const cancelados = Math.max(
+                        0,
+                        Number(campanha.total_cancelados || 0) +
+                          Number(campanha.total_pendentes || 0)
+                      );
+                      const integracao = integracoes.find(
+                        (item) => item.id === campanha.integracao_whatsapp_id
+                      );
+                      const comProblema = campanhaHistoricoTemProblema(campanha);
 
                       return (
-                        <div className={styles.resultErrorFeedback}>
-                          <strong className={styles.resultErrorTitle}>
-                            {feedbackErro.titulo}
-                          </strong>
+                        <button
+                          key={campanha.id}
+                          type="button"
+                          className={`${styles.resultItem} ${styles.campaignHistoryCard} ${
+                            comProblema ? styles.resultError : styles.resultSuccess
+                          }`}
+                          onClick={() => {
+                            setFiltroHistoricoCampanha(campanha.id);
+                            setPaginaRelatorioCampanha(1);
+                            setBuscaHistorico("");
+                            setErro("");
+                          }}
+                        >
+                          <div className={styles.resultCompactHeader}>
+                            <div className={styles.resultCompactMain}>
+                              <strong className={styles.resultCompactName}>
+                                {nomeCampanhaHistorico(campanha)}
+                              </strong>
+                              <p className={styles.resultCompactMeta}>
+                                Template: {campanha.template_nome || "-"}
+                                {" • "}
+                                Categoria: {formatarCategoriaMeta(campanha.template_categoria)}
+                                {" • "}
+                                Integração: {integracao?.nome_conexao || integracao?.numero || "WhatsApp"}
+                                {" • "}
+                                {formatarDataHora(campanha.created_at)}
+                              </p>
+                            </div>
 
-                          <p className={styles.resultErrorDescription}>
-                            <strong>O que significa:</strong>{" "}
-                            {feedbackErro.descricao}
-                          </p>
+                            <span
+                              className={`${styles.resultStatus} ${
+                                comProblema ? styles.massCancelledStatus : ""
+                              }`}
+                            >
+                              {statusCampanhaHistorico(campanha)}
+                            </span>
+                          </div>
 
-                          <p className={styles.resultErrorDetail}>
-                            <strong>O que fazer:</strong>{" "}
-                            {feedbackErro.acao}
-                          </p>
-                        </div>
+                          <div className={styles.massCancelledMetrics}>
+                            <div className={styles.massCancelledMetric}>
+                              <strong>{total}</strong>
+                              <span>Total</span>
+                            </div>
+                            <div className={styles.massCancelledMetric}>
+                              <strong>{enviados}</strong>
+                              <span>Enviados</span>
+                            </div>
+                            <div className={styles.massCancelledMetric}>
+                              <strong>{cancelados}</strong>
+                              <span>Cancelados</span>
+                            </div>
+                            <div className={styles.massCancelledMetric}>
+                              <strong>{falhas}</strong>
+                              <span>Falhas</span>
+                            </div>
+                          </div>
+
+                          <span className={styles.campaignHistoryCardAction}>
+                            Ver relatório da campanha
+                          </span>
+                        </button>
                       );
-                    })()}
+                    })}
                   </div>
-                  );
-                })}
-                
-                {totalResultadosFiltroAtivo > ITENS_HISTORICO_POR_PAGINA ||
-                paginaHistorico > 1 ||
-                historicoTemMais ? (
-                  <div className={styles.paginationBar}>
-                    <span className={styles.paginationInfo}>
-                      Mostrando {primeiroItemHistorico} a {ultimoItemHistorico} de{" "}
-                      {totalResultadosFiltroAtivo} disparos
-                    </span>
-
-                    <div className={styles.paginationActions}>
-                      <button
-                        type="button"
-                        className={styles.paginationButton}
-                        onClick={() =>
-                          void carregarHistorico({
-                            pagina: Math.max(1, paginaHistorico - 1),
-                            forcar: false,
-                          })
-                        }
-                        disabled={paginaHistorico <= 1 || loadingHistorico}
-                      >
-                        Anterior
-                      </button>
-
-                      <span className={styles.paginationCurrent}>
-                        Página {paginaHistorico} de {totalPaginasHistorico}
-                      </span>
-
-                      <button
-                        type="button"
-                        className={styles.paginationButton}
-                        onClick={() =>
-                          void carregarHistorico({
-                            pagina: paginaHistorico + 1,
-                            forcar: false,
-                          })
-                        }
-                        disabled={!historicoTemMais || loadingHistorico}
-                      >
-                        Próxima
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
+                )}
               </>
             )}
           </section>
