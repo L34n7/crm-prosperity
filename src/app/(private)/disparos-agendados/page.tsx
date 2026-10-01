@@ -257,10 +257,21 @@ function obterTipoDisparo(disparo: DisparoAgendado) {
 }
 
 function obterGrupoId(disparo: DisparoAgendado) {
-  const agendamentoId = String(
-    disparo.payload_json?.agendamento_id || ""
-  ).trim();
-  return agendamentoId ? "agendamento:" + agendamentoId : "disparo:" + disparo.id;
+  const payload = disparo.payload_json || {};
+  const agendamentoId = String(payload.agendamento_id || "").trim();
+
+  if (agendamentoId) {
+    return "agendamento:" + agendamentoId;
+  }
+
+  const grupoManualId = String(payload.agendamento_grupo_id || "").trim();
+  const origem = String(payload.origem || "").trim().toLowerCase();
+
+  if (origem === "manual_agendado" && grupoManualId) {
+    return "manual:" + grupoManualId;
+  }
+
+  return "disparo:" + disparo.id;
 }
 
 function millisData(valor?: string | null) {
@@ -322,7 +333,10 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
       id,
       agendamentoId: payload.agendamento_id || null,
       titulo: String(
-        payload.agendamento_titulo || payload.template_nome || "Disparo agendado"
+        payload.agendamento_titulo ||
+          payload.nome_campanha ||
+          payload.template_nome ||
+          "Disparo agendado"
       ),
       contatoNome: String(payload.contato_nome || "Contato não informado"),
       calendarioNome: String(
@@ -363,6 +377,46 @@ function grupoStatusLabel(status: StatusGrupoDisparo) {
 function grupoStatusClass(status: StatusGrupoDisparo) {
   if (status === "parcial") return [styles.badge, styles.badgeBlue].join(" ");
   return statusClass(status);
+}
+
+function grupoEhDisparoManual(grupo: GrupoDisparos) {
+  return grupo.itens.some((item) => {
+    const payload = item.payload_json || {};
+    return (
+      String(payload.origem || "").toLowerCase() === "manual_agendado" &&
+      Boolean(String(payload.agendamento_grupo_id || "").trim())
+    );
+  });
+}
+
+function grupoCardAccentClass(status: StatusGrupoDisparo) {
+  if (status === "executado") return styles.cardAccentSuccess;
+  if (status === "cancelado" || status === "erro") {
+    return styles.cardAccentDanger;
+  }
+  if (status === "parcial") return styles.cardAccentPrimary;
+  return styles.cardAccentWarning;
+}
+
+function disparoCardAccentClass(status: DisparoAgendado["status"]) {
+  if (status === "executado") return styles.cardAccentSuccess;
+  if (status === "cancelado" || status === "erro") {
+    return styles.cardAccentDanger;
+  }
+  return styles.cardAccentWarning;
+}
+
+function compararNumeroContatoDesc(
+  a: DisparoAgendado,
+  b: DisparoAgendado
+) {
+  const numeroA = limparNumero(a.payload_json?.numero_destino);
+  const numeroB = limparNumero(b.payload_json?.numero_destino);
+
+  return numeroB.localeCompare(numeroA, "pt-BR", {
+    numeric: true,
+    sensitivity: "base",
+  });
 }
 
 function grupoPossuiStatus(grupo: GrupoDisparos, filtro: StatusDisparo) {
@@ -682,6 +736,13 @@ function DisparosAgendadosPageContent() {
   const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
   const [grupoSelecionado, setGrupoSelecionado] = useState<GrupoDisparos | null>(null);
   const [grupoParaCancelar, setGrupoParaCancelar] = useState<GrupoDisparos | null>(null);
+  const [grupoManualModalId, setGrupoManualModalId] = useState<string | null>(null);
+  const [buscaGrupoManual, setBuscaGrupoManual] = useState("");
+  const [
+    confirmarCancelamentoManualId,
+    setConfirmarCancelamentoManualId,
+  ] = useState<string | null>(null);
+  const [cancelandoManualId, setCancelandoManualId] = useState<string | null>(null);
 
   const [disparoSelecionado, setDisparoSelecionado] =
     useState<DisparoAgendado | null>(null);
@@ -1238,6 +1299,40 @@ function DisparosAgendadosPageContent() {
 
   const grupos = useMemo(() => criarGruposDisparos(disparos), [disparos]);
 
+  const grupoManualModal = useMemo(
+    () =>
+      grupoManualModalId
+        ? grupos.find(
+            (grupo) =>
+              grupo.id === grupoManualModalId &&
+              grupoEhDisparoManual(grupo)
+          ) || null
+        : null,
+    [grupoManualModalId, grupos]
+  );
+
+  const itensGrupoManualModal = useMemo(() => {
+    if (!grupoManualModal) return [];
+
+    const termo = buscaGrupoManual.trim().toLowerCase();
+    const termoNumero = limparNumero(buscaGrupoManual);
+
+    return [...grupoManualModal.itens]
+      .filter((disparo) => {
+        if (!termo) return true;
+
+        const payload = disparo.payload_json || {};
+        const nome = String(payload.contato_nome || "").toLowerCase();
+        const numero = limparNumero(payload.numero_destino);
+
+        return (
+          nome.includes(termo) ||
+          (termoNumero ? numero.includes(termoNumero) : false)
+        );
+      })
+      .sort(compararNumeroContatoDesc);
+  }, [grupoManualModal, buscaGrupoManual]);
+
   const gruposFiltrados = useMemo(() => {
     return grupos.filter((grupo) => {
       const correspondeStatus = grupoPossuiStatus(grupo, filtroStatus);
@@ -1391,6 +1486,57 @@ function DisparosAgendadosPageContent() {
       return proximos;
     });
     router.push("/disparos-agendados?grupo=" + encodeURIComponent(grupo.id));
+  }
+
+  function abrirGrupoManual(grupo: GrupoDisparos) {
+    setGrupoManualModalId(grupo.id);
+    setBuscaGrupoManual("");
+    setConfirmarCancelamentoManualId(null);
+  }
+
+  function fecharGrupoManual() {
+    setGrupoManualModalId(null);
+    setBuscaGrupoManual("");
+    setConfirmarCancelamentoManualId(null);
+    setCancelandoManualId(null);
+  }
+
+  async function cancelarContatoGrupoManual(disparo: DisparoAgendado) {
+    if (disparo.status !== "pendente") return;
+
+    if (!podeRealizarDisparos) {
+      setErro("Você não tem permissão para cancelar disparos.");
+      return;
+    }
+
+    if (confirmarCancelamentoManualId !== disparo.id) {
+      setConfirmarCancelamentoManualId(disparo.id);
+      return;
+    }
+
+    try {
+      setCancelandoManualId(disparo.id);
+      setErro("");
+
+      const res = await fetch(
+        `/api/disparos-agendados/${disparo.id}/cancelar`,
+        { method: "PATCH" }
+      );
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || "Erro ao cancelar disparo.");
+      }
+
+      setConfirmarCancelamentoManualId(null);
+      solicitarAtualizacaoDisparosPendentesHeader();
+      await carregarDisparos();
+      setSucesso("Disparo do contato cancelado com sucesso.");
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao cancelar disparo do contato.");
+    } finally {
+      setCancelandoManualId(null);
+    }
   }
 
   function alternarGrupo(grupo: GrupoDisparos) {
@@ -1723,6 +1869,101 @@ function DisparosAgendadosPageContent() {
                   const expandido = gruposExpandidos.has(grupo.id);
                   const canais = (["whatsapp", "email", "sistema", "fluxo"] as CanalDisparo[])
                     .filter((canal) => grupo.canais[canal] > 0);
+                  const grupoManual = grupoEhDisparoManual(grupo);
+
+                  if (grupoManual) {
+                    const primeiro = grupo.itens[0];
+                    const payload = primeiro.payload_json || {};
+                    const tituloCampanha =
+                      String(payload.nome_campanha || "").trim() ||
+                      String(payload.template_nome || "").trim() ||
+                      "Disparo agendado";
+                    const integracaoNome =
+                      String(payload.integracao_nome || "").trim() ||
+                      "Integração WhatsApp";
+
+                    return (
+                      <article
+                        key={grupo.id}
+                        className={[
+                          styles.groupCard,
+                          styles.manualCampaignCard,
+                          grupoCardAccentClass(grupo.status),
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => abrirGrupoManual(grupo)}
+                      >
+                        <div className={styles.groupHeader}>
+                          <div className={styles.groupIdentity}>
+                            <div className={styles.groupTitleRow}>
+                              <div className={styles.groupIcon}>💬</div>
+                              <div>
+                                <strong className={styles.groupTitle}>
+                                  {tituloCampanha}
+                                </strong>
+                                <p className={styles.groupMeta}>
+                                  {integracaoNome} · Template:{" "}
+                                  {payload.template_nome || "-"}
+                                </p>
+                              </div>
+                            </div>
+                            <span className={grupoStatusClass(grupo.status)}>
+                              {grupoStatusLabel(grupo.status)}
+                            </span>
+                          </div>
+
+                          <div className={styles.groupStats}>
+                            <span>
+                              <strong>{grupo.total}</strong>{" "}
+                              {grupo.total === 1 ? "contato" : "contatos"}
+                            </span>
+                            {grupo.pendentes + grupo.executando > 0 ? (
+                              <span>
+                                {grupo.pendentes + grupo.executando} pendentes
+                              </span>
+                            ) : null}
+                            {grupo.executados > 0 ? (
+                              <span>{grupo.executados} executados</span>
+                            ) : null}
+                            {grupo.cancelados > 0 ? (
+                              <span>{grupo.cancelados} cancelados</span>
+                            ) : null}
+                            {grupo.erros > 0 ? (
+                              <span>{grupo.erros} com erro</span>
+                            ) : null}
+                          </div>
+
+                          <div className={styles.groupScheduleGrid}>
+                            <div className={styles.groupSchedule}>
+                              <span>Execução programada</span>
+                              <strong>{formatarData(primeiro.executar_em)}</strong>
+                            </div>
+                            <div className={styles.groupSchedule}>
+                              <span>Campanha</span>
+                              <strong>{tituloCampanha}</strong>
+                            </div>
+                          </div>
+
+                          <div className={styles.groupFooterActions}>
+                            <span className={styles.channelChip}>
+                              💬 WhatsApp {grupo.canais.whatsapp}
+                            </span>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                abrirGrupoManual(grupo);
+                              }}
+                            >
+                              Ver contatos
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  }
 
                   if (grupo.total === 1) {
                     const disparo = grupo.itens[0];
@@ -1738,7 +1979,12 @@ function DisparosAgendadosPageContent() {
                     return (
                       <article
                         key={grupo.id}
-                        className={styles.disparoCard}
+                        className={[
+                          styles.disparoCard,
+                          disparoCardAccentClass(disparo.status),
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
                         onClick={() => abrirDisparo(disparo)}
                       >
                         <div className={styles.disparoMain}>
@@ -1799,6 +2045,7 @@ function DisparosAgendadosPageContent() {
                       key={grupo.id}
                       className={[
                         styles.groupCard,
+                        grupoCardAccentClass(grupo.status),
                         grupoSelecionado?.id === grupo.id ? styles.groupCardSelected : "",
                       ].filter(Boolean).join(" ")}
                     >
@@ -3145,6 +3392,152 @@ function DisparosAgendadosPageContent() {
                   }
                 >
                   {salvandoDisparo ? "Agendando..." : "Assumir e agendar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {grupoManualModal ? (
+          <div className={styles.modalOverlay} onClick={fecharGrupoManual}>
+            <div
+              className={`${styles.modalCard} ${styles.manualCampaignModal}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <p className={styles.eyebrow}>Disparo agendado</p>
+                  <h3 className={styles.modalTitle}>
+                    {grupoManualModal.titulo}
+                  </h3>
+                  <p className={styles.panelSubtitle}>
+                    {grupoManualModal.total}{" "}
+                    {grupoManualModal.total === 1 ? "contato" : "contatos"} ·{" "}
+                    {formatarData(grupoManualModal.itens[0]?.executar_em)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className={styles.closePanelButton}
+                  onClick={fecharGrupoManual}
+                  aria-label="Fechar"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className={styles.manualCampaignToolbar}>
+                <div className={styles.manualCampaignSummary}>
+                  <span>
+                    <strong>{grupoManualModal.total}</strong> total
+                  </span>
+                  <span>
+                    <strong>{grupoManualModal.pendentes}</strong> pendentes
+                  </span>
+                  <span>
+                    <strong>{grupoManualModal.executados}</strong> executados
+                  </span>
+                  <span>
+                    <strong>{grupoManualModal.cancelados}</strong> cancelados
+                  </span>
+                </div>
+
+                <input
+                  type="search"
+                  className={styles.input}
+                  value={buscaGrupoManual}
+                  onChange={(event) => {
+                    setBuscaGrupoManual(event.target.value);
+                    setConfirmarCancelamentoManualId(null);
+                  }}
+                  placeholder="Buscar por número ou nome do contato..."
+                  aria-label="Buscar contato no disparo agendado"
+                />
+              </div>
+
+              <div className={styles.manualCampaignList}>
+                {itensGrupoManualModal.length === 0 ? (
+                  <div className={styles.manualCampaignEmpty}>
+                    Nenhum contato encontrado para esta busca.
+                  </div>
+                ) : (
+                  itensGrupoManualModal.map((disparo) => {
+                    const payload = disparo.payload_json || {};
+                    const nomeContato =
+                      String(payload.contato_nome || "").trim() ||
+                      "Contato sem nome";
+                    const numero = formatarTelefone(payload.numero_destino);
+                    const confirmando =
+                      confirmarCancelamentoManualId === disparo.id;
+                    const cancelandoContato =
+                      cancelandoManualId === disparo.id;
+
+                    return (
+                      <div
+                        key={disparo.id}
+                        className={styles.manualCampaignItem}
+                      >
+                        <div className={styles.manualCampaignContact}>
+                          <strong>{numero}</strong>
+                          <span>{nomeContato}</span>
+                        </div>
+
+                        <div className={styles.manualCampaignItemMeta}>
+                          <span>{formatarData(disparo.executar_em)}</span>
+                          <span className={statusClass(disparo.status)}>
+                            {statusLabel(disparo.status)}
+                          </span>
+                        </div>
+
+                        <div className={styles.manualCampaignItemAction}>
+                          {disparo.status === "pendente" &&
+                          podeRealizarDisparos ? (
+                            <button
+                              type="button"
+                              className={
+                                confirmando
+                                  ? styles.manualCancelConfirmButton
+                                  : styles.manualCancelButton
+                              }
+                              onClick={() =>
+                                cancelarContatoGrupoManual(disparo)
+                              }
+                              disabled={Boolean(cancelandoManualId)}
+                            >
+                              {cancelandoContato
+                                ? "Cancelando..."
+                                : confirmando
+                                ? "Confirmar"
+                                : "Cancelar"}
+                            </button>
+                          ) : (
+                            <span className={styles.manualCampaignDoneLabel}>
+                              {disparo.status === "executado"
+                                ? "Finalizado"
+                                : disparo.status === "cancelado"
+                                ? "Cancelado"
+                                : disparo.status === "erro"
+                                ? "Com erro"
+                                : "Em processamento"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className={styles.modalFooter}>
+                <span className={styles.manualCampaignFooterInfo}>
+                  Ordenado pelo número do contato em ordem decrescente.
+                </span>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={fecharGrupoManual}
+                >
+                  Fechar
                 </button>
               </div>
             </div>
