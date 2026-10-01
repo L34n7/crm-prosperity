@@ -353,107 +353,196 @@ export async function GET(request: Request) {
         statusConversa.length > 0
     );
 
-  // Evita materializar toda a RPC contextual só para contar contatos.
-  // No módulo de disparos, filtros simples usam contagem direta em contatos;
-  // filtros contextuais contam apenas na primeira página.
-  const contarNaRpc =
-    exigeContagemContextual && (!contagemOtimizada || pagina === 1);
+  // Caminho rápido: primeiro pagina a tabela contatos usando índices e só
+  // depois enriquece os IDs da página com conversa/protocolo/opt-in/opt-out.
+  // Isso evita executar as junções laterais para todos os contatos da empresa.
+  const usarConsultaPaginadaOtimizada = !exigeContagemContextual;
 
-  let query = supabaseAdmin
-    .rpc(
-      "listar_contatos_operacionais_contexto_filtros_disparo",
-      {
-        ...contextoArgs,
-        p_lista_id: listaId || null,
-        p_lista_compartilhada_id: listaCompartilhadaId || null,
-        p_campanha_id: disparoAnteriorId || null,
-      },
-      contarNaRpc ? { count: "exact" } : undefined
-    )
-    .select(camposContatosContexto);
+  let data: any = null;
+  let error: any = null;
+  let count: number | null = null;
 
-  query = query.eq("empresa_id", usuario.empresa_id);
+  if (usarConsultaPaginadaOtimizada) {
+    let idsQuery = supabaseAdmin
+      .from("contatos")
+      .select("id", { count: "exact" })
+      .eq("empresa_id", usuario.empresa_id);
 
-  if (interesse) {
-    query = query.eq("interesse", interesse);
-  }
-
-  if (classificacoes.length > 0) {
-    query = query.in("classificacao", classificacoes);
-  } else if (statusLead && classificacaoLeadValida(statusLead)) {
-    query = query.eq(
-      "classificacao",
-      normalizarClassificacaoLead(statusLead, "novo")
-    );
-  }
-
-  if (apenasNovos) {
-    query = query.gte(
-      "created_at",
-      new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-    );
-  }
-
-  if (statusConversa.length > 0) {
-    const statusExistentes = statusConversa.filter(
-      (item) => item !== "sem_conversa"
-    );
-
-    if (statusConversa.includes("sem_conversa")) {
-      query =
-        statusExistentes.length > 0
-          ? query.or(
-              `conversa_status.in.(${statusExistentes.join(",")}),conversa_status.is.null`
-            )
-          : query.is("conversa_status", null);
-    } else {
-      query = query.in("conversa_status", statusExistentes);
+    if (interesse) {
+      idsQuery = idsQuery.eq("interesse", interesse);
     }
-  }
 
-  if (origem) {
-    query = query.eq("origem_exibicao", origem);
-  }
+    if (classificacoes.length > 0) {
+      idsQuery = idsQuery.in("classificacao", classificacoes);
+    } else if (statusLead && classificacaoLeadValida(statusLead)) {
+      idsQuery = idsQuery.eq(
+        "classificacao",
+        normalizarClassificacaoLead(statusLead, "novo")
+      );
+    }
 
-  if (rastreamentoCampanhaId) {
-    query = query.eq("rastreamento_campanha_id", rastreamentoCampanhaId);
-  } else if (campanha) {
-    query = query.eq("campanha_exibicao", campanha);
-  }
+    if (apenasNovos) {
+      idsQuery = idsQuery.gte(
+        "created_at",
+        new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      );
+    }
 
-  if (telefoneRevisar === "true") {
-    query = query.eq("telefone_revisar", true);
-  }
+    if (telefoneRevisar === "true") {
+      idsQuery = idsQuery.eq("telefone_revisar", true);
+    } else if (telefoneRevisar === "false") {
+      idsQuery = idsQuery.eq("telefone_revisar", false);
+    }
 
-  if (telefoneRevisar === "false") {
-    query = query.eq("telefone_revisar", false);
-  }
+    if (ordenacao === "antigos") {
+      idsQuery = idsQuery.order("created_at", { ascending: true });
+    } else if (ordenacao === "nome_asc") {
+      idsQuery = idsQuery.order("nome", { ascending: true });
+    } else if (ordenacao === "nome_desc") {
+      idsQuery = idsQuery.order("nome", { ascending: false });
+    } else {
+      idsQuery = idsQuery.order("created_at", { ascending: false });
+    }
 
-  if (optIn === "true" || optIn === "false") {
-    query = query.eq("opt_in_whatsapp", optIn === "true");
-  }
+    const idsResultado = await idsQuery.range(from, to);
 
-  if (optOut === "true" || optOut === "false") {
-    query = query.eq("whatsapp_opt_out", optOut === "true");
-  }
+    if (idsResultado.error) {
+      return NextResponse.json(
+        { ok: false, error: idsResultado.error.message },
+        { status: 500 }
+      );
+    }
 
-  if (busca) {
-    query = query.or(
-      `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,campo_contato.ilike.%${busca}%,interesse.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
-    );
-  }
+    count =
+      typeof idsResultado.count === "number"
+        ? idsResultado.count
+        : null;
 
-  if (ordenacao === "antigos") {
-    query = query.order("created_at", { ascending: true });
-  } else if (ordenacao === "nome_asc") {
-    query = query.order("nome", { ascending: true });
-  } else if (ordenacao === "nome_desc") {
-    query = query.order("nome", { ascending: false });
+    const contatoIds = (idsResultado.data || [])
+      .map((item) => String(item.id || "").trim())
+      .filter(Boolean);
+
+    if (contatoIds.length === 0) {
+      data = [];
+    } else {
+      const contextoResultado = await supabaseAdmin
+        .rpc("listar_contatos_operacionais_contexto_ids", {
+          p_empresa_id: usuario.empresa_id,
+          p_contato_ids: contatoIds,
+          p_integracao_whatsapp_id: integracaoWhatsappId || null,
+        })
+        .select(camposContatosContexto);
+
+      data = contextoResultado.data;
+      error = contextoResultado.error;
+    }
   } else {
-    query = query.order("created_at", { ascending: false });
-  }
+    // Filtros contextuais (lista, histórico, conversa, opt-in/out, período etc.)
+    // continuam no caminho completo para preservar a semântica existente.
+    const contarNaRpc = !contagemOtimizada || pagina === 1;
 
-  const { data, error, count } = await query.range(from, to);
+    let query = supabaseAdmin
+      .rpc(
+        "listar_contatos_operacionais_contexto_filtros_disparo",
+        {
+          ...contextoArgs,
+          p_lista_id: listaId || null,
+          p_lista_compartilhada_id: listaCompartilhadaId || null,
+          p_campanha_id: disparoAnteriorId || null,
+        },
+        contarNaRpc ? { count: "exact" } : undefined
+      )
+      .select(camposContatosContexto);
+
+    query = query.eq("empresa_id", usuario.empresa_id);
+
+    if (interesse) {
+      query = query.eq("interesse", interesse);
+    }
+
+    if (classificacoes.length > 0) {
+      query = query.in("classificacao", classificacoes);
+    } else if (statusLead && classificacaoLeadValida(statusLead)) {
+      query = query.eq(
+        "classificacao",
+        normalizarClassificacaoLead(statusLead, "novo")
+      );
+    }
+
+    if (apenasNovos) {
+      query = query.gte(
+        "created_at",
+        new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      );
+    }
+
+    if (statusConversa.length > 0) {
+      const statusExistentes = statusConversa.filter(
+        (item) => item !== "sem_conversa"
+      );
+
+      if (statusConversa.includes("sem_conversa")) {
+        query =
+          statusExistentes.length > 0
+            ? query.or(
+                `conversa_status.in.(${statusExistentes.join(",")}),conversa_status.is.null`
+              )
+            : query.is("conversa_status", null);
+      } else {
+        query = query.in("conversa_status", statusExistentes);
+      }
+    }
+
+    if (origem) {
+      query = query.eq("origem_exibicao", origem);
+    }
+
+    if (rastreamentoCampanhaId) {
+      query = query.eq("rastreamento_campanha_id", rastreamentoCampanhaId);
+    } else if (campanha) {
+      query = query.eq("campanha_exibicao", campanha);
+    }
+
+    if (telefoneRevisar === "true") {
+      query = query.eq("telefone_revisar", true);
+    }
+
+    if (telefoneRevisar === "false") {
+      query = query.eq("telefone_revisar", false);
+    }
+
+    if (optIn === "true" || optIn === "false") {
+      query = query.eq("opt_in_whatsapp", optIn === "true");
+    }
+
+    if (optOut === "true" || optOut === "false") {
+      query = query.eq("whatsapp_opt_out", optOut === "true");
+    }
+
+    if (busca) {
+      query = query.or(
+        `nome.ilike.%${busca}%,whatsapp_profile_name.ilike.%${busca}%,email.ilike.%${busca}%,campo_contato.ilike.%${busca}%,interesse.ilike.%${busca}%,origem_exibicao.ilike.%${busca}%,campanha_exibicao.ilike.%${busca}%,telefone.ilike.%${busca}%`
+      );
+    }
+
+    if (ordenacao === "antigos") {
+      query = query.order("created_at", { ascending: true });
+    } else if (ordenacao === "nome_asc") {
+      query = query.order("nome", { ascending: true });
+    } else if (ordenacao === "nome_desc") {
+      query = query.order("nome", { ascending: false });
+    } else {
+      query = query.order("created_at", { ascending: false });
+    }
+
+    const resultadoQuery = await query.range(from, to);
+    data = resultadoQuery.data;
+    error = resultadoQuery.error;
+    count =
+      typeof resultadoQuery.count === "number"
+        ? resultadoQuery.count
+        : null;
+  }
 
   if (error) {
     return NextResponse.json(
@@ -465,80 +554,10 @@ export async function GET(request: Request) {
   let totalContatos: number | null =
     typeof count === "number" ? count : null;
 
-  if (!exigeContagemContextual && (!contagemOtimizada || pagina === 1)) {
-    let countQuery = supabaseAdmin
-      .from("contatos")
-      .select("id", { count: "exact", head: true })
-      .eq("empresa_id", usuario.empresa_id);
-
-    if (interesse) {
-      countQuery = countQuery.eq("interesse", interesse);
-    }
-
-    if (classificacoes.length > 0) {
-      countQuery = countQuery.in("classificacao", classificacoes);
-    } else if (statusLead && classificacaoLeadValida(statusLead)) {
-      countQuery = countQuery.eq(
-        "classificacao",
-        normalizarClassificacaoLead(statusLead, "novo")
-      );
-    }
-
-    if (apenasNovos) {
-      countQuery = countQuery.gte(
-        "created_at",
-        new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-      );
-    }
-
-    if (telefoneRevisar === "true") {
-      countQuery = countQuery.eq("telefone_revisar", true);
-    } else if (telefoneRevisar === "false") {
-      countQuery = countQuery.eq("telefone_revisar", false);
-    }
-
-    const { count: countDireto, error: countDiretoError } =
-      await countQuery;
-
-    if (!countDiretoError && typeof countDireto === "number") {
-      totalContatos = countDireto;
-    }
-  }
 
   let contatos = (
     Array.isArray(data) ? data : data ? [data] : []
   ) as ContatoLista[];
-
-  if (contatos.length > 0) {
-    const contatoIds = contatos
-      .map((contato) => String(contato.id || "").trim())
-      .filter(Boolean);
-
-    const { data: interessesData, error: interessesError } = await supabaseAdmin
-      .from("contatos")
-      .select("id, interesse")
-      .eq("empresa_id", usuario.empresa_id)
-      .in("id", contatoIds);
-
-    if (interessesError) {
-      return NextResponse.json(
-        { ok: false, error: interessesError.message },
-        { status: 500 }
-      );
-    }
-
-    const interessesPorContato = new Map(
-      (interessesData || []).map((item) => [
-        String(item.id),
-        String(item.interesse || "").trim() || null,
-      ])
-    );
-
-    contatos = contatos.map((contato) => ({
-      ...contato,
-      interesse: interessesPorContato.get(String(contato.id || "")) ?? null,
-    }));
-  }
 
   if (contatos.length > 0) {
     try {
