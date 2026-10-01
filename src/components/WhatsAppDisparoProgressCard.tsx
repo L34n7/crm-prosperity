@@ -49,7 +49,6 @@ const EVENTO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_REFRESH = "crm:whatsapp-disparo-refresh";
 const EVENTO_PREPARANDO = "crm:whatsapp-disparo-preparando";
 const POLLING_ATIVO_MS = 6000;
-const TERMINAL_DISMISS_MS = 8000;
 const STATUS_ATIVOS = new Set(["preparando", "pendente", "enviando"]);
 
 function inteiro(valor: unknown) {
@@ -133,7 +132,6 @@ export default function WhatsAppDisparoProgressCard() {
   const [preparacoesLocais, setPreparacoesLocais] = useState<PreparacaoLocal[]>(
     []
   );
-  const terminalTimerRef = useRef<number | null>(null);
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
     null
   );
@@ -147,41 +145,45 @@ export default function WhatsAppDisparoProgressCard() {
   }
 
   const aplicarCampanhas = useCallback((lista: CampanhaProgresso[]) => {
-    const ordenadas = [...lista].sort((a, b) => {
-      const criadaA = String(a.created_at || "");
-      const criadaB = String(b.created_at || "");
-      const criadaAMs = Date.parse(criadaA);
-      const criadaBMs = Date.parse(criadaB);
+    const ordenadasAtivas = [...lista]
+      .filter((campanha) => isStatusAtivo(campanha.status))
+      .sort((a, b) => {
+        const criadaA = String(a.created_at || "");
+        const criadaB = String(b.created_at || "");
+        const criadaAMs = Date.parse(criadaA);
+        const criadaBMs = Date.parse(criadaB);
 
-      if (Number.isFinite(criadaAMs) && Number.isFinite(criadaBMs)) {
-        const diferenca = criadaAMs - criadaBMs;
+        if (Number.isFinite(criadaAMs) && Number.isFinite(criadaBMs)) {
+          const diferenca = criadaAMs - criadaBMs;
 
-        if (diferenca !== 0) return diferenca;
+          if (diferenca !== 0) return diferenca;
 
-        if (criadaA !== criadaB) {
-          return criadaA.localeCompare(criadaB, "pt-BR");
+          if (criadaA !== criadaB) {
+            return criadaA.localeCompare(criadaB, "pt-BR");
+          }
+        } else if (Number.isFinite(criadaAMs)) {
+          return -1;
+        } else if (Number.isFinite(criadaBMs)) {
+          return 1;
         }
-      } else if (Number.isFinite(criadaAMs)) {
-        return -1;
-      } else if (Number.isFinite(criadaBMs)) {
-        return 1;
-      }
 
-      return String(a.id || "").localeCompare(String(b.id || ""), "pt-BR");
-    });
+        return String(a.id || "").localeCompare(String(b.id || ""), "pt-BR");
+      });
 
-    setCampanhas(ordenadas);
+    // O card global representa somente campanhas realmente em andamento.
+    // Campanhas concluídas/interrompidas nunca entram como fallback visual.
+    setCampanhas(ordenadasAtivas);
     setPreparacoesLocais((atuais) =>
       atuais.filter(
         (preparacao) =>
-          !ordenadas.some(
+          !lista.some(
             (campanha) =>
               campanha.integracao_whatsapp_id ===
               preparacao.integracao_whatsapp_id
           )
       )
     );
-    emitirAndamento(ordenadas);
+    emitirAndamento(ordenadasAtivas);
   }, []);
 
   const carregarStatus = useCallback(async () => {
@@ -354,29 +356,7 @@ export default function WhatsAppDisparoProgressCard() {
     };
   }, [possuiAtivas, carregarStatus]);
 
-  useEffect(() => {
-    if (terminalTimerRef.current) {
-      window.clearTimeout(terminalTimerRef.current);
-      terminalTimerRef.current = null;
-    }
-
-    if (campanhas.length === 0 || possuiAtivas) return;
-
-    terminalTimerRef.current = window.setTimeout(() => {
-      setCampanhas([]);
-      setExpandido(false);
-      emitirAndamento([]);
-    }, TERMINAL_DISMISS_MS);
-
-    return () => {
-      if (terminalTimerRef.current) {
-        window.clearTimeout(terminalTimerRef.current);
-        terminalTimerRef.current = null;
-      }
-    };
-  }, [campanhas.length, possuiAtivas]);
-
-  const listaVisivel = possuiAtivas ? campanhasAtivasVisiveis : campanhas;
+  const listaVisivel = campanhasAtivasVisiveis;
   const total = listaVisivel.reduce(
     (soma, campanha) => soma + inteiro(campanha.total),
     0
@@ -431,9 +411,7 @@ export default function WhatsAppDisparoProgressCard() {
           <div>
             <strong>Disparos em massa</strong>
             <small>
-              {possuiAtivas
-                ? `${campanhasAtivasVisiveis.length} ${campanhasAtivasVisiveis.length === 1 ? "ativo" : "ativos"}`
-                : "Últimos disparos"}
+              {`${campanhasAtivasVisiveis.length} ${campanhasAtivasVisiveis.length === 1 ? "ativo" : "ativos"}`}
             </small>
           </div>
 
@@ -521,13 +499,7 @@ export default function WhatsAppDisparoProgressCard() {
   return (
     <button
       type="button"
-      className={`${styles.card} ${
-        possuiAtivas
-          ? styles.cardActive
-          : listaVisivel.every(isCampanhaSucesso)
-          ? styles.cardSuccess
-          : styles.cardWarning
-      }`}
+      className={`${styles.card} ${styles.cardActive}`}
       onClick={() => {
         if (
           listaVisivel.length === 1 &&
@@ -554,7 +526,7 @@ export default function WhatsAppDisparoProgressCard() {
               ? ` · ${campanhasAtivasVisiveis.length} ativos`
               : ""}
           </strong>
-          <small>{possuiAtivas ? "Processando" : rotuloStatus(listaVisivel[0])}</small>
+          <small>Processando</small>
         </div>
       </div>
 
