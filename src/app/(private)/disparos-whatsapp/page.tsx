@@ -383,6 +383,11 @@ type CampanhaHistoricoFiltro = {
   erro?: string | null;
   erro_exemplo?: string | null;
   erro_codigo_meta_exemplo?: number | string | null;
+  metadata_json?: {
+    agendamento_chave?: string | null;
+    executar_em?: string | null;
+    [chave: string]: unknown;
+  } | null;
   created_at?: string | null;
   finished_at?: string | null;
   status?: string | null;
@@ -1636,6 +1641,18 @@ function campanhaHistoricoTemProblema(campanha: CampanhaHistoricoFiltro) {
     Number(campanha.total_cancelados || 0) > 0
   );
 }
+
+function campanhaHistoricoFoiAgendada(campanha: CampanhaHistoricoFiltro) {
+  const metadata = campanha.metadata_json;
+
+  if (!metadata || typeof metadata !== "object") return false;
+
+  return Boolean(
+    String(metadata.agendamento_chave || "").trim() ||
+      String(metadata.executar_em || "").trim()
+  );
+}
+
 
 function feedbackErroCampanhaHistorico(
   campanha: CampanhaHistoricoFiltro
@@ -7499,6 +7516,8 @@ export default function DisparosWhatsAppPage() {
                         statusCampanha === "erro" ||
                         statusCampanha.startsWith("pausada_");
                       const comProblema = campanhaHistoricoTemProblema(campanha);
+                      const campanhaAgendada =
+                        campanhaHistoricoFoiAgendada(campanha);
                       const feedbackErro = comProblema
                         ? feedbackErroCampanhaHistorico(campanha)
                         : null;
@@ -7545,22 +7564,54 @@ export default function DisparosWhatsAppPage() {
                               </p>
                             </div>
 
-                            <span
-                              className={styles.resultStatus}
-                              style={
-                                campanhaCancelada ||
-                                campanhaFalhouIntegralmente ||
-                                campanhaInterrompida
-                                  ? {
-                                      border: "1px solid var(--crm-danger-border)",
-                                      color: "var(--crm-danger-text)",
-                                      background: "var(--crm-danger-bg)",
-                                    }
-                                  : undefined
-                              }
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                gap: 8,
+                                flexWrap: "wrap",
+                              }}
                             >
-                              {statusCampanhaHistorico(campanha)}
-                            </span>
+                              {campanhaAgendada ? (
+                                <span
+                                  className={styles.resultStatus}
+                                  title={
+                                    campanha.metadata_json?.executar_em
+                                      ? `Disparo originalmente agendado para ${formatarDataHora(
+                                          String(
+                                            campanha.metadata_json.executar_em
+                                          )
+                                        )}`
+                                      : "Disparo criado a partir de um agendamento"
+                                  }
+                                  style={{
+                                    border: "1px solid var(--crm-primary-border)",
+                                    color: "var(--crm-primary-text)",
+                                    background: "var(--crm-primary-soft)",
+                                  }}
+                                >
+                                  Agendado
+                                </span>
+                              ) : null}
+
+                              <span
+                                className={styles.resultStatus}
+                                style={
+                                  campanhaCancelada ||
+                                  campanhaFalhouIntegralmente ||
+                                  campanhaInterrompida
+                                    ? {
+                                        border: "1px solid var(--crm-danger-border)",
+                                        color: "var(--crm-danger-text)",
+                                        background: "var(--crm-danger-bg)",
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {statusCampanhaHistorico(campanha)}
+                              </span>
+                            </div>
                           </div>
 
                           <div className={styles.massCancelledMetrics}>
