@@ -7188,17 +7188,23 @@ export default function DisparosWhatsAppPage() {
                       const total = Math.max(0, Number(campanha.total_itens || 0));
                       const enviados = Math.max(0, Number(campanha.total_enviados || 0));
                       const falhas = Math.max(0, Number(campanha.total_falhas || 0));
-                      const cancelados = Math.max(
+                      const emAndamento = ["pendente", "enviando"].includes(
+                        String(campanha.status || "").toLowerCase()
+                      );
+                      const canceladosRegistrados = Math.max(
                         0,
                         Number(campanha.total_cancelados || 0)
                       );
+                      const cancelados = emAndamento
+                        ? canceladosRegistrados
+                        : Math.max(
+                            canceladosRegistrados,
+                            total - enviados - falhas
+                          );
                       const integracao = integracoes.find(
                         (item) => item.id === campanha.integracao_whatsapp_id
                       );
                       const comProblema = campanhaHistoricoTemProblema(campanha);
-                      const emAndamento = ["pendente", "enviando"].includes(
-                        String(campanha.status || "").toLowerCase()
-                      );
 
                       return (
                         <button
