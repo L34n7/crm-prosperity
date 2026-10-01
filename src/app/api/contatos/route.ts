@@ -387,26 +387,50 @@ export async function GET(request: Request) {
         ? new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
         : null;
 
-      const idsResultado = await supabaseAdmin.rpc(
-        "selecionar_ids_contatos_disparo_paginados",
-        {
-          p_empresa_id: usuario.empresa_id,
-          p_busca: busca || null,
-          p_origem: origem || null,
-          p_interesse: interesse || null,
-          p_lista_id: listaId || null,
-          p_lista_compartilhada_id: listaCompartilhadaId || null,
-          p_campanha: campanha || null,
-          p_rastreamento_campanha_id: rastreamentoCampanhaId || null,
-          p_disparo_anterior_id: disparoAnteriorId || null,
-          p_classificacoes: classificacoesSeletor,
-          p_novos_desde: novosDesde,
-          p_telefone_revisar: telefoneRevisarSeletor,
-          p_ordenacao: ordenacao,
-          p_offset: from,
-          p_limite: limite,
-        }
-      );
+      const usarSeletorLista =
+        Boolean(listaId) &&
+        !listaCompartilhadaId &&
+        !disparoAnteriorId;
+
+      const idsResultado = usarSeletorLista
+        ? await supabaseAdmin.rpc(
+            "selecionar_ids_contatos_lista_disparo_paginados",
+            {
+              p_empresa_id: usuario.empresa_id,
+              p_lista_id: listaId,
+              p_busca: busca || null,
+              p_origem: origem || null,
+              p_interesse: interesse || null,
+              p_campanha: campanha || null,
+              p_rastreamento_campanha_id: rastreamentoCampanhaId || null,
+              p_classificacoes: classificacoesSeletor,
+              p_novos_desde: novosDesde,
+              p_telefone_revisar: telefoneRevisarSeletor,
+              p_ordenacao: ordenacao,
+              p_offset: from,
+              p_limite: limite,
+            }
+          )
+        : await supabaseAdmin.rpc(
+            "selecionar_ids_contatos_disparo_paginados",
+            {
+              p_empresa_id: usuario.empresa_id,
+              p_busca: busca || null,
+              p_origem: origem || null,
+              p_interesse: interesse || null,
+              p_lista_id: listaId || null,
+              p_lista_compartilhada_id: listaCompartilhadaId || null,
+              p_campanha: campanha || null,
+              p_rastreamento_campanha_id: rastreamentoCampanhaId || null,
+              p_disparo_anterior_id: disparoAnteriorId || null,
+              p_classificacoes: classificacoesSeletor,
+              p_novos_desde: novosDesde,
+              p_telefone_revisar: telefoneRevisarSeletor,
+              p_ordenacao: ordenacao,
+              p_offset: from,
+              p_limite: limite,
+            }
+          );
 
       if (idsResultado.error) {
         return NextResponse.json(
