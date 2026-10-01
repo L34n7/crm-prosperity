@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     perf("WEBHOOK / body lido", inicioPost);
 
-    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+    if (false && MODO_CONTINGENCIA_SUPABASE_ATIVO) {
       // Não tocamos no banco durante a indisponibilidade. O 503 sinaliza à
       // Meta que a entrega deve ser tentada novamente mais tarde.
       return respostaContingenciaSupabase("webhook_whatsapp_meta", {
