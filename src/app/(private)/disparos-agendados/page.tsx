@@ -11,6 +11,7 @@ import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whats
 import styles from "./disparos-agendados.module.css";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
+type FiltroOrigemDisparo = "todos" | "manual" | "agenda" | "fluxo";
 
 const ITENS_POR_PAGINA = 20;
 
@@ -379,6 +380,43 @@ function grupoStatusClass(status: StatusGrupoDisparo) {
   return statusClass(status);
 }
 
+function origemFiltroDisparo(
+  disparo: DisparoAgendado
+): Exclude<FiltroOrigemDisparo, "todos"> | "outros" {
+  const payload = disparo.payload_json || {};
+  const origem = String(payload.origem || "").trim().toLowerCase();
+  const origemNormalizada = String(payload.origem_disparo || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    origem === "manual_agendado" &&
+    Boolean(String(payload.agendamento_grupo_id || "").trim())
+  ) {
+    return "manual";
+  }
+
+  if (
+    disparo.tipo_agendamento === "agenda_automacao" ||
+    origemNormalizada === "agenda" ||
+    origemNormalizada === "lembrete_individual"
+  ) {
+    return "agenda";
+  }
+
+  if (
+    disparo.tipo_agendamento === "disparo_template" &&
+    origem !== "manual_agendado" &&
+    (origemNormalizada === "fluxo" ||
+      Boolean(disparo.fluxo_id) ||
+      Boolean(disparo.no_id))
+  ) {
+    return "fluxo";
+  }
+
+  return "outros";
+}
+
 function grupoEhDisparoManual(grupo: GrupoDisparos) {
   return grupo.itens.some((item) => {
     const payload = item.payload_json || {};
@@ -733,6 +771,8 @@ function DisparosAgendadosPageContent() {
   const [filtroStatus, setFiltroStatus] = useState<StatusDisparo>("todos");
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [filtroCanal, setFiltroCanal] = useState<"todos" | CanalDisparo>("todos");
+  const [filtroOrigem, setFiltroOrigem] =
+    useState<FiltroOrigemDisparo>("todos");
   const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
   const [grupoSelecionado, setGrupoSelecionado] = useState<GrupoDisparos | null>(null);
   const [grupoParaCancelar, setGrupoParaCancelar] = useState<GrupoDisparos | null>(null);
@@ -1339,9 +1379,15 @@ function DisparosAgendadosPageContent() {
       const correspondeCanal =
         filtroCanal === "todos" ||
         grupo.itens.some((item) => obterCanalDisparo(item) === filtroCanal);
-      return correspondeStatus && correspondeCanal;
+      const correspondeOrigem =
+        filtroOrigem === "todos" ||
+        grupo.itens.some(
+          (item) => origemFiltroDisparo(item) === filtroOrigem
+        );
+
+      return correspondeStatus && correspondeCanal && correspondeOrigem;
     });
-  }, [grupos, filtroStatus, filtroCanal]);
+  }, [grupos, filtroStatus, filtroCanal, filtroOrigem]);
 
   const totalPaginas = useMemo(() => {
     return Math.max(1, Math.ceil(gruposFiltrados.length / ITENS_POR_PAGINA));
@@ -1361,7 +1407,7 @@ function DisparosAgendadosPageContent() {
 
   useEffect(() => {
     setPaginaAtual(1);
-  }, [filtroStatus, filtroCanal, disparos]);
+  }, [filtroStatus, filtroCanal, filtroOrigem, disparos]);
 
   useEffect(() => {
     if (disparoParam) {
@@ -1783,6 +1829,22 @@ function DisparosAgendadosPageContent() {
               <option value="fluxo">Fluxo</option>
             </select>
 
+            <select
+              className={styles.input}
+              value={filtroOrigem}
+              onChange={(event) =>
+                setFiltroOrigem(
+                  event.target.value as FiltroOrigemDisparo
+                )
+              }
+              aria-label="Filtrar por origem do agendamento"
+            >
+              <option value="todos">Todas as origens</option>
+              <option value="manual">Disparos Agendados</option>
+              <option value="agenda">Agendamentos</option>
+              <option value="fluxo">Fluxo</option>
+            </select>
+
             <button
               type="button"
               className={styles.primaryButton}
@@ -1851,7 +1913,8 @@ function DisparosAgendadosPageContent() {
 
           <div className={styles.groupsSummary}>
             <span>
-              {grupos.length} {grupos.length === 1 ? "grupo visual" : "grupos visuais"}
+              {gruposFiltrados.length}{" "}
+              {gruposFiltrados.length === 1 ? "grupo visual" : "grupos visuais"}
             </span>
             <span>As métricas acima continuam contabilizando cada automação.</span>
           </div>
