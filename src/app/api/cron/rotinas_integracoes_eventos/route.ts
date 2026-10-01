@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarEventosIntegracoesMapeadas } from "@/lib/rotinas-automacao/runtime-eventos-mapeados";
@@ -18,6 +19,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("rotinas_integracoes_eventos");
+    }
+
     const resultado = await processarEventosIntegracoesMapeadas(limite(request));
     const houveTrabalho = Object.entries(resultado).some(
       ([chave, valor]) => chave !== "erros" && Number(valor || 0) > 0,

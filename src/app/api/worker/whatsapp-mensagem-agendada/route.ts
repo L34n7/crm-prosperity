@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
 import { processarMensagemManualAgendadaPorId } from "@/lib/whatsapp/mensagem-agendada";
@@ -21,6 +22,12 @@ export async function POST(request: Request) {
 
     if (!isValid) {
       return NextResponse.json({ ok: false, error: "Assinatura inválida" }, { status: 401 });
+    }
+
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      // A assinatura QStash já foi validada. Encerramos esta tentativa com
+      // sucesso sem consultar o banco; a pendência será reconciliada depois.
+      return respostaContingenciaSupabase("whatsapp-mensagem-agendada");
     }
 
     const body = JSON.parse(bodyText) as { agendamentoId?: string };

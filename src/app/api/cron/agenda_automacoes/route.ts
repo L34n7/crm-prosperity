@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { processAgendaAutomations } from "@/lib/agendas/automation-runtime";
 import { validarChamadaCron } from "@/lib/cron/auth";
@@ -19,6 +20,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("agenda_automacoes");
+    }
+
     const result = await processAgendaAutomations(limitFromRequest(request));
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

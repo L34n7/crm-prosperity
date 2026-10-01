@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { enfileirarDisparosAgendadosVencidos } from "@/lib/whatsapp/disparo-agendado-fila";
@@ -47,6 +48,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("disparos_agendados");
+    }
+
     const agora = new Date().toISOString();
     const limite = obterLimite(request);
     const [resultado, mensagensManuais] = await Promise.all([

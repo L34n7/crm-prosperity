@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -15,6 +16,10 @@ export async function GET(request: Request) {
   const idadeMinutos = Math.max(60, Number(params.get("idade_minutos") || 1560));
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("atomopay_reconciliar_pix");
+    }
+
     const { data, error } = await supabase.rpc("atomopay_reconciliar_pix_pendentes", {
       p_limite: limite,
       p_idade_minutos: idadeMinutos,

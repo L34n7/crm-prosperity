@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -25,6 +26,10 @@ export async function GET(request: Request) {
   const limite = obterLimite(request);
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("feedback_agendamentos");
+    }
+
     const { data, error } = await getSupabaseAdmin().rpc(
       "processar_feedbacks_agendamentos_pendentes",
       { p_limite: limite }

@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarAlteracoesNomeWhatsappPendentes } from "@/lib/whatsapp/display-name-changes";
@@ -30,6 +31,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("whatsapp_nomes_pendentes");
+    }
+
     const agora = new Date().toISOString();
     const resultado = await processarAlteracoesNomeWhatsappPendentes({
       limite: obterLimite(request),

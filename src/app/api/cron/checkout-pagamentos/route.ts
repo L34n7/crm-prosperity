@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarCheckoutPagamentosExpirados } from "@/lib/automacoes/process-automation-engine-checkout-runtime";
@@ -20,6 +21,10 @@ export async function GET(request: Request) {
     : 50;
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("checkout-pagamentos");
+    }
+
     const reconciliacoes = await processarReconciliacoesCheckoutPendentes(limite);
     const recuperacoes = await processarRecuperacoesCheckoutPendentes(limite);
     const expiracoes = await processarCheckoutPagamentosExpirados(limite);

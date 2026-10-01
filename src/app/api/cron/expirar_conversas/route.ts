@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -34,6 +35,10 @@ export async function GET(request: Request) {
   const limite = obterLimite(request);
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("expirar_conversas");
+    }
+
     const { data, error } = await supabaseAdmin.rpc(
       "processar_conversas_expiradas_24h",
       {

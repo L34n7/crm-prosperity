@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarFilaDisparosWhatsapp } from "@/lib/whatsapp/disparo-fila";
@@ -51,6 +52,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("whatsapp_disparos_fila");
+    }
+
     const resultado = await processarFilaDisparosWhatsapp({
       limite: obterLimite(request),
       apenasSemQstash: true,

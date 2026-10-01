@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarAvisosAssinatura } from "@/lib/assinaturas/processar-avisos";
@@ -7,6 +8,10 @@ export async function GET(request: Request) {
   const auth = validarChamadaCron(request, { exigirVercelCron: true });
   if (!auth.ok) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("assinaturas");
+    }
+
     const afiliados = await sincronizarAfiliadosAssinaturasProsperityPay();
     const avisos = await processarAvisosAssinatura();
     return NextResponse.json({ ok: true, affiliate_sync: afiliados, ...avisos });

@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { processarFilaWebhooksWhatsapp } from "@/lib/whatsapp/webhook-queue";
 
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("processar_webhooks_whatsapp");
+    }
+
     const resultado = await processarFilaWebhooksWhatsapp({
       limite: getLimitFromRequest(request),
     });

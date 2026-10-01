@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarFilaProcessamentoAutoPendentes } from "@/lib/automacoes/process-automation-engine";
@@ -48,6 +49,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("fila_processamento_auto");
+    }
+
     const agora = new Date().toISOString();
     const limite = obterLimite(request);
     const [resultado, recuperacaoFluxos, agentesIa] = await Promise.all([

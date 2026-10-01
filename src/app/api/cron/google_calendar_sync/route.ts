@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import {
   processarFilaGoogleCalendar,
@@ -25,6 +26,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      return respostaContingenciaSupabase("google_calendar_sync");
+    }
+
     const valorLimite = limite(request);
     const notificacoes = await processarIntegracoesPendentesGoogleCalendar(
       Math.min(valorLimite, 20)

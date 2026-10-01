@@ -1,3 +1,4 @@
+import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { after, NextRequest, NextResponse } from "next/server";
 import {
   extractIncomingMessages,
@@ -117,6 +118,15 @@ export async function POST(req: NextRequest) {
     let rawBody = (await req.json()) as WhatsAppWebhookBody;
 
     perf("WEBHOOK / body lido", inicioPost);
+
+    if (MODO_CONTINGENCIA_SUPABASE_ATIVO) {
+      // Não tocamos no banco durante a indisponibilidade. O 503 sinaliza à
+      // Meta que a entrega deve ser tentada novamente mais tarde.
+      return respostaContingenciaSupabase("webhook_whatsapp_meta", {
+        status: 503,
+        retryAfterSegundos: 300,
+      });
+    }
 
     if (rawBody.object !== "whatsapp_business_account") {
       return NextResponse.json(
