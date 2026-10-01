@@ -11,7 +11,7 @@ import { NextResponse } from "next/server";
  * Desative este flag assim que o Supabase estiver estável e faça a reconciliação
  * dos registros pendentes pelas rotinas já existentes.
  */
-export const MODO_CONTINGENCIA_SUPABASE_ATIVO = true;
+export const MODO_CONTINGENCIA_SUPABASE_ATIVO = false;
 
 export function respostaContingenciaSupabase(
   servico: string,
