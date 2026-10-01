@@ -3377,10 +3377,10 @@ export default function DisparosWhatsAppPage() {
             if (
               campanhaRealtime.integracao_whatsapp_id === integracaoId
             ) {
-              setContatosSelecionados([]);
-              setPreviewCusto(null);
-              setQuantidadeAdicionarContatos("");
-              setQuantidadeRemoverContatos("");
+              // Mesmo que o usuário tenha começado a montar uma nova seleção
+              // enquanto a campanha ainda processava, descartamos esse estado
+              // ao finalizar para não reaproveitar contatos com status antigo.
+              limparFormularioDisparo();
               setRefreshContatosNonce((atual) => atual + 1);
               void carregarSaudeMeta(integracaoId);
             }
@@ -3406,6 +3406,7 @@ export default function DisparosWhatsAppPage() {
     integracaoId,
     abaAtiva,
     carregarHistorico,
+    limparFormularioDisparo,
   ]);
 
   useEffect(() => {
