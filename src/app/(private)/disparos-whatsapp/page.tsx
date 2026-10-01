@@ -395,7 +395,15 @@ type TotaisHistorico = {
   falha: number;
 };
 
-type FiltroRelatorioCampanha = "todos" | "enviado" | "entregue" | "falha";
+type FiltroRelatorioCampanha =
+  | "todos"
+  | "enviado"
+  | "entregue"
+  | "lido"
+  | "respondido"
+  | "falha"
+  | "pendente"
+  | "cancelado";
 
 type LinhaRelatorioCampanha = {
   numero?: string | null;
@@ -4136,11 +4144,21 @@ export default function DisparosWhatsAppPage() {
     );
 
     if (filtroRelatorioCampanha !== "todos") {
-      linhas = linhas.filter(
-        (linha) =>
+      linhas = linhas.filter((linha) => {
+        if (filtroRelatorioCampanha === "respondido") {
+          return (
+            Boolean(String(linha.resposta_em || "").trim()) ||
+            String(linha.situacao || "").trim().toLowerCase() ===
+              "respondido" ||
+            Boolean(String(linha.primeira_resposta || "").trim())
+          );
+        }
+
+        return (
           String(linha.status_final || "pendente").toLowerCase() ===
           filtroRelatorioCampanha
-      );
+        );
+      });
     }
 
     const termo = buscaHistorico.trim().toLocaleLowerCase("pt-BR");
@@ -7145,16 +7163,56 @@ export default function DisparosWhatsAppPage() {
                             {relatorioCampanhaDetalhado.totais.entregue}
                           </strong>
                         </button>
-                        <div className={styles.campaignReportMetric}>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "lido"}
+                          title="Filtrar somente registros lidos"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("lido");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "lido"
+                                ? "inset 0 0 0 2px var(--crm-success-text)"
+                                : undefined,
+                          }}
+                        >
                           <span>Lidos</span>
                           <strong>{relatorioCampanhaDetalhado.totais.lido}</strong>
-                        </div>
-                        <div className={styles.campaignReportMetric}>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "respondido"}
+                          title="Filtrar somente registros respondidos"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("respondido");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "respondido"
+                                ? "inset 0 0 0 2px var(--crm-primary-strong)"
+                                : undefined,
+                          }}
+                        >
                           <span>Respondidos</span>
                           <strong>
                             {relatorioCampanhaDetalhado.totais.respondido}
                           </strong>
-                        </div>
+                        </button>
                         <button
                           type="button"
                           className={styles.campaignReportMetric}
@@ -7195,18 +7253,58 @@ export default function DisparosWhatsAppPage() {
                             {relatorioCampanhaDetalhado.totais.falha}
                           </strong>
                         </button>
-                        <div className={styles.campaignReportMetric}>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "pendente"}
+                          title="Filtrar somente registros pendentes"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("pendente");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "pendente"
+                                ? "inset 0 0 0 2px var(--crm-warning-text)"
+                                : undefined,
+                          }}
+                        >
                           <span>Pendentes</span>
                           <strong>
                             {relatorioCampanhaDetalhado.totais.pendente}
                           </strong>
-                        </div>
-                        <div className={styles.campaignReportMetric}>
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.campaignReportMetric}
+                          aria-pressed={filtroRelatorioCampanha === "cancelado"}
+                          title="Filtrar somente registros cancelados"
+                          onClick={() => {
+                            setFiltroRelatorioCampanha("cancelado");
+                            setPaginaRelatorioCampanha(1);
+                          }}
+                          style={{
+                            appearance: "none",
+                            width: "100%",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            boxShadow:
+                              filtroRelatorioCampanha === "cancelado"
+                                ? "inset 0 0 0 2px var(--crm-danger-text)"
+                                : undefined,
+                          }}
+                        >
                           <span>Cancelados</span>
                           <strong>
                             {relatorioCampanhaDetalhado.totais.cancelado}
                           </strong>
-                        </div>
+                        </button>
                       </div>
 
                       <p className={styles.campaignReportCostNote}>
