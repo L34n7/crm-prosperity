@@ -381,6 +381,8 @@ type CampanhaHistoricoFiltro = {
   total_processando?: number | null;
   pausa_motivo?: string | null;
   erro?: string | null;
+  erro_exemplo?: string | null;
+  erro_codigo_meta_exemplo?: number | string | null;
   created_at?: string | null;
   finished_at?: string | null;
   status?: string | null;
@@ -501,7 +503,7 @@ const TEMPO_MAXIMO_LOADING_PREPARACAO_MS = 15_000;
 const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
 const TESTE_CARD_PAGINA_DISPARO_KEY =
   "crm-whatsapp-disparo-page-card-test";
-const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v4";
+const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v5";
 const HISTORICO_CACHE_TTL_MS = 5 * 60 * 1000;
 const HISTORICO_CACHE_MAX_CONSULTAS = 20;
 
@@ -1623,6 +1625,57 @@ function campanhaHistoricoTemProblema(campanha: CampanhaHistoricoFiltro) {
     Number(campanha.total_falhas || 0) > 0 ||
     Number(campanha.total_cancelados || 0) > 0
   );
+}
+
+function feedbackErroCampanhaHistorico(
+  campanha: CampanhaHistoricoFiltro
+) {
+  const status = String(campanha.status || "").trim().toLowerCase();
+  const falhas = Math.max(0, Number(campanha.total_falhas || 0));
+  const motivo = String(
+    campanha.pausa_motivo ||
+      campanha.erro ||
+      campanha.erro_exemplo ||
+      ""
+  ).trim();
+
+  const codigoExemplo = Number(campanha.erro_codigo_meta_exemplo || 0);
+  const codigoTexto = motivo.match(/\b(\d{5,6})\b/)?.[1] || "";
+  const codigo =
+    Number.isFinite(codigoExemplo) && codigoExemplo > 0
+      ? codigoExemplo
+      : codigoTexto
+      ? Number(codigoTexto)
+      : null;
+
+  const descricaoMeta = codigo
+    ? descreverErroMetaWhatsApp(codigo, motivo || null)
+    : null;
+
+  const titulo =
+    status === "cancelada"
+      ? "Disparo em massa cancelado"
+      : status === "concluida" && falhas > 0
+      ? "Campanha concluída com falhas"
+      : status === "erro"
+      ? "Disparo em massa interrompido"
+      : status.startsWith("pausada_")
+      ? "Disparo em massa interrompido"
+      : falhas > 0
+      ? "Falhas durante o disparo"
+      : "Ocorrência no disparo";
+
+  const descricao =
+    motivo ||
+    (falhas > 0
+      ? `${falhas} disparo${falhas === 1 ? "" : "s"} falhou${falhas === 1 ? "" : "ram"} durante o processamento.`
+      : "A campanha foi interrompida antes de concluir todos os envios.");
+
+  return {
+    titulo,
+    descricao,
+    meta: descricaoMeta,
+  };
 }
 
 function timestampRelatorio(valor?: string | null) {
@@ -7206,7 +7259,14 @@ export default function DisparosWhatsAppPage() {
                       const integracao = integracoes.find(
                         (item) => item.id === campanha.integracao_whatsapp_id
                       );
+                      const nomeIntegracao =
+                        integracao?.nome_conexao ||
+                        integracao?.numero ||
+                        "WhatsApp";
                       const comProblema = campanhaHistoricoTemProblema(campanha);
+                      const feedbackErro = comProblema
+                        ? feedbackErroCampanhaHistorico(campanha)
+                        : null;
 
                       return (
                         <button
@@ -7216,7 +7276,7 @@ export default function DisparosWhatsAppPage() {
                             emAndamento
                               ? styles.resultProcessing
                               : comProblema
-                              ? styles.resultError
+                              ? `${styles.resultError} ${styles.resultMassCancelled}`
                               : styles.resultSuccess
                           }`}
                           onClick={() => {
@@ -7229,14 +7289,12 @@ export default function DisparosWhatsAppPage() {
                           <div className={styles.resultCompactHeader}>
                             <div className={styles.resultCompactMain}>
                               <strong className={styles.resultCompactName}>
-                                {nomeCampanhaHistorico(campanha)}
+                                {nomeIntegracao} — {nomeCampanhaHistorico(campanha)}
                               </strong>
                               <p className={styles.resultCompactMeta}>
                                 Template: {campanha.template_nome || "-"}
                                 {" • "}
                                 Categoria: {formatarCategoriaMeta(campanha.template_categoria)}
-                                {" • "}
-                                Integração: {integracao?.nome_conexao || integracao?.numero || "WhatsApp"}
                                 {" • "}
                                 {formatarDataHora(campanha.created_at)}
                               </p>
@@ -7269,6 +7327,46 @@ export default function DisparosWhatsAppPage() {
                               <span>Falhas</span>
                             </div>
                           </div>
+
+                          {feedbackErro ? (
+                            <div className={styles.resultErrorFeedback}>
+                              <strong className={styles.resultErrorTitle}>
+                                {feedbackErro.titulo}
+                              </strong>
+
+                              {feedbackErro.meta ? (
+                                <>
+                                  <p className={styles.resultErrorDescription}>
+                                    <strong>
+                                      {feedbackErro.meta.codigo} · {feedbackErro.meta.nome}
+                                    </strong>
+                                  </p>
+                                  <p className={styles.resultErrorDescription}>
+                                    <strong>O que significa:</strong>{" "}
+                                    {feedbackErro.meta.significado}
+                                  </p>
+                                  <p className={styles.resultErrorDescription}>
+                                    <strong>O que fazer:</strong>{" "}
+                                    {feedbackErro.meta.acao}
+                                  </p>
+                                </>
+                              ) : null}
+
+                              <p className={styles.resultErrorDetail}>
+                                {feedbackErro.descricao}
+                              </p>
+
+                              <p className={styles.resultErrorDetail}>
+                                Foram enviados {enviados} de {total} disparos.
+                                {cancelados > 0
+                                  ? ` ${cancelados} foram cancelados antes do envio.`
+                                  : ""}
+                                {falhas > 0
+                                  ? ` ${falhas} falharam durante o processamento.`
+                                  : ""}
+                              </p>
+                            </div>
+                          ) : null}
 
                           <span className={styles.campaignHistoryCardAction}>
                             Ver relatório da campanha
