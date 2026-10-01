@@ -501,7 +501,7 @@ const TEMPO_MAXIMO_LOADING_PREPARACAO_MS = 15_000;
 const STATUS_CAMPANHAS_ATIVAS = new Set(["pendente", "enviando"]);
 const TESTE_CARD_PAGINA_DISPARO_KEY =
   "crm-whatsapp-disparo-page-card-test";
-const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v3";
+const HISTORICO_CACHE_STORAGE_KEY = "crm:disparos:historico-cache:v4";
 const HISTORICO_CACHE_TTL_MS = 5 * 60 * 1000;
 const HISTORICO_CACHE_MAX_CONSULTAS = 20;
 
@@ -2382,7 +2382,10 @@ export default function DisparosWhatsAppPage() {
             ? lista.find((campanha) => campanha.id === atual.id) || null
             : null;
 
-          if (preferida) return preferida;
+          if (campanhaPreferida) {
+            return preferida;
+          }
+
           if (atualAtualizada) return atualAtualizada;
 
           if (integracaoConsultaId) {
@@ -2392,7 +2395,11 @@ export default function DisparosWhatsAppPage() {
           return lista[0] || null;
         });
 
-        if (lista.length === 0) {
+        if (
+          lista.length === 0 ||
+          (campanhaPreferida &&
+            !lista.some((campanha) => campanha.id === campanhaPreferida))
+        ) {
           setModalCampanhaAberto(false);
         }
       } catch {
@@ -7175,20 +7182,26 @@ export default function DisparosWhatsAppPage() {
                       const falhas = Math.max(0, Number(campanha.total_falhas || 0));
                       const cancelados = Math.max(
                         0,
-                        Number(campanha.total_cancelados || 0) +
-                          Number(campanha.total_pendentes || 0)
+                        Number(campanha.total_cancelados || 0)
                       );
                       const integracao = integracoes.find(
                         (item) => item.id === campanha.integracao_whatsapp_id
                       );
                       const comProblema = campanhaHistoricoTemProblema(campanha);
+                      const emAndamento = ["pendente", "enviando"].includes(
+                        String(campanha.status || "").toLowerCase()
+                      );
 
                       return (
                         <button
                           key={campanha.id}
                           type="button"
                           className={`${styles.resultItem} ${styles.campaignHistoryCard} ${
-                            comProblema ? styles.resultError : styles.resultSuccess
+                            emAndamento
+                              ? styles.resultProcessing
+                              : comProblema
+                              ? styles.resultError
+                              : styles.resultSuccess
                           }`}
                           onClick={() => {
                             setFiltroHistoricoCampanha(campanha.id);
