@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
 import PaymentGatewayModal from "@/components/PaymentGatewayModal";
+import MetaServiceQuotaBadge from "@/components/MetaServiceQuotaBadge";
 import { useHeaderUser } from "@/components/header-user-context";
 import { useHeaderSummary } from "@/components/header-summary-context";
 import { montarWhatsappUrl } from "@/lib/contatos/sistema";
@@ -1020,6 +1021,8 @@ export default function Header({
               <strong>{avisoTokensMensagem}</strong>
             </span>
           ))}
+
+        <MetaServiceQuotaBadge />
 
         {!assinaturaEmAberto &&
           podeExibirSaldoTokensIa &&

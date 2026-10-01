@@ -25,6 +25,7 @@ import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { processCoexistenceWebhookBody } from "@/lib/whatsapp/process-coexistence-webhook";
 import { processTemplateWebhookUpdates } from "@/lib/whatsapp/process-template-webhook";
 import { empresaComRecebimentoWhatsappSuspenso } from "@/lib/whatsapp/inadimplencia";
+import { processarAlertaFranquiaService } from "@/lib/whatsapp/service-quota";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -529,6 +530,16 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             pricingBillable: statusItem.pricingBillable,
             payloadTipo: "status",
             payloadJson: statusItem.rawStatus as Record<string, unknown>,
+          });
+
+          await processarAlertaFranquiaService({
+            empresaId: integration.empresa_id,
+            integracaoWhatsappId: integration.id,
+            numero: integration.numero,
+            nomeConexao: integration.nome_conexao,
+            status: statusItem.status,
+            pricingCategory: statusItem.pricingCategory,
+            pricingType: statusItem.pricingType,
           });
         }
       } catch (attributionError) {

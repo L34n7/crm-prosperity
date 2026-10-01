@@ -446,13 +446,46 @@ export async function updateWhatsAppMessageStatus({
     },
   };
 
+  const agora = new Date().toISOString();
+  const pricingCategory =
+    typeof metadata?.pricing_category === "string" && metadata.pricing_category
+      ? metadata.pricing_category
+      : null;
+  const pricingType =
+    typeof metadata?.pricing_type === "string" && metadata.pricing_type
+      ? metadata.pricing_type
+      : null;
+  const pricingModel =
+    typeof metadata?.pricing_model === "string" && metadata.pricing_model
+      ? metadata.pricing_model
+      : null;
+  const pricingBillable =
+    typeof metadata?.pricing_billable === "boolean"
+      ? metadata.pricing_billable
+      : null;
+
+  const updatePayload: Record<string, unknown> = {
+    status_envio: status,
+    metadata_json: metadataFinal,
+    updated_at: agora,
+  };
+
+  if (pricingCategory !== null) updatePayload.pricing_category = pricingCategory;
+  if (pricingType !== null) updatePayload.pricing_type = pricingType;
+  if (pricingModel !== null) updatePayload.pricing_model = pricingModel;
+  if (pricingBillable !== null) updatePayload.pricing_billable = pricingBillable;
+  if (
+    pricingCategory !== null ||
+    pricingType !== null ||
+    pricingModel !== null ||
+    pricingBillable !== null
+  ) {
+    updatePayload.pricing_apurado_em = agora;
+  }
+
   const { error: updateError } = await supabaseAdmin
     .from("mensagens")
-    .update({
-      status_envio: status,
-      metadata_json: metadataFinal,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq("id", mensagemAtual.id);
 
   if (updateError) {

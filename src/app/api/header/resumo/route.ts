@@ -12,6 +12,7 @@ import {
 import { contarGruposDisparosPendentes } from "@/lib/disparos-agendados/pendentes";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buscarResumoFranquiaServiceEmpresa } from "@/lib/whatsapp/service-quota";
 
 const supabaseAdmin = getSupabaseAdmin();
 const RESUMO_HEADERS = {
@@ -146,6 +147,21 @@ async function buscarResumoTokensIa(empresaId: string) {
   }
 }
 
+async function buscarResumoFranquiaService(params: {
+  empresaId: string;
+  usuarioId: string;
+  isAdmin: boolean;
+}) {
+  try {
+    const resumo = await buscarResumoFranquiaServiceEmpresa(params);
+    return blocoOk(resumo);
+  } catch (error) {
+    return blocoErro(
+      getMensagemErro(error, "Erro ao buscar franquia Service da Meta.")
+    );
+  }
+}
+
 export async function GET() {
   const resultado = await getUsuarioContexto({ sincronizarAssinatura: false });
 
@@ -187,6 +203,7 @@ export async function GET() {
     disparosPendentes,
     feedbackAgendas,
     tokensIa,
+    franquiaServiceMeta,
   ] = await Promise.all([
     buscarResumoNotificacoes(usuario.empresa_id),
     podeVerConversas
@@ -210,6 +227,11 @@ export async function GET() {
       : Promise.resolve(
           blocoErro("Sem permissao para visualizar tokens de IA.", "sem_permissao")
         ),
+    buscarResumoFranquiaService({
+      empresaId: usuario.empresa_id,
+      usuarioId: usuario.id,
+      isAdmin: usuario.is_admin,
+    }),
   ]);
 
   return NextResponse.json(
@@ -224,6 +246,7 @@ export async function GET() {
       disparos_pendentes: disparosPendentes,
       feedback_agendas: feedbackAgendas,
       tokens_ia: tokensIa,
+      whatsapp_service_franquia: franquiaServiceMeta,
     },
     { headers: RESUMO_HEADERS }
   );

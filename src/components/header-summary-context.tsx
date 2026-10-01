@@ -38,6 +38,35 @@ export type HeaderSummarySaldoTokensIa = {
   periodo_inicio?: string;
 };
 
+export type HeaderSummaryFranquiaServiceMeta = {
+  mes: string;
+  total_usado: number;
+  total_limite: number;
+  total_restante: number;
+  percentual: number;
+  nivel_percentual_maximo: number;
+  integracoes: Array<{
+    id: string;
+    nome: string;
+    numero: string;
+    usados: number;
+    limite: number;
+    restantes: number;
+    percentual: number;
+    service_cobrado: number;
+    free_entry_point: number;
+  }>;
+  alerta_pendente: null | {
+    id: string;
+    percentual: number;
+    service_usado: number;
+    service_limite: number;
+    integracao_whatsapp_id: string;
+    numero: string;
+    nome: string;
+  };
+};
+
 type HeaderSummaryContextValue = {
   notificacoes: HeaderSummaryNotificacao[];
   notificacoesNaoLidas: number;
@@ -45,6 +74,7 @@ type HeaderSummaryContextValue = {
   disparosPendentes: number;
   agendamentosFeedbackPendentes: number;
   saldoTokensIa: HeaderSummarySaldoTokensIa | null;
+  franquiaServiceMeta: HeaderSummaryFranquiaServiceMeta | null;
   refreshResumo: (forcarAtualizacao?: boolean) => Promise<void>;
   marcarNotificacaoLidaLocal: (id: string) => void;
   marcarTodasNotificacoesLidasLocal: () => void;
@@ -62,6 +92,7 @@ const HeaderSummaryContext = createContext<HeaderSummaryContextValue>({
   disparosPendentes: 0,
   agendamentosFeedbackPendentes: 0,
   saldoTokensIa: null,
+  franquiaServiceMeta: null,
   refreshResumo: async () => {},
   marcarNotificacaoLidaLocal: () => {},
   marcarTodasNotificacoesLidasLocal: () => {},
@@ -150,6 +181,7 @@ export function HeaderSummaryProvider({
   const conversasNaoLidasTimerRef = useRef<number | null>(null);
   const disparosPendentesTimerRef = useRef<number | null>(null);
   const feedbackAgendasTimerRef = useRef<number | null>(null);
+  const franquiaServiceTimerRef = useRef<number | null>(null);
   const supabaseRealtimeRef = useRef<ReturnType<typeof createClient> | null>(
     null
   );
@@ -164,6 +196,8 @@ export function HeaderSummaryProvider({
     useState(0);
   const [saldoTokensIa, setSaldoTokensIa] =
     useState<HeaderSummarySaldoTokensIa | null>(null);
+  const [franquiaServiceMeta, setFranquiaServiceMeta] =
+    useState<HeaderSummaryFranquiaServiceMeta | null>(null);
   const [contextoRealtime, setContextoRealtime] =
     useState<HeaderSummaryContextoRealtime | null>(null);
 
@@ -227,6 +261,14 @@ export function HeaderSummaryProvider({
         setSaldoTokensIa(json.tokens_ia.data.saldo || null);
       } else if (blocoSemPermissao(json.tokens_ia)) {
         setSaldoTokensIa(null);
+      }
+
+      if (
+        blocoOk<HeaderSummaryFranquiaServiceMeta>(
+          json.whatsapp_service_franquia
+        )
+      ) {
+        setFranquiaServiceMeta(json.whatsapp_service_franquia.data || null);
       }
     } catch {
       // Mantem os ultimos dados bons para nao zerar o header em falhas pontuais.
@@ -517,6 +559,37 @@ export function HeaderSummaryProvider({
       .on(
         "postgres_changes",
         {
+          event: "UPDATE",
+          schema: "public",
+          table: "mensagens",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            pricing_category?: unknown;
+            pricing_type?: unknown;
+          } | null;
+
+          if (
+            row?.pricing_category !== "service" &&
+            row?.pricing_type !== "free_customer_service"
+          ) {
+            return;
+          }
+
+          if (franquiaServiceTimerRef.current) {
+            window.clearTimeout(franquiaServiceTimerRef.current);
+          }
+
+          franquiaServiceTimerRef.current = window.setTimeout(() => {
+            franquiaServiceTimerRef.current = null;
+            void refreshResumo(true);
+          }, REALTIME_CONTADOR_DEBOUNCE_MS);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
           event: "*",
           schema: "public",
           table: "conversas",
@@ -553,6 +626,7 @@ export function HeaderSummaryProvider({
     contextoRealtime?.empresa_id,
     contextoRealtime?.usuario_id,
     agendarAtualizacaoConversasNaoLidas,
+    refreshResumo,
   ]);
 
   useEffect(() => {
@@ -625,6 +699,10 @@ export function HeaderSummaryProvider({
       if (feedbackAgendasTimerRef.current) {
         window.clearTimeout(feedbackAgendasTimerRef.current);
       }
+
+      if (franquiaServiceTimerRef.current) {
+        window.clearTimeout(franquiaServiceTimerRef.current);
+      }
     };
   }, []);
 
@@ -637,6 +715,7 @@ export function HeaderSummaryProvider({
         disparosPendentes,
         agendamentosFeedbackPendentes,
         saldoTokensIa,
+        franquiaServiceMeta,
         refreshResumo,
         marcarNotificacaoLidaLocal,
         marcarTodasNotificacoesLidasLocal,
