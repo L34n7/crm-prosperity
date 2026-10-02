@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidBuyerEmail } from "@/lib/checkout/buyer-validation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   TEXTO_ACEITE_LGPD,
@@ -73,6 +74,10 @@ export async function POST(request: Request) {
 
     if (!email) {
       throw new Error("Email é obrigatório.");
+    }
+
+    if (!isValidBuyerEmail(email)) {
+      throw new Error("Informe um e-mail válido, como nome@exemplo.com.br.");
     }
 
     if (!segmento) {
