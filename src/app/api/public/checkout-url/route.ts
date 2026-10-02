@@ -37,20 +37,6 @@ function obterAffiliateRef(metadata: unknown) {
   return value;
 }
 
-function adicionarAffiliateRef(checkoutUrl: string, affiliateRef: string | null) {
-  if (!affiliateRef) {
-    return checkoutUrl;
-  }
-
-  try {
-    const url = new URL(checkoutUrl);
-    url.searchParams.set("ref", affiliateRef);
-    return url.toString();
-  } catch {
-    const separador = checkoutUrl.includes("?") ? "&" : "?";
-    return `${checkoutUrl}${separador}ref=${encodeURIComponent(affiliateRef)}`;
-  }
-}
 
 function obterCheckoutUrlAtomo(tipoOferta: string | null, planoSlug: PlanoSlug | null) {
   const checkoutPadrao = process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ?? "";
