@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-
-export const maxDuration = 300;
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import {
@@ -8,29 +6,19 @@ import {
   registrarLogAuditoriaSeguro,
 } from "@/lib/auditoria/logs";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  pausarDisparosIntegracaoQstash,
+  publicarDesconexaoIntegracaoQstash,
+} from "@/lib/whatsapp/integracao-desconexao-fila";
+
+export const maxDuration = 60;
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const MAX_TENTATIVAS_DESCONEXAO = 3;
-const MAX_TENTATIVAS_DESCONEXAO_META_JA_REMOVIDA = 3;
-const ERROS_TRANSITORIOS_DESCONEXAO = new Set([
-  "55P03",
-  "57014",
-  "40001",
-  "40P01",
-]);
-
 type ConfirmacaoDesconexao = {
   confirmar_desconexao?: boolean;
   confirmar_desconexao_coex_no_app?: boolean;
-};
-
-type ErroBanco = {
-  code?: string | null;
-  message?: string | null;
-  details?: string | null;
-  hint?: string | null;
 };
 
 type IntegracaoParaDesconexao = {
@@ -49,25 +37,15 @@ type IntegracaoParaDesconexao = {
   config_json?: Record<string, unknown> | null;
 };
 
-function aguardar(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function erroTransitorioDesconexao(error: ErroBanco | null | undefined) {
-  if (ERROS_TRANSITORIOS_DESCONEXAO.has(String(error?.code || ""))) {
-    return true;
-  }
-
-  const texto = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
-
-  return (
-    texto.includes("fetch failed") ||
-    texto.includes("econnreset") ||
-    texto.includes("etimedout") ||
-    texto.includes("socket hang up") ||
-    texto.includes("und_err_socket")
-  );
-}
+type SolicitacaoDesconexao = {
+  job_id: string;
+  backup_id: string | null;
+  posicao_liberada: number | null;
+  integracao_nome: string | null;
+  numero_original: string | null;
+  phone_number_id_original: string | null;
+  ja_enfileirada: boolean;
+};
 
 function objetoJson(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -114,148 +92,14 @@ function metaJaRemoveuIntegracao(integracao: IntegracaoParaDesconexao) {
     saudeConectadaEm
   );
 
-  // PARTNER_REMOVED fica armazenado no config_json como histórico. Se houve
-  // conclusão/sincronização ou uma checagem CONNECTED depois desse evento,
-  // ele não representa mais o estado atual da integração.
-  if (conexaoConfirmadaEm > 0 && (!desconectadoEm || conexaoConfirmadaEm > desconectadoEm)) {
+  if (
+    conexaoConfirmadaEm > 0 &&
+    (!desconectadoEm || conexaoConfirmadaEm > desconectadoEm)
+  ) {
     return false;
   }
 
   return true;
-}
-
-async function integracaoAindaExiste(params: {
-  supabase: ReturnType<typeof getSupabaseAdmin>;
-  integracaoId: string;
-  empresaId: string;
-}) {
-  const { data, error } = await params.supabase
-    .from("integracoes_whatsapp")
-    .select("id")
-    .eq("id", params.integracaoId)
-    .eq("empresa_id", params.empresaId)
-    .eq("provider", "meta_official")
-    .maybeSingle();
-
-  if (error) {
-    console.warn(
-      "[WHATSAPP] Não foi possível reconciliar a integração após conflito de desconexão",
-      {
-        integracaoId: params.integracaoId,
-        codigo: error.code,
-        mensagem: error.message,
-      }
-    );
-    return null;
-  }
-
-  return Boolean(data);
-}
-
-async function executarDesconexaoComRetentativa(params: {
-  supabase: ReturnType<typeof getSupabaseAdmin>;
-  integracaoId: string;
-  empresaId: string;
-  usuarioId: string;
-  metaJaDesconectado: boolean;
-}) {
-  let ultimoErro: ErroBanco | null = null;
-  let tentativasRealizadas = 0;
-  const inicioTotal = Date.now();
-  const maxTentativas = params.metaJaDesconectado
-    ? MAX_TENTATIVAS_DESCONEXAO_META_JA_REMOVIDA
-    : MAX_TENTATIVAS_DESCONEXAO;
-
-  for (let tentativa = 1; tentativa <= maxTentativas; tentativa += 1) {
-    tentativasRealizadas = tentativa;
-
-    if (tentativa > 1) {
-      // Quando a Meta já removeu o parceiro, ainda pode haver um webhook/status
-      // encerrando a atualização local. Damos uma janela curta para esse lock sair
-      // e repetimos a operação atômica sem exigir nova ação do usuário.
-      await aguardar(500 * tentativa);
-    }
-
-    const { data, error } = await params.supabase.rpc(
-      "backup_e_excluir_integracao_whatsapp",
-      {
-        p_integracao_id: params.integracaoId,
-        p_empresa_id: params.empresaId,
-        p_usuario_id: params.usuarioId,
-      }
-    );
-
-    if (!error) {
-      return {
-        backupId: data,
-        error: null,
-        tentativas: tentativa,
-        duracaoMs: Date.now() - inicioTotal,
-        jaRemovida: false,
-      };
-    }
-
-    ultimoErro = error;
-
-    // Se outra tentativa/processo terminou a exclusão enquanto esta requisição
-    // aguardava, o objetivo já foi atingido. DELETE deve ser idempotente.
-    if (String(error.code || "") === "P0002") {
-      const aindaExiste = await integracaoAindaExiste(params);
-      if (aindaExiste === false) {
-        return {
-          backupId: null,
-          error: null,
-          tentativas: tentativa,
-          duracaoMs: Date.now() - inicioTotal,
-          jaRemovida: true,
-        };
-      }
-    }
-
-    if (!erroTransitorioDesconexao(error)) {
-      break;
-    }
-
-    // Statement timeout indica que a limpeza foi grande demais para a janela
-    // atual. Repetir imediatamente a mesma transação só prolonga a requisição
-    // e pode estourar o limite da Vercel.
-    if (String(error.code || "") === "57014") {
-      console.warn("[WHATSAPP] Limpeza excedeu statement_timeout; sem retentativa imediata", {
-        integracaoId: params.integracaoId,
-        tentativa,
-        duracaoMs: Date.now() - inicioTotal,
-      });
-      break;
-    }
-
-    const aindaExiste = await integracaoAindaExiste(params);
-    if (aindaExiste === false) {
-      return {
-        backupId: null,
-        error: null,
-        tentativas: tentativa,
-        duracaoMs: Date.now() - inicioTotal,
-        jaRemovida: true,
-      };
-    }
-
-    console.warn("[WHATSAPP] Conflito transitório ao desconectar integração", {
-      integracaoId: params.integracaoId,
-      tentativa,
-      maxTentativas,
-      codigo: error.code,
-      metaJaDesconectado: params.metaJaDesconectado,
-      duracaoMs: Date.now() - inicioTotal,
-    });
-  }
-
-  return {
-    backupId: null,
-    error: ultimoErro,
-    tentativas: tentativasRealizadas,
-    duracaoMs: Date.now() - inicioTotal,
-    jaRemovida: false,
-  };
 }
 
 export async function DELETE(
@@ -276,7 +120,7 @@ export async function DELETE(
     const bloqueio = bloquearSemPermissao(
       usuario,
       "whatsapp.integracao.configurar",
-      "Você não tem permissão para remover integrações WhatsApp.",
+      "Você não tem permissão para remover integrações WhatsApp."
     );
     if (bloqueio) return bloqueio;
 
@@ -358,72 +202,80 @@ export async function DELETE(
       );
     }
 
-    if (metaJaDesconectado) {
-      console.info(
-        "[WHATSAPP] Meta já removeu a integração; reconciliando limpeza local",
-        {
-          integracaoId: id,
-          empresaId: usuario.empresa_id,
-          status: integracao.status,
-          coexStatus: integracao.coex_status,
-        }
-      );
-    }
+    const { data: solicitacaoData, error: solicitacaoError } =
+      await supabase.rpc("solicitar_desconexao_integracao_whatsapp", {
+        p_integracao_id: id,
+        p_empresa_id: usuario.empresa_id,
+        p_usuario_id: usuario.id,
+        p_meta_ja_desconectado: metaJaDesconectado,
+      });
 
-    const resultadoExclusao = await executarDesconexaoComRetentativa({
-      supabase,
-      integracaoId: id,
-      empresaId: usuario.empresa_id,
-      usuarioId: usuario.id,
-      metaJaDesconectado,
-    });
-
-    if (resultadoExclusao.error) {
-      const transitorio = erroTransitorioDesconexao(resultadoExclusao.error);
-      const codigoErro = String(resultadoExclusao.error.code || "");
-
+    if (solicitacaoError) {
       console.error(
-        "[WHATSAPP] Erro ao criar backup e excluir integração:",
-        {
-          ...resultadoExclusao.error,
-          tentativas: resultadoExclusao.tentativas,
-          transitorio,
-          metaJaDesconectado,
-        }
+        "[WHATSAPP] Erro ao colocar desconexão na fila:",
+        solicitacaoError
       );
-
-      const mensagemErro =
-        codigoErro === "57014"
-          ? "A limpeza desta integração possui um histórico grande e excedeu o tempo limite de processamento. Nenhum dado foi excluído parcialmente."
-          : transitorio
-            ? metaJaDesconectado
-              ? "A Meta já desconectou este número, mas o CRM ainda está finalizando a limpeza local. Tente novamente em alguns segundos."
-              : "A integração está sendo atualizada por outro processo. Aguarde alguns segundos e tente novamente."
-            : "Não foi possível desconectar a integração. Nenhum dado foi excluído.";
 
       return NextResponse.json(
         {
           ok: false,
-          error: mensagemErro,
-          retryable: transitorio,
-          meta_already_disconnected: metaJaDesconectado,
+          error:
+            solicitacaoError.code === "55P03"
+              ? "A integração está sendo atualizada por outro processo. Aguarde alguns segundos e tente novamente."
+              : "Não foi possível iniciar a desconexão da integração.",
+          retryable: ["55P03", "57014", "40001", "40P01"].includes(
+            String(solicitacaoError.code || "")
+          ),
         },
-        { status: transitorio ? 409 : 500 }
+        { status: 409 }
       );
     }
 
-    const backupId = resultadoExclusao.backupId;
+    const solicitacao = (
+      Array.isArray(solicitacaoData)
+        ? solicitacaoData[0] || null
+        : solicitacaoData || null
+    ) as SolicitacaoDesconexao | null;
+
+    if (!solicitacao?.job_id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "A desconexão foi iniciada, mas o job de limpeza não foi criado.",
+        },
+        { status: 500 }
+      );
+    }
+
+    // O bloqueio local e a liberação do slot já aconteceram atomicamente.
+    // A partir daqui nenhuma falha de QStash volta a prender o usuário.
+    const [publicacao] = await Promise.all([
+      publicarDesconexaoIntegracaoQstash(solicitacao.job_id),
+      pausarDisparosIntegracaoQstash(id),
+    ]);
+
+    if (!publicacao.ok) {
+      console.warn(
+        "[WHATSAPP] Desconexão liberada; limpeza seguirá pelo cron fallback:",
+        {
+          jobId: solicitacao.job_id,
+          integracaoId: id,
+          erro: publicacao.erro,
+        }
+      );
+    }
 
     const { count: totalIntegracoesRestantes, error: totalError } =
       await supabase
         .from("integracoes_whatsapp")
         .select("id", { count: "exact", head: true })
         .eq("empresa_id", usuario.empresa_id)
-        .eq("provider", "meta_official");
+        .eq("provider", "meta_official")
+        .neq("status", "desconectada");
 
     if (totalError) {
       console.warn(
-        "[WHATSAPP] Nao foi possivel contar integracoes restantes apos desconexao:",
+        "[WHATSAPP] Não foi possível contar integrações restantes:",
         totalError
       );
     }
@@ -440,41 +292,52 @@ export async function DELETE(
       categoria: "sistema",
       entidade: "integracao_whatsapp",
       entidade_id: id,
-      acao: "integracao_whatsapp_desconectada",
-      descricao: `Integração WhatsApp ${integracao.nome_conexao} desconectada do CRM`,
+      acao: "integracao_whatsapp_desconexao_enfileirada",
+      descricao:
+        `Integração WhatsApp ${integracao.nome_conexao} bloqueada e enviada para limpeza em background`,
       usuario_id: usuario.id,
       usuario_nome: usuario.nome,
       usuario_email: usuario.email,
       antes: integracao,
-      depois: null,
+      depois: {
+        status: "desconectada",
+        posicao: null,
+        limpeza_pendente: true,
+      },
       detalhes: {
-        backup_id: backupId,
+        backup_id: solicitacao.backup_id,
+        job_id: solicitacao.job_id,
+        posicao_liberada: solicitacao.posicao_liberada,
         destino: redirectTo,
-        tentativas: resultadoExclusao.tentativas,
-        duracao_ms: resultadoExclusao.duracaoMs,
         meta_ja_desconectado: metaJaDesconectado,
-        remocao_idempotente: resultadoExclusao.jaRemovida,
+        ja_enfileirada: solicitacao.ja_enfileirada,
+        qstash_publicado: publicacao.ok,
+        qstash_message_id: publicacao.messageId,
+        qstash_erro: publicacao.erro,
       },
       ip: auditMeta.ip,
       user_agent: auditMeta.user_agent,
     });
 
-    return NextResponse.json({
-      ok: true,
-      message: metaJaDesconectado
-        ? "A conexão já estava removida na Meta e foi limpa do CRM com sucesso."
-        : "Integração desconectada com sucesso.",
-      meta_already_disconnected: metaJaDesconectado,
-      already_removed: resultadoExclusao.jaRemovida,
-      redirect_to: redirectTo,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        queued: true,
+        cleanup_job_id: solicitacao.job_id,
+        cleanup_published: publicacao.ok,
+        message:
+          "Integração desconectada do uso do CRM. A limpeza do histórico operacional continuará em segundo plano.",
+        meta_already_disconnected: metaJaDesconectado,
+        redirect_to: redirectTo,
+      },
+      { status: 202 }
+    );
   } catch (error) {
     console.error("[WHATSAPP] Erro inesperado ao desconectar integração:", error);
     return NextResponse.json(
       {
         ok: false,
-        error:
-          "Não foi possível desconectar a integração. Nenhum dado foi excluído.",
+        error: "Não foi possível iniciar a desconexão da integração.",
       },
       { status: 500 }
     );

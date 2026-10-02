@@ -127,9 +127,10 @@ export async function obterLimiteIntegracoesWhatsapp(empresaId: string) {
 }
 
 export async function listarIntegracoesWhatsappDaEmpresa(
-  empresaId: string
+  empresaId: string,
+  options: { incluirDesconectadas?: boolean } = {}
 ): Promise<IntegracaoWhatsappResumo[]> {
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("integracoes_whatsapp")
     .select(
       [
@@ -148,7 +149,13 @@ export async function listarIntegracoesWhatsappDaEmpresa(
       ].join(", ")
     )
     .eq("empresa_id", empresaId)
-    .eq("provider", "meta_official")
+    .eq("provider", "meta_official");
+
+  if (!options.incluirDesconectadas) {
+    query = query.neq("status", "desconectada");
+  }
+
+  const { data, error } = await query
     .order("posicao", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 

@@ -342,7 +342,7 @@ export async function GET(req: NextRequest) {
     }
 
     const consultaPagina = supabaseAdmin.rpc(
-      "buscar_whatsapp_disparo_historico_paginado_v2",
+      "buscar_whatsapp_disparo_historico_paginado_v3",
       {
         p_empresa_id: usuario.empresa_id,
         p_limite: limite + 1,
@@ -357,7 +357,7 @@ export async function GET(req: NextRequest) {
     );
 
     const consultaTotais = incluirTotais
-      ? supabaseAdmin.rpc("contar_whatsapp_disparo_historico_v2", {
+      ? supabaseAdmin.rpc("contar_whatsapp_disparo_historico_v3", {
           p_empresa_id: usuario.empresa_id,
           p_campanha_id: campanhaId || null,
           p_busca: busca || null,
@@ -387,7 +387,7 @@ export async function GET(req: NextRequest) {
       const funcaoHistoricoAusente =
         paginaError.code === "PGRST202" ||
         paginaError.message.includes(
-          "buscar_whatsapp_disparo_historico_paginado_v2"
+          "buscar_whatsapp_disparo_historico_paginado_v3"
         );
 
       return NextResponse.json(

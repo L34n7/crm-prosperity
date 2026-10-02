@@ -68,7 +68,7 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
 
   const { data: integracoes, error: integracoesError } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("id,nome_conexao,numero,posicao")
+    .select("id,nome_conexao,numero,posicao,phone_number_id")
     .eq("empresa_id", params.empresaId)
     .eq("provider", "meta_official")
     .eq("status", "ativa")
@@ -81,18 +81,24 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
     );
   }
 
-  const ids = (integracoes || []).map((item) => item.id);
+  const phoneNumberIds = Array.from(
+    new Set(
+      (integracoes || [])
+        .map((item) => String(item.phone_number_id || "").trim())
+        .filter(Boolean)
+    )
+  );
   let custos: Array<Record<string, any>> = [];
 
-  if (ids.length > 0) {
+  if (phoneNumberIds.length > 0) {
     const { data, error } = await supabaseAdmin
-      .from("whatsapp_custos_mensais_integracao")
+      .from("whatsapp_service_franquia_resumo_mensal")
       .select(
-        "integracao_whatsapp_id,service_gratis,service_cobrado,free_entry_point"
+        "phone_number_id,service_gratis,service_cobrado,free_entry_point"
       )
       .eq("empresa_id", params.empresaId)
       .eq("mes", mes)
-      .in("integracao_whatsapp_id", ids);
+      .in("phone_number_id", phoneNumberIds);
 
     if (error) {
       throw new Error(`Erro ao buscar consumo Service: ${error.message}`);
@@ -101,13 +107,15 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
     custos = (data || []) as Array<Record<string, any>>;
   }
 
-  const custosPorIntegracao = new Map(
-    custos.map((item) => [String(item.integracao_whatsapp_id), item])
+  const custosPorPhoneNumberId = new Map(
+    custos.map((item) => [String(item.phone_number_id), item])
   );
 
   const resumoIntegracoes: ResumoIntegracao[] = (integracoes || []).map(
     (integracao) => {
-      const custo = custosPorIntegracao.get(String(integracao.id));
+      const custo = custosPorPhoneNumberId.get(
+        String(integracao.phone_number_id || "")
+      );
       const usadosRaw = numero(custo?.service_gratis);
       const usados = Math.min(WHATSAPP_SERVICE_FREE_LIMIT, usadosRaw);
       const restantes = Math.max(WHATSAPP_SERVICE_FREE_LIMIT - usados, 0);
@@ -363,6 +371,7 @@ async function enviarEmailAlerta(params: {
 export async function processarAlertaFranquiaService(params: {
   empresaId: string;
   integracaoWhatsappId: string;
+  phoneNumberId: string | null;
   numero: string | null;
   nomeConexao: string | null;
   status: string | null;
@@ -375,11 +384,15 @@ export async function processarAlertaFranquiaService(params: {
     if (params.pricingType !== "free_customer_service") return;
 
     const mes = mesAtual();
+    const phoneNumberId = String(params.phoneNumberId || "").trim();
+
+    if (!phoneNumberId) return;
+
     const { data: consumo, error: consumoError } = await supabaseAdmin
-      .from("whatsapp_custos_mensais_integracao")
+      .from("whatsapp_service_franquia_resumo_mensal")
       .select("service_gratis")
       .eq("empresa_id", params.empresaId)
-      .eq("integracao_whatsapp_id", params.integracaoWhatsappId)
+      .eq("phone_number_id", phoneNumberId)
       .eq("mes", mes)
       .maybeSingle();
 

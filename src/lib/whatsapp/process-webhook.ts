@@ -535,6 +535,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           await processarAlertaFranquiaService({
             empresaId: integration.empresa_id,
             integracaoWhatsappId: integration.id,
+            phoneNumberId: integration.phone_number_id,
             numero: integration.numero,
             nomeConexao: integration.nome_conexao,
             status: statusItem.status,
