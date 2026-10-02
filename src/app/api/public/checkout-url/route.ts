@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { criarSessaoPrefillCheckoutProsperityPay } from "@/lib/prosperity-pay/subscriptions";
 
 const supabase = getSupabaseAdmin();
 
@@ -282,7 +283,7 @@ export async function POST(request: Request) {
 
     const { data: lead, error } = await supabase
       .from("leads_cadastro")
-      .select("id, tipo_oferta, metadata_json")
+      .select("id, nome, email, tipo_oferta, metadata_json")
       .eq("id", leadId)
       .maybeSingle();
 
@@ -310,17 +311,21 @@ export async function POST(request: Request) {
     if (gateway === "prosperity_pay") {
       const checkout = await obterCheckoutProsperityPay(planoSlug, tipoOferta);
       const affiliateRef = obterAffiliateRef(lead.metadata_json);
-      const checkoutUrl = adicionarAffiliateRef(
-        checkout.checkoutUrl,
-        affiliateRef
-      );
+      const prefill = await criarSessaoPrefillCheckoutProsperityPay({
+        offerSlug: checkout.referencia,
+        customerName: String(lead.nome || "").trim(),
+        customerEmail: String(lead.email || "").trim().toLowerCase(),
+        affiliateRef,
+        sourceReference: lead.id,
+      });
 
       return NextResponse.json({
         ok: true,
         gateway,
-        checkout_url: checkoutUrl,
+        checkout_url: prefill.checkout_url,
         checkout_reference: checkout.referencia,
         affiliate_ref: affiliateRef,
+        prefill_expires_at: prefill.expires_at,
       });
     }
 
