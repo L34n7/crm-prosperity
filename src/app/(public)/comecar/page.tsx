@@ -9,6 +9,7 @@ import {
   SEGMENTOS_EMPRESA,
   type SegmentoCodigo,
 } from "@/lib/segmentos/catalogo";
+import { isValidBuyerEmail } from "@/lib/checkout/buyer-validation";
 import LegalDocumentModal, {
   type DocumentoLegalId,
 } from "@/components/legal/LegalDocumentModal";
@@ -120,6 +121,11 @@ export default function ComecarPage() {
 
     if (!nome || !email || !segmento) {
       setErro("Preencha nome, email e segmento da empresa.");
+      return;
+    }
+
+    if (!isValidBuyerEmail(email)) {
+      setErro("Informe um e-mail válido, como nome@exemplo.com.br.");
       return;
     }
 
