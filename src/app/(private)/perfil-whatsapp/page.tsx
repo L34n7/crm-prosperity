@@ -849,7 +849,7 @@ export default function WhatsappPerfilPage() {
       setErroDesconexao("");
 
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 265_000);
+      const timeoutId = window.setTimeout(() => controller.abort(), 45_000);
 
       let response: Response;
 
@@ -888,7 +888,7 @@ export default function WhatsappPerfilPage() {
     } catch (error: unknown) {
       const mensagem =
         error instanceof DOMException && error.name === "AbortError"
-          ? "A desconexão demorou mais que o esperado. Nenhum dado foi excluído parcialmente. Tente novamente em alguns instantes."
+          ? "A solicitação demorou mais que o esperado. Atualize a página antes de tentar novamente, pois a desconexão pode já ter sido iniciada."
           : getErrorMessage(
               error,
               "Não foi possível desconectar a integração."
@@ -2038,12 +2038,17 @@ export default function WhatsappPerfilPage() {
                 serão interrompidos.
               </li>
               <li>
-                Templates sincronizados, disparos pendentes e filas desta
-                conexão serão removidos ou cancelados.
+                O slot deste número será liberado imediatamente para você
+                conectar outro número sem esperar a limpeza terminar.
               </li>
               <li>
-                Fluxos que usam esses templates serão pausados. A seleção do
-                template e suas variáveis serão limpas nos blocos afetados.
+                Templates sincronizados, disparos pendentes e filas desta
+                conexão serão removidos ou cancelados em segundo plano.
+              </li>
+              <li>
+                Os fluxos permanecerão ativos. Nos blocos que usam templates
+                desta integração, apenas a seleção do template e suas variáveis
+                serão limpas durante a etapa de limpeza.
               </li>
               <li>
                 Conversas, contatos, rastreamentos e logs já existentes serão
@@ -2055,16 +2060,18 @@ export default function WhatsappPerfilPage() {
                 remoção acontece somente dentro do CRM.
               </li>
               <li>
-                Você será direcionado ao onboarding e precisará configurar a
-                integração novamente para retomar a operação.
+                Se não houver outro número ativo, você será direcionado ao
+                onboarding. Caso já existam outras integrações, continuará no
+                módulo de perfil normalmente.
               </li>
             </ul>
 
             <div className={styles.backupNotice}>
-              <strong>Backup de segurança</strong>
+              <strong>Backup e limpeza segura</strong>
               <span>
-                Antes da exclusão, o sistema salvará uma cópia interna completa
-                dos dados da integração. Se o backup falhar, nada será apagado.
+                Antes de liberar o número, o sistema salva o estado completo da
+                integração. A limpeza pesada acontece depois, em fila, sem
+                manter o usuário aguardando na tela.
               </span>
             </div>
 
@@ -2121,7 +2128,7 @@ export default function WhatsappPerfilPage() {
               }
             >
               {desconectando
-                ? "Salvando backup e desconectando..."
+                ? "Desconectando e liberando o slot..."
                 : "Confirmar e desconectar"}
             </button>
           </div>
