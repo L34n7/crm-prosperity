@@ -56,6 +56,26 @@ async function signedPost<T>(path: string, body: Record<string, unknown>): Promi
   return data as T;
 }
 
+export async function criarSessaoPrefillCheckoutProsperityPay(params: {
+  offerSlug: string;
+  customerName: string;
+  customerEmail: string;
+  affiliateRef?: string | null;
+  sourceReference?: string | null;
+}) {
+  return signedPost<{
+    ok: boolean;
+    checkout_url: string;
+    expires_at: string;
+  }>("/api/integrations/checkout-prefill", {
+    offerSlug: params.offerSlug,
+    customerName: params.customerName,
+    customerEmail: params.customerEmail,
+    ...(params.affiliateRef ? { affiliateRef: params.affiliateRef } : {}),
+    ...(params.sourceReference ? { sourceReference: params.sourceReference } : {}),
+  });
+}
+
 function obj(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, any>
