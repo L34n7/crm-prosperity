@@ -48,30 +48,23 @@ export async function POST(request: Request) {
       body.eventoId
     );
 
-    const resultadoOk =
-      resultado?.ok === true &&
-      resultado?.processado === true;
-
-    if (!resultadoOk) {
-      console.warn("[QSTASH WORKER] Evento já processado", {
-        eventoId: body.eventoId,
+    if (resultado?.ok === true) {
+      // Se outro worker/cron já concluiu ou travou o mesmo evento, o QStash
+      // deve considerar a entrega concluída e não repetir a chamada.
+      return NextResponse.json({
+        ok: true,
         resultado,
       });
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Webhook processado com erro interno.",
-          resultado,
-        },
-        { status: 500 }
-      );
     }
 
-    return NextResponse.json({
-      ok: true,
-      resultado,
-    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Webhook processado com erro interno.",
+        resultado,
+      },
+      { status: 500 }
+    );
   } catch (error: any) {
     console.error("[QSTASH WORKER] Erro fatal", error);
 

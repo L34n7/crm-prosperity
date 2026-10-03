@@ -13,7 +13,6 @@ import {
 import {
   enfileirarWebhookWhatsapp,
   processarWebhookWhatsappPorId,
-  contarMensagensWebhookNoMesmoSegundo,
 } from "@/lib/whatsapp/webhook-queue";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { qstash } from "@/lib/qstash/client";
@@ -241,85 +240,77 @@ export async function POST(req: NextRequest) {
     });
 
     if (eventoFila.evento?.id && !eventoFila.duplicado) {
-      const limiteQstash = Number(
-        process.env.WHATSAPP_QSTASH_THRESHOLD_MESSAGES_PER_SECOND || 10
-      );
-      const limiteQstashStatuses = Number(
-        process.env.WHATSAPP_QSTASH_THRESHOLD_STATUSES_PER_SECOND || 5
-      );
-
-      const volumeSegundo = await contarMensagensWebhookNoMesmoSegundo(
-        eventoFila.evento.created_at
-      );
-
-      const deveUsarQstash =
+      const eventoId = eventoFila.evento.id;
+      const possuiStatuses = incomingStatuses.length > 0;
+      const possuiCoexistenciaPesada =
         coexistenceItems.historyMessages > 0 ||
         coexistenceItems.historyStates > 0 ||
-        coexistenceItems.contacts > 0 ||
-        (incomingStatuses.length > 0 &&
-          (volumeSegundo.totalStatuses || 0) > limiteQstashStatuses) ||
-        (incomingMessages.length > 0 &&
-          volumeSegundo.totalMensagens > limiteQstash);
+        coexistenceItems.contacts > 0;
+      const loteMensagens = incomingMessages.length > 1;
+
+      // Status de envio/leitura/falha geram rajadas grandes durante disparos.
+      // Eles sempre passam pelo QStash para que o banco receba carga controlada.
+      // Mensagens recebidas comuns continuam no caminho direto para preservar
+      // a baixa latência do atendimento.
+      const deveUsarQstash =
+        possuiStatuses || possuiCoexistenciaPesada || loteMensagens;
 
       if (deveUsarQstash) {
-        const qstashWorkerUrl = process.env.QSTASH_WORKER_URL;
+        const qstashWorkerUrl = String(process.env.QSTASH_WORKER_URL || "").trim();
 
         if (!qstashWorkerUrl) {
-          console.error("[QSTASH] QSTASH_WORKER_URL não configurada.");
-
-          after(async () => {
-            await processarWebhookWhatsappPorId(eventoFila.evento!.id);
-          });
+          console.error(
+            "[QSTASH] QSTASH_WORKER_URL não configurada. Evento permanecerá pendente para o cron de recuperação.",
+            { eventoId }
+          );
         } else {
           try {
             await qstash.publishJSON({
               url: qstashWorkerUrl,
-              body: {
-                eventoId: eventoFila.evento.id,
+              body: { eventoId },
+              retries: 5,
+              timeout: 60,
+              deduplicationId: `whatsapp-webhook-${eventoId}`,
+              flowControl: {
+                key: `whatsapp-webhooks-${process.env.VERCEL_ENV || "production"}`,
+                rate: 10,
+                period: 1,
+                parallelism: 5,
               },
-              retries: 3,
             });
 
-            logOperacional("[QSTASH] Evento publicado por pico de mensagens", {
-              eventoId: eventoFila.evento.id,
-              totalMensagensNoSegundo: volumeSegundo.totalMensagens,
-              totalStatusesNoSegundo: volumeSegundo.totalStatuses,
-              limiteQstash,
-              limiteQstashStatuses,
+            logOperacional("[QSTASH] Evento publicado com controle de fluxo", {
+              eventoId,
+              incomingMessages: incomingMessages.length,
+              incomingStatuses: incomingStatuses.length,
+              coexistenceItems: coexistenceItems.total,
             });
           } catch (error) {
-            console.error("[QSTASH] Erro ao publicar evento. Processando direto:", error);
-
-            after(async () => {
-              await processarWebhookWhatsappPorId(eventoFila.evento!.id);
-            });
+            // O evento já está persistido como pendente. Não fazemos fallback
+            // direto aqui, pois isso recriaria a avalanche que o QStash evita.
+            console.error(
+              "[QSTASH] Falha ao publicar evento. Evento permanecerá pendente para o cron de recuperação:",
+              { eventoId, error }
+            );
           }
         }
       } else {
         after(async () => {
           try {
-            const resultado = await processarWebhookWhatsappPorId(
-              eventoFila.evento!.id
-            );
+            const resultado = await processarWebhookWhatsappPorId(eventoId);
 
             if (resultado.ok && resultado.processado) {
               logOperacional(
-                "[WEBHOOK WHATSAPP] Evento processado direto na Vercel",
+                "[WEBHOOK WHATSAPP] Mensagem recebida processada direto na Vercel",
                 {
-                  eventoId: eventoFila.evento.id,
-                  totalMensagensNoSegundo: volumeSegundo.totalMensagens,
-                  totalStatusesNoSegundo: volumeSegundo.totalStatuses,
-                  limiteQstash,
-                  limiteQstashStatuses,
+                  eventoId,
+                  incomingMessages: incomingMessages.length,
                 }
               );
             } else {
               console.error(
                 "[WEBHOOK WHATSAPP] Evento direto permaneceu sem processamento",
-                {
-                  eventoId: eventoFila.evento.id,
-                  resultado,
-                }
+                { eventoId, resultado }
               );
             }
           } catch (error) {

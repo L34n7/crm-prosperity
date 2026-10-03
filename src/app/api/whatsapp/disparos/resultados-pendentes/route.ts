@@ -17,6 +17,8 @@ type CampanhaResultado = {
   status: string;
   template_nome: string | null;
   total_itens: number | null;
+  total_enviados: number | null;
+  total_processando: number | null;
   total_falhas: number | null;
   total_cancelados: number | null;
   pausa_motivo: string | null;
@@ -108,7 +110,6 @@ export async function GET() {
     const [
       { data: campanhasData, error: campanhasError },
       { data: integracoesData, error: integracoesError },
-      { data: confirmacoesData, error: confirmacoesError },
     ] = await Promise.all([
       supabaseAdmin
         .from("whatsapp_disparo_campanhas")
@@ -120,6 +121,8 @@ export async function GET() {
             "status",
             "template_nome",
             "total_itens",
+            "total_enviados",
+            "total_processando",
             "total_falhas",
             "total_cancelados",
             "pausa_motivo",
@@ -138,9 +141,6 @@ export async function GET() {
         .select("id, nome_conexao, numero")
         .eq("empresa_id", usuario.empresa_id)
         .in("id", acessoIntegracoes.idsPermitidos),
-      supabaseAdmin.rpc("resumir_whatsapp_disparo_confirmacoes", {
-        p_campanha_ids: ids,
-      }),
     ]);
 
     if (campanhasError) {
@@ -155,12 +155,6 @@ export async function GET() {
       );
     }
 
-    if (confirmacoesError) {
-      throw new Error(
-        `Erro ao carregar confirmacoes das campanhas: ${confirmacoesError.message}`
-      );
-    }
-
     const ordem = new Map(ids.map((id, index) => [id, index]));
     const integracoes = new Map<string, IntegracaoResumo>(
       ((integracoesData || []) as unknown as IntegracaoResumo[]).map((item) => [
@@ -168,13 +162,6 @@ export async function GET() {
         item,
       ])
     );
-    const confirmacoes = new Map<string, ConfirmacaoResumo>(
-      ((confirmacoesData || []) as unknown as ConfirmacaoResumo[]).map((item) => [
-        item.campanha_id,
-        item,
-      ])
-    );
-
     const campanhas = ((campanhasData || []) as unknown as CampanhaResultado[])
       .sort(
         (a, b) =>
@@ -183,7 +170,6 @@ export async function GET() {
       )
       .map((campanha) => {
         const integracao = integracoes.get(campanha.integracao_whatsapp_id);
-        const confirmacao = confirmacoes.get(campanha.id);
 
         return {
           id: campanha.id,
@@ -194,12 +180,10 @@ export async function GET() {
           status: campanha.status,
           template_nome: campanha.template_nome,
           total: inteiro(campanha.total_itens),
-          enviados: inteiro(confirmacao?.total_enviados_confirmados),
+          enviados: inteiro(campanha.total_enviados),
           falhas: inteiro(campanha.total_falhas),
           cancelados: inteiro(campanha.total_cancelados),
-          aguardando_confirmacao: inteiro(
-            confirmacao?.total_aguardando_confirmacao
-          ),
+          aguardando_confirmacao: inteiro(campanha.total_processando),
           motivo: campanha.pausa_motivo || campanha.erro || null,
           created_at: campanha.created_at,
           updated_at: campanha.updated_at,

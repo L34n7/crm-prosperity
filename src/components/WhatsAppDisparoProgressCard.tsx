@@ -51,7 +51,7 @@ type PreparacaoLocal = {
 const EVENTO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_REFRESH = "crm:whatsapp-disparo-refresh";
 const EVENTO_PREPARANDO = "crm:whatsapp-disparo-preparando";
-const POLLING_ATIVO_MS = 6000;
+const POLLING_ATIVO_MS = 30_000;
 const TEMPO_EXIBICAO_FINALIZADA_MS = 25_000;
 const CHAVE_FINALIZADAS_EXIBIDAS_PREFIX =
   "crm:whatsapp-disparo-finalizado-exibido:";

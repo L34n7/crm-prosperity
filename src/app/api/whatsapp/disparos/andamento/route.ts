@@ -109,10 +109,12 @@ function mapearCampanha(
 ) {
   const total = inteiro(campanha.total_itens);
   const confirmacao = confirmacoes.get(campanha.id);
-  const enviados = inteiro(confirmacao?.total_enviados_confirmados);
-  const aguardandoConfirmacao = inteiro(
-    confirmacao?.total_aguardando_confirmacao
-  );
+  const enviados = confirmacao
+    ? inteiro(confirmacao.total_enviados_confirmados)
+    : inteiro(campanha.total_enviados);
+  const aguardandoConfirmacao = confirmacao
+    ? inteiro(confirmacao.total_aguardando_confirmacao)
+    : 0;
   const falhas = inteiro(campanha.total_falhas);
   const cancelados = inteiro(campanha.total_cancelados);
   const pendentes = inteiro(campanha.total_pendentes);
@@ -204,6 +206,8 @@ export async function GET(request: NextRequest) {
     const incluirFinalizadasRecentes =
       request.nextUrl.searchParams.get("incluir_finalizadas_recentes")?.trim() ===
       "1";
+    const incluirConfirmacoes =
+      request.nextUrl.searchParams.get("incluir_confirmacoes")?.trim() === "1";
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -323,9 +327,9 @@ export async function GET(request: NextRequest) {
 
     const campanhasAtivasTipadas =
       (campanhasAtivas || []) as CampanhaDisparo[];
-    const confirmacoesAtivas = await buscarConfirmacoesCampanhas(
-      campanhasAtivasTipadas
-    );
+    const confirmacoesAtivas = incluirConfirmacoes
+      ? await buscarConfirmacoesCampanhas(campanhasAtivasTipadas)
+      : new Map<string, ConfirmacaoCampanha>();
     const ativas = campanhasAtivasTipadas.map((campanha) =>
       mapearCampanha(campanha, integracoes, confirmacoesAtivas)
     );
@@ -382,9 +386,9 @@ export async function GET(request: NextRequest) {
 
     const campanhasRecentesTipadas =
       (campanhasRecentes || []) as CampanhaDisparo[];
-    const confirmacoesRecentes = await buscarConfirmacoesCampanhas(
-      campanhasRecentesTipadas
-    );
+    const confirmacoesRecentes = incluirConfirmacoes
+      ? await buscarConfirmacoesCampanhas(campanhasRecentesTipadas)
+      : new Map<string, ConfirmacaoCampanha>();
     const recentes = campanhasRecentesTipadas.map((campanha) =>
       mapearCampanha(campanha, integracoes, confirmacoesRecentes)
     );

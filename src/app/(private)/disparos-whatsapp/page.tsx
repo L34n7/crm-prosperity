@@ -3608,7 +3608,7 @@ export default function DisparosWhatsAppPage() {
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void carregarResultadosConclusao();
-    }, 5_000);
+    }, 30_000);
 
     const aoVoltarParaAba = () => {
       if (document.visibilityState === "visible") {
@@ -3789,7 +3789,7 @@ export default function DisparosWhatsAppPage() {
 
     atualizarCampanhaAtiva();
 
-    const timer = window.setInterval(atualizarCampanhaAtiva, 4 * 1000);
+    const timer = window.setInterval(atualizarCampanhaAtiva, 30 * 1000);
 
     document.addEventListener("visibilitychange", atualizarCampanhaAtiva);
 
