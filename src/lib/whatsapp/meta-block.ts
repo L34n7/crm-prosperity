@@ -82,9 +82,11 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     console.warn("[WHATSAPP META BLOCK] Erro ao buscar conversas:", conversasError);
   }
 
-  const conversaIds = (conversasAtivas || [])
-    .map((item) => item.id)
-    .filter(Boolean);
+  // Pendência financeira não encerra conversas nem protocolos. O recebimento
+  // continua normal; somente a camada automática de saída fica suspensa.
+  const conversaIds = ehPagamento
+    ? []
+    : (conversasAtivas || []).map((item) => item.id).filter(Boolean);
 
   if (conversaIds.length > 0) {
     const { error: conversasUpdateError } = await supabaseAdmin
