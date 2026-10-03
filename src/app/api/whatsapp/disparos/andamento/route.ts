@@ -201,6 +201,9 @@ export async function GET(request: NextRequest) {
       request.nextUrl.searchParams.get("integracao_id")?.trim() || "";
     const escopoEmpresa =
       request.nextUrl.searchParams.get("escopo")?.trim() === "empresa";
+    const incluirFinalizadasRecentes =
+      request.nextUrl.searchParams.get("incluir_finalizadas_recentes")?.trim() ===
+      "1";
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -327,7 +330,7 @@ export async function GET(request: NextRequest) {
       mapearCampanha(campanha, integracoes, confirmacoesAtivas)
     );
 
-    if (ativas.length > 0) {
+    if (ativas.length > 0 && !incluirFinalizadasRecentes) {
       return NextResponse.json({
         ok: true,
         usuario_id: usuario.id,
@@ -386,15 +389,20 @@ export async function GET(request: NextRequest) {
       mapearCampanha(campanha, integracoes, confirmacoesRecentes)
     );
 
+    const campanhasResposta =
+      incluirFinalizadasRecentes && ativas.length > 0
+        ? [...ativas, ...recentes]
+        : recentes;
+
     return NextResponse.json({
       ok: true,
       usuario_id: usuario.id,
       empresa_id: usuario.empresa_id,
       integracao_id: integracaoId || null,
-      bloquear_disparos: false,
+      bloquear_disparos: ativas.length > 0,
       bloqueio_escopo: bloqueioEscopo,
-      campanha: recentes[0] || null,
-      campanhas: recentes,
+      campanha: ativas[0] || recentes[0] || null,
+      campanhas: campanhasResposta,
     });
   } catch (error) {
     return NextResponse.json(
