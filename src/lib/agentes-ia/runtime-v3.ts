@@ -1234,7 +1234,13 @@ function selecionarFerramentasParaModelo(params: {
   agendamentosAtivos: any[];
   preexecutadas: Set<TipoFerramenta>;
 }) {
-  const { ativas, mensagem, estado, preexecutadas } = params;
+  const {
+    ativas,
+    mensagem,
+    estado,
+    agendamentosAtivos,
+    preexecutadas,
+  } = params;
   const selecionadas = new Map<TipoFerramenta, Record<string, unknown>>();
   const texto = normalizarTextoIntencao(mensagem);
   const adicionar = (tipo: TipoFerramenta) => {
@@ -1266,7 +1272,20 @@ function selecionarFerramentasParaModelo(params: {
   const continuacaoAgenda = estadoAgendaEmAndamento && referenciaCurtaAgenda;
   const querCancelar = /\b(cancelar|cancela|desmarcar|desmarca)\b/.test(texto);
   const querRemarcarExplicito = /\b(remarcar|reagendar|mudar o horario|mudar horario|trocar o dia|trocar dia|trocar horario|mudar dia)\b/.test(texto);
-  const querRemarcar = querRemarcarExplicito || (continuacaoAgenda && estadoIndicaReagendamento(estado));
+  const possuiAgendamentoAtivo = agendamentosAtivos.length > 0;
+  const novaReferenciaComAgendamentoAtivo =
+    possuiAgendamentoAtivo &&
+    intencaoAgendaExplicita &&
+    !querCancelar &&
+    (
+      referenciaCurtaAgenda ||
+      /\b(hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
+      /\b\d{1,2}(?::\d{2}|\s*(?:h|hr|hrs|hora|horas))\b/.test(texto)
+    );
+  const querRemarcar =
+    querRemarcarExplicito ||
+    (continuacaoAgenda && estadoIndicaReagendamento(estado)) ||
+    novaReferenciaComAgendamentoAtivo;
   const querAgendar = /\b(agendar|marcar|reservar|confirmo|quero a demo|quero demonstracao)\b/.test(texto) ||
     (continuacaoAgenda && /aguardar escolha|agend|demonstr|reuni/.test(statusAgenda) && /^(sim|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|vamos|fechado|\d{1,2}(?::\d{2})?(?:\s*(?:h|hr|hrs|hora|horas))?)$/.test(texto));
   const querContato = /\b(meus dados|meu cadastro|meu email|meu e-mail|meu telefone|meu contato|quem sou)\b/.test(texto);
@@ -2489,6 +2508,22 @@ function promessaOperacionalNaoExecutada(
       : "criar_agendamento";
   }
 
+  const afirmouRemarcacaoConcluida =
+    /\b(?:remarcad[oa]|reagendad[oa]|alterad[oa]|ajustad[oa])\b/.test(texto) ||
+    /\b(?:ficou|fica|ficara|agora esta)\s+(?:para|na|no|em)\b/.test(texto);
+  const mencionaNovoHorario =
+    /\b(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
+    /\b(?:as\s+)?\d{1,2}(?::\d{2})?\s*(?:h|hr|hrs|hora|horas)?\b/.test(texto);
+
+  if (
+    ctx.agendamentosAtivos.length > 0 &&
+    afirmouRemarcacaoConcluida &&
+    mencionaNovoHorario &&
+    !ferramentaExecutadaComSucesso(ctx, "remarcar_agendamento")
+  ) {
+    return "remarcar_agendamento";
+  }
+
   if (/\b(?:vou|irei)\s+(?:remarcar|reagendar)\b/.test(texto) &&
       !ferramentaExecutadaComSucesso(ctx, "remarcar_agendamento")) {
     return "remarcar_agendamento";
@@ -2617,6 +2652,7 @@ function promptDoAgente(
     "- Nunca diga que algo ficou agendado, marcado, reservado ou confirmado sem sucesso real de criar_agendamento/remarcar_agendamento.",
     "- Nunca prometa uma ação operacional para depois (ex.: 'vou consultar', 'vou verificar', 'vou transferir', 'vou agendar'). Execute a ferramenta no mesmo turno ou peça objetivamente a informação que falta.",
     "- Em reagendamento use remarcar_agendamento; não crie outro. Cancelar/remarcar usam o compromisso ativo do backend, sem UUID inventado.",
+    "- Se o ESTADO OPERACIONAL mostrar agendamento ativo e o cliente pedir outro dia/horário ou escolher uma nova opção de data/hora, trate como reagendamento mesmo que ele não repita as palavras 'remarcar' ou 'reagendar'.",
     "- Transferência usa o destino configurado. mensagem_cliente é enviada ao cliente; nunca use esse campo como anotação interna nem para repetir a pergunta dele.",
     `Memória: ${memoriaCompacta(estado) || "sem fatos relevantes"}`,
     "Em memoria_delta envie SOMENTE novidades: null/[] quando não mudou; proxima_acao com string vazia limpa a ação.",
