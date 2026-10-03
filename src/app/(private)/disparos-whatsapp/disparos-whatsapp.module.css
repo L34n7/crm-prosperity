@@ -4686,3 +4686,26 @@
 .campaignProgressFooter > .campaignProgressMinimize {
   margin-left: auto;
 }
+
+.campaignResultOnceNote {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .campaignProgressFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .campaignProgressFooterLeft {
+    width: 100%;
+  }
+
+  .campaignProgressFooter > .campaignProgressMinimize {
+    width: 100%;
+    margin-left: 0;
+  }
+}
