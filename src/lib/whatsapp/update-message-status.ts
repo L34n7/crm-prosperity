@@ -489,6 +489,7 @@ async function tratarErroMetaPagamento(params: {
         agendamentos_cancelados: 0,
         pendencias_ia_canceladas: 0,
         execucoes_ia_canceladas: 0,
+        jobs_fila_cancelados: 0,
         campanhas_pausadas: 0,
       },
     },
@@ -534,6 +535,7 @@ async function tratarErroMetaPagamento(params: {
     agendamentos_cancelados: resultadoOperacional.agendamentosCancelados,
     pendencias_ia_canceladas: resultadoOperacional.pendenciasIaCanceladas,
     execucoes_ia_canceladas: resultadoOperacional.execucoesIaCanceladas,
+    jobs_fila_cancelados: resultadoOperacional.jobsFilaCancelados,
     campanhas_pausadas: campanhasPausadas,
   };
 
