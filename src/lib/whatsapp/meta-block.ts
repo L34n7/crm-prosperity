@@ -53,6 +53,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
       agendamentosCancelados: 0,
       pendenciasIaCanceladas: 0,
       execucoesIaCanceladas: 0,
+      jobsFilaCancelados: 0,
     };
   }
 
@@ -175,6 +176,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
 
   let pendenciasIaCanceladas = 0;
   let execucoesIaCanceladas = 0;
+  let jobsFilaCancelados = 0;
 
   if (conversaIdsIntegracao.length > 0) {
     const { data: pendenciasIa, error: pendenciasIaError } = await supabaseAdmin
@@ -219,6 +221,31 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
       );
     } else {
       execucoesIaCanceladas = (execucoesIa || []).length;
+    }
+  }
+
+  if (conversaIdsIntegracao.length > 0) {
+    const { data: jobsFila, error: jobsFilaError } = await supabaseAdmin
+      .from("fila_processamento_auto")
+      .update({
+        status: "cancelado",
+        locked_at: null,
+        executed_at: agora,
+        erro: motivoFinal,
+        updated_at: agora,
+      })
+      .eq("empresa_id", empresaId)
+      .in("conversa_id", conversaIdsIntegracao)
+      .in("status", ["pendente", "executando"])
+      .select("id");
+
+    if (jobsFilaError) {
+      console.warn(
+        "[WHATSAPP META BLOCK] Erro ao cancelar fila de processamento automático:",
+        jobsFilaError
+      );
+    } else {
+      jobsFilaCancelados = (jobsFila || []).length;
     }
   }
 
@@ -366,5 +393,6 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     agendamentosCancelados: agendamentosPendentes.length,
     pendenciasIaCanceladas,
     execucoesIaCanceladas,
+    jobsFilaCancelados,
   };
 }
