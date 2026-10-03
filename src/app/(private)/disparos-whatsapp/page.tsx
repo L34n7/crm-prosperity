@@ -2952,29 +2952,75 @@ export default function DisparosWhatsAppPage() {
         params.set("limite", "2000");
         params.set("contagem_otimizada", "true");
 
-        const res = await fetch(`/api/contatos?${params.toString()}`, {
-          cache: "no-store",
-        });
+        let res: Response | null = null;
+        let json: any = null;
+        let ultimoErro: unknown = null;
 
-        const json = await res.json();
+        for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(
+            () => controller.abort(),
+            12_000
+          );
 
-        if (!res.ok) {
-          throw new Error(json.error || "Erro ao carregar contatos.");
+          try {
+            res = await fetch(`/api/contatos?${params.toString()}`, {
+              cache: "no-store",
+              signal: controller.signal,
+            });
+
+            json = await res.json().catch(() => ({}));
+
+            if (res.ok) {
+              ultimoErro = null;
+              break;
+            }
+
+            ultimoErro = new Error(
+              json?.error || `Erro ao carregar contatos (HTTP ${res.status}).`
+            );
+
+            if (res.status < 500 || tentativa === 1) {
+              throw ultimoErro;
+            }
+          } catch (error) {
+            ultimoErro = error;
+
+            if (tentativa === 1) {
+              throw error;
+            }
+          } finally {
+            window.clearTimeout(timeoutId);
+          }
+
+          // Um único retry curto protege a experiência sem transformar
+          // indisponibilidade do banco em avalanche de novas requisições.
+          await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+        }
+
+        if (!res?.ok) {
+          throw (
+            ultimoErro ||
+            new Error("Não foi possível atualizar os contatos agora.")
+          );
         }
 
         if (contatosConsultaAtivaRef.current !== requisicaoId) return;
 
-        const lista = Array.isArray(json.contatos) ? json.contatos : [];
+        const lista = Array.isArray(json?.contatos) ? json.contatos : [];
         setContatos(lista);
-        setTotalContatosDisponiveis(Number(json.total || 0));
+        setTotalContatosDisponiveis(Number(json?.total || 0));
       } catch (error: any) {
         if (contatosConsultaAtivaRef.current !== requisicaoId) return;
 
-        setErro(error?.message || "Erro ao carregar contatos.");
-        if (disparoAnteriorId) {
-          setContatos([]);
-          setTotalContatosDisponiveis(0);
-        }
+        const detalhe =
+          error?.name === "AbortError"
+            ? "A consulta demorou mais que o esperado."
+            : error?.message || "Erro ao carregar contatos.";
+
+        setErro(
+          `Não foi possível atualizar os contatos agora. A lista anterior foi mantida. ${detalhe}`
+        );
       } finally {
         if (contatosConsultaAtivaRef.current === requisicaoId) {
           setLoadingContatos(false);
