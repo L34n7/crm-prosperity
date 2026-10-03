@@ -37,6 +37,7 @@ type CampanhaDisparo = {
   started_at: string | null;
   paused_at: string | null;
   finished_at: string | null;
+  metadata_json: Record<string, unknown> | null;
 };
 
 type IntegracaoResumo = {
@@ -48,6 +49,28 @@ type IntegracaoResumo = {
 function inteiro(valor: unknown) {
   const numero = Number(valor || 0);
   return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
+}
+
+function metadataCampanha(campanha: CampanhaDisparo) {
+  return campanha.metadata_json &&
+    typeof campanha.metadata_json === "object" &&
+    !Array.isArray(campanha.metadata_json)
+    ? campanha.metadata_json
+    : {};
+}
+
+function estadoCooldownMeta(campanha: CampanhaDisparo) {
+  const metadata = metadataCampanha(campanha);
+  const retomarEm = String(metadata.rate_limit_131048_ate || "").trim();
+  const retomarMs = retomarEm ? new Date(retomarEm).getTime() : 0;
+  const aguardando =
+    Number.isFinite(retomarMs) && retomarMs > Date.now();
+
+  return {
+    aguardando,
+    retomarEm: aguardando ? retomarEm : null,
+    codigo: aguardando ? 131048 : null,
+  };
 }
 
 function motivoCampanha(campanha: CampanhaDisparo) {
@@ -87,6 +110,7 @@ function mapearCampanha(
   const integracao = campanha.integracao_whatsapp_id
     ? integracoes.get(campanha.integracao_whatsapp_id) || null
     : null;
+  const cooldownMeta = estadoCooldownMeta(campanha);
 
   return {
     id: campanha.id,
@@ -105,6 +129,9 @@ function mapearCampanha(
     processando,
     processados,
     motivo: motivoCampanha(campanha),
+    aguardando_meta: cooldownMeta.aguardando,
+    aguardando_meta_codigo: cooldownMeta.codigo,
+    aguardando_meta_retomar_em: cooldownMeta.retomarEm,
     created_at: campanha.created_at,
     updated_at: campanha.updated_at,
     started_at: campanha.started_at,
@@ -206,6 +233,7 @@ export async function GET(request: NextRequest) {
       total_cancelados,
       pausa_motivo,
       erro,
+      metadata_json,
       created_at,
       updated_at,
       started_at,
