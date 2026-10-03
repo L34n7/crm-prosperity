@@ -262,7 +262,10 @@ export default function WhatsAppDisparoProgressCard() {
         };
       })
       .filter(
-        (campanha): campanha is CampanhaProgresso => Boolean(campanha)
+        (
+          campanha
+        ): campanha is CampanhaProgresso & { exibir_ate_ms: number } =>
+          campanha !== null
       );
 
     setCampanhasFinalizadasVisiveis((atuais) => {
