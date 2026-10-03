@@ -728,3 +728,28 @@
     text-align: left;
   }
 }
+
+.immediateWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid #fdba74;
+  border-radius: 11px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.immediateWarning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+:global(html[data-theme="dark"]) .immediateWarning {
+  border-color: rgba(251, 146, 60, .45);
+  background: rgba(74, 45, 22, .58);
+  color: #fdba74;
+}
