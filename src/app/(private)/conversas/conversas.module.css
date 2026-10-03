@@ -850,6 +850,7 @@
   top: calc(100% + 8px);
   right: 0;
   width: 260px;
+  max-height: calc(100dvh - 120px);
   background: var(--crm-surface);
   border: 1px solid var(--crm-border);
   border-radius: 16px;
@@ -858,6 +859,27 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--crm-border) transparent;
+  scrollbar-gutter: stable;
+  box-sizing: border-box;
+}
+
+.headerDropdownMenu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.headerDropdownMenu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.headerDropdownMenu::-webkit-scrollbar-thumb {
+  background: var(--crm-border);
+  border-radius: 999px;
 }
 
 .headerDropdownItem,
