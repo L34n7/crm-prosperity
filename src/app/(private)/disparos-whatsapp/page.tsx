@@ -171,6 +171,9 @@ type CampanhaDisparoAndamento = {
   started_at?: string | null;
   paused_at?: string | null;
   finished_at?: string | null;
+  aguardando_meta?: boolean;
+  aguardando_meta_codigo?: number | null;
+  aguardando_meta_retomar_em?: string | null;
 };
 
 type DisparoAndamentoPayload = {
@@ -202,6 +205,7 @@ type CampanhaDisparoRealtimeRow = {
   started_at?: unknown;
   paused_at?: unknown;
   finished_at?: unknown;
+  metadata_json?: unknown;
 };
 
 type ContatoOpcao = {
@@ -1810,6 +1814,19 @@ function campanhaEstaAtiva(campanha?: CampanhaDisparoAndamento | null) {
   return STATUS_CAMPANHAS_ATIVAS.has(String(campanha?.status || ""));
 }
 
+function campanhaAguardandoMeta(
+  campanha?: CampanhaDisparoAndamento | null
+) {
+  if (!campanha?.aguardando_meta) return false;
+
+  const retomarEm = String(
+    campanha.aguardando_meta_retomar_em || ""
+  ).trim();
+  const retomarMs = retomarEm ? new Date(retomarEm).getTime() : 0;
+
+  return Number.isFinite(retomarMs) && retomarMs > Date.now();
+}
+
 function campanhaFoiConcluida(campanha?: CampanhaDisparoAndamento | null) {
   return String(campanha?.status || "") === "concluida";
 }
@@ -1890,6 +1907,13 @@ function normalizarCampanhaRealtime(
   const cancelados = inteiroCampanha(campanha.total_cancelados);
   const pendentes = inteiroCampanha(campanha.total_pendentes);
   const processando = inteiroCampanha(campanha.total_processando);
+  const metadata = objeto(campanha.metadata_json);
+  const retomarEm = String(
+    metadata.rate_limit_131048_ate || ""
+  ).trim();
+  const retomarMs = retomarEm ? new Date(retomarEm).getTime() : 0;
+  const aguardandoMeta =
+    Number.isFinite(retomarMs) && retomarMs > Date.now();
 
   return {
     id,
@@ -1906,6 +1930,9 @@ function normalizarCampanhaRealtime(
     processando,
     processados: Math.min(total, enviados + falhas + cancelados),
     motivo: motivoCampanhaRealtime(campanha),
+    aguardando_meta: aguardandoMeta,
+    aguardando_meta_codigo: aguardandoMeta ? 131048 : null,
+    aguardando_meta_retomar_em: aguardandoMeta ? retomarEm : null,
     created_at: textoCampanha(campanha.created_at),
     updated_at: textoCampanha(campanha.updated_at),
     started_at: textoCampanha(campanha.started_at),
@@ -1931,6 +1958,7 @@ function progressoCampanha(campanha: CampanhaDisparoAndamento) {
 }
 
 function rotuloStatusCampanha(campanha: CampanhaDisparoAndamento) {
+  if (campanhaAguardandoMeta(campanha)) return "Aguardando Meta";
   if (campanhaEstaAtiva(campanha)) return "Processando";
   if (campanhaFoiConcluidaComSucesso(campanha)) return "Concluído";
   if (campanhaFoiConcluida(campanha)) return "Concluído com falhas";
@@ -7953,7 +7981,9 @@ export default function DisparosWhatsAppPage() {
             >
               <Info size={17} aria-hidden="true" />
               <p>
-                {campanhaPaginaAtiva
+                {campanhaAguardandoMeta(campanhaPagina)
+                  ? "Pausa automática temporária após 5 erros consecutivos 131048. Os contatos restantes continuam pendentes e o disparo será retomado automaticamente em até 2 minutos."
+                  : campanhaPaginaAtiva
                   ? "Enviados, falhas e restantes são atualizados conforme a campanha avança. Os totais definitivos são consolidados ao final do processamento."
                   : descricaoCampanhaTerminal(campanhaPagina)}
               </p>
