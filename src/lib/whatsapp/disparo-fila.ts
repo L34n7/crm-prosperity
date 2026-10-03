@@ -31,7 +31,7 @@ export const QSTASH_DISPARO_CHAIN_PENDING = "chain_pending";
 
 const ERRO_META_SPAM_RATE_LIMIT = 131048;
 const LIMITE_CONSECUTIVO_SPAM_RATE_LIMIT = 5;
-const COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS = 5 * 60;
+const COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS = 2 * 60;
 
 type DisparoCampanhaRow = {
   id: string;
