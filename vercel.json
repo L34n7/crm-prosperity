@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/processar_webhooks_whatsapp",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/compactar_webhooks_whatsapp",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

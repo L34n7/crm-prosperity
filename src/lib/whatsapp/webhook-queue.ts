@@ -384,16 +384,23 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
       eventoTravado
     );
 
+    const agora = new Date().toISOString();
+
     await supabaseAdmin
       .from("whatsapp_webhook_eventos")
       .update({
         status: "processado",
-        processed_at: new Date().toISOString(),
+        processed_at: agora,
         resultado_json: resultado || {},
         erro: null,
         locked_at: null,
-        updated_at: new Date().toISOString(),
-        ...(bodyCompactado ? { body_json: bodyCompactado } : {}),
+        updated_at: agora,
+        ...(bodyCompactado
+          ? {
+              body_json: bodyCompactado,
+              compactado_at: agora,
+            }
+          : {}),
       })
       .eq("id", evento.id);
 
@@ -524,7 +531,12 @@ export async function processarFilaWebhooksWhatsapp(
           locked_at: null,
           processed_at: agora,
           updated_at: agora,
-          ...(bodyCompactado ? { body_json: bodyCompactado } : {}),
+          ...(bodyCompactado
+            ? {
+                body_json: bodyCompactado,
+                compactado_at: agora,
+              }
+            : {}),
         })
         .eq("id", eventoReivindicado.id);
 
@@ -682,7 +694,7 @@ export async function compactarWebhooksWhatsappProcessados(
     return { ok: true, pausado: true, compactados: 0 };
   }
 
-  const limite = normalizarInteiro(params.limite, 50, 1, 100);
+  const limite = normalizarInteiro(params.limite, 500, 1, 500);
   const idadeMinimaHoras = normalizarInteiro(
     params.idadeMinimaHoras,
     24,
@@ -698,11 +710,10 @@ export async function compactarWebhooksWhatsappProcessados(
       .from("whatsapp_webhook_eventos")
       .select("id")
       .eq("status", "processado")
+      .is("compactado_at", null)
       .lt("updated_at", antesDe)
-      .or(
-        "resultado_json->>archived_reason.is.null,resultado_json->>archived_reason.neq.retention_compaction"
-      )
       .order("updated_at", { ascending: true })
+      .order("id", { ascending: true })
       .limit(limite);
 
     if (error) {
@@ -718,26 +729,35 @@ export async function compactarWebhooksWhatsappProcessados(
     }
 
     const agora = new Date().toISOString();
-    const { error: updateError } = await supabaseAdmin
-      .from("whatsapp_webhook_eventos")
-      .update({
-        body_json: {
-          archived: true,
-          archived_reason: "retention_compaction",
-          archived_at: agora,
-        },
-        resultado_json: {
-          archived: true,
-          archived_reason: "retention_compaction",
-        },
-        updated_at: agora,
-      })
-      .in("id", ids);
+    let compactados = 0;
 
-    if (updateError) {
-      throw new Error(
-        `Erro ao compactar webhooks processados: ${updateError.message}`
-      );
+    // Evita URLs muito grandes no PostgREST ao compactar centenas de UUIDs.
+    for (let indice = 0; indice < ids.length; indice += 100) {
+      const loteIds = ids.slice(indice, indice + 100);
+      const { error: updateError } = await supabaseAdmin
+        .from("whatsapp_webhook_eventos")
+        .update({
+          body_json: {
+            archived: true,
+            archived_reason: "retention_compaction",
+            archived_at: agora,
+          },
+          resultado_json: {
+            archived: true,
+            archived_reason: "retention_compaction",
+          },
+          compactado_at: agora,
+        })
+        .in("id", loteIds)
+        .is("compactado_at", null);
+
+      if (updateError) {
+        throw new Error(
+          `Erro ao compactar webhooks processados: ${updateError.message}`
+        );
+      }
+
+      compactados += loteIds.length;
     }
 
     registrarSucessoCircuitoSupabase(servico);
@@ -745,7 +765,7 @@ export async function compactarWebhooksWhatsappProcessados(
     return {
       ok: true,
       pausado: false,
-      compactados: ids.length,
+      compactados,
     };
   } catch (error) {
     registrarFalhaCircuitoSupabase(servico, error, {

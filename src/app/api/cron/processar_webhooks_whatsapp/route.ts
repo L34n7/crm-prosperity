@@ -1,9 +1,6 @@
 import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
-import {
-  compactarWebhooksWhatsappProcessados,
-  republicarFilaWebhooksWhatsapp,
-} from "@/lib/whatsapp/webhook-queue";
+import { republicarFilaWebhooksWhatsapp } from "@/lib/whatsapp/webhook-queue";
 
 export const runtime = "nodejs";
 
@@ -39,21 +36,11 @@ export async function GET(request: Request) {
       idadeMinimaSegundos: 90,
     });
 
-    // O cron não vira um segundo worker pesado. Ele apenas republica órfãos
-    // para a fila controlada do QStash. Quando não há nada para recuperar,
-    // usa uma pequena fração da execução para compactar histórico antigo.
-    const compactacao =
-      !recuperacao.pausado && recuperacao.buscados === 0
-        ? await compactarWebhooksWhatsappProcessados({
-            limite: 50,
-            idadeMinimaHoras: 24,
-          })
-        : null;
-
+    // Este cron permanece mínimo: apenas recupera eventos órfãos e os
+    // republica no QStash. A retenção histórica roda em cron separado.
     return NextResponse.json({
       ok: true,
       recuperacao,
-      compactacao,
     });
   } catch (error: any) {
     console.error("[CRON WEBHOOK WHATSAPP] Erro geral:", error);
