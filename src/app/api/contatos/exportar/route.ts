@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as XLSX from "xlsx";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getUsuarioContexto,
@@ -26,14 +27,6 @@ function dataIsoValida(valor: string) {
     data.getUTCMonth() === mes - 1 &&
     data.getUTCDate() === dia
   );
-}
-
-function csvEscape(value: unknown) {
-  const text = String(value ?? "");
-  if (text.includes(",") || text.includes('"') || text.includes("\n")) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
 }
 
 export async function GET(request: Request) {
@@ -450,94 +443,59 @@ export async function GET(request: Request) {
     }
   }
 
+  // A exportação segue exatamente o mesmo layout aceito pelo
+  // modelo oficial de importação para permitir reimportação direta.
   const headers = [
     "nome",
-    "whatsapp_profile_name",
     "telefone",
+    "campo_contato",
     "email",
     "origem",
     "campanha",
-    "campo_contato",
-    "interesse",
     "classificacao",
-    "contato_novo",
-    "integracao_whatsapp",
-    "numero_integracao",
-    "opt_in_whatsapp",
-    "opt_out_whatsapp",
-    "opt_out_geral",
-    "opt_out_marketing",
-    "opt_out_utility",
-    "status_conversa",
-    "protocolo_atual",
-    "resultado_protocolo",
-    "novo_no_inicio_protocolo",
-    "iniciado_com_bot",
-    "finalizado_com_bot",
-    "finalizado_por_tipo",
-    "finalizado_por",
-    "ultimo_atendente",
-    "ultima_mensagem_do_contato",
     "observacoes",
-    "telefone_revisar",
-    "created_at",
-    "updated_at",
   ];
 
-  const rows = contatos.map((contato) =>
-    [
-      contato.nome,
-      contato.whatsapp_profile_name,
-      contato.telefone,
-      contato.email,
-      contato.origem_exibicao,
-      contato.campanha_exibicao,
-      contato.campo_contato,
-      contato.interesse,
-      contato.classificacao,
-      contato.contato_novo ? "sim" : "nao",
-      contato.contexto_integracao_nome,
-      contato.contexto_integracao_numero,
-      contato.opt_in_whatsapp === null ||
-      contato.opt_in_whatsapp === undefined
-        ? ""
-        : contato.opt_in_whatsapp
-          ? "sim"
-          : "nao",
-      contato.whatsapp_opt_out ? "sim" : "nao",
-      contato.whatsapp_opt_out_geral ? "sim" : "nao",
-      contato.whatsapp_opt_out_marketing ? "sim" : "nao",
-      contato.whatsapp_opt_out_utility ? "sim" : "nao",
-      contato.conversa_status,
-      contato.protocolo_atual,
-      contato.protocolo_resultado,
-      contato.contato_novo_no_inicio ? "sim" : "nao",
-      contato.iniciado_com_bot ? "sim" : "nao",
-      contato.finalizado_com_bot === null
-        ? ""
-        : contato.finalizado_com_bot
-          ? "sim"
-          : "nao",
-      contato.finalizado_por_tipo,
-      contato.finalizado_por_usuario_nome,
-      contato.ultimo_atendente_nome,
-      contato.ultima_mensagem_contato_em,
-      contato.observacoes,
-      contato.telefone_revisar ? "sim" : "nao",
-      contato.created_at,
-      contato.updated_at,
-    ]
-      .map(csvEscape)
-      .join(",")
-  );
+  const rows = contatos.map((contato) => [
+    String(contato.nome || ""),
+    String(contato.telefone || ""),
+    String(contato.campo_contato || ""),
+    String(contato.email || ""),
+    String(contato.origem_exibicao || ""),
+    String(contato.campanha_exibicao || ""),
+    String(contato.classificacao || ""),
+    String(contato.observacoes || ""),
+  ]);
 
-  const csv = [headers.join(","), ...rows].join("\n");
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
-  return new NextResponse(csv, {
+  worksheet["!cols"] = [
+    { wch: 32 },
+    { wch: 18 },
+    { wch: 24 },
+    { wch: 34 },
+    { wch: 28 },
+    { wch: 28 },
+    { wch: 18 },
+    { wch: 48 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Contatos");
+
+  const buffer = XLSX.write(workbook, {
+    type: "buffer",
+    bookType: "xlsx",
+  });
+
+  return new NextResponse(buffer, {
     status: 200,
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="contatos-crm.csv"',
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition":
+        'attachment; filename="contatos-crm.xlsx"',
+      "Cache-Control": "private, no-store",
     },
   });
 }
