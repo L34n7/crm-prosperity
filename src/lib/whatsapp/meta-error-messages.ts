@@ -69,6 +69,11 @@ const ERROS_META_WHATSAPP: Record<
     significado: "A conta possui pendência de cobrança ou problema com a forma de pagamento na Meta.",
     acao: "Regularize a cobrança ou o método de pagamento no Gerenciador da Meta.",
   },
+  131044: {
+    nome: "Payment Method Issue",
+    significado: "A Meta não conseguiu processar a cobrança pela forma de pagamento da conta WhatsApp Business.",
+    acao: "Cadastre ou regularize a forma de pagamento no Gerenciador da Meta.",
+  },
   131048: {
     nome: "Spam Rate Limit Hit",
     significado: "A Meta limitou temporariamente o número remetente por sinais de spam ou baixa aceitação dos envios.",
