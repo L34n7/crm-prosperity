@@ -2076,6 +2076,14 @@
   max-width: 720px;
 }
 
+.listManagerError {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 14px;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+}
+
 .listManagerSection {
   display: flex;
   flex-direction: column;
