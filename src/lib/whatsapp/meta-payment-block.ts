@@ -20,6 +20,7 @@ export type MetaPaymentBlockState = {
     agendamentos_cancelados: number;
     pendencias_ia_canceladas: number;
     execucoes_ia_canceladas: number;
+    jobs_fila_cancelados: number;
     campanhas_pausadas: number;
   };
 };
@@ -66,6 +67,7 @@ export function lerBloqueioFinanceiroMeta(
       agendamentos_cancelados: Number(pausas.agendamentos_cancelados || 0),
       pendencias_ia_canceladas: Number(pausas.pendencias_ia_canceladas || 0),
       execucoes_ia_canceladas: Number(pausas.execucoes_ia_canceladas || 0),
+      jobs_fila_cancelados: Number(pausas.jobs_fila_cancelados || 0),
       campanhas_pausadas: Number(pausas.campanhas_pausadas || 0),
     },
   };
