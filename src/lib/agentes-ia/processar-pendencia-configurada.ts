@@ -1,3 +1,5 @@
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buscarBloqueioFinanceiroMetaConversa } from "@/lib/whatsapp/meta-payment-block";
 import { assumirConversaParaPendenciaAgenteIa } from "./estado-atendimento-conversa";
 import { processarPoliticaHorarioAtendimento } from "./politica-horario-atendimento";
 import { processarPoliticaAgendaPendencia } from "./politica-agenda";
@@ -7,6 +9,39 @@ export async function processarPendenciaAgenteIa(
   pendenciaId: string,
   options: { forcar?: boolean } = {}
 ) {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data: pendencia } = await supabaseAdmin
+    .from("agente_ia_pendencias")
+    .select("empresa_id, conversa_id")
+    .eq("id", pendenciaId)
+    .maybeSingle();
+
+  if (pendencia?.empresa_id && pendencia?.conversa_id) {
+    const bloqueio = await buscarBloqueioFinanceiroMetaConversa({
+      empresaId: pendencia.empresa_id,
+      conversaId: pendencia.conversa_id,
+    });
+
+    if (bloqueio?.ativo) {
+      await supabaseAdmin
+        .from("agente_ia_pendencias")
+        .update({
+          status: "cancelado",
+          erro: "Agente de IA pausado por pendência financeira na Meta.",
+          locked_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pendenciaId)
+        .in("status", ["pendente", "processando"]);
+
+      return {
+        ok: true,
+        processado: false,
+        runtime: "pagamento_meta_pendente",
+      };
+    }
+  }
+
   const politicaHorario = await processarPoliticaHorarioAtendimento(pendenciaId);
   if (politicaHorario.tratado) {
     return politicaHorario.resultado || {
