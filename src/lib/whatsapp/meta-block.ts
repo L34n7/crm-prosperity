@@ -22,7 +22,8 @@ export const WHATSAPP_META_BLOCK_CUSTOMER_ACTION =
 
 type TipoBloqueioOperacional =
   | "conta_meta_bloqueada"
-  | "pagamento_meta_pendente";
+  | "pagamento_meta_pendente"
+  | "limite_service_atingido";
 
 type BloquearWhatsappMetaParams = {
   empresaId: string;
@@ -59,17 +60,25 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
 
   const agora = new Date().toISOString();
   const ehPagamento = tipoBloqueio === "pagamento_meta_pendente";
+  const ehLimiteService = tipoBloqueio === "limite_service_atingido";
+  const bloqueioNaoDestrutivo = ehPagamento || ehLimiteService;
   const motivoCancelamento = ehPagamento
     ? "pagamento_meta_pendente"
-    : "whatsapp_meta_bloqueado";
+    : ehLimiteService
+      ? "limite_meta_service_atingido"
+      : "whatsapp_meta_bloqueado";
   const tipoMensagemSistema = ehPagamento
     ? "whatsapp_meta_pagamento_pendente"
-    : "whatsapp_meta_bloqueado";
+    : ehLimiteService
+      ? "whatsapp_meta_service_limite_atingido"
+      : "whatsapp_meta_bloqueado";
   const motivoFinal =
     motivo ||
     (ehPagamento
       ? "A Meta recusou o envio por pendência financeira. As automações vinculadas a este número foram interrompidas pelo CRM até a regularização."
-      : "Conta WhatsApp Business bloqueada/desativada pela Meta. Recursos de WhatsApp interrompidos pelo CRM.");
+      : ehLimiteService
+        ? "O limite mensal configurado para Meta Service foi atingido. Fluxos e agentes de IA vinculados a este número foram pausados pelo CRM até o próximo ciclo ou alteração do limite."
+        : "Conta WhatsApp Business bloqueada/desativada pela Meta. Recursos de WhatsApp interrompidos pelo CRM.");
 
   const { data: conversasAtivas, error: conversasError } = await supabaseAdmin
     .from("conversas")
@@ -82,9 +91,10 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     console.warn("[WHATSAPP META BLOCK] Erro ao buscar conversas:", conversasError);
   }
 
-  // Pendência financeira não encerra conversas nem protocolos. O recebimento
-  // continua normal; somente a camada automática de saída fica suspensa.
-  const conversaIds = ehPagamento
+  // Pendência financeira e limite de Service não encerram conversas nem protocolos.
+  // O recebimento e o atendimento humano continuam normais; somente a camada
+  // automática de saída fica suspensa.
+  const conversaIds = bloqueioNaoDestrutivo
     ? []
     : (conversasAtivas || []).map((item) => item.id).filter(Boolean);
 

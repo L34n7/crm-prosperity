@@ -75,7 +75,18 @@ export type HeaderSummaryFranquiaServiceMeta = {
     restantes: number;
     percentual: number;
     service_cobrado: number;
+    service_total_mes: number;
     free_entry_point: number;
+    pausar_automacoes: boolean;
+    limite_extra: number;
+    limite_total_automacoes: number;
+    restante_ate_pausa: number | null;
+    bloqueado_por_limite: boolean;
+    bloqueado_mes: string | null;
+    bloqueado_em: string | null;
+    custo_extra_estimado_brl_min: number | null;
+    custo_extra_estimado_brl_max: number | null;
+    tarifa_service_brl_estimada: number | null;
   }>;
   alerta_pendente: null | {
     id: string;

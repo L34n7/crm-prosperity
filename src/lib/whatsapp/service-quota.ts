@@ -1,5 +1,7 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { aplicarBloqueioOperacionalWhatsappMeta } from "@/lib/whatsapp/meta-block";
+import { USD_BRL_EXCHANGE_RATE } from "@/lib/whatsapp/pricing";
 
 const supabaseAdmin = getSupabaseAdmin();
 const resend = process.env.RESEND_API_KEY
@@ -18,7 +20,18 @@ type ResumoIntegracao = {
   restantes: number;
   percentual: number;
   service_cobrado: number;
+  service_total_mes: number;
   free_entry_point: number;
+  pausar_automacoes: boolean;
+  limite_extra: number;
+  limite_total_automacoes: number;
+  restante_ate_pausa: number | null;
+  bloqueado_por_limite: boolean;
+  bloqueado_mes: string | null;
+  bloqueado_em: string | null;
+  custo_extra_estimado_brl_min: number | null;
+  custo_extra_estimado_brl_max: number | null;
+  tarifa_service_brl_estimada: number | null;
 };
 
 type AlertaPendente = {
@@ -91,6 +104,50 @@ function percentual(usados: number, limite: number) {
   return Number(Math.min(100, (usados / limite) * 100).toFixed(1));
 }
 
+function valorMonetario(valor: number) {
+  return Number(Math.max(0, valor).toFixed(2));
+}
+
+async function buscarTarifaServiceBrasilBrl() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_rate_cards")
+    .select("moeda,valor_unitario")
+    .eq("pais", "BR")
+    .eq("categoria", "service")
+    .lte("vigencia_inicio", hoje)
+    .or(`vigencia_fim.is.null,vigencia_fim.gte.${hoje}`)
+    .order("vigencia_inicio", { ascending: false })
+    .order("faixa_min", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const tarifa = numero(data.valor_unitario);
+  if (tarifa <= 0) return null;
+
+  const moeda = String(data.moeda || "").toUpperCase();
+  if (moeda === "BRL") return tarifa;
+  if (moeda === "USD") return tarifa * USD_BRL_EXCHANGE_RATE;
+  return null;
+}
+
+function estimarCustoExtra(limiteExtra: number, tarifaBrl: number | null) {
+  if (limiteExtra <= 0 || !tarifaBrl || tarifaBrl <= 0) {
+    return { minimo: null, maximo: null };
+  }
+
+  const centro = limiteExtra * tarifaBrl;
+
+  // Faixa de ±5% para deixar claro que o valor em reais é uma estimativa,
+  // pois câmbio e tarifação efetiva da Meta podem variar.
+  return {
+    minimo: valorMonetario(centro * 0.95),
+    maximo: valorMonetario(centro * 1.05),
+  };
+}
+
 export async function buscarResumoFranquiaServiceEmpresa(params: {
   empresaId: string;
   usuarioId?: string | null;
@@ -144,6 +201,32 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
     custos.map((item) => [String(item.phone_number_id), item])
   );
 
+  const integracaoIds = (integracoes || []).map((item) => String(item.id));
+  const { data: configuracoes, error: configuracoesError } =
+    integracaoIds.length > 0
+      ? await supabaseAdmin
+          .from("whatsapp_service_automacao_limites")
+          .select(
+            "integracao_whatsapp_id,pausar_automacoes,limite_extra,bloqueado_mes,bloqueado_em"
+          )
+          .eq("empresa_id", params.empresaId)
+          .in("integracao_whatsapp_id", integracaoIds)
+      : { data: [], error: null };
+
+  if (configuracoesError) {
+    throw new Error(
+      `Erro ao buscar configuração de limite Service: ${configuracoesError.message}`
+    );
+  }
+
+  const configuracaoPorIntegracao = new Map(
+    (configuracoes || []).map((item) => [
+      String(item.integracao_whatsapp_id),
+      item,
+    ])
+  );
+  const tarifaServiceBrasilBrl = await buscarTarifaServiceBrasilBrl();
+
   const resumoIntegracoes: ResumoIntegracao[] = (integracoes || []).map(
     (integracao) => {
       const custo = custosPorPhoneNumberId.get(
@@ -151,7 +234,23 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
       );
       const usadosRaw = numero(custo?.service_gratis);
       const usados = Math.min(WHATSAPP_SERVICE_FREE_LIMIT, usadosRaw);
+      const serviceCobrado = numero(custo?.service_cobrado);
+      const serviceTotalMes = usados + serviceCobrado;
       const restantes = Math.max(WHATSAPP_SERVICE_FREE_LIMIT - usados, 0);
+      const configuracao = configuracaoPorIntegracao.get(String(integracao.id));
+      const pausarAutomacoes = configuracao?.pausar_automacoes === true;
+      const limiteExtra = Math.max(0, numero(configuracao?.limite_extra));
+      const limiteTotalAutomacoes = WHATSAPP_SERVICE_FREE_LIMIT + limiteExtra;
+      const bloqueadoMes = configuracao?.bloqueado_mes
+        ? String(configuracao.bloqueado_mes)
+        : null;
+      const bloqueadoPorLimite =
+        pausarAutomacoes && bloqueadoMes === mes;
+      const numeroLimpo = String(integracao.numero || "").replace(/\D/g, "");
+      const tarifaBrl = numeroLimpo.startsWith("55")
+        ? tarifaServiceBrasilBrl
+        : null;
+      const custoExtra = estimarCustoExtra(limiteExtra, tarifaBrl);
 
       return {
         id: String(integracao.id),
@@ -161,8 +260,25 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
         limite: WHATSAPP_SERVICE_FREE_LIMIT,
         restantes,
         percentual: percentual(usados, WHATSAPP_SERVICE_FREE_LIMIT),
-        service_cobrado: numero(custo?.service_cobrado),
+        service_cobrado: serviceCobrado,
+        service_total_mes: serviceTotalMes,
         free_entry_point: numero(custo?.free_entry_point),
+        pausar_automacoes: pausarAutomacoes,
+        limite_extra: limiteExtra,
+        limite_total_automacoes: limiteTotalAutomacoes,
+        restante_ate_pausa: pausarAutomacoes
+          ? Math.max(limiteTotalAutomacoes - serviceTotalMes, 0)
+          : null,
+        bloqueado_por_limite: bloqueadoPorLimite,
+        bloqueado_mes: bloqueadoMes,
+        bloqueado_em: configuracao?.bloqueado_em
+          ? String(configuracao.bloqueado_em)
+          : null,
+        custo_extra_estimado_brl_min: custoExtra.minimo,
+        custo_extra_estimado_brl_max: custoExtra.maximo,
+        tarifa_service_brl_estimada: tarifaBrl
+          ? Number(tarifaBrl.toFixed(8))
+          : null,
       };
     }
   );
@@ -248,6 +364,189 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
     nivel_percentual_maximo: nivelPercentualMaximo,
     integracoes: resumoIntegracoes,
     alerta_pendente: alertaPendente,
+  };
+}
+
+export async function buscarBloqueioLimiteServiceConversa(params: {
+  empresaId: string;
+  conversaId: string;
+  integracaoId?: string | null;
+}) {
+  let integracaoId = String(params.integracaoId || "").trim();
+
+  if (!integracaoId) {
+    const { data: conversa, error } = await supabaseAdmin
+      .from("conversas")
+      .select("integracao_whatsapp_id")
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.conversaId)
+      .maybeSingle();
+
+    if (error || !conversa?.integracao_whatsapp_id) return null;
+    integracaoId = String(conversa.integracao_whatsapp_id);
+  }
+
+  const { data: configuracao, error } = await supabaseAdmin
+    .from("whatsapp_service_automacao_limites")
+    .select(
+      "pausar_automacoes,limite_extra,bloqueado_mes,bloqueado_em"
+    )
+    .eq("empresa_id", params.empresaId)
+    .eq("integracao_whatsapp_id", integracaoId)
+    .maybeSingle();
+
+  if (error || configuracao?.pausar_automacoes !== true) return null;
+
+  const timezone = await buscarTimezoneEmpresa(params.empresaId);
+  const mes = mesAtual(timezone);
+
+  if (String(configuracao.bloqueado_mes || "") !== mes) return null;
+
+  return {
+    ativo: true,
+    integracaoId,
+    mes,
+    limiteExtra: Math.max(0, numero(configuracao.limite_extra)),
+    limiteTotal:
+      WHATSAPP_SERVICE_FREE_LIMIT +
+      Math.max(0, numero(configuracao.limite_extra)),
+    bloqueadoEm: configuracao.bloqueado_em
+      ? String(configuracao.bloqueado_em)
+      : null,
+  };
+}
+
+export async function avaliarLimiteAutomacoesService(params: {
+  empresaId: string;
+  integracaoWhatsappId: string;
+  phoneNumberId: string | null;
+}) {
+  const phoneNumberId = String(params.phoneNumberId || "").trim();
+
+  if (!phoneNumberId) {
+    return { ativo: false, bloqueado: false, motivo: "sem_phone_number_id" };
+  }
+
+  const { data: configuracao, error: configuracaoError } = await supabaseAdmin
+    .from("whatsapp_service_automacao_limites")
+    .select("pausar_automacoes,limite_extra,bloqueado_mes")
+    .eq("empresa_id", params.empresaId)
+    .eq("integracao_whatsapp_id", params.integracaoWhatsappId)
+    .maybeSingle();
+
+  if (configuracaoError) {
+    throw new Error(
+      `Erro ao consultar configuração de pausa Service: ${configuracaoError.message}`
+    );
+  }
+
+  if (configuracao?.pausar_automacoes !== true) {
+    return { ativo: false, bloqueado: false, motivo: "configuracao_desativada" };
+  }
+
+  const timezone = await buscarTimezoneEmpresa(params.empresaId);
+  const mes = mesAtual(timezone);
+  const limiteExtra = Math.max(0, numero(configuracao.limite_extra));
+  const limiteTotal = WHATSAPP_SERVICE_FREE_LIMIT + limiteExtra;
+
+  const { data: consumo, error: consumoError } = await supabaseAdmin
+    .from("whatsapp_service_franquia_resumo_mensal")
+    .select("service_gratis,service_cobrado")
+    .eq("empresa_id", params.empresaId)
+    .eq("phone_number_id", phoneNumberId)
+    .eq("mes", mes)
+    .maybeSingle();
+
+  if (consumoError) {
+    throw new Error(
+      `Erro ao consultar consumo para pausa Service: ${consumoError.message}`
+    );
+  }
+
+  const serviceGratis = Math.min(
+    WHATSAPP_SERVICE_FREE_LIMIT,
+    numero(consumo?.service_gratis)
+  );
+  const serviceCobrado = numero(consumo?.service_cobrado);
+  const serviceTotal = serviceGratis + serviceCobrado;
+
+  if (serviceTotal < limiteTotal) {
+    return {
+      ativo: true,
+      bloqueado: false,
+      mes,
+      serviceTotal,
+      limiteTotal,
+      limiteExtra,
+      restante: Math.max(limiteTotal - serviceTotal, 0),
+    };
+  }
+
+  const detalhe = {
+    origem: "meta_service_quota",
+    service_gratis: serviceGratis,
+    service_cobrado: serviceCobrado,
+    service_total: serviceTotal,
+    limite_gratis: WHATSAPP_SERVICE_FREE_LIMIT,
+    limite_extra: limiteExtra,
+    limite_total: limiteTotal,
+    mes,
+  };
+
+  const { data: assumiuBloqueio, error: claimError } = await supabaseAdmin.rpc(
+    "claim_whatsapp_service_automation_limit",
+    {
+      p_empresa_id: params.empresaId,
+      p_integracao_id: params.integracaoWhatsappId,
+      p_mes: mes,
+      p_service_total: serviceTotal,
+      p_detalhe: detalhe,
+    }
+  );
+
+  if (claimError) {
+    throw new Error(
+      `Erro ao registrar pausa por limite Service: ${claimError.message}`
+    );
+  }
+
+  if (assumiuBloqueio === true) {
+    const motivo =
+      `Limite Meta Service atingido: ${serviceTotal} de ${limiteTotal} mensagens no mês. ` +
+      "Todos os fluxos e agentes de IA desta integração foram pausados.";
+
+    const resultado = await aplicarBloqueioOperacionalWhatsappMeta({
+      empresaId: params.empresaId,
+      integracaoId: params.integracaoWhatsappId,
+      motivo,
+      tipoBloqueio: "limite_service_atingido",
+    });
+
+    await supabaseAdmin
+      .from("integracoes_whatsapp")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.integracaoWhatsappId);
+
+    console.warn("[WHATSAPP SERVICE] Automações pausadas pelo limite configurado:", {
+      empresaId: params.empresaId,
+      integracaoWhatsappId: params.integracaoWhatsappId,
+      serviceTotal,
+      limiteTotal,
+      limiteExtra,
+      ...resultado,
+    });
+  }
+
+  return {
+    ativo: true,
+    bloqueado: true,
+    bloqueioAplicadoAgora: assumiuBloqueio === true,
+    mes,
+    serviceTotal,
+    limiteTotal,
+    limiteExtra,
+    restante: 0,
   };
 }
 
@@ -414,6 +713,13 @@ export async function processarAlertaFranquiaService(params: {
   try {
     if (!["entregue", "lida"].includes(String(params.status || ""))) return;
     if (params.pricingCategory !== "service") return;
+
+    await avaliarLimiteAutomacoesService({
+      empresaId: params.empresaId,
+      integracaoWhatsappId: params.integracaoWhatsappId,
+      phoneNumberId: params.phoneNumberId,
+    });
+
     if (params.pricingType !== "free_customer_service") return;
 
     const timezone = await buscarTimezoneEmpresa(params.empresaId);
