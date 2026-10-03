@@ -76,7 +76,7 @@ export default function AcessoTemporarioEmpresaBanner({
   }
 
   return (
-    <div className={styles.banner} role="status">
+    <div className={styles.banner} role="status" style={{ display: "none" }}>
       <div className={styles.content}>
         <span className={styles.badge}>Sessão de suporte</span>
 
