@@ -819,7 +819,7 @@ export default function ContatosPage() {
 
       const link = document.createElement("a");
       link.href = downloadUrl;
-      link.download = "contatos-crm.csv";
+      link.download = "contatos-crm.xlsx";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
