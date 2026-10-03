@@ -2,6 +2,7 @@ import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
+const TELEFONES_POR_CONSULTA = 250;
 
 export const ERRO_META_LIMITE_QUALIDADE_MARKETING = 131049;
 
@@ -87,53 +88,60 @@ export async function buscarCooldownsDisparoPorTelefone(params: {
   const categoria = categoriaNormalizada(params.categoria);
   const agora = new Date().toISOString();
 
-  const { data, error } = await supabaseAdmin
-    .from("whatsapp_disparo_cooldowns")
-    .select(
-      "telefone_normalizado, categoria, expira_em, ocorrencias_janela, metadata_json"
-    )
-    .eq("empresa_id", params.empresaId)
-    .eq("categoria", categoria)
-    .eq("ativo", true)
-    .gt("expira_em", agora)
-    .in("telefone_normalizado", telefones);
-
-  if (error) {
-    if (tabelaCooldownAusente(error)) {
-      console.warn(
-        "[WHATSAPP DISPARO COOLDOWN] Migration de cooldown ainda nao aplicada."
-      );
-      return new Map<string, CooldownDisparoContato>();
-    }
-
-    throw new Error(
-      `Erro ao verificar cooldown de disparos: ${error.message}`
-    );
-  }
-
   const resultado = new Map<string, CooldownDisparoContato>();
 
-  for (const item of data || []) {
-    const telefone = telefoneNormalizado(item.telefone_normalizado);
-    if (!telefone) continue;
+  for (
+    let indice = 0;
+    indice < telefones.length;
+    indice += TELEFONES_POR_CONSULTA
+  ) {
+    const lote = telefones.slice(indice, indice + TELEFONES_POR_CONSULTA);
+    const { data, error } = await supabaseAdmin
+      .from("whatsapp_disparo_cooldowns")
+      .select(
+        "telefone_normalizado, categoria, expira_em, ocorrencias_janela, metadata_json"
+      )
+      .eq("empresa_id", params.empresaId)
+      .eq("categoria", categoria)
+      .eq("ativo", true)
+      .gt("expira_em", agora)
+      .in("telefone_normalizado", lote);
 
-    const metadata =
-      item.metadata_json &&
-      typeof item.metadata_json === "object" &&
-      !Array.isArray(item.metadata_json)
-        ? (item.metadata_json as Record<string, unknown>)
-        : {};
-    const cooldownHoras = Number(metadata.cooldown_horas);
+    if (error) {
+      if (tabelaCooldownAusente(error)) {
+        console.warn(
+          "[WHATSAPP DISPARO COOLDOWN] Migration de cooldown ainda nao aplicada."
+        );
+        return new Map<string, CooldownDisparoContato>();
+      }
 
-    resultado.set(telefone, {
-      telefone,
-      categoria: categoriaNormalizada(item.categoria),
-      expiraEm: item.expira_em ? String(item.expira_em) : null,
-      ocorrenciasJanela: Math.max(1, Number(item.ocorrencias_janela || 1)),
-      cooldownHoras: Number.isFinite(cooldownHoras)
-        ? Math.max(1, Math.floor(cooldownHoras))
-        : null,
-    });
+      throw new Error(
+        `Erro ao verificar cooldown de disparos: ${error.message}`
+      );
+    }
+
+    for (const item of data || []) {
+      const telefone = telefoneNormalizado(item.telefone_normalizado);
+      if (!telefone) continue;
+
+      const metadata =
+        item.metadata_json &&
+        typeof item.metadata_json === "object" &&
+        !Array.isArray(item.metadata_json)
+          ? (item.metadata_json as Record<string, unknown>)
+          : {};
+      const cooldownHoras = Number(metadata.cooldown_horas);
+
+      resultado.set(telefone, {
+        telefone,
+        categoria: categoriaNormalizada(item.categoria),
+        expiraEm: item.expira_em ? String(item.expira_em) : null,
+        ocorrenciasJanela: Math.max(1, Number(item.ocorrencias_janela || 1)),
+        cooldownHoras: Number.isFinite(cooldownHoras)
+          ? Math.max(1, Math.floor(cooldownHoras))
+          : null,
+      });
+    }
   }
 
   return resultado;

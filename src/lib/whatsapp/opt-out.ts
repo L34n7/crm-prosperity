@@ -10,6 +10,7 @@ import {
 } from "@/lib/whatsapp/opt-out-policy";
 
 const supabaseAdmin = getSupabaseAdmin();
+const TELEFONES_POR_CONSULTA = 250;
 
 function telefoneNormalizado(valor: unknown) {
   const somenteDigitos = String(valor || "").replace(/\D/g, "");
@@ -50,32 +51,42 @@ export async function buscarEscoposOptOutPorTelefone(params: {
     return new Map<string, Set<WhatsAppSupressaoScope>>();
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("whatsapp_supressoes")
-    .select("telefone_normalizado, escopo")
-    .eq("empresa_id", params.empresaId)
-    .eq("ativo", true)
-    .in("telefone_normalizado", telefones);
-
-  if (error) {
-    throw new Error(`Erro ao verificar opt-out dos contatos: ${error.message}`);
-  }
-
   const resultado = new Map<string, Set<WhatsAppSupressaoScope>>();
 
-  for (const item of data || []) {
-    const telefone = telefoneNormalizado(item.telefone_normalizado);
-    const escopo = String(item.escopo || "") as WhatsAppSupressaoScope;
-    if (
-      !telefone ||
-      !["todos_disparos", "marketing", "utility"].includes(escopo)
-    ) {
-      continue;
+  for (
+    let indice = 0;
+    indice < telefones.length;
+    indice += TELEFONES_POR_CONSULTA
+  ) {
+    const lote = telefones.slice(indice, indice + TELEFONES_POR_CONSULTA);
+    const { data, error } = await supabaseAdmin
+      .from("whatsapp_supressoes")
+      .select("telefone_normalizado, escopo")
+      .eq("empresa_id", params.empresaId)
+      .eq("ativo", true)
+      .in("telefone_normalizado", lote);
+
+    if (error) {
+      throw new Error(
+        `Erro ao verificar opt-out dos contatos: ${error.message}`
+      );
     }
 
-    const escopos = resultado.get(telefone) || new Set<WhatsAppSupressaoScope>();
-    escopos.add(escopo);
-    resultado.set(telefone, escopos);
+    for (const item of data || []) {
+      const telefone = telefoneNormalizado(item.telefone_normalizado);
+      const escopo = String(item.escopo || "") as WhatsAppSupressaoScope;
+      if (
+        !telefone ||
+        !["todos_disparos", "marketing", "utility"].includes(escopo)
+      ) {
+        continue;
+      }
+
+      const escopos =
+        resultado.get(telefone) || new Set<WhatsAppSupressaoScope>();
+      escopos.add(escopo);
+      resultado.set(telefone, escopos);
+    }
   }
 
   return resultado;
