@@ -225,7 +225,7 @@ function extrairErroStatusMeta(statusItem: any) {
   if (codigo === 131026) {
     mensagemTraduzida =
       "Não foi possível entregar a mensagem ao destinatário. Verifique se o número possui WhatsApp ativo e está informado corretamente.";
-  } else if (codigo === 131042) {
+  } else if (codigo === 131042 || codigo === 131044) {
     mensagemTraduzida =
       "Não foi possível enviar a mensagem devido a uma pendência de pagamento na conta do WhatsApp Business.";
   } else if (codigo === 131047) {
@@ -1147,6 +1147,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           automationResult = await processAutomationEngine({
             empresaId: integration.empresa_id,
             conversaId: conversaIdParaProcessar,
+            integracaoWhatsappId: integration.id,
           contatoId: contact.id,
           mensagemTexto:
             textoAutomacao ||

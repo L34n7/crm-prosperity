@@ -13,6 +13,7 @@ import { contarGruposDisparosPendentes } from "@/lib/disparos-agendados/pendente
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buscarResumoFranquiaServiceEmpresa } from "@/lib/whatsapp/service-quota";
+import { lerBloqueioFinanceiroMeta } from "@/lib/whatsapp/meta-payment-block";
 
 const supabaseAdmin = getSupabaseAdmin();
 const RESUMO_HEADERS = {
@@ -162,6 +163,56 @@ async function buscarResumoFranquiaService(params: {
   }
 }
 
+async function buscarResumoBloqueioPagamentoMeta(params: {
+  empresaId: string;
+  isAdmin: boolean;
+}) {
+  if (!params.isAdmin) {
+    return blocoErro(
+      "Sem permissao para visualizar bloqueios financeiros da Meta.",
+      "sem_permissao"
+    );
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("integracoes_whatsapp")
+      .select("id,nome_conexao,numero,meta_saude_raw_json")
+      .eq("empresa_id", params.empresaId);
+
+    if (error) {
+      return blocoErro(error.message);
+    }
+
+    const integracoes = (data || [])
+      .map((integracao) => {
+        const bloqueio = lerBloqueioFinanceiroMeta(
+          integracao.meta_saude_raw_json
+        );
+
+        if (!bloqueio?.ativo) return null;
+
+        return {
+          id: integracao.id,
+          nome: String(integracao.nome_conexao || "WhatsApp"),
+          numero: String(integracao.numero || ""),
+          codigo: bloqueio.codigo,
+          detalhe: bloqueio.detalhe,
+          ocorrido_em: bloqueio.ocorrido_em,
+          ultima_falha_em: bloqueio.ultima_falha_em,
+          pausas: bloqueio.pausas,
+        };
+      })
+      .filter(Boolean);
+
+    return blocoOk({ integracoes });
+  } catch (error) {
+    return blocoErro(
+      getMensagemErro(error, "Erro ao buscar bloqueio financeiro da Meta.")
+    );
+  }
+}
+
 export async function GET() {
   const resultado = await getUsuarioContexto({ sincronizarAssinatura: false });
 
@@ -204,6 +255,7 @@ export async function GET() {
     feedbackAgendas,
     tokensIa,
     franquiaServiceMeta,
+    bloqueioPagamentoMeta,
   ] = await Promise.all([
     buscarResumoNotificacoes(usuario.empresa_id),
     podeVerConversas
@@ -232,6 +284,10 @@ export async function GET() {
       usuarioId: usuario.id,
       isAdmin: usuario.is_admin,
     }),
+    buscarResumoBloqueioPagamentoMeta({
+      empresaId: usuario.empresa_id,
+      isAdmin: usuario.is_admin,
+    }),
   ]);
 
   return NextResponse.json(
@@ -247,6 +303,7 @@ export async function GET() {
       feedback_agendas: feedbackAgendas,
       tokens_ia: tokensIa,
       whatsapp_service_franquia: franquiaServiceMeta,
+      whatsapp_pagamento_bloqueio: bloqueioPagamentoMeta,
     },
     { headers: RESUMO_HEADERS }
   );

@@ -18,12 +18,17 @@ export const WHATSAPP_META_BLOCK_DESCRIPTION =
   "A Meta desativou a conta WhatsApp Business vinculada a este número. Enquanto a conta estiver desativada, o CRM não consegue enviar, receber, responder mensagens, executar bots ou automações pelo WhatsApp.";
 
 export const WHATSAPP_META_BLOCK_CUSTOMER_ACTION =
-  "Acesse o Gerenciador do WhatsApp da Meta para ver os detalhes e solicitar anaáise, se acreditar que a desativação foi um engano.";
+  "Acesse o Gerenciador do WhatsApp da Meta para ver os detalhes e solicitar análise, se acreditar que a desativação foi um engano.";
+
+type TipoBloqueioOperacional =
+  | "conta_meta_bloqueada"
+  | "pagamento_meta_pendente";
 
 type BloquearWhatsappMetaParams = {
   empresaId: string;
   integracaoId: string;
   motivo?: string | null;
+  tipoBloqueio?: TipoBloqueioOperacional;
 };
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -38,6 +43,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
   empresaId,
   integracaoId,
   motivo,
+  tipoBloqueio = "conta_meta_bloqueada",
 }: BloquearWhatsappMetaParams) {
   if (!empresaId || !integracaoId) {
     return {
@@ -45,13 +51,25 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
       fluxosPausados: 0,
       execucoesCanceladas: 0,
       agendamentosCancelados: 0,
+      pendenciasIaCanceladas: 0,
+      execucoesIaCanceladas: 0,
+      jobsFilaCancelados: 0,
     };
   }
 
   const agora = new Date().toISOString();
+  const ehPagamento = tipoBloqueio === "pagamento_meta_pendente";
+  const motivoCancelamento = ehPagamento
+    ? "pagamento_meta_pendente"
+    : "whatsapp_meta_bloqueado";
+  const tipoMensagemSistema = ehPagamento
+    ? "whatsapp_meta_pagamento_pendente"
+    : "whatsapp_meta_bloqueado";
   const motivoFinal =
     motivo ||
-    "Conta WhatsApp Business bloqueada/desativada pela Meta. Recursos de WhatsApp interrompidos pelo CRM.";
+    (ehPagamento
+      ? "A Meta recusou o envio por pendência financeira. As automações vinculadas a este número foram interrompidas pelo CRM até a regularização."
+      : "Conta WhatsApp Business bloqueada/desativada pela Meta. Recursos de WhatsApp interrompidos pelo CRM.");
 
   const { data: conversasAtivas, error: conversasError } = await supabaseAdmin
     .from("conversas")
@@ -64,9 +82,11 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     console.warn("[WHATSAPP META BLOCK] Erro ao buscar conversas:", conversasError);
   }
 
-  const conversaIds = (conversasAtivas || [])
-    .map((item) => item.id)
-    .filter(Boolean);
+  // Pendência financeira não encerra conversas nem protocolos. O recebimento
+  // continua normal; somente a camada automática de saída fica suspensa.
+  const conversaIds = ehPagamento
+    ? []
+    : (conversasAtivas || []).map((item) => item.id).filter(Boolean);
 
   if (conversaIds.length > 0) {
     const { error: conversasUpdateError } = await supabaseAdmin
@@ -118,7 +138,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
       created_at: agora,
       updated_at: agora,
       metadata_json: {
-        tipo: "whatsapp_meta_bloqueado",
+        tipo: tipoMensagemSistema,
         integracao_whatsapp_id: integracaoId,
         motivo: motivoFinal,
       },
@@ -136,9 +156,8 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     }
   }
 
-  // Um bloqueio da Meta pertence à integração/número afetado.
-  // O fluxo pode atender outras integrações saudáveis, portanto seu status
-  // global nunca deve ser pausado por causa de um único número bloqueado.
+  // O bloqueio é sempre por integração. Não desativamos definições globais de
+  // fluxo/agente porque elas podem atender outros números saudáveis da empresa.
   const { data: conversasDaIntegracao, error: conversasIntegracaoError } =
     await supabaseAdmin
       .from("conversas")
@@ -148,7 +167,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
 
   if (conversasIntegracaoError) {
     console.warn(
-      "[WHATSAPP META BLOCK] Erro ao buscar conversas da integracao:",
+      "[WHATSAPP META BLOCK] Erro ao buscar conversas da integração:",
       conversasIntegracaoError
     );
   }
@@ -156,6 +175,82 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
   const conversaIdsIntegracao = (conversasDaIntegracao || [])
     .map((item) => item.id)
     .filter(Boolean);
+
+  let pendenciasIaCanceladas = 0;
+  let execucoesIaCanceladas = 0;
+  let jobsFilaCancelados = 0;
+
+  if (conversaIdsIntegracao.length > 0) {
+    const { data: pendenciasIa, error: pendenciasIaError } = await supabaseAdmin
+      .from("agente_ia_pendencias")
+      .update({
+        status: "cancelado",
+        erro: motivoFinal,
+        locked_at: null,
+        updated_at: agora,
+      })
+      .eq("empresa_id", empresaId)
+      .in("conversa_id", conversaIdsIntegracao)
+      .in("status", ["pendente", "processando"])
+      .select("id");
+
+    if (pendenciasIaError) {
+      console.warn(
+        "[WHATSAPP META BLOCK] Erro ao cancelar pendências do agente de IA:",
+        pendenciasIaError
+      );
+    } else {
+      pendenciasIaCanceladas = (pendenciasIa || []).length;
+    }
+
+    const { data: execucoesIa, error: execucoesIaError } = await supabaseAdmin
+      .from("agente_ia_execucoes")
+      .update({
+        status: "cancelado",
+        erro: motivoFinal,
+        finished_at: agora,
+        updated_at: agora,
+      })
+      .eq("empresa_id", empresaId)
+      .in("conversa_id", conversaIdsIntegracao)
+      .in("status", ["pendente", "processando"])
+      .select("id");
+
+    if (execucoesIaError) {
+      console.warn(
+        "[WHATSAPP META BLOCK] Erro ao cancelar execuções do agente de IA:",
+        execucoesIaError
+      );
+    } else {
+      execucoesIaCanceladas = (execucoesIa || []).length;
+    }
+  }
+
+  if (conversaIdsIntegracao.length > 0) {
+    const { data: jobsFila, error: jobsFilaError } = await supabaseAdmin
+      .from("fila_processamento_auto")
+      .update({
+        status: "cancelado",
+        locked_at: null,
+        executed_at: agora,
+        erro: motivoFinal,
+        updated_at: agora,
+      })
+      .eq("empresa_id", empresaId)
+      .in("conversa_id", conversaIdsIntegracao)
+      .in("status", ["pendente", "executando"])
+      .select("id");
+
+    if (jobsFilaError) {
+      console.warn(
+        "[WHATSAPP META BLOCK] Erro ao cancelar fila de processamento automático:",
+        jobsFilaError
+      );
+    } else {
+      jobsFilaCancelados = (jobsFila || []).length;
+    }
+  }
+
   const execucoesPorId = new Map<string, { id: string; metadata_json: unknown }>();
 
   if (conversaIdsIntegracao.length > 0) {
@@ -169,7 +264,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
 
     if (execucoesConversaError) {
       console.warn(
-        "[WHATSAPP META BLOCK] Erro ao buscar execucoes por conversa:",
+        "[WHATSAPP META BLOCK] Erro ao buscar execuções por conversa:",
         execucoesConversaError
       );
     }
@@ -198,7 +293,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
         updated_at: agora,
         metadata_json: {
           ...metadataAtual,
-          motivo_cancelamento: "whatsapp_meta_bloqueado",
+          motivo_cancelamento: motivoCancelamento,
           integracao_whatsapp_id: integracaoId,
           detalhe: motivoFinal,
         },
@@ -208,33 +303,60 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
 
     if (execucaoError) {
       console.warn(
-        "[WHATSAPP META BLOCK] Erro ao cancelar execucao:",
+        "[WHATSAPP META BLOCK] Erro ao cancelar execução:",
         execucaoError
       );
     }
   }
 
-  const { data: agendamentosPendentes, error: agendamentosSelectError } =
+  const agendamentosPorId = new Map<
+    string,
+    { id: string; payload_json: unknown }
+  >();
+
+  const { data: agendamentosPorIntegracao, error: agendamentosSelectError } =
     await supabaseAdmin
       .from("automacao_agendamentos")
       .select("id, payload_json")
       .eq("empresa_id", empresaId)
       .eq("status", "pendente")
-      .eq("tipo_agendamento", "disparo_template")
       .eq("payload_json->>integracao_whatsapp_id", integracaoId);
 
   if (agendamentosSelectError) {
     console.warn(
-      "[WHATSAPP META BLOCK] Erro ao buscar agendamentos:",
+      "[WHATSAPP META BLOCK] Erro ao buscar agendamentos por integração:",
       agendamentosSelectError
     );
   }
 
-  const agendamentoIds = (agendamentosPendentes || [])
-    .map((item) => item.id)
-    .filter(Boolean);
+  for (const agendamento of agendamentosPorIntegracao || []) {
+    agendamentosPorId.set(agendamento.id, agendamento);
+  }
 
-  for (const agendamento of agendamentosPendentes || []) {
+  if (execucaoIds.length > 0) {
+    const { data: agendamentosPorExecucao, error: agendamentosExecucaoError } =
+      await supabaseAdmin
+        .from("automacao_agendamentos")
+        .select("id, payload_json")
+        .eq("empresa_id", empresaId)
+        .eq("status", "pendente")
+        .in("execucao_id", execucaoIds);
+
+    if (agendamentosExecucaoError) {
+      console.warn(
+        "[WHATSAPP META BLOCK] Erro ao buscar agendamentos por execução:",
+        agendamentosExecucaoError
+      );
+    }
+
+    for (const agendamento of agendamentosPorExecucao || []) {
+      agendamentosPorId.set(agendamento.id, agendamento);
+    }
+  }
+
+  const agendamentosPendentes = Array.from(agendamentosPorId.values());
+
+  for (const agendamento of agendamentosPendentes) {
     const payloadAtual =
       agendamento.payload_json &&
       typeof agendamento.payload_json === "object" &&
@@ -250,7 +372,7 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
         executed_at: agora,
         payload_json: {
           ...payloadAtual,
-          motivo_cancelamento: "whatsapp_meta_bloqueado",
+          motivo_cancelamento: motivoCancelamento,
           integracao_whatsapp_id: integracaoId,
           detalhe: motivoFinal,
         },
@@ -270,6 +392,9 @@ export async function aplicarBloqueioOperacionalWhatsappMeta({
     conversasEncerradas: conversaIds.length,
     fluxosPausados: 0,
     execucoesCanceladas: execucaoIds.length,
-    agendamentosCancelados: agendamentoIds.length,
+    agendamentosCancelados: agendamentosPendentes.length,
+    pendenciasIaCanceladas,
+    execucoesIaCanceladas,
+    jobsFilaCancelados,
   };
 }

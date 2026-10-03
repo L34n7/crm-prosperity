@@ -103,7 +103,7 @@ export function diagnosticarErroMetaWhatsapp(
   }
 
   if (
-    codigoMeta === 131042 ||
+    (codigoMeta === 131042 || codigoMeta === 131044) ||
     textoBusca.includes("payment") ||
     textoBusca.includes("billing") ||
     textoBusca.includes("pagamento") ||

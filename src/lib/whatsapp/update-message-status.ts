@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sendMetaPaymentBlockedEmail } from "@/lib/email/send-meta-payment-blocked-email";
 import {
   aplicarBloqueioOperacionalWhatsappMeta,
   statusWhatsappMetaBloqueado,
@@ -6,6 +7,7 @@ import {
 } from "@/lib/whatsapp/meta-block";
 import { notificarCampanhaDisparoPausada } from "@/lib/whatsapp/disparo-alertas";
 import { resolverPricingRealizado } from "@/lib/whatsapp/pricing-realized";
+import { codigoErroMetaPagamento } from "@/lib/whatsapp/meta-payment-block";
 
 type UpdateMessageStatusParams = {
   mensagemExternaId: string;
@@ -141,18 +143,28 @@ async function pausarCampanhasDaIntegracao(params: {
   empresaId: string;
   integracaoId: string;
   motivo: string;
+  codigoErroMeta?: number;
+  statusPausa?: "pausada_por_conta_bloqueada" | "pausada_por_erro_meta";
+  motivoCancelamento?: string;
+  notificarCampanhas?: boolean;
 }) {
   const agora = new Date().toISOString();
+  const codigoErroMeta =
+    params.codigoErroMeta ?? ERRO_META_CONTA_BLOQUEADA;
+  const statusPausa =
+    params.statusPausa ?? "pausada_por_conta_bloqueada";
+  const motivoCancelamento =
+    params.motivoCancelamento ?? "conta_whatsapp_meta_bloqueada";
   const { data: campanhas, error } = await supabaseAdmin
     .from("whatsapp_disparo_campanhas")
     .update({
-      status: "pausada_por_conta_bloqueada",
+      status: statusPausa,
       pausa_motivo: params.motivo,
       erro: params.motivo,
       paused_at: agora,
       updated_at: agora,
       metadata_json: {
-        erro_codigo_meta: ERRO_META_CONTA_BLOQUEADA,
+        erro_codigo_meta: codigoErroMeta,
         pausa_automatica: true,
         origem_pausa: "webhook_status_meta",
       },
@@ -188,8 +200,8 @@ async function pausarCampanhasDaIntegracao(params: {
       processed_at: agora,
       updated_at: agora,
       metadata_json: {
-        motivo_cancelamento: "conta_whatsapp_meta_bloqueada",
-        erro_codigo_meta: ERRO_META_CONTA_BLOQUEADA,
+        motivo_cancelamento: motivoCancelamento,
+        erro_codigo_meta: codigoErroMeta,
       },
     })
     .in("campanha_id", campanhaIds)
@@ -230,21 +242,23 @@ async function pausarCampanhasDaIntegracao(params: {
       );
     }
 
-    try {
-      await notificarCampanhaDisparoPausada({
+    if (params.notificarCampanhas !== false) {
+      try {
+        await notificarCampanhaDisparoPausada({
         empresaId: params.empresaId,
         campanhaId,
         integracaoWhatsappId: params.integracaoId,
         usuarioId: campanha.usuario_id || null,
-        statusPausa: "pausada_por_conta_bloqueada",
+        statusPausa,
         motivo: params.motivo,
-        erroCodigoMeta: ERRO_META_CONTA_BLOQUEADA,
-      });
-    } catch (notificationError) {
-      console.warn(
-        "[WHATSAPP META BLOCK] Erro ao notificar campanha pausada:",
-        { campanhaId, erro: notificationError }
-      );
+        erroCodigoMeta: codigoErroMeta,
+        });
+      } catch (notificationError) {
+        console.warn(
+          "[WHATSAPP META BLOCK] Erro ao notificar campanha pausada:",
+          { campanhaId, erro: notificationError }
+        );
+      }
     }
   }
 
@@ -379,6 +393,177 @@ async function tratarErroMetaContaBloqueada(params: {
   });
 }
 
+async function tratarErroMetaPagamento(params: {
+  mensagemExternaId: string;
+  mensagem?: MensagemStatusRow | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  const codigoErroMeta = extrairCodigoErroMeta(params.metadata);
+
+  if (!codigoErroMetaPagamento(codigoErroMeta)) {
+    return;
+  }
+
+  const contexto = await resolverContextoIntegracao(
+    params.mensagemExternaId,
+    params.mensagem
+  );
+
+  if (!contexto) {
+    console.error(
+      "[META PAYMENT BLOCK] Falha financeira recebida, mas a integração não foi localizada:",
+      {
+        codigo: codigoErroMeta,
+        mensagemExternaId: params.mensagemExternaId,
+      }
+    );
+    return;
+  }
+
+  const { data: integracao, error } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select(
+      "id, empresa_id, nome_conexao, numero, payment_method_added, meta_saude_raw_json"
+    )
+    .eq("id", contexto.integracaoId)
+    .eq("empresa_id", contexto.empresaId)
+    .maybeSingle();
+
+  if (error || !integracao) {
+    console.error(
+      "[META PAYMENT BLOCK] Erro ao carregar integração:",
+      error || contexto
+    );
+    return;
+  }
+
+  const agora = new Date().toISOString();
+  const detalhe = extrairDetalheErroMeta(params.metadata);
+  const { data: bloqueioAssumido, error: claimError } = await supabaseAdmin.rpc(
+    "claim_whatsapp_meta_payment_block",
+    {
+      p_empresa_id: contexto.empresaId,
+      p_integracao_id: contexto.integracaoId,
+      p_codigo: codigoErroMeta,
+      p_detalhe: detalhe,
+      p_mensagem_externa_id: params.mensagemExternaId,
+      p_ocorrido_em: agora,
+    }
+  );
+
+  if (claimError) {
+    console.error(
+      "[META PAYMENT BLOCK] Erro ao assumir bloqueio financeiro de forma atômica:",
+      claimError
+    );
+    return;
+  }
+
+  // Outra falha concorrente já assumiu o bloqueio. A função do banco atualiza
+  // a última falha, mas somente o primeiro webhook pausa e envia o e-mail.
+  if (bloqueioAssumido !== true) {
+    return;
+  }
+
+  const motivo =
+    "A Meta recusou um envio por pendência financeira ou problema com a forma de pagamento. " +
+    `Código Meta: ${codigoErroMeta}. As automações deste número foram pausadas pelo CRM.`;
+
+  const resultadoOperacional = await aplicarBloqueioOperacionalWhatsappMeta({
+    empresaId: contexto.empresaId,
+    integracaoId: contexto.integracaoId,
+    motivo,
+    tipoBloqueio: "pagamento_meta_pendente",
+  });
+
+  const campanhasPausadas = await pausarCampanhasDaIntegracao({
+    empresaId: contexto.empresaId,
+    integracaoId: contexto.integracaoId,
+    motivo,
+    codigoErroMeta: codigoErroMeta || undefined,
+    statusPausa: "pausada_por_erro_meta",
+    motivoCancelamento: "pagamento_meta_pendente",
+    notificarCampanhas: false,
+  });
+
+  const pausas = {
+    conversas_encerradas: resultadoOperacional.conversasEncerradas,
+    execucoes_canceladas: resultadoOperacional.execucoesCanceladas,
+    agendamentos_cancelados: resultadoOperacional.agendamentosCancelados,
+    pendencias_ia_canceladas: resultadoOperacional.pendenciasIaCanceladas,
+    execucoes_ia_canceladas: resultadoOperacional.execucoesIaCanceladas,
+    jobs_fila_cancelados: resultadoOperacional.jobsFilaCancelados,
+    campanhas_pausadas: campanhasPausadas,
+  };
+
+  const { data: integracaoAtualizada } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("meta_saude_raw_json")
+    .eq("id", contexto.integracaoId)
+    .eq("empresa_id", contexto.empresaId)
+    .maybeSingle();
+
+  const rawSaudeAtual = objeto(integracaoAtualizada?.meta_saude_raw_json);
+  const { error: finalUpdateError } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .update({
+      meta_saude_ultima_verificacao_em: agora,
+      meta_saude_raw_json: {
+        ...rawSaudeAtual,
+        bloqueio_financeiro_meta: {
+          ...objeto(rawSaudeAtual.bloqueio_financeiro_meta),
+          ativo: true,
+          pausas,
+        },
+      },
+      updated_at: agora,
+    })
+    .eq("id", contexto.integracaoId)
+    .eq("empresa_id", contexto.empresaId);
+
+  if (finalUpdateError) {
+    console.warn(
+      "[META PAYMENT BLOCK] Bloqueio aplicado, mas houve falha ao salvar o resumo:",
+      finalUpdateError
+    );
+  }
+
+  try {
+    await sendMetaPaymentBlockedEmail({
+      empresaId: contexto.empresaId,
+      integracaoNome: integracao.nome_conexao || null,
+      numero: integracao.numero || null,
+      codigoMeta: codigoErroMeta || 131042,
+      detalhe,
+      ocorridoEm: agora,
+      pausas: {
+        conversasEncerradas: resultadoOperacional.conversasEncerradas,
+        execucoesCanceladas: resultadoOperacional.execucoesCanceladas,
+        agendamentosCancelados: resultadoOperacional.agendamentosCancelados,
+        pendenciasIaCanceladas: resultadoOperacional.pendenciasIaCanceladas,
+        execucoesIaCanceladas: resultadoOperacional.execucoesIaCanceladas,
+        jobsFilaCancelados: resultadoOperacional.jobsFilaCancelados,
+        campanhasPausadas,
+      },
+    });
+  } catch (emailError) {
+    console.warn(
+      "[META PAYMENT BLOCK] Bloqueio aplicado, mas o e-mail não foi enviado:",
+      emailError
+    );
+  }
+
+  console.error("[META PAYMENT BLOCK] Automações pausadas por cobrança da Meta:", {
+    codigo: codigoErroMeta,
+    detalhe,
+    empresaId: contexto.empresaId,
+    integracaoId: contexto.integracaoId,
+    mensagemExternaId: params.mensagemExternaId,
+    campanhasPausadas,
+    ...resultadoOperacional,
+  });
+}
+
 export async function updateWhatsAppMessageStatus({
   mensagemExternaId,
   status,
@@ -414,6 +599,18 @@ export async function updateWhatsAppMessageStatus({
         console.error(
           "[WHATSAPP META BLOCK] Falha inesperada na tratativa do erro 131031:",
           blockError
+        );
+      }
+    } else if (status === "falha" && codigoErroMetaPagamento(codigoErroMeta)) {
+      try {
+        await tratarErroMetaPagamento({
+          mensagemExternaId,
+          metadata,
+        });
+      } catch (paymentError) {
+        console.error(
+          "[META PAYMENT BLOCK] Falha inesperada na tratativa financeira:",
+          paymentError
         );
       }
     }
@@ -546,6 +743,19 @@ export async function updateWhatsAppMessageStatus({
       console.error(
         "[WHATSAPP META BLOCK] Falha inesperada na tratativa do erro 131031:",
         blockError
+      );
+    }
+  } else if (status === "falha" && codigoErroMetaPagamento(codigoErroMeta)) {
+    try {
+      await tratarErroMetaPagamento({
+        mensagemExternaId,
+        mensagem: mensagemAtual,
+        metadata,
+      });
+    } catch (paymentError) {
+      console.error(
+        "[META PAYMENT BLOCK] Falha inesperada na tratativa financeira:",
+        paymentError
       );
     }
   }

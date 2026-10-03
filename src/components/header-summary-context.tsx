@@ -38,6 +38,27 @@ export type HeaderSummarySaldoTokensIa = {
   periodo_inicio?: string;
 };
 
+export type HeaderSummaryBloqueioPagamentoMeta = {
+  integracoes: Array<{
+    id: string;
+    nome: string;
+    numero: string;
+    codigo: number | null;
+    detalhe: string | null;
+    ocorrido_em: string | null;
+    ultima_falha_em: string | null;
+    pausas: {
+      conversas_encerradas: number;
+      execucoes_canceladas: number;
+      agendamentos_cancelados: number;
+      pendencias_ia_canceladas: number;
+      execucoes_ia_canceladas: number;
+      jobs_fila_cancelados: number;
+      campanhas_pausadas: number;
+    };
+  }>;
+};
+
 export type HeaderSummaryFranquiaServiceMeta = {
   mes: string;
   total_usado: number;
@@ -75,6 +96,7 @@ type HeaderSummaryContextValue = {
   agendamentosFeedbackPendentes: number;
   saldoTokensIa: HeaderSummarySaldoTokensIa | null;
   franquiaServiceMeta: HeaderSummaryFranquiaServiceMeta | null;
+  bloqueioPagamentoMeta: HeaderSummaryBloqueioPagamentoMeta | null;
   refreshResumo: (forcarAtualizacao?: boolean) => Promise<void>;
   marcarNotificacaoLidaLocal: (id: string) => void;
   marcarTodasNotificacoesLidasLocal: () => void;
@@ -93,6 +115,7 @@ const HeaderSummaryContext = createContext<HeaderSummaryContextValue>({
   agendamentosFeedbackPendentes: 0,
   saldoTokensIa: null,
   franquiaServiceMeta: null,
+  bloqueioPagamentoMeta: null,
   refreshResumo: async () => {},
   marcarNotificacaoLidaLocal: () => {},
   marcarTodasNotificacoesLidasLocal: () => {},
@@ -198,6 +221,8 @@ export function HeaderSummaryProvider({
     useState<HeaderSummarySaldoTokensIa | null>(null);
   const [franquiaServiceMeta, setFranquiaServiceMeta] =
     useState<HeaderSummaryFranquiaServiceMeta | null>(null);
+  const [bloqueioPagamentoMeta, setBloqueioPagamentoMeta] =
+    useState<HeaderSummaryBloqueioPagamentoMeta | null>(null);
   const [contextoRealtime, setContextoRealtime] =
     useState<HeaderSummaryContextoRealtime | null>(null);
 
@@ -269,6 +294,18 @@ export function HeaderSummaryProvider({
         )
       ) {
         setFranquiaServiceMeta(json.whatsapp_service_franquia.data || null);
+      }
+
+      if (
+        blocoOk<HeaderSummaryBloqueioPagamentoMeta>(
+          json.whatsapp_pagamento_bloqueio
+        )
+      ) {
+        setBloqueioPagamentoMeta(
+          json.whatsapp_pagamento_bloqueio.data || null
+        );
+      } else if (blocoSemPermissao(json.whatsapp_pagamento_bloqueio)) {
+        setBloqueioPagamentoMeta(null);
       }
     } catch {
       // Mantem os ultimos dados bons para nao zerar o header em falhas pontuais.
@@ -635,6 +672,32 @@ export function HeaderSummaryProvider({
 
     const supabase = getSupabaseRealtime();
     const channel = supabase
+      .channel(`crm-header-meta-payment:${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "integracoes_whatsapp",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        () => {
+          void refreshResumo(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [contextoRealtime?.empresa_id, refreshResumo]);
+
+  useEffect(() => {
+    const empresaId = contextoRealtime?.empresa_id;
+    if (!empresaId) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
       .channel(`crm-header-disparos-pendentes:${empresaId}`)
       .on(
         "postgres_changes",
@@ -716,6 +779,7 @@ export function HeaderSummaryProvider({
         agendamentosFeedbackPendentes,
         saldoTokensIa,
         franquiaServiceMeta,
+        bloqueioPagamentoMeta,
         refreshResumo,
         marcarNotificacaoLidaLocal,
         marcarTodasNotificacoesLidasLocal,
