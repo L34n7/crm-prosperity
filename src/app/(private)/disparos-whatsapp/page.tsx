@@ -1907,7 +1907,12 @@ function normalizarCampanhaRealtime(
   const cancelados = inteiroCampanha(campanha.total_cancelados);
   const pendentes = inteiroCampanha(campanha.total_pendentes);
   const processando = inteiroCampanha(campanha.total_processando);
-  const metadata = objeto(campanha.metadata_json);
+  const metadata =
+    campanha.metadata_json &&
+    typeof campanha.metadata_json === "object" &&
+    !Array.isArray(campanha.metadata_json)
+      ? (campanha.metadata_json as Record<string, unknown>)
+      : {};
   const retomarEm = String(
     metadata.rate_limit_131048_ate || ""
   ).trim();
