@@ -330,6 +330,7 @@ export default function ConversasPageContent() {
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
   const [menuContatoAberto, setMenuContatoAberto] = useState(false);
   const menuContatoRef = useRef<HTMLDivElement | null>(null);
+  const menuContatoDropdownRef = useRef<HTMLDivElement | null>(null);
   const menuAnexoRef = useRef<HTMLDivElement | null>(null);
   const macroCardRef = useRef<HTMLDivElement | null>(null);
 
@@ -6701,6 +6702,57 @@ const templateFooterTexto = useMemo(() => {
     };
   }, []);
 
+  useLayoutEffect(() => {
+    if (!menuContatoAberto) return;
+
+    const ajustarAlturaMenu = () => {
+      const menu = menuContatoDropdownRef.current;
+
+      if (!menu) return;
+
+      // Mede a posição real do dropdown e usa somente a área visível abaixo
+      // dele. Isso cobre celulares baixos, landscape, tablets e barras móveis
+      // do navegador sem deixar os últimos itens fora da tela.
+      menu.style.maxHeight = "";
+
+      const rect = menu.getBoundingClientRect();
+      const visualViewport = window.visualViewport;
+      const limiteViewport = visualViewport
+        ? Math.min(
+            window.innerHeight,
+            visualViewport.offsetTop + visualViewport.height
+          )
+        : window.innerHeight;
+      const margemInferior = 12;
+      const alturaDisponivel = Math.max(
+        72,
+        Math.floor(limiteViewport - rect.top - margemInferior)
+      );
+
+      menu.style.maxHeight = `${alturaDisponivel}px`;
+    };
+
+    const frame = window.requestAnimationFrame(ajustarAlturaMenu);
+    const visualViewport = window.visualViewport;
+
+    window.addEventListener("resize", ajustarAlturaMenu);
+    window.addEventListener("orientationchange", ajustarAlturaMenu);
+    visualViewport?.addEventListener("resize", ajustarAlturaMenu);
+    visualViewport?.addEventListener("scroll", ajustarAlturaMenu);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", ajustarAlturaMenu);
+      window.removeEventListener("orientationchange", ajustarAlturaMenu);
+      visualViewport?.removeEventListener("resize", ajustarAlturaMenu);
+      visualViewport?.removeEventListener("scroll", ajustarAlturaMenu);
+
+      if (menuContatoDropdownRef.current) {
+        menuContatoDropdownRef.current.style.maxHeight = "";
+      }
+    };
+  }, [menuContatoAberto]);
+
   useEffect(() => {
     function atualizarVisibilidade() {
       setAbaVisivel(document.visibilityState === "visible");
@@ -7496,7 +7548,10 @@ const templateFooterTexto = useMemo(() => {
                             </button>
 
                             {menuContatoAberto && (
-                              <div className={styles.headerDropdownMenu}>
+                              <div
+                                ref={menuContatoDropdownRef}
+                                className={styles.headerDropdownMenu}
+                              >
                                 <button
                                   type="button"
                                   className={styles.headerDropdownItem}
