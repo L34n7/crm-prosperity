@@ -576,6 +576,7 @@ async function tratarErroMetaPagamento(params: {
         agendamentosCancelados: resultadoOperacional.agendamentosCancelados,
         pendenciasIaCanceladas: resultadoOperacional.pendenciasIaCanceladas,
         execucoesIaCanceladas: resultadoOperacional.execucoesIaCanceladas,
+        jobsFilaCancelados: resultadoOperacional.jobsFilaCancelados,
         campanhasPausadas,
       },
     });
