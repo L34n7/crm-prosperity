@@ -3,6 +3,7 @@ import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtim
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { interceptarMensagemAgenteIa } from "@/lib/agentes-ia/runtime";
 import { buscarBloqueioFinanceiroMetaConversa } from "@/lib/whatsapp/meta-payment-block";
+import { buscarBloqueioLimiteServiceConversa } from "@/lib/whatsapp/service-quota";
 import {
   executarNo as executarNoCore,
   processAutomationEngine as processAutomationEngineAgenda,
@@ -592,6 +593,21 @@ export async function processAutomationEngine(
       status: "pagamento_meta_pendente",
       error:
         "Automação pausada porque a Meta recusou a cobrança deste número.",
+    };
+  }
+
+  const bloqueioLimiteService = await buscarBloqueioLimiteServiceConversa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    integracaoId: input.integracaoWhatsappId || null,
+  });
+
+  if (bloqueioLimiteService?.ativo) {
+    return {
+      ok: true,
+      status: "limite_meta_service_atingido",
+      error:
+        "Automação pausada porque esta integração atingiu o limite mensal de Meta Service configurado.",
     };
   }
 
