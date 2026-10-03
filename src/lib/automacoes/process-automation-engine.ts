@@ -2,6 +2,7 @@ import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
 import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtime";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { interceptarMensagemAgenteIa } from "@/lib/agentes-ia/runtime";
+import { buscarBloqueioFinanceiroMetaConversa } from "@/lib/whatsapp/meta-payment-block";
 import {
   executarNo as executarNoCore,
   processAutomationEngine as processAutomationEngineAgenda,
@@ -579,6 +580,21 @@ export async function processAutomationEngine(
   input: AutomationEngineInput,
   options: { ignorarValidacaoTemporal?: boolean } = {}
 ) {
+  const bloqueioPagamentoMeta = await buscarBloqueioFinanceiroMetaConversa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    integracaoId: input.integracaoWhatsappId || null,
+  });
+
+  if (bloqueioPagamentoMeta?.ativo) {
+    return {
+      ok: true,
+      status: "pagamento_meta_pendente",
+      error:
+        "Automação pausada porque a Meta recusou a cobrança deste número.",
+    };
+  }
+
   const resultadoTemporal = options.ignorarValidacaoTemporal
     ? null
     : await ignorarMensagemTemporalmenteInvalida(input);
