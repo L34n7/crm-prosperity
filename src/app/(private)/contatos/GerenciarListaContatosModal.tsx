@@ -240,7 +240,11 @@ export default function GerenciarListaContatosModal({
           </button>
         </div>
 
-        {erro && <div className={styles.alertError}>{erro}</div>}
+        {erro && (
+          <div className={`${styles.alertError} ${styles.listManagerError}`}>
+            {erro}
+          </div>
+        )}
 
         {modo === "editar" ? (
           <div className={styles.listManagerSection}>
