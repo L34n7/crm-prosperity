@@ -1178,13 +1178,19 @@ async function contarFalhasConsecutivasMetaCampanha(
   erroCodigoMeta: number,
   limite = 3
 ) {
+  // Considera apenas resultados que já receberam status de webhook da Meta.
+  // Itens recém-aceitos pela API ficam temporariamente como "enviado", mas
+  // ainda podem virar "falha" segundos depois. Eles não devem quebrar a
+  // sequência de falhas confirmadas pelo webhook.
+  const janelaConsulta = Math.max(20, limite * 10);
+
   const { data, error } = await supabaseAdmin
     .from("whatsapp_disparo_itens")
-    .select("status, erro_codigo_meta, processed_at")
+    .select("status, erro_codigo_meta, updated_at, metadata_json")
     .eq("campanha_id", campanhaId)
     .in("status", ["enviado", "falha"])
-    .order("processed_at", { ascending: false, nullsFirst: false })
-    .limit(Math.max(1, limite));
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(janelaConsulta);
 
   if (error) {
     console.error(
@@ -1198,14 +1204,24 @@ async function contarFalhasConsecutivasMetaCampanha(
     return null;
   }
 
+  const resultadosConfirmados = (data || []).filter((item) => {
+    const metadata = objeto(item.metadata_json);
+    return Boolean(String(metadata.ultimo_status_meta || "").trim());
+  });
+
   let consecutivas = 0;
 
-  for (const item of data || []) {
+  for (const item of resultadosConfirmados) {
     if (
       item.status === "falha" &&
       Number(item.erro_codigo_meta || 0) === erroCodigoMeta
     ) {
       consecutivas += 1;
+
+      if (consecutivas >= limite) {
+        break;
+      }
+
       continue;
     }
 
