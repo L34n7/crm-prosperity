@@ -24,6 +24,17 @@ type AnaliseExclusaoLista = {
   exclusao_bloqueada?: boolean;
 };
 
+function mensagemErroExclusaoLista(error: { code?: string; message?: string }) {
+  const codigo = String(error.code || "");
+  const mensagem = String(error.message || "");
+
+  if (codigo === "57014" || /statement timeout/i.test(mensagem)) {
+    return "A exclusão excedeu o tempo limite do banco. Nenhum dado foi removido. Tente novamente.";
+  }
+
+  return mensagem || "Não foi possível excluir a lista.";
+}
+
 type ResultadoExclusaoLista = {
   ok?: boolean;
   erro?: string;
@@ -340,8 +351,10 @@ export async function DELETE(
   );
 
   if (error) {
+    console.error("[CONTATOS LISTAS] Erro ao excluir lista:", error);
+
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { ok: false, error: mensagemErroExclusaoLista(error) },
       { status: 500 }
     );
   }
