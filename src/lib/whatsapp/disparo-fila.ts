@@ -29,6 +29,10 @@ import {
 const supabaseAdmin = getSupabaseAdmin();
 export const QSTASH_DISPARO_CHAIN_PENDING = "chain_pending";
 
+const ERRO_META_SPAM_RATE_LIMIT = 131048;
+const LIMITE_CONSECUTIVO_SPAM_RATE_LIMIT = 5;
+const COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS = 5 * 60;
+
 type DisparoCampanhaRow = {
   id: string;
   empresa_id: string;
@@ -1211,6 +1215,117 @@ async function contarFalhasConsecutivasMetaCampanha(
   return consecutivas;
 }
 
+function segundosRestantesCooldown131048(campanha: DisparoCampanhaRow) {
+  const metadata = objeto(campanha.metadata_json);
+  const ate = String(metadata.rate_limit_131048_ate || "").trim();
+
+  if (!ate) return 0;
+
+  const ateMs = new Date(ate).getTime();
+  if (!Number.isFinite(ateMs)) return 0;
+
+  return Math.max(0, Math.ceil((ateMs - Date.now()) / 1000));
+}
+
+async function aplicarCooldownTemporarioCampanha131048(params: {
+  campanhaId: string;
+  empresaId: string;
+  consecutivas: number;
+}) {
+  const campanha = await buscarCampanha(params.campanhaId);
+  const metadataAtual = objeto(campanha.metadata_json);
+  const cooldownAtual = segundosRestantesCooldown131048(campanha);
+
+  if (cooldownAtual > 0) {
+    return cooldownAtual;
+  }
+
+  const agora = new Date();
+  const ate = new Date(
+    agora.getTime() + COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS * 1000
+  ).toISOString();
+
+  const { error } = await supabaseAdmin
+    .from("whatsapp_disparo_campanhas")
+    .update({
+      updated_at: agora.toISOString(),
+      metadata_json: {
+        ...metadataAtual,
+        rate_limit_131048_ate: ate,
+        rate_limit_131048_ultimo_em: agora.toISOString(),
+        rate_limit_131048_consecutivas: params.consecutivas,
+        rate_limit_131048_cooldown_segundos:
+          COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS,
+      },
+    })
+    .eq("id", params.campanhaId)
+    .eq("empresa_id", params.empresaId)
+    .in("status", ["pendente", "enviando"]);
+
+  if (error) {
+    console.warn(
+      "[WHATSAPP DISPARO FILA] Erro ao aplicar cooldown temporario 131048:",
+      {
+        campanhaId: params.campanhaId,
+        erro: error,
+      }
+    );
+    return 0;
+  }
+
+  console.warn(
+    "[WHATSAPP DISPARO FILA] Rate limit 131048 consecutivo; fila aguardara antes de retomar:",
+    {
+      campanhaId: params.campanhaId,
+      consecutivas: params.consecutivas,
+      cooldownSegundos: COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS,
+      retomarEm: ate,
+    }
+  );
+
+  return COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS;
+}
+
+async function adiarItemPorCooldownCampanha(
+  item: DisparoItemRow,
+  delaySegundos: number
+) {
+  const agora = new Date();
+  const delay = Math.max(1, Math.ceil(delaySegundos));
+  const nextAttemptAt = new Date(
+    agora.getTime() + delay * 1000
+  ).toISOString();
+  const metadataAtual = objeto(item.metadata_json);
+
+  const { error } = await supabaseAdmin
+    .from("whatsapp_disparo_itens")
+    .update({
+      status: "pendente",
+      locked_at: null,
+      next_attempt_at: nextAttemptAt,
+      qstash_message_id: null,
+      qstash_publicado_at: null,
+      qstash_erro: null,
+      updated_at: agora.toISOString(),
+      metadata_json: {
+        ...metadataAtual,
+        aguardando_rate_limit_meta: true,
+        rate_limit_codigo_meta: ERRO_META_SPAM_RATE_LIMIT,
+        rate_limit_retomar_em: nextAttemptAt,
+      },
+    })
+    .eq("id", item.id)
+    .eq("status", "processando");
+
+  if (error) {
+    throw new Error(
+      `Erro ao adiar item durante cooldown Meta: ${error.message}`
+    );
+  }
+
+  return nextAttemptAt;
+}
+
 async function avaliarCircuitBreakerCampanha(params: {
   campanhaId: string;
   empresaId: string;
@@ -1288,92 +1403,34 @@ async function avaliarCircuitBreakerCampanha(params: {
     return;
   }
 
-  if (erroCodigo === 131048) {
-    const falhasRateLimit = await contarFalhasMetaCampanha(
+  if (erroCodigo === ERRO_META_SPAM_RATE_LIMIT) {
+    const falhasConsecutivas = await contarFalhasConsecutivasMetaCampanha(
       params.campanhaId,
-      erroCodigo
+      ERRO_META_SPAM_RATE_LIMIT,
+      LIMITE_CONSECUTIVO_SPAM_RATE_LIMIT
     );
 
-    if (falhasRateLimit === null || falhasRateLimit <= 3) {
+    if (
+      falhasConsecutivas === null ||
+      falhasConsecutivas < LIMITE_CONSECUTIVO_SPAM_RATE_LIMIT
+    ) {
       return;
     }
 
-    await pausarCampanha({
+    await aplicarCooldownTemporarioCampanha131048({
       campanhaId: params.campanhaId,
       empresaId: params.empresaId,
-      integracaoWhatsappId: params.integracaoWhatsappId,
-      status: "pausada_por_erro_meta",
-      motivo:
-        "Campanha pausada automaticamente apos mais de 3 falhas de rate limit Meta 131048.",
-      erroCodigoMeta: erroCodigo,
+      consecutivas: falhasConsecutivas,
     });
     return;
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("whatsapp_disparo_itens")
-    .select("status, erro_codigo_meta")
-    .eq("campanha_id", params.campanhaId)
-    .in("status", ["enviado", "falha"])
-    .order("processed_at", { ascending: false, nullsFirst: false })
-    .limit(50);
-
-  if (error || !data) {
-    return;
-  }
-
-  const falhas = data.filter((item) => item.status === "falha");
-  const falhasLimiteQualidadeMarketing = falhas.filter(
-    (item) =>
-      Number(item.erro_codigo_meta || 0) ===
-      ERRO_META_LIMITE_QUALIDADE_MARKETING
-  );
-
-  if (data.length >= 10 && falhasLimiteQualidadeMarketing.length >= 3) {
-    await pausarCampanha({
-      campanhaId: params.campanhaId,
-      empresaId: params.empresaId,
-      integracaoWhatsappId: params.integracaoWhatsappId,
-      status: "pausada_por_erro_meta",
-      motivo:
-        "Campanha pausada porque a Meta recusou varias mensagens de marketing por limite de qualidade ou frequencia.",
-      erroCodigoMeta: ERRO_META_LIMITE_QUALIDADE_MARKETING,
-    });
-    return;
-  }
-
-  const falhasNumeroInvalido = falhas.filter(
-    (item) => Number(item.erro_codigo_meta || 0) === 131026
-  );
-
-  if (data.length < 50) {
-    return;
-  }
-
-  if (falhasNumeroInvalido.length >= 10) {
-    await pausarCampanha({
-      campanhaId: params.campanhaId,
-      empresaId: params.empresaId,
-      integracaoWhatsappId: params.integracaoWhatsappId,
-      status: "pausada_por_lista_invalida",
-      motivo:
-        "Campanha pausada porque a lista apresentou muitos numeros invalidos ou indisponiveis.",
-      erroCodigoMeta: 131026,
-    });
-    return;
-  }
-
-  if (falhas.length >= 10) {
-    await pausarCampanha({
-      campanhaId: params.campanhaId,
-      empresaId: params.empresaId,
-      integracaoWhatsappId: params.integracaoWhatsappId,
-      status: "pausada_por_falhas",
-      motivo:
-        "Campanha pausada automaticamente porque muitas mensagens falharam no ultimo lote.",
-      erroCodigoMeta: erroCodigo,
-    });
-  }
+  // Erros de destinatario/qualidade individuais (ex.: 131026, 131049,
+  // 130472) permanecem registrados no item/contato, mas nao interrompem
+  // mais toda a campanha. Tambem removemos o breaker generico por volume
+  // total de falhas: a decisao de parar passa a depender de erro critico
+  // da conta ou de 131048 consecutivo.
+  return;
 }
 
 async function atualizarItemComResultado(
@@ -1820,6 +1877,32 @@ export async function processarItemDisparoPorId(itemId: string) {
   }
 
   try {
+    const campanhaCooldown = await buscarCampanha(item.campanha_id);
+    const cooldownRestante =
+      segundosRestantesCooldown131048(campanhaCooldown);
+
+    if (cooldownRestante > 0) {
+      const proximaTentativaEm = await adiarItemPorCooldownCampanha(
+        item,
+        cooldownRestante
+      );
+      const republicado = await republicarItemDisparoQstash({
+        item,
+        delaySegundos: cooldownRestante,
+      });
+
+      return {
+        ok: true,
+        processado: false,
+        status: "aguardando_meta",
+        itemId: item.id,
+        campanhaId: item.campanha_id,
+        republicado,
+        proximaTentativaEm,
+        proximaTentativaEmSegundos: cooldownRestante,
+      };
+    }
+
     // Mantém uma esteira curta: assim que um worker começa, publica somente
     // o próximo item. Com parallelism=2 haverá no máximo dois workers ativos
     // por integração, sem enfileirar a campanha inteira de uma vez.
