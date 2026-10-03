@@ -144,7 +144,7 @@ export default function MetaServiceQuotaBadge() {
     setMensagemErro("");
     setDrafts((atual) => ({
       ...atual,
-      [integracao.id]: atual[integracao.id] || {
+      [integracao.id]: {
         pausar: integracao.pausar_automacoes,
         usarExtra: integracao.limite_extra > 0,
         limiteExtra: integracao.limite_extra,
@@ -583,6 +583,17 @@ export default function MetaServiceQuotaBadge() {
                                   Com esta opção, todos os fluxos e agentes de IA
                                   deste número serão pausados ao atingir{" "}
                                   <strong>1.000 mensagens Service</strong> no mês.
+                                </div>
+                              )}
+
+                              {integracao.service_total_mes >= limiteFinalDraft && (
+                                <div className={styles.immediateWarning}>
+                                  <AlertTriangle size={17} />
+                                  <span>
+                                    O consumo atual já atingiu este teto. Ao salvar,
+                                    os fluxos e agentes de IA desta integração serão
+                                    pausados imediatamente.
+                                  </span>
                                 </div>
                               )}
                             </>
