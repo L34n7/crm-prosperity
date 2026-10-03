@@ -522,6 +522,12 @@ export async function avaliarLimiteAutomacoesService(params: {
       tipoBloqueio: "limite_service_atingido",
     });
 
+    await supabaseAdmin
+      .from("integracoes_whatsapp")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.integracaoWhatsappId);
+
     console.warn("[WHATSAPP SERVICE] Automações pausadas pelo limite configurado:", {
       empresaId: params.empresaId,
       integracaoWhatsappId: params.integracaoWhatsappId,
