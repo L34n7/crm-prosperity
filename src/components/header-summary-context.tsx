@@ -672,6 +672,32 @@ export function HeaderSummaryProvider({
 
     const supabase = getSupabaseRealtime();
     const channel = supabase
+      .channel(`crm-header-meta-payment:${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "integracoes_whatsapp",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        () => {
+          void refreshResumo(true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [contextoRealtime?.empresa_id, refreshResumo]);
+
+  useEffect(() => {
+    const empresaId = contextoRealtime?.empresa_id;
+    if (!empresaId) return;
+
+    const supabase = getSupabaseRealtime();
+    const channel = supabase
       .channel(`crm-header-disparos-pendentes:${empresaId}`)
       .on(
         "postgres_changes",
