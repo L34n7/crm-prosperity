@@ -1995,6 +1995,13 @@ function descricaoCampanhaTerminal(campanha: CampanhaDisparoAndamento) {
   );
 }
 
+function rotuloResultadoCampanha(campanha: CampanhaDisparoAndamento) {
+  if (campanhaFoiConcluidaComSucesso(campanha)) return "Concluído";
+  if (campanhaFoiConcluida(campanha)) return "Concluído com falhas";
+  if (String(campanha.status || "") === "cancelada") return "Cancelado";
+  return "Interrompido";
+}
+
 function criarCampanhaPaginaTeste(
   modo: string,
   integracaoWhatsappId?: string | null
@@ -2212,6 +2219,7 @@ export default function DisparosWhatsAppPage() {
   );
   const historicoConsultaAtivaRef = useRef("");
   const contatosConsultaAtivaRef = useRef(0);
+  const carregandoResultadosConclusaoRef = useRef(false);
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
 
   const [integracoes, setIntegracoes] = useState<IntegracaoWhatsApp[]>([]);
@@ -2248,6 +2256,14 @@ export default function DisparosWhatsAppPage() {
     CampanhaDisparoAndamento[]
   >([]);
   const [modalCampanhaAberto, setModalCampanhaAberto] = useState(false);
+  const [campanhasResultadoConclusao, setCampanhasResultadoConclusao] =
+    useState<CampanhaDisparoAndamento[]>([]);
+  const [campanhaResultadoConclusaoId, setCampanhaResultadoConclusaoId] =
+    useState("");
+  const [
+    modalResultadoConclusaoAberto,
+    setModalResultadoConclusaoAberto,
+  ] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"disparo" | "resultados">("disparo");
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
@@ -2401,6 +2417,67 @@ export default function DisparosWhatsAppPage() {
 
     return supabaseRealtimeRef.current;
   }
+
+  const carregarResultadosConclusao = useCallback(async () => {
+    if (carregandoResultadosConclusaoRef.current) return;
+
+    carregandoResultadosConclusaoRef.current = true;
+
+    try {
+      const response = await fetch(
+        "/api/whatsapp/disparos/resultados-pendentes",
+        { cache: "no-store" }
+      );
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        campanhas?: CampanhaDisparoAndamento[];
+      };
+
+      if (!response.ok || data.ok === false) return;
+
+      const novas = (Array.isArray(data.campanhas) ? data.campanhas : [])
+        .filter((campanha) => Boolean(campanha?.id));
+
+      if (novas.length === 0) return;
+
+      setCampanhasResultadoConclusao((atuais) => {
+        const porId = new Map(
+          atuais.map((campanha) => [campanha.id, campanha])
+        );
+
+        novas.forEach((campanha) => {
+          porId.set(campanha.id, campanha);
+        });
+
+        return Array.from(porId.values()).sort((a, b) => {
+          const dataA = Date.parse(
+            String(a.finished_at || a.paused_at || a.updated_at || "")
+          );
+          const dataB = Date.parse(
+            String(b.finished_at || b.paused_at || b.updated_at || "")
+          );
+
+          if (Number.isFinite(dataA) && Number.isFinite(dataB)) {
+            return dataA - dataB;
+          }
+
+          return String(a.id).localeCompare(String(b.id), "pt-BR");
+        });
+      });
+
+      setCampanhaResultadoConclusaoId((atual) => atual || novas[0].id);
+      setModalCampanhaAberto(false);
+      setModalResultadoConclusaoAberto(true);
+    } finally {
+      carregandoResultadosConclusaoRef.current = false;
+    }
+  }, []);
+
+  const fecharModalResultadoConclusao = useCallback(() => {
+    setModalResultadoConclusaoAberto(false);
+    setCampanhasResultadoConclusao([]);
+    setCampanhaResultadoConclusaoId("");
+  }, []);
 
   const aplicarCampanhaPagina = useCallback(
     (campanhaAtual: CampanhaDisparoAndamento | null) => {
@@ -3526,6 +3603,30 @@ export default function DisparosWhatsAppPage() {
   useEffect(() => {
     if (!usuarioLogado?.empresa_id) return;
 
+    void carregarResultadosConclusao();
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void carregarResultadosConclusao();
+    }, 5_000);
+
+    const aoVoltarParaAba = () => {
+      if (document.visibilityState === "visible") {
+        void carregarResultadosConclusao();
+      }
+    };
+
+    document.addEventListener("visibilitychange", aoVoltarParaAba);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", aoVoltarParaAba);
+    };
+  }, [usuarioLogado?.empresa_id, carregarResultadosConclusao]);
+
+  useEffect(() => {
+    if (!usuarioLogado?.empresa_id) return;
+
     void carregarHistorico({
       forcar: false,
       restaurarPagina: true,
@@ -4316,6 +4417,33 @@ export default function DisparosWhatsAppPage() {
       ? 0
       : primeiroItemHistorico + resultadoHistoricoPaginado.length - 1,
     totalResultadosFiltroAtivo
+  );
+
+  const campanhaResultadoConclusao = useMemo(
+    () =>
+      campanhasResultadoConclusao.find(
+        (campanha) => campanha.id === campanhaResultadoConclusaoId
+      ) ||
+      campanhasResultadoConclusao[0] ||
+      null,
+    [campanhasResultadoConclusao, campanhaResultadoConclusaoId]
+  );
+  const resultadoConclusaoSucesso =
+    campanhaFoiConcluidaComSucesso(campanhaResultadoConclusao);
+  const totalResultadoConclusao = inteiroCampanha(
+    campanhaResultadoConclusao?.total
+  );
+  const enviadosResultadoConclusao = inteiroCampanha(
+    campanhaResultadoConclusao?.enviados
+  );
+  const falhasResultadoConclusao = inteiroCampanha(
+    campanhaResultadoConclusao?.falhas
+  );
+  const canceladosResultadoConclusao = inteiroCampanha(
+    campanhaResultadoConclusao?.cancelados
+  );
+  const aguardandoResultadoConclusao = inteiroCampanha(
+    campanhaResultadoConclusao?.aguardando_confirmacao
   );
 
   const campanhaPaginaAtiva = campanhaEstaAtiva(campanhaPagina);
@@ -7828,7 +7956,206 @@ export default function DisparosWhatsAppPage() {
         </div>
       ) : null}
 
-      {campanhaPaginaAtiva && campanhaPagina && modalCampanhaAberto ? (
+      {modalResultadoConclusaoAberto && campanhaResultadoConclusao ? (
+        <div className={styles.campaignProgressOverlay} role="presentation">
+          <div className={styles.campaignProgressShell}>
+            {campanhasResultadoConclusao.length > 1 ? (
+              <div
+                className={styles.campaignProgressCampaignTabs}
+                role="tablist"
+                aria-label="Resultados de campanhas finalizadas"
+              >
+                {campanhasResultadoConclusao.map((campanha) => {
+                  const selecionada =
+                    campanha.id === campanhaResultadoConclusao.id;
+                  const label =
+                    campanha.integracao_nome ||
+                    campanha.integracao_numero ||
+                    "Integração";
+
+                  return (
+                    <button
+                      key={campanha.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={selecionada}
+                      className={`${styles.campaignProgressCampaignTab} ${
+                        selecionada
+                          ? styles.campaignProgressCampaignTabActive
+                          : ""
+                      }`}
+                      onClick={() =>
+                        setCampanhaResultadoConclusaoId(campanha.id)
+                      }
+                    >
+                      <span
+                        className={`${styles.campaignProgressCampaignTabDot} ${
+                          campanhaFoiConcluidaComSucesso(campanha)
+                            ? styles.campaignProgressCampaignTabDotSuccess
+                            : styles.campaignProgressCampaignTabDotWarning
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <section
+              className={`${styles.campaignProgressModal} ${
+                resultadoConclusaoSucesso
+                  ? styles.campaignProgressModalSuccess
+                  : styles.campaignProgressModalWarning
+              }`}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="campanha-resultado-titulo"
+            >
+              <header className={styles.campaignProgressHeader}>
+                <div className={styles.campaignProgressHeading}>
+                  <p className={styles.campaignProgressEyebrow}>
+                    Resultado do disparo
+                  </p>
+                  <h2
+                    id="campanha-resultado-titulo"
+                    className={styles.campaignProgressTitle}
+                  >
+                    {campanhaResultadoConclusao.nome ||
+                      rotuloResultadoCampanha(campanhaResultadoConclusao)}
+                  </h2>
+
+                  <div className={styles.campaignProgressMeta}>
+                    <span
+                      className={`${styles.campaignProgressState} ${
+                        resultadoConclusaoSucesso
+                          ? styles.campaignProgressStateSuccess
+                          : styles.campaignProgressStateWarning
+                      }`}
+                    >
+                      <span className={styles.campaignProgressStateDot} />
+                      {rotuloResultadoCampanha(campanhaResultadoConclusao)}
+                    </span>
+
+                    <span className={styles.campaignProgressMetaItem}>
+                      <FileText size={14} aria-hidden="true" />
+                      Template: {campanhaResultadoConclusao.template_nome || "-"}
+                    </span>
+
+                    <span className={styles.campaignProgressMetaItem}>
+                      <Link2 size={14} aria-hidden="true" />
+                      Integração:{" "}
+                      {campanhaResultadoConclusao.integracao_nome ||
+                        campanhaResultadoConclusao.integracao_numero ||
+                        "WhatsApp"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={styles.campaignProgressHeaderActions}>
+                  <span className={styles.campaignProgressCounter}>
+                    {rotuloResultadoCampanha(campanhaResultadoConclusao)}
+                  </span>
+                </div>
+              </header>
+
+              <div className={styles.campaignProgressMetrics}>
+                <article className={styles.campaignProgressMetric}>
+                  <span>Total</span>
+                  <strong>{totalResultadoConclusao}</strong>
+                </article>
+
+                <article
+                  className={`${styles.campaignProgressMetric} ${styles.campaignProgressMetricSuccess}`}
+                >
+                  <span>Enviados</span>
+                  <strong>{enviadosResultadoConclusao}</strong>
+                </article>
+
+                <article
+                  className={`${styles.campaignProgressMetric} ${styles.campaignProgressMetricDanger}`}
+                >
+                  <span>Falhas</span>
+                  <strong>{falhasResultadoConclusao}</strong>
+                </article>
+
+                <article
+                  className={`${styles.campaignProgressMetric} ${
+                    canceladosResultadoConclusao > 0
+                      ? styles.campaignProgressMetricDanger
+                      : ""
+                  }`}
+                >
+                  <span>Cancelados</span>
+                  <strong>{canceladosResultadoConclusao}</strong>
+                </article>
+              </div>
+
+              <div className={styles.campaignProgressBarRow}>
+                <div
+                  className={styles.campaignProgressBar}
+                  role="progressbar"
+                  aria-label="Resultado do disparo em massa"
+                  aria-valuemin={0}
+                  aria-valuemax={totalResultadoConclusao || 100}
+                  aria-valuenow={Math.min(
+                    totalResultadoConclusao,
+                    enviadosResultadoConclusao +
+                      falhasResultadoConclusao +
+                      canceladosResultadoConclusao
+                  )}
+                >
+                  <span style={{ width: "100%" }} />
+                </div>
+
+                <div className={styles.campaignProgressPercent}>
+                  <strong>100%</strong>
+                </div>
+              </div>
+
+              <div
+                className={`${styles.campaignProgressInfo} ${
+                  resultadoConclusaoSucesso
+                    ? styles.campaignProgressInfoSuccess
+                    : styles.campaignProgressInfoWarning
+                }`}
+              >
+                <Info size={17} aria-hidden="true" />
+                <p>
+                  {aguardandoResultadoConclusao > 0
+                    ? `${descricaoCampanhaTerminal(
+                        campanhaResultadoConclusao
+                      )} ${aguardandoResultadoConclusao} mensagem(ns) ainda aguardavam confirmação final da Meta no momento da consolidação.`
+                    : descricaoCampanhaTerminal(campanhaResultadoConclusao)}
+                </p>
+              </div>
+
+              <footer className={styles.campaignProgressFooter}>
+                <div className={styles.campaignProgressFooterLeft}>
+                  <span className={styles.campaignResultOnceNote}>
+                    Este resultado é exibido uma única vez.
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.campaignProgressMinimize}
+                  onClick={fecharModalResultadoConclusao}
+                >
+                  <Check size={16} aria-hidden="true" />
+                  Fechar
+                </button>
+              </footer>
+            </section>
+          </div>
+        </div>
+      ) : null}
+
+      {campanhaPaginaAtiva &&
+      campanhaPagina &&
+      modalCampanhaAberto &&
+      !modalResultadoConclusaoAberto ? (
         <div className={styles.campaignProgressOverlay} role="presentation">
           <div className={styles.campaignProgressShell}>
             {campanhasPagina.length > 1 ? (
