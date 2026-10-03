@@ -7,10 +7,7 @@ import {
 } from "@/lib/whatsapp/meta-block";
 import { notificarCampanhaDisparoPausada } from "@/lib/whatsapp/disparo-alertas";
 import { resolverPricingRealizado } from "@/lib/whatsapp/pricing-realized";
-import {
-  codigoErroMetaPagamento,
-  lerBloqueioFinanceiroMeta,
-} from "@/lib/whatsapp/meta-payment-block";
+import { codigoErroMetaPagamento } from "@/lib/whatsapp/meta-payment-block";
 
 type UpdateMessageStatusParams = {
   mensagemExternaId: string;
@@ -439,79 +436,35 @@ async function tratarErroMetaPagamento(params: {
 
   const agora = new Date().toISOString();
   const detalhe = extrairDetalheErroMeta(params.metadata);
-  const rawSaudeAnterior = objeto(integracao.meta_saude_raw_json);
-  const bloqueioAnterior = lerBloqueioFinanceiroMeta(rawSaudeAnterior);
+  const { data: bloqueioAssumido, error: claimError } = await supabaseAdmin.rpc(
+    "claim_whatsapp_meta_payment_block",
+    {
+      p_empresa_id: contexto.empresaId,
+      p_integracao_id: contexto.integracaoId,
+      p_codigo: codigoErroMeta,
+      p_detalhe: detalhe,
+      p_mensagem_externa_id: params.mensagemExternaId,
+      p_ocorrido_em: agora,
+    }
+  );
 
-  if (bloqueioAnterior?.ativo) {
-    await supabaseAdmin
-      .from("integracoes_whatsapp")
-      .update({
-        meta_saude_ultima_verificacao_em: agora,
-        meta_saude_raw_json: {
-          ...rawSaudeAnterior,
-          bloqueio_financeiro_meta: {
-            ...objeto(rawSaudeAnterior.bloqueio_financeiro_meta),
-            ativo: true,
-            codigo: codigoErroMeta,
-            detalhe,
-            ultima_falha_em: agora,
-            mensagem_externa_id: params.mensagemExternaId,
-          },
-        },
-        updated_at: agora,
-      })
-      .eq("id", contexto.integracaoId)
-      .eq("empresa_id", contexto.empresaId);
+  if (claimError) {
+    console.error(
+      "[META PAYMENT BLOCK] Erro ao assumir bloqueio financeiro de forma atômica:",
+      claimError
+    );
+    return;
+  }
 
+  // Outra falha concorrente já assumiu o bloqueio. A função do banco atualiza
+  // a última falha, mas somente o primeiro webhook pausa e envia o e-mail.
+  if (bloqueioAssumido !== true) {
     return;
   }
 
   const motivo =
     "A Meta recusou um envio por pendência financeira ou problema com a forma de pagamento. " +
     `Código Meta: ${codigoErroMeta}. As automações deste número foram pausadas pelo CRM.`;
-
-  // Registra primeiro um bloqueio provisório. Assim, falhas financeiras
-  // simultâneas não continuam iniciando novas automações enquanto a pausa é aplicada.
-  const bloqueioProvisorio = {
-    ...rawSaudeAnterior,
-    bloqueio_financeiro_meta: {
-      ativo: true,
-      codigo: codigoErroMeta,
-      detalhe,
-      ocorrido_em: agora,
-      ultima_falha_em: agora,
-      mensagem_externa_id: params.mensagemExternaId,
-      origem: "webhook_status_meta",
-      payment_method_added: integracao.payment_method_added === true,
-      pausas: {
-        conversas_encerradas: 0,
-        execucoes_canceladas: 0,
-        agendamentos_cancelados: 0,
-        pendencias_ia_canceladas: 0,
-        execucoes_ia_canceladas: 0,
-        jobs_fila_cancelados: 0,
-        campanhas_pausadas: 0,
-      },
-    },
-  };
-
-  const { error: provisionalError } = await supabaseAdmin
-    .from("integracoes_whatsapp")
-    .update({
-      meta_saude_ultima_verificacao_em: agora,
-      meta_saude_raw_json: bloqueioProvisorio,
-      updated_at: agora,
-    })
-    .eq("id", contexto.integracaoId)
-    .eq("empresa_id", contexto.empresaId);
-
-  if (provisionalError) {
-    console.error(
-      "[META PAYMENT BLOCK] Erro ao registrar bloqueio financeiro:",
-      provisionalError
-    );
-    return;
-  }
 
   const resultadoOperacional = await aplicarBloqueioOperacionalWhatsappMeta({
     empresaId: contexto.empresaId,
@@ -539,14 +492,23 @@ async function tratarErroMetaPagamento(params: {
     campanhas_pausadas: campanhasPausadas,
   };
 
+  const { data: integracaoAtualizada } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("meta_saude_raw_json")
+    .eq("id", contexto.integracaoId)
+    .eq("empresa_id", contexto.empresaId)
+    .maybeSingle();
+
+  const rawSaudeAtual = objeto(integracaoAtualizada?.meta_saude_raw_json);
   const { error: finalUpdateError } = await supabaseAdmin
     .from("integracoes_whatsapp")
     .update({
       meta_saude_ultima_verificacao_em: agora,
       meta_saude_raw_json: {
-        ...bloqueioProvisorio,
+        ...rawSaudeAtual,
         bloqueio_financeiro_meta: {
-          ...objeto(bloqueioProvisorio.bloqueio_financeiro_meta),
+          ...objeto(rawSaudeAtual.bloqueio_financeiro_meta),
+          ativo: true,
           pausas,
         },
       },
