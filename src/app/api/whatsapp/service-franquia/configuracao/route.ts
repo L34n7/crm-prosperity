@@ -120,6 +120,12 @@ export async function POST(request: Request) {
     }
   }
 
+  await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("id", integracao.id);
+
   return NextResponse.json({
     ok: true,
     configuracao: {
