@@ -67,6 +67,8 @@ export default function TentativasConfig({
   onNotificarSistemaChange,
   onNotificarEmailChange,
 }: TentativasConfigProps) {
+  const possuiSetores = setores.length > 0;
+
   return (
     <div className={styles.tentativasBox}>
       <div>
@@ -115,6 +117,14 @@ export default function TentativasConfig({
 
       {acao === "transferir_atendimento" && (
         <>
+          {carregandoSetores ? (
+            <p className={styles.help}>Carregando configuração da fila...</p>
+          ) : !possuiSetores ? (
+            <p className={styles.help}>
+              Nenhum setor cadastrado. O atendimento será enviado para a Fila geral.
+            </p>
+          ) : (
+            <>
           <label className={styles.field}>
             <span className={styles.label}>Escopo da fila</span>
             <select
@@ -206,6 +216,8 @@ export default function TentativasConfig({
                 ))}
               </select>
             </label>
+          )}
+            </>
           )}
         </>
       )}

@@ -68,7 +68,7 @@ export default function NodeCustom({ data, dragging }: any) {
     <div
       className={`${styles.nodeBox} ${corTipoNo(data.tipo_no)} ${
         !dragging && data.isSelecionado ? styles.nodeSelecionado : ""
-      }`}
+      } ${data?.destaqueNovoPendente ? styles.nodeNovoPendente : ""}`}
     >
       <Handle
         type="target"

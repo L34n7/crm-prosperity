@@ -805,6 +805,8 @@ function FluxosPageContent() {
     onError: setErro,
   });
 
+  const empresaPossuiSetores = setores.length > 0;
+
   const [erroCriacaoFluxo, setErroCriacaoFluxo] = useState("");
   const {
     modalCompartilharAberto,
@@ -905,7 +907,7 @@ function FluxosPageContent() {
 
   const [setorDestino, setSetorDestino] = useState("");
   const [escopoFilaTransferenciaNode, setEscopoFilaTransferenciaNode] =
-    useState<EscopoFilaNode>("setor");
+    useState<EscopoFilaNode>("geral");
   const [estrategiaTransferenciaNode, setEstrategiaTransferenciaNode] =
     useState<EstrategiaTransferenciaNode>("fila_setor");
   const [atendenteDestinoNode, setAtendenteDestinoNode] = useState("");
@@ -1122,7 +1124,7 @@ function FluxosPageContent() {
   const [setorExcessoTentativasNode, setSetorExcessoTentativasNode] =
     useState("");
   const [escopoFilaExcessoTentativasNode, setEscopoFilaExcessoTentativasNode] =
-    useState<EscopoFilaNode>("setor");
+    useState<EscopoFilaNode>("geral");
   const [estrategiaExcessoTentativasNode, setEstrategiaExcessoTentativasNode] =
     useState<EstrategiaTransferenciaNode>("fila_setor");
   const [atendenteExcessoTentativasNode, setAtendenteExcessoTentativasNode] =
@@ -2284,9 +2286,10 @@ const onConnect = useCallback(
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
-              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
-                ? "geral"
-                : "setor",
+              escopo_fila_excesso_tentativas:
+                fluxoSistemaCalendario || !empresaPossuiSetores
+                  ? "geral"
+                  : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -2307,9 +2310,10 @@ const onConnect = useCallback(
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
-              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
-                ? "geral"
-                : "setor",
+              escopo_fila_excesso_tentativas:
+                fluxoSistemaCalendario || !empresaPossuiSetores
+                  ? "geral"
+                  : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -2330,9 +2334,10 @@ const onConnect = useCallback(
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
-              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
-                ? "geral"
-                : "setor",
+              escopo_fila_excesso_tentativas:
+                fluxoSistemaCalendario || !empresaPossuiSetores
+                  ? "geral"
+                  : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -2415,9 +2420,10 @@ const onConnect = useCallback(
               max_tentativas_invalidas: 3,
               max_tentativas_sem_resposta: 3,
               acao_excesso_tentativas: "transferir_atendimento",
-              escopo_fila_excesso_tentativas: fluxoSistemaCalendario
-                ? "geral"
-                : "setor",
+              escopo_fila_excesso_tentativas:
+                fluxoSistemaCalendario || !empresaPossuiSetores
+                  ? "geral"
+                  : "setor",
               setor_excesso_tentativas: null,
               estrategia_excesso_tentativas: "fila_setor",
               atendente_excesso_tentativas: null,
@@ -2472,7 +2478,10 @@ const onConnect = useCallback(
           : tipoNo === "transferir_setor"
           ? {
               mensagem: "Vou te encaminhar para um atendente.",
-              escopo_fila: fluxoSistemaCalendario ? "geral" : "setor",
+              escopo_fila:
+                fluxoSistemaCalendario || !empresaPossuiSetores
+                  ? "geral"
+                  : "setor",
               setor_id: "",
               estrategia_transferencia: "fila_setor",
               atendente_id: null,
@@ -2507,7 +2516,13 @@ const onConnect = useCallback(
 
     const novoNodeBase = dbNoParaReactFlow(novoNoDb);
 
-    const novoNode = novoNodeBase;
+    const novoNode: Node = {
+      ...novoNodeBase,
+      data: {
+        ...novoNodeBase.data,
+        destaqueNovoPendente: true,
+      },
+    };
 
     setNodes((atuais) => [...atuais, novoNode]);
 
@@ -2651,13 +2666,17 @@ function offsetLabelConexao(edgeId: string) {
       String(configuracaoJson?.botao_texto || "Acessar")
     );
     setRedirectUrlNode(String(configuracaoJson?.url || ""));
-    setSetorDestino(configuracaoJson?.setor_id || "");
+    setSetorDestino(
+      empresaPossuiSetores ? configuracaoJson?.setor_id || "" : ""
+    );
     setEscopoFilaTransferenciaNode(
-      normalizarEscopoFilaNode(
-        configuracaoJson?.escopo_fila,
-        configuracaoJson?.setor_id,
-        fluxoSistemaCalendario
-      )
+      empresaPossuiSetores
+        ? normalizarEscopoFilaNode(
+            configuracaoJson?.escopo_fila,
+            configuracaoJson?.setor_id,
+            fluxoSistemaCalendario
+          )
+        : "geral"
     );
     setEstrategiaTransferenciaNode(
       normalizarEstrategiaTransferenciaNode(
@@ -2692,14 +2711,18 @@ function offsetLabelConexao(edgeId: string) {
       String(configuracaoJson?.acao_excesso_tentativas || "transferir_atendimento")
     );
     setSetorExcessoTentativasNode(
-      String(configuracaoJson?.setor_excesso_tentativas || "")
+      empresaPossuiSetores
+        ? String(configuracaoJson?.setor_excesso_tentativas || "")
+        : ""
     );
     setEscopoFilaExcessoTentativasNode(
-      normalizarEscopoFilaNode(
-        configuracaoJson?.escopo_fila_excesso_tentativas,
-        configuracaoJson?.setor_excesso_tentativas,
-        fluxoSistemaCalendario
-      )
+      empresaPossuiSetores
+        ? normalizarEscopoFilaNode(
+            configuracaoJson?.escopo_fila_excesso_tentativas,
+            configuracaoJson?.setor_excesso_tentativas,
+            fluxoSistemaCalendario
+          )
+        : "geral"
     );
     setEstrategiaExcessoTentativasNode(
       normalizarEstrategiaTransferenciaNode(
@@ -3386,6 +3409,11 @@ async function aplicarEdicaoNoInterno() {
 
     setErro("");
 
+    const escopoFilaExcessoTentativasEfetivo: EscopoFilaNode =
+      empresaPossuiSetores ? escopoFilaExcessoTentativasNode : "geral";
+    const escopoFilaTransferenciaEfetivo: EscopoFilaNode =
+      empresaPossuiSetores ? escopoFilaTransferenciaNode : "geral";
+
       const nodesAtualizados = nodes.map((node) => {
       if (node.id !== editandoNodeId) return node;
 
@@ -3633,23 +3661,25 @@ async function aplicarEdicaoNoInterno() {
           acaoExcessoTentativasNode || "transferir_atendimento";
 
         configuracao_json.escopo_fila_excesso_tentativas =
-          escopoFilaExcessoTentativasNode;
+          escopoFilaExcessoTentativasEfetivo;
         configuracao_json.setor_excesso_tentativas =
-          escopoFilaExcessoTentativasNode === "setor"
+          escopoFilaExcessoTentativasEfetivo === "setor"
             ? setorExcessoTentativasNode || null
             : null;
         configuracao_json.estrategia_excesso_tentativas =
-          estrategiaDistribuicaoDisponivel(
-            estrategiaExcessoTentativasNode,
-            setorExcessoTentativasNode,
-            incluirAdministradoresExcessoTentativasNode
-          );
+          escopoFilaExcessoTentativasEfetivo === "setor"
+            ? estrategiaDistribuicaoDisponivel(
+                estrategiaExcessoTentativasNode,
+                setorExcessoTentativasNode,
+                incluirAdministradoresExcessoTentativasNode
+              )
+            : "fila_setor";
         configuracao_json.incluir_administradores_excesso_tentativas =
-          escopoFilaExcessoTentativasNode === "setor"
+          escopoFilaExcessoTentativasEfetivo === "setor"
             ? incluirAdministradoresExcessoTentativasNode
             : false;
         configuracao_json.atendente_excesso_tentativas =
-          escopoFilaExcessoTentativasNode === "setor" &&
+          escopoFilaExcessoTentativasEfetivo === "setor" &&
           estrategiaExcessoTentativasNode === "atendente_especifico"
             ? atendenteExcessoTentativasNode || null
             : null;
@@ -3665,21 +3695,23 @@ async function aplicarEdicaoNoInterno() {
       }
 
       if (tipoFinal === "transferir_setor") {
-        configuracao_json.escopo_fila = escopoFilaTransferenciaNode;
+        configuracao_json.escopo_fila = escopoFilaTransferenciaEfetivo;
         configuracao_json.setor_id =
-          escopoFilaTransferenciaNode === "setor" ? setorDestino : null;
+          escopoFilaTransferenciaEfetivo === "setor" ? setorDestino : null;
         configuracao_json.estrategia_transferencia =
-          estrategiaDistribuicaoDisponivel(
-            estrategiaTransferenciaNode,
-            setorDestino,
-            incluirAdministradoresTransferenciaNode
-          );
+          escopoFilaTransferenciaEfetivo === "setor"
+            ? estrategiaDistribuicaoDisponivel(
+                estrategiaTransferenciaNode,
+                setorDestino,
+                incluirAdministradoresTransferenciaNode
+              )
+            : "fila_setor";
         configuracao_json.incluir_administradores_distribuicao =
-          escopoFilaTransferenciaNode === "setor"
+          escopoFilaTransferenciaEfetivo === "setor"
             ? incluirAdministradoresTransferenciaNode
             : false;
         configuracao_json.atendente_id =
-          escopoFilaTransferenciaNode === "setor" &&
+          escopoFilaTransferenciaEfetivo === "setor" &&
           estrategiaTransferenciaNode === "atendente_especifico"
             ? atendenteDestinoNode || null
             : null;
@@ -4394,6 +4426,7 @@ async function duplicarNode(nodeId: string) {
       data: {
         ...novoNodeBase.data,
         isSelecionado: true,
+        destaqueNovoPendente: true,
       },
     };
 
@@ -5531,7 +5564,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
 
                                           {tipoNodeEdicao === "transferir_setor" && (
                     <TransferenciaConfig
-                              escopoFila={escopoFilaTransferenciaNode}
+                              escopoFila={
+                                empresaPossuiSetores
+                                  ? escopoFilaTransferenciaNode
+                                  : "geral"
+                              }
                               setorDestino={setorDestino}
                               incluirAdministradores={incluirAdministradoresTransferenciaNode}
                               estrategia={estrategiaDistribuicaoDisponivel(
@@ -5638,7 +5675,11 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
             maxInvalidas={maxTentativasInvalidasNode}
             maxSemResposta={maxTentativasSemRespostaNode}
             acao={acaoExcessoTentativasNode}
-            escopoFila={escopoFilaExcessoTentativasNode}
+            escopoFila={
+              empresaPossuiSetores
+                ? escopoFilaExcessoTentativasNode
+                : "geral"
+            }
             setor={setorExcessoTentativasNode}
             incluirAdministradores={incluirAdministradoresExcessoTentativasNode}
             estrategia={estrategiaDistribuicaoDisponivel(

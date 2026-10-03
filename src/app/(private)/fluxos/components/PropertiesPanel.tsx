@@ -38,7 +38,9 @@ export default function PropertiesPanel({
     <PropertiesPanelNodeContext.Provider value={nodeEditado}>
       <aside className={styles.propertiesPanel}>
         <div className={styles.propertiesHeader}>
-          <h3 className={styles.propertiesTitle}>Editar bloco</h3>
+          <h3 className={styles.propertiesTitle}>
+            {edgeEditada ? "Edita conexão" : "Editar bloco"}
+          </h3>
 
           <div className={styles.propertiesHeaderActions}>
             {nodeEditado && nodeEditado.data?.tipo_no !== "inicio" && (

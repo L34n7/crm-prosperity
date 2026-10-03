@@ -611,6 +611,40 @@
     0 18px 40px var(--crm-ui-private-shadow-rgb-44-216-255-0-271) !important;
 }
 
+.nodeNovoPendente {
+  position: relative;
+}
+
+.nodeNovoPendente::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  border: 2px solid var(--crm-primary-border);
+  border-radius: 26px;
+  pointer-events: none;
+  animation: nodeNovoPendenteBrilho 1.4s ease-in-out infinite;
+}
+
+@keyframes nodeNovoPendenteBrilho {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.98);
+    box-shadow:
+      0 0 0 2px var(--crm-primary-soft),
+      0 0 16px var(--crm-primary-border);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.03);
+    box-shadow:
+      0 0 0 4px var(--crm-primary-soft),
+      0 0 30px var(--crm-primary);
+  }
+}
+
 .nodeHeader {
   padding: 7px 14px;
   border-bottom: 1px solid var(--crm-ui-private-border-hex-e5ebe6);

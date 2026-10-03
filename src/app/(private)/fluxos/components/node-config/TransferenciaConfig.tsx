@@ -43,8 +43,18 @@ export default function TransferenciaConfig({
   onEstrategiaChange,
   onAtendenteDestinoChange,
 }: TransferenciaConfigProps) {
+  const possuiSetores = setores.length > 0;
+
   return (
     <div className={styles.optionsBox}>
+      {carregandoSetores ? (
+        <p className={styles.help}>Carregando configuração da fila...</p>
+      ) : !possuiSetores ? (
+        <p className={styles.help}>
+          Nenhum setor cadastrado. Este bloco usará a Fila geral.
+        </p>
+      ) : (
+        <>
       <label className={styles.field}>
         <span className={styles.label}>Escopo da fila</span>
         <select
@@ -146,6 +156,8 @@ export default function TransferenciaConfig({
       <p className={styles.help}>
         No rodízio aleatório o sistema escolhe entre os usuários elegíveis. Em menos conversas, considera os atendimentos ainda abertos atribuídos a cada usuário. Administradores só entram na distribuição automática quando a opção acima estiver marcada.
       </p>
+        </>
+      )}
     </div>
   );
 }
