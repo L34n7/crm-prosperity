@@ -160,6 +160,7 @@ type CampanhaDisparoAndamento = {
   template_nome?: string | null;
   total?: number;
   enviados?: number;
+  aguardando_confirmacao?: number;
   falhas?: number;
   cancelados?: number;
   pendentes?: number;
@@ -1902,7 +1903,7 @@ function normalizarCampanhaRealtime(
   if (!id) return null;
 
   const total = inteiroCampanha(campanha.total_itens);
-  const enviados = inteiroCampanha(campanha.total_enviados);
+  const enviadosAceitos = inteiroCampanha(campanha.total_enviados);
   const falhas = inteiroCampanha(campanha.total_falhas);
   const cancelados = inteiroCampanha(campanha.total_cancelados);
   const pendentes = inteiroCampanha(campanha.total_pendentes);
@@ -1928,12 +1929,19 @@ function normalizarCampanhaRealtime(
     status: textoCampanha(campanha.status),
     template_nome: textoCampanha(campanha.template_nome),
     total,
-    enviados,
+    // O realtime da tabela traz o total aceito pela API, que ainda pode
+    // virar falha via webhook. O contador de enviados confirmados vem da
+    // rota /andamento e é preservado ao mesclar o evento realtime.
+    enviados: undefined,
+    aguardando_confirmacao: undefined,
     falhas,
     cancelados,
     pendentes,
     processando,
-    processados: Math.min(total, enviados + falhas + cancelados),
+    processados: Math.min(
+      total,
+      enviadosAceitos + falhas + cancelados
+    ),
     motivo: motivoCampanhaRealtime(campanha),
     aguardando_meta: aguardandoMeta,
     aguardando_meta_codigo: aguardandoMeta ? 131048 : null,
@@ -3582,6 +3590,9 @@ export default function DisparosWhatsAppPage() {
           const campanhaAtiva = campanhaEstaAtiva(campanhaRealtime);
 
           setCampanhasPagina((atuais) => {
+            const existente = atuais.find(
+              (campanha) => campanha.id === campanhaRealtime.id
+            );
             const restantes = atuais.filter(
               (campanha) => campanha.id !== campanhaRealtime.id
             );
@@ -3590,15 +3601,29 @@ export default function DisparosWhatsAppPage() {
               return restantes;
             }
 
+            const campanhaMesclada = {
+              ...campanhaRealtime,
+              enviados: existente?.enviados ?? 0,
+              aguardando_confirmacao:
+                existente?.aguardando_confirmacao ?? 0,
+            };
+
             return ordenarCampanhasPaginaPorCriacao([
-              campanhaRealtime,
+              campanhaMesclada,
               ...restantes,
             ]).slice(0, 25);
           });
 
           setCampanhaPagina((atual) => {
             if (atual?.id !== campanhaRealtime.id) return atual;
-            return campanhaAtiva ? campanhaRealtime : null;
+            if (!campanhaAtiva) return null;
+
+            return {
+              ...campanhaRealtime,
+              enviados: atual.enviados ?? 0,
+              aguardando_confirmacao:
+                atual.aguardando_confirmacao ?? 0,
+            };
           });
 
           if (!campanhaAtiva) {
@@ -7989,7 +8014,11 @@ export default function DisparosWhatsAppPage() {
                 {campanhaAguardandoMeta(campanhaPagina)
                   ? "Pausa automática temporária após 5 erros consecutivos 131048. Os contatos restantes continuam pendentes e o disparo será retomado automaticamente em até 2 minutos."
                   : campanhaPaginaAtiva
-                  ? "Enviados, falhas e restantes são atualizados conforme a campanha avança. Os totais definitivos são consolidados ao final do processamento."
+                  ? inteiroCampanha(campanhaPagina.aguardando_confirmacao) > 0
+                    ? `${inteiroCampanha(
+                        campanhaPagina.aguardando_confirmacao
+                      )} mensagem(ns) aceita(s) pela API aguardando confirmação da Meta. O contador Enviados mostra apenas confirmações sent/delivered/read.`
+                    : "Enviados mostra somente mensagens confirmadas pela Meta (sent/delivered/read). Falhas e restantes são atualizados conforme a campanha avança."
                   : descricaoCampanhaTerminal(campanhaPagina)}
               </p>
             </div>
