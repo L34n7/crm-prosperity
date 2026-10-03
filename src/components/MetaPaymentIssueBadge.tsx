@@ -5,8 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useHeaderSummary } from "@/components/header-summary-context";
 import { useHeaderUser } from "@/components/header-user-context";
-import { META_PAYMENT_SETTINGS_URL } from "@/lib/whatsapp/meta-payment-block";
 import styles from "./MetaPaymentIssueBadge.module.css";
+
+const META_PAYMENT_SETTINGS_URL =
+  "https://business.facebook.com/latest/billing_hub/accounts";
 
 export default function MetaPaymentIssueBadge() {
   const headerUser = useHeaderUser();
