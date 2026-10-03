@@ -163,19 +163,19 @@ export async function GET() {
 
     const ordem = new Map(ids.map((id, index) => [id, index]));
     const integracoes = new Map<string, IntegracaoResumo>(
-      ((integracoesData || []) as IntegracaoResumo[]).map((item) => [
+      ((integracoesData || []) as unknown as IntegracaoResumo[]).map((item) => [
         item.id,
         item,
       ])
     );
     const confirmacoes = new Map<string, ConfirmacaoResumo>(
-      ((confirmacoesData || []) as ConfirmacaoResumo[]).map((item) => [
+      ((confirmacoesData || []) as unknown as ConfirmacaoResumo[]).map((item) => [
         item.campanha_id,
         item,
       ])
     );
 
-    const campanhas = ((campanhasData || []) as CampanhaResultado[])
+    const campanhas = ((campanhasData || []) as unknown as CampanhaResultado[])
       .sort(
         (a, b) =>
           (ordem.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
