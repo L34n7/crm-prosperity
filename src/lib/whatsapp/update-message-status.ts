@@ -146,6 +146,7 @@ async function pausarCampanhasDaIntegracao(params: {
   codigoErroMeta?: number;
   statusPausa?: "pausada_por_conta_bloqueada" | "pausada_por_erro_meta";
   motivoCancelamento?: string;
+  notificarCampanhas?: boolean;
 }) {
   const agora = new Date().toISOString();
   const codigoErroMeta =
@@ -241,8 +242,9 @@ async function pausarCampanhasDaIntegracao(params: {
       );
     }
 
-    try {
-      await notificarCampanhaDisparoPausada({
+    if (params.notificarCampanhas !== false) {
+      try {
+        await notificarCampanhaDisparoPausada({
         empresaId: params.empresaId,
         campanhaId,
         integracaoWhatsappId: params.integracaoId,
@@ -250,12 +252,13 @@ async function pausarCampanhasDaIntegracao(params: {
         statusPausa,
         motivo: params.motivo,
         erroCodigoMeta: codigoErroMeta,
-      });
-    } catch (notificationError) {
-      console.warn(
-        "[WHATSAPP META BLOCK] Erro ao notificar campanha pausada:",
-        { campanhaId, erro: notificationError }
-      );
+        });
+      } catch (notificationError) {
+        console.warn(
+          "[WHATSAPP META BLOCK] Erro ao notificar campanha pausada:",
+          { campanhaId, erro: notificationError }
+        );
+      }
     }
   }
 
@@ -480,6 +483,7 @@ async function tratarErroMetaPagamento(params: {
     codigoErroMeta: codigoErroMeta || undefined,
     statusPausa: "pausada_por_erro_meta",
     motivoCancelamento: "pagamento_meta_pendente",
+    notificarCampanhas: false,
   });
 
   const pausas = {
