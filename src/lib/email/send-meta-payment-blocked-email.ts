@@ -13,6 +13,7 @@ type Pausas = {
   agendamentosCancelados?: number;
   pendenciasIaCanceladas?: number;
   execucoesIaCanceladas?: number;
+  jobsFilaCancelados?: number;
   campanhasPausadas?: number;
 };
 
@@ -91,6 +92,7 @@ export async function sendMetaPaymentBlockedEmail({
     [pausas.agendamentosCancelados, "agendamento(s) automático(s)"],
     [pausas.pendenciasIaCanceladas, "pendência(s) do agente de IA"],
     [pausas.execucoesIaCanceladas, "execução(ões) do agente de IA"],
+    [pausas.jobsFilaCancelados, "job(s) automático(s) em fila"],
     [pausas.campanhasPausadas, "campanha(s) de disparo"],
   ]
     .filter(([valor]) => Number(valor || 0) > 0)
