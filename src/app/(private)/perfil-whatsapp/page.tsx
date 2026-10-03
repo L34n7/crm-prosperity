@@ -274,6 +274,7 @@ export default function WhatsappPerfilPage() {
   const [posInicio, setPosInicio] = useState({ x: 0, y: 0 });
   
   const [carregando, setCarregando] = useState(true);
+  const [integracaoCarregandoId, setIntegracaoCarregandoId] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
@@ -374,6 +375,14 @@ export default function WhatsappPerfilPage() {
     return integracoes.find((item) => item.id === integracaoId) || null;
   }, [integracoes, integracaoId]);
 
+  const integracaoVisualId = integracaoCarregandoId || integracaoId;
+  const integracaoCarregando = useMemo(() => {
+    if (!integracaoCarregandoId) return null;
+    return (
+      integracoes.find((item) => item.id === integracaoCarregandoId) || null
+    );
+  }, [integracoes, integracaoCarregandoId]);
+
   const integracaoDesconexaoSelecionada = useMemo(() => {
     return (
       integracoes.find((item) => item.id === integracaoDesconexaoId) ||
@@ -436,8 +445,14 @@ export default function WhatsappPerfilPage() {
     id?: string,
     options?: { preservarMensagens?: boolean }
   ) {
+    const trocandoIntegracao = Boolean(id && id !== integracaoId);
+
     try {
       setCarregando(true);
+
+      if (trocandoIntegracao && id) {
+        setIntegracaoCarregandoId(id);
+      }
 
       if (!options?.preservarMensagens) {
         setErro("");
@@ -538,6 +553,10 @@ export default function WhatsappPerfilPage() {
       setErro(getErrorMessage(error, "Erro ao carregar perfil."));
     } finally {
       setCarregando(false);
+
+      if (trocandoIntegracao) {
+        setIntegracaoCarregandoId("");
+      }
     }
   }
 
@@ -1044,6 +1063,30 @@ export default function WhatsappPerfilPage() {
 
       <main className={styles.pageContent}>
         <section className={styles.whatsappShell}>
+          {integracaoCarregandoId && (
+            <div
+              className={styles.integracaoLoadingOverlay}
+              role="status"
+              aria-live="polite"
+              aria-busy="true"
+            >
+              <div className={styles.integracaoLoadingCard}>
+                <div className={styles.integracaoLoadingSpinner} />
+
+                <div>
+                  <strong>Trocando integração</strong>
+                  <span>
+                    Carregando perfil
+                    {integracaoCarregando?.nome_conexao
+                      ? ` de ${integracaoCarregando.nome_conexao}`
+                      : ""}
+                    ...
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <aside className={styles.chatSidebar}>
             <div className={styles.sidebarTop}>
               <div className={styles.sidebarAvatar}>☘️</div>
@@ -1066,11 +1109,12 @@ export default function WhatsappPerfilPage() {
                     key={item.id}
                     type="button"
                     className={
-                      item.id === integracaoId
+                      item.id === integracaoVisualId
                         ? styles.connectionActive
                         : styles.connectionItem
                     }
                     onClick={() => carregarPerfil(item.id)}
+                    disabled={carregando}
                   >
                     <div className={styles.connectionAvatar}>
                       {item.nome_conexao?.charAt(0)?.toUpperCase() || "W"}
@@ -1233,7 +1277,7 @@ export default function WhatsappPerfilPage() {
               >
                 <select
                   className={styles.integracaoSelect}
-                  value={integracaoId}
+                  value={integracaoVisualId}
                   onChange={(e) => carregarPerfil(e.target.value)}
                   disabled={carregando}
                 >
@@ -2046,9 +2090,15 @@ export default function WhatsappPerfilPage() {
                 conexão serão removidos ou cancelados em segundo plano.
               </li>
               <li>
-                Os fluxos permanecerão ativos. Nos blocos que usam templates
-                desta integração, apenas a seleção do template e suas variáveis
-                serão limpas durante a etapa de limpeza.
+                Fluxos e Agentes de IA permanecerão ativos e não serão
+                pausados pela desconexão. Apenas operações que dependem deste
+                número, como execuções e envios pendentes desta conexão, podem
+                ser canceladas durante a limpeza.
+              </li>
+              <li>
+                Nos blocos que usam templates desta integração, apenas a
+                seleção do template e suas variáveis serão limpas durante a
+                etapa de limpeza.
               </li>
               <li>
                 Conversas, contatos, rastreamentos e logs já existentes serão
