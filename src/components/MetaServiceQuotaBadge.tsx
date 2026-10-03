@@ -191,6 +191,11 @@ export default function MetaServiceQuotaBadge() {
                     </div>
                     <div className={styles.itemMeta}>
                       <span>{formatar(integracao.restantes)} gratuitas restantes</span>
+                      {integracao.service_cobrado > 0 && (
+                        <span className={styles.itemMetaCharged}>
+                          {formatar(integracao.service_cobrado)} Service cobradas
+                        </span>
+                      )}
                       {integracao.free_entry_point > 0 && (
                         <span>
                           {formatar(integracao.free_entry_point)} Free Entry Point
@@ -202,7 +207,9 @@ export default function MetaServiceQuotaBadge() {
               </div>
 
               <div className={styles.footerNote}>
-                A franquia reinicia mensalmente por número. Free Entry Point é
+                A franquia reinicia mensalmente por número, considerando o fuso
+                da empresa. Após o limite, as mensagens cobradas são exibidas
+                conforme a classificação recebida da Meta. Free Entry Point é
                 contabilizado separadamente e não reduz este saldo.
               </div>
 

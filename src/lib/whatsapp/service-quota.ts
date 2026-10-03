@@ -42,11 +42,43 @@ export type ResumoFranquiaServiceEmpresa = {
   alerta_pendente: AlertaPendente | null;
 };
 
-function mesAtual() {
+const timezoneEmpresaCache = new Map<string, string>();
+
+function mesAtual(timeZone = "UTC") {
   const agora = new Date();
+
+  try {
+    const partes = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(agora);
+    const ano = partes.find((item) => item.type === "year")?.value;
+    const mes = partes.find((item) => item.type === "month")?.value;
+
+    if (ano && mes) return `${ano}-${mes}-01`;
+  } catch {
+    // Fallback UTC abaixo.
+  }
+
   return `${agora.getUTCFullYear()}-${String(
     agora.getUTCMonth() + 1
   ).padStart(2, "0")}-01`;
+}
+
+async function buscarTimezoneEmpresa(empresaId: string) {
+  const cached = timezoneEmpresaCache.get(empresaId);
+  if (cached) return cached;
+
+  const { data } = await supabaseAdmin
+    .from("empresas")
+    .select("timezone")
+    .eq("id", empresaId)
+    .maybeSingle();
+
+  const timezone = String(data?.timezone || "UTC").trim() || "UTC";
+  timezoneEmpresaCache.set(empresaId, timezone);
+  return timezone;
 }
 
 function numero(valor: unknown) {
@@ -64,7 +96,8 @@ export async function buscarResumoFranquiaServiceEmpresa(params: {
   usuarioId?: string | null;
   isAdmin?: boolean;
 }): Promise<ResumoFranquiaServiceEmpresa> {
-  const mes = mesAtual();
+  const timezone = await buscarTimezoneEmpresa(params.empresaId);
+  const mes = mesAtual(timezone);
 
   const { data: integracoes, error: integracoesError } = await supabaseAdmin
     .from("integracoes_whatsapp")
@@ -383,7 +416,8 @@ export async function processarAlertaFranquiaService(params: {
     if (params.pricingCategory !== "service") return;
     if (params.pricingType !== "free_customer_service") return;
 
-    const mes = mesAtual();
+    const timezone = await buscarTimezoneEmpresa(params.empresaId);
+    const mes = mesAtual(timezone);
     const phoneNumberId = String(params.phoneNumberId || "").trim();
 
     if (!phoneNumberId) return;

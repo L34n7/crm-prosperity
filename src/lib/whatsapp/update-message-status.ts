@@ -5,6 +5,7 @@ import {
   WHATSAPP_META_BLOCK_DESCRIPTION,
 } from "@/lib/whatsapp/meta-block";
 import { notificarCampanhaDisparoPausada } from "@/lib/whatsapp/disparo-alertas";
+import { resolverPricingRealizado } from "@/lib/whatsapp/pricing-realized";
 
 type UpdateMessageStatusParams = {
   mensagemExternaId: string;
@@ -19,6 +20,12 @@ type MensagemStatusRow = {
   conversa_id?: string | null;
   status_envio?: string | null;
   metadata_json?: Record<string, unknown> | null;
+  created_at?: string | null;
+  pricing_moeda?: string | null;
+  pricing_tarifa_unitaria?: number | string | null;
+  pricing_custo_usd?: number | string | null;
+  pricing_custo_brl?: number | string | null;
+  pricing_rate_card_id?: string | null;
 };
 
 type ContextoIntegracao = {
@@ -385,7 +392,9 @@ export async function updateWhatsAppMessageStatus({
   const codigoErroMeta = extrairCodigoErroMeta(metadata);
   const { data: mensagemAtual, error: findError } = await supabaseAdmin
     .from("mensagens")
-    .select("id, empresa_id, conversa_id, status_envio, metadata_json")
+    .select(
+      "id, empresa_id, conversa_id, status_envio, metadata_json, created_at, pricing_moeda, pricing_tarifa_unitaria, pricing_custo_usd, pricing_custo_brl, pricing_rate_card_id"
+    )
     .eq("mensagem_externa_id", mensagemExternaId)
     .limit(1)
     .maybeSingle();
@@ -463,6 +472,25 @@ export async function updateWhatsAppMessageStatus({
     typeof metadata?.pricing_billable === "boolean"
       ? metadata.pricing_billable
       : null;
+  const recipientId =
+    typeof metadata?.recipient_id === "string" ? metadata.recipient_id : null;
+
+  const pricingRealizado =
+    pricingBillable === true && pricingCategory
+      ? await resolverPricingRealizado({
+          empresaId: String(mensagemAtual.empresa_id || ""),
+          recipientId,
+          categoria: pricingCategory,
+          mensagemCriadaEm: mensagemAtual.created_at || agora,
+          existente: {
+            moeda: mensagemAtual.pricing_moeda ?? null,
+            tarifaUnitaria: mensagemAtual.pricing_tarifa_unitaria ?? null,
+            custoUsd: mensagemAtual.pricing_custo_usd ?? null,
+            custoBrl: mensagemAtual.pricing_custo_brl ?? null,
+            rateCardId: mensagemAtual.pricing_rate_card_id ?? null,
+          },
+        })
+      : null;
 
   const updatePayload: Record<string, unknown> = {
     status_envio: status,
@@ -474,6 +502,21 @@ export async function updateWhatsAppMessageStatus({
   if (pricingType !== null) updatePayload.pricing_type = pricingType;
   if (pricingModel !== null) updatePayload.pricing_model = pricingModel;
   if (pricingBillable !== null) updatePayload.pricing_billable = pricingBillable;
+
+  if (pricingBillable === false) {
+    updatePayload.pricing_moeda = null;
+    updatePayload.pricing_tarifa_unitaria = null;
+    updatePayload.pricing_custo_usd = null;
+    updatePayload.pricing_custo_brl = null;
+    updatePayload.pricing_rate_card_id = null;
+  } else if (pricingRealizado) {
+    updatePayload.pricing_moeda = pricingRealizado.moeda;
+    updatePayload.pricing_tarifa_unitaria = pricingRealizado.tarifaUnitaria;
+    updatePayload.pricing_custo_usd = pricingRealizado.custoUsd;
+    updatePayload.pricing_custo_brl = pricingRealizado.custoBrl;
+    updatePayload.pricing_rate_card_id = pricingRealizado.rateCardId;
+  }
+
   if (
     pricingCategory !== null ||
     pricingType !== null ||
@@ -512,5 +555,20 @@ export async function updateWhatsAppMessageStatus({
     found: true,
     messageId: mensagemAtual.id,
     status,
+    pricing: {
+      type: pricingType,
+      category: pricingCategory,
+      model: pricingModel,
+      billable: pricingBillable,
+      moeda: pricingBillable === false ? null : pricingRealizado?.moeda ?? null,
+      tarifaUnitaria:
+        pricingBillable === false ? null : pricingRealizado?.tarifaUnitaria ?? null,
+      custoUsd:
+        pricingBillable === false ? null : pricingRealizado?.custoUsd ?? null,
+      custoBrl:
+        pricingBillable === false ? null : pricingRealizado?.custoBrl ?? null,
+      rateCardId:
+        pricingBillable === false ? null : pricingRealizado?.rateCardId ?? null,
+    },
   };
 }

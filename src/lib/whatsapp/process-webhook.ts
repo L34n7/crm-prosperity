@@ -247,7 +247,22 @@ function extrairErroStatusMeta(statusItem: any) {
   };
 }
 
-async function atualizarLogDisparoPeloWebhook(statusItem: any) {
+type PricingRealizadoWebhook = {
+  type?: string | null;
+  category?: string | null;
+  model?: string | null;
+  billable?: boolean | null;
+  moeda?: string | null;
+  tarifaUnitaria?: number | null;
+  custoUsd?: number | null;
+  custoBrl?: number | null;
+  rateCardId?: string | null;
+};
+
+async function atualizarLogDisparoPeloWebhook(
+  statusItem: any,
+  pricing?: PricingRealizadoWebhook | null
+) {
   const mensagemExternaId = String(
     statusItem?.mensagemExternaId || ""
   ).trim();
@@ -363,14 +378,28 @@ async function atualizarLogDisparoPeloWebhook(statusItem: any) {
     webhook_status_raw: statusItem?.rawStatus || null,
   };
 
+  const updateLogPayload: Record<string, unknown> = {
+    status: novoStatus,
+    erro: erroDisparo,
+    metadata_json: metadataAtualizada,
+    updated_at: agora,
+  };
+
+  if (pricing) {
+    updateLogPayload.pricing_type = pricing.type ?? null;
+    updateLogPayload.pricing_category = pricing.category ?? null;
+    updateLogPayload.pricing_model = pricing.model ?? null;
+    updateLogPayload.pricing_billable = pricing.billable ?? null;
+    updateLogPayload.pricing_moeda = pricing.moeda ?? null;
+    updateLogPayload.pricing_tarifa_unitaria = pricing.tarifaUnitaria ?? null;
+    updateLogPayload.pricing_custo_usd = pricing.custoUsd ?? null;
+    updateLogPayload.pricing_custo_brl = pricing.custoBrl ?? null;
+    updateLogPayload.pricing_rate_card_id = pricing.rateCardId ?? null;
+  }
+
   const { error: erroAtualizacao } = await supabaseAdmin
     .from("whatsapp_disparos_logs")
-    .update({
-      status: novoStatus,
-      erro: erroDisparo,
-      metadata_json: metadataAtualizada,
-      updated_at: agora,
-    })
+    .update(updateLogPayload)
     .eq("id", logDisparo.id);
 
   if (erroAtualizacao) {
@@ -488,7 +517,10 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       try {
         resultadoLogDisparo =
-          await atualizarLogDisparoPeloWebhook(statusItem);
+          await atualizarLogDisparoPeloWebhook(
+            statusItem,
+            "pricing" in updateResult ? updateResult.pricing : null
+          );
       } catch (logDisparoError) {
         console.error(
           "[WEBHOOK WHATSAPP] Erro ao atualizar whatsapp_disparos_logs:",

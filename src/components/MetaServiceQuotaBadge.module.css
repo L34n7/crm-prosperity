@@ -280,11 +280,17 @@
 
 .itemMeta {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px 10px;
   margin-top: 8px;
   color: #859892;
   font-size: 11px;
+}
+
+.itemMetaCharged {
+  color: #a16207;
+  font-weight: 800;
 }
 
 .footerNote {
