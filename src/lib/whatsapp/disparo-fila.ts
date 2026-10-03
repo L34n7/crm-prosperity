@@ -83,6 +83,7 @@ type WebhookStatusUpdateParams = {
   erro?: string | null;
   erroCodigoMeta?: number | null;
   rawStatus?: unknown;
+  reconciliarCampanha?: boolean;
 };
 
 function normalizarInteiro(
@@ -192,6 +193,82 @@ export function obterUrlWorkerDisparoQstash() {
 
   const base = obterBaseUrlAplicacao();
   return base ? `${base}/api/worker/whatsapp-disparo-item` : "";
+}
+
+function obterUrlWorkerReconciliacaoDisparoQstash() {
+  const urlConfigurada =
+    process.env.QSTASH_WHATSAPP_DISPARO_RECONCILE_WORKER_URL ||
+    process.env.WHATSAPP_DISPARO_RECONCILE_QSTASH_WORKER_URL;
+
+  if (urlConfigurada) {
+    return urlConfigurada;
+  }
+
+  const base = obterBaseUrlAplicacao();
+  return base ? `${base}/api/worker/reconciliar-disparo-campanha` : "";
+}
+
+export async function agendarReconciliacaoCampanhaDisparo(
+  campanhaId: string
+) {
+  const id = String(campanhaId || "").trim();
+  const url = obterUrlWorkerReconciliacaoDisparoQstash();
+
+  if (!id || !process.env.QSTASH_TOKEN || !url) {
+    return {
+      ok: false,
+      scheduled: false,
+      reason: !id
+        ? "campanha_id_ausente"
+        : !process.env.QSTASH_TOKEN
+          ? "qstash_token_ausente"
+          : "worker_url_ausente",
+    };
+  }
+
+  // Agrupa rajadas de callbacks em uma única reconciliação por campanha.
+  // A janela curta mantém o progresso quase em tempo real sem executar duas
+  // RPCs pesadas para cada status individual recebido da Meta.
+  const bucket = Math.floor(Date.now() / 3_000);
+
+  try {
+    const result = await qstash.publishJSON({
+      url,
+      body: { campanhaId: id },
+      delay: "3s",
+      retries: 5,
+      timeout: 60,
+      deduplicationId: `whatsapp-disparo-reconcile-${id}-${bucket}`,
+      flowControl: {
+        key: `whatsapp-disparo-reconcile-${process.env.VERCEL_ENV || "production"}`,
+        rate: 20,
+        period: 1,
+        parallelism: 5,
+      },
+      label: `whatsapp-disparo-reconcile-${id}`,
+    });
+
+    return {
+      ok: true,
+      scheduled: true,
+      messageId: extrairMessageIdQstash(result),
+      reason: null,
+    };
+  } catch (error) {
+    console.warn(
+      "[WHATSAPP DISPARO] Falha ao agendar reconciliação agregada:",
+      {
+        campanhaId: id,
+        erro: error instanceof Error ? error.message : String(error),
+      }
+    );
+
+    return {
+      ok: false,
+      scheduled: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export function obterFlowControlKeyDisparo(integracaoWhatsappId: string) {
@@ -967,6 +1044,18 @@ async function sincronizarAgendamentosCampanha(campanhaId: string) {
       }
     );
   }
+}
+
+export async function reconciliarCampanhaDisparo(campanhaId: string) {
+  const id = String(campanhaId || "").trim();
+
+  if (!id) {
+    return null;
+  }
+
+  const resumo = await recalcularCampanha(id);
+  await sincronizarAgendamentosCampanha(id);
+  return resumo;
 }
 
 async function buscarCampanha(campanhaId: string) {
@@ -2084,6 +2173,7 @@ export async function atualizarItemDisparoPeloWebhook({
   erro,
   erroCodigoMeta,
   rawStatus,
+  reconciliarCampanha = true,
 }: WebhookStatusUpdateParams) {
   const mensagemExternaId = String(messageId || "").trim();
 
@@ -2134,8 +2224,9 @@ export async function atualizarItemDisparoPeloWebhook({
     );
   }
 
-  await recalcularCampanha(String(item.campanha_id));
-  await sincronizarAgendamentosCampanha(String(item.campanha_id));
+  if (reconciliarCampanha) {
+    await reconciliarCampanhaDisparo(String(item.campanha_id));
+  }
 
   if (falhou) {
     if (erroCodigoMeta === ERRO_META_LIMITE_QUALIDADE_MARKETING) {
@@ -2192,6 +2283,7 @@ export async function atualizarItemDisparoPeloWebhook({
     found: true,
     updated: true,
     itemId: item.id,
+    campanhaId: String(item.campanha_id),
     status: falhou ? "falha" : "enviado",
   };
 }

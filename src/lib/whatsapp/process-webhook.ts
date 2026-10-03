@@ -18,7 +18,10 @@ import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir-campanha-whatsapp";
 import { salvarAtribuicaoMetaAnuncio } from "@/lib/whatsapp/meta-attribution";
-import { atualizarItemDisparoPeloWebhook } from "@/lib/whatsapp/disparo-fila";
+import {
+  agendarReconciliacaoCampanhaDisparo,
+  atualizarItemDisparoPeloWebhook,
+} from "@/lib/whatsapp/disparo-fila";
 import { processarMensagemRecebidaParaOptOut } from "@/lib/whatsapp/opt-out";
 import { obterFeedbackOptOut } from "@/lib/whatsapp/opt-out-policy";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -408,14 +411,22 @@ async function atualizarLogDisparoPeloWebhook(
     );
   }
 
+  let campanhaId: string | null = null;
+
   try {
-    await atualizarItemDisparoPeloWebhook({
+    const itemAtualizado = await atualizarItemDisparoPeloWebhook({
       messageId: mensagemExternaId,
       statusNormalizado,
       erro: erroDisparo,
       erroCodigoMeta: erroMeta?.codigo ?? null,
       rawStatus: statusItem?.rawStatus || null,
+      reconciliarCampanha: false,
     });
+
+    campanhaId =
+      "campanhaId" in itemAtualizado
+        ? String(itemAtualizado.campanhaId || "").trim() || null
+        : null;
   } catch (itemDisparoError) {
     console.error(
       "[WEBHOOK WHATSAPP] Erro ao atualizar item da campanha pelo webhook:",
@@ -426,6 +437,7 @@ async function atualizarLogDisparoPeloWebhook(
   return {
     found: true,
     updated: true,
+    campanhaId,
     status: novoStatus,
     erro: erroDisparo,
   };
@@ -467,6 +479,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
   const processedResults: Array<Record<string, unknown>> = [];
   const recebimentoSuspensoPorEmpresa = new Map<string, boolean>();
+  const campanhasParaReconciliar = new Set<string>();
   let optOutCriticalError: OptOutCriticalError | null = null;
 
   const templateUpdatesResult =
@@ -521,6 +534,15 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             statusItem,
             "pricing" in updateResult ? updateResult.pricing : null
           );
+
+        const campanhaId = String(
+          (resultadoLogDisparo as { campanhaId?: string | null }).campanhaId ||
+            ""
+        ).trim();
+
+        if (campanhaId) {
+          campanhasParaReconciliar.add(campanhaId);
+        }
       } catch (logDisparoError) {
         console.error(
           "[WEBHOOK WHATSAPP] Erro ao atualizar whatsapp_disparos_logs:",
@@ -619,6 +641,25 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             : "Erro desconhecido ao processar status",
       });
     }
+  }
+
+  if (campanhasParaReconciliar.size > 0) {
+    await Promise.all(
+      [...campanhasParaReconciliar].map(async (campanhaId) => {
+        const agendamento =
+          await agendarReconciliacaoCampanhaDisparo(campanhaId);
+
+        if (!agendamento.ok) {
+          console.warn(
+            "[WHATSAPP DISPARO] Reconciliação agregada não foi agendada:",
+            {
+              campanhaId,
+              motivo: agendamento.reason || null,
+            }
+          );
+        }
+      })
+    );
   }
 
   for (const message of incomingMessages) {

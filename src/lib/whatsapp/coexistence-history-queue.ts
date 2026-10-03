@@ -13,6 +13,12 @@ import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mod
 import { persistCoexistenceHistoryBatch } from "@/lib/whatsapp/persist-coexistence-history";
 import { calculateCoexistenceHistoryProgress } from "@/lib/whatsapp/coexistence-history-state";
 import { isCoexistenceSyncTerminalStatus } from "@/lib/whatsapp/coexistence-sync-policy";
+import {
+  circuitoSupabaseEstaAberto,
+  erroSupabaseEhTransitorio,
+  registrarFalhaCircuitoSupabase,
+  registrarSucessoCircuitoSupabase,
+} from "@/lib/operacional/contingencia-supabase";
 
 const supabase = getSupabaseAdmin();
 
@@ -72,9 +78,9 @@ function getWorkerUrl() {
 function getBatchSize() {
   return normalizeInteger(
     process.env.WHATSAPP_COEX_HISTORY_BATCH_SIZE,
-    50,
+    25,
     10,
-    200
+    100
   );
 }
 
@@ -158,7 +164,129 @@ export async function finishCoexistenceIntegrationIfReady(
     .eq("id", integrationId);
 }
 
+type HistoryStatsDelta = {
+  processed?: number;
+  ignored?: number;
+  fatalErrors?: number;
+};
+
+function safeCount(value: unknown) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
+}
+
 export async function refreshCoexistenceHistoryStats(
+  integrationId: string,
+  delta: HistoryStatsDelta = {}
+) {
+  const servico = `whatsapp-coex-stats:${integrationId}`;
+
+  if (circuitoSupabaseEstaAberto(servico)) {
+    throw new Error(
+      "Circuit breaker do Supabase aberto para atualização do histórico Coex."
+    );
+  }
+
+  const { data: job, error: jobError } = await supabase
+    .from("whatsapp_coex_sync_jobs")
+    .select(
+      "status, meta_concluido, erro_codigo, itens_recebidos, itens_processados, itens_ignorados, itens_com_erro"
+    )
+    .eq("integracao_whatsapp_id", integrationId)
+    .eq("tipo", "history")
+    .maybeSingle();
+
+  if (jobError) {
+    registrarFalhaCircuitoSupabase(servico, jobError);
+    throw new Error(
+      `Erro ao carregar progresso do histórico Coex: ${jobError.message}`
+    );
+  }
+
+  registrarSucessoCircuitoSupabase(servico);
+
+  if (!job) {
+    return {
+      total: 0,
+      processed: 0,
+      ignored: 0,
+      fatalErrors: 0,
+      status: null,
+    };
+  }
+
+  const processed =
+    safeCount(job.itens_processados) + safeCount(delta.processed);
+  const ignored =
+    safeCount(job.itens_ignorados) + safeCount(delta.ignored);
+  const fatalErrors =
+    safeCount(job.itens_com_erro) + safeCount(delta.fatalErrors);
+  const total = Math.max(
+    safeCount(job.itens_recebidos),
+    processed + ignored + fatalErrors
+  );
+
+  if (
+    job.status === "recusado_usuario" ||
+    (job.status === "erro" && job.erro_codigo)
+  ) {
+    return {
+      total,
+      processed,
+      ignored,
+      fatalErrors,
+      status: job.status,
+    };
+  }
+
+  const progress = calculateCoexistenceHistoryProgress({
+    total,
+    processed,
+    ignored,
+    fatalErrors,
+    metaCompleted: job.meta_concluido === true,
+  });
+  const now = new Date().toISOString();
+
+  const { error: updateError } = await supabase
+    .from("whatsapp_coex_sync_jobs")
+    .update({
+      status: progress.status,
+      itens_recebidos: progress.total,
+      itens_processados: progress.processed,
+      itens_ignorados: progress.ignored,
+      itens_com_erro: progress.fatalErrors,
+      processamento_progresso: progress.processingProgress,
+      concluido_em: progress.completed || progress.failed ? now : null,
+      updated_at: now,
+    })
+    .eq("integracao_whatsapp_id", integrationId)
+    .eq("tipo", "history");
+
+  if (updateError) {
+    registrarFalhaCircuitoSupabase(servico, updateError);
+    throw new Error(
+      `Erro ao atualizar progresso do histórico Coex: ${updateError.message}`
+    );
+  }
+
+  registrarSucessoCircuitoSupabase(servico);
+
+  if (progress.completed || progress.failed) {
+    await finishCoexistenceIntegrationIfReady(integrationId);
+  }
+
+  return {
+    total: progress.total,
+    processed: progress.processed,
+    ignored: progress.ignored,
+    fatalErrors: progress.fatalErrors,
+    processingProgress: progress.processingProgress,
+    status: progress.status,
+  };
+}
+
+async function reconciliarCoexistenceHistoryStatsExato(
   integrationId: string
 ) {
   const maxAttempts = getMaxAttempts();
@@ -199,9 +327,10 @@ export async function refreshCoexistenceHistoryStats(
 
   const firstError =
     totalError || processedError || ignoredError || fatalError || jobError;
+
   if (firstError) {
     throw new Error(
-      `Erro ao calcular progresso do histórico Coex: ${firstError.message}`
+      `Erro ao reconciliar progresso final do histórico Coex: ${firstError.message}`
     );
   }
 
@@ -237,7 +366,7 @@ export async function refreshCoexistenceHistoryStats(
       itens_ignorados: progress.ignored,
       itens_com_erro: progress.fatalErrors,
       processamento_progresso: progress.processingProgress,
-      concluido_em: progress.completed ? now : null,
+      concluido_em: progress.completed || progress.failed ? now : null,
       updated_at: now,
     })
     .eq("integracao_whatsapp_id", integrationId)
@@ -245,11 +374,11 @@ export async function refreshCoexistenceHistoryStats(
 
   if (updateError) {
     throw new Error(
-      `Erro ao atualizar progresso do histórico Coex: ${updateError.message}`
+      `Erro ao salvar reconciliação final do histórico Coex: ${updateError.message}`
     );
   }
 
-  if (progress.completed) {
+  if (progress.completed || progress.failed) {
     await finishCoexistenceIntegrationIfReady(integrationId);
   }
 
@@ -334,16 +463,15 @@ export async function scheduleCoexistenceHistoryBatch(
         0,
         10
       ),
-      retryDelay: "30000 * (1 + retried)",
       timeout: 60,
       deduplicationId: `coex-history-${nextItem.id}-${nextItem.tentativas}`,
       flowControl: {
         key: getFlowControlKey(integrationId),
         rate: normalizeInteger(
           process.env.WHATSAPP_COEX_HISTORY_QSTASH_RATE,
-          2,
           1,
-          20
+          1,
+          10
         ),
         period: 60,
         parallelism: 1,
@@ -457,10 +585,23 @@ export async function enqueueCoexistenceHistory(
       duplicated += rowChunk.length - (data?.length || 0);
     }
 
+    const { count: totalItensHistorico, error: totalItensError } =
+      await supabase
+        .from("whatsapp_coex_historico_itens")
+        .select("id", { count: "exact", head: true })
+        .eq("integracao_whatsapp_id", integration.id);
+
+    if (totalItensError) {
+      throw new Error(
+        `Erro ao consolidar total recebido do histórico Coex: ${totalItensError.message}`
+      );
+    }
+
     await supabase
       .from("whatsapp_coex_sync_jobs")
       .update({
         status: "processando",
+        itens_recebidos: totalItensHistorico || 0,
         updated_at: new Date().toISOString(),
       })
       .eq("integracao_whatsapp_id", integration.id)
@@ -503,25 +644,40 @@ export async function processCoexistenceHistoryBatch(params: {
   integrationId: string;
   scheduleNext?: boolean;
 }) {
+  const servico = `whatsapp-coex-worker:${params.integrationId}`;
+
+  if (circuitoSupabaseEstaAberto(servico)) {
+    throw new Error(
+      "Circuit breaker do Supabase aberto para histórico Coexistence."
+    );
+  }
+
+  const maxAttempts = getMaxAttempts();
   const { data, error } = await supabase.rpc(
     "whatsapp_coex_claim_historico_itens",
     {
       p_integracao_id: params.integrationId,
       p_limite: getBatchSize(),
-      p_max_tentativas: getMaxAttempts(),
+      p_max_tentativas: maxAttempts,
       p_lock_timeout_minutos: getLockTimeoutMinutes(),
     }
   );
 
   if (error) {
+    registrarFalhaCircuitoSupabase(servico, error);
     throw new Error(
       `Erro ao reservar lote do histórico Coex: ${error.message}`
     );
   }
 
+  registrarSucessoCircuitoSupabase(servico);
+
   const claimed = (data || []) as HistoryQueueRow[];
   if (!claimed.length) {
-    const stats = await refreshCoexistenceHistoryStats(
+    // COUNTs exatos só rodam quando a fila está drenada. Isso repara qualquer
+    // divergência causada por uma falha entre a persistência do lote e a
+    // atualização incremental do job, sem pagar esse custo a cada lote.
+    const stats = await reconciliarCoexistenceHistoryStatsExato(
       params.integrationId
     );
     return { ok: true, processed: 0, stats };
@@ -550,9 +706,10 @@ export async function processCoexistenceHistoryBatch(params: {
         claimed.map((item) => item.id)
       );
 
-    await refreshCoexistenceHistoryStats(params.integrationId);
+    registrarFalhaCircuitoSupabase(servico, loadError);
     throw loadError;
   }
+
   const validItems: Array<{
     item: HistoryQueueRow;
     message: ExtractedCoexistenceHistoryMessage;
@@ -568,9 +725,15 @@ export async function processCoexistenceHistoryBatch(params: {
   }
 
   const processedIds: string[] = [];
-  const failedItems: Array<{ id: string; error: string }> = [];
-  const results: Array<Awaited<ReturnType<typeof persistCoexistenceHistoryBatch>>> =
-    [];
+  const failedItems: Array<{
+    id: string;
+    error: string;
+    fatal: boolean;
+  }> = [];
+  const results: Array<
+    Awaited<ReturnType<typeof persistCoexistenceHistoryBatch>>
+  > = [];
+  let infrastructureError: unknown = null;
 
   if (validItems.length) {
     try {
@@ -582,34 +745,45 @@ export async function processCoexistenceHistoryBatch(params: {
       results.push(result);
       processedIds.push(...validItems.map((entry) => entry.item.id));
     } catch (batchError) {
-      console.warn(
-        "[WHATSAPP COEX HISTORY] Lote falhou; reprocessando item a item.",
-        batchError
-      );
+      if (erroSupabaseEhTransitorio(batchError)) {
+        infrastructureError = batchError;
+      } else {
+        console.warn(
+          "[WHATSAPP COEX HISTORY] Lote com erro de dados; isolando itens.",
+          batchError
+        );
 
-      for (const entry of validItems) {
-        try {
-          const result = await persistCoexistenceHistoryBatch({
-            integration,
-            messages: [entry.message],
-          });
+        for (const entry of validItems) {
+          try {
+            const result = await persistCoexistenceHistoryBatch({
+              integration,
+              messages: [entry.message],
+            });
 
-          results.push(result);
-          processedIds.push(entry.item.id);
-        } catch (itemError) {
-          failedItems.push({
-            id: entry.item.id,
-            error:
-              itemError instanceof Error
-                ? itemError.message
-                : "Erro ao processar item do histórico Coex.",
-          });
+            results.push(result);
+            processedIds.push(entry.item.id);
+          } catch (itemError) {
+            if (erroSupabaseEhTransitorio(itemError)) {
+              infrastructureError = itemError;
+              break;
+            }
+
+            failedItems.push({
+              id: entry.item.id,
+              error:
+                itemError instanceof Error
+                  ? itemError.message
+                  : "Erro ao processar item do histórico Coex.",
+              fatal: safeCount(entry.item.tentativas) >= maxAttempts,
+            });
+          }
         }
       }
     }
   }
 
   const now = new Date().toISOString();
+  const processedSet = new Set(processedIds);
 
   for (const idChunk of chunk(ignoredIds, 100)) {
     const { error: ignoredError } = await supabase
@@ -651,6 +825,46 @@ export async function processCoexistenceHistoryBatch(params: {
     }
   }
 
+  if (infrastructureError) {
+    const retryIds = validItems
+      .map((entry) => entry.item.id)
+      .filter((id) => !processedSet.has(id));
+
+    for (const idChunk of chunk(retryIds, 100)) {
+      const { error: retryError } = await supabase
+        .from("whatsapp_coex_historico_itens")
+        .update({
+          status: "erro",
+          erro:
+            infrastructureError instanceof Error
+              ? infrastructureError.message
+              : "Falha transitória de infraestrutura.",
+          locked_at: null,
+          updated_at: now,
+        })
+        .in("id", idChunk);
+
+      if (retryError) {
+        console.warn(
+          "[WHATSAPP COEX HISTORY] Erro ao liberar lote após falha transitória:",
+          retryError
+        );
+      }
+    }
+
+    await refreshCoexistenceHistoryStats(params.integrationId, {
+      processed: processedIds.length,
+      ignored: ignoredIds.length,
+    });
+
+    registrarFalhaCircuitoSupabase(servico, infrastructureError, {
+      limiarFalhas: 1,
+      pausaMs: 60_000,
+    });
+
+    throw infrastructureError;
+  }
+
   for (const failedItem of failedItems) {
     const { error: itemUpdateError } = await supabase
       .from("whatsapp_coex_historico_itens")
@@ -670,12 +884,19 @@ export async function processCoexistenceHistoryBatch(params: {
   }
 
   const stats = await refreshCoexistenceHistoryStats(
-    params.integrationId
+    params.integrationId,
+    {
+      processed: processedIds.length,
+      ignored: ignoredIds.length,
+      fatalErrors: failedItems.filter((item) => item.fatal).length,
+    }
   );
   const next =
     params.scheduleNext === false
       ? null
       : await scheduleCoexistenceHistoryBatch(params.integrationId);
+
+  registrarSucessoCircuitoSupabase(servico);
 
   return {
     ok: failedItems.length === 0,
@@ -691,12 +912,23 @@ export async function processCoexistenceHistoryBatch(params: {
 export async function processCoexistenceHistoryFallback(params: {
   integrationLimit?: number;
 }) {
+  const servico = "whatsapp-coex-fallback";
   const integrationLimit = normalizeInteger(
     params.integrationLimit,
     3,
     1,
     10
   );
+
+  if (circuitoSupabaseEstaAberto(servico)) {
+    return {
+      ok: true,
+      paused: true,
+      integrations: 0,
+      results: [],
+    };
+  }
+
   const staleBefore = new Date(Date.now() - 3 * 60 * 1000).toISOString();
   const { data: jobs, error } = await supabase
     .from("whatsapp_coex_sync_jobs")
@@ -710,36 +942,69 @@ export async function processCoexistenceHistoryFallback(params: {
     .limit(integrationLimit);
 
   if (error) {
+    registrarFalhaCircuitoSupabase(servico, error);
     throw new Error(
       `Erro ao buscar históricos pendentes: ${error.message}`
     );
   }
 
+  registrarSucessoCircuitoSupabase(servico);
+
   const results = [];
+
   for (const job of jobs || []) {
     try {
       const nextItem = await findNextQueueItem(
         job.integracao_whatsapp_id
       );
-      if (!nextItem) continue;
 
-      results.push(
-        await processCoexistenceHistoryBatch({
+      if (!nextItem) {
+        const stats = await reconciliarCoexistenceHistoryStatsExato(
+          job.integracao_whatsapp_id
+        );
+        results.push({
+          ok: true,
           integrationId: job.integracao_whatsapp_id,
-        })
+          processed: 0,
+          reconciled: true,
+          stats,
+        });
+        continue;
+      }
+
+      const scheduled = await scheduleCoexistenceHistoryBatch(
+        job.integracao_whatsapp_id
       );
+
+      results.push({
+        ...scheduled,
+        integrationId: job.integracao_whatsapp_id,
+        recovered: true,
+      });
     } catch (error) {
+      const transient = erroSupabaseEhTransitorio(error);
+
       results.push({
         ok: false,
         integrationId: job.integracao_whatsapp_id,
+        transient,
         error:
           error instanceof Error ? error.message : "Erro desconhecido.",
       });
+
+      if (transient) {
+        registrarFalhaCircuitoSupabase(servico, error, {
+          limiarFalhas: 1,
+          pausaMs: 60_000,
+        });
+        break;
+      }
     }
   }
 
   return {
     ok: true,
+    paused: false,
     integrations: jobs?.length || 0,
     results,
   };

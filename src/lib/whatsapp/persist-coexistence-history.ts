@@ -379,25 +379,53 @@ async function markHistoryAsRead(params: {
 
   if (usersError || !users?.length) return;
 
+  const conversationIds = [...params.latestByConversation.keys()];
+  const userIds = users.map((user) => user.id);
+  const existingKeys = new Set<string>();
+
+  // Evita repetir o upsert usuário x conversa a cada lote histórico. Como
+  // conversas importadas são encerradas e não devem gerar não-lidos, basta
+  // criar a leitura inicial para pares que ainda não existem.
+  for (const conversationIdChunk of chunk(conversationIds, 100)) {
+    const { data: existing, error } = await supabase
+      .from("conversa_leituras")
+      .select("conversa_id, usuario_id")
+      .in("conversa_id", conversationIdChunk)
+      .in("usuario_id", userIds);
+
+    if (error) {
+      throw new Error(
+        `Erro ao consultar leituras do histórico Coex: ${error.message}`
+      );
+    }
+
+    for (const item of existing || []) {
+      existingKeys.add(`${item.conversa_id}:${item.usuario_id}`);
+    }
+  }
+
   const now = new Date().toISOString();
   const rows = [...params.latestByConversation].flatMap(
     ([conversationId, latest]) =>
-      users.map((user) => ({
-        empresa_id: params.empresaId,
-        conversa_id: conversationId,
-        usuario_id: user.id,
-        ultima_mensagem_lida_at: latest,
-        updated_at: now,
-      }))
+      users
+        .filter(
+          (user) => !existingKeys.has(`${conversationId}:${user.id}`)
+        )
+        .map((user) => ({
+          empresa_id: params.empresaId,
+          conversa_id: conversationId,
+          usuario_id: user.id,
+          ultima_mensagem_lida_at: latest,
+          updated_at: now,
+        }))
   );
 
   for (const rowChunk of chunk(rows, 500)) {
+    if (!rowChunk.length) continue;
+
     const { error } = await supabase
       .from("conversa_leituras")
-      .upsert(rowChunk, {
-        onConflict: "conversa_id,usuario_id",
-        ignoreDuplicates: true,
-      });
+      .insert(rowChunk);
 
     if (error) {
       throw new Error(

@@ -1,5 +1,77 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+
+const CACHE_TTL_MS = 15_000;
+const CACHE_NEGATIVO_TTL_MS = 3_000;
+
+type CacheEntry = {
+  value: WhatsAppIntegration | null;
+  expiresAt: number;
+};
+
+type GlobalIntegrationCache = typeof globalThis & {
+  __crmWhatsappIntegrationCache?: Map<string, CacheEntry>;
+};
+
+const globalIntegrationCache = globalThis as GlobalIntegrationCache;
+const integrationCache =
+  globalIntegrationCache.__crmWhatsappIntegrationCache ||
+  new Map<string, CacheEntry>();
+
+globalIntegrationCache.__crmWhatsappIntegrationCache = integrationCache;
+
+function getCachedIntegration(key: string) {
+  const cached = integrationCache.get(key);
+  if (!cached) return undefined;
+
+  if (cached.expiresAt <= Date.now()) {
+    integrationCache.delete(key);
+    return undefined;
+  }
+
+  return cached.value;
+}
+
+function setCachedIntegration(
+  keys: string[],
+  value: WhatsAppIntegration | null
+) {
+  const ttl = value ? CACHE_TTL_MS : CACHE_NEGATIVO_TTL_MS;
+  const entry: CacheEntry = {
+    value,
+    expiresAt: Date.now() + ttl,
+  };
+
+  for (const key of keys.filter(Boolean)) {
+    integrationCache.set(key, entry);
+  }
+}
+
+function cacheKeysForIntegration(integration: WhatsAppIntegration) {
+  return [
+    integration.phone_number_id
+      ? `phone:${integration.phone_number_id}`
+      : "",
+    integration.waba_id ? `waba:${integration.waba_id}` : "",
+    `id:${integration.id}`,
+  ].filter(Boolean);
+}
+
+export function invalidarCacheIntegracaoWhatsapp(integrationId?: string | null) {
+  const id = String(integrationId || "").trim();
+
+  if (!id) {
+    integrationCache.clear();
+    return;
+  }
+
+  for (const [key, entry] of integrationCache.entries()) {
+    if (entry.value?.id === id || key === `id:${id}`) {
+      integrationCache.delete(key);
+    }
+  }
+}
+
 export type WhatsAppIntegration = {
   id: string;
   empresa_id: string;
@@ -27,6 +99,10 @@ export async function findWhatsAppIntegrationByPhoneNumberId(
 ): Promise<WhatsAppIntegration | null> {
   if (!phoneNumberId) return null;
 
+  const cacheKey = `phone:${phoneNumberId}`;
+  const cached = getCachedIntegration(cacheKey);
+  if (cached !== undefined) return cached;
+
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
     .select("*")
@@ -42,13 +118,23 @@ export async function findWhatsAppIntegrationByPhoneNumberId(
     return null;
   }
 
-  return (data as WhatsAppIntegration | null) ?? null;
+  const integration = (data as WhatsAppIntegration | null) ?? null;
+  setCachedIntegration(
+    integration ? cacheKeysForIntegration(integration) : [cacheKey],
+    integration
+  );
+
+  return integration;
 }
 
 export async function findWhatsAppIntegrationByWabaId(
   wabaId: string
 ): Promise<WhatsAppIntegration | null> {
   if (!wabaId) return null;
+
+  const cacheKey = `waba:${wabaId}`;
+  const cached = getCachedIntegration(cacheKey);
+  if (cached !== undefined) return cached;
 
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
@@ -65,5 +151,11 @@ export async function findWhatsAppIntegrationByWabaId(
     return null;
   }
 
-  return (data as WhatsAppIntegration | null) ?? null;
+  const integration = (data as WhatsAppIntegration | null) ?? null;
+  setCachedIntegration(
+    integration ? cacheKeysForIntegration(integration) : [cacheKey],
+    integration
+  );
+
+  return integration;
 }

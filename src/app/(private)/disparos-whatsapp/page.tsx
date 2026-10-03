@@ -1929,11 +1929,11 @@ function normalizarCampanhaRealtime(
     status: textoCampanha(campanha.status),
     template_nome: textoCampanha(campanha.template_nome),
     total,
-    // O realtime da tabela traz o total aceito pela API, que ainda pode
-    // virar falha via webhook. O contador de enviados confirmados vem da
-    // rota /andamento e é preservado ao mesclar o evento realtime.
-    enviados: undefined,
-    aguardando_confirmacao: undefined,
+    // A tabela da campanha é a fonte de verdade para o card em tempo real.
+    // Os contadores são atualizados pela reconciliação agregada dos callbacks,
+    // evitando polling e RPCs repetidas no navegador.
+    enviados: enviadosAceitos,
+    aguardando_confirmacao: processando,
     falhas,
     cancelados,
     pendentes,
@@ -3649,25 +3649,9 @@ export default function DisparosWhatsAppPage() {
   useEffect(() => {
     if (!usuarioLogado?.empresa_id) return;
 
+    // Consulta única de recuperação ao abrir a tela. Depois disso, mudanças
+    // chegam pelo Realtime da tabela whatsapp_disparo_campanhas.
     void carregarResultadosConclusao();
-
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      void carregarResultadosConclusao();
-    }, 30_000);
-
-    const aoVoltarParaAba = () => {
-      if (document.visibilityState === "visible") {
-        void carregarResultadosConclusao();
-      }
-    };
-
-    document.addEventListener("visibilitychange", aoVoltarParaAba);
-
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", aoVoltarParaAba);
-    };
   }, [usuarioLogado?.empresa_id, carregarResultadosConclusao]);
 
   useEffect(() => {
@@ -3698,16 +3682,6 @@ export default function DisparosWhatsAppPage() {
       carregarCampanhaPagina();
     }
   }, [integracaoId, carregarCampanhaPagina]);
-
-  useEffect(() => {
-    if (!integracaoId || !integracaoDisparoProcessando) return;
-
-    const timer = window.setInterval(() => {
-      carregarBloqueioDisparoEmMassa(integracaoId);
-    }, 2 * 60 * 1000);
-
-    return () => window.clearInterval(timer);
-  }, [integracaoId, integracaoDisparoProcessando]);
 
   useEffect(() => {
     const empresaId = usuarioLogado?.empresa_id;
@@ -3749,10 +3723,8 @@ export default function DisparosWhatsAppPage() {
             }
 
             const campanhaMesclada = {
+              ...existente,
               ...campanhaRealtime,
-              enviados: existente?.enviados ?? 0,
-              aguardando_confirmacao:
-                existente?.aguardando_confirmacao ?? 0,
             };
 
             return ordenarCampanhasPaginaPorCriacao([
@@ -3766,10 +3738,8 @@ export default function DisparosWhatsAppPage() {
             if (!campanhaAtiva) return null;
 
             return {
+              ...atual,
               ...campanhaRealtime,
-              enviados: atual.enviados ?? 0,
-              aguardando_confirmacao:
-                atual.aguardando_confirmacao ?? 0,
             };
           });
 
@@ -3785,6 +3755,7 @@ export default function DisparosWhatsAppPage() {
 
           if (!campanhaAtiva) {
             invalidarHistoricoCacheEmpresa(empresaId);
+            void carregarResultadosConclusao();
 
             // Revalida os contatos após o término para incorporar imediatamente
             // cooldowns/bloqueios registrados durante a campanha.
@@ -3810,7 +3781,14 @@ export default function DisparosWhatsAppPage() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status !== "SUBSCRIBED") return;
+
+        // Reconciliamos uma vez ao estabelecer/reestabelecer o WebSocket para
+        // cobrir qualquer evento ocorrido durante uma queda de conexão.
+        void carregarCampanhaPagina();
+        void carregarResultadosConclusao();
+      });
 
     return () => {
       void supabase.removeChannel(channel);
@@ -3821,33 +3799,8 @@ export default function DisparosWhatsAppPage() {
     abaAtiva,
     carregarHistorico,
     limparFormularioDisparo,
-  ]);
-
-  useEffect(() => {
-    if (!campanhaEstaAtiva(campanhaPagina)) return;
-
-    const atualizarCampanhaAtiva = () => {
-      if (document.visibilityState !== "visible") return;
-      void carregarCampanhaPagina(
-        campanhaPagina?.integracao_whatsapp_id || ""
-      );
-    };
-
-    atualizarCampanhaAtiva();
-
-    const timer = window.setInterval(atualizarCampanhaAtiva, 30 * 1000);
-
-    document.addEventListener("visibilitychange", atualizarCampanhaAtiva);
-
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", atualizarCampanhaAtiva);
-    };
-  }, [
-    campanhaPagina?.id,
-    campanhaPagina?.status,
-    campanhaPagina?.integracao_whatsapp_id,
     carregarCampanhaPagina,
+    carregarResultadosConclusao,
   ]);
 
   const permissoes = usuarioLogado?.permissoes || [];

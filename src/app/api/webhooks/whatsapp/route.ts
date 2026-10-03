@@ -13,9 +13,9 @@ import {
 import {
   enfileirarWebhookWhatsapp,
   processarWebhookWhatsappPorId,
+  publicarWebhookWhatsappQstash,
 } from "@/lib/whatsapp/webhook-queue";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { qstash } from "@/lib/qstash/client";
 import {
   buscarPhoneNumberIdsComRecebimentoSuspenso,
   removerMensagensWhatsappPorPhoneNumberIds,
@@ -256,43 +256,25 @@ export async function POST(req: NextRequest) {
         possuiStatuses || possuiCoexistenciaPesada || loteMensagens;
 
       if (deveUsarQstash) {
-        const qstashWorkerUrl = String(process.env.QSTASH_WORKER_URL || "").trim();
+        const publicacao = await publicarWebhookWhatsappQstash(eventoId);
 
-        if (!qstashWorkerUrl) {
-          console.error(
-            "[QSTASH] QSTASH_WORKER_URL não configurada. Evento permanecerá pendente para o cron de recuperação.",
-            { eventoId }
-          );
+        if (publicacao.ok) {
+          logOperacional("[QSTASH] Evento publicado com controle de fluxo", {
+            eventoId,
+            incomingMessages: incomingMessages.length,
+            incomingStatuses: incomingStatuses.length,
+            coexistenceItems: coexistenceItems.total,
+          });
         } else {
-          try {
-            await qstash.publishJSON({
-              url: qstashWorkerUrl,
-              body: { eventoId },
-              retries: 5,
-              timeout: 60,
-              deduplicationId: `whatsapp-webhook-${eventoId}`,
-              flowControl: {
-                key: `whatsapp-webhooks-${process.env.VERCEL_ENV || "production"}`,
-                rate: 10,
-                period: 1,
-                parallelism: 5,
-              },
-            });
-
-            logOperacional("[QSTASH] Evento publicado com controle de fluxo", {
+          // O evento já está persistido como pendente. Não fazemos fallback
+          // direto aqui, pois isso recriaria a avalanche que o QStash evita.
+          console.error(
+            "[QSTASH] Falha ao publicar evento. Evento permanecerá pendente para o cron de recuperação:",
+            {
               eventoId,
-              incomingMessages: incomingMessages.length,
-              incomingStatuses: incomingStatuses.length,
-              coexistenceItems: coexistenceItems.total,
-            });
-          } catch (error) {
-            // O evento já está persistido como pendente. Não fazemos fallback
-            // direto aqui, pois isso recriaria a avalanche que o QStash evita.
-            console.error(
-              "[QSTASH] Falha ao publicar evento. Evento permanecerá pendente para o cron de recuperação:",
-              { eventoId, error }
-            );
-          }
+              motivo: publicacao.reason || null,
+            }
+          );
         }
       } else {
         after(async () => {

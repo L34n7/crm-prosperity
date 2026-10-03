@@ -8,6 +8,12 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { processWhatsAppWebhookBody } from "@/lib/whatsapp/process-webhook";
 import { extrairIdentificadoresWebhookWhatsapp } from "@/lib/whatsapp/webhook-recovery";
+import { qstash } from "@/lib/qstash/client";
+import {
+  circuitoSupabaseEstaAberto,
+  registrarFalhaCircuitoSupabase,
+  registrarSucessoCircuitoSupabase,
+} from "@/lib/operacional/contingencia-supabase";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -41,23 +47,31 @@ type WebhookEventoMetadata = {
   metadata_json?: Record<string, unknown> | null;
 };
 
-function compactarBodyHistoricoProcessado(evento: {
+function compactarBodyProcessado(evento: {
   body_json?: WhatsAppWebhookBody | null;
   metadata_json?: Record<string, unknown> | null;
 }) {
+  const metadata = evento.metadata_json || {};
   const historyMessages = Number(
-    evento.metadata_json?.coexistence_history_messages || 0
+    metadata.coexistence_history_messages || 0
   );
   const historyStates = Number(
-    evento.metadata_json?.coexistence_history_states || 0
+    metadata.coexistence_history_states || 0
   );
 
+  // Histórico Coexistence pode carregar payloads enormes e já é persistido
+  // em uma fila própria, então é compactado imediatamente. Webhooks comuns
+  // preservam o payload bruto por 24h para diagnóstico e só depois entram na
+  // retenção gradual do cron.
   if (historyMessages <= 0 && historyStates <= 0) return null;
 
   return {
     object: evento.body_json?.object || "whatsapp_business_account",
     archived: true,
     archived_reason: "coex_history_enqueued",
+    incoming_messages: Number(metadata.incoming_messages || 0),
+    incoming_statuses: Number(metadata.incoming_statuses || 0),
+    coexistence_total: Number(metadata.coexistence_total || 0),
     history_messages: historyMessages,
     history_states: historyStates,
     archived_at: new Date().toISOString(),
@@ -105,6 +119,71 @@ function calcularBodyHash(body: WhatsAppWebhookBody) {
 function erroParaTexto(error: unknown) {
   if (error instanceof Error) return error.message;
   return "Erro desconhecido";
+}
+
+
+function getQstashWorkerUrl() {
+  return String(process.env.QSTASH_WORKER_URL || "").trim();
+}
+
+function getWebhookFlowControlKey() {
+  return `whatsapp-webhooks-${process.env.VERCEL_ENV || "production"}`;
+}
+
+export async function publicarWebhookWhatsappQstash(
+  eventoId: string,
+  opcoes: { recuperacao?: boolean } = {}
+) {
+  const id = String(eventoId || "").trim();
+  const url = getQstashWorkerUrl();
+
+  if (!id || !process.env.QSTASH_TOKEN || !url) {
+    return {
+      ok: false,
+      scheduled: false,
+      reason: !id
+        ? "evento_id_ausente"
+        : !process.env.QSTASH_TOKEN
+          ? "qstash_token_ausente"
+          : "qstash_worker_url_ausente",
+    };
+  }
+
+  const recuperacao = opcoes.recuperacao === true;
+
+  try {
+    const result = await qstash.publishJSON({
+      url,
+      body: { eventoId: id },
+      retries: 5,
+      timeout: 60,
+      deduplicationId: recuperacao
+        ? `whatsapp-webhook-recovery-${id}`
+        : `whatsapp-webhook-${id}`,
+      flowControl: {
+        key: getWebhookFlowControlKey(),
+        rate: 10,
+        period: 1,
+        parallelism: 5,
+      },
+      label: recuperacao
+        ? "whatsapp-webhook-recovery"
+        : "whatsapp-webhook",
+    });
+
+    return {
+      ok: true,
+      scheduled: true,
+      result,
+      reason: null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      scheduled: false,
+      reason: erroParaTexto(error),
+    };
+  }
 }
 
 export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
@@ -301,7 +380,7 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
     const resultado = await processWhatsAppWebhookBody(
       eventoTravado.body_json as WhatsAppWebhookBody
     );
-    const bodyCompactado = compactarBodyHistoricoProcessado(
+    const bodyCompactado = compactarBodyProcessado(
       eventoTravado
     );
 
@@ -426,7 +505,7 @@ export async function processarFilaWebhooksWhatsapp(
       const resultado = await processWhatsAppWebhookBody(
         eventoReivindicado.body_json as WhatsAppWebhookBody
       );
-      const bodyCompactado = compactarBodyHistoricoProcessado(
+      const bodyCompactado = compactarBodyProcessado(
         eventoReivindicado
       );
 
@@ -492,6 +571,189 @@ export async function processarFilaWebhooksWhatsapp(
     limite,
     maxTentativas,
   };
+}
+
+
+export async function republicarFilaWebhooksWhatsapp(
+  params: {
+    limite?: number;
+    idadeMinimaSegundos?: number;
+  } = {}
+) {
+  const servico = "whatsapp-webhook-recovery";
+
+  if (circuitoSupabaseEstaAberto(servico)) {
+    return {
+      ok: true,
+      pausado: true,
+      buscados: 0,
+      republicados: 0,
+      falhas: 0,
+    };
+  }
+
+  const limite = normalizarInteiro(params.limite, 10, 1, 25);
+  const idadeMinimaSegundos = normalizarInteiro(
+    params.idadeMinimaSegundos,
+    90,
+    30,
+    600
+  );
+  const maxTentativas = normalizarInteiro(
+    process.env.WHATSAPP_WEBHOOK_MAX_TENTATIVAS,
+    5,
+    1,
+    20
+  );
+  const timeoutLockMinutos = normalizarInteiro(
+    process.env.WHATSAPP_WEBHOOK_LOCK_TIMEOUT_MINUTES,
+    5,
+    1,
+    60
+  );
+
+  try {
+    await liberarLocksExpirados(timeoutLockMinutos);
+
+    const antesDe = new Date(
+      Date.now() - idadeMinimaSegundos * 1000
+    ).toISOString();
+    const { data: eventos, error } = await supabaseAdmin
+      .from("whatsapp_webhook_eventos")
+      .select("id")
+      .in("status", ["pendente", "erro"])
+      .lt("tentativas", maxTentativas)
+      .lt("updated_at", antesDe)
+      .order("created_at", { ascending: true })
+      .limit(limite);
+
+    if (error) {
+      throw new Error(
+        `Erro ao buscar webhooks órfãos: ${error.message}`
+      );
+    }
+
+    registrarSucessoCircuitoSupabase(servico);
+
+    let republicados = 0;
+    let falhas = 0;
+
+    for (const evento of eventos || []) {
+      const result = await publicarWebhookWhatsappQstash(evento.id, {
+        recuperacao: true,
+      });
+
+      if (result.ok) {
+        republicados += 1;
+      } else {
+        falhas += 1;
+        console.warn(
+          "[WEBHOOK WHATSAPP] Falha ao republicar evento órfão no QStash:",
+          {
+            eventoId: evento.id,
+            motivo: result.reason || null,
+          }
+        );
+      }
+    }
+
+    return {
+      ok: true,
+      pausado: false,
+      buscados: eventos?.length || 0,
+      republicados,
+      falhas,
+    };
+  } catch (error) {
+    registrarFalhaCircuitoSupabase(servico, error, {
+      limiarFalhas: 1,
+      pausaMs: 60_000,
+    });
+    throw error;
+  }
+}
+
+export async function compactarWebhooksWhatsappProcessados(
+  params: { limite?: number; idadeMinimaHoras?: number } = {}
+) {
+  const servico = "whatsapp-webhook-compaction";
+
+  if (circuitoSupabaseEstaAberto(servico)) {
+    return { ok: true, pausado: true, compactados: 0 };
+  }
+
+  const limite = normalizarInteiro(params.limite, 50, 1, 100);
+  const idadeMinimaHoras = normalizarInteiro(
+    params.idadeMinimaHoras,
+    24,
+    6,
+    720
+  );
+  const antesDe = new Date(
+    Date.now() - idadeMinimaHoras * 60 * 60 * 1000
+  ).toISOString();
+
+  try {
+    const { data: eventos, error } = await supabaseAdmin
+      .from("whatsapp_webhook_eventos")
+      .select("id")
+      .eq("status", "processado")
+      .lt("updated_at", antesDe)
+      .or(
+        "resultado_json->>archived_reason.is.null,resultado_json->>archived_reason.neq.retention_compaction"
+      )
+      .order("updated_at", { ascending: true })
+      .limit(limite);
+
+    if (error) {
+      throw new Error(
+        `Erro ao buscar webhooks para compactação: ${error.message}`
+      );
+    }
+
+    const ids = (eventos || []).map((evento) => evento.id);
+    if (ids.length === 0) {
+      registrarSucessoCircuitoSupabase(servico);
+      return { ok: true, pausado: false, compactados: 0 };
+    }
+
+    const agora = new Date().toISOString();
+    const { error: updateError } = await supabaseAdmin
+      .from("whatsapp_webhook_eventos")
+      .update({
+        body_json: {
+          archived: true,
+          archived_reason: "retention_compaction",
+          archived_at: agora,
+        },
+        resultado_json: {
+          archived: true,
+          archived_reason: "retention_compaction",
+        },
+        updated_at: agora,
+      })
+      .in("id", ids);
+
+    if (updateError) {
+      throw new Error(
+        `Erro ao compactar webhooks processados: ${updateError.message}`
+      );
+    }
+
+    registrarSucessoCircuitoSupabase(servico);
+
+    return {
+      ok: true,
+      pausado: false,
+      compactados: ids.length,
+    };
+  } catch (error) {
+    registrarFalhaCircuitoSupabase(servico, error, {
+      limiarFalhas: 1,
+      pausaMs: 60_000,
+    });
+    throw error;
+  }
 }
 
 export async function contarMensagensWebhookNoMesmoSegundo(createdAt?: string | null) {
