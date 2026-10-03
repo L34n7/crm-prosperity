@@ -267,6 +267,8 @@ export default function ConversasPageContent() {
     useState(false);
   const [modalAtivarBotAberto, setModalAtivarBotAberto] = useState(false);
   const [ativandoIa, setAtivandoIa] = useState(false);
+  const [alterandoAutomacoesContato, setAlterandoAutomacoesContato] =
+    useState(false);
     
   const [infoExpandida, setInfoExpandida] = useState(false);
 
@@ -3728,6 +3730,85 @@ export default function ConversasPageContent() {
       setErro("Erro ao ativar bot nesta conversa.");
     } finally {
       setSalvandoAcao(false);
+    }
+  }
+
+  async function alternarAutomacoesContato() {
+    const contatoId = conversaSelecionada?.contatos?.id;
+
+    if (!contatoId || alterandoAutomacoesContato) return;
+
+    const desabilitar =
+      conversaSelecionada?.contatos?.automacoes_desabilitadas !== true;
+
+    try {
+      setAlterandoAutomacoesContato(true);
+      setErro("");
+      setMensagemSucesso("");
+      setMenuContatoAberto(false);
+
+      const res = await fetch(`/api/contatos/${contatoId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Origem-Modulo": "conversas",
+        },
+        body: JSON.stringify({
+          automacoes_desabilitadas: desabilitar,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErro(
+          data.error ||
+            (desabilitar
+              ? "Erro ao desabilitar automações para o contato."
+              : "Erro ao habilitar automações para o contato.")
+        );
+        return;
+      }
+
+      setMensagemSucesso(
+        data.message ||
+          (desabilitar
+            ? "Automações desabilitadas para este contato."
+            : "Automações habilitadas para este contato.")
+      );
+
+      const listaAtualizada = await atualizarConversasCarregadas();
+      const conversaAtualizada = listaAtualizada.find(
+        (conversa: Conversa) => conversa.id === conversaSelecionada?.id
+      );
+
+      if (conversaAtualizada) {
+        setConversaSelecionada(conversaAtualizada);
+      } else {
+        setConversaSelecionada((atual) =>
+          atual?.contatos
+            ? {
+                ...atual,
+                bot_ativo: desabilitar ? false : atual.bot_ativo,
+                contatos: {
+                  ...atual.contatos,
+                  automacoes_desabilitadas: desabilitar,
+                  automacoes_desabilitadas_em: desabilitar
+                    ? new Date().toISOString()
+                    : null,
+                },
+              }
+            : atual
+        );
+      }
+    } catch {
+      setErro(
+        desabilitar
+          ? "Erro ao desabilitar automações para o contato."
+          : "Erro ao habilitar automações para o contato."
+      );
+    } finally {
+      setAlterandoAutomacoesContato(false);
     }
   }
 
@@ -7698,7 +7779,29 @@ const templateFooterTexto = useMemo(() => {
 
                                 <div className={styles.headerDropdownDivider} />
 
-                                {podeAtivarBotComUltimaMensagem && (
+                                {conversaSelecionada?.contatos?.id && (
+                                  <button
+                                    type="button"
+                                    className={styles.headerDropdownItem}
+                                    onClick={alternarAutomacoesContato}
+                                    disabled={
+                                      alterandoAutomacoesContato ||
+                                      salvandoAcao ||
+                                      ativandoIa
+                                    }
+                                  >
+                                    {alterandoAutomacoesContato
+                                      ? "Atualizando automações..."
+                                      : conversaSelecionada.contatos
+                                            .automacoes_desabilitadas
+                                        ? "Habilitar Automações"
+                                        : "Desabilitar Automações"}
+                                  </button>
+                                )}
+
+                                {!conversaSelecionada?.contatos
+                                  ?.automacoes_desabilitadas &&
+                                  podeAtivarBotComUltimaMensagem && (
                                   <button
                                     type="button"
                                     className={styles.AtivarBot}
@@ -7709,7 +7812,9 @@ const templateFooterTexto = useMemo(() => {
                                   </button>
                                 )}
 
-                                {podeAtivarIa && (
+                                {!conversaSelecionada?.contatos
+                                  ?.automacoes_desabilitadas &&
+                                  podeAtivarIa && (
                                   <button
                                     type="button"
                                     className={styles.AtivarIa}

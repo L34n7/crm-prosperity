@@ -1051,7 +1051,7 @@ export async function validarExecucaoAutomacaoAtiva(params: {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, status, bot_ativo, responsavel_id")
+    .select("id, status, bot_ativo, responsavel_id, contatos (automacoes_desabilitadas)")
     .eq("id", conversaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -1060,6 +1060,17 @@ export async function validarExecucaoAutomacaoAtiva(params: {
     return {
       ok: false,
       motivo: "conversa_nao_encontrada",
+    };
+  }
+
+  const contatoConversa = Array.isArray(conversa.contatos)
+    ? conversa.contatos[0]
+    : conversa.contatos;
+
+  if (contatoConversa?.automacoes_desabilitadas === true) {
+    return {
+      ok: false,
+      motivo: "contato_automacoes_desabilitadas",
     };
   }
 

@@ -51,6 +51,8 @@ export type Conversa = {
     observacoes?: string | null;
     campanha?: string | null;
     interesse?: string | null;
+    automacoes_desabilitadas?: boolean;
+    automacoes_desabilitadas_em?: string | null;
     rastreamento_campanha_id?: string | null;
     rastreamento_campanhas?: CampanhaRastreamentoContato | null;
   } | null;

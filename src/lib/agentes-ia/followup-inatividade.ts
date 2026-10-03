@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
@@ -347,7 +348,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       .maybeSingle(),
     supabaseAdmin
       .from("conversas")
-      .select("id, status, bot_ativo, aguardando_atendente, responsavel_id, agente_ia_id")
+      .select("id, contato_id, status, bot_ativo, aguardando_atendente, responsavel_id, agente_ia_id")
       .eq("empresa_id", agendamento.empresa_id)
       .eq("id", conversaId)
       .maybeSingle(),
@@ -367,6 +368,15 @@ export async function processarFollowupAgenteIa(agendamento: {
   if (!config.ativo || tentativa > config.tentativas) return { ok: true, cancelado: true, motivo: "followup_desativado_ou_limite" };
   if (!conversa || conversa.status !== "bot" || conversa.bot_ativo !== true || conversa.aguardando_atendente === true) {
     return { ok: true, cancelado: true, motivo: "conversa_nao_esta_com_agente" };
+  }
+  if (
+    await automacoesContatoEstaoDesabilitadas({
+      empresaId: agendamento.empresa_id,
+      contatoId: conversa.contato_id || null,
+      conversaId,
+    })
+  ) {
+    return { ok: true, cancelado: true, motivo: "contato_automacoes_desabilitadas" };
   }
   if (conversa.agente_ia_id && String(conversa.agente_ia_id) !== agenteId) {
     return { ok: true, cancelado: true, motivo: "outro_agente_assumiu" };
@@ -455,15 +465,25 @@ export async function processarFollowupAgenteIa(agendamento: {
     const revalidacaoEntrada = await ultimaMensagemContato(agendamento.empresa_id, conversaId);
     const { data: conversaRevalidada } = await supabaseAdmin
       .from("conversas")
-      .select("status, bot_ativo, aguardando_atendente, agente_ia_id")
+      .select("contato_id, status, bot_ativo, aguardando_atendente, agente_ia_id")
       .eq("empresa_id", agendamento.empresa_id)
       .eq("id", conversaId)
       .maybeSingle();
+
+    const automacoesDesabilitadas =
+      conversaRevalidada &&
+      (await automacoesContatoEstaoDesabilitadas({
+        empresaId: agendamento.empresa_id,
+        contatoId: conversaRevalidada.contato_id || null,
+        conversaId,
+      }));
+
     if (
       !revalidacaoEntrada ||
       revalidacaoEntrada.id !== ultimaMensagemContatoId ||
       !dentroDaJanela24h(revalidacaoEntrada.created_at) ||
       !conversaRevalidada ||
+      automacoesDesabilitadas ||
       conversaRevalidada.status !== "bot" ||
       conversaRevalidada.bot_ativo !== true ||
       conversaRevalidada.aguardando_atendente === true ||

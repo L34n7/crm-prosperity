@@ -2,6 +2,7 @@ import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
 import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtime";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { interceptarMensagemAgenteIa } from "@/lib/agentes-ia/runtime";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { buscarBloqueioFinanceiroMetaConversa } from "@/lib/whatsapp/meta-payment-block";
 import { buscarBloqueioLimiteServiceConversa } from "@/lib/whatsapp/service-quota";
 import {
@@ -581,6 +582,19 @@ export async function processAutomationEngine(
   input: AutomationEngineInput,
   options: { ignorarValidacaoTemporal?: boolean } = {}
 ) {
+  const automacoesDesabilitadas = await automacoesContatoEstaoDesabilitadas({
+    empresaId: input.empresaId,
+    contatoId: input.contatoId || null,
+    conversaId: input.conversaId,
+  });
+
+  if (automacoesDesabilitadas) {
+    return {
+      ok: true,
+      status: "contato_automacoes_desabilitadas",
+    };
+  }
+
   const bloqueioPagamentoMeta = await buscarBloqueioFinanceiroMetaConversa({
     empresaId: input.empresaId,
     conversaId: input.conversaId,

@@ -11,6 +11,7 @@ import {
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
 import { ativarAgenteIaManualmente } from "@/lib/agentes-ia/ativacao-manual";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -100,6 +101,23 @@ export async function POST(
       return NextResponse.json(
         { ok: false, error: CONVERSA_HISTORICO_IMPORTADO_MENSAGEM },
         { status: 400 }
+      );
+    }
+
+    if (
+      await automacoesContatoEstaoDesabilitadas({
+        empresaId: conversa.empresa_id,
+        contatoId: conversa.contato_id,
+        conversaId: conversa.id,
+      })
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "As automações estão desabilitadas para este contato. Habilite-as antes de ativar a IA.",
+        },
+        { status: 409 }
       );
     }
 

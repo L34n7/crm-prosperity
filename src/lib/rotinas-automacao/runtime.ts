@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { avaliarCondicoes, type CondicaoRotina, type ContextoEvento } from "./runtime-condicoes";
 import { executarAcaoRotina, tituloAcaoRotina, type AcaoRotina } from "./runtime-acoes";
 
@@ -275,9 +276,20 @@ export async function processarMensagemRecebidaRotinas(
       let jobAnteriorId: string | null = null;
       let interromperNestaExecucao = false;
       let erroExecucao: string | null = null;
+      let canceladaPorContato = false;
       const resultados: Array<Record<string, unknown>> = [];
 
       for (const acao of [...acoes].sort((a, b) => a.ordem - b.ordem)) {
+        if (
+          await automacoesContatoEstaoDesabilitadas({
+            empresaId: input.empresaId,
+            contatoId: input.contatoId || null,
+            conversaId: input.conversaId,
+          })
+        ) {
+          canceladaPorContato = true;
+          break;
+        }
         const job = await obterJob({
           empresaId: input.empresaId,
           automacaoId: automacao.id,
@@ -304,6 +316,27 @@ export async function processarMensagemRecebidaRotinas(
           .eq("id", job.id)
           .eq("empresa_id", input.empresaId);
         if (processandoError) throw processandoError;
+
+        if (
+          await automacoesContatoEstaoDesabilitadas({
+            empresaId: input.empresaId,
+            contatoId: input.contatoId || null,
+            conversaId: input.conversaId,
+          })
+        ) {
+          canceladaPorContato = true;
+          await supabase
+            .from("rotina_automacao_jobs")
+            .update({
+              status: "cancelado",
+              bloqueado_em: null,
+              cancelado_em: new Date().toISOString(),
+              origem_cancelamento: "contato_automacoes_desabilitadas",
+            })
+            .eq("id", job.id)
+            .eq("empresa_id", input.empresaId);
+          break;
+        }
 
         try {
           const resultado = await executarAcaoRotina({
@@ -339,10 +372,20 @@ export async function processarMensagemRecebidaRotinas(
       const { error: execucaoFinalError } = await supabase
         .from("rotina_automacao_execucoes")
         .update({
-          status: erroExecucao ? "erro" : "concluida",
+          status: canceladaPorContato
+            ? "cancelada"
+            : erroExecucao
+              ? "erro"
+              : "concluida",
           resultado_json: { automacao_nome: automacao.nome, interromper_fluxo_atual: interromperNestaExecucao, acoes: resultados },
           erro: erroExecucao,
           finalizada_em: new Date().toISOString(),
+          ...(canceladaPorContato
+            ? {
+                cancelado_em: new Date().toISOString(),
+                motivo_cancelamento: "automacoes_contato_desabilitadas",
+              }
+            : {}),
         })
         .eq("id", execucao.id)
         .eq("empresa_id", input.empresaId);

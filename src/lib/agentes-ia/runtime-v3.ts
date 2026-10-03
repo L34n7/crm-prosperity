@@ -19,6 +19,7 @@ import {
   obterGrupoDistribuicao,
 } from "@/lib/agendas/distribuicao";
 import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribuicao-transferencia";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
@@ -2718,6 +2719,16 @@ async function temMensagemContatoNaoProcessada(pendencia: PendenciaRow) {
 }
 
 async function execucaoFoiSupersedida(pendencia: PendenciaRow) {
+  if (
+    await automacoesContatoEstaoDesabilitadas({
+      empresaId: pendencia.empresa_id,
+      contatoId: pendencia.contato_id || null,
+      conversaId: pendencia.conversa_id,
+    })
+  ) {
+    return true;
+  }
+
   if (await temNovaVersao(pendencia)) return true;
   return temMensagemContatoNaoProcessada(pendencia);
 }

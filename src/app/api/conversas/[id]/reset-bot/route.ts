@@ -173,7 +173,7 @@ export async function POST(
 
   const { data: contato, error: contatoError } = await supabaseAdmin
     .from("contatos")
-    .select("id, telefone")
+    .select("id, telefone, automacoes_desabilitadas")
     .eq("id", conversa.contato_id)
     .eq("empresa_id", conversa.empresa_id)
     .maybeSingle();
@@ -189,6 +189,17 @@ export async function POST(
     return NextResponse.json(
       { ok: false, error: "Contato da conversa nao encontrado" },
       { status: 404 }
+    );
+  }
+
+  if (contato.automacoes_desabilitadas === true) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "As automações estão desabilitadas para este contato. Habilite-as antes de ativar o bot.",
+      },
+      { status: 409 }
     );
   }
 

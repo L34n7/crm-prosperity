@@ -144,6 +144,63 @@ function criarCursor(conversa: ConversaResumo) {
   ).toString("base64url");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function enriquecerStatusAutomacoesContatos(
+  empresaId: string,
+  conversas: ConversaResumo[]
+) {
+  const contatoIds = Array.from(
+    new Set(
+      conversas
+        .map((conversa) =>
+          isRecord(conversa.contatos)
+            ? String(conversa.contatos.id || "").trim()
+            : ""
+        )
+        .filter(Boolean)
+    )
+  );
+
+  if (contatoIds.length === 0) return conversas;
+
+  const { data, error } = await supabaseAdmin
+    .from("contatos")
+    .select("id, automacoes_desabilitadas, automacoes_desabilitadas_em")
+    .eq("empresa_id", empresaId)
+    .in("id", contatoIds);
+
+  if (error) {
+    throw new Error(
+      `Erro ao carregar status de automacoes dos contatos: ${error.message}`
+    );
+  }
+
+  const statusPorContato = new Map(
+    (data || []).map((contato) => [contato.id, contato])
+  );
+
+  return conversas.map((conversa) => {
+    if (!isRecord(conversa.contatos)) return conversa;
+
+    const contatoId = String(conversa.contatos.id || "").trim();
+    const status = statusPorContato.get(contatoId);
+
+    return {
+      ...conversa,
+      contatos: {
+        ...conversa.contatos,
+        automacoes_desabilitadas:
+          status?.automacoes_desabilitadas === true,
+        automacoes_desabilitadas_em:
+          status?.automacoes_desabilitadas_em || null,
+      },
+    };
+  });
+}
+
 export async function GET(request: Request) {
   const resultado = await getUsuarioContexto();
 
@@ -344,10 +401,14 @@ export async function GET(request: Request) {
     });
     const hasMore = recebidas.length > limite;
     const conversasBase = hasMore ? recebidas.slice(0, limite) : recebidas;
-    const conversas = await enriquecerConversasComDisparosAgendados({
+    const conversasComDisparos = await enriquecerConversasComDisparosAgendados({
       empresaId: usuario.empresa_id,
       conversas: conversasBase,
     });
+    const conversas = await enriquecerStatusAutomacoesContatos(
+      usuario.empresa_id,
+      conversasComDisparos
+    );
     const ultimaConversa = conversas[conversas.length - 1] || null;
 
     return NextResponse.json({
