@@ -46,6 +46,12 @@ type IntegracaoResumo = {
   numero: string | null;
 };
 
+type ConfirmacaoCampanha = {
+  campanha_id: string;
+  total_enviados_confirmados: number | null;
+  total_aguardando_confirmacao: number | null;
+};
+
 function inteiro(valor: unknown) {
   const numero = Number(valor || 0);
   return Number.isFinite(numero) ? Math.max(0, Math.trunc(numero)) : 0;
@@ -98,10 +104,15 @@ function motivoCampanha(campanha: CampanhaDisparo) {
 
 function mapearCampanha(
   campanha: CampanhaDisparo,
-  integracoes: Map<string, IntegracaoResumo>
+  integracoes: Map<string, IntegracaoResumo>,
+  confirmacoes: Map<string, ConfirmacaoCampanha>
 ) {
   const total = inteiro(campanha.total_itens);
-  const enviados = inteiro(campanha.total_enviados);
+  const confirmacao = confirmacoes.get(campanha.id);
+  const enviados = inteiro(confirmacao?.total_enviados_confirmados);
+  const aguardandoConfirmacao = inteiro(
+    confirmacao?.total_aguardando_confirmacao
+  );
   const falhas = inteiro(campanha.total_falhas);
   const cancelados = inteiro(campanha.total_cancelados);
   const pendentes = inteiro(campanha.total_pendentes);
@@ -123,6 +134,7 @@ function mapearCampanha(
     template_nome: campanha.template_nome,
     total,
     enviados,
+    aguardando_confirmacao: aguardandoConfirmacao,
     falhas,
     cancelados,
     pendentes,
@@ -138,6 +150,39 @@ function mapearCampanha(
     paused_at: campanha.paused_at,
     finished_at: campanha.finished_at,
   };
+}
+
+async function buscarConfirmacoesCampanhas(
+  campanhas: CampanhaDisparo[]
+) {
+  const ids = campanhas
+    .map((campanha) => String(campanha.id || "").trim())
+    .filter(Boolean);
+
+  if (ids.length === 0) {
+    return new Map<string, ConfirmacaoCampanha>();
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "resumir_whatsapp_disparo_confirmacoes",
+    {
+      p_campanha_ids: ids,
+    }
+  );
+
+  if (error) {
+    console.error(
+      "[WHATSAPP DISPAROS ANDAMENTO] Erro ao contar confirmações:",
+      error
+    );
+    return new Map<string, ConfirmacaoCampanha>();
+  }
+
+  return new Map<string, ConfirmacaoCampanha>(
+    ((Array.isArray(data) ? data : []) as ConfirmacaoCampanha[]).map(
+      (item) => [String(item.campanha_id), item]
+    )
+  );
 }
 
 export async function GET(request: NextRequest) {
@@ -273,8 +318,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const ativas = ((campanhasAtivas || []) as CampanhaDisparo[]).map(
-      (campanha) => mapearCampanha(campanha, integracoes)
+    const campanhasAtivasTipadas =
+      (campanhasAtivas || []) as CampanhaDisparo[];
+    const confirmacoesAtivas = await buscarConfirmacoesCampanhas(
+      campanhasAtivasTipadas
+    );
+    const ativas = campanhasAtivasTipadas.map((campanha) =>
+      mapearCampanha(campanha, integracoes, confirmacoesAtivas)
     );
 
     if (ativas.length > 0) {
@@ -327,8 +377,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const recentes = ((campanhasRecentes || []) as CampanhaDisparo[]).map(
-      (campanha) => mapearCampanha(campanha, integracoes)
+    const campanhasRecentesTipadas =
+      (campanhasRecentes || []) as CampanhaDisparo[];
+    const confirmacoesRecentes = await buscarConfirmacoesCampanhas(
+      campanhasRecentesTipadas
+    );
+    const recentes = campanhasRecentesTipadas.map((campanha) =>
+      mapearCampanha(campanha, integracoes, confirmacoesRecentes)
     );
 
     return NextResponse.json({
