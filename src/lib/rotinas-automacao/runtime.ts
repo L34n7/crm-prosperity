@@ -285,6 +285,7 @@ export async function processarMensagemRecebidaRotinas(
             empresaId: input.empresaId,
             contatoId: input.contatoId || null,
             conversaId: input.conversaId,
+            integracaoWhatsappId: integracaoConversaId || null,
           })
         ) {
           canceladaPorContato = true;
@@ -322,6 +323,7 @@ export async function processarMensagemRecebidaRotinas(
             empresaId: input.empresaId,
             contatoId: input.contatoId || null,
             conversaId: input.conversaId,
+            integracaoWhatsappId: integracaoConversaId || null,
           })
         ) {
           canceladaPorContato = true;

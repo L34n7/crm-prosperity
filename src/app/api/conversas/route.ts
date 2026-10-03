@@ -152,50 +152,74 @@ async function enriquecerStatusAutomacoesContatos(
   empresaId: string,
   conversas: ConversaResumo[]
 ) {
+  const pares = conversas
+    .map((conversa) => {
+      const contatoId = isRecord(conversa.contatos)
+        ? String(conversa.contatos.id || "").trim()
+        : "";
+      const integracaoWhatsappId = String(
+        conversa.integracao_whatsapp_id || ""
+      ).trim();
+
+      return {
+        contatoId,
+        integracaoWhatsappId,
+      };
+    })
+    .filter(
+      (item) => Boolean(item.contatoId) && Boolean(item.integracaoWhatsappId)
+    );
+
+  if (pares.length === 0) return conversas;
+
   const contatoIds = Array.from(
-    new Set(
-      conversas
-        .map((conversa) =>
-          isRecord(conversa.contatos)
-            ? String(conversa.contatos.id || "").trim()
-            : ""
-        )
-        .filter(Boolean)
-    )
+    new Set(pares.map((item) => item.contatoId))
+  );
+  const integracaoIds = Array.from(
+    new Set(pares.map((item) => item.integracaoWhatsappId))
   );
 
-  if (contatoIds.length === 0) return conversas;
-
   const { data, error } = await supabaseAdmin
-    .from("contatos")
-    .select("id, automacoes_desabilitadas, automacoes_desabilitadas_em")
+    .from("contato_automacoes_integracoes")
+    .select(
+      "contato_id, integracao_whatsapp_id, desabilitadas, desabilitadas_em"
+    )
     .eq("empresa_id", empresaId)
-    .in("id", contatoIds);
+    .eq("desabilitadas", true)
+    .in("contato_id", contatoIds)
+    .in("integracao_whatsapp_id", integracaoIds);
 
   if (error) {
     throw new Error(
-      `Erro ao carregar status de automacoes dos contatos: ${error.message}`
+      `Erro ao carregar status de automacoes por integracao: ${error.message}`
     );
   }
 
-  const statusPorContato = new Map(
-    (data || []).map((contato) => [contato.id, contato])
+  const statusPorPar = new Map(
+    (data || []).map((item) => [
+      `${item.contato_id}:${item.integracao_whatsapp_id}`,
+      item,
+    ])
   );
 
   return conversas.map((conversa) => {
     if (!isRecord(conversa.contatos)) return conversa;
 
     const contatoId = String(conversa.contatos.id || "").trim();
-    const status = statusPorContato.get(contatoId);
+    const integracaoWhatsappId = String(
+      conversa.integracao_whatsapp_id || ""
+    ).trim();
+    const status = statusPorPar.get(
+      `${contatoId}:${integracaoWhatsappId}`
+    );
 
     return {
       ...conversa,
       contatos: {
         ...conversa.contatos,
-        automacoes_desabilitadas:
-          status?.automacoes_desabilitadas === true,
+        automacoes_desabilitadas: status?.desabilitadas === true,
         automacoes_desabilitadas_em:
-          status?.automacoes_desabilitadas_em || null,
+          status?.desabilitadas_em || null,
       },
     };
   });

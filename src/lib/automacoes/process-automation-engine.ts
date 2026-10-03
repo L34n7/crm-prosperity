@@ -586,6 +586,7 @@ export async function processAutomationEngine(
     empresaId: input.empresaId,
     contatoId: input.contatoId || null,
     conversaId: input.conversaId,
+    integracaoWhatsappId: input.integracaoWhatsappId || null,
   });
 
   if (automacoesDesabilitadas) {

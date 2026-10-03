@@ -24,6 +24,7 @@ import {
   obterConfiguracaoEncerramentoInatividade,
 } from "@/lib/automacoes/normalizar-configuracao-fluxo";
 import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribuicao-transferencia";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import {
   chaveEhVariavelFixaContato,
   chaveEhVariavelNomeWhatsapp,
@@ -1051,7 +1052,7 @@ export async function validarExecucaoAutomacaoAtiva(params: {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, status, bot_ativo, responsavel_id, contatos (automacoes_desabilitadas)")
+    .select("id, contato_id, integracao_whatsapp_id, status, bot_ativo, responsavel_id")
     .eq("id", conversaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -1063,11 +1064,14 @@ export async function validarExecucaoAutomacaoAtiva(params: {
     };
   }
 
-  const contatoConversa = Array.isArray(conversa.contatos)
-    ? conversa.contatos[0]
-    : conversa.contatos;
-
-  if (contatoConversa?.automacoes_desabilitadas === true) {
+  if (
+    await automacoesContatoEstaoDesabilitadas({
+      empresaId,
+      contatoId: conversa.contato_id,
+      conversaId,
+      integracaoWhatsappId: conversa.integracao_whatsapp_id,
+    })
+  ) {
     return {
       ok: false,
       motivo: "contato_automacoes_desabilitadas",

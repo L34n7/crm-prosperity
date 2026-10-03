@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import { isAdministrador } from "@/lib/auth/authorization";
 import { processAutomationEngine } from "@/lib/automacoes/process-automation-engine";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
   isConversaHistoricoImportado,
@@ -173,7 +174,7 @@ export async function POST(
 
   const { data: contato, error: contatoError } = await supabaseAdmin
     .from("contatos")
-    .select("id, telefone, automacoes_desabilitadas")
+    .select("id, telefone")
     .eq("id", conversa.contato_id)
     .eq("empresa_id", conversa.empresa_id)
     .maybeSingle();
@@ -192,12 +193,19 @@ export async function POST(
     );
   }
 
-  if (contato.automacoes_desabilitadas === true) {
+  if (
+    await automacoesContatoEstaoDesabilitadas({
+      empresaId: conversa.empresa_id,
+      contatoId: conversa.contato_id,
+      conversaId: conversa.id,
+      integracaoWhatsappId: conversa.integracao_whatsapp_id,
+    })
+  ) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          "As automações estão desabilitadas para este contato. Habilite-as antes de ativar o bot.",
+          "As automações estão desabilitadas para este contato nesta integração. Habilite-as antes de ativar o bot.",
       },
       { status: 409 }
     );

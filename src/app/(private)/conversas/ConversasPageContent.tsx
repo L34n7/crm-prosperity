@@ -3734,9 +3734,19 @@ export default function ConversasPageContent() {
   }
 
   async function alternarAutomacoesContato() {
+    const conversaId = conversaSelecionada?.id;
     const contatoId = conversaSelecionada?.contatos?.id;
+    const integracaoWhatsappId =
+      conversaSelecionada?.integracao_whatsapp_id;
 
-    if (!contatoId || alterandoAutomacoesContato) return;
+    if (
+      !conversaId ||
+      !contatoId ||
+      !integracaoWhatsappId ||
+      alterandoAutomacoesContato
+    ) {
+      return;
+    }
 
     const desabilitar =
       conversaSelecionada?.contatos?.automacoes_desabilitadas !== true;
@@ -3747,16 +3757,18 @@ export default function ConversasPageContent() {
       setMensagemSucesso("");
       setMenuContatoAberto(false);
 
-      const res = await fetch(`/api/contatos/${contatoId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Origem-Modulo": "conversas",
-        },
-        body: JSON.stringify({
-          automacoes_desabilitadas: desabilitar,
-        }),
-      });
+      const res = await fetch(
+        `/api/conversas/${conversaId}/automacoes`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            desabilitadas: desabilitar,
+          }),
+        }
+      );
 
       const data = await res.json();
 
@@ -3764,8 +3776,8 @@ export default function ConversasPageContent() {
         setErro(
           data.error ||
             (desabilitar
-              ? "Erro ao desabilitar automações para o contato."
-              : "Erro ao habilitar automações para o contato.")
+              ? "Erro ao desabilitar automações nesta integração."
+              : "Erro ao habilitar automações nesta integração.")
         );
         return;
       }
@@ -3773,13 +3785,13 @@ export default function ConversasPageContent() {
       setMensagemSucesso(
         data.message ||
           (desabilitar
-            ? "Automações desabilitadas para este contato."
-            : "Automações habilitadas para este contato.")
+            ? "Automações desabilitadas para este contato nesta integração."
+            : "Automações habilitadas para este contato nesta integração.")
       );
 
       const listaAtualizada = await atualizarConversasCarregadas();
       const conversaAtualizada = listaAtualizada.find(
-        (conversa: Conversa) => conversa.id === conversaSelecionada?.id
+        (conversa: Conversa) => conversa.id === conversaId
       );
 
       if (conversaAtualizada) {
@@ -3804,8 +3816,8 @@ export default function ConversasPageContent() {
     } catch {
       setErro(
         desabilitar
-          ? "Erro ao desabilitar automações para o contato."
-          : "Erro ao habilitar automações para o contato."
+          ? "Erro ao desabilitar automações nesta integração."
+          : "Erro ao habilitar automações nesta integração."
       );
     } finally {
       setAlterandoAutomacoesContato(false);

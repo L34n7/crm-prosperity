@@ -109,13 +109,14 @@ export async function POST(
         empresaId: conversa.empresa_id,
         contatoId: conversa.contato_id,
         conversaId: conversa.id,
+        integracaoWhatsappId: conversa.integracao_whatsapp_id,
       })
     ) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            "As automações estão desabilitadas para este contato. Habilite-as antes de ativar a IA.",
+            "As automações estão desabilitadas para este contato nesta integração. Habilite-as antes de ativar a IA.",
         },
         { status: 409 }
       );

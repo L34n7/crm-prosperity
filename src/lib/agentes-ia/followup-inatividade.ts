@@ -348,7 +348,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       .maybeSingle(),
     supabaseAdmin
       .from("conversas")
-      .select("id, contato_id, status, bot_ativo, aguardando_atendente, responsavel_id, agente_ia_id")
+      .select("id, contato_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, responsavel_id, agente_ia_id")
       .eq("empresa_id", agendamento.empresa_id)
       .eq("id", conversaId)
       .maybeSingle(),
@@ -374,6 +374,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       empresaId: agendamento.empresa_id,
       contatoId: conversa.contato_id || null,
       conversaId,
+      integracaoWhatsappId: conversa.integracao_whatsapp_id || null,
     })
   ) {
     return { ok: true, cancelado: true, motivo: "contato_automacoes_desabilitadas" };
@@ -465,7 +466,7 @@ export async function processarFollowupAgenteIa(agendamento: {
     const revalidacaoEntrada = await ultimaMensagemContato(agendamento.empresa_id, conversaId);
     const { data: conversaRevalidada } = await supabaseAdmin
       .from("conversas")
-      .select("contato_id, status, bot_ativo, aguardando_atendente, agente_ia_id")
+      .select("contato_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, agente_ia_id")
       .eq("empresa_id", agendamento.empresa_id)
       .eq("id", conversaId)
       .maybeSingle();
@@ -476,6 +477,8 @@ export async function processarFollowupAgenteIa(agendamento: {
         empresaId: agendamento.empresa_id,
         contatoId: conversaRevalidada.contato_id || null,
         conversaId,
+        integracaoWhatsappId:
+          conversaRevalidada.integracao_whatsapp_id || null,
       }));
 
     if (

@@ -15,7 +15,6 @@ import {
   statusLeadLegadoDaClassificacao,
 } from "@/lib/leads/classificacao";
 import { podeEditarContatoPelaConversa } from "@/lib/auth/authorization";
-import { pausarAutomacoesAtivasContato } from "@/lib/contatos/automacoes";
 
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -292,23 +291,6 @@ if (body?.observacoes !== undefined) {
   payload.observacoes = body.observacoes?.trim() || null;
 }
 
-if (body?.automacoes_desabilitadas !== undefined) {
-  if (typeof body.automacoes_desabilitadas !== "boolean") {
-    return NextResponse.json(
-      { ok: false, error: "Status de automações inválido" },
-      { status: 400 }
-    );
-  }
-
-  payload.automacoes_desabilitadas = body.automacoes_desabilitadas;
-  payload.automacoes_desabilitadas_em = body.automacoes_desabilitadas
-    ? new Date().toISOString()
-    : null;
-  payload.automacoes_desabilitadas_por = body.automacoes_desabilitadas
-    ? usuario.id
-    : null;
-}
-
 if (Object.keys(payload).length === 0) {
   return NextResponse.json(
     { ok: false, error: "Nenhum campo válido enviado para atualização" },
@@ -328,34 +310,6 @@ if (Object.keys(payload).length === 0) {
       { ok: false, error: error.message },
       { status: 500 }
     );
-  }
-
-  let resultadoPausaAutomacoes: Awaited<
-    ReturnType<typeof pausarAutomacoesAtivasContato>
-  > | null = null;
-
-  if (body?.automacoes_desabilitadas === true) {
-    try {
-      resultadoPausaAutomacoes = await pausarAutomacoesAtivasContato({
-        empresaId: usuario.empresa_id,
-        contatoId: id,
-        usuarioId: usuario.id,
-      });
-    } catch (error) {
-      console.error(
-        "[CONTATOS] Falha ao interromper automações após desabilitar contato:",
-        error
-      );
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "As automações foram desabilitadas para o contato, mas houve falha ao limpar execuções pendentes.",
-        },
-        { status: 500 }
-      );
-    }
   }
 
   const interesseAnterior =
@@ -440,22 +394,10 @@ if (Object.keys(payload).length === 0) {
     user_agent: auditMeta.user_agent,
   });
 
-  const alterouAutomacoes =
-    body?.automacoes_desabilitadas !== undefined &&
-    Boolean(contatoAtual.automacoes_desabilitadas) !==
-      Boolean(data.automacoes_desabilitadas);
-
   return NextResponse.json({
     ok: true,
-    message: alterouAutomacoes
-      ? data.automacoes_desabilitadas
-        ? "Automações desabilitadas para este contato."
-        : "Automações habilitadas para este contato."
-      : "Contato atualizado com sucesso",
+    message: "Contato atualizado com sucesso",
     contato: data,
-    ...(resultadoPausaAutomacoes
-      ? { automacoes_interrompidas: resultadoPausaAutomacoes }
-      : {}),
   });
 }
 
