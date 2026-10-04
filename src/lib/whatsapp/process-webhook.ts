@@ -29,6 +29,7 @@ import { processCoexistenceWebhookBody } from "@/lib/whatsapp/process-coexistenc
 import { processTemplateWebhookUpdates } from "@/lib/whatsapp/process-template-webhook";
 import { empresaComRecebimentoWhatsappSuspenso } from "@/lib/whatsapp/inadimplencia";
 import { processarAlertaFranquiaService } from "@/lib/whatsapp/service-quota";
+import { registrarPricingStatusEventoMeta } from "@/lib/whatsapp/pricing-status-events";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -572,6 +573,20 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         );
 
         if (integration) {
+          await registrarPricingStatusEventoMeta({
+            empresaId: integration.empresa_id,
+            integracaoWhatsappId: integration.id,
+            phoneNumberId: statusItem.phoneNumberId,
+            mensagemExternaId: statusItem.mensagemExternaId,
+            recipientId: statusItem.recipientId,
+            status: statusItem.status,
+            timestamp: statusItem.timestamp,
+            pricingCategory: statusItem.pricingCategory,
+            pricingType: statusItem.pricingType,
+            pricingModel: statusItem.pricingModel,
+            pricingBillable: statusItem.pricingBillable,
+          });
+
           await salvarAtribuicaoMetaAnuncio({
             empresaId: integration.empresa_id,
             integracaoWhatsappId: integration.id,
