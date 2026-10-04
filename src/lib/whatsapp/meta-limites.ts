@@ -299,6 +299,12 @@ export async function obterResumoLimiteMeta(params: {
   };
 }
 
+export type LiberacaoCapacidadeMeta = {
+  horario: string;
+  quantidadeLiberada: number;
+  disponivelAcumulado: number;
+};
+
 export type DisponibilidadeAgendamentoMeta = {
   disponivel: boolean;
   impossivel: boolean;
@@ -309,6 +315,11 @@ export type DisponibilidadeAgendamentoMeta = {
   usadosNoHorario: number;
   ocupadosPorOutros: number;
   totalProjetado: number;
+  capacidadeDisponivelAgora: number;
+  capacidadeDisponivelNoHorario: number;
+  selecionadosJaOcupadosNoHorario: number;
+  novosNecessariosNoHorario: number;
+  liberacoes: LiberacaoCapacidadeMeta[];
 };
 
 function arredondarDataParaMinuto(data: Date) {
@@ -316,6 +327,57 @@ function arredondarDataParaMinuto(data: Date) {
   const timestamp = data.getTime();
 
   return new Date(Math.ceil(timestamp / minutoMs) * minutoMs);
+}
+
+function montarCronogramaLiberacao(params: {
+  limite: number;
+  agora: Date;
+  expiracoes: number[];
+}): {
+  capacidadeDisponivelAgora: number;
+  liberacoes: LiberacaoCapacidadeMeta[];
+} {
+  const expiracoesValidas = params.expiracoes
+    .filter(
+      (timestamp) =>
+        Number.isFinite(timestamp) && timestamp > params.agora.getTime()
+    )
+    .sort((a, b) => a - b);
+
+  const capacidadeDisponivelAgora = Math.max(
+    params.limite - expiracoesValidas.length,
+    0
+  );
+  const liberacoesPorMinuto = new Map<number, number>();
+
+  for (const timestamp of expiracoesValidas) {
+    const minuto = arredondarDataParaMinuto(new Date(timestamp)).getTime();
+    liberacoesPorMinuto.set(
+      minuto,
+      (liberacoesPorMinuto.get(minuto) || 0) + 1
+    );
+  }
+
+  let disponivelAcumulado = capacidadeDisponivelAgora;
+  const liberacoes = Array.from(liberacoesPorMinuto.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([horarioMs, quantidadeLiberada]) => {
+      disponivelAcumulado = Math.min(
+        params.limite,
+        disponivelAcumulado + quantidadeLiberada
+      );
+
+      return {
+        horario: new Date(horarioMs).toISOString(),
+        quantidadeLiberada,
+        disponivelAcumulado,
+      };
+    });
+
+  return {
+    capacidadeDisponivelAgora,
+    liberacoes,
+  };
 }
 
 export async function obterDisponibilidadeAgendamentoMeta(params: {
@@ -336,6 +398,7 @@ export async function obterDisponibilidadeAgendamentoMeta(params: {
       ? agora
       : solicitado;
   const horarioConsultado = horarioInicial.toISOString();
+  const horarioConsultadoMs = horarioInicial.getTime();
   const telefonesSelecionados = normalizarTelefonesMetaLimite(params.telefones);
   const selecionados = new Set(telefonesSelecionados);
   const limiteInfo = obterLimiteMetaIntegracao(params.integracao);
@@ -351,6 +414,11 @@ export async function obterDisponibilidadeAgendamentoMeta(params: {
       usadosNoHorario: 0,
       ocupadosPorOutros: 0,
       totalProjetado: selecionados.size,
+      capacidadeDisponivelAgora: 0,
+      capacidadeDisponivelNoHorario: 0,
+      selecionadosJaOcupadosNoHorario: 0,
+      novosNecessariosNoHorario: selecionados.size,
+      liberacoes: [],
     };
   }
 
@@ -359,15 +427,13 @@ export async function obterDisponibilidadeAgendamentoMeta(params: {
     integracao: params.integracao,
   });
 
-  const query = supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("whatsapp_meta_conversas_iniciadas")
     .select("telefone_normalizado, janela_expira_em")
     .eq("empresa_id", params.empresaId)
     .eq("integracao_whatsapp_id", params.integracao.id)
-    .gt("janela_expira_em", horarioConsultado)
+    .gt("janela_expira_em", agora.toISOString())
     .in("status", ["reservado", "processando", "enviado"]);
-
-  const { data, error } = await query;
 
   if (error) {
     throw new Error(
@@ -389,13 +455,39 @@ export async function obterDisponibilidadeAgendamentoMeta(params: {
     );
   }
 
-  const expiracoesOutros = Array.from(expiraPorTelefone.entries())
+  const cronograma = montarCronogramaLiberacao({
+    limite: limiteInfo.limite,
+    agora,
+    expiracoes: Array.from(expiraPorTelefone.values()),
+  });
+
+  const ativosNoHorario = Array.from(expiraPorTelefone.entries()).filter(
+    ([, expiraEm]) => expiraEm > horarioConsultadoMs
+  );
+  const ativosNoHorarioSet = new Set(
+    ativosNoHorario.map(([telefone]) => telefone)
+  );
+  const selecionadosJaOcupadosNoHorario = Array.from(selecionados).filter(
+    (telefone) => ativosNoHorarioSet.has(telefone)
+  ).length;
+  const novosNecessariosNoHorario = Math.max(
+    selecionados.size - selecionadosJaOcupadosNoHorario,
+    0
+  );
+  const usadosNoHorario = ativosNoHorario.length;
+  const capacidadeDisponivelNoHorario = Math.max(
+    limiteInfo.limite - usadosNoHorario,
+    0
+  );
+
+  const expiracoesOutros = ativosNoHorario
     .filter(([telefone]) => !selecionados.has(telefone))
     .map(([, expiraEm]) => expiraEm)
     .sort((a, b) => a - b);
   const ocupadosPorOutros = expiracoesOutros.length;
   const totalProjetado = selecionados.size + ocupadosPorOutros;
-  const disponivel = totalProjetado <= limiteInfo.limite;
+  const disponivel =
+    novosNecessariosNoHorario <= capacidadeDisponivelNoHorario;
 
   if (disponivel) {
     return {
@@ -405,18 +497,21 @@ export async function obterDisponibilidadeAgendamentoMeta(params: {
       disponivelApartirDe: horarioConsultado,
       limite: limiteInfo.limite,
       selecionadosUnicos: selecionados.size,
-      usadosNoHorario: expiraPorTelefone.size,
+      usadosNoHorario,
       ocupadosPorOutros,
       totalProjetado,
+      capacidadeDisponivelAgora: cronograma.capacidadeDisponivelAgora,
+      capacidadeDisponivelNoHorario,
+      selecionadosJaOcupadosNoHorario,
+      novosNecessariosNoHorario,
+      liberacoes: cronograma.liberacoes,
     };
   }
 
-  const maxOutrosPermitidos = Math.max(
-    limiteInfo.limite - selecionados.size,
+  const quantidadeQuePrecisaLiberar = Math.max(
+    novosNecessariosNoHorario - capacidadeDisponivelNoHorario,
     0
   );
-  const quantidadeQuePrecisaLiberar =
-    ocupadosPorOutros - maxOutrosPermitidos;
   const indiceLiberacao = Math.max(quantidadeQuePrecisaLiberar - 1, 0);
   const timestampLiberacao = expiracoesOutros[indiceLiberacao];
   const liberacao = Number.isFinite(timestampLiberacao)
@@ -430,9 +525,14 @@ export async function obterDisponibilidadeAgendamentoMeta(params: {
     disponivelApartirDe: liberacao?.toISOString() || null,
     limite: limiteInfo.limite,
     selecionadosUnicos: selecionados.size,
-    usadosNoHorario: expiraPorTelefone.size,
+    usadosNoHorario,
     ocupadosPorOutros,
     totalProjetado,
+    capacidadeDisponivelAgora: cronograma.capacidadeDisponivelAgora,
+    capacidadeDisponivelNoHorario,
+    selecionadosJaOcupadosNoHorario,
+    novosNecessariosNoHorario,
+    liberacoes: cronograma.liberacoes,
   };
 }
 

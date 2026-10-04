@@ -2443,6 +2443,127 @@
   border-top: 1px solid var(--crm-ui-private-border-hex-cceee5);
 }
 
+.scheduleCapacityOk {
+  grid-column: 1 / -1;
+  margin: 0;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 14px;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 800;
+}
+
+.scheduleCapacityPanel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--crm-ui-private-border-hex-cceee5);
+  border-radius: 14px;
+  background: var(--crm-surface);
+}
+
+.scheduleCapacityHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scheduleCapacityHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.scheduleCapacityHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.scheduleCapacityHeader span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.scheduleCapacityNow {
+  flex: 0 0 auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  background: var(--crm-surface-soft);
+  padding: 6px 9px;
+  color: var(--crm-text-strong) !important;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.scheduleCapacitySelectedOk,
+.scheduleCapacitySelectedBlocked {
+  display: grid;
+  gap: 3px;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.scheduleCapacitySelectedOk {
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}
+
+.scheduleCapacitySelectedBlocked {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+
+.scheduleCapacitySelectedOk strong,
+.scheduleCapacitySelectedBlocked strong {
+  font-size: 12px;
+}
+
+.scheduleCapacitySelectedOk span,
+.scheduleCapacitySelectedBlocked span {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.scheduleCapacityTimeline {
+  display: grid;
+  gap: 7px;
+}
+
+.scheduleCapacityItem {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.7fr) minmax(140px, 1fr) minmax(150px, 1fr);
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--crm-border);
+  padding-top: 7px;
+  color: var(--crm-text);
+  font-size: 11px;
+}
+
+.scheduleCapacityItem:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.scheduleCapacityItem strong {
+  color: var(--crm-primary-strong);
+}
+
+.scheduleCapacityMore,
+.scheduleCapacityEmpty {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .templateVariablesGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3358,6 +3479,15 @@
   .disparoCardExpandido,
   .disparoQuickTopRow {
     grid-template-columns: 1fr;
+  }
+
+  .scheduleCapacityHeader {
+    flex-direction: column;
+  }
+
+  .scheduleCapacityItem {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 
   .campaignNameField {

@@ -489,39 +489,16 @@ export async function POST(request: NextRequest) {
             limite: disponibilidadeNoHorario.limite,
             selecionados_unicos:
               disponibilidadeNoHorario.selecionadosUnicos,
-          },
-          { status: 422 }
-        );
-      }
-
-      const todosTelefonesSelecionados = Array.from(
-        new Set(contatosValidos.map((contato: any) => contato.telefone))
-      );
-      const disponibilidadeSegura =
-        await obterDisponibilidadeAgendamentoMeta({
-          empresaId: usuario.empresa_id,
-          integracao: integracao as any,
-          telefones: todosTelefonesSelecionados as string[],
-          aPartirDe: executarEm,
-        });
-
-      if (disponibilidadeSegura.impossivel) {
-        return NextResponse.json(
-          {
-            ok: false,
-            code: "WHATSAPP_META_AGENDAMENTO_ACIMA_CAPACIDADE",
-            error:
-              "Nao ha capacidade suficiente para esta selecao em um unico horario. Divida os contatos em mais de um disparo agendado.",
-            limite: disponibilidadeSegura.limite,
-            selecionados_unicos:
-              disponibilidadeSegura.selecionadosUnicos,
+            capacidade_disponivel_no_horario:
+              disponibilidadeNoHorario.capacidadeDisponivelNoHorario,
+            novos_necessarios_no_horario:
+              disponibilidadeNoHorario.novosNecessariosNoHorario,
           },
           { status: 422 }
         );
       }
 
       const disponivelApartirDe =
-        disponibilidadeSegura.disponivelApartirDe ||
         disponibilidadeNoHorario.disponivelApartirDe;
 
       return NextResponse.json(
@@ -529,14 +506,19 @@ export async function POST(request: NextRequest) {
           ok: false,
           code: "WHATSAPP_META_AGENDAMENTO_ANTES_DA_LIBERACAO",
           error: disponivelApartirDe
-            ? `O limite de 24 horas da Meta ainda estara ocupado nesse horario. Agende a partir de ${formatarDataHoraBrasil(
+            ? `Nesse horario ainda nao existe capacidade suficiente para a quantidade selecionada. Agende a partir de ${formatarDataHoraBrasil(
                 disponivelApartirDe
               )}.`
-            : "O limite de 24 horas da Meta ainda estara ocupado no horario escolhido.",
+            : "Nesse horario ainda nao existe capacidade suficiente para a quantidade selecionada.",
           disponivel_a_partir_de: disponivelApartirDe,
           limite: disponibilidadeNoHorario.limite,
           selecionados_unicos:
             disponibilidadeNoHorario.selecionadosUnicos,
+          capacidade_disponivel_no_horario:
+            disponibilidadeNoHorario.capacidadeDisponivelNoHorario,
+          novos_necessarios_no_horario:
+            disponibilidadeNoHorario.novosNecessariosNoHorario,
+          liberacoes: disponibilidadeNoHorario.liberacoes.slice(0, 12),
         },
         { status: 429 }
       );

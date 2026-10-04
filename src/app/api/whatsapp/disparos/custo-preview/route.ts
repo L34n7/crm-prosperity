@@ -13,6 +13,7 @@ import { obterDisponibilidadeAgendamentoMeta } from "@/lib/whatsapp/meta-limites
 type BodyRequest = {
   categoria?: string | null;
   integracao_whatsapp_id?: string | null;
+  executar_em?: string | null;
   contatos?: Array<{
     id?: string;
     telefone?: string | null;
@@ -131,6 +132,17 @@ export async function POST(request: Request) {
     const integracaoWhatsappId = String(
       body?.integracao_whatsapp_id || ""
     ).trim();
+    const executarEmRecebido = String(body?.executar_em || "").trim();
+    const executarEmData = executarEmRecebido
+      ? new Date(executarEmRecebido)
+      : null;
+    const executarEmValido =
+      executarEmData && Number.isFinite(executarEmData.getTime())
+        ? executarEmData
+        : null;
+    const referenciaJanelaMs = executarEmValido
+      ? executarEmValido.getTime()
+      : Date.now();
 
     if (!categoriaValida(categoria)) {
       return NextResponse.json(
@@ -223,8 +235,9 @@ export async function POST(request: Request) {
 
       if (Number.isNaN(dataUltimaMensagemContato)) continue;
 
-      const diffMs = Date.now() - dataUltimaMensagemContato;
-      const dentroDaJanela24h = diffMs <= 24 * 60 * 60 * 1000;
+      const diffMs = referenciaJanelaMs - dataUltimaMensagemContato;
+      const dentroDaJanela24h =
+        diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
 
       if (dentroDaJanela24h) {
         telefonesDentroDaJanela24h.add(telefoneNormalizado);
@@ -283,6 +296,7 @@ export async function POST(request: Request) {
             empresaId: usuario.empresa_id,
             integracao,
             telefones: telefonesCobrados,
+            aPartirDe: executarEmValido,
           });
       }
     }
@@ -327,6 +341,7 @@ export async function POST(request: Request) {
       fonteCotacao: fonte,
       cotacaoDataHora: dataHora,
       cotacaoFallback: fallback,
+      referenciaAgendamento: executarEmValido?.toISOString() || null,
       disponibilidadeAgendamentoMeta,
     });
   } catch (error: any) {

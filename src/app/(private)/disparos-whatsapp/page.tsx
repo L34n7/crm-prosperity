@@ -2405,6 +2405,15 @@ export default function DisparosWhatsAppPage() {
       usadosNoHorario: number;
       ocupadosPorOutros: number;
       totalProjetado: number;
+      capacidadeDisponivelAgora: number;
+      capacidadeDisponivelNoHorario: number;
+      selecionadosJaOcupadosNoHorario: number;
+      novosNecessariosNoHorario: number;
+      liberacoes: Array<{
+        horario: string;
+        quantidadeLiberada: number;
+        disponivelAcumulado: number;
+      }>;
     } | null;
   } | null>(null);
 
@@ -3836,6 +3845,16 @@ export default function DisparosWhatsAppPage() {
     typeof saldoEstimadoAposSelecao === "number" && saldoEstimadoAposSelecao < 0;
   const disponibilidadeAgendamentoMeta =
     previewCusto?.disponibilidadeAgendamentoMeta || null;
+  const liberacoesCapacidadeMeta =
+    disponibilidadeAgendamentoMeta?.liberacoes || [];
+  const liberacoesCapacidadeMetaVisiveis =
+    liberacoesCapacidadeMeta.slice(0, 8);
+  const capacidadeDisponivelAgoraAgendamento =
+    disponibilidadeAgendamentoMeta?.capacidadeDisponivelAgora ?? null;
+  const capacidadeDisponivelNoHorario =
+    disponibilidadeAgendamentoMeta?.capacidadeDisponivelNoHorario ?? null;
+  const novosNecessariosNoHorario =
+    disponibilidadeAgendamentoMeta?.novosNecessariosNoHorario ?? null;
   const horarioLiberacaoMeta = disponibilidadeAgendamentoMeta?.disponivel
     ? null
     : disponibilidadeAgendamentoMeta?.disponivelApartirDe || null;
@@ -3857,7 +3876,9 @@ export default function DisparosWhatsAppPage() {
     disponibilidadeAgendamentoMeta?.impossivel === true;
   const agendamentoInvalidoPeloLimiteMeta =
     agendarDisparo &&
-    (agendamentoAntesDaLiberacaoMeta ||
+    Boolean(disponibilidadeAgendamentoMeta) &&
+    (disponibilidadeAgendamentoMeta?.disponivel === false ||
+      agendamentoAntesDaLiberacaoMeta ||
       agendamentoImpossivelPeloLimiteMeta);
 
   const templateSelecionado = useMemo(() => {
@@ -5490,6 +5511,15 @@ export default function DisparosWhatsAppPage() {
 
       setLoadingPreviewCusto(true);
 
+      const executarEmPreview =
+        agendarDisparo && agendamentoData && agendamentoHora
+          ? new Date(`${agendamentoData}T${agendamentoHora}:00`)
+          : null;
+      const executarEmPreviewIso =
+        executarEmPreview && Number.isFinite(executarEmPreview.getTime())
+          ? executarEmPreview.toISOString()
+          : null;
+
       const res = await fetch("/api/whatsapp/disparos/custo-preview", {
         method: "POST",
         headers: {
@@ -5498,6 +5528,7 @@ export default function DisparosWhatsAppPage() {
         body: JSON.stringify({
           categoria,
           integracao_whatsapp_id: integracaoId,
+          executar_em: executarEmPreviewIso,
           contatos: contatosLista.map((contato) => ({
             id: contato.id,
             telefone: contato.telefone,
@@ -5768,7 +5799,14 @@ export default function DisparosWhatsAppPage() {
     }
 
     calcularPreviewCusto(categoria, contatosSelecionados);
-  }, [templateSelecionado, contatosSelecionados, integracaoId]);
+  }, [
+    templateSelecionado,
+    contatosSelecionados,
+    integracaoId,
+    agendarDisparo,
+    agendamentoData,
+    agendamentoHora,
+  ]);
 
   return (
     <>
@@ -6021,12 +6059,114 @@ export default function DisparosWhatsAppPage() {
                             </p>
                           ) : horarioLiberacaoMeta ? (
                             <p className={styles.metaHealthAlert}>
-                              Limite de 24 horas ocupado. Para esta seleção, o agendamento está liberado a partir de{" "}
+                              Nesse horário ainda não existe capacidade suficiente para esta seleção. Ela fica liberada a partir de{" "}
                               <strong>
                                 {formatarDataHora(horarioLiberacaoMeta)}
                               </strong>
                               .
                             </p>
+                          ) : disponibilidadeAgendamentoMeta?.disponivel ? (
+                            <p className={styles.scheduleCapacityOk}>
+                              O horário escolhido comporta esta seleção.
+                            </p>
+                          ) : null}
+
+                          {disponibilidadeAgendamentoMeta ? (
+                            <div className={styles.scheduleCapacityPanel}>
+                              <div className={styles.scheduleCapacityHeader}>
+                                <div>
+                                  <strong>Liberação da capacidade</strong>
+                                  <span>
+                                    Janela móvel de 24 horas desta integração
+                                  </span>
+                                </div>
+                                <span className={styles.scheduleCapacityNow}>
+                                  Agora:{" "}
+                                  {formatarNumeroMeta(
+                                    capacidadeDisponivelAgoraAgendamento
+                                  )}{" "}
+                                  disponíveis
+                                </span>
+                              </div>
+
+                              {agendamentoData && agendamentoHora ? (
+                                <div
+                                  className={
+                                    disponibilidadeAgendamentoMeta.disponivel
+                                      ? styles.scheduleCapacitySelectedOk
+                                      : styles.scheduleCapacitySelectedBlocked
+                                  }
+                                >
+                                  <strong>
+                                    {disponibilidadeAgendamentoMeta.disponivel
+                                      ? "Horário permitido"
+                                      : "Horário sem capacidade suficiente"}
+                                  </strong>
+                                  <span>
+                                    Em{" "}
+                                    {formatarDataHora(
+                                      disponibilidadeAgendamentoMeta.horarioConsultado
+                                    )}
+                                    :{" "}
+                                    {formatarNumeroMeta(
+                                      capacidadeDisponivelNoHorario
+                                    )}{" "}
+                                    vaga(s) livres
+                                    {typeof novosNecessariosNoHorario === "number"
+                                      ? ` · ${formatarNumeroMeta(
+                                          novosNecessariosNoHorario
+                                        )} nova(s) vaga(s) necessária(s) para esta seleção`
+                                      : ""}
+                                  </span>
+                                </div>
+                              ) : null}
+
+                              {liberacoesCapacidadeMetaVisiveis.length > 0 ? (
+                                <div className={styles.scheduleCapacityTimeline}>
+                                  {liberacoesCapacidadeMetaVisiveis.map(
+                                    (liberacao) => (
+                                      <div
+                                        key={liberacao.horario}
+                                        className={styles.scheduleCapacityItem}
+                                      >
+                                        <span>
+                                          <strong>
+                                            +
+                                            {formatarNumeroMeta(
+                                              liberacao.quantidadeLiberada
+                                            )}
+                                          </strong>{" "}
+                                          libera(m)
+                                        </span>
+                                        <span>
+                                          {formatarDataHora(liberacao.horario)}
+                                        </span>
+                                        <span>
+                                          {formatarNumeroMeta(
+                                            liberacao.disponivelAcumulado
+                                          )}{" "}
+                                          disponíveis acumulados
+                                        </span>
+                                      </div>
+                                    )
+                                  )}
+                                  {liberacoesCapacidadeMeta.length >
+                                  liberacoesCapacidadeMetaVisiveis.length ? (
+                                    <p className={styles.scheduleCapacityMore}>
+                                      +{" "}
+                                      {liberacoesCapacidadeMeta.length -
+                                        liberacoesCapacidadeMetaVisiveis.length}{" "}
+                                      horário(s) de liberação posteriores.
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <p className={styles.scheduleCapacityEmpty}>
+                                  Não há novas liberações pendentes nas próximas
+                                  24 horas.
+                                </p>
+                              )}
+                            </div>
                           ) : null}
                         </div>
                       ) : null}
@@ -7071,8 +7211,18 @@ export default function DisparosWhatsAppPage() {
                     </div>
 
                     {selecaoExcedeLimite && (
-                      <p className={styles.metaHealthAlert}>
-                        {agendarDisparo && horarioLiberacaoMeta
+                      <p
+                        className={
+                          agendarDisparo &&
+                          disponibilidadeAgendamentoMeta?.disponivel
+                            ? styles.scheduleCapacityOk
+                            : styles.metaHealthAlert
+                        }
+                      >
+                        {agendarDisparo &&
+                        disponibilidadeAgendamentoMeta?.disponivel
+                          ? "A seleção ultrapassa o saldo disponível agora, mas o horário agendado escolhido possui capacidade suficiente."
+                          : agendarDisparo && horarioLiberacaoMeta
                           ? `O limite disponível agora é insuficiente. Para esta seleção, use um horário a partir de ${formatarDataHora(
                               horarioLiberacaoMeta
                             )}.`
@@ -7143,6 +7293,7 @@ export default function DisparosWhatsAppPage() {
                         (agendarDisparo &&
                           (!agendamentoData || !agendamentoHora)) ||
                         agendamentoInvalidoPeloLimiteMeta ||
+                        (agendarDisparo && loadingPreviewCusto) ||
                         disparando ||
                         (!agendarDisparo && disparoBloqueado) ||
                         (!agendarDisparo && selecaoExcedeLimite) ||
@@ -8838,6 +8989,7 @@ export default function DisparosWhatsAppPage() {
                   (agendarDisparo &&
                     (!agendamentoData || !agendamentoHora)) ||
                   agendamentoInvalidoPeloLimiteMeta ||
+                  (agendarDisparo && loadingPreviewCusto) ||
                   loadingConflitos ||
                   temConflitosPendentes ||
                   temVariaveisObrigatoriasPendentes
