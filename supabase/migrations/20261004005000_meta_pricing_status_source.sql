@@ -275,7 +275,7 @@ with raw_status as (
   cross join lateral jsonb_array_elements(coalesce(e->'changes','[]'::jsonb)) ch
   cross join lateral (select ch->'value' as v) value_row
   cross join lateral jsonb_array_elements(coalesce(v->'statuses','[]'::jsonb)) s
-  where w.created_at >= timestamptz '2026-10-01 00:00:00+00'
+  where w.created_at >= timestamptz '2026-09-30 00:00:00+00'
     and s->>'id' is not null
     and v->'metadata'->>'phone_number_id' is not null
     and s->'pricing' is not null
@@ -397,7 +397,11 @@ select
 from public.whatsapp_pricing_status_eventos p
 join public.empresas e on e.id=p.empresa_id
 where p.delivered_at is not null
-  and p.delivered_at >= timestamptz '2026-10-01 00:00:00+00'
+  and p.delivered_at >= timestamptz '2026-09-30 00:00:00+00'
+  and date_trunc(
+    'month',
+    p.delivered_at at time zone coalesce(nullif(e.timezone,''),'UTC')
+  )::date >= date '2026-10-01'
 group by
   p.empresa_id,
   p.phone_number_id,
@@ -420,7 +424,7 @@ with raw_status as (
   cross join lateral jsonb_array_elements(coalesce(e->'changes','[]'::jsonb)) ch
   cross join lateral (select ch->'value' as v) value_row
   cross join lateral jsonb_array_elements(coalesce(v->'statuses','[]'::jsonb)) s
-  where w.created_at >= timestamptz '2026-10-01 00:00:00+00'
+  where w.created_at >= timestamptz '2026-09-30 00:00:00+00'
     and s->>'id' is not null
   group by s->>'id'
 )
