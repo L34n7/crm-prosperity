@@ -723,13 +723,40 @@ export async function updateWhatsAppMessageStatus({
     updatePayload.pricing_apurado_em = agora;
   }
 
-  const { error: updateError } = await supabaseAdmin
+  const statusPermitidosPorNovo: Record<string, string[]> = {
+    enviada: ["pendente", "enviada"],
+    entregue: ["pendente", "enviada", "entregue"],
+    lida: ["pendente", "enviada", "entregue", "lida"],
+  };
+
+  let updateQuery = supabaseAdmin
     .from("mensagens")
     .update(updatePayload)
     .eq("id", mensagemAtual.id);
 
+  if (status !== "falha") {
+    updateQuery = updateQuery.in(
+      "status_envio",
+      statusPermitidosPorNovo[status] || [status]
+    );
+  }
+
+  const { data: mensagemAtualizada, error: updateError } = await updateQuery
+    .select("id,status_envio")
+    .maybeSingle();
+
   if (updateError) {
     throw new Error(`Erro ao atualizar status da mensagem: ${updateError.message}`);
+  }
+
+  if (!mensagemAtualizada) {
+    return {
+      updated: false,
+      found: true,
+      reason:
+        "Status não aplicado porque outro callback já avançou a mensagem",
+      messageId: mensagemAtual.id,
+    };
   }
 
   if (status === "falha" && codigoErroMeta === ERRO_META_CONTA_BLOQUEADA) {
