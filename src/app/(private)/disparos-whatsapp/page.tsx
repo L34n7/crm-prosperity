@@ -4170,14 +4170,21 @@ export default function DisparosWhatsAppPage() {
     [totalContatosDisponiveis, contatosSelecionadosFiltrados.length]
   );
 
-  // O "Add todos" nunca pode ultrapassar a capacidade ainda disponível
-  // da integração. O limite é cumulativo com os contatos já selecionados.
-  const capacidadeRestanteParaAdicionar = limiteMeta
-    ? Math.max(
-        Number(limiteMeta.restantes || 0) - contatosSelecionados.length,
-        0
-      )
+  // No envio imediato, a seleção respeita o saldo disponível agora.
+  // No agendamento, a seleção pode ocupar a capacidade total da integração,
+  // pois o horário futuro será validado pela janela de 24h antes de salvar.
+  const capacidadeBaseParaSelecao = limiteMeta
+    ? agendarDisparo
+      ? Number(limiteMeta.limite || 0)
+      : Number(limiteMeta.restantes || 0)
     : null;
+  const capacidadeRestanteParaAdicionar =
+    typeof capacidadeBaseParaSelecao === "number"
+      ? Math.max(
+          capacidadeBaseParaSelecao - contatosSelecionados.length,
+          0
+        )
+      : null;
 
   const gruposConflitoAtivos = useMemo(() => {
     const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
@@ -4624,7 +4631,9 @@ export default function DisparosWhatsAppPage() {
       capacidadeDisponivel <= 0
     ) {
       setErro(
-        "A capacidade disponível desta integração já foi totalmente preenchida pelos contatos selecionados."
+        agendarDisparo
+          ? "A capacidade total desta integração já foi totalmente preenchida pelos contatos selecionados."
+          : "A capacidade disponível desta integração já foi totalmente preenchida pelos contatos selecionados."
       );
       return;
     }
@@ -4665,7 +4674,9 @@ export default function DisparosWhatsAppPage() {
       setMensagem(
         limitadoPelaCapacidade
           ? String(novos.length) +
-              " contato(s) adicionado(s). A seleção atingiu a capacidade disponível da integração."
+              (agendarDisparo
+                ? " contato(s) adicionado(s). A seleção atingiu a capacidade total da integração para o agendamento."
+                : " contato(s) adicionado(s). A seleção atingiu a capacidade disponível da integração.")
           : quantidadeInformada > 0
           ? String(novos.length) + " contato(s) adicionado(s)."
           : "Todos os " + String(novos.length) + " contato(s) disponíveis foram adicionados."
@@ -6513,8 +6524,16 @@ export default function DisparosWhatsAppPage() {
                           }
                           className={styles.bulkQuantityInput}
                           placeholder="Qtd."
-                          title="Informe a quantidade. Com 0 ou vazio, adiciona até o limite disponível da integração."
-                          aria-label="Quantidade de contatos para adicionar; zero ou vazio adiciona até o limite disponível"
+                          title={
+                            agendarDisparo
+                              ? "Informe a quantidade. Com 0 ou vazio, adiciona até a capacidade total da integração para o agendamento."
+                              : "Informe a quantidade. Com 0 ou vazio, adiciona até o limite disponível da integração."
+                          }
+                          aria-label={
+                            agendarDisparo
+                              ? "Quantidade de contatos para adicionar; zero ou vazio adiciona até a capacidade total da integração"
+                              : "Quantidade de contatos para adicionar; zero ou vazio adiciona até o limite disponível"
+                          }
                         />
                         <button
                           type="button"
