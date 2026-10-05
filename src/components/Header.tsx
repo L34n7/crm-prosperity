@@ -244,6 +244,7 @@ export default function Header({
     useState<Notificacao | null>(null);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
   const [mounted, setMounted] = useState(false);
+  const [avatarCarregado, setAvatarCarregado] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
@@ -268,6 +269,10 @@ export default function Header({
   const nomeFinal = profileName || headerUser.profileName || "Usuário";
   const avatarFinal = avatarUrl || headerUser.avatarUrl || "";
   const letraAvatar = nomeFinal?.trim()?.charAt(0)?.toUpperCase() || "U";
+
+  useEffect(() => {
+    setAvatarCarregado(false);
+  }, [avatarFinal]);
 
   const LIMITE_NOTIFICACOES_POR_PAGINA = 60;
   const INTERVALO_LEMBRETE_TOKENS_MS = 30 * 60 * 1000;
@@ -1820,15 +1825,22 @@ export default function Header({
             onClick={toggleMenu}
           >
             <div className={styles.avatar}>
+              {(!avatarFinal || !avatarCarregado) && (
+                <span className={styles.avatarFallback}>{letraAvatar}</span>
+              )}
               {avatarFinal ? (
                 <img
                   src={avatarFinal}
                   alt={`Foto de ${nomeFinal}`}
-                  className={styles.avatarImage}
+                  className={`${styles.avatarImage} ${
+                    avatarCarregado ? styles.avatarImageLoaded : ""
+                  }`}
+                  loading="eager"
+                  decoding="async"
+                  onLoad={() => setAvatarCarregado(true)}
+                  onError={() => setAvatarCarregado(false)}
                 />
-              ) : (
-                <span className={styles.avatarFallback}>{letraAvatar}</span>
-              )}
+              ) : null}
             </div>
 
             <span className={styles.profileName}>{nomeFinal}</span>

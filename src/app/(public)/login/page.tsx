@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
 import Link from "next/link";
-import { ArrowRight, Check, Eye, EyeOff } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-session";
 
 const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
@@ -64,6 +64,7 @@ export default function LoginPage() {
       } = await supabase.auth.getUser();
 
       if (user) {
+        setLoading(true);
         const rota = await obterRotaAposLogin();
 
         if (rota === "/configurar-ambiente") {
@@ -74,7 +75,6 @@ export default function LoginPage() {
         }
 
         router.replace(rota);
-        router.refresh();
       }
     }
 
@@ -111,7 +111,9 @@ export default function LoginPage() {
     window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
     try {
       getClientSessionId();
-      await enviarEventoSessao("login");
+      void enviarEventoSessao("login").catch(() => {
+        // O registro de sessao nao deve bloquear o login.
+      });
     } catch {
       // O registro de sessao nao deve bloquear o login.
     }
@@ -123,10 +125,7 @@ export default function LoginPage() {
     }
 
     setMensagem("Login realizado com sucesso.");
-    setLoading(false);
-
     router.replace(rota);
-    router.refresh();
   }
 
   return (
@@ -134,6 +133,23 @@ export default function LoginPage() {
       <div className={styles.backgroundGlowTop} />
       <div className={styles.backgroundGlowBottom} />
       <div className={styles.backgroundGrid} />
+
+      {loading && (
+        <div
+          className={styles.loginLoadingOverlay}
+          role="status"
+          aria-live="polite"
+          aria-label="Entrando no CRM Prosperity"
+        >
+          <div className={styles.loginLoadingCard}>
+            <span className={styles.loginLoadingIcon} aria-hidden="true">
+              <LoaderCircle size={34} />
+            </span>
+            <strong>Entrando no CRM Prosperity</strong>
+            <span>Validando seu acesso e preparando o painel...</span>
+          </div>
+        </div>
+      )}
 
       <section className={styles.wrapper}>
         <div className={styles.brandPanel}>
@@ -271,6 +287,13 @@ export default function LoginPage() {
               disabled={loading}
               className={styles.submitButton}
             >
+              {loading ? (
+                <LoaderCircle
+                  size={19}
+                  className={styles.buttonSpinner}
+                  aria-hidden="true"
+                />
+              ) : null}
               <span>{loading ? "Entrando..." : "Entrar na plataforma"}</span>
               {loading ? null : <ArrowRight size={19} aria-hidden="true" />}
             </button>

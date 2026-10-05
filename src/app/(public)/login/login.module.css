@@ -649,3 +649,62 @@
     padding-top: 17px;
   }
 }
+
+
+.loginLoadingOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 11, 16, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.loginLoadingCard {
+  width: min(390px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 30px 28px;
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-26);
+  border-radius: 22px;
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-97);
+  box-shadow: 0 24px 70px var(--crm-ui-public-shadow-rgb-0-0-0-0-34);
+  text-align: center;
+}
+
+.loginLoadingCard strong {
+  color: var(--crm-ui-public-content-hex-0f172a);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.loginLoadingCard > span:last-child {
+  color: var(--crm-ui-public-content-hex-64748b);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.loginLoadingIcon {
+  width: 58px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--crm-ui-public-surface-hex-ecfdf5);
+  color: var(--crm-ui-public-content-hex-047857);
+}
+
+.loginLoadingIcon svg,
+.buttonSpinner {
+  animation: loginSpin 0.85s linear infinite;
+}
+
+@keyframes loginSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
