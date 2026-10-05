@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
-import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
+import {
+  ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO,
+  aplicarAfiliadoAtomoAoCheckout,
+  EMERSON_PROSPERITY_AFFILIATE_REF,
+} from "@/lib/atomopay/checkout-links";
 import { enviarPrimeiroAcesso } from "@/lib/auth/enviar-primeiro-acesso";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -261,27 +265,28 @@ function normalizarPlanoRelacao(plano: any) {
   return plano ?? null;
 }
 
-const EMERSON_AFFILIATE_REF = "EMERSONLUI8FA7B4AF2A44F7C3";
-
 const COPRODUCAO_EMERSON_ATOMO: Record<
   string,
   {
     atomoCheckoutUrl: string;
-    atomoCheckoutOriginalUrl: string;
     prosperityPayOffer: string;
     prosperityPayCheckoutUrl: string;
   }
 > = {
   ubtga: {
-    atomoCheckoutUrl: ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico,
-    atomoCheckoutOriginalUrl: "https://go.atomopay.com.br/ubtga",
+    atomoCheckoutUrl: aplicarAfiliadoAtomoAoCheckout(
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico,
+      EMERSON_PROSPERITY_AFFILIATE_REF
+    ),
     prosperityPayOffer: "plano-basic-be3817c7",
     prosperityPayCheckoutUrl:
       "https://www.prosperitypay.com.br/checkout/plano-basic-be3817c7",
   },
   uqddy: {
-    atomoCheckoutUrl: ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial,
-    atomoCheckoutOriginalUrl: "https://go.atomopay.com.br/uqddy",
+    atomoCheckoutUrl: aplicarAfiliadoAtomoAoCheckout(
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial,
+      EMERSON_PROSPERITY_AFFILIATE_REF
+    ),
     prosperityPayOffer: "c7074bf9e18e",
     prosperityPayCheckoutUrl:
       "https://www.prosperitypay.com.br/checkout/c7074bf9e18e",
@@ -301,8 +306,7 @@ function obterRenovacaoCoprodutorEmerson(referencia: string | null | undefined) 
     offer_reference: config.prosperityPayOffer,
     checkout_url: config.prosperityPayCheckoutUrl,
     atomo_checkout_url: config.atomoCheckoutUrl,
-    atomo_checkout_original_url: config.atomoCheckoutOriginalUrl,
-    affiliate_ref: EMERSON_AFFILIATE_REF,
+    affiliate_ref: EMERSON_PROSPERITY_AFFILIATE_REF,
     compra_original_coprodutor_emerson: true,
     observacao_origem_comercial:
       "Compra original realizada pela oferta de co-produtor Emerson na Átomo Pay. Renovação deve permanecer na Prosperity Pay; revisar produto/afiliado Emerson apenas se houver nova estratégia comercial.",
@@ -879,8 +883,6 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
               renewal_affiliate_ref: renovacaoCoprodutor.affiliate_ref,
               renewal_atomo_checkout_url:
                 renovacaoCoprodutor.atomo_checkout_url,
-              renewal_atomo_checkout_original_url:
-                renovacaoCoprodutor.atomo_checkout_original_url,
               compra_original_coprodutor_emerson: true,
               observacao_origem_comercial:
                 renovacaoCoprodutor.observacao_origem_comercial,
@@ -938,8 +940,6 @@ async function processarPagamentoAprovado(lead: any, payload: any) {
                 planoPagamento.oferta?.referencia ?? obterOfferHash(payload),
               renewal_atomo_checkout_url:
                 renovacaoCoprodutor.atomo_checkout_url,
-              renewal_atomo_checkout_original_url:
-                renovacaoCoprodutor.atomo_checkout_original_url,
               compra_original_coprodutor_emerson: true,
               observacao_origem_comercial:
                 renovacaoCoprodutor.observacao_origem_comercial,

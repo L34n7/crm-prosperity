@@ -1,4 +1,8 @@
-import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
+import {
+  ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO,
+  aplicarAfiliadoAtomoAoCheckout,
+  EMERSON_PROSPERITY_AFFILIATE_REF,
+} from "@/lib/atomopay/checkout-links";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type PlanoSlugRenovacao = "basico" | "essencial";
@@ -20,20 +24,24 @@ export type CheckoutRenovacaoResolvido = {
 
 const supabase = getSupabaseAdmin();
 
-const EMERSON_AFFILIATE_REF = "EMERSONLUI8FA7B4AF2A44F7C3";
-
 const COPRODUCAO_ATOMO: Record<
   string,
   { atomoUrl: string; prosperityPayRef: string; prosperityPayUrl: string }
 > = {
   ubtga: {
-    atomoUrl: ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico,
+    atomoUrl: aplicarAfiliadoAtomoAoCheckout(
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico,
+      EMERSON_PROSPERITY_AFFILIATE_REF
+    ),
     prosperityPayRef: "plano-basic-be3817c7",
     prosperityPayUrl:
       "https://www.prosperitypay.com.br/checkout/plano-basic-be3817c7",
   },
   uqddy: {
-    atomoUrl: ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial,
+    atomoUrl: aplicarAfiliadoAtomoAoCheckout(
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial,
+      EMERSON_PROSPERITY_AFFILIATE_REF
+    ),
     prosperityPayRef: "c7074bf9e18e",
     prosperityPayUrl:
       "https://www.prosperitypay.com.br/checkout/c7074bf9e18e",
@@ -160,6 +168,8 @@ export async function resolverCheckoutRenovacao(params: {
     plano(params.planoSlugFallback) || "basico";
   const metadata = obj((empresa as any).assinatura_metadata_json);
   const fixo = obj(metadata.renovacao_checkout);
+  const affiliateEmpresa =
+    affiliate(fixo.affiliate_ref) || affiliate(metadata.affiliate_ref);
 
   if (fixo.requires_price_match === true) {
     return {
@@ -170,7 +180,7 @@ export async function resolverCheckoutRenovacao(params: {
       planoSlug,
       tipoOferta: tipo(metadata.tipo_oferta),
       ofertaReferencia: String(fixo.offer_reference || "").trim() || null,
-      affiliateRef: affiliate(fixo.affiliate_ref),
+      affiliateRef: affiliateEmpresa,
       valorOriginalCentavos: Number(fixo.original_amount_cents) || null,
       valorRenovacaoCentavos:
         Number(fixo.renewal_amount_cents || fixo.original_amount_cents) || null,
@@ -181,7 +191,7 @@ export async function resolverCheckoutRenovacao(params: {
 
   const urlFixa = String(fixo.checkout_url || "").trim();
   if (urlFixa) {
-    const ref = affiliate(fixo.affiliate_ref);
+    const ref = affiliateEmpresa;
     return {
       checkoutUrl: comRef(urlFixa, ref),
       atomoCheckoutUrl:
@@ -219,14 +229,15 @@ export async function resolverCheckoutRenovacao(params: {
     null;
 
   if (!pag) {
+    const checkoutAtomo = atomo(planoSlug, Boolean(affiliateEmpresa));
     return {
-      checkoutUrl: atomo(planoSlug) || null,
-      atomoCheckoutUrl: atomo(planoSlug) || null,
+      checkoutUrl: checkoutAtomo || null,
+      atomoCheckoutUrl: checkoutAtomo || null,
       gateway: "atomo",
       planoSlug,
-      tipoOferta: tipo(metadata.tipo_oferta),
+      tipoOferta: affiliateEmpresa ? "af" : tipo(metadata.tipo_oferta),
       ofertaReferencia: null,
-      affiliateRef: null,
+      affiliateRef: affiliateEmpresa,
       valorOriginalCentavos: null,
       valorRenovacaoCentavos: null,
       origemResolucao: "fallback_sem_pagamento",
@@ -236,7 +247,10 @@ export async function resolverCheckoutRenovacao(params: {
 
   const valor = Number(pag.offer_preco || pag.valor || 0) || null;
   const hash = String(pag.offer_hash || "").trim();
-  const refAfiliado = affiliatePayload(pag.payload) || await affiliateLead(pag.lead_id);
+  const refAfiliado =
+    affiliatePayload(pag.payload) ||
+    (await affiliateLead(pag.lead_id)) ||
+    affiliateEmpresa;
 
   const coproducaoAtomo =
     pag.gateway === "atomo" ? COPRODUCAO_ATOMO[hash] : null;
@@ -245,14 +259,14 @@ export async function resolverCheckoutRenovacao(params: {
     return {
       checkoutUrl: comRef(
         coproducaoAtomo.prosperityPayUrl,
-        EMERSON_AFFILIATE_REF
+        EMERSON_PROSPERITY_AFFILIATE_REF
       ),
       atomoCheckoutUrl: coproducaoAtomo.atomoUrl,
       gateway: "prosperity_pay",
       planoSlug,
       tipoOferta: "af",
       ofertaReferencia: coproducaoAtomo.prosperityPayRef,
-      affiliateRef: EMERSON_AFFILIATE_REF,
+      affiliateRef: EMERSON_PROSPERITY_AFFILIATE_REF,
       valorOriginalCentavos: valor,
       valorRenovacaoCentavos: valor,
       origemResolucao: "primeira_compra_atomo_coprodutor_emerson",

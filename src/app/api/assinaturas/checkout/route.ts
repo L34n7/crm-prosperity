@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
 import {
   ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO,
+  aplicarAfiliadoAtomoAoCheckout,
   obterCheckoutAtomoPagamentoUnicoPorRenovacao,
 } from "@/lib/atomopay/checkout-links";
 import {
@@ -662,12 +663,10 @@ export async function POST(request: Request) {
           planoSlug: renovacao.planoSlug,
           valorCentavos: renovacao.valorRenovacaoCentavos,
         });
-      const checkoutUrl = renovacao.affiliateRef
-        ? obterCheckoutUrlPorPlanoEOferta({
-            planoSlug: renovacao.planoSlug,
-            tipoOferta: "af",
-          }) || checkoutPagamentoUnico
-        : checkoutPagamentoUnico;
+      const checkoutUrl = aplicarAfiliadoAtomoAoCheckout(
+        checkoutPagamentoUnico,
+        renovacao.affiliateRef
+      );
 
       const leadId = await buscarOuCriarLeadCheckout({
         planoSlug: renovacao.planoSlug,

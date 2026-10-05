@@ -11,6 +11,30 @@ export const ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO = {
   recarga200MilTokens: "https://go.atomopay.com.br/czwnh",
 } as const;
 
+export const EMERSON_PROSPERITY_AFFILIATE_REF =
+  "EMERSONLUI8FA7B4AF2A44F7C3";
+export const EMERSON_ATOMOPAY_AFFILIATE_HASH = "zp1klu3iqf";
+
+export function aplicarAfiliadoAtomoAoCheckout(
+  checkoutUrl: string,
+  affiliateRef?: string | null
+) {
+  const url = String(checkoutUrl || "").trim();
+  if (!url) return url;
+
+  if (
+    String(affiliateRef || "").trim() !==
+    EMERSON_PROSPERITY_AFFILIATE_REF
+  ) {
+    return url;
+  }
+
+  const [baseUrl, queryString = ""] = url.split("?");
+  const params = new URLSearchParams(queryString);
+  params.set("affh", EMERSON_ATOMOPAY_AFFILIATE_HASH);
+
+  return `${baseUrl}?${params.toString()}`;
+}
 
 export function obterCheckoutAtomoPagamentoUnicoPorRenovacao(params: {
   planoSlug: "basico" | "essencial";
@@ -26,7 +50,7 @@ export function obterCheckoutAtomoPagamentoUnicoPorRenovacao(params: {
     return ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico;
   }
 
-  if (valor === 19700) {
+  if (valor === 19300 || valor === 19700) {
     return ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasicoMaisUmNumero197;
   }
 
