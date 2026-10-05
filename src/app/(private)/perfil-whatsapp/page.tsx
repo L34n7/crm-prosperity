@@ -322,7 +322,7 @@ export default function WhatsappPerfilPage() {
   async function contratarNumeroAdicional() {
     if (abrindoCheckoutAdicional) return;
 
-    const novaAba = window.open("about:blank", "_blank");
+    const novaAba = window.open("/checkout-carregando", "_blank");
     if (!novaAba) {
       setErroCheckoutAdicional(
         "O navegador bloqueou a nova aba. Permita pop-ups para o CRM e tente novamente."
@@ -362,7 +362,7 @@ export default function WhatsappPerfilPage() {
         return;
       }
 
-      novaAba.location.href = data.checkout_url;
+      novaAba.location.replace(data.checkout_url);
     } catch {
       novaAba.close();
       setErroCheckoutAdicional("Erro inesperado ao preparar o checkout.");
