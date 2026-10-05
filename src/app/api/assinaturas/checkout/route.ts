@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
+import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import {
   criarCheckoutAssinaturaProsperityPay,
   referenciaProsperityPayPorPlanoSlug,
@@ -55,67 +56,6 @@ function normalizarGatewayCheckout(valor: unknown): GatewayCheckout {
   return valor === "prosperity_pay" ? "prosperity_pay" : "atomo";
 }
 
-async function buscarCheckoutAtomoPorValor(params: {
-  planoSlug: PlanoSlug;
-  valorCentavos: number | null;
-}) {
-  const { planoSlug, valorCentavos } = params;
-
-  if (valorCentavos === 13700 && planoSlug === "basico") {
-    return obterCheckoutNormalPorPlano("basico") || null;
-  }
-
-  if (valorCentavos === 26700 && planoSlug === "essencial") {
-    return obterCheckoutNormalPorPlano("essencial") || null;
-  }
-
-  if (valorCentavos === 6000 && planoSlug === "basico") {
-    return (
-      process.env.ATOMOPAY_CHECKOUT_URL_VIP ||
-      "https://go.atomopay.com.br/2psef"
-    );
-  }
-
-  if (valorCentavos === 500 && planoSlug === "basico") {
-    return process.env.ATOMOPAY_CHECKOUT_URL_JV || null;
-  }
-
-  if (!valorCentavos) {
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from("ia_token_ofertas")
-    .select("referencia,metadata_json")
-    .eq("gateway", "atomo")
-    .eq("tipo", "mensalidade")
-    .eq("ativa", true)
-    .contains("metadata_json", {
-      plano_slug: planoSlug,
-      valor_oferta_centavos: valorCentavos,
-    })
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error("Erro ao buscar checkout equivalente da Átomo.");
-  }
-
-  const metadata = extrairMetadataJson(data?.metadata_json);
-  const checkoutUrl = String(metadata.checkout_url || "").trim();
-
-  if (checkoutUrl) {
-    return checkoutUrl;
-  }
-
-  const referencia = String(data?.referencia || "").trim();
-
-  return referencia
-    ? `https://go.atomopay.com.br/${encodeURIComponent(referencia)}`
-    : null;
-}
-
 function obterCheckoutNormalPorPlano(planoSlug: PlanoSlug) {
   if (planoSlug === "basico") {
     return (
@@ -123,7 +63,7 @@ function obterCheckoutNormalPorPlano(planoSlug: PlanoSlug) {
       process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_BASICO ||
       process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ||
       process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL ||
-      ""
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico
     );
   }
 
@@ -132,7 +72,7 @@ function obterCheckoutNormalPorPlano(planoSlug: PlanoSlug) {
     process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
     process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ||
     process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL ||
-    ""
+    ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial
   );
 }
 
@@ -715,34 +655,22 @@ export async function POST(request: Request) {
       });
 
       const checkoutUrl =
-        renovacao.atomoCheckoutUrl ||
-        (await buscarCheckoutAtomoPorValor({
-          planoSlug: renovacao.planoSlug,
-          valorCentavos: renovacao.valorRenovacaoCentavos,
-        }));
+        renovacao.gateway === "prosperity_pay"
+          ? renovacao.checkoutUrl
+          : null;
 
       if (!checkoutUrl) {
         return NextResponse.json(
           {
             ok: false,
             error:
-              "A oferta equivalente na Átomo ainda não está disponível para este valor.",
-            gateway: "atomo",
+              "Checkout de renovação da Prosperity Pay não configurado para este cliente. O CRM não usa mais a Átomo para renovações.",
+            plano_slug: renovacao.planoSlug,
+            gateway: "prosperity_pay",
             valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
+            origem_resolucao: renovacao.origemResolucao,
           },
           { status: 409 }
-        );
-      }
-
-      if (!checkoutUrl) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Checkout de renovação não configurado.",
-            plano_slug: renovacao.planoSlug,
-            gateway: gatewaySolicitado,
-          },
-          { status: 400 }
         );
       }
 
@@ -759,7 +687,7 @@ export async function POST(request: Request) {
         ok: true,
         lead_id: leadId,
         checkout_url: checkoutUrl,
-        gateway: gatewaySolicitado,
+        gateway: "prosperity_pay",
         plano_slug: renovacao.planoSlug,
         tipo_oferta: renovacao.tipoOferta,
         oferta_referencia: renovacao.ofertaReferencia,
@@ -767,8 +695,7 @@ export async function POST(request: Request) {
         valor_original_centavos: renovacao.valorOriginalCentavos,
         valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
         origem_resolucao: renovacao.origemResolucao,
-        preserva_origem_comercial:
-          Boolean(renovacao.affiliateRef || renovacao.atomoCheckoutUrl),
+        preserva_origem_comercial: Boolean(renovacao.affiliateRef),
       });
     }
 

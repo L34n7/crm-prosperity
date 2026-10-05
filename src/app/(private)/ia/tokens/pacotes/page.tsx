@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Header from "@/components/Header";
+import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import styles from "./pacotes.module.css";
 
@@ -32,16 +33,16 @@ const PACOTE_200_PROSPERITY_PAY =
 
 const PACOTE_50_ATOMO =
   process.env.NEXT_PUBLIC_TOKEN_PACKAGE_1M_URL ||
-  "https://go.atomopay.com.br/uoqee";
+  ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.recarga50MilTokens;
 const PACOTE_200_ATOMO =
   process.env.NEXT_PUBLIC_TOKEN_PACKAGE_5M_URL ||
-  "https://go.atomopay.com.br/8vyyj";
+  ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.recarga200MilTokens;
 
 const ESSENCIAL_PROSPERITY_PAY =
   "https://www.prosperitypay.com.br/checkout/c7074bf9e18e";
 const ESSENCIAL_ATOMO =
   process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
-  "https://go.atomopay.com.br/7ibzm";
+  ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial;
 
 const pacotes: PacoteTokens[] = [
   {

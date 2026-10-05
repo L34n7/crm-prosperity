@@ -1,3 +1,4 @@
+import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type PlanoSlugRenovacao = "basico" | "essencial";
@@ -26,13 +27,13 @@ const COPRODUCAO_ATOMO: Record<
   { atomoUrl: string; prosperityPayRef: string; prosperityPayUrl: string }
 > = {
   ubtga: {
-    atomoUrl: "https://go.atomopay.com.br/ubtga",
+    atomoUrl: ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico,
     prosperityPayRef: "plano-basic-be3817c7",
     prosperityPayUrl:
       "https://www.prosperitypay.com.br/checkout/plano-basic-be3817c7",
   },
   uqddy: {
-    atomoUrl: "https://go.atomopay.com.br/uqddy",
+    atomoUrl: ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial,
     prosperityPayRef: "c7074bf9e18e",
     prosperityPayUrl:
       "https://www.prosperitypay.com.br/checkout/c7074bf9e18e",
@@ -94,11 +95,13 @@ function atomo(planoSlug: PlanoSlugRenovacao, af = false) {
   if (planoSlug === "basico") {
     return process.env.ATOMOPAY_CHECKOUT_URL_BASICO ||
       process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_BASICO ||
-      process.env.ATOMOPAY_CHECKOUT_URL_PADRAO || "";
+      process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ||
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico;
   }
   return process.env.ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
     process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
-    process.env.ATOMOPAY_CHECKOUT_URL_PADRAO || "";
+    process.env.ATOMOPAY_CHECKOUT_URL_PADRAO ||
+    ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial;
 }
 
 function planoRelacao(v: any) {

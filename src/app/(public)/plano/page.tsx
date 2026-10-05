@@ -8,6 +8,7 @@ import PaymentProviderModal, {
   type PaymentGateway,
   type PaymentPlanSummary,
 } from "@/components/payments/PaymentProviderModal";
+import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import styles from "./plano.module.css";
 
 type Plano = {
@@ -186,7 +187,7 @@ export default function PlanoPage() {
 
   function abrirCheckoutCotacao() {
     window.open(
-      "https://go.atomopay.com.br/oulzq",
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoCotacao337,
       "_blank",
       "noopener,noreferrer"
     );

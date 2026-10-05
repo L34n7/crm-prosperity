@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import { criarSessaoPrefillCheckoutProsperityPay } from "@/lib/prosperity-pay/subscriptions";
 
 const supabase = getSupabaseAdmin();
@@ -101,11 +102,17 @@ function adicionarPlanoAoCheckoutFree(
 
 function obterCheckoutUrlAtomoPorPlano(planoSlug: PlanoSlug | null) {
   if (planoSlug === "basico") {
-    return process.env.ATOMOPAY_CHECKOUT_URL_BASICO || "";
+    return (
+      process.env.ATOMOPAY_CHECKOUT_URL_BASICO ||
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoBasico
+    );
   }
 
   if (planoSlug === "essencial") {
-    return process.env.ATOMOPAY_CHECKOUT_URL_ESSENCIAL || "";
+    return (
+      process.env.ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
+      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial
+    );
   }
 
   return "";
