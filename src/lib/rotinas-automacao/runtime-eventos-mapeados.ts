@@ -99,6 +99,78 @@ async function executarJob(job:JobRow){
   }catch(error){const t=Number(job.tentativas||0)+1,final=t>=Number(job.max_tentativas||5),atraso=Math.min(30,2**Math.max(0,t-1));await supabase.from("rotina_automacao_jobs").update({status:final?"erro":"pendente",tentativas:t,erro:error instanceof Error?error.message:"Erro no job de integração.",bloqueado_em:null,proxima_tentativa_em:final?null:new Date(Date.now()+atraso*60000).toISOString(),updated_at:new Date().toISOString()}).eq("id",job.id);if(final)await finalizarExecucao(job.execucao_id);throw error;}
 }
 
+export async function processarEventoIntegracaoMapeadaPorId(
+  tipo: "outbox" | "job",
+  id: string
+) {
+  const itemId = String(id || "").trim();
+  if (!itemId) return { ok: true, ignorado: true, motivo: "id_ausente" };
+
+  if (tipo === "outbox") {
+    const r = await supabase
+      .from("integracao_eventos_outbox")
+      .select("id,empresa_id,integracao_id,sistema,recurso,evento,entidade_tipo,entidade_id,evento_chave,payload_json,tentativas,max_tentativas,processar_em,status")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (r.error) throw r.error;
+    if (!r.data) return { ok: true, ignorado: true, motivo: "nao_encontrado" };
+    if (r.data.status !== "pendente") return { ok: true, ignorado: true, motivo: `status_${r.data.status}` };
+
+    const due = Date.parse(String(r.data.processar_em || ""));
+    if (Number.isFinite(due) && due > Date.now() + 1_000) {
+      return { ok: true, reagendarEm: new Date(due).toISOString() };
+    }
+
+    try {
+      const processado = await processarOutbox(r.data as OutboxRow);
+      return { ok: true, processado };
+    } catch (error) {
+      const atual = await supabase
+        .from("integracao_eventos_outbox")
+        .select("status,processar_em")
+        .eq("id", itemId)
+        .maybeSingle();
+      if (atual.data?.status === "pendente" && atual.data.processar_em) {
+        return { ok: true, status: "reagendado", reagendarEm: atual.data.processar_em };
+      }
+      throw error;
+    }
+  }
+
+  const r = await supabase
+    .from("rotina_automacao_jobs")
+    .select("id,empresa_id,automacao_id,execucao_id,acao_id,ordem,executar_em,proxima_tentativa_em,tentativas,max_tentativas,depende_de_job_id,cancelamento_solicitado_em,contexto_json,status")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (r.error) throw r.error;
+  if (!r.data) return { ok: true, ignorado: true, motivo: "nao_encontrado" };
+  if (r.data.status !== "pendente") return { ok: true, ignorado: true, motivo: `status_${r.data.status}` };
+  if (String(obj(r.data.contexto_json).origem || "") !== "integracao_mapeada") {
+    return { ok: true, ignorado: true, motivo: "origem_diferente" };
+  }
+
+  const executarEm = String(r.data.proxima_tentativa_em || r.data.executar_em || "");
+  const due = Date.parse(executarEm);
+  if (Number.isFinite(due) && due > Date.now() + 1_000) {
+    return { ok: true, reagendarEm: new Date(due).toISOString() };
+  }
+
+  try {
+    const processado = await executarJob(r.data as JobRow);
+    return { ok: true, processado };
+  } catch (error) {
+    const atual = await supabase
+      .from("rotina_automacao_jobs")
+      .select("status,proxima_tentativa_em")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (atual.data?.status === "pendente" && atual.data.proxima_tentativa_em) {
+      return { ok: true, status: "reagendado", reagendarEm: atual.data.proxima_tentativa_em };
+    }
+    throw error;
+  }
+}
+
 export async function processarEventosIntegracoesMapeadas(limite=50){
   const max=Math.min(Math.max(limite,1),100),agora=new Date().toISOString();const resumo={outbox_encontrados:0,outbox_processados:0,outbox_ignorados:0,jobs_encontrados:0,jobs_processados:0,jobs_ignorados:0,erros:0};
   const or=await supabase.from("integracao_eventos_outbox").select("id,empresa_id,integracao_id,sistema,recurso,evento,entidade_tipo,entidade_id,evento_chave,payload_json,tentativas,max_tentativas").eq("status","pendente").lte("processar_em",agora).order("created_at").limit(max);if(or.error)throw or.error;const outbox=(or.data||[]) as OutboxRow[];resumo.outbox_encontrados=outbox.length;

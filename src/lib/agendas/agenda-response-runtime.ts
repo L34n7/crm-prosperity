@@ -419,6 +419,67 @@ async function fail(job: ResponseJob, error: unknown) {
   return custom.cancel ? "cancelado" : final ? "erro" : "reagendado";
 }
 
+export async function processAgendaResponseById(id: string) {
+  const respostaId = String(id || "").trim();
+  if (!respostaId) return { ok: true, ignorado: true, motivo: "id_ausente" };
+
+  const { data: atual, error } = await supabase
+    .from("agenda_automacao_respostas")
+    .select("*")
+    .eq("id", respostaId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao carregar resposta da agenda: ${error.message}`);
+  if (!atual) return { ok: true, ignorado: true, motivo: "nao_encontrada" };
+  if (atual.status !== "pendente") {
+    return { ok: true, ignorado: true, motivo: `status_${atual.status}` };
+  }
+
+  const executarEmMs = Date.parse(String(atual.proxima_tentativa_em || ""));
+  if (Number.isFinite(executarEmMs) && executarEmMs > Date.now() + 1_000) {
+    return { ok: true, reagendarEm: new Date(executarEmMs).toISOString() };
+  }
+
+  const agora = new Date().toISOString();
+  const { data: reivindicado, error: claimError } = await supabase
+    .from("agenda_automacao_respostas")
+    .update({
+      status: "processando",
+      tentativas: Number(atual.tentativas || 0) + 1,
+      bloqueado_em: agora,
+      erro: null,
+      updated_at: agora,
+    })
+    .eq("id", respostaId)
+    .eq("status", "pendente")
+    .select("*")
+    .maybeSingle();
+
+  if (claimError) throw new Error(`Erro ao reivindicar resposta da agenda: ${claimError.message}`);
+  if (!reivindicado) return { ok: true, ignorado: true, motivo: "concorrencia" };
+
+  const job = reivindicado as ResponseJob;
+  try {
+    await processResponse(job);
+    return { ok: true, status: "concluido" };
+  } catch (processError) {
+    console.error("[AGENDA_RESPOSTAS] Erro no processamento orientado a evento:", {
+      respostaId,
+      error: processError,
+    });
+    const status = await fail(job, processError);
+    if (status === "reagendado") {
+      const { data: reagendada } = await supabase
+        .from("agenda_automacao_respostas")
+        .select("proxima_tentativa_em")
+        .eq("id", respostaId)
+        .maybeSingle();
+      return { ok: true, status, reagendarEm: reagendada?.proxima_tentativa_em || null };
+    }
+    return { ok: true, status };
+  }
+}
+
 export async function processAgendaResponseFlows(limit = 30) {
   const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 30)));
   const { data, error } = await supabase.rpc(

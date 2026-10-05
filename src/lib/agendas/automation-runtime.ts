@@ -202,6 +202,73 @@ async function processJob(job: Job) {
   });
 }
 
+export async function processAgendaAutomationById(id: string) {
+  const jobId = String(id || "").trim();
+  if (!jobId) return { ok: true, ignorado: true, motivo: "id_ausente" };
+
+  const { data: atual, error } = await supabase
+    .from("agenda_automacao_execucoes")
+    .select("*")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao carregar automação da agenda: ${error.message}`);
+  if (!atual) return { ok: true, ignorado: true, motivo: "nao_encontrada" };
+  if (atual.status !== "pendente") {
+    return { ok: true, ignorado: true, motivo: `status_${atual.status}` };
+  }
+
+  const executarEm = String(atual.proxima_tentativa_em || atual.executar_em || "");
+  const executarEmMs = Date.parse(executarEm);
+  if (Number.isFinite(executarEmMs) && executarEmMs > Date.now() + 1_000) {
+    return { ok: true, reagendarEm: new Date(executarEmMs).toISOString() };
+  }
+
+  const agora = new Date().toISOString();
+  const { data: reivindicado, error: claimError } = await supabase
+    .from("agenda_automacao_execucoes")
+    .update({
+      status: "processando",
+      tentativas: Number(atual.tentativas || 0) + 1,
+      bloqueado_em: agora,
+      erro: null,
+      updated_at: agora,
+    })
+    .eq("id", jobId)
+    .eq("status", "pendente")
+    .select("*")
+    .maybeSingle();
+
+  if (claimError) throw new Error(`Erro ao reivindicar automação da agenda: ${claimError.message}`);
+  if (!reivindicado) return { ok: true, ignorado: true, motivo: "concorrencia" };
+
+  const job = reivindicado as Job;
+  try {
+    const status = await processJob(job);
+    return { ok: true, status };
+  } catch (processError) {
+    console.error("[AGENDA_AUTOMACOES] Erro no processamento orientado a evento:", {
+      jobId,
+      error: processError,
+    });
+    const status = await failJob(job, processError);
+    if (isIndividualReminder(job)) {
+      await refreshIndividualReminderStatus(job).catch((refreshError) =>
+        console.warn("[AGENDA_LEMBRETES] Falha ao consolidar lembrete:", refreshError)
+      );
+    }
+    if (status === "reagendado") {
+      const { data: reagendado } = await supabase
+        .from("agenda_automacao_execucoes")
+        .select("proxima_tentativa_em")
+        .eq("id", jobId)
+        .maybeSingle();
+      return { ok: true, status, reagendarEm: reagendado?.proxima_tentativa_em || null };
+    }
+    return { ok: true, status };
+  }
+}
+
 export async function processAgendaAutomations(limit = 50) {
   const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
   await supabase.rpc("agenda_automacoes_reconciliar", {

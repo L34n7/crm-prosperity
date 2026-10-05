@@ -1567,7 +1567,97 @@ export async function processarNotificacaoGoogleCalendar(headers: Headers) {
     ok: true,
     enfileirado: resourceState !== "sync",
     estado: resourceState,
+    integracaoId: integracao.id,
   };
+}
+
+export async function processarIntegracaoGoogleCalendarPendentePorId(id: string) {
+  const integracaoId = String(id || "").trim();
+  if (!integracaoId) return { ok: true, ignorado: true, motivo: "id_ausente" };
+
+  const supabase = getSupabaseAdmin();
+  const { data: integracao, error } = await supabase
+    .from("agenda_google_integracoes")
+    .select("id,empresa_id,agenda_id,sync_status,sync_ativo")
+    .eq("id", integracaoId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao carregar integração Google: ${error.message}`);
+  if (!integracao) return { ok: true, ignorado: true, motivo: "nao_encontrada" };
+  if (integracao.sync_ativo !== true || integracao.sync_status !== "pendente_google") {
+    return { ok: true, ignorado: true, motivo: `status_${integracao.sync_status || "inativo"}` };
+  }
+
+  const resultado = await sincronizarAlteracoesGoogleCalendar({
+    empresaId: integracao.empresa_id,
+    agendaId: integracao.agenda_id,
+  });
+  return { ok: true, ...resultado };
+}
+
+export async function processarFilaGoogleCalendarPorId(id: string) {
+  const filaId = String(id || "").trim();
+  if (!filaId) return { ok: true, ignorado: true, motivo: "id_ausente" };
+
+  const supabase = getSupabaseAdmin();
+  const { data: atual, error } = await supabase
+    .from("agenda_google_sync_fila")
+    .select("*")
+    .eq("id", filaId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao carregar fila Google: ${error.message}`);
+  if (!atual) return { ok: true, ignorado: true, motivo: "nao_encontrada" };
+  if (atual.status !== "pendente") {
+    return { ok: true, ignorado: true, motivo: `status_${atual.status}` };
+  }
+
+  const executarEmMs = Date.parse(String(atual.proxima_tentativa_em || ""));
+  if (Number.isFinite(executarEmMs) && executarEmMs > Date.now() + 1_000) {
+    return { ok: true, reagendarEm: new Date(executarEmMs).toISOString() };
+  }
+
+  const agora = new Date().toISOString();
+  const { data: item, error: claimError } = await supabase
+    .from("agenda_google_sync_fila")
+    .update({
+      status: "processando",
+      tentativas: Number(atual.tentativas || 0) + 1,
+      bloqueado_em: agora,
+      updated_at: agora,
+    })
+    .eq("id", filaId)
+    .eq("status", "pendente")
+    .select("*")
+    .maybeSingle();
+
+  if (claimError) throw new Error(`Erro ao reservar fila Google: ${claimError.message}`);
+  if (!item) return { ok: true, ignorado: true, motivo: "concorrencia" };
+
+  try {
+    await sincronizarAgendamentoGoogleCalendar({
+      empresaId: item.empresa_id,
+      agendaId: item.agenda_id,
+      agendamentoId: item.agendamento_id,
+      forcar: item.operacao === "delete",
+    });
+    return { ok: true, status: "concluido" };
+  } catch (syncError) {
+    const mensagem = syncError instanceof Error ? syncError.message : String(syncError);
+    const esperaMinutos = Math.min(2 ** Math.min(Number(item.tentativas || 1), 8), 240);
+    const reagendarEm = new Date(Date.now() + esperaMinutos * 60_000).toISOString();
+    await supabase
+      .from("agenda_google_sync_fila")
+      .update({
+        status: "pendente",
+        erro: mensagem,
+        bloqueado_em: null,
+        proxima_tentativa_em: reagendarEm,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", filaId);
+    return { ok: true, status: "reagendado", reagendarEm };
+  }
 }
 
 export async function processarIntegracoesPendentesGoogleCalendar(limite = 15) {

@@ -10,11 +10,35 @@
     },
     {
       "path": "/api/cron/processar_webhooks_whatsapp",
-      "schedule": "* * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/compactar_webhooks_whatsapp",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/google_calendar_sync",
+      "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/expirar_conversas",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/rotinas_integracoes_eventos",
+      "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/cron/agenda_automacoes",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/checkout-pagamentos",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp_disparos_fila",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

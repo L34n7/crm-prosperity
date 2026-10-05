@@ -121,10 +121,17 @@ async function tentarEnviarRecuperacao(transacao: any) {
   if (
     !Number.isFinite(criadoEm) ||
     !Number.isFinite(expiraEm) ||
-    agoraMs < recuperacaoEm ||
     agoraMs >= expiraEm
   ) {
     return { elegivel: false, enviado: false };
+  }
+
+  if (agoraMs < recuperacaoEm) {
+    return {
+      elegivel: false,
+      enviado: false,
+      reagendarEm: new Date(recuperacaoEm).toISOString(),
+    };
   }
 
   const agora = new Date().toISOString();
@@ -240,6 +247,29 @@ async function tentarEnviarRecuperacao(transacao: any) {
 
     throw error;
   }
+}
+
+export async function processarRecuperacaoCheckoutPorId(id: string) {
+  const transacaoId = String(id || "").trim();
+  if (!transacaoId) return { ok: true, ignorado: true, motivo: "id_ausente" };
+
+  const { data: transacao, error } = await supabaseAdmin
+    .from("pagamento_gateway_transacoes")
+    .select("*")
+    .eq("id", transacaoId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao carregar checkout para recuperação: ${error.message}`);
+  if (!transacao) return { ok: true, ignorado: true, motivo: "nao_encontrado" };
+  if (transacao.status !== STATUS_AGUARDANDO) {
+    return { ok: true, ignorado: true, motivo: `status_${transacao.status}` };
+  }
+  if (transacao.recuperacao_enviada_em) {
+    return { ok: true, ignorado: true, motivo: "recuperacao_ja_enviada" };
+  }
+
+  const resultado = await tentarEnviarRecuperacao(transacao);
+  return { ok: true, ...resultado };
 }
 
 export async function processarRecuperacoesCheckoutPendentes(limite = 50) {

@@ -1178,6 +1178,34 @@ export async function interceptarMensagemCheckoutPendente(input: {
   };
 }
 
+export async function processarCheckoutExpiracaoPorId(id: string) {
+  const transacaoId = String(id || "").trim();
+  if (!transacaoId) return { ok: true, ignorado: true, motivo: "id_ausente" };
+
+  const { data: transacao, error } = await supabaseAdmin
+    .from("pagamento_gateway_transacoes")
+    .select("*")
+    .eq("id", transacaoId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao carregar checkout para expiração: ${error.message}`);
+  if (!transacao) return { ok: true, ignorado: true, motivo: "nao_encontrado" };
+  if (transacao.status !== STATUS_AGUARDANDO) {
+    return { ok: true, ignorado: true, motivo: `status_${transacao.status}` };
+  }
+
+  const limiteMs =
+    new Date(transacao.expira_em).getTime() +
+    GRACA_EXPIRACAO_MINUTOS * 60_000;
+
+  if (Number.isFinite(limiteMs) && limiteMs > Date.now() + 1_000) {
+    return { ok: true, reagendarEm: new Date(limiteMs).toISOString() };
+  }
+
+  const resultado = await processarCancelamento(transacao, "expirado");
+  return { ok: true, ...resultado };
+}
+
 export async function processarCheckoutPagamentosExpirados(limite = 50) {
   const agoraComGraca = new Date(
     Date.now() - GRACA_EXPIRACAO_MINUTOS * 60 * 1000
