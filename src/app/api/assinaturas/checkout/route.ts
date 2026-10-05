@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
-import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
+import {
+  ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO,
+  obterCheckoutAtomoPagamentoUnicoPorRenovacao,
+} from "@/lib/atomopay/checkout-links";
 import {
   criarCheckoutAssinaturaProsperityPay,
   referenciaProsperityPayPorPlanoSlug,
@@ -654,25 +657,17 @@ export async function POST(request: Request) {
         planoSlugFallback: planoSlugSolicitado,
       });
 
-      const checkoutUrl =
-        renovacao.gateway === "prosperity_pay"
-          ? renovacao.checkoutUrl
-          : null;
-
-      if (!checkoutUrl) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error:
-              "Checkout de renovação da Prosperity Pay não configurado para este cliente. O CRM não usa mais a Átomo para renovações.",
-            plano_slug: renovacao.planoSlug,
-            gateway: "prosperity_pay",
-            valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
-            origem_resolucao: renovacao.origemResolucao,
-          },
-          { status: 409 }
-        );
-      }
+      const checkoutPagamentoUnico =
+        obterCheckoutAtomoPagamentoUnicoPorRenovacao({
+          planoSlug: renovacao.planoSlug,
+          valorCentavos: renovacao.valorRenovacaoCentavos,
+        });
+      const checkoutUrl = renovacao.affiliateRef
+        ? obterCheckoutUrlPorPlanoEOferta({
+            planoSlug: renovacao.planoSlug,
+            tipoOferta: "af",
+          }) || checkoutPagamentoUnico
+        : checkoutPagamentoUnico;
 
       const leadId = await buscarOuCriarLeadCheckout({
         planoSlug: renovacao.planoSlug,
@@ -687,7 +682,7 @@ export async function POST(request: Request) {
         ok: true,
         lead_id: leadId,
         checkout_url: checkoutUrl,
-        gateway: "prosperity_pay",
+        gateway: "atomo",
         plano_slug: renovacao.planoSlug,
         tipo_oferta: renovacao.tipoOferta,
         oferta_referencia: renovacao.ofertaReferencia,
@@ -696,6 +691,7 @@ export async function POST(request: Request) {
         valor_renovacao_centavos: renovacao.valorRenovacaoCentavos,
         origem_resolucao: renovacao.origemResolucao,
         preserva_origem_comercial: Boolean(renovacao.affiliateRef),
+        checkout_pagamento_unico: true,
       });
     }
 
