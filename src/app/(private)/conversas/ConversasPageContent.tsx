@@ -9972,6 +9972,26 @@ const templateFooterTexto = useMemo(() => {
                                 ⊞ Adicionar à lista
                               </button>
 
+                              {conversaSelecionada?.contatos?.id && (
+                                <button
+                                  type="button"
+                                  className={styles.whatsSecondaryAction}
+                                  onClick={alternarAutomacoesContato}
+                                  disabled={
+                                    alterandoAutomacoesContato ||
+                                    salvandoAcao ||
+                                    ativandoIa
+                                  }
+                                >
+                                  {alterandoAutomacoesContato
+                                    ? "Atualizando automações..."
+                                    : conversaSelecionada.contatos
+                                          .automacoes_desabilitadas
+                                      ? "Habilitar automações"
+                                      : "Desabilitar automações"}
+                                </button>
+                              )}
+
                               {podeTransferir && (
                                 <button
                                   type="button"
