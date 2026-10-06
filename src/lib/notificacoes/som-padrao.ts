@@ -98,11 +98,14 @@ export async function tocarSomNotificacaoSistema() {
 
   const agora = contexto.currentTime + 0.01;
 
-  criarTom(contexto, 880, agora, 0.2, 0.15, "sine");
-  criarTom(contexto, 1320, agora, 0.22, 0.08, "triangle");
-  criarTom(contexto, 1046.5, agora + 0.17, 0.24, 0.145, "triangle");
-  criarTom(contexto, 1568, agora + 0.17, 0.24, 0.075, "sine");
-  criarTom(contexto, 1318.51, agora + 0.39, 0.3, 0.13, "triangle");
+  // Campainha descendente, propositalmente diferente do som ascendente do chat.
+  criarTom(contexto, 523.25, agora, 0.34, 0.18, "sine");
+  criarTom(contexto, 1046.5, agora, 0.3, 0.075, "sine");
+
+  criarTom(contexto, 392, agora + 0.3, 0.42, 0.19, "sine");
+  criarTom(contexto, 784, agora + 0.3, 0.36, 0.08, "sine");
+
+  criarTom(contexto, 329.63, agora + 0.64, 0.28, 0.11, "triangle");
 }
 
 export async function tocarSomPadraoNotificacao() {
