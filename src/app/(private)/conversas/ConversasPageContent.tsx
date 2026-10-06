@@ -7110,11 +7110,6 @@ const templateFooterTexto = useMemo(() => {
           <aside className={styles.sidebar}>
             <div className={styles.sidebarHeader}>
               <div className={styles.sidebarTopRow}>
-                <p className={styles.sidebarCount}>
-                  {totalConversasResumo}{" "}
-                  {totalConversasResumo === 1 ? "conversa" : "conversas"}
-                </p>
-
                 <div className={styles.sidebarHeaderActions}>
                   <button
                     type="button"
@@ -7137,6 +7132,11 @@ const templateFooterTexto = useMemo(() => {
                     {atualizandoConversas ? "Atualizando..." : "Atualizar"}
                   </button>
                 </div>
+
+                <p className={styles.sidebarCount}>
+                  {totalConversasResumo}{" "}
+                  {totalConversasResumo === 1 ? "conversa" : "conversas"}
+                </p>
               </div>
 
               <input
