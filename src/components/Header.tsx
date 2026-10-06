@@ -1960,7 +1960,7 @@ export default function Header({
                       <BellOff size={16} strokeWidth={2.2} />
                     )}
                   </span>
-                  <span>Som do sininho</span>
+                  <span>Som notificação</span>
                 </span>
 
                 <span className={styles.themeMenuBadge}>
