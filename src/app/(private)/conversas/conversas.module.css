@@ -34,7 +34,7 @@
 }
 
 .sidebarHeader {
-  padding: 16px;
+  padding: 12px 16px 14px;
   border-bottom: 1px solid var(--crm-border-soft);
   background: var(--header);
 }
@@ -43,8 +43,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .sidebarTitle {
@@ -56,8 +56,15 @@
 
 .sidebarCount {
   margin: 0;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 9px;
+  background: var(--crm-surface-soft);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.2;
   color: var(--crm-text-muted);
   white-space: nowrap;
@@ -98,7 +105,15 @@
 .sidebarHeaderActions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.sidebarHeaderActions .iconButton {
+  min-height: 34px;
+  padding: 7px 10px;
+  gap: 6px;
+  border-radius: 10px;
+  font-size: 12px;
 }
 
 .primaryButton {
@@ -206,6 +221,10 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.searchInput {
+  padding: 10px 12px;
+}
+
 .searchInput:focus,
 .filterSelect:focus,
 .actionSelect:focus,
@@ -226,9 +245,9 @@
 .quickFilters {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px 8px;
-  margin-top: 12px;
-  padding-top: 8px;
+  gap: 8px 6px;
+  margin-top: 9px;
+  padding-top: 4px;
 }
 
 .quickChip {
@@ -237,7 +256,7 @@
   border: 1px solid var(--crm-border);
   background: var(--crm-surface);
   color: var(--crm-text);
-  padding: 8px 12px;
+  padding: 7px 11px;
   font-size: 12px;
 }
 
