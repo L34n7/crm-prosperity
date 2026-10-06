@@ -1246,8 +1246,8 @@
 }
 
 .messageBubbleIa {
-  background: var(--messageBubbleIncoming);
-  color: var(--crm-text-strong);
+  background: rgb(211, 224, 223);
+  color: rgb(40, 58, 70);
   border-top-right-radius: 4px;
 }
 
@@ -1277,8 +1277,8 @@
 }
 
 .iaSenderLabel {
-  color: var(--crm-text);
-  font-weight: 700;
+  color: rgb(55, 113, 108);
+  font-weight: 800;
 }
 
 .automaticBadge {

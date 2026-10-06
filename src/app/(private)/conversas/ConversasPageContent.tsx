@@ -8249,17 +8249,16 @@ const templateFooterTexto = useMemo(() => {
                                             <div className={styles.messageMetaTop}>
                                               {isDisparo ? (
                                                 <>
-                                                  <span className={styles.disparoModeBadge}>
-                                                    {disparoModo}
-                                                  </span>
                                                   <span
                                                     className={[
                                                       styles.senderLabel,
                                                       styles.disparoSenderLabel,
-                                                      styles.senderLabelOutgoing,
                                                     ].join(" ")}
                                                   >
                                                     Disparo
+                                                  </span>
+                                                  <span className={styles.disparoModeBadge}>
+                                                    {disparoModo}
                                                   </span>
                                                 </>
                                               ) : (
@@ -8272,7 +8271,7 @@ const templateFooterTexto = useMemo(() => {
                                                   <span
                                                     className={[
                                                       styles.senderLabel,
-                                                      styles.senderLabelOutgoing,
+                                                      !isIa ? styles.senderLabelOutgoing : "",
                                                       isIa ? styles.iaSenderLabel : "",
                                                     ]
                                                       .filter(Boolean)
