@@ -8199,14 +8199,14 @@ const templateFooterTexto = useMemo(() => {
                                 const isConteudoIndisponivel = msg.tipo_mensagem === "unsupported";
                                 const isDisparo = mensagemEhDisparo(msg);
                                 const disparoModo = getModoDisparo(msg);
+                                const isMensagemDoSistema =
+                                  mensagemFoiEnviadaPeloSistema(msg);
                                 const isOutgoing =
-                                  !isDisparo &&
-                                  msg.origem === "enviada" &&
+                                  isMensagemDoSistema &&
                                   !isConteudoIndisponivel;
                                 const isAutomatic =
                                   !isDisparo && msg.origem === "automatica";
                                 const isSystem = msg.remetente_tipo === "sistema";
-                                const isMensagemDoSistema = mensagemFoiEnviadaPeloSistema(msg);
                                 const mensagemErroEnvio = getMensagemErroEnvio(msg);
                                 const eventoWhatsapp =
                                   getWhatsAppMessageSpecialState(msg);
@@ -8233,17 +8233,16 @@ const templateFooterTexto = useMemo(() => {
                                         className={`${styles.messageBubble} ${
                                           isDisparo
                                             ? styles.messageBubbleDisparo
-                                            : isOutgoing
-                                            ? styles.messageBubbleOutgoing
                                             : isAutomatic
                                             ? styles.messageBubbleAutomatic
+                                            : isOutgoing
+                                            ? styles.messageBubbleOutgoing
                                             : styles.messageBubbleIncoming
                                         }`}
                                       >
                                         {(isDisparo ||
-                                          (!isOutgoing &&
-                                            (msg.remetente_tipo === "bot" ||
-                                              msg.remetente_tipo === "ia"))) && (
+                                          msg.remetente_tipo === "bot" ||
+                                          msg.remetente_tipo === "ia") && (
                                             <div className={styles.messageMetaTop}>
                                               <span
                                                 className={[

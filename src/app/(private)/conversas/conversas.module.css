@@ -1248,7 +1248,7 @@
 .messageBubbleAutomatic {
   background: var(--crm-warning-bg-strong);
   color: var(--crm-warning-text);
-  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
 }
 
 .messageMetaTop {
@@ -7965,9 +7965,9 @@ a.buttonMessageOption:hover {
     var(--crm-primary-strong) 28%,
     var(--crm-border)
   );
-  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
   box-shadow:
-    inset 3px 0 0 var(--crm-primary-strong),
+    inset -3px 0 0 var(--crm-primary-strong),
     0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
 }
 
