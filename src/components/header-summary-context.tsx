@@ -18,6 +18,10 @@ import {
   HEADER_DISPAROS_PENDENTES_REFRESH_EVENT,
 } from "@/lib/header-summary/events";
 import { createClient } from "@/lib/supabase/client";
+import {
+  habilitarSomPadraoNotificacao,
+  tocarSomPadraoNotificacao,
+} from "@/lib/notificacoes/som-padrao";
 
 export type HeaderSummaryNotificacao = {
   id: string;
@@ -426,6 +430,23 @@ export function HeaderSummaryProvider({
     notificacoesRef.current = notificacoes;
   }, [notificacoes]);
 
+  useEffect(() => {
+    function habilitarSom() {
+      void habilitarSomPadraoNotificacao();
+    }
+
+    window.addEventListener("pointerdown", habilitarSom, {
+      once: true,
+      passive: true,
+    });
+    window.addEventListener("keydown", habilitarSom, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", habilitarSom);
+      window.removeEventListener("keydown", habilitarSom);
+    };
+  }, []);
+
   function getSupabaseRealtime() {
     if (!supabaseRealtimeRef.current) {
       supabaseRealtimeRef.current = createClient();
@@ -443,6 +464,18 @@ export function HeaderSummaryProvider({
 
     const notificacao = normalizarNotificacaoRealtime(payload.new);
     if (!notificacao) return;
+
+    const jaExistia = notificacoesRef.current.some(
+      (item) => item.id === notificacao.id
+    );
+
+    if (
+      payload.eventType === "INSERT" &&
+      !notificacao.lida &&
+      !jaExistia
+    ) {
+      void tocarSomPadraoNotificacao();
+    }
 
     const mapa = new Map<string, HeaderSummaryNotificacao>();
 
