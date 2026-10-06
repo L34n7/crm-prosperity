@@ -3,8 +3,12 @@
 import Link from "next/link";
 import {
   ArrowLeft,
+  Bell,
+  BellOff,
   CheckCircle2,
   CreditCard,
+  MessageCircle,
+  MessageCircleOff,
   Moon,
   Smartphone,
   Sparkles,
@@ -19,6 +23,12 @@ import MetaPaymentIssueBadge from "@/components/MetaPaymentIssueBadge";
 import { useHeaderUser } from "@/components/header-user-context";
 import { useHeaderSummary } from "@/components/header-summary-context";
 import { montarWhatsappUrl } from "@/lib/contatos/sistema";
+import {
+  definirSomChatAtivo,
+  definirSomSininhoAtivo,
+  isSomChatAtivo,
+  isSomSininhoAtivo,
+} from "@/lib/notificacoes/som-padrao";
 import styles from "./Header.module.css";
 import { createPortal } from "react-dom";
 
@@ -243,6 +253,8 @@ export default function Header({
   const [feedbackAgendaPopup, setFeedbackAgendaPopup] =
     useState<Notificacao | null>(null);
   const [temaVisual, setTemaVisual] = useState<TemaVisual>("light");
+  const [somSininhoAtivo, setSomSininhoAtivo] = useState(true);
+  const [somChatAtivo, setSomChatAtivo] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [avatarCarregado, setAvatarCarregado] = useState(false);
 
@@ -307,6 +319,19 @@ export default function Header({
   function alternarTemaVisual() {
     aplicarTemaVisual(temaVisual === "dark" ? "light" : "dark");
   }
+
+  function alternarSomSininho() {
+    const proximoValor = !somSininhoAtivo;
+    definirSomSininhoAtivo(proximoValor);
+    setSomSininhoAtivo(proximoValor);
+  }
+
+  function alternarSomChat() {
+    const proximoValor = !somChatAtivo;
+    definirSomChatAtivo(proximoValor);
+    setSomChatAtivo(proximoValor);
+  }
+
   function formatarTokens(valor: number | null) {
     if (valor === null) return "Ilimitado";
 
@@ -564,6 +589,19 @@ export default function Header({
       document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 
     setTemaVisual(temaAtual);
+    setSomSininhoAtivo(isSomSininhoAtivo());
+    setSomChatAtivo(isSomChatAtivo());
+
+    function atualizarPreferenciasSom() {
+      setSomSininhoAtivo(isSomSininhoAtivo());
+      setSomChatAtivo(isSomChatAtivo());
+    }
+
+    window.addEventListener("storage", atualizarPreferenciasSom);
+
+    return () => {
+      window.removeEventListener("storage", atualizarPreferenciasSom);
+    };
   }, []);
 
   useEffect(() => {
@@ -976,6 +1014,8 @@ export default function Header({
   const temaEscuroAtivo = temaVisual === "dark";
   const temaBotaoLabel = temaEscuroAtivo ? "Tema claro" : "Tema escuro";
   const temaBotaoStatus = temaEscuroAtivo ? "Escuro" : "Claro";
+  const somSininhoStatus = somSininhoAtivo ? "Ativo" : "Desativado";
+  const somChatStatus = somChatAtivo ? "Ativo" : "Desativado";
 
   return (
     <header className={styles.header}>
@@ -1898,6 +1938,60 @@ export default function Header({
 
                 <span className={styles.themeMenuBadge}>
                   {temaBotaoStatus}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`${styles.dropdownItem} ${styles.themeMenuButton}`}
+                onClick={alternarSomSininho}
+                aria-pressed={somSininhoAtivo}
+                title={
+                  somSininhoAtivo
+                    ? "Desativar som das notificações"
+                    : "Ativar som das notificações"
+                }
+              >
+                <span className={styles.themeMenuMain}>
+                  <span className={styles.themeMenuIcon}>
+                    {somSininhoAtivo ? (
+                      <Bell size={16} strokeWidth={2.2} />
+                    ) : (
+                      <BellOff size={16} strokeWidth={2.2} />
+                    )}
+                  </span>
+                  <span>Som do sininho</span>
+                </span>
+
+                <span className={styles.themeMenuBadge}>
+                  {somSininhoStatus}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`${styles.dropdownItem} ${styles.themeMenuButton}`}
+                onClick={alternarSomChat}
+                aria-pressed={somChatAtivo}
+                title={
+                  somChatAtivo
+                    ? "Desativar som das mensagens"
+                    : "Ativar som das mensagens"
+                }
+              >
+                <span className={styles.themeMenuMain}>
+                  <span className={styles.themeMenuIcon}>
+                    {somChatAtivo ? (
+                      <MessageCircle size={16} strokeWidth={2.2} />
+                    ) : (
+                      <MessageCircleOff size={16} strokeWidth={2.2} />
+                    )}
+                  </span>
+                  <span>Som do chat</span>
+                </span>
+
+                <span className={styles.themeMenuBadge}>
+                  {somChatStatus}
                 </span>
               </button>
 

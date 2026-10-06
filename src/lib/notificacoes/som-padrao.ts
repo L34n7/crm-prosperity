@@ -5,6 +5,35 @@ type AudioContextComCompatibilidade = typeof AudioContext;
 let contextoAudio: AudioContext | null = null;
 let somHabilitado = false;
 
+const SOM_SININHO_STORAGE_KEY = "crm:som-sininho:ativo";
+const SOM_CHAT_STORAGE_KEY = "crm:som-chat:ativo";
+
+function lerPreferenciaSom(chave: string) {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(chave) !== "false";
+}
+
+function definirPreferenciaSom(chave: string, ativo: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(chave, String(ativo));
+}
+
+export function isSomSininhoAtivo() {
+  return lerPreferenciaSom(SOM_SININHO_STORAGE_KEY);
+}
+
+export function isSomChatAtivo() {
+  return lerPreferenciaSom(SOM_CHAT_STORAGE_KEY);
+}
+
+export function definirSomSininhoAtivo(ativo: boolean) {
+  definirPreferenciaSom(SOM_SININHO_STORAGE_KEY, ativo);
+}
+
+export function definirSomChatAtivo(ativo: boolean) {
+  definirPreferenciaSom(SOM_CHAT_STORAGE_KEY, ativo);
+}
+
 function obterAudioContextConstructor(): AudioContextComCompatibilidade | null {
   if (typeof window === "undefined") return null;
 
@@ -82,6 +111,8 @@ async function prepararContextoParaSom() {
 }
 
 export async function tocarSomMensagemChat() {
+  if (!isSomChatAtivo()) return;
+
   const contexto = await prepararContextoParaSom();
   if (!contexto) return;
 
@@ -128,6 +159,8 @@ function criarNotaEncorpada(
 }
 
 export async function tocarSomNotificacaoSistema() {
+  if (!isSomSininhoAtivo()) return;
+
   const contexto = await prepararContextoParaSom();
   if (!contexto) return;
 
