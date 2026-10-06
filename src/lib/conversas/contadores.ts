@@ -50,12 +50,14 @@ export async function obterContadoresConversas({
   usuarioPodeAtribuir,
   usuarioPodeVisualizarEncerradasSetor,
   usuarioPodeVisualizarBot,
+  restringirAosSetores = false,
   filtros,
 }: {
   usuario: UsuarioContexto;
   usuarioPodeAtribuir: boolean;
   usuarioPodeVisualizarEncerradasSetor: boolean;
   usuarioPodeVisualizarBot: boolean;
+  restringirAosSetores?: boolean;
   filtros: FiltrosContadoresConversas;
 }): Promise<TotaisChipsRapidos> {
   if (!usuario.empresa_id) {
@@ -78,6 +80,7 @@ export async function obterContadoresConversas({
     usuarioPodeAtribuir,
     usuarioPodeVisualizarEncerradasSetor,
     usuarioPodeVisualizarBot,
+    restringirAosSetores,
     setoresIds.join(","),
     filtros.status,
     filtros.prioridade,
@@ -104,6 +107,7 @@ export async function obterContadoresConversas({
         p_usuario_pode_visualizar_encerradas_setor:
           usuarioPodeVisualizarEncerradasSetor,
         p_usuario_pode_visualizar_bot: usuarioPodeVisualizarBot,
+        p_restringir_aos_setores: restringirAosSetores,
         p_status: filtros.status,
         p_prioridade: filtros.prioridade,
         p_contato_id: filtros.contatoId,
@@ -126,6 +130,7 @@ export async function obterContadoresConversas({
           usuarioPodeAtribuir,
           usuarioPodeVisualizarEncerradasSetor,
           usuarioPodeVisualizarBot,
+          restringirAosSetores,
           status: filtros.status,
           prioridade: filtros.prioridade,
           contatoId: filtros.contatoId,

@@ -1,5 +1,6 @@
 import type { UsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
+  deveRestringirConversasAosSetoresDoUsuario,
   isAdministrador,
   podeVisualizarAtendimentosBot,
   podeVisualizarConversasDoSetor,
@@ -67,6 +68,15 @@ export async function usuarioPodeVisualizarConversa(
   }
 
   if (isAdministrador(usuario)) return true;
+
+  if (await deveRestringirConversasAosSetoresDoUsuario(usuario)) {
+    if (
+      !conversa.setor_id ||
+      !usuario.setores_ids.includes(conversa.setor_id)
+    ) {
+      return false;
+    }
+  }
 
   if (
     conversa.bot_ativo === true &&

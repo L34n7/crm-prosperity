@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  deveRestringirConversasAosSetoresDoUsuario,
   isAdministrador,
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
@@ -321,10 +322,12 @@ export async function GET(request: Request) {
     usuarioPodeVisualizarAtribuidasDoSetor,
     usuarioPodeVisualizarEncerradasDoSetor,
     usuarioPodeVisualizarAtendimentosBot,
+    restringirAosSetores,
   ] = await Promise.all([
     podeVisualizarConversasAtribuidasDoSetor(usuario),
     podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
     podeVisualizarAtendimentosBotEfetivo(usuario),
+    deveRestringirConversasAosSetoresDoUsuario(usuario),
   ]);
   const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
     usuario,
@@ -372,6 +375,7 @@ export async function GET(request: Request) {
       p_usuario_pode_visualizar_encerradas_setor:
         usuarioPodeVisualizarEncerradasDoSetor,
       p_usuario_pode_visualizar_bot: usuarioPodeVisualizarAtendimentosBot,
+      p_restringir_aos_setores: restringirAosSetores,
       p_status: status,
       p_prioridade: prioridade,
       p_contato_id: contatoId,
@@ -394,6 +398,7 @@ export async function GET(request: Request) {
           usuarioPodeVisualizarEncerradasSetor:
             usuarioPodeVisualizarEncerradasDoSetor,
           usuarioPodeVisualizarBot: usuarioPodeVisualizarAtendimentosBot,
+          restringirAosSetores,
           filtros: filtrosComuns,
         })
       : Promise.resolve(null);

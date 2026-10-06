@@ -67,6 +67,17 @@ export async function podeVisualizarConversasDoSetor(usuario: UsuarioAuth) {
   );
 }
 
+export async function deveRestringirConversasAosSetoresDoUsuario(
+  usuario: UsuarioAuth
+) {
+  if (isAdministrador(usuario)) return false;
+
+  return await temPermissao(
+    usuario,
+    "conversas.visualizar_apenas_proprio_setor"
+  );
+}
+
 export async function podeVisualizarConversasEncerradasDoSetor(
   usuario: UsuarioAuth
 ) {

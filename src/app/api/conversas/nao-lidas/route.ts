@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import {
+  deveRestringirConversasAosSetoresDoUsuario,
   podeVisualizarConversas,
 } from "@/lib/auth/authorization";
 import { contarConversasNaoLidas } from "@/lib/conversas/nao-lidas";
@@ -45,10 +46,12 @@ export async function GET() {
       usuarioPodeVisualizarAtribuidasDoSetor,
       usuarioPodeVisualizarEncerradasDoSetor,
       usuarioPodeVisualizarAtendimentosBot,
+      restringirAosSetores,
     ] = await Promise.all([
       podeVisualizarConversasAtribuidasDoSetor(usuario),
       podeVisualizarConversasEncerradasDoSetorEfetivo(usuario),
       podeVisualizarAtendimentosBotEfetivo(usuario),
+      deveRestringirConversasAosSetoresDoUsuario(usuario),
     ]);
 
     const quantidade = await contarConversasNaoLidas({
@@ -60,6 +63,7 @@ export async function GET() {
       usuarioPodeVisualizarEncerradasSetor:
         usuarioPodeVisualizarEncerradasDoSetor,
       usuarioPodeVisualizarBot: usuarioPodeVisualizarAtendimentosBot,
+      restringirAosSetores,
     });
 
     return NextResponse.json(
