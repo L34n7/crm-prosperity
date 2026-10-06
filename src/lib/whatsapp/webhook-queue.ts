@@ -194,74 +194,55 @@ export async function enfileirarWebhookWhatsapp(body: WhatsAppWebhookBody) {
   const bodyHash = calcularBodyHash(body);
   const receivedAt = new Date().toISOString();
   const identificadores = extrairIdentificadoresWebhookWhatsapp(body);
-  const payloadInsert = {
-    body_hash: bodyHash,
-    body_json: body,
-    status: "pendente",
-    metadata_json: {
-      incoming_messages: incomingMessages.length,
-      incoming_statuses: incomingStatuses.length,
-      coexistence_total: coexistenceItems.total,
-      coexistence_message_echoes: coexistenceItems.messageEchoes,
-      coexistence_history_messages: coexistenceItems.historyMessages,
-      coexistence_history_states: coexistenceItems.historyStates,
-      coexistence_contacts: coexistenceItems.contacts,
-      coexistence_account_updates: coexistenceItems.accountUpdates,
-      phone_number_ids: identificadores.phoneNumberIds,
-      mensagem_externa_ids: identificadores.mensagemExternaIds,
-      received_at: receivedAt,
-    },
-    updated_at: receivedAt,
+  const metadataJson = {
+    incoming_messages: incomingMessages.length,
+    incoming_statuses: incomingStatuses.length,
+    coexistence_total: coexistenceItems.total,
+    coexistence_message_echoes: coexistenceItems.messageEchoes,
+    coexistence_history_messages: coexistenceItems.historyMessages,
+    coexistence_history_states: coexistenceItems.historyStates,
+    coexistence_contacts: coexistenceItems.contacts,
+    coexistence_account_updates: coexistenceItems.accountUpdates,
+    phone_number_ids: identificadores.phoneNumberIds,
+    mensagem_externa_ids: identificadores.mensagemExternaIds,
+    received_at: receivedAt,
   };
 
-  const { data, error } = await supabaseAdmin
-    .from("whatsapp_webhook_eventos")
-    .upsert(payloadInsert, {
-      onConflict: "body_hash",
-      ignoreDuplicates: true,
-    })
-    .select("*")
-    .maybeSingle();
-
-  if (!error && data) {
-    perf("FILA / webhook salvo no banco", inicioEnfileirar, {
-      eventId: data.id,
-      incomingMessages: incomingMessages.length,
-      incomingStatuses: incomingStatuses.length,
-      coexistenceItems: coexistenceItems.total,
-    });
-
-    return {
-      evento: data,
-      duplicado: false,
-      bodyHash,
-      incomingMessages: incomingMessages.length,
-      incomingStatuses: incomingStatuses.length,
-      coexistenceItems: coexistenceItems.total,
-    };
-  }
+  const { data, error } = await supabaseAdmin.rpc(
+    "registrar_whatsapp_webhook_evento",
+    {
+      p_body_hash: bodyHash,
+      p_body_json: body,
+      p_metadata_json: metadataJson,
+      p_received_at: receivedAt,
+    }
+  );
 
   if (error) {
     throw new Error(`Erro ao enfileirar webhook: ${error.message}`);
   }
 
-  const { data: eventoExistente, error: selectError } = await supabaseAdmin
-    .from("whatsapp_webhook_eventos")
-    .select("*")
-    .eq("body_hash", bodyHash)
-    .maybeSingle();
+  const resultado = data as {
+    evento?: Record<string, any> | null;
+    duplicado?: boolean;
+  } | null;
+  const evento = resultado?.evento || null;
 
-  if (selectError || !eventoExistente) {
-    throw new Error(
-      `Erro ao buscar webhook duplicado: ${
-        selectError?.message || "evento nao encontrado"
-      }`
-    );
+  if (!evento?.id) {
+    throw new Error("Erro ao enfileirar webhook: evento não retornado pelo banco");
   }
 
+  perf("FILA / webhook salvo no banco", inicioEnfileirar, {
+    eventId: evento.id,
+    duplicado: resultado?.duplicado === true,
+    incomingMessages: incomingMessages.length,
+    incomingStatuses: incomingStatuses.length,
+    coexistenceItems: coexistenceItems.total,
+  });
+
   return {
-    evento: eventoExistente,
-    duplicado: true,
+    evento,
+    duplicado: resultado?.duplicado === true,
     bodyHash,
     incomingMessages: incomingMessages.length,
     incomingStatuses: incomingStatuses.length,
@@ -292,31 +273,31 @@ async function liberarLocksExpirados(timeoutLockMinutos: number) {
 }
 
 async function reivindicarEvento(
-  evento: WebhookEventoMinimo,
+  evento: WebhookEventoMinimo | string,
   maxTentativas: number
 ) {
-  const agora = new Date().toISOString();
+  const eventoId =
+    typeof evento === "string" ? evento : String(evento?.id || "").trim();
 
-  const { data, error } = await supabaseAdmin
-    .from("whatsapp_webhook_eventos")
-    .update({
-      status: "processando",
-      tentativas: Number(evento.tentativas || 0) + 1,
-      locked_at: agora,
-      erro: null,
-      updated_at: agora,
-    })
-    .eq("id", evento.id)
-    .in("status", ["pendente", "erro"])
-    .lt("tentativas", maxTentativas)
-    .select("*")
-    .maybeSingle();
+  if (!eventoId) return null;
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "claim_whatsapp_webhook_evento",
+    {
+      p_evento_id: eventoId,
+      p_max_tentativas: maxTentativas,
+    }
+  );
 
   if (error) {
     throw new Error(`Erro ao reivindicar evento do webhook: ${error.message}`);
   }
 
-  return data;
+  if (Array.isArray(data)) {
+    return data[0] || null;
+  }
+
+  return data || null;
 }
 
 export async function processarWebhookWhatsappPorId(eventoId: string) {
@@ -337,36 +318,7 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
     20
   );
 
-  const { data: evento, error } = await supabaseAdmin
-    .from("whatsapp_webhook_eventos")
-    .select("*")
-    .eq("id", eventoId)
-    .in("status", ["pendente", "erro"])
-    .lt("tentativas", maxTentativas)
-    .maybeSingle();
-
-  if (error) {
-    console.error(
-      "[WEBHOOK QUEUE] Erro ao buscar evento por ID:",
-      error
-    );
-
-    return {
-      ok: false,
-      error: error.message,
-    };
-  }
-
-  if (!evento) {
-    return {
-      ok: true,
-      ignorado: true,
-      motivo:
-        "Evento não encontrado, já processado ou com tentativas esgotadas.",
-    };
-  }
-
-  const eventoTravado = await reivindicarEvento(evento, maxTentativas);
+  const eventoTravado = await reivindicarEvento(eventoId, maxTentativas);
 
   if (!eventoTravado) {
     return {
@@ -402,17 +354,17 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
             }
           : {}),
       })
-      .eq("id", evento.id);
+      .eq("id", eventoTravado.id);
 
     logOperacional("[WEBHOOK QUEUE] Evento processado por ID", {
-      eventoId: evento.id,
+      eventoId: eventoTravado.id,
       tempo_ms: Date.now() - inicioTotal,
     });
 
     return {
       ok: true,
       processado: true,
-      eventoId: evento.id,
+      eventoId: eventoTravado.id,
       tempo_ms: Date.now() - inicioTotal,
     };
   } catch (error) {
@@ -439,12 +391,12 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
         locked_at: null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", evento.id);
+      .eq("id", eventoTravado.id);
 
     return {
       ok: false,
       processado: false,
-      eventoId: evento.id,
+      eventoId: eventoTravado.id,
       error:
         error instanceof Error
           ? error.message

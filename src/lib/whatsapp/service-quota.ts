@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { aplicarBloqueioOperacionalWhatsappMeta } from "@/lib/whatsapp/meta-block";
 import { USD_BRL_EXCHANGE_RATE } from "@/lib/whatsapp/pricing";
+import type { AvaliacaoWhatsappServiceStatusEvento } from "@/lib/whatsapp/pricing-status-events";
 
 const supabaseAdmin = getSupabaseAdmin();
 const resend = process.env.RESEND_API_KEY
@@ -416,15 +417,106 @@ export async function buscarBloqueioLimiteServiceConversa(params: {
   };
 }
 
+async function aplicarPausaAutomacoesPorLimiteService(params: {
+  empresaId: string;
+  integracaoWhatsappId: string;
+  serviceTotal: number;
+  limiteTotal: number;
+  limiteExtra: number;
+}) {
+  const motivo =
+    `Limite Meta Service atingido: ${params.serviceTotal} de ${params.limiteTotal} mensagens no mês. ` +
+    "Todos os fluxos e agentes de IA desta integração foram pausados.";
+
+  const resultado = await aplicarBloqueioOperacionalWhatsappMeta({
+    empresaId: params.empresaId,
+    integracaoId: params.integracaoWhatsappId,
+    motivo,
+    tipoBloqueio: "limite_service_atingido",
+  });
+
+  await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("empresa_id", params.empresaId)
+    .eq("id", params.integracaoWhatsappId);
+
+  console.warn("[WHATSAPP SERVICE] Automações pausadas pelo limite configurado:", {
+    empresaId: params.empresaId,
+    integracaoWhatsappId: params.integracaoWhatsappId,
+    serviceTotal: params.serviceTotal,
+    limiteTotal: params.limiteTotal,
+    limiteExtra: params.limiteExtra,
+    ...resultado,
+  });
+
+  return resultado;
+}
+
 export async function avaliarLimiteAutomacoesService(params: {
   empresaId: string;
   integracaoWhatsappId: string;
   phoneNumberId: string | null;
+  avaliacaoStatus?: AvaliacaoWhatsappServiceStatusEvento | null;
 }) {
   const phoneNumberId = String(params.phoneNumberId || "").trim();
 
   if (!phoneNumberId) {
     return { ativo: false, bloqueado: false, motivo: "sem_phone_number_id" };
+  }
+
+  const avaliacaoStatus = params.avaliacaoStatus || null;
+
+  if (avaliacaoStatus) {
+    const ativo = avaliacaoStatus.limite_ativo === true;
+    const serviceTotal = Math.max(0, numero(avaliacaoStatus.service_total));
+    const limiteExtra = Math.max(0, numero(avaliacaoStatus.limite_extra));
+    const limiteTotal = Math.max(
+      WHATSAPP_SERVICE_FREE_LIMIT,
+      numero(avaliacaoStatus.limite_total) ||
+        WHATSAPP_SERVICE_FREE_LIMIT + limiteExtra
+    );
+    const bloqueado = avaliacaoStatus.bloqueado === true;
+
+    if (!ativo) {
+      return { ativo: false, bloqueado: false, motivo: "configuracao_desativada" };
+    }
+
+    if (!bloqueado) {
+      return {
+        ativo: true,
+        bloqueado: false,
+        mes: avaliacaoStatus.mes || null,
+        serviceTotal,
+        limiteTotal,
+        limiteExtra,
+        restante: Math.max(limiteTotal - serviceTotal, 0),
+      };
+    }
+
+    const assumiuBloqueio =
+      avaliacaoStatus.bloqueio_aplicado_agora === true;
+
+    if (assumiuBloqueio) {
+      await aplicarPausaAutomacoesPorLimiteService({
+        empresaId: params.empresaId,
+        integracaoWhatsappId: params.integracaoWhatsappId,
+        serviceTotal,
+        limiteTotal,
+        limiteExtra,
+      });
+    }
+
+    return {
+      ativo: true,
+      bloqueado: true,
+      bloqueioAplicadoAgora: assumiuBloqueio,
+      mes: avaliacaoStatus.mes || null,
+      serviceTotal,
+      limiteTotal,
+      limiteExtra,
+      restante: 0,
+    };
   }
 
   const { data: configuracao, error: configuracaoError } = await supabaseAdmin
@@ -511,30 +603,12 @@ export async function avaliarLimiteAutomacoesService(params: {
   }
 
   if (assumiuBloqueio === true) {
-    const motivo =
-      `Limite Meta Service atingido: ${serviceTotal} de ${limiteTotal} mensagens no mês. ` +
-      "Todos os fluxos e agentes de IA desta integração foram pausados.";
-
-    const resultado = await aplicarBloqueioOperacionalWhatsappMeta({
-      empresaId: params.empresaId,
-      integracaoId: params.integracaoWhatsappId,
-      motivo,
-      tipoBloqueio: "limite_service_atingido",
-    });
-
-    await supabaseAdmin
-      .from("integracoes_whatsapp")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("empresa_id", params.empresaId)
-      .eq("id", params.integracaoWhatsappId);
-
-    console.warn("[WHATSAPP SERVICE] Automações pausadas pelo limite configurado:", {
+    await aplicarPausaAutomacoesPorLimiteService({
       empresaId: params.empresaId,
       integracaoWhatsappId: params.integracaoWhatsappId,
       serviceTotal,
       limiteTotal,
       limiteExtra,
-      ...resultado,
     });
   }
 
@@ -700,6 +774,54 @@ async function enviarEmailAlerta(params: {
   );
 }
 
+async function enviarAlertaFranquiaServiceRegistrado(params: {
+  alertaId: string;
+  empresaId: string;
+  integracaoWhatsappId: string;
+  numero: string | null;
+  nomeConexao: string | null;
+  marco: number;
+  usados: number;
+}) {
+  try {
+    await enviarEmailAlerta({
+      empresaId: params.empresaId,
+      numero: params.numero,
+      nomeConexao: params.nomeConexao,
+      percentual: params.marco,
+      usados: params.usados,
+      limite: WHATSAPP_SERVICE_FREE_LIMIT,
+    });
+
+    await supabaseAdmin
+      .from("whatsapp_service_franquia_alertas")
+      .update({
+        email_enviado_em: new Date().toISOString(),
+        email_erro: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.alertaId);
+  } catch (emailError) {
+    const mensagem =
+      emailError instanceof Error ? emailError.message : String(emailError);
+
+    await supabaseAdmin
+      .from("whatsapp_service_franquia_alertas")
+      .update({
+        email_erro: mensagem.slice(0, 1000),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", params.alertaId);
+
+    console.error("[WHATSAPP SERVICE] Falha ao enviar alerta de franquia:", {
+      empresaId: params.empresaId,
+      integracaoWhatsappId: params.integracaoWhatsappId,
+      marco: params.marco,
+      erro: mensagem,
+    });
+  }
+}
+
 export async function processarAlertaFranquiaService(params: {
   empresaId: string;
   integracaoWhatsappId: string;
@@ -709,6 +831,7 @@ export async function processarAlertaFranquiaService(params: {
   status: string | null;
   pricingCategory: string | null;
   pricingType: string | null;
+  avaliacaoStatus?: AvaliacaoWhatsappServiceStatusEvento | null;
 }) {
   try {
     if (!["entregue", "lida"].includes(String(params.status || ""))) return;
@@ -718,9 +841,35 @@ export async function processarAlertaFranquiaService(params: {
       empresaId: params.empresaId,
       integracaoWhatsappId: params.integracaoWhatsappId,
       phoneNumberId: params.phoneNumberId,
+      avaliacaoStatus: params.avaliacaoStatus || null,
     });
 
     if (params.pricingType !== "free_customer_service") return;
+
+    const avaliacaoStatus = params.avaliacaoStatus || null;
+
+    if (avaliacaoStatus?.processado === true) {
+      const alertaId = String(avaliacaoStatus.alerta_id || "").trim();
+      const marco = numero(avaliacaoStatus.alerta_percentual);
+      const usados = Math.min(
+        WHATSAPP_SERVICE_FREE_LIMIT,
+        numero(avaliacaoStatus.service_gratis)
+      );
+
+      if (!alertaId || marco <= 0) return;
+
+      await enviarAlertaFranquiaServiceRegistrado({
+        alertaId,
+        empresaId: params.empresaId,
+        integracaoWhatsappId: params.integracaoWhatsappId,
+        numero: params.numero,
+        nomeConexao: params.nomeConexao,
+        marco,
+        usados,
+      });
+
+      return;
+    }
 
     const timezone = await buscarTimezoneEmpresa(params.empresaId);
     const mes = mesAtual(timezone);
@@ -784,43 +933,15 @@ export async function processarAlertaFranquiaService(params: {
       throw new Error(`Erro ao registrar alerta Service: ${alertaError.message}`);
     }
 
-    try {
-      await enviarEmailAlerta({
-        empresaId: params.empresaId,
-        numero: params.numero,
-        nomeConexao: params.nomeConexao,
-        percentual: marco,
-        usados,
-        limite: WHATSAPP_SERVICE_FREE_LIMIT,
-      });
-
-      await supabaseAdmin
-        .from("whatsapp_service_franquia_alertas")
-        .update({
-          email_enviado_em: new Date().toISOString(),
-          email_erro: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", alerta.id);
-    } catch (emailError) {
-      const mensagem =
-        emailError instanceof Error ? emailError.message : String(emailError);
-
-      await supabaseAdmin
-        .from("whatsapp_service_franquia_alertas")
-        .update({
-          email_erro: mensagem.slice(0, 1000),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", alerta.id);
-
-      console.error("[WHATSAPP SERVICE] Falha ao enviar alerta de franquia:", {
-        empresaId: params.empresaId,
-        integracaoWhatsappId: params.integracaoWhatsappId,
-        marco,
-        erro: mensagem,
-      });
-    }
+    await enviarAlertaFranquiaServiceRegistrado({
+      alertaId: String(alerta.id),
+      empresaId: params.empresaId,
+      integracaoWhatsappId: params.integracaoWhatsappId,
+      numero: params.numero,
+      nomeConexao: params.nomeConexao,
+      marco,
+      usados,
+    });
   } catch (error) {
     console.error("[WHATSAPP SERVICE] Falha ao processar franquia:", {
       empresaId: params.empresaId,

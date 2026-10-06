@@ -19,6 +19,23 @@ function timestampMetaParaIso(timestamp?: string | null) {
   return new Date().toISOString();
 }
 
+export type AvaliacaoWhatsappServiceStatusEvento = {
+  processado?: boolean;
+  mes?: string | null;
+  timezone?: string | null;
+  service_gratis?: number | string | null;
+  service_cobrado?: number | string | null;
+  service_total?: number | string | null;
+  limite_ativo?: boolean;
+  limite_extra?: number | string | null;
+  limite_total?: number | string | null;
+  bloqueado?: boolean;
+  bloqueio_aplicado_agora?: boolean;
+  restante?: number | string | null;
+  alerta_id?: string | null;
+  alerta_percentual?: number | string | null;
+};
+
 export async function registrarPricingStatusEventoMeta(params: {
   empresaId: string;
   integracaoWhatsappId: string;
@@ -40,8 +57,8 @@ export async function registrarPricingStatusEventoMeta(params: {
     return;
   }
 
-  const { error } = await supabaseAdmin.rpc(
-    "registrar_whatsapp_pricing_status_evento",
+  const { data, error } = await supabaseAdmin.rpc(
+    "registrar_whatsapp_pricing_status_evento_otimizado",
     {
       p_empresa_id: params.empresaId,
       p_integracao_id: params.integracaoWhatsappId || null,
@@ -65,4 +82,8 @@ export async function registrarPricingStatusEventoMeta(params: {
       `Erro ao registrar status de pricing da Meta: ${error.message}`
     );
   }
+
+  return (data && typeof data === "object"
+    ? data
+    : null) as AvaliacaoWhatsappServiceStatusEvento | null;
 }

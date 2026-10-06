@@ -573,7 +573,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         );
 
         if (integration) {
-          await registrarPricingStatusEventoMeta({
+          const avaliacaoService = await registrarPricingStatusEventoMeta({
             empresaId: integration.empresa_id,
             integracaoWhatsappId: integration.id,
             phoneNumberId: statusItem.phoneNumberId,
@@ -610,6 +610,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             status: statusItem.status,
             pricingCategory: statusItem.pricingCategory,
             pricingType: statusItem.pricingType,
+            avaliacaoStatus: avaliacaoService,
           });
         }
       } catch (attributionError) {

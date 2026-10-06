@@ -4,6 +4,53 @@ import { USD_BRL_EXCHANGE_RATE } from "@/lib/whatsapp/pricing";
 const supabaseAdmin = getSupabaseAdmin();
 const timezoneEmpresaCache = new Map<string, string>();
 
+const RATE_CARD_CACHE_TTL_MS = 5 * 60_000;
+
+type RateCardRow = {
+  id: string;
+  moeda: string | null;
+  valor_unitario: number | string | null;
+  faixa_min: number | string | null;
+  faixa_max: number | string | null;
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+};
+
+type RateCardCacheEntry = {
+  value: RateCardRow | null;
+  expiresAt: number;
+};
+
+type GlobalPricingRealizedCache = typeof globalThis & {
+  __crmWhatsappRateCardCache?: Map<string, RateCardCacheEntry>;
+};
+
+const globalPricingRealizedCache = globalThis as GlobalPricingRealizedCache;
+const rateCardCache =
+  globalPricingRealizedCache.__crmWhatsappRateCardCache ||
+  new Map<string, RateCardCacheEntry>();
+
+globalPricingRealizedCache.__crmWhatsappRateCardCache = rateCardCache;
+
+function getCachedRateCard(key: string) {
+  const cached = rateCardCache.get(key);
+  if (!cached) return undefined;
+
+  if (cached.expiresAt <= Date.now()) {
+    rateCardCache.delete(key);
+    return undefined;
+  }
+
+  return cached.value;
+}
+
+function setCachedRateCard(key: string, value: RateCardRow | null) {
+  rateCardCache.set(key, {
+    value,
+    expiresAt: Date.now() + RATE_CARD_CACHE_TTL_MS,
+  });
+}
+
 export type PricingRealizado = {
   moeda: string | null;
   tarifaUnitaria: number | null;
@@ -108,27 +155,35 @@ export async function resolverPricingRealizado(params: {
     const timezone = await buscarTimezoneEmpresa(params.empresaId);
     const dataReferencia = dataNoTimezone(params.mensagemCriadaEm, timezone);
 
-    const { data: rateCard, error } = await supabaseAdmin
-      .from("whatsapp_rate_cards")
-      .select(
-        "id,moeda,valor_unitario,faixa_min,faixa_max,vigencia_inicio,vigencia_fim"
-      )
-      .eq("pais", pais)
-      .eq("categoria", params.categoria)
-      .lte("vigencia_inicio", dataReferencia)
-      .or(`vigencia_fim.is.null,vigencia_fim.gte.${dataReferencia}`)
-      .order("faixa_min", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const cacheKey = [pais, params.categoria, dataReferencia].join("|");
+    let rateCard = getCachedRateCard(cacheKey);
 
-    if (error) {
-      console.warn("[WHATSAPP PRICING] Falha ao consultar rate card:", {
-        empresaId: params.empresaId,
-        categoria: params.categoria,
-        pais,
-        erro: error.message,
-      });
-      return null;
+    if (rateCard === undefined) {
+      const { data, error } = await supabaseAdmin
+        .from("whatsapp_rate_cards")
+        .select(
+          "id,moeda,valor_unitario,faixa_min,faixa_max,vigencia_inicio,vigencia_fim"
+        )
+        .eq("pais", pais)
+        .eq("categoria", params.categoria)
+        .lte("vigencia_inicio", dataReferencia)
+        .or(`vigencia_fim.is.null,vigencia_fim.gte.${dataReferencia}`)
+        .order("faixa_min", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.warn("[WHATSAPP PRICING] Falha ao consultar rate card:", {
+          empresaId: params.empresaId,
+          categoria: params.categoria,
+          pais,
+          erro: error.message,
+        });
+        return null;
+      }
+
+      rateCard = (data as RateCardRow | null) ?? null;
+      setCachedRateCard(cacheKey, rateCard);
     }
 
     if (!rateCard) return null;
