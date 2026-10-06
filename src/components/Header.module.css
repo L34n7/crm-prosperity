@@ -1183,6 +1183,45 @@
   line-height: 1;
 }
 
+.soundMenuRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 1px;
+  box-sizing: border-box;
+}
+
+.soundMenuButton {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 9px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.soundMenuButton:hover {
+  background: var(--headerDropdownHover);
+  border-color: var(--crm-border-strong);
+}
+
+.soundMenuButtonMuted {
+  background: transparent;
+  color: var(--crm-text-muted);
+  opacity: 0.72;
+}
+
 .dropdownDivider {
   height: 1px;
   background: var(--crm-primary-border);

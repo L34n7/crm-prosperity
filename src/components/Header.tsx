@@ -1014,8 +1014,6 @@ export default function Header({
   const temaEscuroAtivo = temaVisual === "dark";
   const temaBotaoLabel = temaEscuroAtivo ? "Tema claro" : "Tema escuro";
   const temaBotaoStatus = temaEscuroAtivo ? "Escuro" : "Claro";
-  const somSininhoStatus = somSininhoAtivo ? "Ativo" : "Desativado";
-  const somChatStatus = somChatAtivo ? "Ativo" : "Desativado";
 
   return (
     <header className={styles.header}>
@@ -1941,59 +1939,57 @@ export default function Header({
                 </span>
               </button>
 
-              <button
-                type="button"
-                className={`${styles.dropdownItem} ${styles.themeMenuButton}`}
-                onClick={alternarSomSininho}
-                aria-pressed={somSininhoAtivo}
-                title={
-                  somSininhoAtivo
-                    ? "Desativar som das notificações"
-                    : "Ativar som das notificações"
-                }
-              >
-                <span className={styles.themeMenuMain}>
-                  <span className={styles.themeMenuIcon}>
-                    {somSininhoAtivo ? (
-                      <Bell size={16} strokeWidth={2.2} />
-                    ) : (
-                      <BellOff size={16} strokeWidth={2.2} />
-                    )}
-                  </span>
-                  <span>Som do sininho</span>
-                </span>
+              <div className={styles.soundMenuRow}>
+                <button
+                  type="button"
+                  className={`${styles.soundMenuButton} ${
+                    !somSininhoAtivo ? styles.soundMenuButtonMuted : ""
+                  }`}
+                  onClick={alternarSomSininho}
+                  aria-pressed={somSininhoAtivo}
+                  aria-label={
+                    somSininhoAtivo
+                      ? "Desativar som das notificações"
+                      : "Ativar som das notificações"
+                  }
+                  title={
+                    somSininhoAtivo
+                      ? "Desativar som das notificações"
+                      : "Ativar som das notificações"
+                  }
+                >
+                  {somSininhoAtivo ? (
+                    <Bell size={18} strokeWidth={2.2} />
+                  ) : (
+                    <BellOff size={18} strokeWidth={2.2} />
+                  )}
+                </button>
 
-                <span className={styles.themeMenuBadge}>
-                  {somSininhoStatus}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className={`${styles.dropdownItem} ${styles.themeMenuButton}`}
-                onClick={alternarSomChat}
-                aria-pressed={somChatAtivo}
-                title={
-                  somChatAtivo
-                    ? "Desativar som das mensagens"
-                    : "Ativar som das mensagens"
-                }
-              >
-                <span className={styles.themeMenuMain}>
-                  <span className={styles.themeMenuIcon}>
-                    {somChatAtivo ? (
-                      <MessageCircle size={16} strokeWidth={2.2} />
-                    ) : (
-                      <MessageCircleOff size={16} strokeWidth={2.2} />
-                    )}
-                  </span>
-                  <span>Som do chat</span>
-                </span>
-
-                <span className={styles.themeMenuBadge}>
-                  {somChatStatus}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  className={`${styles.soundMenuButton} ${
+                    !somChatAtivo ? styles.soundMenuButtonMuted : ""
+                  }`}
+                  onClick={alternarSomChat}
+                  aria-pressed={somChatAtivo}
+                  aria-label={
+                    somChatAtivo
+                      ? "Desativar som das mensagens"
+                      : "Ativar som das mensagens"
+                  }
+                  title={
+                    somChatAtivo
+                      ? "Desativar som das mensagens"
+                      : "Ativar som das mensagens"
+                  }
+                >
+                  {somChatAtivo ? (
+                    <MessageCircle size={18} strokeWidth={2.2} />
+                  ) : (
+                    <MessageCircleOff size={18} strokeWidth={2.2} />
+                  )}
+                </button>
+              </div>
 
               <div className={styles.dropdownDivider} />
 
