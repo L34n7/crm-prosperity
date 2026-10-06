@@ -87,9 +87,44 @@ export async function tocarSomMensagemChat() {
 
   const agora = contexto.currentTime + 0.01;
 
-  criarTom(contexto, 659.25, agora, 0.18, 0.12);
-  criarTom(contexto, 880, agora + 0.105, 0.2, 0.115);
-  criarTom(contexto, 1174.66, agora + 0.225, 0.24, 0.105);
+  // Soft Duo: curto, limpo e discreto para mensagens frequentes.
+  criarTom(contexto, 698.46, agora, 0.13, 0.05, "sine");
+  criarTom(contexto, 880, agora + 0.075, 0.15, 0.045, "sine");
+}
+
+function criarNotaEncorpada(
+  contexto: AudioContext,
+  frequencia: number,
+  inicio: number,
+  duracao: number,
+  volume: number
+) {
+  const camadas: Array<[number, number]> = [
+    [0.5, 0.1],
+    [1, 1],
+    [2, 0.3],
+    [3, 0.1],
+  ];
+
+  const ecos: Array<[number, number]> = [
+    [0, 1],
+    [0.055, 0.22],
+    [0.11, 0.12],
+    [0.19, 0.06],
+  ];
+
+  ecos.forEach(([atraso, intensidadeEco]) => {
+    camadas.forEach(([multiplicador, intensidadeCamada]) => {
+      criarTom(
+        contexto,
+        frequencia * multiplicador,
+        inicio + atraso,
+        duracao,
+        volume * intensidadeCamada * intensidadeEco,
+        "sine"
+      );
+    });
+  });
 }
 
 export async function tocarSomNotificacaoSistema() {
@@ -98,14 +133,9 @@ export async function tocarSomNotificacaoSistema() {
 
   const agora = contexto.currentTime + 0.01;
 
-  // Campainha descendente, propositalmente diferente do som ascendente do chat.
-  criarTom(contexto, 523.25, agora, 0.34, 0.18, "sine");
-  criarTom(contexto, 1046.5, agora, 0.3, 0.075, "sine");
-
-  criarTom(contexto, 392, agora + 0.3, 0.42, 0.19, "sine");
-  criarTom(contexto, 784, agora + 0.3, 0.36, 0.08, "sine");
-
-  criarTom(contexto, 329.63, agora + 0.64, 0.28, 0.11, "triangle");
+  // Warm Premium: duas notas encorpadas, com a segunda sustentada e cauda longa.
+  criarNotaEncorpada(contexto, 523.25, agora, 0.34, 0.17);
+  criarNotaEncorpada(contexto, 659.25, agora + 0.3, 1.42, 0.19);
 }
 
 export async function tocarSomPadraoNotificacao() {
