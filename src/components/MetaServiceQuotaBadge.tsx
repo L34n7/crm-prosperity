@@ -364,19 +364,42 @@ export default function MetaServiceQuotaBadge() {
                   const custoMax = estimativaDraft
                     ? formatarMoeda(estimativaDraft.maximo)
                     : null;
+                  const statusConsumo =
+                    integracao.bloqueado_por_limite
+                      ? "Pausado"
+                      : integracao.percentual >= 85
+                        ? "Crítico"
+                        : integracao.percentual >= 50
+                          ? "Atenção"
+                          : "Normal";
+                  const statusConsumoClass =
+                    integracao.bloqueado_por_limite
+                      ? styles.itemStatusPaused
+                      : integracao.percentual >= 85
+                        ? styles.itemStatusCritical
+                        : integracao.percentual >= 50
+                          ? styles.itemStatusWarning
+                          : styles.itemStatusSafe;
 
                   return (
                     <div
                       key={integracao.id}
-                      className={`${styles.item} ${
+                      className={`${styles.item} ${statusConsumoClass} ${
+                        expandida ? styles.itemExpanded : ""
+                      } ${
                         integracao.bloqueado_por_limite
                           ? styles.itemBlocked
                           : ""
                       }`}
                     >
                       <div className={styles.itemTop}>
-                        <div>
-                          <strong>{integracao.numero || integracao.nome}</strong>
+                        <div className={styles.itemIdentity}>
+                          <div className={styles.itemNumberLine}>
+                            <strong>{integracao.numero || integracao.nome}</strong>
+                            <span className={styles.itemStatus}>
+                              {statusConsumo}
+                            </span>
+                          </div>
                           <span>{integracao.nome}</span>
                         </div>
                         <div className={styles.itemValue}>
