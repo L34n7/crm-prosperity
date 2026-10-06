@@ -522,8 +522,13 @@
 }
 
 :global(html[data-theme="dark"]) .modal {
-  border-color: rgba(86, 125, 115, .45);
-  background: radial-gradient(circle at 92% 0%, rgba(32, 151, 116, .18), transparent 34%), #10231f;
+  border-color: rgba(81, 135, 122, .48);
+  background:
+    radial-gradient(circle at 92% 0%, rgba(24, 136, 105, .16), transparent 32%),
+    #071814;
+  box-shadow:
+    0 28px 70px rgba(0, 0, 0, .46),
+    inset 0 1px 0 rgba(137, 214, 193, .04);
 }
 
 :global(html[data-theme="dark"]) .badge:not(.badgeWarning):not(.badgeCritical) {
@@ -570,17 +575,38 @@
 :global(html[data-theme="dark"]) .itemTop strong { color: #e2f3ee; }
 :global(html[data-theme="dark"]) .hero p,
 :global(html[data-theme="dark"]) .footerNote { color: #91aaa3; }
-:global(html[data-theme="dark"]) .totalCard,
-:global(html[data-theme="dark"]) .item,
+:global(html[data-theme="dark"]) .totalCard {
+  border-color: #3b675d;
+  background: linear-gradient(145deg, #173a33, #123129);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, .18),
+    inset 0 1px 0 rgba(168, 226, 210, .05);
+}
+
+:global(html[data-theme="dark"]) .item {
+  border-color: #34574f;
+  background: linear-gradient(180deg, #102d27, #0e2924);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, .16),
+    inset 0 1px 0 rgba(167, 226, 209, .035);
+}
+
+:global(html[data-theme="dark"]) .itemExpanded {
+  border-color: #4b8174;
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, .22),
+    0 0 0 1px rgba(65, 186, 153, .08);
+}
+
 :global(html[data-theme="dark"]) .footerNote {
-  border-color: #29463f;
-  background: rgba(18, 47, 40, .82);
+  border: 1px solid #294a42;
+  background: #0c2520;
 }
 
 :global(html[data-theme="dark"]) .itemMeta > span {
-  border-color: #2d4a43;
-  background: rgba(24, 55, 48, .86);
-  color: #9cb0aa;
+  border-color: #365950;
+  background: #183a33;
+  color: #b0c4be;
 }
 
 :global(html[data-theme="dark"]) .itemNumberLine .itemStatus {
@@ -605,6 +631,16 @@
   border-color: rgba(251, 146, 60, .38);
   background: rgba(87, 52, 19, .38);
   color: #fdba74;
+}
+
+:global(html[data-theme="dark"]) .totalProgress,
+:global(html[data-theme="dark"]) .itemProgress {
+  background: #29473f;
+}
+
+:global(html[data-theme="dark"]) .totalCard > div > span,
+:global(html[data-theme="dark"]) .itemTop > div > span {
+  color: #9fb5af;
 }
 
 @media (max-width: 1268px) {
@@ -1245,8 +1281,17 @@
 :global(html[data-theme="dark"]) .configPanel,
 :global(html[data-theme="dark"]) .expandButton,
 :global(html[data-theme="dark"]) .estimateCard > div {
-  border-color: #315047;
-  background: rgba(19, 48, 41, .76);
+  border-color: #2d4e46;
+  background: #0a211d;
+}
+
+:global(html[data-theme="dark"]) .expandButton {
+  color: #c4ddd6;
+}
+
+:global(html[data-theme="dark"]) .expandButton:hover {
+  border-color: #47766a;
+  background: #102b25;
 }
 
 :global(html[data-theme="dark"]) .protectionBlocked {
@@ -1264,11 +1309,12 @@
 :global(html[data-theme="dark"]) .toggleRow small,
 :global(html[data-theme="dark"]) .configInfo,
 :global(html[data-theme="dark"]) .estimateNote {
-  color: #99aea8;
+  color: #a8bdb7;
 }
 
 :global(html[data-theme="dark"]) .configInfo {
-  background: rgba(28, 60, 52, .8);
+  border-color: #315047;
+  background: #13322c;
 }
 
 :global(html[data-theme="dark"]) .noExtraNote {
