@@ -21,18 +21,6 @@
       "schedule": "15 3 * * *"
     },
     {
-      "path": "/api/cron/expirar_conversas",
-      "schedule": "30 3 * * *"
-    },
-    {
-      "path": "/api/cron/rotinas_integracoes_eventos",
-      "schedule": "45 3 * * *"
-    },
-    {
-      "path": "/api/cron/agenda_automacoes",
-      "schedule": "0 4 * * *"
-    },
-    {
       "path": "/api/cron/checkout-pagamentos",
       "schedule": "*/30 * * * *"
     },

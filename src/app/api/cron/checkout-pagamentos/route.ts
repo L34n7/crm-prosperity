@@ -1,8 +1,6 @@
 import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
-import { processarCheckoutPagamentosExpirados } from "@/lib/automacoes/process-automation-engine-checkout-runtime";
-import { processarRecuperacoesCheckoutPendentes } from "@/lib/automacoes/process-automation-engine-checkout-recovery";
 import { processarReconciliacoesCheckoutPendentes } from "@/lib/automacoes/process-automation-engine-checkout-reconciliation";
 
 export const runtime = "nodejs";
@@ -25,15 +23,13 @@ export async function GET(request: Request) {
       return respostaContingenciaSupabase("checkout-pagamentos");
     }
 
+    // Webhooks tratam pagamentos em tempo real. Recuperação e expiração são
+    // tarefas QStash agendadas. O cron fica somente como reconciliação segura.
     const reconciliacoes = await processarReconciliacoesCheckoutPendentes(limite);
-    const recuperacoes = await processarRecuperacoesCheckoutPendentes(limite);
-    const expiracoes = await processarCheckoutPagamentosExpirados(limite);
 
     return NextResponse.json({
       ok: true,
       reconciliacoes,
-      recuperacoes,
-      expiracoes,
     });
   } catch (error) {
     console.error("[CRON CHECKOUT] Erro:", error);

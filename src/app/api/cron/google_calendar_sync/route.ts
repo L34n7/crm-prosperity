@@ -1,14 +1,10 @@
 import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { NextResponse } from "next/server";
-import {
-  processarFilaGoogleCalendar,
-  processarIntegracoesPendentesGoogleCalendar,
-  renovarCanaisGoogleCalendar,
-} from "@/lib/agendas/google-calendar";
+import { renovarCanaisGoogleCalendar } from "@/lib/agendas/google-calendar";
 
 function limite(request: Request) {
-  const valor = Number(new URL(request.url).searchParams.get("limit") || 30);
-  if (!Number.isFinite(valor)) return 30;
+  const valor = Number(new URL(request.url).searchParams.get("limit") || 20);
+  if (!Number.isFinite(valor)) return 20;
   return Math.min(Math.max(Math.floor(valor), 1), 100);
 }
 
@@ -30,27 +26,12 @@ export async function GET(request: Request) {
       return respostaContingenciaSupabase("google_calendar_sync");
     }
 
-    const valorLimite = limite(request);
-    const notificacoes = await processarIntegracoesPendentesGoogleCalendar(
-      Math.min(valorLimite, 20)
-    );
-    const itens = await processarFilaGoogleCalendar(valorLimite);
-    const canais = await renovarCanaisGoogleCalendar(20);
+    // A fila CRM -> Google e as notificações Google -> CRM são processadas
+    // por evento/QStash. Este cron diário existe apenas para renovar canais.
+    const canais = await renovarCanaisGoogleCalendar(limite(request));
 
     return NextResponse.json({
       ok: true,
-      fila: {
-        processados: itens.length,
-        sucesso: itens.filter((item: Record<string, unknown>) => item.ok).length,
-        falhas: itens.filter((item: Record<string, unknown>) => !item.ok).length,
-        itens,
-      },
-      notificacoes: {
-        processados: notificacoes.length,
-        sucesso: notificacoes.filter((item: Record<string, unknown>) => item.ok).length,
-        falhas: notificacoes.filter((item: Record<string, unknown>) => !item.ok).length,
-        itens: notificacoes,
-      },
       canais: {
         processados: canais.length,
         sucesso: canais.filter((item: Record<string, unknown>) => item.ok).length,
@@ -67,7 +48,7 @@ export async function GET(request: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "Erro ao processar sincronização do Google Calendar.",
+            : "Erro ao renovar canais do Google Calendar.",
       },
       { status: 500 }
     );
