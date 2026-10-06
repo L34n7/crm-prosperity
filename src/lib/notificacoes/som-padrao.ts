@@ -51,11 +51,11 @@ function criarTom(
   const oscilador = contexto.createOscillator();
   const ganho = contexto.createGain();
 
-  oscilador.type = "sine";
+  oscilador.type = "triangle";
   oscilador.frequency.setValueAtTime(frequencia, inicio);
 
   ganho.gain.setValueAtTime(0.0001, inicio);
-  ganho.gain.exponentialRampToValueAtTime(volume, inicio + 0.018);
+  ganho.gain.exponentialRampToValueAtTime(volume, inicio + 0.012);
   ganho.gain.exponentialRampToValueAtTime(
     0.0001,
     inicio + duracao
@@ -79,6 +79,7 @@ export async function tocarSomPadraoNotificacao() {
 
   const agora = contexto.currentTime + 0.01;
 
-  criarTom(contexto, 784, agora, 0.16, 0.075);
-  criarTom(contexto, 1046.5, agora + 0.105, 0.2, 0.065);
+  criarTom(contexto, 659.25, agora, 0.18, 0.12);
+  criarTom(contexto, 880, agora + 0.105, 0.2, 0.115);
+  criarTom(contexto, 1174.66, agora + 0.225, 0.24, 0.105);
 }
