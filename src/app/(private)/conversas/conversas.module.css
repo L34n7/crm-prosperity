@@ -1246,21 +1246,9 @@
 }
 
 .messageBubbleIa {
-  background: color-mix(
-    in srgb,
-    var(--crm-primary-soft) 72%,
-    var(--crm-surface)
-  );
+  background: var(--messageBubbleIncoming);
   color: var(--crm-text-strong);
-  border: 1px solid color-mix(
-    in srgb,
-    var(--crm-primary-strong) 20%,
-    var(--crm-border)
-  );
   border-top-right-radius: 4px;
-  box-shadow:
-    inset -3px 0 0 var(--crm-primary-strong),
-    0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
 }
 
 .messageBubbleAutomatic {
@@ -1289,8 +1277,8 @@
 }
 
 .iaSenderLabel {
-  color: var(--crm-primary-strong);
-  font-weight: 800;
+  color: var(--crm-text);
+  font-weight: 700;
 }
 
 .automaticBadge {

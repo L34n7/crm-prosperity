@@ -8249,16 +8249,17 @@ const templateFooterTexto = useMemo(() => {
                                             <div className={styles.messageMetaTop}>
                                               {isDisparo ? (
                                                 <>
+                                                  <span className={styles.disparoModeBadge}>
+                                                    {disparoModo}
+                                                  </span>
                                                   <span
                                                     className={[
                                                       styles.senderLabel,
                                                       styles.disparoSenderLabel,
+                                                      styles.senderLabelOutgoing,
                                                     ].join(" ")}
                                                   >
                                                     Disparo
-                                                  </span>
-                                                  <span className={styles.disparoModeBadge}>
-                                                    {disparoModo}
                                                   </span>
                                                 </>
                                               ) : (
