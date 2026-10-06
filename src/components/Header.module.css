@@ -57,7 +57,7 @@
 
 .tokensBadge {
   position: relative;
-  height: 34px;
+  height: 38px;
   padding: 0 10px;
   margin-right: 0;
   border: 1px solid var(--tokensBadgeBorder);
@@ -2239,8 +2239,8 @@
   }
 
   .tokensBadge {
-    height: 34px;
-    max-width: 118px;
+    height: 38px;
+    max-width: 126px;
     padding: 0 9px;
     border-radius: 999px;
   }
@@ -2495,8 +2495,8 @@
   }
 
   .tokensBadge {
-    height: 34px;
-    max-width: 118px;
+    height: 38px;
+    max-width: 126px;
     padding: 0 9px;
     border-radius: 999px;
   }

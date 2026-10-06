@@ -1,27 +1,36 @@
 .badge {
   position: relative;
-  height: 34px;
-  max-width: 150px;
-  padding: 0 10px;
+  height: 38px;
+  max-width: 160px;
+  padding: 0 10px 4px;
   margin-right: 0;
-  border: 1px solid var(--tokensBadgeBorder);
+  border: 1px solid rgba(20, 184, 135, .34);
   border-radius: 10px;
-  background: var(--tokensBadge);
-  color: var(--tokensBadgeColor);
+  background: linear-gradient(
+    145deg,
+    rgba(236, 249, 245, .98),
+    rgba(225, 245, 239, .98)
+  );
+  color: var(--crm-text-strong);
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
-  box-shadow: inset 0 1px 0 var(--tokensBadgebox-shadow);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75);
   cursor: pointer;
+  overflow: hidden;
   transition: border-color .2s ease, background .2s ease;
 }
 
 .badge:hover {
-  background: var(--tokensBadgeHover);
-  border-color: var(--tokensBadgeBorderhover);
+  background: linear-gradient(
+    145deg,
+    rgba(230, 248, 242, 1),
+    rgba(215, 241, 233, 1)
+  );
+  border-color: rgba(20, 184, 135, .5);
 }
 
 .badgeWarning {
@@ -57,16 +66,16 @@
 }
 
 .label {
-  color: var(--crm-primary-strong);
+  color: #0f8f6d;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .copy strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--crm-text-strong);
+  color: #173d35;
   font-size: 12px;
   font-weight: 800;
 }
@@ -75,6 +84,32 @@
   margin: 0 3px;
   color: var(--crm-text-muted);
   font-weight: 650;
+}
+
+.progress {
+  position: absolute;
+  right: 9px;
+  bottom: 3px;
+  left: 9px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 143, 109, .12);
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f8f6d, #45c9a3);
+}
+
+.badgeWarning .progress > span {
+  background: linear-gradient(90deg, #d97706, #f5ad3d);
+}
+
+.badgeCritical .progress > span {
+  background: linear-gradient(90deg, #dc2626, #f87171);
 }
 
 .badgeWarning .label,
@@ -532,9 +567,9 @@
 
 @media (max-width: 1268px) {
   .badge {
-    height: 34px;
-    max-width: 118px;
-    padding: 0 9px;
+    height: 38px;
+    max-width: 126px;
+    padding: 0 9px 4px;
     border-radius: 999px;
   }
 
@@ -600,15 +635,15 @@
 
   .hero p {
     margin-top: 5px;
-    font-size: 12px;
-    line-height: 1.42;
+    font-size: 14px;
+    line-height: 1.45;
   }
 
   .heroContinuation {
     margin-top: 6px !important;
     padding: 8px 9px;
-    font-size: 11px !important;
-    line-height: 1.4 !important;
+    font-size: 12px !important;
+    line-height: 1.42 !important;
   }
 
   .totalCard {
@@ -619,12 +654,12 @@
   }
 
   .totalCard span {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .totalCard strong {
     margin-top: 2px;
-    font-size: 15px;
+    font-size: 17px;
   }
 
   .totalProgress {
@@ -653,22 +688,22 @@
   }
 
   .itemTop strong {
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .itemTop span,
   .itemValue span {
     margin-top: 2px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .itemNumberLine .itemStatus {
     padding: 3px 6px;
-    font-size: 8px;
+    font-size: 10px;
   }
 
   .itemValue strong {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .itemProgress {
@@ -683,10 +718,10 @@
 
   .itemMeta > span {
     width: fit-content;
-    min-height: 20px;
-    padding: 3px 6px;
+    min-height: 22px;
+    padding: 3px 7px;
     border-radius: 7px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .protectionStatus {
@@ -704,12 +739,12 @@
   }
 
   .protectionStatus strong {
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .protectionStatus span:not(.protectionIcon) {
-    font-size: 10px;
-    line-height: 1.35;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .expandButton {
@@ -721,7 +756,7 @@
 
   .expandButton > span {
     gap: 6px;
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .expandButton svg {
@@ -741,12 +776,12 @@
   }
 
   .toggleRow strong {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .toggleRow small {
-    font-size: 10px;
-    line-height: 1.35;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .switch {
@@ -771,8 +806,8 @@
   .immediateWarning {
     padding: 8px 9px;
     border-radius: 9px;
-    font-size: 10px;
-    line-height: 1.4;
+    font-size: 12px;
+    line-height: 1.42;
   }
 
   .limitEditor {
@@ -794,37 +829,37 @@
   }
 
   .estimateCard span {
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .estimateCard strong {
     margin-top: 3px;
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .estimateNote {
-    font-size: 9px;
-    line-height: 1.35;
+    font-size: 11px;
+    line-height: 1.4;
   }
 
   .saveButton {
-    min-height: 38px;
-    font-size: 11px;
+    min-height: 40px;
+    font-size: 13px;
   }
 
   .footerNote {
     margin-top: 9px;
     padding: 9px 10px;
     border-radius: 10px;
-    font-size: 10px;
-    line-height: 1.4;
+    font-size: 12px;
+    line-height: 1.45;
   }
 
   .primary {
     margin-top: 9px;
     padding: 10px 14px;
     border-radius: 10px;
-    font-size: 12px;
+    font-size: 14px;
   }
 }
 

@@ -250,6 +250,10 @@ export default function MetaServiceQuotaBadge() {
             {formatar(franquiaServiceMeta.total_limite)}
           </strong>
         </span>
+
+        <span className={styles.progress} aria-hidden="true">
+          <span style={{ width: `${percentualGeral}%` }} />
+        </span>
       </button>
 
       {mounted &&
