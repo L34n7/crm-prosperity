@@ -184,7 +184,92 @@ async function converterAudioWebmParaM4a(file: File): Promise<File> {
   });
 }
 
-async function prepararArquivoParaUpload(file: File): Promise<File> {
+async function converterAudioParaOggOpus(file: File): Promise<File> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crm-voice-"));
+  const extensaoEntrada = path.extname(file.name || "").toLowerCase() || ".bin";
+  const inputPath = path.join(tmpDir, `input${extensaoEntrada}`);
+  const outputPath = path.join(tmpDir, "voice.ogg");
+
+  try {
+    await fs.writeFile(inputPath, buffer);
+
+    await new Promise<void>(async (resolve, reject) => {
+      let ffmpegBinaryPath = "";
+
+      try {
+        ffmpegBinaryPath = await getFfmpegBinaryPath();
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      const ffmpeg = spawn(ffmpegBinaryPath, [
+        "-i",
+        inputPath,
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "48000",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "48k",
+        "-application",
+        "voip",
+        "-f",
+        "ogg",
+        "-y",
+        outputPath,
+      ]);
+
+      let stderr = "";
+
+      ffmpeg.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      ffmpeg.on("error", (error) => {
+        reject(error);
+      });
+
+      ffmpeg.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+
+        reject(
+          new Error(
+            `Falha ao converter mensagem de voz para OGG/Opus. Código: ${code}. Detalhes: ${stderr}`
+          )
+        );
+      });
+    });
+
+    const convertidoBuffer = await fs.readFile(outputPath);
+
+    return new File(
+      [convertidoBuffer],
+      `voice-${Date.now()}.ogg`,
+      {
+        type: "audio/ogg; codecs=opus",
+      }
+    );
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function prepararArquivoParaUpload(
+  file: File,
+  enviarComoMensagemVoz = false
+): Promise<File> {
+  if (enviarComoMensagemVoz) {
+    return await converterAudioParaOggOpus(file);
+  }
+
   if (file.type === "audio/webm" || file.name.toLowerCase().endsWith(".webm")) {
     return await converterAudioWebmParaM4a(file);
   }
@@ -223,6 +308,8 @@ export async function POST(request: Request) {
 
     const conversaId = String(formData.get("conversa_id") || "");
     const legenda = String(formData.get("caption") || "").trim();
+    const enviarComoMensagemVoz =
+      String(formData.get("voice") || "").trim().toLowerCase() === "true";
     const file = formData.get("file");
 
     if (!conversaId) {
@@ -239,7 +326,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const arquivoPreparado = await prepararArquivoParaUpload(file);
+    if (
+      enviarComoMensagemVoz &&
+      !file.type.toLowerCase().startsWith("audio/")
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Mensagem de voz precisa ser um arquivo de áudio" },
+        { status: 400 }
+      );
+    }
+
+    const arquivoPreparado = await prepararArquivoParaUpload(
+      file,
+      enviarComoMensagemVoz
+    );
 
     console.log("[MEDIA] arquivo original:", {
       nome: file.name,
@@ -255,6 +355,13 @@ export async function POST(request: Request) {
 
     const mimeType = arquivoPreparado.type || "application/octet-stream";
     const tipoMensagem = detectarTipoMensagemPorMime(mimeType);
+
+    if (enviarComoMensagemVoz && tipoMensagem !== "audio") {
+      return NextResponse.json(
+        { ok: false, error: "Não foi possível preparar a mensagem de voz" },
+        { status: 400 }
+      );
+    }
 
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
@@ -444,9 +551,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const conteudoFinal = legendaFinal
-      ? legendaFinal
-      : getConteudoPadrao(tipoMensagem, arquivoPreparado.name);
+    const conteudoFinal = enviarComoMensagemVoz
+      ? "🎙️ Mensagem de voz"
+      : legendaFinal
+        ? legendaFinal
+        : getConteudoPadrao(tipoMensagem, arquivoPreparado.name);
 
     const metadataJson = {
       tipo_original_whatsapp:
@@ -471,7 +580,7 @@ export async function POST(request: Request) {
           : null,
       filename: arquivoPreparado.name || null,
       url: null,
-      voice: false,
+      voice: enviarComoMensagemVoz && tipoMensagem === "audio",
       contacts: null,
       location: null,
       unsupported: null,

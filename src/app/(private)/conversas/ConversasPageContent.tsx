@@ -738,6 +738,8 @@ export default function ConversasPageContent() {
   const [legendaArquivo, setLegendaArquivo] = useState("");
   const [gravandoAudio, setGravandoAudio] = useState(false);
   const [duracaoGravacao, setDuracaoGravacao] = useState(0);
+  const [arquivoEnvioEhMensagemVoz, setArquivoEnvioEhMensagemVoz] =
+    useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -2031,6 +2033,7 @@ export default function ConversasPageContent() {
 
       setArquivoEnvio(null);
       setArquivoEnvioPreviewUrl(null);
+      setArquivoEnvioEhMensagemVoz(false);
       setLegendaArquivo("");
       setConteudo("");
       if (editorRef.current) {
@@ -2074,11 +2077,21 @@ export default function ConversasPageContent() {
           type: tipoFinal,
         });
 
-        const arquivo = new File([blob], `audio-${Date.now()}.webm`, {
-          type: tipoFinal,
-        });
+        const extensao =
+          tipoFinal.includes("ogg")
+            ? "ogg"
+            : tipoFinal.includes("mp4")
+              ? "m4a"
+              : "webm";
+        const arquivo = new File(
+          [blob],
+          `audio-${Date.now()}.${extensao}`,
+          {
+            type: tipoFinal,
+          }
+        );
 
-        selecionarArquivo(arquivo);
+        selecionarArquivo(arquivo, null, true);
 
         if (mediaStreamRef.current) {
           mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -2208,7 +2221,8 @@ export default function ConversasPageContent() {
 
   function selecionarArquivo(
     file: File | null,
-    input?: HTMLInputElement | null
+    input?: HTMLInputElement | null,
+    mensagemVozGravada = false
   ) {
     if (file && !podeEnviarMidia) {
       setErro("Você não tem permissão para enviar mídias e arquivos.");
@@ -2223,6 +2237,7 @@ export default function ConversasPageContent() {
     if (!file) {
       setArquivoEnvio(null);
       setArquivoEnvioPreviewUrl(null);
+      setArquivoEnvioEhMensagemVoz(false);
 
       if (input) input.value = "";
       return;
@@ -2230,6 +2245,9 @@ export default function ConversasPageContent() {
 
     const previewUrl = URL.createObjectURL(file);
 
+    setArquivoEnvioEhMensagemVoz(
+      mensagemVozGravada && file.type.startsWith("audio/")
+    );
     setArquivoEnvio(file);
     setArquivoEnvioPreviewUrl(previewUrl);
     setConteudo("");
@@ -5015,6 +5033,10 @@ async function baixarConversaPDF() {
       formData.append("conversa_id", conversaSelecionada.id);
       formData.append("file", arquivo);
 
+      if (arquivoEnvioEhMensagemVoz && arquivo.type.startsWith("audio/")) {
+        formData.append("voice", "true");
+      }
+
       const legendaAtual = legendaArquivoRef.current.trim();
 
       if (legendaAtual) {
@@ -5039,6 +5061,7 @@ async function baixarConversaPDF() {
 
       setArquivoEnvio(null);
       setArquivoEnvioPreviewUrl(null);
+      setArquivoEnvioEhMensagemVoz(false);
       setLegendaArquivo("");
       legendaArquivoRef.current = "";
       if (legendaEditorRef.current) {
@@ -6986,6 +7009,7 @@ const templateFooterTexto = useMemo(() => {
 
     setArquivoEnvio(null);
     setArquivoEnvioPreviewUrl(null);
+    setArquivoEnvioEhMensagemVoz(false);
     setLegendaArquivo("");
     legendaArquivoRef.current = "";
     setConteudo("");
@@ -8525,6 +8549,7 @@ const templateFooterTexto = useMemo(() => {
 
                                     setArquivoEnvio(null);
                                     setArquivoEnvioPreviewUrl(null);
+                                    setArquivoEnvioEhMensagemVoz(false);
                                     setLegendaArquivo("");
                                     legendaArquivoRef.current = "";
                                     if (legendaEditorRef.current) {
@@ -9301,6 +9326,7 @@ const templateFooterTexto = useMemo(() => {
                                       }
                                       setArquivoEnvio(null);
                                       setArquivoEnvioPreviewUrl(null);
+                                      setArquivoEnvioEhMensagemVoz(false);
                                       setLegendaArquivo("");
                                       legendaArquivoRef.current = "";
                                       setConteudo("");
