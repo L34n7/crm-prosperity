@@ -46,12 +46,13 @@ function criarTom(
   frequencia: number,
   inicio: number,
   duracao: number,
-  volume: number
+  volume: number,
+  tipo: OscillatorType = "triangle"
 ) {
   const oscilador = contexto.createOscillator();
   const ganho = contexto.createGain();
 
-  oscilador.type = "triangle";
+  oscilador.type = tipo;
   oscilador.frequency.setValueAtTime(frequencia, inicio);
 
   ganho.gain.setValueAtTime(0.0001, inicio);
@@ -68,18 +69,42 @@ function criarTom(
   oscilador.stop(inicio + duracao + 0.025);
 }
 
-export async function tocarSomPadraoNotificacao() {
+async function prepararContextoParaSom() {
   const contexto = obterContextoAudio();
-  if (!contexto) return;
+  if (!contexto) return null;
 
   if (!somHabilitado || contexto.state !== "running") {
     const habilitado = await habilitarSomPadraoNotificacao();
-    if (!habilitado) return;
+    if (!habilitado) return null;
   }
+
+  return contexto;
+}
+
+export async function tocarSomMensagemChat() {
+  const contexto = await prepararContextoParaSom();
+  if (!contexto) return;
 
   const agora = contexto.currentTime + 0.01;
 
   criarTom(contexto, 659.25, agora, 0.18, 0.12);
   criarTom(contexto, 880, agora + 0.105, 0.2, 0.115);
   criarTom(contexto, 1174.66, agora + 0.225, 0.24, 0.105);
+}
+
+export async function tocarSomNotificacaoSistema() {
+  const contexto = await prepararContextoParaSom();
+  if (!contexto) return;
+
+  const agora = contexto.currentTime + 0.01;
+
+  criarTom(contexto, 880, agora, 0.2, 0.15, "sine");
+  criarTom(contexto, 1320, agora, 0.22, 0.08, "triangle");
+  criarTom(contexto, 1046.5, agora + 0.17, 0.24, 0.145, "triangle");
+  criarTom(contexto, 1568, agora + 0.17, 0.24, 0.075, "sine");
+  criarTom(contexto, 1318.51, agora + 0.39, 0.3, 0.13, "triangle");
+}
+
+export async function tocarSomPadraoNotificacao() {
+  await tocarSomMensagemChat();
 }

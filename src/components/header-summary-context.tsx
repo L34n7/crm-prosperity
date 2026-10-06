@@ -20,7 +20,8 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import {
   habilitarSomPadraoNotificacao,
-  tocarSomPadraoNotificacao,
+  tocarSomMensagemChat,
+  tocarSomNotificacaoSistema,
 } from "@/lib/notificacoes/som-padrao";
 
 export type HeaderSummaryNotificacao = {
@@ -196,6 +197,40 @@ function eventoMensagemContaComoNaoLida(valor: unknown) {
   };
 
   return row.origem === "recebida" || row.remetente_tipo === "contato";
+}
+
+function getConversaAbertaNoNavegador() {
+  if (typeof window === "undefined") return null;
+
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (pathname !== "/conversas") return null;
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get("id") || params.get("conversaId");
+}
+
+function deveTocarSomParaMensagemRecebida(valor: unknown) {
+  if (!eventoMensagemContaComoNaoLida(valor)) return false;
+  if (!valor || typeof valor !== "object") return false;
+
+  const row = valor as {
+    conversa_id?: unknown;
+  };
+
+  const conversaId =
+    typeof row.conversa_id === "string" ? row.conversa_id : null;
+
+  if (!conversaId) return true;
+
+  const conversaAberta = getConversaAbertaNoNavegador();
+  const paginaVisivel = document.visibilityState === "visible";
+  const janelaFocada =
+    typeof document.hasFocus === "function" ? document.hasFocus() : true;
+
+  const conversaEstaAbertaEFocada =
+    paginaVisivel && janelaFocada && conversaAberta === conversaId;
+
+  return !conversaEstaAbertaEFocada;
 }
 
 function eventoAgendamentoContaComoDisparo(valor: unknown) {
@@ -460,8 +495,6 @@ export function HeaderSummaryProvider({
     new?: unknown;
     old?: unknown;
   }) => {
-    if (document.visibilityState !== "visible") return;
-
     const notificacao = normalizarNotificacaoRealtime(payload.new);
     if (!notificacao) return;
 
@@ -474,7 +507,7 @@ export function HeaderSummaryProvider({
       !notificacao.lida &&
       !jaExistia
     ) {
-      void tocarSomPadraoNotificacao();
+      void tocarSomNotificacaoSistema();
     }
 
     const mapa = new Map<string, HeaderSummaryNotificacao>();
@@ -634,6 +667,10 @@ export function HeaderSummaryProvider({
         (payload) => {
           if (eventoMensagemContaComoNaoLida(payload.new)) {
             agendarAtualizacaoConversasNaoLidas();
+
+            if (deveTocarSomParaMensagemRecebida(payload.new)) {
+              void tocarSomMensagemChat();
+            }
           }
         }
       )
