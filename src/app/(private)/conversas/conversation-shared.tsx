@@ -1091,9 +1091,23 @@ export function mensagemEhDisparo(msg: Mensagem) {
   );
 }
 
+export function obterBotoesDisparo(msg: Mensagem) {
+  const botoesMetadata = msg.metadata_json?.botoes;
+
+  if (Array.isArray(botoesMetadata) && botoesMetadata.length > 0) {
+    return botoesMetadata;
+  }
+
+  return obterApresentacaoDisparo(msg).botoes.map((titulo, index) => ({
+    id: `resposta-rapida-${index + 1}`,
+    titulo,
+    url: null,
+    tipo: "quick_reply",
+  }));
+}
+
 export function mensagemDisparoTemBotoes(msg: Mensagem) {
-  const metadata = getMensagemMetadataDisparo(msg);
-  return Array.isArray(metadata.botoes) && metadata.botoes.length > 0;
+  return obterBotoesDisparo(msg).length > 0;
 }
 
 export function getModoDisparo(msg: Mensagem) {
@@ -1148,15 +1162,37 @@ export function obterApresentacaoDisparo(msg: Mensagem) {
   const conteudoComRodape = primeiroBlocoPareceTitulo
     ? blocos.slice(1).join("\n\n")
     : texto;
-  const rodapeMatch = conteudoComRodape.match(
+
+  const respostasRapidasMatch = conteudoComRodape.match(
+    /(?:^|\n)\s*Respostas\s+r[aá]pidas\s*:\s*([\s\S]*)$/i
+  );
+  const respostasRapidasIndice =
+    typeof respostasRapidasMatch?.index === "number"
+      ? respostasRapidasMatch.index
+      : conteudoComRodape.length;
+  const botoes = respostasRapidasMatch
+    ? String(respostasRapidasMatch[1] || "")
+        .split(/\n+/)
+        .map((linha) =>
+          linha
+            .replace(/^\s*(?:\d+\s*[.)-]?|[-•])\s*/, "")
+            .trim()
+        )
+        .filter(Boolean)
+    : [];
+  const conteudoSemRespostasRapidas = respostasRapidasMatch
+    ? conteudoComRodape.slice(0, respostasRapidasIndice).trimEnd()
+    : conteudoComRodape;
+
+  const rodapeMatch = conteudoSemRespostasRapidas.match(
     /(?:^|\n)\s*Footer:\s*([\s\S]+?)\s*$/i
   );
   const rodape = rodapeMatch?.[1]?.trim() || "";
   const conteudo = rodapeMatch
-    ? conteudoComRodape.slice(0, rodapeMatch.index).trimEnd()
-    : conteudoComRodape;
+    ? conteudoSemRespostasRapidas.slice(0, rodapeMatch.index).trimEnd()
+    : conteudoSemRespostasRapidas;
 
-  return { titulo, conteudo, rodape };
+  return { titulo, conteudo, rodape, botoes };
 }
 
 export function getStatusEnvioLabel(status: Mensagem["status_envio"]) {

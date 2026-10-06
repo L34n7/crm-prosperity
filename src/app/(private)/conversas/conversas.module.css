@@ -8019,11 +8019,15 @@ a.buttonMessageOption:hover {
   margin: 0;
   padding-top: 2px;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.disparoMessageContent .buttonMessageOptions {
+  margin-top: 0;
 }
 
 

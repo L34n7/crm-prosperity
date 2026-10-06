@@ -71,7 +71,7 @@ import {
   getCategoriaLeadProtocoloLabel,
   getRemetenteLabel,
   mensagemEhDisparo,
-  mensagemDisparoTemBotoes,
+  obterBotoesDisparo,
   getModoDisparo,
   obterApresentacaoDisparo,
   getStatusEnvioLabel,
@@ -1475,6 +1475,9 @@ export default function ConversasPageContent() {
 
   function renderizarConteudoMensagem(msg: Mensagem) {
     const flowResponse = getWhatsAppFlowResponsePresentation(msg.metadata_json);
+    const ehDisparo = mensagemEhDisparo(msg);
+    const botoesDisparo = ehDisparo ? obterBotoesDisparo(msg) : [];
+    let tituloDisparoComBotoes = "";
     let rodapeDisparoComBotoes = "";
 
     if (flowResponse) {
@@ -1513,9 +1516,7 @@ export default function ConversasPageContent() {
       );
     }
 
-    if (
-      mensagemEhDisparo(msg) && !mensagemDisparoTemBotoes(msg)
-    ) {
+    if (ehDisparo && botoesDisparo.length === 0) {
       const disparo = obterApresentacaoDisparo(msg);
 
       return (
@@ -1539,14 +1540,13 @@ export default function ConversasPageContent() {
       );
     }
 
-    if (mensagemEhDisparo(msg) && mensagemDisparoTemBotoes(msg)) {
+    if (ehDisparo && botoesDisparo.length > 0) {
       const disparo = obterApresentacaoDisparo(msg);
+      tituloDisparoComBotoes = disparo.titulo;
       rodapeDisparoComBotoes = disparo.rodape;
       msg = {
         ...msg,
-        conteudo: [disparo.titulo, disparo.conteudo]
-          .filter(Boolean)
-          .join("\n\n"),
+        conteudo: disparo.conteudo,
       };
     }
 
@@ -1903,14 +1903,35 @@ export default function ConversasPageContent() {
       );
     }
 
-    if (msg.tipo_mensagem === "botao") {
-      const botoes = msg.metadata_json?.botoes || [];
+    if (msg.tipo_mensagem === "botao" || botoesDisparo.length > 0) {
+      const botoes =
+        botoesDisparo.length > 0
+          ? botoesDisparo
+          : msg.metadata_json?.botoes || [];
 
       return (
-        <div>
-          <p className={styles.messageText}>
-            <TextoComEmoji texto={msg.conteudo} />
-          </p>
+        <div
+          className={
+            botoesDisparo.length > 0 ? styles.disparoMessageContent : undefined
+          }
+        >
+          {tituloDisparoComBotoes ? (
+            <strong className={styles.disparoMessageTitle}>
+              <TextoComEmoji texto={tituloDisparoComBotoes} />
+            </strong>
+          ) : null}
+
+          {msg.conteudo ? (
+            <p className={styles.messageText}>
+              <TextoComEmoji texto={msg.conteudo} />
+            </p>
+          ) : null}
+
+          {rodapeDisparoComBotoes ? (
+            <p className={styles.disparoMessageFooter}>
+              <TextoComEmoji texto={rodapeDisparoComBotoes} />
+            </p>
+          ) : null}
 
           {botoes.length > 0 && (
             <div className={styles.buttonMessageOptions}>
@@ -1939,12 +1960,6 @@ export default function ConversasPageContent() {
               })}
             </div>
           )}
-
-          {rodapeDisparoComBotoes ? (
-            <p className={styles.disparoMessageFooter}>
-              <TextoComEmoji texto={rodapeDisparoComBotoes} />
-            </p>
-          ) : null}
         </div>
       );
     }
