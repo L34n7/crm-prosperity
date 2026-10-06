@@ -8204,6 +8204,7 @@ const templateFooterTexto = useMemo(() => {
                                 const isOutgoing =
                                   isMensagemDoSistema &&
                                   !isConteudoIndisponivel;
+                                const isIa = msg.remetente_tipo === "ia";
                                 const isAutomatic =
                                   !isDisparo && msg.origem === "automatica";
                                 const isSystem = msg.remetente_tipo === "sistema";
@@ -8233,6 +8234,8 @@ const templateFooterTexto = useMemo(() => {
                                         className={`${styles.messageBubble} ${
                                           isDisparo
                                             ? styles.messageBubbleDisparo
+                                            : isIa
+                                            ? styles.messageBubbleIa
                                             : isAutomatic
                                             ? styles.messageBubbleAutomatic
                                             : isOutgoing
@@ -8244,26 +8247,40 @@ const templateFooterTexto = useMemo(() => {
                                           msg.remetente_tipo === "bot" ||
                                           msg.remetente_tipo === "ia") && (
                                             <div className={styles.messageMetaTop}>
-                                              <span
-                                                className={[
-                                                  styles.senderLabel,
-                                                  isDisparo ? styles.disparoSenderLabel : "",
-                                                ]
-                                                  .filter(Boolean)
-                                                  .join(" ")}
-                                              >
-                                                {isDisparo
-                                                  ? "Disparo"
-                                                  : getRemetenteLabel(msg.remetente_tipo)}
-                                              </span>
-
                                               {isDisparo ? (
-                                                <span className={styles.disparoModeBadge}>
-                                                  {disparoModo}
-                                                </span>
-                                              ) : isAutomatic ? (
-                                                <span className={styles.automaticBadge}>automática</span>
-                                              ) : null}
+                                                <>
+                                                  <span
+                                                    className={[
+                                                      styles.senderLabel,
+                                                      styles.disparoSenderLabel,
+                                                    ].join(" ")}
+                                                  >
+                                                    Disparo
+                                                  </span>
+                                                  <span className={styles.disparoModeBadge}>
+                                                    {disparoModo}
+                                                  </span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  {isAutomatic ? (
+                                                    <span className={styles.automaticBadge}>
+                                                      automática
+                                                    </span>
+                                                  ) : null}
+                                                  <span
+                                                    className={[
+                                                      styles.senderLabel,
+                                                      styles.senderLabelOutgoing,
+                                                      isIa ? styles.iaSenderLabel : "",
+                                                    ]
+                                                      .filter(Boolean)
+                                                      .join(" ")}
+                                                  >
+                                                    {getRemetenteLabel(msg.remetente_tipo)}
+                                                  </span>
+                                                </>
+                                              )}
                                             </div>
                                           )}
 
