@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
-  MessageCircle,
   PauseCircle,
   Save,
   ShieldCheck,
@@ -243,21 +242,13 @@ export default function MetaServiceQuotaBadge() {
         onClick={() => setModalOpen(true)}
         aria-label={descricao}
       >
-        <span className={styles.iconWrap}>
-          <MessageCircle size={15} strokeWidth={2.4} />
-        </span>
-
         <span className={styles.copy}>
-          <span className={styles.label}>Meta Service</span>
+          <span className={styles.label}>M.S.</span>
           <strong>
             {formatar(franquiaServiceMeta.total_usado)}
             <span>/</span>
             {formatar(franquiaServiceMeta.total_limite)}
           </strong>
-        </span>
-
-        <span className={styles.progress} aria-hidden="true">
-          <span style={{ width: `${percentualGeral}%` }} />
         </span>
       </button>
 
