@@ -41,7 +41,7 @@
 
 .sidebarTopRow {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
@@ -55,9 +55,12 @@
 }
 
 .sidebarCount {
-  margin: 4px 0 0;
-  font-size: 12px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
   color: var(--crm-text-muted);
+  white-space: nowrap;
 }
 
 .iconButton,
@@ -6327,16 +6330,19 @@
 }
 
 .messageText :global(img.emoji),
-.favoriteMessageText :global(img.emoji) {
-  width: 1.45em !important;
-  height: 2em !important;
-  min-width: 1.6em !important;
-  min-height: 1.15em !important;
-  max-width: none !important;
-  max-height: none !important;
+.favoriteMessageText :global(img.emoji),
+.disparoMessageTitle :global(img.emoji),
+.disparoMessageFooter :global(img.emoji),
+.buttonMessageOption :global(img.emoji) {
+  width: 1em !important;
+  height: 1em !important;
+  min-width: 1em !important;
+  min-height: 1em !important;
+  max-width: 1em !important;
+  max-height: 1em !important;
   display: inline-block !important;
-  vertical-align: -0.16em;
-  margin: 0 0.02em;
+  vertical-align: -0.12em;
+  margin: 0 0.03em;
   object-fit: contain;
 }
 
@@ -7988,6 +7994,17 @@ a.buttonMessageOption:hover {
 
 .disparoMessageContent .messageText {
   margin: 0;
+}
+
+.disparoMessageFooter {
+  margin: 0;
+  padding-top: 2px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 

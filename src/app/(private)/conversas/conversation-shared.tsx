@@ -1145,11 +1145,18 @@ export function obterApresentacaoDisparo(msg: Mensagem) {
   const titulo = primeiroBlocoPareceTitulo
     ? primeiroBloco.replace(/^Header:\s*/i, "").trim()
     : formatarNomeTemplateDisparo(metadata.template_nome);
-  const conteudo = primeiroBlocoPareceTitulo
+  const conteudoComRodape = primeiroBlocoPareceTitulo
     ? blocos.slice(1).join("\n\n")
     : texto;
+  const rodapeMatch = conteudoComRodape.match(
+    /(?:^|\n)\s*Footer:\s*(.+?)\s*$/is
+  );
+  const rodape = rodapeMatch?.[1]?.trim() || "";
+  const conteudo = rodapeMatch
+    ? conteudoComRodape.slice(0, rodapeMatch.index).trimEnd()
+    : conteudoComRodape;
 
-  return { titulo, conteudo };
+  return { titulo, conteudo, rodape };
 }
 
 export function getStatusEnvioLabel(status: Mensagem["status_envio"]) {

@@ -1475,6 +1475,7 @@ export default function ConversasPageContent() {
 
   function renderizarConteudoMensagem(msg: Mensagem) {
     const flowResponse = getWhatsAppFlowResponsePresentation(msg.metadata_json);
+    let rodapeDisparoComBotoes = "";
 
     if (flowResponse) {
       return (
@@ -1528,16 +1529,24 @@ export default function ConversasPageContent() {
               <TextoComEmoji texto={disparo.conteudo} />
             </p>
           ) : null}
+
+          {disparo.rodape ? (
+            <p className={styles.disparoMessageFooter}>
+              <TextoComEmoji texto={disparo.rodape} />
+            </p>
+          ) : null}
         </div>
       );
     }
 
     if (mensagemEhDisparo(msg) && mensagemDisparoTemBotoes(msg)) {
+      const disparo = obterApresentacaoDisparo(msg);
+      rodapeDisparoComBotoes = disparo.rodape;
       msg = {
         ...msg,
-        conteudo: String(msg.conteudo || "")
-          .replace(/^Header:\s*/i, "")
-          .trimStart(),
+        conteudo: [disparo.titulo, disparo.conteudo]
+          .filter(Boolean)
+          .join("\n\n"),
       };
     }
 
@@ -1930,6 +1939,12 @@ export default function ConversasPageContent() {
               })}
             </div>
           )}
+
+          {rodapeDisparoComBotoes ? (
+            <p className={styles.disparoMessageFooter}>
+              <TextoComEmoji texto={rodapeDisparoComBotoes} />
+            </p>
+          ) : null}
         </div>
       );
     }
@@ -6071,6 +6086,8 @@ async function baixarConversaPDF() {
   }, [conversas]);
 
   const totalConversasRobo = totaisChipsRapidos.robo;
+  const totalConversasResumo =
+    totaisChipsRapidos.Todas > 0 ? totaisChipsRapidos.Todas : conversas.length;
 
   function renderQuickChipCount(
     total: number,
@@ -7078,17 +7095,10 @@ const templateFooterTexto = useMemo(() => {
           <aside className={styles.sidebar}>
             <div className={styles.sidebarHeader}>
               <div className={styles.sidebarTopRow}>
-                <div>
-                  <h2 className={styles.sidebarTitle}>Conversas</h2>
-                  <p className={styles.sidebarCount}>
-                    {conversasFiltradas.length}
-                    {chipRapido === "Todas" &&
-                    totaisChipsRapidos.Todas > conversasFiltradas.length
-                      ? ` de ${totaisChipsRapidos.Todas}`
-                      : ""}{" "}
-                    conversa(s) carregada(s)
-                  </p>
-                </div>
+                <p className={styles.sidebarCount}>
+                  {totalConversasResumo}{" "}
+                  {totalConversasResumo === 1 ? "conversa" : "conversas"}
+                </p>
 
                 <div className={styles.sidebarHeaderActions}>
                   <button
