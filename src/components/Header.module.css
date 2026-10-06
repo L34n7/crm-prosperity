@@ -1187,8 +1187,8 @@
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px 1px;
+  gap: 4px;
+  padding: 2px 0 0;
   box-sizing: border-box;
 }
 
@@ -1196,30 +1196,42 @@
   flex: 1 1 0;
   min-width: 0;
   height: 34px;
-  border: 1px solid var(--crm-primary-border);
-  border-radius: 9px;
-  background: var(--crm-primary-soft);
-  color: var(--crm-primary-text);
+  padding: 7px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--crm-text-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
   transition:
     background 0.2s ease,
-    border-color 0.2s ease,
     color 0.2s ease,
     opacity 0.2s ease;
 }
 
+.soundMenuButton svg {
+  flex: 0 0 auto;
+  color: var(--crm-primary-text);
+}
+
 .soundMenuButton:hover {
   background: var(--headerDropdownHover);
-  border-color: var(--crm-border-strong);
 }
 
 .soundMenuButtonMuted {
-  background: transparent;
   color: var(--crm-text-muted);
   opacity: 0.72;
+}
+
+.soundMenuButtonMuted svg {
+  color: var(--crm-text-muted);
 }
 
 .dropdownDivider {

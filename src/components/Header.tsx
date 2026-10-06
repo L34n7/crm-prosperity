@@ -1959,10 +1959,11 @@ export default function Header({
                   }
                 >
                   {somSininhoAtivo ? (
-                    <Bell size={18} strokeWidth={2.2} />
+                    <Bell size={17} strokeWidth={2.2} />
                   ) : (
-                    <BellOff size={18} strokeWidth={2.2} />
+                    <BellOff size={17} strokeWidth={2.2} />
                   )}
+                  <span>Sininho</span>
                 </button>
 
                 <button
@@ -1984,10 +1985,11 @@ export default function Header({
                   }
                 >
                   {somChatAtivo ? (
-                    <MessageCircle size={18} strokeWidth={2.2} />
+                    <MessageCircle size={17} strokeWidth={2.2} />
                   ) : (
-                    <MessageCircleOff size={18} strokeWidth={2.2} />
+                    <MessageCircleOff size={17} strokeWidth={2.2} />
                   )}
+                  <span>Chat</span>
                 </button>
               </div>
 
