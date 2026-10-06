@@ -1149,7 +1149,7 @@ export function obterApresentacaoDisparo(msg: Mensagem) {
     ? blocos.slice(1).join("\n\n")
     : texto;
   const rodapeMatch = conteudoComRodape.match(
-    /(?:^|\n)\s*Footer:\s*(.+?)\s*$/is
+    /(?:^|\n)\s*Footer:\s*([\s\S]+?)\s*$/i
   );
   const rodape = rodapeMatch?.[1]?.trim() || "";
   const conteudo = rodapeMatch
