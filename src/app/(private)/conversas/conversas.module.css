@@ -1284,6 +1284,26 @@
   font-weight: 800;
 }
 
+:global(html[data-theme="dark"]) .messageBubbleIa {
+  background: color-mix(
+    in srgb,
+    var(--messageBubbleIncoming) 84%,
+    var(--crm-primary) 16%
+  );
+  color: var(--crm-text-strong);
+  box-shadow:
+    inset -3px 0 0 var(--crm-primary),
+    0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
+}
+
+:global(html[data-theme="dark"]) .messageBubbleIa .iaSenderLabel {
+  color: var(--crm-primary-text);
+}
+
+:global(html[data-theme="dark"]) .messageBubbleIa .messageMetaBottom {
+  color: var(--crm-on-strong-muted);
+}
+
 .automaticBadge {
   display: inline-flex;
   align-items: center;
