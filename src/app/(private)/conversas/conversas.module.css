@@ -1246,15 +1246,11 @@
 }
 
 .messageBubbleIa {
-  background: color-mix(
-    in srgb,
-    var(--crm-primary) 22%,
-    var(--crm-surface)
-  );
+  background: rgb(211, 224, 223);
   color: var(--crm-text-strong);
   border-top-right-radius: 4px;
   box-shadow:
-    inset -3px 0 0 var(--crm-primary),
+    inset -3px 0 0 rgb(89, 138, 133),
     0 1px 1px var(--crm-ui-private-shadow-rgb-0-0-0-0-08);
 }
 

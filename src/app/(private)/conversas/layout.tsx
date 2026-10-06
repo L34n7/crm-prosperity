@@ -7,7 +7,8 @@ import mobileStyles from "./conversas-mobile.module.css";
 const mobileConversationListStyles = `
 @media (max-width: 1200px), (hover: none) and (pointer: coarse) {
   .${styles.sidebar} .${styles.sidebarCount} {
-    display: none !important;
+    display: inline-flex !important;
+    flex-shrink: 0 !important;
   }
 
   .${styles.sidebar} .${styles.sidebarTopRow} {
