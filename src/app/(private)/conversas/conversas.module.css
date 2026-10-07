@@ -6388,7 +6388,19 @@
 }
 
 .messageText :global(img.emoji),
-.favoriteMessageText :global(img.emoji),
+.favoriteMessageText :global(img.emoji) {
+  width: 1.16em !important;
+  height: 1.16em !important;
+  min-width: 1.16em !important;
+  min-height: 1.16em !important;
+  max-width: 1.16em !important;
+  max-height: 1.16em !important;
+  display: inline-block !important;
+  vertical-align: -0.16em;
+  margin: 0 0.035em;
+  object-fit: contain;
+}
+
 .disparoMessageTitle :global(img.emoji),
 .disparoMessageFooter :global(img.emoji),
 .buttonMessageOption :global(img.emoji) {
