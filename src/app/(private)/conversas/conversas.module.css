@@ -6389,15 +6389,15 @@
 
 .messageText :global(img.emoji),
 .favoriteMessageText :global(img.emoji) {
-  width: 1.16em !important;
-  height: 1.16em !important;
-  min-width: 1.16em !important;
-  min-height: 1.16em !important;
-  max-width: 1.16em !important;
-  max-height: 1.16em !important;
+  width: 1.24em !important;
+  height: 1.24em !important;
+  min-width: 1.24em !important;
+  min-height: 1.24em !important;
+  max-width: 1.24em !important;
+  max-height: 1.24em !important;
   display: inline-block !important;
-  vertical-align: -0.16em;
-  margin: 0 0.035em;
+  vertical-align: -0.18em;
+  margin: 0 0.04em;
   object-fit: contain;
 }
 
