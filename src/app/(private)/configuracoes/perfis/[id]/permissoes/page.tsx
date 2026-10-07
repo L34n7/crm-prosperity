@@ -1,6 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import styles from "./permissoes.module.css";
 
@@ -47,14 +55,30 @@ function getGrupoFromCodigo(codigo: string) {
   }
 }
 
+function normalizarBusca(valor: string) {
+  return valor
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getModuloId(grupo: string) {
+  return `modulo-${normalizarBusca(grupo)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")}`;
+}
+
 export default function PermissoesDoPerfilPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const [perfilId, setPerfilId] = useState<string>("");
+  const [perfilId, setPerfilId] = useState("");
   const [perfil, setPerfil] = useState<PerfilInfo | null>(null);
   const [permissoes, setPermissoes] = useState<PermissaoItem[]>([]);
+  const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set());
+  const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -90,8 +114,13 @@ export default function PermissoesDoPerfilPage({
         grupo: item.grupo || getGrupoFromCodigo(item.codigo),
       }));
 
+      const modulos = Array.from(
+        new Set(permissoesFormatadas.map((item) => item.grupo || "Outros"))
+      );
+
       setPerfil(data.perfil);
       setPermissoes(permissoesFormatadas);
+      setGruposAbertos(new Set(modulos));
     } catch {
       setErro("Erro ao carregar permissões do perfil");
     } finally {
@@ -114,11 +143,52 @@ export default function PermissoesDoPerfilPage({
       map.set(grupo, lista);
     }
 
-    return Array.from(map.entries()).map(([grupo, itens]) => ({
-      grupo,
-      itens: itens.sort((a, b) => a.codigo.localeCompare(b.codigo)),
-    }));
+    return Array.from(map.entries())
+      .map(([grupo, itens]) => ({
+        grupo,
+        itens: [...itens].sort((a, b) =>
+          (a.descricao || a.codigo).localeCompare(
+            b.descricao || b.codigo,
+            "pt-BR"
+          )
+        ),
+      }))
+      .sort((a, b) => a.grupo.localeCompare(b.grupo, "pt-BR"));
   }, [permissoes]);
+
+  const termoBusca = normalizarBusca(busca);
+
+  const gruposFiltrados = useMemo(() => {
+    if (!termoBusca) {
+      return grupos.map((grupo) => ({
+        ...grupo,
+        itensVisiveis: grupo.itens,
+      }));
+    }
+
+    return grupos.flatMap((grupo) => {
+      const encontrouModulo = normalizarBusca(grupo.grupo).includes(termoBusca);
+      const itensVisiveis = encontrouModulo
+        ? grupo.itens
+        : grupo.itens.filter((item) => {
+            const texto = normalizarBusca(
+              `${item.descricao || ""} ${item.codigo}`
+            );
+            return texto.includes(termoBusca);
+          });
+
+      if (itensVisiveis.length === 0) return [];
+
+      return [
+        {
+          ...grupo,
+          itensVisiveis,
+        },
+      ];
+    });
+  }, [grupos, termoBusca]);
+
+  const totalMarcadas = permissoes.filter((item) => item.marcada).length;
 
   function alternarPermissao(codigo: string) {
     setPermissoes((atual) =>
@@ -134,6 +204,34 @@ export default function PermissoesDoPerfilPage({
         item.grupo === grupo ? { ...item, marcada: valor } : item
       )
     );
+  }
+
+  function alternarGrupo(grupo: string) {
+    setGruposAbertos((atual) => {
+      const proximo = new Set(atual);
+
+      if (proximo.has(grupo)) {
+        proximo.delete(grupo);
+      } else {
+        proximo.add(grupo);
+      }
+
+      return proximo;
+    });
+  }
+
+  function irParaModulo(grupo: string) {
+    setBusca("");
+    setGruposAbertos((atual) => new Set(atual).add(grupo));
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById(getModuloId(grupo))?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    });
   }
 
   async function salvarPermissoes() {
@@ -199,22 +297,31 @@ export default function PermissoesDoPerfilPage({
   return (
     <main className={styles.page}>
       <div className={styles.shell}>
-        <header className={styles.hero}>
-          <div>
-            <a href="/configuracoes/perfis" className={styles.backLink}>
-              ← Voltar para perfis
-            </a>
+        <header className={styles.pageHeader}>
+          <div className={styles.headerContent}>
+            <Link href="/configuracoes/perfis" className={styles.backLink}>
+              <ArrowLeft size={16} />
+              <span>Perfis</span>
+            </Link>
 
-            <h1 className={styles.title}>Permissões do perfil</h1>
-            <p className={styles.subtitle}>
-              Ajuste o que este perfil pode fazer dentro do sistema. Pense nas
-              permissões como botões e ações liberadas para quem estiver usando
-              este perfil.
-            </p>
+            <div className={styles.titleRow}>
+              <div>
+                <p className={styles.eyebrow}>Configurações de acesso</p>
+                <h1 className={styles.title}>Permissões do perfil</h1>
+                <p className={styles.subtitle}>
+                  Organize o que cada perfil pode visualizar e executar no CRM.
+                </p>
+              </div>
 
-            <div className={styles.profileBox}>
-              <strong>{perfil.nome}</strong>
-              <span>{perfil.descricao || "Sem descrição"}</span>
+              <div className={styles.profileBadge}>
+                <span className={styles.profileIcon}>
+                  <ShieldCheck size={17} />
+                </span>
+                <span>
+                  <small>Perfil</small>
+                  <strong>{perfil.nome}</strong>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -233,82 +340,154 @@ export default function PermissoesDoPerfilPage({
           onSuccessDismiss={() => setSucesso("")}
         />
 
-        <section className={styles.explainGrid}>
-          <div className={styles.explainCard}>
-            <h2>Como usar</h2>
-            <p>
-              Marque apenas o que esse perfil realmente precisa. Quanto mais
-              simples o perfil, mais fácil fica administrar a operação.
-            </p>
+        <section className={styles.searchPanel}>
+          <div className={styles.searchBox}>
+            <Search size={18} />
+            <input
+              type="search"
+              value={busca}
+              onChange={(event) => setBusca(event.target.value)}
+              placeholder="Buscar por permissão ou módulo..."
+              aria-label="Buscar permissões"
+            />
           </div>
 
-          <div className={styles.explainCard}>
-            <h2>Dica prática</h2>
-            <p>
-              Use perfis para controlar acesso geral. Regras mais específicas
-              podem ser tratadas depois por política da empresa ou por usuário.
-            </p>
+          <div className={styles.searchMeta}>
+            <span>{grupos.length} módulos</span>
+            <span className={styles.metaDivider} />
+            <span>
+              {totalMarcadas} de {permissoes.length} ativas
+            </span>
           </div>
         </section>
 
-        <section className={styles.groupsSection}>
-          {grupos.map(({ grupo, itens }) => {
-            const totalMarcadas = itens.filter((item) => item.marcada).length;
-            const todasMarcadas = totalMarcadas === itens.length && itens.length > 0;
+        <div className={styles.contentGrid}>
+          <section className={styles.modulesColumn}>
+            {gruposFiltrados.length === 0 ? (
+              <div className={styles.emptySearch}>
+                Nenhuma permissão ou módulo encontrado para “{busca}”.
+              </div>
+            ) : (
+              gruposFiltrados.map(({ grupo, itens, itensVisiveis }) => {
+                const marcadas = itens.filter((item) => item.marcada).length;
+                const todasMarcadas =
+                  marcadas === itens.length && itens.length > 0;
+                const aberto = termoBusca ? true : gruposAbertos.has(grupo);
 
-            return (
-              <article key={grupo} className={styles.groupCard}>
-                <div className={styles.groupHeader}>
-                  <div>
-                    <h2 className={styles.groupTitle}>{grupo}</h2>
-                    <p className={styles.groupSubtitle}>
-                      {totalMarcadas} de {itens.length} permissões marcadas
-                    </p>
-                  </div>
-
-                  <div className={styles.groupActions}>
-                    <button
-                      className={styles.secondaryButton}
-                      onClick={() => marcarGrupo(grupo, true)}
-                    >
-                      Marcar todas
-                    </button>
-                    <button
-                      className={styles.ghostButton}
-                      onClick={() => marcarGrupo(grupo, false)}
-                      disabled={!todasMarcadas && totalMarcadas === 0}
-                    >
-                      Limpar
-                    </button>
-                  </div>
-                </div>
-
-                <div className={styles.permissionsGrid}>
-                  {itens.map((item) => (
-                    <label key={item.codigo} className={styles.permissionCard}>
-                      <div className={styles.permissionText}>
-                        <span className={styles.permissionCode}>{item.codigo}</span>
-                        <span className={styles.permissionDescription}>
-                          {item.descricao || "Sem descrição"}
+                return (
+                  <article
+                    key={grupo}
+                    id={getModuloId(grupo)}
+                    className={styles.moduleCard}
+                  >
+                    <div className={styles.moduleHeader}>
+                      <button
+                        type="button"
+                        className={styles.moduleToggle}
+                        onClick={() => alternarGrupo(grupo)}
+                        aria-expanded={aberto}
+                      >
+                        <span className={styles.moduleIdentity}>
+                          <span className={styles.moduleName}>{grupo}</span>
+                          <span className={styles.moduleCount}>
+                            {marcadas} de {itens.length} ativas
+                          </span>
                         </span>
-                      </div>
 
-                      <span className={styles.switchWrap}>
-                        <input
-                          type="checkbox"
-                          checked={item.marcada}
-                          onChange={() => alternarPermissao(item.codigo)}
-                          className={styles.switchInput}
-                        />
-                        <span className={styles.switchSlider} />
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </article>
-            );
-          })}
-        </section>
+                        <span className={styles.chevron}>
+                          {aberto ? (
+                            <ChevronUp size={18} />
+                          ) : (
+                            <ChevronDown size={18} />
+                          )}
+                        </span>
+                      </button>
+
+                      <div className={styles.groupActions}>
+                        <button
+                          type="button"
+                          className={styles.textButton}
+                          onClick={() => marcarGrupo(grupo, true)}
+                          disabled={todasMarcadas}
+                        >
+                          Marcar todas
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.textButton}
+                          onClick={() => marcarGrupo(grupo, false)}
+                          disabled={marcadas === 0}
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    </div>
+
+                    {aberto && (
+                      <div className={styles.moduleBody}>
+                        <div className={styles.permissionsGrid}>
+                          {itensVisiveis.map((item) => (
+                            <label
+                              key={item.codigo}
+                              className={styles.permissionCard}
+                            >
+                              <span className={styles.permissionText}>
+                                <span className={styles.permissionName}>
+                                  {item.descricao || item.codigo}
+                                </span>
+                                <span className={styles.permissionCode}>
+                                  {item.codigo}
+                                </span>
+                              </span>
+
+                              <span className={styles.switchWrap}>
+                                <input
+                                  type="checkbox"
+                                  checked={item.marcada}
+                                  onChange={() =>
+                                    alternarPermissao(item.codigo)
+                                  }
+                                  className={styles.switchInput}
+                                />
+                                <span className={styles.switchSlider} />
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </article>
+                );
+              })
+            )}
+          </section>
+
+          <aside className={styles.summaryAside}>
+            <div className={styles.summaryCard}>
+              <p className={styles.summaryTitle}>Módulos</p>
+
+              <nav className={styles.summaryNav} aria-label="Sumário de módulos">
+                {grupos.map(({ grupo, itens }) => {
+                  const marcadas = itens.filter((item) => item.marcada).length;
+
+                  return (
+                    <button
+                      type="button"
+                      key={grupo}
+                      className={styles.summaryLink}
+                      onClick={() => irParaModulo(grupo)}
+                    >
+                      <span>{grupo}</span>
+                      <small>
+                        {marcadas}/{itens.length}
+                      </small>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </aside>
+        </div>
       </div>
     </main>
   );
