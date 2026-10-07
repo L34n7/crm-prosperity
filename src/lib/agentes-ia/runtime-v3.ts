@@ -1123,6 +1123,54 @@ function mensagemEhCurtaDeContinuidade(mensagem: string) {
   return /^(sim|nao|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|entendi|me mostra|mostra|manda|vamos|fechado)$/.test(texto);
 }
 
+function mensagemMencionaDataAgenda(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  return (
+    /\b(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
+    /\bdia\s+\d{1,2}\b/.test(texto) ||
+    /\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/.test(texto) ||
+    /\b\d{4}-\d{2}-\d{2}\b/.test(texto)
+  );
+}
+
+function extrairHorariosExplicitosAgenda(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  const encontrados = new Set<string>();
+  const padrao =
+    /\b([01]?\d|2[0-3])(?::([0-5]\d)|\s*(?:h|hr|hrs|hora|horas))\b/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = padrao.exec(texto)) !== null) {
+    const hora = String(Number(match[1])).padStart(2, "0");
+    const minuto = String(Number(match[2] || 0)).padStart(2, "0");
+    encontrados.add(`${hora}:${minuto}`);
+  }
+
+  return Array.from(encontrados);
+}
+
+function mensagemEhConfirmacaoCurtaAgendaConcluida(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!texto) {
+    return /[👍👌✅🤝]/u.test(String(mensagem || ""));
+  }
+
+  return /^(?:ok|certo|combinado|perfeito|fechado|beleza|blz|show|valeu|obrigado|obrigada|sim|tudo certo)$/.test(
+    texto,
+  );
+}
+
+function estadoTemAgendaConcluida(estado: EstadoConversa) {
+  const estagio = normalizarTextoIntencao(estado.estagio || "");
+  return /\b(?:agendamento confirmado|agendamento remarcado|remarcacao concluida|reagendamento concluido)\b/.test(
+    estagio,
+  );
+}
+
 function estadoTemAgendaEmAndamento(estado: EstadoConversa) {
   const estagio = normalizarTextoIntencao(estado.estagio || "");
   const proximaAcao = normalizarTextoIntencao(estado.proxima_acao || "");
@@ -1877,10 +1925,20 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       ctx.pendencia.conteudo_agregado,
       timezone,
     );
+    const agendamentoAtivoUnico =
+      ctx.agendamentosAtivos.length === 1 ? ctx.agendamentosAtivos[0] : null;
+    const preservarDataAtual =
+      Boolean(agendamentoAtivoUnico) &&
+      !mensagemMencionaDataAgenda(ctx.pendencia.conteudo_agregado);
+    const dataAtualAgendamento = agendamentoAtivoUnico
+      ? dataLocalDeIso(agendamentoAtivoUnico.inicio_at, timezone)
+      : null;
     const dataArg = args.data ? String(args.data).trim() : "";
-    const data = /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
-      ? dataArg
-      : interpretacao.data || null;
+    const data = preservarDataAtual
+      ? dataAtualAgendamento
+      : /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
+        ? dataArg
+        : interpretacao.data || null;
     const resultado = await listarSlotsOrigemAgenda({
       empresaId,
       agendaId: origem.agendaId,
@@ -1890,11 +1948,21 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       limite: interpretacao.preferencia ? 50 : 12,
       timezone,
     });
-    const filtrados = filtrarSlotsPorPreferencia(
-      resultado.slots,
-      interpretacao.preferencia,
-      timezone,
-    ).slice(0, 12);
+    const horariosExplicitos = extrairHorariosExplicitosAgenda(
+      ctx.pendencia.conteudo_agregado,
+    );
+    const filtrados =
+      horariosExplicitos.length > 1
+        ? resultado.slots
+            .filter((slot: any) =>
+              horariosExplicitos.includes(String(slot.hora_label || "")),
+            )
+            .slice(0, 12)
+        : filtrarSlotsPorPreferencia(
+            resultado.slots,
+            interpretacao.preferencia,
+            timezone,
+          ).slice(0, 12);
     return {
       ok: true,
       agenda: resultado.grupo
@@ -2108,16 +2176,36 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     const atual = atualResolvido.agendamento;
     const agendaId = String(atual.agenda_id);
 
-    const dataNova = String(args.data || "").trim();
+    const atualFormatado = formatarAgendamentoAtivo(
+      atual,
+      atualResolvido.timezone,
+    );
+    const dataInformadaPeloCliente = mensagemMencionaDataAgenda(
+      ctx.pendencia.conteudo_agregado,
+    );
+    const dataArgNova = String(args.data || "").trim();
+    const dataNova = dataInformadaPeloCliente
+      ? dataArgNova
+      : atualFormatado.data;
     const horaNova = normalizarHoraLocal(args.hora);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dataNova) || !horaNova) {
       return { ok: false, error: "Nova data ou horário local inválido." };
     }
 
-    const atualFormatado = formatarAgendamentoAtivo(
-      atual,
-      atualResolvido.timezone,
+    const horariosExplicitos = extrairHorariosExplicitosAgenda(
+      ctx.pendencia.conteudo_agregado,
     );
+    if (
+      horariosExplicitos.length > 1 &&
+      !horariosExplicitos.includes(horaNova)
+    ) {
+      return {
+        ok: false,
+        code: "HORARIO_FORA_DAS_OPCOES_DO_CLIENTE",
+        error:
+          "O horário escolhido não está entre as opções informadas pelo cliente.",
+      };
+    }
     if (
       atualFormatado.data === dataNova &&
       atualFormatado.hora === horaNova
@@ -2884,7 +2972,17 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     ctx.estadoConversa = contexto.estado;
     ctx.agendamentosAtivos = contexto.agendamentosAtivos;
 
-    const preconsultas = await preExecutarConsultasObvias(ctx, contexto.historico);
+    if (
+      contexto.agendamentosAtivos.length > 0 &&
+      estadoTemAgendaConcluida(contexto.estado) &&
+      mensagemEhConfirmacaoCurtaAgendaConcluida(pendencia.conteudo_agregado)
+    ) {
+      ctx.respostaDeterministica = ["Combinado 👍"];
+    }
+
+    const preconsultas = ctx.respostaDeterministica?.length
+      ? []
+      : await preExecutarConsultasObvias(ctx, contexto.historico);
     const preexecutadas = new Set<TipoFerramenta>(preconsultas.map((item) => item.nome));
     const ferramentasParaModelo = selecionarFerramentasParaModelo({
       ativas: ferramentasAtivas,
@@ -2930,6 +3028,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     let correcoesPromessaOperacional = 0;
 
     for (let rodada = 0; rodada < MAX_RODADAS_FERRAMENTAS; rodada++) {
+      if (ctx.respostaDeterministica?.length) break;
+
       const response: any = await openai.responses.create({
         model: modelo,
         instructions,
