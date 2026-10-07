@@ -234,8 +234,56 @@ function historicoParaModelo(mensagens: Array<Record<string, unknown>>) {
 function textoFollowupSeguro(valor: unknown) {
   return String(valor || "")
     .trim()
-    .replace(/^['\"`]+|['\"`]+$/g, "")
+    .replace(/^['\"\`]+|['\"\`]+$/g, "")
+    .replace(/^\s*🎤\s*áudio\s*/i, "")
+    .trim()
     .slice(0, 700);
+}
+
+function followupPrometeAgendamentoSemFerramenta(texto: string) {
+  const normalizado = texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return (
+    /\b(?:vou|vamos|irei)\s+(?:confirmar|agendar|marcar|reservar)\b/.test(
+      normalizado,
+    ) ||
+    /\b(?:ficou|esta|esta tudo|ja esta)\s+(?:agendad[oa]|marcad[oa]|reservad[oa]|confirmad[oa])\b/.test(
+      normalizado,
+    )
+  );
+}
+
+async function existeAgendamentoAtivoDaConversa(params: {
+  empresaId: string;
+  conversaId: string;
+  contatoId?: string | null;
+}) {
+  let query = supabaseAdmin
+    .from("agenda_agendamentos")
+    .select("id")
+    .eq("empresa_id", params.empresaId)
+    .in("status", ["agendado", "confirmado"])
+    .order("inicio_at", { ascending: true })
+    .limit(1);
+
+  query = params.contatoId
+    ? query.or(
+        `conversa_id.eq.${params.conversaId},contato_id.eq.${params.contatoId}`,
+      )
+    : query.eq("conversa_id", params.conversaId);
+
+  const { data, error } = await query.maybeSingle();
+  if (error) {
+    console.error(
+      "[AGENTE_IA_FOLLOWUP] Falha ao validar agendamento ativo:",
+      error,
+    );
+    return false;
+  }
+  return Boolean(data?.id);
 }
 
 async function enviarFollowup(params: {
@@ -460,8 +508,20 @@ export async function processarFollowupAgenteIa(agendamento: {
       reasoning: { effort: "none" },
       text: { verbosity: "low" },
     } as any);
-    const texto = textoFollowupSeguro(response.output_text);
+    let texto = textoFollowupSeguro(response.output_text);
     if (!texto) throw new Error("A IA não gerou uma mensagem válida para o follow-up.");
+
+    if (followupPrometeAgendamentoSemFerramenta(texto)) {
+      const existeAgendamento = await existeAgendamentoAtivoDaConversa({
+        empresaId: agendamento.empresa_id,
+        conversaId,
+        contatoId: conversa?.contato_id || null,
+      });
+      if (!existeAgendamento) {
+        texto =
+          "Só confirmando para não deixar nada errado: você quer seguir com o horário que combinamos?";
+      }
+    }
 
     const revalidacaoEntrada = await ultimaMensagemContato(agendamento.empresa_id, conversaId);
     const { data: conversaRevalidada } = await supabaseAdmin

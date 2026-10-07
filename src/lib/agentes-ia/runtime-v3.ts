@@ -1149,6 +1149,20 @@ function extrairHorariosExplicitosAgenda(mensagem: string) {
   return Array.from(encontrados);
 }
 
+function mensagemEscolheHorarioExplicitamente(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  if (!texto) return false;
+  if (mensagemConfirmaAgendamento(mensagem)) return true;
+  return (
+    /\b(?:fica|ta|esta)\s+(?:otimo|otima|bom|boa|perfeito|perfeita|tranquilo|tranquila)\b/.test(
+      texto,
+    ) ||
+    /\b(?:quero|prefiro|escolho|vamos de|fecha|fechado|combinado)\b/.test(
+      texto,
+    )
+  );
+}
+
 function mensagemEhConfirmacaoCurtaAgendaConcluida(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem)
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
@@ -2522,6 +2536,64 @@ async function preExecutarConsultasObvias(
   return executadas;
 }
 
+async function criarAgendamentoImediatoDeterministico(
+  ctx: ContextoExecucao,
+  preconsultas: Array<{ nome: TipoFerramenta; argumentos: any; resultado: any }>,
+) {
+  const configCriar = ctx.ferramentasAtivas.get("criar_agendamento");
+  if (!configCriar) return null;
+  if (
+    normalizarModoExecucaoAgendamento(configCriar.modo_execucao) !==
+    "imediato"
+  ) {
+    return null;
+  }
+  if (ctx.agendamentosAtivos.length > 0) return null;
+  if (!mensagemEscolheHorarioExplicitamente(ctx.pendencia.conteudo_agregado)) {
+    return null;
+  }
+
+  const horarios = extrairHorariosExplicitosAgenda(
+    ctx.pendencia.conteudo_agregado,
+  );
+  if (horarios.length !== 1) return null;
+
+  const consulta = [...preconsultas]
+    .reverse()
+    .find(
+      (item) =>
+        item.nome === "consultar_agenda" &&
+        item.resultado?.ok === true &&
+        Array.isArray(item.resultado?.slots),
+    );
+  if (!consulta) return null;
+
+  const horaEscolhida = horarios[0];
+  const candidatos = (consulta.resultado.slots || []).filter(
+    (slot: any) => normalizarHoraLocal(slot?.hora) === horaEscolhida,
+  );
+  if (candidatos.length !== 1) return null;
+
+  const slot = candidatos[0];
+  const data = String(slot?.data || "").trim();
+  const hora = normalizarHoraLocal(slot?.hora);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !hora) return null;
+
+  const argumentos = { data, hora };
+  const resultado = await executarFerramenta(
+    "criar_agendamento",
+    argumentos,
+    ctx,
+  );
+  const item = {
+    nome: "criar_agendamento" as const,
+    argumentos,
+    resultado,
+  };
+  ctx.ferramentasExecutadas.push(item);
+  return item;
+}
+
 function contextoPreconsultasParaModelo(executadas: Array<{ nome: TipoFerramenta; resultado: any }>) {
   const blocos: string[] = [];
   for (const item of executadas) {
@@ -2983,7 +3055,14 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     const preconsultas = ctx.respostaDeterministica?.length
       ? []
       : await preExecutarConsultasObvias(ctx, contexto.historico);
-    const preexecutadas = new Set<TipoFerramenta>(preconsultas.map((item) => item.nome));
+
+    if (!ctx.respostaDeterministica?.length) {
+      await criarAgendamentoImediatoDeterministico(ctx, preconsultas);
+    }
+
+    const preexecutadas = new Set<TipoFerramenta>(
+      ctx.ferramentasExecutadas.map((item) => item.nome as TipoFerramenta),
+    );
     const ferramentasParaModelo = selecionarFerramentasParaModelo({
       ativas: ferramentasAtivas,
       mensagem: pendencia.conteudo_agregado,
@@ -3280,6 +3359,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     const ultimaMensagemSaida = saidaFinal.mensagens.at(-1) || "";
     const deveAgendarFollowup =
       !ctx.transferidoHumano &&
+      !ctx.acaoCriticaExecutada &&
       ctx.respostaEnviada &&
       Boolean(saidaFinal.estado.proxima_acao) &&
       ultimaMensagemSaida.includes("?") &&
