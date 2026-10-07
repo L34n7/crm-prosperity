@@ -2,6 +2,7 @@ import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
 import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtime";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { interceptarMensagemAgenteIa } from "@/lib/agentes-ia/runtime";
+import { conversaEstaComHumano } from "@/lib/agentes-ia/estado-atendimento-conversa";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { buscarBloqueioFinanceiroMetaConversa } from "@/lib/whatsapp/meta-payment-block";
 import { buscarBloqueioLimiteServiceConversa } from "@/lib/whatsapp/service-quota";
@@ -46,6 +47,26 @@ type TimeoutSemRespostaParams = Parameters<
 >[0];
 
 const LIMITE_EXECUCAO_ORFA_PADRAO_MS = 2 * 60 * 1000;
+
+async function buscarEstadoAtendimentoConversa(params: {
+  empresaId: string;
+  conversaId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("conversas")
+    .select("id, status, responsavel_id, bot_ativo, aguardando_atendente")
+    .eq("empresa_id", params.empresaId)
+    .eq("id", params.conversaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Erro ao validar atendimento humano da conversa: ${error.message}`
+    );
+  }
+
+  return data;
+}
 
 function limiteExecucaoOrfaMs() {
   const configurado = Number(process.env.AUTOMACAO_EXECUCAO_ORFA_MS);
@@ -593,6 +614,26 @@ export async function processAutomationEngine(
     return {
       ok: true,
       status: "contato_automacoes_desabilitadas",
+    };
+  }
+
+  const estadoConversa = await buscarEstadoAtendimentoConversa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+  });
+
+  if (!estadoConversa) {
+    return {
+      ok: false,
+      status: "conversa_nao_encontrada",
+      error: "Conversa não encontrada para validar o estado do atendimento.",
+    };
+  }
+
+  if (conversaEstaComHumano(estadoConversa)) {
+    return {
+      ok: true,
+      status: "ignorado_atendimento_humano",
     };
   }
 

@@ -209,6 +209,10 @@ async function reabrirConversaEncerrada(
       closed_at: null,
       bot_ativo: false,
       aguardando_atendente: false,
+      agente_ia_id: null,
+      agente_ia_protocolo_id: null,
+      agente_ia_fallback_ativo: false,
+      atendimento_humano_ate: null,
     })
     .eq("id", conversa.id)
     .select("*")
