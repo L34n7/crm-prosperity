@@ -22,17 +22,27 @@ Antes de liberar o modo em produção:
    - `smb_app_state_sync`
    - `smb_message_echoes`
    - `account_update`
-3. Confirme que o `NEXT_PUBLIC_META_CONFIG_ID` usa Embedded Signup v3.
+3. Confirme que o `NEXT_PUBLIC_META_CONFIG_ID` aponta para uma configuração do Facebook Login for Business criada como **WhatsApp Embedded Signup v4**. No v4, produtos, ativos e permissões ficam na configuração da Meta; o launcher do CRM não envia `version`, `sessionInfoVersion` nem `scope`.
 4. Mantenha `APP_CRYPTO_SECRET` configurado. Novos tokens da Meta são
    armazenados criptografados.
 5. Configure `WHATSAPP_API_VERSION` quando for necessário fixar uma versão.
    O fallback atual é `v25.0`.
 
+## Embedded Signup v4
+
+A partir desta migração, o CRM usa o modelo **configuration-driven** do Embedded Signup v4:
+
+- `NEXT_PUBLIC_META_CONFIG_ID` deve ser o ID da configuração v4 criada em **Facebook Login for Business > Configurations** com a variação WhatsApp Embedded Signup;
+- a configuração da Meta deve conceder `whatsapp_business_management` e `whatsapp_business_messaging` e compartilhar as contas/números necessários;
+- o JavaScript não força mais `version: "v3"`, `sessionInfoVersion: "3"` nem solicita permissões por `scope`;
+- Coexistence continua usando `featureType: "whatsapp_business_app_onboarding"`;
+- o callback tolera o `phone_number_id` ausente no evento e recupera os ativos no backend quando necessário;
+- o frontend aguarda o evento de sessão mesmo depois de receber o code OAuth, porque os dois retornos podem chegar fora de ordem.
+
 ## Fluxo do onboarding
 
 1. O usuário escolhe Cloud API exclusiva ou WhatsApp Business + CRM.
-2. No modo Coexistence, o frontend inicia o Embedded Signup com
-   `featureType: "whatsapp_business_app_onboarding"`.
+2. O frontend inicia o Embedded Signup v4 de forma orientada pela configuração. No modo Coexistence, mantém apenas o seletor de fluxo `featureType: "whatsapp_business_app_onboarding"`; no modo Cloud API, envia somente `setup: {}`.
 3. O compartilhamento do histórico é autorizado ou recusado pelo usuário
    dentro do fluxo da Meta/WhatsApp Business App (incluindo o QR code). O
    Prosperity não apresenta uma segunda opção de consentimento.

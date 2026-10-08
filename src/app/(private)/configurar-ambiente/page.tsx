@@ -19,6 +19,12 @@ import {
   Workflow,
   X,
 } from "lucide-react";
+import {
+  buildWhatsAppEmbeddedSignupV4Options,
+  isWhatsAppEmbeddedSignupFinishEvent,
+  normalizeWhatsAppEmbeddedSignupEvent,
+  type WhatsAppEmbeddedSignupData,
+} from "@/lib/whatsapp/embedded-signup-v4";
 
 declare global {
   interface Window {
@@ -568,7 +574,9 @@ export default function ConfigurarAmbientePage() {
     return data;
   }
 
-  async function finalizarEmbeddedSignup(dadosEmbeddedSignup: any) {
+  async function finalizarEmbeddedSignup(
+    dadosEmbeddedSignup: WhatsAppEmbeddedSignupData
+  ) {
     const response = await fetch("/api/integracoes-whatsapp/embedded-signup/finish", {
       method: "POST",
       headers: {
@@ -596,13 +604,7 @@ export default function ConfigurarAmbientePage() {
   }: {
     code: string;
     state: string;
-    embeddedSignup: {
-      waba_id: string | null;
-      phone_number_id: string | null;
-      business_portfolio_id: string | null;
-      event: string;
-      raw: unknown;
-    } | null;
+    embeddedSignup: WhatsAppEmbeddedSignupData | null;
   }) {
     const response = await fetch("/api/integracoes-whatsapp/meta-callback", {
       method: "POST",
@@ -878,7 +880,7 @@ async function iniciarEmbeddedSignup() {
     const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
 
     if (!configId) {
-      throw new Error("NEXT_PUBLIC_META_CONFIG_ID não configurado.");
+      throw new Error("NEXT_PUBLIC_META_CONFIG_ID não configurado para o Embedded Signup v4.");
     }
 
     if (!integracao.modo_integracao_escolhido_em) {
@@ -891,44 +893,26 @@ async function iniciarEmbeddedSignup() {
 
     await carregarFacebookSdk();
 
-    let dadosEmbeddedSignup: {
-      waba_id: string | null;
-      phone_number_id: string | null;
-      business_portfolio_id: string | null;
-      event: string;
-      raw: unknown;
-    } | null = null;
+    let dadosEmbeddedSignup: WhatsAppEmbeddedSignupData | null = null;
 
-    const salvarDadosEmbeddedSignup = (data: any) => {
-      const wabaId =
-        data?.data?.waba_id ||
-        data?.data?.whatsapp_business_account_id ||
-        null;
+    const salvarDadosEmbeddedSignup = (data: unknown) => {
+      const normalizado = normalizeWhatsAppEmbeddedSignupEvent(data);
+      if (!normalizado) return;
 
-      const phoneNumberId =
-        data?.data?.phone_number_id ||
-        data?.data?.business_phone_number_id ||
-        null;
-
-      const businessPortfolioId =
-        data?.data?.business_id ||
-        data?.data?.business_portfolio_id ||
-        null;
-
-      dadosEmbeddedSignup = {
-        waba_id: wabaId,
-        phone_number_id: phoneNumberId,
-        business_portfolio_id: businessPortfolioId,
-        event: data.event,
-        raw: data,
-      };
+      dadosEmbeddedSignup = normalizado;
 
       localStorage.setItem(
         `meta_embedded_signup_${integracao.id}`,
         JSON.stringify(dadosEmbeddedSignup)
       );
 
-      console.log("✅ DADOS META CAPTURADOS E SALVOS:", dadosEmbeddedSignup);
+      console.log("[META EMBEDDED SIGNUP V4] Dados capturados:", {
+        event: normalizado.event,
+        waba_id: normalizado.waba_id,
+        phone_number_id: normalizado.phone_number_id,
+        business_portfolio_id: normalizado.business_portfolio_id,
+        session_version: normalizado.session_version,
+      });
     };
 
     const aguardarDadosEmbeddedSignup = async () => {
@@ -969,11 +953,7 @@ async function iniciarEmbeddedSignup() {
           return;
         }
 
-        if (
-          data.event === "FINISH" ||
-          data.event === "FINISH_ONLY_WABA" ||
-          data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
-        ) {
+        if (isWhatsAppEmbeddedSignupFinishEvent(data?.event)) {
           salvarDadosEmbeddedSignup(data);
         }
 
@@ -1004,9 +984,9 @@ async function iniciarEmbeddedSignup() {
 
         setTimeout(async () => {
           try {
-            if (integracao.modo_integracao === "coexistence") {
-              await aguardarDadosEmbeddedSignup();
-            }
+            // No v4 o code OAuth e o postMessage com WABA/phone_number_id
+            // são canais independentes e podem chegar fora de ordem.
+            await aguardarDadosEmbeddedSignup();
             window.removeEventListener("message", onMessage);
 
             if (dadosEmbeddedSignup) {
@@ -1039,26 +1019,13 @@ async function iniciarEmbeddedSignup() {
           }
         }, 1500);
       },
-      {
-        config_id: configId,
-        response_type: "code",
-        override_default_response_type: true,
-        auth_type: "rerequest",
-        scope:
-          "business_management,whatsapp_business_management,whatsapp_business_messaging",
-        extras: {
-          ...(integracao.modo_integracao === "coexistence"
-            ? {
-                version: "v3",
-                setup: {},
-                featureType:
-                  "whatsapp_business_app_onboarding",
-              }
-            : {
-                sessionInfoVersion: "3",
-              }),
-        },
-      }
+      buildWhatsAppEmbeddedSignupV4Options({
+        configId,
+        modoIntegracao:
+          integracao.modo_integracao === "coexistence"
+            ? "coexistence"
+            : "cloud_api",
+      })
     );
   } catch (error) {
     setConectandoMeta(false);
