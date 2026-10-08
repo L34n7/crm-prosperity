@@ -3,6 +3,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sanitizeWhatsAppIntegrationForClient } from "@/lib/whatsapp/access-token";
 import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
+import { isWhatsAppEmbeddedSignupFinishEvent } from "@/lib/whatsapp/embedded-signup-v4";
 
 type FinishPayload = {
   integracao_id?: string | null;
@@ -11,6 +12,7 @@ type FinishPayload = {
   phone_number_id?: string | null;
   business_portfolio_id?: string | null;
   meta_business_id?: string | null;
+  launcher_version?: string | null;
   raw?: unknown;
 };
 
@@ -110,7 +112,7 @@ export async function POST(request: NextRequest) {
     if (
       normalizeWhatsAppIntegrationMode(integracao.modo_integracao) ===
         "coexistence" &&
-      body.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
+      isWhatsAppEmbeddedSignupFinishEvent(body.event)
     ) {
       updatePayload.coex_status = "onboarded";
       updatePayload.coex_onboarded_at = agora;
@@ -124,6 +126,8 @@ export async function POST(request: NextRequest) {
     updatePayload.config_json = {
       ...configJsonAtual,
       embedded_signup_finish_payload: body.raw ?? body,
+      embedded_signup_finish_event: body.event || null,
+      embedded_signup_launcher_version: body.launcher_version || null,
       embedded_signup_finished_at: agora,
     };
 

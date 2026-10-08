@@ -7,6 +7,7 @@ import {
 } from "@/lib/whatsapp/access-token";
 import { getWhatsAppGraphUrl } from "@/lib/whatsapp/graph-api";
 import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mode";
+import { isWhatsAppEmbeddedSignupFinishEvent } from "@/lib/whatsapp/embedded-signup-v4";
 
 export async function POST(request: NextRequest) {
   try {
@@ -145,14 +146,22 @@ export async function POST(request: NextRequest) {
 
     if (
       modoIntegracao === "coexistence" &&
-      embeddedSignupEvent !==
-        "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
+      !isWhatsAppEmbeddedSignupFinishEvent(embeddedSignupEvent)
     ) {
+      console.warn("[META CALLBACK] Embedded Signup sem evento de conclusão:", {
+        integracaoId: integracao.id,
+        modoIntegracao,
+        embeddedSignupEvent: embeddedSignupEvent || null,
+        possuiWabaId: Boolean(wabaId),
+        possuiPhoneNumberId: Boolean(phoneNumberId),
+        launcherVersion: embeddedSignup?.launcher_version || null,
+      });
+
       return NextResponse.json(
         {
           ok: false,
           error:
-            "A Meta não concluiu o fluxo de Coexistência. Confirme que o número já está ativo no WhatsApp Business App e tente novamente.",
+            "A Meta não retornou a confirmação final do Embedded Signup. Abra a conexão novamente e conclua todas as etapas no WhatsApp Business App.",
         },
         { status: 400 }
       );
@@ -195,6 +204,9 @@ export async function POST(request: NextRequest) {
             },
             meta_connected_at: agora,
             embedded_signup: embeddedSignup,
+            embedded_signup_event: embeddedSignupEvent || null,
+            embedded_signup_launcher_version:
+              embeddedSignup?.launcher_version || null,
           },
           ultimo_sync_at: agora,
           updated_at: agora,

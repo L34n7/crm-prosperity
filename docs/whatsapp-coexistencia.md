@@ -38,6 +38,7 @@ A partir desta migração, o CRM usa o modelo **configuration-driven** do Embedd
 - Coexistence continua usando `featureType: "whatsapp_business_app_onboarding"`;
 - o callback tolera o `phone_number_id` ausente no evento e recupera os ativos no backend quando necessário;
 - o frontend aguarda o evento de sessão mesmo depois de receber o code OAuth, porque os dois retornos podem chegar fora de ordem.
+- o backend aceita os eventos finais `FINISH`, `FINISH_ONLY_WABA` e `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`. A elegibilidade real de Coexistence continua sendo validada depois pela Graph API através de `is_on_biz_app=true` e `platform_type=CLOUD_API`, evitando depender do nome legado do evento de conclusão.
 
 ## Fluxo do onboarding
 
