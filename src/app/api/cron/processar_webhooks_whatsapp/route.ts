@@ -2,6 +2,7 @@ import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "
 import { NextResponse } from "next/server";
 import { republicarFilaWebhooksWhatsapp } from "@/lib/whatsapp/webhook-queue";
 import { republicarWebhooksIntegracaoPendentes } from "@/lib/rotinas-automacao/webhook-outbox";
+import { republicarMensagensEnviadasPendentes } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 
 export const runtime = "nodejs";
 
@@ -33,12 +34,16 @@ export async function GET(request: Request) {
     }
 
     const limite = getLimitFromRequest(request);
-    const [recuperacao, recuperacaoIntegracoes] = await Promise.all([
+    const [recuperacao, recuperacaoIntegracoes, recuperacaoMensagensEnviadas] = await Promise.all([
       republicarFilaWebhooksWhatsapp({
         limite,
         idadeMinimaSegundos: 90,
       }),
       republicarWebhooksIntegracaoPendentes({
+        limite,
+        idadeMinimaSegundos: 90,
+      }),
+      republicarMensagensEnviadasPendentes({
         limite,
         idadeMinimaSegundos: 90,
       }),
@@ -50,6 +55,7 @@ export async function GET(request: Request) {
       ok: true,
       recuperacao,
       recuperacao_integracoes: recuperacaoIntegracoes,
+      recuperacao_mensagens_enviadas: recuperacaoMensagensEnviadas,
     });
   } catch (error: any) {
     console.error("[CRON WEBHOOK WHATSAPP] Erro geral:", error);

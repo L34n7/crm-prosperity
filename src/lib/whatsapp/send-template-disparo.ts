@@ -1,3 +1,4 @@
+import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";
 import { findOrCreateWhatsAppContact } from "@/lib/whatsapp/find-or-create-contact";
@@ -546,7 +547,7 @@ async function registrarMensagemDeDisparo(params: {
         }`
       : conteudoTemplate;
 
-  const { error } = await supabaseAdmin.from("mensagens").insert({
+  const { data: mensagem, error } = await supabaseAdmin.from("mensagens").insert({
     empresa_id: params.empresaId,
     conversa_id: params.conversaId,
     remetente_tipo: params.usuarioId ? "usuario" : "bot",
@@ -573,10 +574,17 @@ async function registrarMensagemDeDisparo(params: {
     conversa_protocolo_id: params.conversaProtocoloId,
     created_at: now,
     updated_at: now,
-  });
+  }).select("id").single();
 
   if (error) {
     throw new Error(`Erro ao registrar mensagem de disparo: ${error.message}`);
+  }
+  if (mensagem?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId: params.empresaId,
+      conversaId: params.conversaId,
+      mensagemId: mensagem.id,
+    });
   }
 }
 

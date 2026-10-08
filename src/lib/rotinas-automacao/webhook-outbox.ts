@@ -169,7 +169,9 @@ export async function enfileirarWebhookAutomacao(params: {
     const outboxId = randomUUID();
     const eventName = params.evento === "mensagem.recebida"
       ? "message.received"
-      : params.evento.replace(/_/g, ".");
+      : params.evento === "mensagem.enviada"
+        ? "message.sent"
+        : params.evento.replace(/_/g, ".");
 
     const payload = {
       event: eventName,
@@ -208,10 +210,10 @@ export async function enfileirarWebhookAutomacao(params: {
       message: {
         id: mensagem?.id || params.mensagemId || null,
         external_id: mensagem?.mensagem_externa_id || null,
-        direction: "incoming",
+        direction: params.evento === "mensagem.enviada" ? "outgoing" : "incoming",
         type: mensagem?.tipo_mensagem || null,
         content: mensagem?.conteudo || null,
-        source: mensagem?.origem || mensagem?.remetente_tipo || "whatsapp",
+        source: metadata.origem || mensagem?.origem || mensagem?.remetente_tipo || "whatsapp",
         status: mensagem?.status_envio || null,
         created_at: mensagem?.created_at || null,
         media: {

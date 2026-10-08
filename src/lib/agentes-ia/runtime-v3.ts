@@ -1,3 +1,4 @@
+import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import crypto from "node:crypto";
@@ -1616,7 +1617,7 @@ async function enviarMensagemAgente(params: {
     .from("conversa_protocolos").select("id").eq("empresa_id", params.empresaId).eq("conversa_id", params.conversaId).eq("ativo", true)
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
 
-  const { error: mensagemError } = await supabaseAdmin.from("mensagens").insert({
+  const { data: mensagemSalva, error: mensagemError } = await supabaseAdmin.from("mensagens").insert({
     empresa_id: params.empresaId,
     conversa_id: params.conversaId,
     conversa_protocolo_id: protocolo?.id || null,
@@ -1633,8 +1634,15 @@ async function enviarMensagemAgente(params: {
     },
     created_at: agora,
     updated_at: agora,
-  });
+  }).select("id").single();
   if (mensagemError) console.error("[AGENTE_IA] Falha ao persistir mensagem enviada:", mensagemError);
+  if (mensagemSalva?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId: params.empresaId,
+      conversaId: params.conversaId,
+      mensagemId: mensagemSalva.id,
+    });
+  }
   if (!envio.ok) throw new Error(envio.error || "Falha ao enviar resposta do agente.");
   await supabaseAdmin.from("conversas").update({ last_message_at: agora, updated_at: agora }).eq("empresa_id", params.empresaId).eq("id", params.conversaId);
   return envio;

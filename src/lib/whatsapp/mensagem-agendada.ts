@@ -1,3 +1,4 @@
+import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
@@ -219,7 +220,7 @@ async function inserirMensagem(params: {
   messageId: string | null;
   metadata: Record<string, unknown>;
 }) {
-  const { error } = await supabaseAdmin.from("mensagens").insert({
+  const { data: mensagem, error } = await supabaseAdmin.from("mensagens").insert({
     empresa_id: params.agendamento.empresa_id,
     conversa_id: params.payload.conversa_id,
     conversa_protocolo_id: params.payload.conversa_protocolo_id || null,
@@ -236,8 +237,15 @@ async function inserirMensagem(params: {
       agendamento_id: params.agendamento.id,
       origem_agendamento: "conversa",
     },
-  });
+  }).select("id").single();
   if (error) throw new Error(`Mensagem enviada, mas não foi possível registrar no CRM: ${error.message}`);
+  if (mensagem?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId: params.agendamento.empresa_id,
+      conversaId: String(params.payload.conversa_id || ""),
+      mensagemId: mensagem.id,
+    });
+  }
 }
 
 export async function processarMensagemManualAgendadaPorId(agendamentoId: string) {

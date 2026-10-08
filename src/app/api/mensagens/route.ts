@@ -28,6 +28,7 @@ import {
 } from "@/lib/whatsapp/meta-block";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { buildRecentMessagePage } from "@/lib/conversas/message-pagination";
+import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -1044,6 +1045,12 @@ export async function POST(request: Request) {
       last_message_at: new Date().toISOString(),
     })
     .eq("id", conversa_id);
+
+  await publicarMensagemEnviadaRegistrada({
+    empresaId: conversa.empresa_id,
+    conversaId: conversa_id,
+    mensagemId: data.id,
+  });
 
   return NextResponse.json({
     ok: true,

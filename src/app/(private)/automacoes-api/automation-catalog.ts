@@ -199,6 +199,7 @@ export const gatilhosPorCategoria: Record<
   ],
   conversas: [
     { evento: "mensagem.recebida", nome: "Mensagem recebida", tipo: "evento" },
+    { evento: "mensagem.enviada", nome: "Mensagem enviada", tipo: "evento" },
     { evento: "conversa.criada", nome: "Conversa criada", tipo: "evento" },
     { evento: "conversa.assumida", nome: "Conversa assumida", tipo: "evento" },
     { evento: "conversa.transferida", nome: "Conversa transferida", tipo: "evento" },

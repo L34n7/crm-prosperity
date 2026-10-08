@@ -1,3 +1,4 @@
+import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type {
@@ -10202,6 +10203,14 @@ export async function enviarMensagemAutomacao(params: {
     mensagemId: mensagemSalva?.id,
   });
 
+  if (mensagemSalva?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId,
+      conversaId,
+      mensagemId: mensagemSalva.id,
+    });
+  }
+
   return {
     ok: envio.ok,
     status: envio.status,
@@ -10384,6 +10393,14 @@ async function enviarBotoesAutomacao({
       insertMensagemError
     );
     throw new Error(insertMensagemErrorTexto);
+  }
+
+  if (mensagemSalva?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId,
+      conversaId,
+      mensagemId: mensagemSalva.id,
+    });
   }
 
   return {
@@ -10599,6 +10616,14 @@ async function enviarBotaoRedirectAutomacao({
     throw new Error(
       `Erro ao salvar Botao redirect da automacao: ${mensagemError.message}`
     );
+  }
+
+  if (mensagemSalva?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId,
+      conversaId,
+      mensagemId: mensagemSalva.id,
+    });
   }
 
   return {
@@ -10818,6 +10843,14 @@ async function enviarMidiaAutomacao(params: {
 
   if (mensagemError) {
     throw new Error(`Erro ao salvar mídia da automação: ${mensagemError.message}`);
+  }
+
+  if (mensagemSalva?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId,
+      conversaId,
+      mensagemId: mensagemSalva.id,
+    });
   }
 
   return {

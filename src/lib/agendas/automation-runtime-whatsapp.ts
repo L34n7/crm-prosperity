@@ -1,3 +1,4 @@
+import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -153,7 +154,7 @@ async function recordOutboundMessage(
 
   const conversationProtocolId = await resolveConversationProtocolId(context);
 
-  const { error } = await supabase.from("mensagens").insert({
+  const { data: mensagem, error } = await supabase.from("mensagens").insert({
     empresa_id: context.job.empresa_id,
     conversa_id: context.conversation.id,
     conversa_protocolo_id: conversationProtocolId,
@@ -178,9 +179,15 @@ async function recordOutboundMessage(
       variaveis_enviadas: variablesSnapshot,
       meta_response: raw,
     },
-  });
+  }).select("id").single();
   if (error) {
     console.warn("[AGENDA_AUTOMACOES] Mensagem enviada, mas não registrada:", error);
+  } else if (mensagem?.id) {
+    await publicarMensagemEnviadaRegistrada({
+      empresaId: context.job.empresa_id,
+      conversaId: context.conversation.id,
+      mensagemId: mensagem.id,
+    });
   }
 
   await supabase

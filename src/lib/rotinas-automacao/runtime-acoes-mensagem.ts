@@ -1,3 +1,4 @@
+import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
@@ -147,6 +148,12 @@ export async function enviarMensagemRotina(params: {
     .eq("empresa_id", params.empresaId)
     .eq("id", params.conversaId);
   if (conversaUpdateError) throw conversaUpdateError;
+
+  await publicarMensagemEnviadaRegistrada({
+    empresaId: params.empresaId,
+    conversaId: params.conversaId,
+    mensagemId: mensagem.id,
+  });
 
   return {
     mensagem_id: mensagem.id,

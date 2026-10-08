@@ -4,7 +4,7 @@ import { avaliarCondicoes, type CondicaoRotina, type ContextoEvento } from "./ru
 import { executarAcaoRotina, tituloAcaoRotina, type AcaoRotina } from "./runtime-acoes";
 
 const supabase = getSupabaseAdmin();
-const EVENTO = "mensagem.recebida";
+type EventoMensagemRotina = "mensagem.recebida" | "mensagem.enviada";
 
 export type ProcessarMensagemRecebidaRotinasInput = {
   empresaId: string;
@@ -119,8 +119,9 @@ async function marcarEvento(eventoId: string | null, empresaId: string, status: 
     .eq("empresa_id", empresaId);
 }
 
-export async function processarMensagemRecebidaRotinas(
+async function processarMensagemRotinas(
   input: ProcessarMensagemRecebidaRotinasInput,
+  eventoTipo: EventoMensagemRotina,
 ): Promise<ProcessarMensagemRecebidaRotinasResultado | null> {
   const mensagemId = String(input.mensagemId || "").trim();
   if (!mensagemId) return null;
@@ -130,7 +131,7 @@ export async function processarMensagemRecebidaRotinas(
       .from("rotina_automacao_assinaturas")
       .select("id")
       .eq("empresa_id", input.empresaId)
-      .eq("evento", EVENTO)
+      .eq("evento", eventoTipo)
       .maybeSingle();
     if (assinaturaError) {
       console.error("[ROTINA_AUTOMACAO] Falha ao consultar assinatura:", assinaturaError);
@@ -143,7 +144,7 @@ export async function processarMensagemRecebidaRotinas(
         .from("rotina_automacao_gatilhos")
         .select("id,automacao_id,configuracao_json")
         .eq("empresa_id", input.empresaId)
-        .eq("evento", EVENTO)
+        .eq("evento", eventoTipo)
         .eq("ativo", true),
       supabase
         .from("conversas")
@@ -191,12 +192,12 @@ export async function processarMensagemRecebidaRotinas(
       return { executado: false, interromperFluxoAtual: false, execucaoIds: [] };
     }
 
-    const eventoChave = `${EVENTO}:${mensagemId}`;
+    const eventoChave = `${eventoTipo}:${mensagemId}`;
     const { data: evento, error: eventoError } = await supabase
       .from("rotina_automacao_eventos")
       .upsert({
         empresa_id: input.empresaId,
-        evento: EVENTO,
+        evento: eventoTipo,
         evento_chave: eventoChave,
         entidade_tipo: "mensagem",
         entidade_id: mensagemId,
@@ -261,7 +262,7 @@ export async function processarMensagemRecebidaRotinas(
         eventoChave,
         mensagemId,
         contextoJson: {
-          evento: EVENTO,
+          evento: eventoTipo,
           mensagem_id: mensagemId,
           conversa_id: input.conversaId,
           contato_id: input.contatoId || null,
@@ -349,7 +350,7 @@ export async function processarMensagemRecebidaRotinas(
             automacaoId: automacao.id,
             execucaoId: execucao.id,
             mensagemId,
-            evento: EVENTO,
+            evento: eventoTipo,
             acao,
           });
           resultados.push(resultado);
@@ -412,7 +413,20 @@ export async function processarMensagemRecebidaRotinas(
       erro: houveErro ? "Uma ou mais automações falharam." : null,
     };
   } catch (error) {
-    console.error("[ROTINA_AUTOMACAO] Falha no runtime de mensagem recebida:", error);
+    console.error(`[ROTINA_AUTOMACAO] Falha no runtime de ${eventoTipo}:`, error);
     return null;
   }
+}
+
+
+export async function processarMensagemRecebidaRotinas(
+  input: ProcessarMensagemRecebidaRotinasInput,
+) {
+  return processarMensagemRotinas(input, "mensagem.recebida");
+}
+
+export async function processarMensagemEnviadaRotinas(
+  input: ProcessarMensagemRecebidaRotinasInput,
+) {
+  return processarMensagemRotinas(input, "mensagem.enviada");
 }
