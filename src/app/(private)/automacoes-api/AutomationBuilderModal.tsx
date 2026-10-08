@@ -71,6 +71,7 @@ function AcaoIcon({ tipo }: { tipo: string }) {
   if (tipo === "conversa.transferir_setor") return <GitBranch size={18} />;
   if (tipo === "agenda.atualizar_status") return <CalendarClock size={18} />;
   if (tipo === "integracao.consultar_api") return <Database size={18} />;
+  if (tipo === "integracao.enviar_webhook") return <Database size={18} />;
   if (tipo === "aguardar") return <CalendarClock size={18} />;
   return <Zap size={18} />;
 }
@@ -862,6 +863,39 @@ export default function AutomationBuilderModal({
         <>
           <label className={styles.formField} style={{ marginTop: 8 }}><span>Conexão</span><select value={String(config.integracao_id || "")} onChange={(event) => configAcao(index, "integracao_id", event.target.value)}><option value="">Selecione</option>{opcoes.integracoes_api.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
           <label className={styles.formField} style={{ marginTop: 8 }}><span>Endpoint</span><input value={String(config.endpoint || "")} onChange={(event) => configAcao(index, "endpoint", event.target.value)} placeholder="/clientes" /></label>
+        </>
+      );
+    }
+
+    if (acao.tipo_acao === "integracao.enviar_webhook") {
+      const conexoesAtivas = opcoes.integracoes_api.filter((item) => item.status === "ativa");
+      return (
+        <>
+          <label className={styles.formField} style={{ marginTop: 8 }}>
+            <span>Conexão externa</span>
+            <select
+              value={String(config.integracao_id || "")}
+              onChange={(event) => configAcao(index, "integracao_id", event.target.value)}
+            >
+              <option value="">{conexoesAtivas.length ? "Selecione" : "Cadastre e teste uma conexão primeiro"}</option>
+              {conexoesAtivas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+            </select>
+          </label>
+          <label className={styles.formField} style={{ marginTop: 8 }}>
+            <span>Endpoint do webhook</span>
+            <input
+              value={String(config.endpoint || "")}
+              onChange={(event) => configAcao(index, "endpoint", event.target.value)}
+              placeholder="/webhook/wf00-entrada"
+            />
+          </label>
+          <div className={styles.infoBox} style={{ marginTop: 10 }}>
+            <Database size={18} />
+            <div>
+              <b>Envio assíncrono</b>
+              <p>O CRM apenas coloca o evento na fila e continua o atendimento. A resposta do sistema externo não bloqueia a conversa, o fluxo ou a IA.</p>
+            </div>
+          </div>
         </>
       );
     }

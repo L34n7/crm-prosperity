@@ -11,6 +11,7 @@ import {
 import {
   enviarDisparoWhatsappRotina,
 } from "./runtime-acoes-whatsapp";
+import { enfileirarWebhookAutomacao } from "./webhook-outbox";
 
 export type AcaoRotina = {
   id: string;
@@ -27,6 +28,7 @@ export function tituloAcaoRotina(tipo: string) {
   if (tipo === "contato.adicionar_etiqueta") return "Adicionar etiqueta";
   if (tipo === "whatsapp.enviar_mensagem") return "Enviar mensagem";
   if (tipo === "whatsapp.enviar_template") return "Enviar disparo WhatsApp";
+  if (tipo === "integracao.enviar_webhook") return "Enviar webhook HTTP";
   return tipo;
 }
 
@@ -35,6 +37,8 @@ export async function executarAcaoRotina(params: {
   conversaId: string;
   automacaoId: string;
   execucaoId: string;
+  mensagemId?: string | null;
+  evento?: string | null;
   acao: AcaoRotina;
 }): Promise<Record<string, unknown>> {
   if (params.acao.tipo_acao === "fluxo.interromper") {
@@ -82,6 +86,19 @@ export async function executarAcaoRotina(params: {
       automacaoId: params.automacaoId,
       execucaoId: params.execucaoId,
       acaoId: params.acao.id,
+      config: params.acao.configuracao_json || {},
+    });
+  }
+
+  if (params.acao.tipo_acao === "integracao.enviar_webhook") {
+    return enfileirarWebhookAutomacao({
+      empresaId: params.empresaId,
+      conversaId: params.conversaId,
+      automacaoId: params.automacaoId,
+      execucaoId: params.execucaoId,
+      acaoId: params.acao.id,
+      mensagemId: params.mensagemId || null,
+      evento: params.evento || "mensagem.recebida",
       config: params.acao.configuracao_json || {},
     });
   }

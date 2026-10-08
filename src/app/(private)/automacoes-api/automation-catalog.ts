@@ -287,6 +287,7 @@ export const acoesDisponiveis = [
   { value: "conversa.transferir_setor", label: "Transferir conversa" },
   { value: "agenda.atualizar_status", label: "Alterar status do agendamento" },
   { value: "integracao.consultar_api", label: "Consultar API externa" },
+  { value: "integracao.enviar_webhook", label: "Enviar webhook HTTP" },
 ];
 
 export const variaveisWhatsappSugeridas = [
@@ -385,6 +386,9 @@ export function configuracaoPadraoAcao(tipo: string): Record<string, unknown> {
   if (tipo === "whatsapp.enviar_mensagem") return { mensagem: "" };
   if (tipo === "whatsapp.enviar_template") {
     return { integracao_whatsapp_id: "", template_id: "", variaveis: [] };
+  }
+  if (tipo === "integracao.enviar_webhook") {
+    return { integracao_id: "", endpoint: "" };
   }
   if (tipo === "conversa.transferir_setor") {
     return {

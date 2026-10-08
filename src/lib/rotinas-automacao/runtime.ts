@@ -71,7 +71,9 @@ async function obterJob(params: {
     ? "whatsapp"
     : params.acao.tipo_acao === "email.enviar"
       ? "email"
-      : null;
+      : params.acao.tipo_acao.startsWith("integracao.")
+        ? "integracao"
+        : null;
   const { data, error } = await supabase
     .from("rotina_automacao_jobs")
     .upsert({
@@ -346,6 +348,8 @@ export async function processarMensagemRecebidaRotinas(
             conversaId: input.conversaId,
             automacaoId: automacao.id,
             execucaoId: execucao.id,
+            mensagemId,
+            evento: EVENTO,
             acao,
           });
           resultados.push(resultado);
