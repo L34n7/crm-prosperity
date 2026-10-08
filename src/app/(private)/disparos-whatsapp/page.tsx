@@ -2384,6 +2384,8 @@ export default function DisparosWhatsAppPage() {
     totalCobrados: number;
     totalTelefonesIsentosUnicos: number;
     totalTelefonesCobradosUnicos: number;
+    totalTelefonesConsomemLimiteUnicos: number;
+    totalTelefonesIsentosLimiteUnicos: number;
     valorUnitarioUsd: number;
     valorTotalUsd: number;
     cotacaoUsdBrl: number;
@@ -3833,10 +3835,10 @@ export default function DisparosWhatsAppPage() {
   }, [contatosSelecionados]);
 
   const totalTelefonesQueConsomemLimite = previewCusto
-    ? Number(previewCusto.totalTelefonesCobradosUnicos || 0)
+    ? Number(previewCusto.totalTelefonesConsomemLimiteUnicos || 0)
     : telefonesSelecionadosUnicos.length;
   const totalTelefonesIsentosLimite = previewCusto
-    ? Number(previewCusto.totalTelefonesIsentosUnicos || 0)
+    ? Number(previewCusto.totalTelefonesIsentosLimiteUnicos || 0)
     : 0;
   const saldoEstimadoAposSelecao = limiteMeta
     ? limiteMeta.restantes - totalTelefonesQueConsomemLimite
@@ -5571,6 +5573,17 @@ export default function DisparosWhatsAppPage() {
         totalTelefonesCobradosUnicos: Number(
           json.totalTelefonesCobradosUnicos ?? totalCobrados ?? 0
         ),
+        totalTelefonesConsomemLimiteUnicos: Number(
+          json.totalTelefonesConsomemLimiteUnicos ??
+            json.totalTelefonesCobradosUnicos ??
+            totalCobrados ??
+            0
+        ),
+        totalTelefonesIsentosLimiteUnicos: Number(
+          json.totalTelefonesIsentosLimiteUnicos ??
+            json.totalTelefonesIsentosUnicos ??
+            0
+        ),
         valorUnitarioUsd: Number(json.valorUnitarioUsd || 0),
         valorTotalUsd,
         cotacaoUsdBrl: Number(json.cotacaoUsdBrl || 0),
@@ -7263,7 +7276,7 @@ export default function DisparosWhatsAppPage() {
                     </span>
 
                     <span>
-                      <strong>Isentos:</strong> {previewCusto?.totalIsentos}
+                      <strong>Isentos (FEP):</strong> {previewCusto?.totalIsentos}
                     </span>
 
                     <span>
@@ -8910,7 +8923,7 @@ export default function DisparosWhatsAppPage() {
                   </div>
 
                   <div className={styles.modalInfoItem}>
-                    <span className={styles.modalInfoLabel}>Isentos</span>
+                    <span className={styles.modalInfoLabel}>Isentos (FEP)</span>
                     <strong className={styles.modalInfoValue}>
                       {previewCusto?.totalIsentos ?? 0}
                     </strong>
@@ -8932,6 +8945,8 @@ export default function DisparosWhatsAppPage() {
                 </strong>
                 <p className={styles.modalFinanceiroObs}>
                   Valor de referência calculado a partir do total em USD e da cotação atual.
+                  Utility dentro da janela de 24h é cobrado desde 01/10/2026; a
+                  isenção exibida considera apenas Free Entry Point identificado.
                 </p>
               </div>
 

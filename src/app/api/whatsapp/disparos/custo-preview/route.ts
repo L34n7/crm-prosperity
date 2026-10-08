@@ -37,6 +37,30 @@ function categoriaValida(valor?: string | null): valor is CategoriaTemplateCobra
   return valor === "marketing" || valor === "utility";
 }
 
+const JANELA_24H_MS = 24 * 60 * 60 * 1000;
+const JANELA_FREE_ENTRY_POINT_MS = 72 * 60 * 60 * 1000;
+const TAMANHO_LOTE_CONVERSAS_FEP = 200;
+
+function dividirEmLotes<T>(itens: T[], tamanho: number) {
+  const lotes: T[][] = [];
+
+  for (let indice = 0; indice < itens.length; indice += tamanho) {
+    lotes.push(itens.slice(indice, indice + tamanho));
+  }
+
+  return lotes;
+}
+
+function referralEhFreeEntryPoint(valor: unknown) {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return false;
+
+  const referral = valor as Record<string, unknown>;
+  const sourceType = String(referral.source_type || "").trim().toLowerCase();
+  const ctwaClid = String(referral.ctwa_clid || "").trim();
+
+  return sourceType === "ad" || Boolean(ctwaClid);
+}
+
 function formatarDataBCB(data: Date) {
   const dia = String(data.getDate()).padStart(2, "0");
   const mes = String(data.getMonth() + 1).padStart(2, "0");
@@ -169,6 +193,10 @@ export async function POST(request: Request) {
         totalTelefonesCobradosUnicos: 0,
         telefonesIsentos: [],
         telefonesCobrados: [],
+        totalTelefonesConsomemLimiteUnicos: 0,
+        totalTelefonesIsentosLimiteUnicos: 0,
+        telefonesConsomemLimite: [],
+        telefonesIsentosLimite: [],
         valorUnitarioUsd: WHATSAPP_TEMPLATE_PRICING[categoria].usd,
         valorTotalUsd: 0,
         cotacaoUsdBrl: cotacao,
@@ -197,11 +225,12 @@ export async function POST(request: Request) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    const { data: conversasData, error: conversasError } = await supabaseAdmin
+    let conversasQuery = supabaseAdmin
       .from("conversas")
       .select(`
         id,
         empresa_id,
+        integracao_whatsapp_id,
         contato_id,
         status,
         last_inbound_message_at,
@@ -212,6 +241,16 @@ export async function POST(request: Request) {
       `)
       .eq("empresa_id", usuario.empresa_id);
 
+    if (integracaoWhatsappId) {
+      conversasQuery = conversasQuery.eq(
+        "integracao_whatsapp_id",
+        integracaoWhatsappId
+      );
+    }
+
+    const { data: conversasData, error: conversasError } =
+      await conversasQuery;
+
     if (conversasError) {
       return NextResponse.json(
         { ok: false, error: conversasError.message },
@@ -219,16 +258,24 @@ export async function POST(request: Request) {
       );
     }
 
+    const telefonesSelecionadosSet = new Set(telefonesSelecionados);
     const telefonesDentroDaJanela24h = new Set<string>();
+    const telefonePorConversaId = new Map<string, string>();
 
     for (const conversa of conversasData || []) {
       const telefoneContato = (conversa as any)?.contatos?.telefone || "";
       const telefoneNormalizado = normalizarNumeroComparacao(telefoneContato);
+      const conversaId = String((conversa as any)?.id || "").trim();
       const lastInboundMessageAt =
         (conversa as any)?.last_inbound_message_at || null;
 
       if (!telefoneNormalizado) continue;
-      if (!telefonesSelecionados.includes(telefoneNormalizado)) continue;
+      if (!telefonesSelecionadosSet.has(telefoneNormalizado)) continue;
+
+      if (conversaId) {
+        telefonePorConversaId.set(conversaId, telefoneNormalizado);
+      }
+
       if (!lastInboundMessageAt) continue;
 
       const dataUltimaMensagemContato = new Date(lastInboundMessageAt).getTime();
@@ -237,39 +284,93 @@ export async function POST(request: Request) {
 
       const diffMs = referenciaJanelaMs - dataUltimaMensagemContato;
       const dentroDaJanela24h =
-        diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
+        diffMs >= 0 && diffMs < JANELA_24H_MS;
 
       if (dentroDaJanela24h) {
         telefonesDentroDaJanela24h.add(telefoneNormalizado);
       }
     }
 
-    const totalSelecionados = contatosNormalizados.length;
+    // Desde 01/10/2026, Utility dentro da janela de 24h volta a ser cobrado.
+    // A janela de 24h continua relevante para capacidade da Meta, mas nao
+    // pode mais ser usada como isencao financeira.
+    //
+    // A isencao de entrega que permanece e o Free Entry Point (CTWA/CTA),
+    // identificado pelo referral de anuncio dentro da janela valida de 72h.
+    const telefonesFreeEntryPoint = new Set<string>();
+    const conversaIdsSelecionadas = Array.from(telefonePorConversaId.keys());
 
-    const totalIsentos =
-      categoria === "utility"
-        ? contatosNormalizados.filter((item) =>
-            telefonesDentroDaJanela24h.has(item.telefoneNormalizado)
-          ).length
-        : 0;
+    if (conversaIdsSelecionadas.length > 0) {
+      const inicioFep = new Date(
+        referenciaJanelaMs - JANELA_FREE_ENTRY_POINT_MS
+      ).toISOString();
+      const fimFep = new Date(referenciaJanelaMs).toISOString();
 
-    const totalCobrados =
-      categoria === "marketing"
-        ? totalSelecionados
-        : Math.max(0, totalSelecionados - totalIsentos);
+      for (const loteConversaIds of dividirEmLotes(
+        conversaIdsSelecionadas,
+        TAMANHO_LOTE_CONVERSAS_FEP
+      )) {
+        const { data: mensagensFep, error: mensagensFepError } =
+          await supabaseAdmin
+            .from("mensagens")
+            .select("conversa_id, created_at, metadata_json")
+            .eq("empresa_id", usuario.empresa_id)
+            .eq("origem", "recebida")
+            .in("conversa_id", loteConversaIds)
+            .gte("created_at", inicioFep)
+            .lte("created_at", fimFep);
 
-    const telefonesIsentos =
-      categoria === "utility"
-        ? telefonesSelecionados.filter((telefone) =>
-            telefonesDentroDaJanela24h.has(telefone)
-          )
-        : [];
-    const telefonesCobrados =
-      categoria === "marketing"
-        ? telefonesSelecionados
-        : telefonesSelecionados.filter(
-            (telefone) => !telefonesDentroDaJanela24h.has(telefone)
+        if (mensagensFepError) {
+          return NextResponse.json(
+            { ok: false, error: mensagensFepError.message },
+            { status: 500 }
           );
+        }
+
+        for (const mensagem of mensagensFep || []) {
+          const metadata =
+            (mensagem as any)?.metadata_json &&
+            typeof (mensagem as any).metadata_json === "object"
+              ? (mensagem as any).metadata_json
+              : null;
+
+          if (!referralEhFreeEntryPoint(metadata?.referral)) continue;
+
+          const conversaId = String((mensagem as any)?.conversa_id || "").trim();
+          const telefone = telefonePorConversaId.get(conversaId);
+
+          if (telefone) {
+            telefonesFreeEntryPoint.add(telefone);
+          }
+        }
+      }
+    }
+
+    const totalSelecionados = contatosNormalizados.length;
+    const totalIsentos = contatosNormalizados.filter((item) =>
+      telefonesFreeEntryPoint.has(item.telefoneNormalizado)
+    ).length;
+    const totalCobrados = Math.max(0, totalSelecionados - totalIsentos);
+
+    const telefonesIsentos = telefonesSelecionados.filter((telefone) =>
+      telefonesFreeEntryPoint.has(telefone)
+    );
+    const telefonesCobrados = telefonesSelecionados.filter(
+      (telefone) => !telefonesFreeEntryPoint.has(telefone)
+    );
+
+    // Nao reutilizar cobranca para calcular capacidade. Marketing continua
+    // consumindo limite conforme a regra existente. Utility com janela de
+    // atendimento aberta permanece fora desse calculo de capacidade.
+    const telefonesConsomemLimite =
+      categoria === "utility"
+        ? telefonesSelecionados.filter(
+            (telefone) => !telefonesDentroDaJanela24h.has(telefone)
+          )
+        : telefonesSelecionados;
+    const telefonesIsentosLimite = telefonesSelecionados.filter(
+      (telefone) => !telefonesConsomemLimite.includes(telefone)
+    );
 
     let disponibilidadeAgendamentoMeta = null;
 
@@ -295,7 +396,7 @@ export async function POST(request: Request) {
           await obterDisponibilidadeAgendamentoMeta({
             empresaId: usuario.empresa_id,
             integracao,
-            telefones: telefonesCobrados,
+            telefones: telefonesConsomemLimite,
             aPartirDe: executarEmValido,
           });
       }
@@ -330,6 +431,12 @@ export async function POST(request: Request) {
       totalTelefonesCobradosUnicos: telefonesCobrados.length,
       telefonesIsentos,
       telefonesCobrados,
+      totalTelefonesConsomemLimiteUnicos: telefonesConsomemLimite.length,
+      totalTelefonesIsentosLimiteUnicos: telefonesIsentosLimite.length,
+      telefonesConsomemLimite,
+      telefonesIsentosLimite,
+      criterioIsencaoCobranca: "free_entry_point_72h",
+      utilityJanela24hIsento: false,
       valorUnitarioUsd,
       valorTotalUsd,
       cotacaoUsdBrl: cotacao,
