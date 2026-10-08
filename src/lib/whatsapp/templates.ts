@@ -1,3 +1,8 @@
+import {
+  ERRO_LINK_DIRETO_WHATSAPP_TEMPLATE,
+  linkTemplateAbreWhatsappDiretamente,
+} from "@/lib/whatsapp/template-url-policy";
+
 export type TemplateCategory = "UTILITY" | "MARKETING" | "AUTHENTICATION";
 export type TemplateLanguage = "pt_BR" | "en_US";
 
@@ -201,6 +206,11 @@ export function validateTemplateInput(input: CreateTemplateInput) {
         const parsed = new URL(url);
         if (!["http:", "https:"].includes(parsed.protocol)) {
           errors.push("A URL do botão Redirect deve começar com http:// ou https://.");
+          continue;
+        }
+
+        if (linkTemplateAbreWhatsappDiretamente(url)) {
+          errors.push(ERRO_LINK_DIRETO_WHATSAPP_TEMPLATE);
         }
       } catch {
         errors.push("Informe uma URL válida para o botão Redirect.");

@@ -6,6 +6,11 @@ import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./templates-whatsapp.module.css";
 import { obterFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
+import {
+  ERRO_LINK_DIRETO_WHATSAPP_TEMPLATE,
+  linkTemplateAbreWhatsappDiretamente,
+  traduzirErroLinkDiretoWhatsappTemplate,
+} from "@/lib/whatsapp/template-url-policy";
 
 type IntegracaoWhatsApp = {
   id: string;
@@ -724,6 +729,11 @@ export default function TemplatesWhatsAppPage() {
           setErro("A URL do botão Redirect deve começar com http:// ou https://.");
           return;
         }
+
+        if (linkTemplateAbreWhatsappDiretamente(urlBotao)) {
+          setErro(ERRO_LINK_DIRETO_WHATSAPP_TEMPLATE);
+          return;
+        }
       } catch {
         setErro(`Informe uma URL válida no botão Redirect ${index + 1}.`);
         return;
@@ -838,7 +848,10 @@ export default function TemplatesWhatsAppPage() {
           json?.meta?.error?.message ||
           json?.error;
 
-        throw new Error(metaMsg || "Erro ao criar template.");
+        throw new Error(
+          traduzirErroLinkDiretoWhatsappTemplate(metaMsg) ||
+            "Erro ao criar template."
+        );
       }
 
       setMensagem("Template criado com sucesso e enviado para análise do Meta.");
@@ -1228,7 +1241,7 @@ export default function TemplatesWhatsAppPage() {
                             </strong>
                             <p>
                               Adicione até 3 botões. Texto envia uma resposta rápida;
-                              Redirect abre um link externo.
+                              Redirect abre um site ou página externa; links diretos para WhatsApp não são permitidos pela Meta.
                             </p>
                           </div>
                           <span className={styles.contentSectionBadge}>
@@ -1319,6 +1332,22 @@ export default function TemplatesWhatsAppPage() {
                                         placeholder="https://seusite.com.br"
                                         inputMode="url"
                                       />
+                                      {linkTemplateAbreWhatsappDiretamente(
+                                        button.url
+                                      ) ? (
+                                        <p className={styles.help}>
+                                          Link direto para WhatsApp não é aceito
+                                          pela Meta. Para o cliente responder no
+                                          WhatsApp, use um botão Texto — resposta
+                                          rápida.
+                                        </p>
+                                      ) : (
+                                        <p className={styles.help}>
+                                          Use um site ou página externa. Links
+                                          wa.me e api.whatsapp.com não são
+                                          permitidos neste tipo de botão.
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
                                 )}
