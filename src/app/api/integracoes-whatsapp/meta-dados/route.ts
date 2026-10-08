@@ -150,43 +150,53 @@ export async function POST(request: NextRequest) {
     }
 
     /**
-     * 2. Busca WABAs do business cliente.
+     * 2. No Embedded Signup v4, o callback já persiste a WABA autorizada.
+     * Isso evita depender de business_management apenas para relistar ativos.
      */
-    const wabasResult = await fetchGraph(
-      `${clientBusinessId}/owned_whatsapp_business_accounts?fields=id,name`,
-      accessToken
-    );
+    let wabas: Array<{ id?: string; name?: string }> = [];
+    let wabasResponse: unknown = null;
 
-    if (!wabasResult.ok) {
-      await supabaseAdmin
-        .from("integracoes_whatsapp")
-        .update({
-          onboarding_erro:
-            wabasResult.data?.error?.message ||
-            "Erro ao consultar WABAs do cliente.",
-          config_json: {
-            ...(integracao.config_json || {}),
-            meta_me_response: meResult.data,
-            meta_wabas_response: wabasResult.data,
-            meta_dados_checked_at: agora,
-          },
-          updated_at: agora,
-        })
-        .eq("id", integracao.id);
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Erro ao consultar WABAs do cliente.",
-          meta_response: wabasResult.data,
-        },
-        { status: wabasResult.status }
+    if (integracao.waba_id) {
+      wabas = [{ id: integracao.waba_id }];
+    } else {
+      const wabasResult = await fetchGraph(
+        `${clientBusinessId}/owned_whatsapp_business_accounts?fields=id,name`,
+        accessToken
       );
+      wabasResponse = wabasResult.data;
+
+      if (!wabasResult.ok) {
+        await supabaseAdmin
+          .from("integracoes_whatsapp")
+          .update({
+            onboarding_erro:
+              wabasResult.data?.error?.message ||
+              "Erro ao consultar WABAs do cliente.",
+            config_json: {
+              ...(integracao.config_json || {}),
+              meta_me_response: meResult.data,
+              meta_wabas_response: wabasResponse,
+              meta_dados_checked_at: agora,
+            },
+            updated_at: agora,
+          })
+          .eq("id", integracao.id);
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Erro ao consultar WABAs do cliente.",
+            meta_response: wabasResult.data,
+          },
+          { status: wabasResult.status }
+        );
+      }
+
+      wabas = Array.isArray(wabasResult.data?.data)
+        ? wabasResult.data.data
+        : [];
     }
 
-    const wabas = Array.isArray(wabasResult.data?.data)
-      ? wabasResult.data.data
-      : [];
     const waba =
       wabas.find(
         (item: { id?: string }) => item?.id === integracao.waba_id
@@ -203,7 +213,7 @@ export async function POST(request: NextRequest) {
           config_json: {
             ...(integracao.config_json || {}),
             meta_me_response: meResult.data,
-            meta_wabas_response: wabasResult.data,
+            meta_wabas_response: wabasResponse,
             meta_dados_checked_at: agora,
           },
           updated_at: agora,
@@ -219,7 +229,7 @@ export async function POST(request: NextRequest) {
               : "WABA não encontrada.",
           meta_response: {
             me: meResult.data,
-            wabas: wabasResult.data,
+            wabas: wabasResponse,
           },
         },
         { status: 400 }
@@ -244,7 +254,7 @@ export async function POST(request: NextRequest) {
           config_json: {
             ...(integracao.config_json || {}),
             meta_me_response: meResult.data,
-            meta_wabas_response: wabasResult.data,
+            meta_wabas_response: wabasResponse,
             meta_phone_numbers_response: phonesResult.data,
             meta_dados_checked_at: agora,
           },
@@ -294,7 +304,7 @@ export async function POST(request: NextRequest) {
           config_json: {
             ...(integracao.config_json || {}),
             meta_me_response: meResult.data,
-            meta_wabas_response: wabasResult.data,
+            meta_wabas_response: wabasResponse,
             meta_phone_numbers_response: phonesResult.data,
             meta_dados_checked_at: agora,
           },
@@ -366,7 +376,7 @@ export async function POST(request: NextRequest) {
           config_json: {
             ...(integracao.config_json || {}),
             meta_me_response: meResult.data,
-            meta_wabas_response: wabasResult.data,
+            meta_wabas_response: wabasResponse,
             meta_phone_numbers_response: phonesResult.data,
             meta_dados_checked_at: agora,
             whatsapp_meta_health: {

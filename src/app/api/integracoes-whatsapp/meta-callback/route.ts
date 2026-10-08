@@ -66,6 +66,8 @@ function metaErrorMessage(data: unknown, fallback: string) {
 
 async function resolveCoexistenceAssetsFromGraph(params: {
   accessToken: string;
+  appId: string;
+  appSecret: string;
   preferredWabaId?: string | null;
   preferredPhoneNumberId?: string | null;
 }): Promise<CoexistenceAssetResolution> {
@@ -78,53 +80,77 @@ async function resolveCoexistenceAssetsFromGraph(params: {
   if (preferredWabaId) {
     wabas = [{ id: preferredWabaId }];
   } else {
+    const debugUrl = new URL(getWhatsAppGraphUrl("debug_token"));
+    debugUrl.searchParams.set("input_token", params.accessToken);
+    debugUrl.searchParams.set(
+      "access_token",
+      `${params.appId}|${params.appSecret}`
+    );
+
+    const debugResponse = await fetch(debugUrl.toString(), {
+      method: "GET",
+      cache: "no-store",
+    });
+    const debugData = await debugResponse.json().catch(() => null);
+
+    if (debugResponse.ok) {
+      const debugRoot = recordValue(recordValue(debugData).data);
+      const granularScopes = Array.isArray(debugRoot.granular_scopes)
+        ? debugRoot.granular_scopes.map(recordValue)
+        : [];
+
+      const targetIds = new Set<string>();
+
+      for (const scope of granularScopes) {
+        const scopeName = textValue(scope.scope);
+        if (
+          scopeName !== "whatsapp_business_management" &&
+          scopeName !== "whatsapp_business_messaging"
+        ) {
+          continue;
+        }
+
+        const targets = Array.isArray(scope.target_ids)
+          ? scope.target_ids
+          : [];
+        for (const target of targets) {
+          const targetId = textValue(target);
+          if (targetId) targetIds.add(targetId);
+        }
+      }
+
+      wabas = Array.from(targetIds).map((id) => ({ id }));
+    }
+
     const me = await graphGet(
       "me?fields=id,client_business_id",
       params.accessToken
     );
 
-    if (!me.ok) {
-      return {
-        ok: false,
-        metaStatus: me.status,
-        error: metaErrorMessage(
-          me.data,
-          "Não foi possível consultar o business associado ao token da Meta."
-        ),
-      };
+    if (me.ok) {
+      businessPortfolioId =
+        textValue(recordValue(me.data).client_business_id) || null;
     }
 
-    businessPortfolioId =
-      textValue(recordValue(me.data).client_business_id) || null;
+    // Fallback para configurações antigas que ainda concedem business_management.
+    if (!wabas.length && businessPortfolioId) {
+      const wabasResult = await graphGet(
+        `${businessPortfolioId}/owned_whatsapp_business_accounts?fields=id,name`,
+        params.accessToken
+      );
 
-    if (!businessPortfolioId) {
-      return {
-        ok: false,
-        error:
-          "A Meta autorizou a conta, mas não retornou o business associado ao Embedded Signup.",
-      };
+      if (wabasResult.ok) {
+        const rows = recordValue(wabasResult.data).data;
+        wabas = Array.isArray(rows)
+          ? rows.map(recordValue).filter((item) => textValue(item.id))
+          : [];
+      } else {
+        console.warn("[META CALLBACK] owned_whatsapp_business_accounts indisponível; usando granular scopes quando possível.", {
+          status: wabasResult.status,
+          error: metaErrorMessage(wabasResult.data, "Falha ao consultar WABAs."),
+        });
+      }
     }
-
-    const wabasResult = await graphGet(
-      `${businessPortfolioId}/owned_whatsapp_business_accounts?fields=id,name`,
-      params.accessToken
-    );
-
-    if (!wabasResult.ok) {
-      return {
-        ok: false,
-        metaStatus: wabasResult.status,
-        error: metaErrorMessage(
-          wabasResult.data,
-          "Não foi possível consultar as contas do WhatsApp autorizadas."
-        ),
-      };
-    }
-
-    const rows = recordValue(wabasResult.data).data;
-    wabas = Array.isArray(rows)
-      ? rows.map(recordValue).filter((item) => textValue(item.id))
-      : [];
   }
 
   if (!wabas.length) {
@@ -366,6 +392,8 @@ export async function POST(request: NextRequest) {
     ) {
       const graphResolution = await resolveCoexistenceAssetsFromGraph({
         accessToken,
+        appId,
+        appSecret,
         preferredWabaId: effectiveWabaId,
         preferredPhoneNumberId: effectivePhoneNumberId,
       });
