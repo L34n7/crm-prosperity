@@ -487,27 +487,53 @@ async function processAccountUpdates(body: WhatsAppWebhookBody) {
       continue;
     }
 
-    await supabase
+    const agora = new Date().toISOString();
+    const { error } = await supabase
       .from("integracoes_whatsapp")
       .update({
         status: "desconectada",
         coex_status: "desconectado",
         onboarding_status: "erro",
+        onboarding_etapa: "inicio",
         onboarding_erro:
           update.reason === "PRIMARY_INACTIVITY"
             ? "A Meta desconectou a Coexistência por inatividade do WhatsApp Business App."
             : `A parceria do Coexistence foi removida pela Meta${
                 update.reason ? `: ${update.reason}` : "."
               }`,
+        token_ref: null,
+        waba_id: null,
+        phone_number_id: null,
+        business_portfolio_id: null,
+        meta_business_id: null,
+        business_account_id: null,
+        webhook_verificado: false,
+        app_assigned: false,
+        is_on_biz_app: false,
+        platform_type: null,
+        phone_number_status: null,
+        phone_registered: false,
+        coex_sync_started_at: null,
+        coex_sync_completed_at: null,
         config_json: {
           ...(integration.config_json || {}),
+          coex_previous_binding: {
+            waba_id: integration.waba_id || null,
+            phone_number_id: integration.phone_number_id || null,
+          },
           coex_last_disconnection: update,
-          coex_last_disconnection_at: new Date().toISOString(),
+          coex_last_disconnection_at: agora,
         },
-        updated_at: new Date().toISOString(),
+        updated_at: agora,
       })
       .eq("id", integration.id)
       .eq("empresa_id", integration.empresa_id);
+
+    if (error) {
+      throw new Error(
+        `Erro ao limpar vínculo removido da Coexistência: ${error.message}`
+      );
+    }
   }
 
   return updates.length;
