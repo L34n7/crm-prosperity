@@ -83,6 +83,19 @@ type ApiResponse = {
   error?: string;
 };
 
+type CoexistencePhoneCandidate = {
+  waba_id: string;
+  phone_number_id: string;
+  display_phone_number: string | null;
+  verified_name: string | null;
+  status: string | null;
+};
+
+type MetaCallbackResponse = ApiResponse & {
+  selection_required?: boolean;
+  candidates?: CoexistencePhoneCandidate[];
+};
+
 type CoexSyncJob = {
   tipo: "contacts" | "history";
   status:
@@ -407,6 +420,12 @@ export default function ConfigurarAmbientePage() {
   const [erro, setErro] = useState<string | null>(null);
   const [conectandoMeta, setConectandoMeta] = useState(false);
   const [modalPinAberto, setModalPinAberto] = useState(false);
+  const [modalSelecaoCoexAberto, setModalSelecaoCoexAberto] =
+    useState(false);
+  const [coexPhoneCandidates, setCoexPhoneCandidates] =
+    useState<CoexistencePhoneCandidate[]>([]);
+  const [selecionandoPhoneCoex, setSelecionandoPhoneCoex] =
+    useState("");
   const [pin, setPin] = useState("");
   const [registrandoNumero, setRegistrandoNumero] = useState(false);
   const [erroWebhook, setErroWebhook] = useState<string | null>(null);
@@ -622,7 +641,21 @@ export default function ConfigurarAmbientePage() {
       }),
     });
 
-    const data = await response.json();
+    const data = (await response.json()) as MetaCallbackResponse & {
+      meta_response?: {
+        error?: {
+          message?: string;
+        };
+      };
+    };
+
+    if (
+      data.selection_required === true &&
+      Array.isArray(data.candidates) &&
+      data.candidates.length > 1
+    ) {
+      return data;
+    }
 
     if (!response.ok || !data.ok) {
       throw new Error(
@@ -993,7 +1026,7 @@ async function iniciarEmbeddedSignup() {
               await finalizarEmbeddedSignup(dadosEmbeddedSignup);
             }
 
-            await processarMetaCallbackNaPagina({
+            const metaCallback = await processarMetaCallbackNaPagina({
               code,
               state: integracao.id,
               embeddedSignup: dadosEmbeddedSignup,
@@ -1001,6 +1034,17 @@ async function iniciarEmbeddedSignup() {
 
             if (integracao.id) {
               localStorage.removeItem(`meta_embedded_signup_${integracao.id}`);
+            }
+
+            if (
+              metaCallback.selection_required === true &&
+              Array.isArray(metaCallback.candidates) &&
+              metaCallback.candidates.length > 1
+            ) {
+              setCoexPhoneCandidates(metaCallback.candidates);
+              setModalSelecaoCoexAberto(true);
+              setToastErro("");
+              return;
             }
 
             await carregarIntegracao(false);
@@ -1035,6 +1079,54 @@ async function iniciarEmbeddedSignup() {
         ? error.message
         : "Erro ao abrir a configuração da Meta."
     );
+  }
+}
+
+
+async function selecionarNumeroCoexistencia(
+  candidato: CoexistencePhoneCandidate
+) {
+  if (!integracao?.id || selecionandoPhoneCoex) return;
+
+  try {
+    setSelecionandoPhoneCoex(candidato.phone_number_id);
+    setToastErro("");
+
+    const response = await fetch(
+      "/api/integracoes-whatsapp/coexistence/select-phone",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          integracao_id: integracao.id,
+          phone_number_id: candidato.phone_number_id,
+        }),
+      }
+    );
+
+    const data = (await response.json()) as ApiResponse;
+
+    if (!response.ok || !data.ok) {
+      throw new Error(
+        data.error || "Não foi possível selecionar o número do WhatsApp."
+      );
+    }
+
+    setModalSelecaoCoexAberto(false);
+    setCoexPhoneCandidates([]);
+    await carregarIntegracao(false);
+    setEtapaQuiz(2);
+    mostrarSucessoToast("Número do WhatsApp selecionado com sucesso.");
+  } catch (error) {
+    mostrarErroToast(
+      error instanceof Error
+        ? error.message
+        : "Não foi possível selecionar o número do WhatsApp."
+    );
+  } finally {
+    setSelecionandoPhoneCoex("");
   }
 }
 
@@ -1499,6 +1591,27 @@ async function salvarNichoEAvancar() {
       document.removeEventListener("mousedown", fecharMenuAoClicarFora);
     };
   }, []);
+
+  useEffect(() => {
+    if (!integracao?.config_json) return;
+
+    const pending = integracao.config_json
+      .coexistence_phone_selection as
+      | {
+          required?: boolean;
+          candidates?: CoexistencePhoneCandidate[];
+        }
+      | undefined;
+
+    if (
+      pending?.required === true &&
+      Array.isArray(pending.candidates) &&
+      pending.candidates.length > 1
+    ) {
+      setCoexPhoneCandidates(pending.candidates);
+      setModalSelecaoCoexAberto(true);
+    }
+  }, [integracao]);
 
   const indiceEtapaAtual = useMemo(
     () => obterIndiceEtapaAtual(integracao),
@@ -2803,6 +2916,72 @@ return (
           <span>Ajuda</span>
           <strong>‹</strong>
         </button>
+      )}
+
+      {modalSelecaoCoexAberto && (
+        <div className={styles.modalOverlay}>
+          <div
+            className={`${styles.modalCard} ${styles.coexPhoneSelectionModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-selecao-numero-coex"
+          >
+            <h2
+              id="titulo-selecao-numero-coex"
+              className={styles.modalTitle}
+            >
+              Selecione o número do WhatsApp
+            </h2>
+
+            <p className={styles.modalText}>
+              A Meta autorizou mais de um número com Coexistência nesta conta.
+              Escolha abaixo qual número deseja conectar a esta integração.
+            </p>
+
+            <div className={styles.coexPhoneSelectionList}>
+              {coexPhoneCandidates.map((candidato) => {
+                const selecionando =
+                  selecionandoPhoneCoex === candidato.phone_number_id;
+
+                return (
+                  <button
+                    key={`${candidato.waba_id}:${candidato.phone_number_id}`}
+                    type="button"
+                    className={styles.coexPhoneSelectionOption}
+                    onClick={() => {
+                      void selecionarNumeroCoexistencia(candidato);
+                    }}
+                    disabled={Boolean(selecionandoPhoneCoex)}
+                  >
+                    <div>
+                      <span>Número</span>
+                      <strong>
+                        {candidato.display_phone_number ||
+                          candidato.phone_number_id}
+                      </strong>
+                      {candidato.verified_name && (
+                        <small>{candidato.verified_name}</small>
+                      )}
+                    </div>
+
+                    <b>{selecionando ? "Selecionando..." : "Selecionar"}</b>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setModalSelecaoCoexAberto(false)}
+                disabled={Boolean(selecionandoPhoneCoex)}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {modalPinAberto && (

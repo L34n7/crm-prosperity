@@ -10,6 +10,14 @@ import { normalizeWhatsAppIntegrationMode } from "@/lib/whatsapp/integration-mod
 import { isWhatsAppEmbeddedSignupFinishEvent } from "@/lib/whatsapp/embedded-signup-v4";
 
 
+type CoexistencePhoneCandidate = {
+  waba_id: string;
+  phone_number_id: string;
+  display_phone_number: string | null;
+  verified_name: string | null;
+  status: string | null;
+};
+
 type CoexistenceAssetResolution =
   | {
       ok: true;
@@ -22,6 +30,9 @@ type CoexistenceAssetResolution =
       ok: false;
       error: string;
       metaStatus?: number;
+      selectionRequired?: boolean;
+      candidates?: CoexistencePhoneCandidate[];
+      businessPortfolioId?: string | null;
     };
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -218,8 +229,18 @@ async function resolveCoexistenceAssetsFromGraph(params: {
     if (candidates.length > 1) {
       return {
         ok: false,
+        selectionRequired: true,
+        businessPortfolioId,
+        candidates: candidates.map((candidate) => ({
+          waba_id: candidate.wabaId,
+          phone_number_id: candidate.phoneNumberId,
+          display_phone_number:
+            textValue(candidate.phone.display_phone_number) || null,
+          verified_name: textValue(candidate.phone.verified_name) || null,
+          status: textValue(candidate.phone.status) || null,
+        })),
         error:
-          "A autorização foi concluída, mas a Meta retornou mais de um número elegível para Coexistência. Reabra o Embedded Signup e selecione o número desejado.",
+          "A Meta autorizou mais de um número elegível para Coexistência. Selecione no CRM qual número deseja conectar.",
       };
     }
 
@@ -383,6 +404,11 @@ export async function POST(request: NextRequest) {
       null;
     let coexistenceVerifiedByGraph = false;
     let coexistenceGraphPhone: Record<string, unknown> | null = null;
+    const agora = new Date().toISOString();
+    const configJsonAtual =
+      integracao.config_json && typeof integracao.config_json === "object"
+        ? integracao.config_json
+        : {};
 
     if (
       modoIntegracao === "coexistence" &&
@@ -405,8 +431,74 @@ export async function POST(request: NextRequest) {
           possuiWabaId: Boolean(effectiveWabaId),
           possuiPhoneNumberId: Boolean(effectivePhoneNumberId),
           launcherVersion: embeddedSignup?.launcher_version || null,
+          selectionRequired: graphResolution.selectionRequired === true,
+          candidatos: graphResolution.candidates?.length || 0,
           error: graphResolution.error,
         });
+
+        if (
+          graphResolution.selectionRequired === true &&
+          Array.isArray(graphResolution.candidates) &&
+          graphResolution.candidates.length > 1
+        ) {
+          const { error: pendingSelectionError } = await supabaseAdmin
+            .from("integracoes_whatsapp")
+            .update({
+              onboarding_etapa: "meta_conectado",
+              onboarding_status: "em_andamento",
+              onboarding_erro: null,
+              token_ref: "config_json.access_token_encrypted",
+              business_portfolio_id:
+                graphResolution.businessPortfolioId ||
+                integracao.business_portfolio_id ||
+                null,
+              coex_status: "selecao_numero_pendente",
+              config_json: {
+                ...configJsonAtual,
+                access_token: undefined,
+                access_token_encrypted:
+                  encryptWhatsAppAccessToken(accessToken),
+                token_type: tokenData?.token_type ?? null,
+                expires_in: tokenData?.expires_in ?? null,
+                meta_token_response: {
+                  token_type: tokenData?.token_type ?? null,
+                  expires_in: tokenData?.expires_in ?? null,
+                },
+                meta_connected_at: agora,
+                embedded_signup: embeddedSignup,
+                embedded_signup_event: embeddedSignupEvent || null,
+                embedded_signup_launcher_version:
+                  embeddedSignup?.launcher_version || null,
+                coexistence_phone_selection: {
+                  required: true,
+                  created_at: agora,
+                  business_portfolio_id:
+                    graphResolution.businessPortfolioId || null,
+                  candidates: graphResolution.candidates,
+                },
+              },
+              ultimo_sync_at: agora,
+              updated_at: agora,
+            })
+            .eq("id", integracao.id);
+
+          if (pendingSelectionError) {
+            return NextResponse.json(
+              { ok: false, error: pendingSelectionError.message },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json(
+            {
+              ok: false,
+              selection_required: true,
+              candidates: graphResolution.candidates,
+              error: graphResolution.error,
+            },
+            { status: 409 }
+          );
+        }
 
         return NextResponse.json(
           {
@@ -439,13 +531,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const agora = new Date().toISOString();
-
-    const configJsonAtual =
-      integracao.config_json && typeof integracao.config_json === "object"
-        ? integracao.config_json
-        : {};
 
     const { data: integracaoAtualizada, error: updateError } =
       await supabaseAdmin
@@ -491,6 +576,7 @@ export async function POST(request: NextRequest) {
                   phone: coexistenceGraphPhone,
                 }
               : null,
+            coexistence_phone_selection: null,
           },
           ultimo_sync_at: agora,
           updated_at: agora,

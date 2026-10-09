@@ -394,6 +394,82 @@
   margin-top: 22px;
 }
 
+.coexPhoneSelectionModal {
+  max-width: 620px;
+}
+
+.coexPhoneSelectionList {
+  display: grid;
+  gap: 10px;
+  max-height: min(420px, 52vh);
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.coexPhoneSelectionOption {
+  width: 100%;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface-soft);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.coexPhoneSelectionOption:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--crm-primary);
+  background: var(--crm-primary-soft);
+}
+
+.coexPhoneSelectionOption:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+.coexPhoneSelectionOption span,
+.coexPhoneSelectionOption small {
+  display: block;
+}
+
+.coexPhoneSelectionOption span {
+  margin-bottom: 4px;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.coexPhoneSelectionOption strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.coexPhoneSelectionOption small {
+  margin-top: 4px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.coexPhoneSelectionOption > b {
+  flex-shrink: 0;
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .novaIntegracaoModal {
   max-width: 880px;
   padding: 0;
