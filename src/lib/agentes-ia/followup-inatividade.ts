@@ -11,6 +11,154 @@ const JANELA_WHATSAPP_MS = 24 * 60 * 60 * 1000;
 const MARGEM_JANELA_MS = 60 * 1000;
 const MAX_TENTATIVAS = 3;
 
+type ObjetivoFollowup =
+  | "agenda_novo"
+  | "agenda_remarcar"
+  | "agenda_cancelar"
+  | "preco"
+  | "disparos"
+  | "qualificacao"
+  | "geral";
+
+function normalizarValidadeFollowup(valor: unknown) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function classificarObjetivoFollowup(valor: unknown): ObjetivoFollowup {
+  const texto = normalizarValidadeFollowup(valor);
+  if (
+    texto === "agenda_novo" ||
+    texto === "agenda_remarcar" ||
+    texto === "agenda_cancelar" ||
+    texto === "preco" ||
+    texto === "disparos" ||
+    texto === "qualificacao" ||
+    texto === "geral"
+  ) {
+    return texto as ObjetivoFollowup;
+  }
+  if (/\b(?:remarc\w*|reagend\w*)\b/.test(texto)) return "agenda_remarcar";
+  if (/\b(?:cancel\w*)\b.*\b(?:agend\w*|reuniao|demonstr\w*)\b/.test(texto)) {
+    return "agenda_cancelar";
+  }
+  if (/\b(?:agend\w*|demonstr\w*|reuniao|horario\w*)\b/.test(texto)) {
+    return "agenda_novo";
+  }
+  if (/\b(?:preco|valor|plano\w*)\b/.test(texto)) return "preco";
+  if (/\b(?:disparo\w*|campanha\w*|base de clientes)\b/.test(texto)) {
+    return "disparos";
+  }
+  if (/\b(?:qualific\w*|interesse\w*|necessidade\w*|entender)\b/.test(texto)) {
+    return "qualificacao";
+  }
+  return "geral";
+}
+
+function clientePediuPausaNoFollowup(valor: unknown) {
+  const texto = normalizarValidadeFollowup(valor);
+  if (!texto) return false;
+  return (
+    /\b(?:vou|irei)\s+(?:analisar|ver|avaliar|pensar)\b/.test(texto) ||
+    /\b(?:depois|mais tarde)\s+(?:retorno|te retorno|te chamo|falo)\b/.test(texto) ||
+    /\b(?:assim que puder|quando puder)\s+(?:retorno|te retorno|te chamo|falo)\b/.test(texto) ||
+    /\b(?:te retorno|te chamo|falo com voce)\s+(?:depois|mais tarde)\b/.test(texto) ||
+    /\b(?:agora|por enquanto)\s+nao\b/.test(texto) ||
+    /\b(?:nao quero|nao tenho interesse|sem interesse)\b/.test(texto)
+  );
+}
+
+function mensagemEncerraObjetivoFollowup(valor: unknown) {
+  const texto = normalizarValidadeFollowup(valor);
+  if (!texto) return false;
+  return (
+    /\b(?:nos vemos|te aguardamos|combinado|ate mais)\b/.test(texto) ||
+    /\b(?:ficou|esta|ja esta)\s+(?:agendad\w*|remarcad\w*|cancelad\w*|confirmad\w*)\b/.test(texto) ||
+    /\b(?:agendad\w*|remarcad\w*|cancelad\w*)\s+com sucesso\b/.test(texto) ||
+    /\b(?:fico|estou)\s+a disposicao\b/.test(texto)
+  );
+}
+
+function mensagemMantemFollowupPendente(valor: unknown) {
+  const texto = String(valor || "").trim();
+  if (!texto || mensagemEncerraObjetivoFollowup(texto)) return false;
+  return (texto.match(/\?/g) || []).length === 1;
+}
+
+function estadoEncerraFollowup(
+  estado: Record<string, unknown>,
+  proximaAcao: unknown,
+) {
+  if (estado.transferido_humano === true || estado.ultima_acao_critica === true) {
+    return true;
+  }
+  const estagio = normalizarValidadeFollowup(estado.estagio);
+  const proxima = normalizarValidadeFollowup(
+    estado.proxima_acao || proximaAcao,
+  );
+  if (
+    /\b(?:concluid\w*|finaliz\w*|encerrad\w*|transferid\w*|convertid\w*|perdid\w*|sem interesse)\b/.test(
+      estagio,
+    ) ||
+    /\b(?:agendamento confirmado|agendamento remarcado|remarcacao concluida|reagendamento concluido)\b/.test(
+      estagio,
+    )
+  ) {
+    return true;
+  }
+  return (
+    /\baguard\w*\b.*\b(?:retorno|contato|resposta)\b.*\bcliente\b/.test(
+      proxima,
+    ) ||
+    /\bcliente\b.*\b(?:retornar|responder|chamar)\b/.test(proxima)
+  );
+}
+
+function palavrasFollowup(valor: unknown) {
+  const ignorar = new Set([
+    "a","as","o","os","de","da","das","do","dos","e","em","para","por","um","uma",
+    "que","eu","voce","voces","se","te","me","com","no","na","nos","nas","mais",
+    "como","isso","esse","essa","este","esta","ser","pode","quer","gostaria",
+  ]);
+  return normalizarValidadeFollowup(valor)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((item) => item.length > 2 && !ignorar.has(item));
+}
+
+function similaridadeFollowup(a: unknown, b: unknown) {
+  const ta = normalizarValidadeFollowup(a);
+  const tb = normalizarValidadeFollowup(b);
+  if (!ta || !tb) return 0;
+  if (ta === tb) return 1;
+  const menor = ta.length <= tb.length ? ta : tb;
+  const maior = ta.length > tb.length ? ta : tb;
+  if (menor.length >= 28 && maior.includes(menor)) {
+    return menor.length / Math.max(maior.length, 1);
+  }
+  const sa = new Set(palavrasFollowup(a));
+  const sb = new Set(palavrasFollowup(b));
+  if (!sa.size || !sb.size) return 0;
+  let intersecao = 0;
+  for (const item of sa) if (sb.has(item)) intersecao += 1;
+  const uniao = new Set([...sa, ...sb]).size;
+  return uniao ? intersecao / uniao : 0;
+}
+
+function followupRepeteHistorico(
+  texto: string,
+  historico: Array<{ role: string; content: string }>,
+) {
+  return historico
+    .filter((item) => item.role === "assistant")
+    .slice(-4)
+    .some((item) => similaridadeFollowup(texto, item.content) >= 0.78);
+}
+
 export type FollowupInatividadeConfig = {
   ativo: boolean;
   tentativas: number;
@@ -63,7 +211,7 @@ function dentroDaJanela24h(createdAt: string | null | undefined, referencia = Da
 async function ultimaMensagemContato(empresaId: string, conversaId: string) {
   const { data, error } = await supabaseAdmin
     .from("mensagens")
-    .select("id, created_at")
+    .select("id, created_at, conteudo")
     .eq("empresa_id", empresaId)
     .eq("conversa_id", conversaId)
     .eq("remetente_tipo", "contato")
@@ -77,7 +225,7 @@ async function ultimaMensagemContato(empresaId: string, conversaId: string) {
 async function ultimaMensagemSaida(empresaId: string, conversaId: string) {
   const { data, error } = await supabaseAdmin
     .from("mensagens")
-    .select("id, remetente_tipo, metadata_json, created_at")
+    .select("id, remetente_tipo, conteudo, metadata_json, created_at")
     .eq("empresa_id", empresaId)
     .eq("conversa_id", conversaId)
     .neq("remetente_tipo", "contato")
@@ -86,6 +234,70 @@ async function ultimaMensagemSaida(empresaId: string, conversaId: string) {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data || null;
+}
+
+async function estadoAtualFollowup(params: {
+  empresaId: string;
+  agenteId: string;
+  conversaId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("agente_ia_conversa_estados")
+    .select("estado_json, resumo, updated_at")
+    .eq("empresa_id", params.empresaId)
+    .eq("agente_id", params.agenteId)
+    .eq("conversa_id", params.conversaId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data || null;
+}
+
+async function compromissoConcluiObjetivoFollowup(params: {
+  empresaId: string;
+  conversaId: string;
+  contatoId?: string | null;
+  objetivo: ObjetivoFollowup;
+  referenciaEntradaEm: string;
+}) {
+  if (!params.objetivo.startsWith("agenda_")) return false;
+
+  const statuses =
+    params.objetivo === "agenda_cancelar"
+      ? ["cancelado", "cancelada"]
+      : ["agendado", "confirmado"];
+
+  let query = supabaseAdmin
+    .from("agenda_agendamentos")
+    .select("id, status, created_at, updated_at, inicio_at")
+    .eq("empresa_id", params.empresaId)
+    .in("status", statuses)
+    .gte("updated_at", params.referenciaEntradaEm)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  query = params.contatoId
+    ? query.or(
+        `conversa_id.eq.${params.conversaId},contato_id.eq.${params.contatoId}`,
+      )
+    : query.eq("conversa_id", params.conversaId);
+
+  const { data, error } = await query.maybeSingle();
+  if (error) {
+    console.error(
+      "[AGENTE_IA_FOLLOWUP] Falha ao revalidar objetivo de agenda:",
+      error,
+    );
+    return false;
+  }
+  if (!data?.id) return false;
+
+  if (params.objetivo !== "agenda_cancelar" && data.inicio_at) {
+    const inicio = new Date(data.inicio_at).getTime();
+    if (Number.isFinite(inicio) && inicio < Date.now() - 12 * 60 * 60 * 1000) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function cancelarFollowupsPendentesAgenteIa(params: {
@@ -158,6 +370,61 @@ export async function agendarFollowupAgenteIa(params: {
   if (!dentroDaJanela24h(ultimaEntrada.created_at)) {
     return { agendado: false, motivo: "fora_janela_24h" };
   }
+  if (clientePediuPausaNoFollowup(ultimaEntrada.conteudo)) {
+    return { agendado: false, motivo: "cliente_aguarda_retorno_proprio" };
+  }
+
+  const [{ data: conversa }, ultimaSaida, estadoRow] = await Promise.all([
+    supabaseAdmin
+      .from("conversas")
+      .select("id, contato_id, status, bot_ativo, aguardando_atendente, responsavel_id, agente_ia_id")
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.conversaId)
+      .maybeSingle(),
+    ultimaMensagemSaida(params.empresaId, params.conversaId),
+    estadoAtualFollowup({
+      empresaId: params.empresaId,
+      agenteId: params.agenteId,
+      conversaId: params.conversaId,
+    }),
+  ]);
+
+  if (
+    !conversa ||
+    conversa.status !== "bot" ||
+    conversa.bot_ativo !== true ||
+    conversa.aguardando_atendente === true ||
+    conversa.responsavel_id
+  ) {
+    return { agendado: false, motivo: "conversa_nao_elegivel_followup" };
+  }
+  const metadataSaida = (ultimaSaida?.metadata_json || {}) as Record<string, unknown>;
+  if (
+    !ultimaSaida ||
+    ultimaSaida.remetente_tipo !== "bot" ||
+    String(metadataSaida.agente_id || "") !== params.agenteId ||
+    !mensagemMantemFollowupPendente(ultimaSaida.conteudo)
+  ) {
+    return { agendado: false, motivo: "sem_pergunta_pendente" };
+  }
+
+  const proximaAcao = String(params.proximaAcao || "").trim();
+  const objetivoFollowup = classificarObjetivoFollowup(proximaAcao);
+  const estado = (estadoRow?.estado_json || {}) as Record<string, unknown>;
+  if (estadoEncerraFollowup(estado, proximaAcao)) {
+    return { agendado: false, motivo: "objetivo_followup_concluido" };
+  }
+  if (
+    await compromissoConcluiObjetivoFollowup({
+      empresaId: params.empresaId,
+      conversaId: params.conversaId,
+      contatoId: conversa.contato_id || null,
+      objetivo: objetivoFollowup,
+      referenciaEntradaEm: ultimaEntrada.created_at,
+    })
+  ) {
+    return { agendado: false, motivo: "objetivo_agenda_ja_concluido" };
+  }
 
   if (params.cancelarAnteriores !== false) {
     await cancelarFollowupsPendentesAgenteIa({
@@ -182,7 +449,10 @@ export async function agendarFollowupAgenteIa(params: {
     tentativa,
     ultima_mensagem_contato_id: params.ultimaMensagemContatoId,
     referencia_execucao_id: params.referenciaExecucaoId || null,
-    proxima_acao: String(params.proximaAcao || "").slice(0, 500) || null,
+    proxima_acao: proximaAcao.slice(0, 500) || null,
+    objetivo_followup: objetivoFollowup,
+    estado_versao: estadoRow?.updated_at || null,
+    ultima_mensagem_saida_id: ultimaSaida.id,
     janela_limite_em: new Date(limiteJanelaMs).toISOString(),
   };
 
@@ -496,7 +766,7 @@ export async function processarFollowupAgenteIa(agendamento: {
     ultimaMensagemSaida(agendamento.empresa_id, conversaId),
     supabaseAdmin
       .from("agente_ia_conversa_estados")
-      .select("estado_json, resumo")
+      .select("estado_json, resumo, updated_at")
       .eq("empresa_id", agendamento.empresa_id)
       .eq("agente_id", agenteId)
       .eq("conversa_id", conversaId)
@@ -532,6 +802,16 @@ export async function processarFollowupAgenteIa(agendamento: {
   if (!ultimaSaida || ultimaSaida.remetente_tipo !== "bot" || String(metadataSaida.agente_id || "") !== agenteId) {
     return { ok: true, cancelado: true, motivo: "ultima_saida_nao_e_do_agente" };
   }
+  const saidaReferenciaId = String(payload.ultima_mensagem_saida_id || "").trim();
+  if (saidaReferenciaId && ultimaSaida.id !== saidaReferenciaId) {
+    return { ok: true, cancelado: true, motivo: "contexto_saida_alterado" };
+  }
+  if (!mensagemMantemFollowupPendente(ultimaSaida.conteudo)) {
+    return { ok: true, cancelado: true, motivo: "sem_pergunta_pendente" };
+  }
+  if (clientePediuPausaNoFollowup(ultimaEntrada.conteudo)) {
+    return { ok: true, cancelado: true, motivo: "cliente_aguarda_retorno_proprio" };
+  }
 
   const saldo = await buscarSaldoTokensIa(agendamento.empresa_id);
   if (saldo.limite !== null && Number(saldo.restantes || 0) <= 0) {
@@ -559,21 +839,45 @@ export async function processarFollowupAgenteIa(agendamento: {
       "continuar o atendimento",
   ).trim();
 
-  const estagioNormalizado = normalizarFollowupAnalise(estado.estagio);
+  const objetivoPayload = classificarObjetivoFollowup(
+    payload.objetivo_followup || proximaAcao,
+  );
+  if (estadoEncerraFollowup(estado, proximaAcao)) {
+    return {
+      ok: true,
+      cancelado: true,
+      motivo: "objetivo_followup_concluido",
+    };
+  }
+
+  const estadoVersaoPayload = String(payload.estado_versao || "").trim();
+  const estadoVersaoAtual = String(estadoRow?.updated_at || "").trim();
+  if (estadoVersaoPayload && estadoVersaoAtual && estadoVersaoPayload !== estadoVersaoAtual) {
+    const objetivoAtual = classificarObjetivoFollowup(
+      estado.proxima_acao || proximaAcao,
+    );
+    if (objetivoAtual !== objetivoPayload) {
+      return {
+        ok: true,
+        cancelado: true,
+        motivo: "objetivo_followup_alterado",
+      };
+    }
+  }
+
   if (
-    /\b(agendamento confirmado|agendamento remarcado|remarcacao concluida|reagendamento concluido)\b/.test(
-      estagioNormalizado,
-    ) &&
-    (await existeAgendamentoAtivoDaConversa({
+    await compromissoConcluiObjetivoFollowup({
       empresaId: agendamento.empresa_id,
       conversaId,
       contatoId: conversa.contato_id || null,
-    }))
+      objetivo: objetivoPayload,
+      referenciaEntradaEm: ultimaEntrada.created_at,
+    })
   ) {
     return {
       ok: true,
       cancelado: true,
-      motivo: "agendamento_ja_confirmado",
+      motivo: "objetivo_agenda_ja_concluido",
     };
   }
 
@@ -644,6 +948,39 @@ export async function processarFollowupAgenteIa(agendamento: {
       texto = followupFallbackSeguro(proximaAcao);
     }
 
+    if (followupRepeteHistorico(texto, historico)) {
+      const fallback = followupFallbackSeguro(proximaAcao);
+      if (
+        normalizarValidadeFollowup(fallback) ===
+          normalizarValidadeFollowup(texto) ||
+        followupRepeteHistorico(fallback, historico)
+      ) {
+        const agoraCancelamento = new Date().toISOString();
+        await supabaseAdmin
+          .from("agente_ia_execucoes")
+          .update({
+            status: "cancelado",
+            resposta: texto,
+            latencia_ms: Date.now() - inicio,
+            finished_at: agoraCancelamento,
+            updated_at: agoraCancelamento,
+            metadata_json: {
+              origem: "followup_inatividade",
+              followup_agendamento_id: agendamento.id,
+              followup_tentativa: tentativa,
+              motivo_cancelamento: "followup_repetitivo",
+            },
+          })
+          .eq("id", execucao.id);
+        return {
+          ok: true,
+          cancelado: true,
+          motivo: "followup_repetitivo",
+        };
+      }
+      texto = fallback;
+    }
+
     if (followupPrometeAgendamentoSemFerramenta(texto)) {
       const existeAgendamento = await existeAgendamentoAtivoDaConversa({
         empresaId: agendamento.empresa_id,
@@ -656,13 +993,36 @@ export async function processarFollowupAgenteIa(agendamento: {
       }
     }
 
-    const revalidacaoEntrada = await ultimaMensagemContato(agendamento.empresa_id, conversaId);
-    const { data: conversaRevalidada } = await supabaseAdmin
-      .from("conversas")
-      .select("contato_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, agente_ia_id")
-      .eq("empresa_id", agendamento.empresa_id)
-      .eq("id", conversaId)
-      .maybeSingle();
+    const [revalidacaoEntrada, revalidacaoSaida, estadoRevalidado, { data: conversaRevalidada }] =
+      await Promise.all([
+        ultimaMensagemContato(agendamento.empresa_id, conversaId),
+        ultimaMensagemSaida(agendamento.empresa_id, conversaId),
+        estadoAtualFollowup({
+          empresaId: agendamento.empresa_id,
+          agenteId,
+          conversaId,
+        }),
+        supabaseAdmin
+          .from("conversas")
+          .select("contato_id, integracao_whatsapp_id, status, bot_ativo, aguardando_atendente, agente_ia_id")
+          .eq("empresa_id", agendamento.empresa_id)
+          .eq("id", conversaId)
+          .maybeSingle(),
+      ]);
+
+    const estadoRevalidadoJson =
+      (estadoRevalidado?.estado_json || {}) as Record<string, unknown>;
+    const objetivoAindaValido =
+      !estadoEncerraFollowup(estadoRevalidadoJson, proximaAcao);
+    const agendaAindaPendente = revalidacaoEntrada
+      ? !(await compromissoConcluiObjetivoFollowup({
+          empresaId: agendamento.empresa_id,
+          conversaId,
+          contatoId: conversaRevalidada?.contato_id || null,
+          objetivo: objetivoPayload,
+          referenciaEntradaEm: revalidacaoEntrada.created_at,
+        }))
+      : false;
 
     const automacoesDesabilitadas =
       conversaRevalidada &&
@@ -678,6 +1038,12 @@ export async function processarFollowupAgenteIa(agendamento: {
       !revalidacaoEntrada ||
       revalidacaoEntrada.id !== ultimaMensagemContatoId ||
       !dentroDaJanela24h(revalidacaoEntrada.created_at) ||
+      !revalidacaoSaida ||
+      (saidaReferenciaId && revalidacaoSaida.id !== saidaReferenciaId) ||
+      !mensagemMantemFollowupPendente(revalidacaoSaida.conteudo) ||
+      clientePediuPausaNoFollowup(revalidacaoEntrada.conteudo) ||
+      !objetivoAindaValido ||
+      !agendaAindaPendente ||
       !conversaRevalidada ||
       automacoesDesabilitadas ||
       conversaRevalidada.status !== "bot" ||
@@ -755,7 +1121,11 @@ export async function processarFollowupAgenteIa(agendamento: {
       })
       .eq("id", execucao.id);
 
-    if (tentativa < config.tentativas) {
+    if (
+      tentativa < config.tentativas &&
+      mensagemMantemFollowupPendente(texto) &&
+      !followupPrometeAgendamentoSemFerramenta(texto)
+    ) {
       await agendarFollowupAgenteIa({
         empresaId: agendamento.empresa_id,
         agenteId,
