@@ -549,20 +549,43 @@ function normalizarFollowupAnalise(valor: unknown) {
     .trim();
 }
 
-function followupFallbackSeguro(proximaAcao: string) {
+function estrategiaTentativaFollowup(tentativa: number) {
+  if (tentativa <= 1) {
+    return "Retome diretamente o ponto pendente com uma pergunta objetiva.";
+  }
+  if (tentativa === 2) {
+    return "Use uma abordagem DIFERENTE da primeira tentativa: reduza o esforço para responder, mude a pergunta e facilite a decisão com um próximo passo mais simples.";
+  }
+  return "Use uma abordagem curta e leve, diferente das anteriores, sem pressão. Não repita a mesma pergunta nem a mesma proposta; ofereça uma forma simples de continuar quando o cliente quiser.";
+}
+
+function followupFallbackSeguro(proximaAcao: string, tentativa = 1) {
   const acao = normalizarFollowupAnalise(proximaAcao);
+  const segunda = tentativa === 2;
+  const terceira = tentativa >= 3;
+
   if (/\b(?:agend\w*|demonstr\w*|reuniao|horario\w*)\b/.test(acao)) {
+    if (terceira) return "Se quiser retomar depois, me chama aqui e seguimos com a demonstração. Prefere que eu deixe assim por enquanto?";
+    if (segunda) return "Para facilitar, fica melhor para você pela manhã ou à tarde?";
     return "Quer que eu veja um horário para a demonstração?";
   }
   if (/\b(disparo|campanha|base de clientes)\b/.test(acao)) {
+    if (terceira) return "Quando quiser retomar, posso te mostrar essa parte dos disparos sem compromisso. Quer deixar para outro momento?";
+    if (segunda) return "Se preferir, posso resumir em poucos passos como funciona um disparo no CRM. Quer?";
     return "Quer que eu te mostre como os disparos funcionam na prática?";
   }
   if (/\b(preco|valor|plano)\b/.test(acao)) {
+    if (terceira) return "Se quiser comparar os planos depois, sigo por aqui. Quer deixar para outro momento?";
+    if (segunda) return "Posso te ajudar a escolher o plano pelo que você realmente precisa usar. Quer?";
     return "Ficou alguma dúvida sobre os planos ou quer que eu te mostre o sistema?";
   }
   if (/\b(interesse|necessidade|qualificar|entender)\b/.test(acao)) {
+    if (terceira) return "Quando quiser continuar, me chama por aqui. Quer deixar para outro momento?";
+    if (segunda) return "Para eu ser mais direto: hoje sua prioridade é vender mais, organizar o atendimento ou automatizar tarefas?";
     return "Você quer usar o CRM mais para disparos, atendimento ou automações?";
   }
+  if (terceira) return "Quando quiser retomar, sigo por aqui. Quer deixar para outro momento?";
+  if (segunda) return "Posso ir direto ao ponto e te mostrar só o que faz sentido para sua necessidade. Quer?";
   return "Quer que eu continue de onde paramos?";
 }
 
@@ -906,6 +929,24 @@ export async function processarFollowupAgenteIa(agendamento: {
   const inicio = Date.now();
   try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const followupsAnteriores = ((mensagens || []) as Array<Record<string, unknown>>)
+      .slice()
+      .reverse()
+      .filter((item) => {
+        const metadata = (item.metadata_json || {}) as Record<string, unknown>;
+        return (
+          String(metadata.origem || "") === "agente_ia_followup" &&
+          String(item.conteudo || "").trim()
+        );
+      })
+      .map((item) => String(item.conteudo || "").trim().slice(0, 320))
+      .slice(-2);
+    const exemplosNaoRepetir = followupsAnteriores.length
+      ? followupsAnteriores
+          .map((item, indice) => `- Follow-up anterior ${indice + 1}: ${item}`)
+          .join("\n")
+      : "";
+
     const instructions = [
       `Você é ${agente.nome}, assistente do CRM Prosperity.`,
       String(agente.prompt_sistema || "").trim(),
@@ -914,6 +955,13 @@ export async function processarFollowupAgenteIa(agendamento: {
       "FOLLOW-UP DE INATIVIDADE:",
       "- O cliente parou de responder e a janela de 24 horas ainda está aberta.",
       "- Escreva UMA única mensagem curta e natural para retomar exatamente o ponto pendente.",
+      `- Esta é a tentativa ${tentativa}. ${estrategiaTentativaFollowup(tentativa)}`,
+      tentativa > 1
+        ? "- REGRA PRIORITÁRIA: esta nova mensagem precisa ser claramente DIFERENTE dos follow-ups anteriores. Não reutilize a mesma abertura, a mesma pergunta central, a mesma estrutura nem apenas troque palavras por sinônimos. Mantenha o objetivo, mas avance por outro ângulo."
+        : "",
+      exemplosNaoRepetir
+        ? `MENSAGENS JÁ ENVIADAS — NÃO REPITA NEM PARAFRASEIE:\n${exemplosNaoRepetir}`
+        : "",
       "- Você continua sendo o assistente. NUNCA responda como se fosse o cliente e nunca agradeça por algo que o cliente não acabou de dizer.",
       "- A mensagem deve conter EXATAMENTE UMA pergunta objetiva e contextual.",
       "- Não repita preço, plano ou explicação que já foi entregue no histórico; avance para o ponto pendente.",
@@ -935,7 +983,7 @@ export async function processarFollowupAgenteIa(agendamento: {
     } as any);
     let texto = textoFollowupSeguro(response.output_text);
     if (!texto) {
-      texto = followupFallbackSeguro(proximaAcao);
+      texto = followupFallbackSeguro(proximaAcao, tentativa);
     }
 
     if (
@@ -945,11 +993,11 @@ export async function processarFollowupAgenteIa(agendamento: {
         historico,
       })
     ) {
-      texto = followupFallbackSeguro(proximaAcao);
+      texto = followupFallbackSeguro(proximaAcao, tentativa);
     }
 
     if (followupRepeteHistorico(texto, historico)) {
-      const fallback = followupFallbackSeguro(proximaAcao);
+      const fallback = followupFallbackSeguro(proximaAcao, tentativa);
       if (
         normalizarValidadeFollowup(fallback) ===
           normalizarValidadeFollowup(texto) ||
