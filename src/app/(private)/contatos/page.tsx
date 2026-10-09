@@ -5,9 +5,7 @@ import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import ExclusaoContatosEmMassa from "./ExclusaoContatosEmMassa";
 import GerenciarListaContatosModal from "./GerenciarListaContatosModal";
-import GerenciarListasCompartilhadasModal, {
-  type ListaCompartilhadaContato,
-} from "./GerenciarListasCompartilhadasModal";
+import type { ListaCompartilhadaContato } from "./GerenciarListasCompartilhadasModal";
 import styles from "./contatos.module.css";
 
 type ClassificacaoContato =
@@ -320,9 +318,6 @@ export default function ContatosPage() {
     ListaCompartilhadaContato[]
   >([]);
   const [filtroOrigem, setFiltroOrigem] = useState("");
-  const [filtroLista, setFiltroLista] = useState("");
-  const [modalGerenciarListasAberto, setModalGerenciarListasAberto] =
-    useState(false);
   const [filtroCampanha, setFiltroCampanha] = useState("");
   const [filtroIntegracaoWhatsappId, setFiltroIntegracaoWhatsappId] =
     useState("");
@@ -481,10 +476,6 @@ export default function ContatosPage() {
       params.set("lista_id", filtroOrigem.replace("lista:", ""));
     } else if (filtroOrigem.trim()) {
       params.set("origem", filtroOrigem.trim());
-    }
-
-    if (filtroLista) {
-      params.set("lista_compartilhada_id", filtroLista);
     }
 
     if (filtroCampanha.startsWith("rastreamento:")) {
@@ -757,10 +748,6 @@ export default function ContatosPage() {
         params.set("lista_id", filtroOrigem.replace("lista:", ""));
       } else if (filtroOrigem.trim()) {
         params.set("origem", filtroOrigem.trim());
-      }
-
-      if (filtroLista) {
-        params.set("lista_compartilhada_id", filtroLista);
       }
 
       if (filtroCampanha.startsWith("rastreamento:")) {
@@ -1341,7 +1328,6 @@ export default function ContatosPage() {
     filtroStatusConversa,
     filtroApenasNovos,
     filtroOrigem,
-    filtroLista,
     filtroCampanha,
     filtroIntegracaoWhatsappId,
     filtroMensagemDataInicio,
@@ -1383,7 +1369,6 @@ export default function ContatosPage() {
     filtroStatusConversa,
     filtroApenasNovos,
     filtroOrigem,
-    filtroLista,
     filtroCampanha,
     filtroIntegracaoWhatsappId,
     filtroMensagemDataInicio,
@@ -1592,40 +1577,6 @@ export default function ContatosPage() {
                 aria-label="Excluir lista selecionada"
               >
                 ×
-              </button>
-            </div>
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Lista</label>
-            <div className={styles.originFilterRow}>
-              <select
-                className={`${styles.select} ${styles.originFilterSelect}`}
-                value={filtroLista}
-                onChange={(e) => setFiltroLista(e.target.value)}
-              >
-                <option value="">Todas</option>
-                {listasCompartilhadas.length === 0 ? (
-                  <option value="" disabled>
-                    Nenhuma lista criada
-                  </option>
-                ) : (
-                  listasCompartilhadas.map((lista) => (
-                    <option key={lista.id} value={lista.id}>
-                      {lista.nome} · {lista.total_contatos}
-                    </option>
-                  ))
-                )}
-              </select>
-
-              <button
-                type="button"
-                className={`${styles.originListActionButton} ${styles.originListEditButton}`}
-                onClick={() => setModalGerenciarListasAberto(true)}
-                title="Criar, editar ou excluir listas"
-                aria-label="Gerenciar listas"
-              >
-                <span className={styles.listPlusIcon}>＋</span>
               </button>
             </div>
           </div>
@@ -1858,7 +1809,6 @@ export default function ContatosPage() {
               setFiltroStatusConversa([]);
               setFiltroApenasNovos(false);
               setFiltroOrigem("");
-              setFiltroLista("");
               setFiltroIntegracaoWhatsappId("");
               setFiltroMensagemDataInicio("");
               setFiltroMensagemDataFim("");
@@ -2983,23 +2933,6 @@ export default function ContatosPage() {
         </div>
       )}
 
-
-      {modalGerenciarListasAberto && (
-        <GerenciarListasCompartilhadasModal
-          listas={listasCompartilhadas}
-          onClose={() => setModalGerenciarListasAberto(false)}
-          onChanged={async (mensagemLista, listaExcluidaId) => {
-            if (listaExcluidaId && filtroLista === listaExcluidaId) {
-              setFiltroLista("");
-              setPaginaAtual(1);
-            }
-
-            setMensagem(mensagemLista);
-            await carregarListasCompartilhadas();
-            await carregarContatos();
-          }}
-        />
-      )}
 
       {modoGerenciarLista && listaSelecionada && (
         <GerenciarListaContatosModal

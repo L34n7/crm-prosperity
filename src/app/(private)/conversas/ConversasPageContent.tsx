@@ -2261,6 +2261,53 @@ export default function ConversasPageContent() {
     }
   }
 
+  function colarImagemNoComposer(
+    event: React.ClipboardEvent<HTMLDivElement>
+  ) {
+    const itemImagem = Array.from(event.clipboardData.items).find(
+      (item) => item.kind === "file" && item.type.startsWith("image/")
+    );
+
+    if (!itemImagem) return;
+
+    event.preventDefault();
+
+    if (!podeEnviarMidia || enviando || gravandoAudio) {
+      setErro("Não é possível anexar uma imagem nesta conversa agora.");
+      return;
+    }
+
+    const arquivoColado = itemImagem.getAsFile();
+    if (!arquivoColado) {
+      setErro("Não foi possível importar a imagem colada.");
+      return;
+    }
+
+    const tipo = arquivoColado.type || "image/png";
+    const extensao =
+      tipo === "image/jpeg"
+        ? "jpg"
+        : tipo === "image/webp"
+          ? "webp"
+          : tipo === "image/gif"
+            ? "gif"
+            : "png";
+    const arquivo = new File(
+      [arquivoColado],
+      `imagem-colada-${Date.now()}.${extensao}`,
+      { type: tipo },
+    );
+    const textoAtual = arquivoEnvio
+      ? legendaArquivoRef.current
+      : conteudoRef.current;
+
+    selecionarArquivo(arquivo);
+    legendaArquivoRef.current = textoAtual;
+    setLegendaArquivo(textoAtual);
+    setMenuAnexoAberto(false);
+    setEmojiAberto(false);
+  }
+
 
   function atualizarParametro(index: number, valor: string) {
     setParametros((atual) => {
@@ -9284,6 +9331,7 @@ const templateFooterTexto = useMemo(() => {
                                         setConteudo(texto);
                                       }
                                     }}
+                                    onPaste={colarImagemNoComposer}
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter" && !e.shiftKey) {
                                         e.preventDefault();
