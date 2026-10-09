@@ -1151,9 +1151,22 @@ function extrairHorariosExplicitosAgenda(mensagem: string) {
 }
 
 function mensagemEscolheHorarioExplicitamente(mensagem: string) {
-  const texto = normalizarTextoIntencao(mensagem);
+  const texto = normalizarTextoIntencao(mensagem)
+    .replace(/[?!.,;:]+$/g, "")
+    .trim();
   if (!texto) return false;
   if (mensagemConfirmaAgendamento(mensagem)) return true;
+
+  const horarios = extrairHorariosExplicitosAgenda(mensagem);
+  if (
+    horarios.length === 1 &&
+    /^(?:(?:pode ser|prefiro|quero|fica melhor|fechado|combinado)\s+)?(?:as\s+)?\d{1,2}(?::\d{2})?\s*(?:h|hr|hrs|hora|horas)$/.test(
+      texto,
+    )
+  ) {
+    return true;
+  }
+
   return (
     /\b(?:fica|ta|esta)\s+(?:otimo|otima|bom|boa|perfeito|perfeita|tranquilo|tranquila)\b/.test(
       texto,
@@ -1259,11 +1272,63 @@ function mensagemAgendaComContexto(
   historico: Array<{ role?: string; content?: string }>,
   estado: EstadoConversa
 ) {
-  if (!estadoTemAgendaEmAndamento(estado) || !mensagemEhFragmentoContextualAgenda(mensagem)) {
+  const atual = normalizarTextoIntencao(mensagem);
+  const confirmacaoCurta =
+    mensagemConfirmaAgendamento(mensagem) &&
+    atual.length <= 24;
+  const escolhaHorarioCurta =
+    mensagemEhFragmentoContextualAgenda(mensagem) &&
+    extrairHorariosExplicitosAgenda(mensagem).length === 1;
+
+  const propostaAnterior =
+    confirmacaoCurta || escolhaHorarioCurta
+      ? [...(historico || [])]
+          .reverse()
+          .find((item) => {
+            if (item?.role !== "assistant") return false;
+            const conteudo = String(item?.content || "").trim();
+            const normalizado = normalizarTextoIntencao(conteudo);
+            if (!conteudo) return false;
+
+            const temData =
+              /\b(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(
+                normalizado,
+              ) ||
+              /\bdia\s+\d{1,2}\b/.test(normalizado) ||
+              /\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/.test(
+                normalizado,
+              ) ||
+              /\b\d{4}-\d{2}-\d{2}\b/.test(normalizado);
+
+            const horariosPropostos =
+              extrairHorariosExplicitosAgenda(conteudo);
+            const temHorarioUtil =
+              escolhaHorarioCurta
+                ? horariosPropostos.length >= 1
+                : horariosPropostos.length === 1;
+            const pareceProposta =
+              /\b(?:agenda|agendar|remarcar|reagendar|marcar|apresentacao|demonstracao|reuniao|horario|deixar)\b/.test(
+                normalizado,
+              ) || conteudo.includes("?");
+
+            return temData && temHorarioUtil && pareceProposta;
+          })
+      : null;
+
+  if (propostaAnterior?.content) {
+    const rotulo = confirmacaoCurta
+      ? "Cliente confirmou"
+      : "Cliente escolheu";
+    return `${String(propostaAnterior.content).trim()}\n${rotulo}: ${mensagem}`;
+  }
+
+  if (
+    !estadoTemAgendaEmAndamento(estado) ||
+    !mensagemEhFragmentoContextualAgenda(mensagem)
+  ) {
     return mensagem;
   }
 
-  const atual = normalizarTextoIntencao(mensagem);
   const referencia = [...(historico || [])]
     .reverse()
     .find((item) => {
@@ -1949,9 +2014,12 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     );
     const agendamentoAtivoUnico =
       ctx.agendamentosAtivos.length === 1 ? ctx.agendamentosAtivos[0] : null;
+    const contextoTemporalHerdado =
+      args?.__contexto_temporal_herdado === true;
     const preservarDataAtual =
       Boolean(agendamentoAtivoUnico) &&
-      !mensagemMencionaDataAgenda(ctx.pendencia.conteudo_agregado);
+      !mensagemMencionaDataAgenda(ctx.pendencia.conteudo_agregado) &&
+      !contextoTemporalHerdado;
     const dataAtualAgendamento = agendamentoAtivoUnico
       ? dataLocalDeIso(agendamentoAtivoUnico.inicio_at, timezone)
       : null;
@@ -2206,7 +2274,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       ctx.pendencia.conteudo_agregado,
     );
     const dataArgNova = String(args.data || "").trim();
-    const dataNova = dataInformadaPeloCliente
+    const dataContextualConfiavel =
+      args?.__contexto_temporal_herdado === true ||
+      ctx.ferramentasExecutadas.some(
+        (item) =>
+          item?.nome === "consultar_agenda" &&
+          item?.argumentos?.__contexto_temporal_herdado === true &&
+          String(item?.argumentos?.data || "") === dataArgNova,
+      );
+    const dataNova = dataInformadaPeloCliente || dataContextualConfiavel
       ? dataArgNova
       : atualFormatado.data;
     const horaNova = normalizarHoraLocal(args.hora);
@@ -2521,14 +2597,39 @@ async function preExecutarConsultasObvias(
 
   if (ctx.ferramentasAtivas.has("consultar_agenda") && ctx.agendaAutorizada) {
     const timezone = ctx.agendaAutorizada.timezone || "America/Sao_Paulo";
-    const mensagemContextual = mensagemAgendaComContexto(mensagem, historico, ctx.estadoConversa);
-    const interpretacao = interpretarDataHorarioAgenda(mensagemContextual, timezone);
-    const temIntencaoAgenda = mensagemTemIntencaoAgenda(mensagem, ctx.estadoConversa);
+    const mensagemContextual = mensagemAgendaComContexto(
+      mensagem,
+      historico,
+      ctx.estadoConversa,
+    );
+    const interpretacao = interpretarDataHorarioAgenda(
+      mensagemContextual,
+      timezone,
+    );
+    const herdouContextoTemporal = mensagemContextual !== mensagem;
+    const horariosContextuais = extrairHorariosExplicitosAgenda(
+      mensagemContextual,
+    );
+    const temIntencaoAgenda = mensagemTemIntencaoAgenda(
+      mensagemContextual,
+      ctx.estadoConversa,
+    );
     const referencias = referenciasTemporaisDistintas(mensagemContextual);
     const recusaTemporal = mensagemRecusaReferenciaTemporal(mensagem);
     if (!recusaTemporal && temIntencaoAgenda && interpretacao.data && referencias <= 1) {
       try {
-        const argumentos = { data: interpretacao.data };
+        const argumentos = {
+          data: interpretacao.data,
+          ...(herdouContextoTemporal
+            ? {
+                __contexto_temporal_herdado: true,
+                __hora_contextual:
+                  horariosContextuais.length === 1
+                    ? horariosContextuais[0]
+                    : null,
+              }
+            : {}),
+        };
         const resultado: any = await executarFerramenta("consultar_agenda", argumentos, ctx);
         if (resultado?.ok) {
           const item = { nome: "consultar_agenda" as const, argumentos, resultado };
@@ -2564,7 +2665,6 @@ async function criarAgendamentoImediatoDeterministico(
   const horarios = extrairHorariosExplicitosAgenda(
     ctx.pendencia.conteudo_agregado,
   );
-  if (horarios.length !== 1) return null;
 
   const consulta = [...preconsultas]
     .reverse()
@@ -2576,7 +2676,17 @@ async function criarAgendamentoImediatoDeterministico(
     );
   if (!consulta) return null;
 
-  const horaEscolhida = horarios[0];
+  const horaContextual =
+    consulta.argumentos?.__contexto_temporal_herdado === true
+      ? normalizarHoraLocal(consulta.argumentos?.__hora_contextual)
+      : null;
+  const horaEscolhida =
+    horarios.length === 1
+      ? horarios[0]
+      : mensagemConfirmaAgendamento(ctx.pendencia.conteudo_agregado)
+        ? horaContextual
+        : null;
+  if (!horaEscolhida) return null;
   const candidatos = (consulta.resultado.slots || []).filter(
     (slot: any) => normalizarHoraLocal(slot?.hora) === horaEscolhida,
   );
@@ -2595,6 +2705,61 @@ async function criarAgendamentoImediatoDeterministico(
   );
   const item = {
     nome: "criar_agendamento" as const,
+    argumentos,
+    resultado,
+  };
+  ctx.ferramentasExecutadas.push(item);
+  return item;
+}
+
+async function remarcarAgendamentoContextualDeterministico(
+  ctx: ContextoExecucao,
+  preconsultas: Array<{ nome: TipoFerramenta; argumentos: any; resultado: any }>,
+) {
+  if (!ctx.ferramentasAtivas.has("remarcar_agendamento")) return null;
+  if (ctx.agendamentosAtivos.length !== 1) return null;
+  if (!mensagemConfirmaAgendamento(ctx.pendencia.conteudo_agregado)) {
+    return null;
+  }
+
+  const consulta = [...preconsultas]
+    .reverse()
+    .find(
+      (item) =>
+        item.nome === "consultar_agenda" &&
+        item.resultado?.ok === true &&
+        item.argumentos?.__contexto_temporal_herdado === true &&
+        Array.isArray(item.resultado?.slots),
+    );
+  if (!consulta) return null;
+
+  const horaContextual = normalizarHoraLocal(
+    consulta.argumentos?.__hora_contextual,
+  );
+  if (!horaContextual) return null;
+
+  const candidatos = (consulta.resultado.slots || []).filter(
+    (slot: any) => normalizarHoraLocal(slot?.hora) === horaContextual,
+  );
+  if (candidatos.length !== 1) return null;
+
+  const slot = candidatos[0];
+  const data = String(slot?.data || "").trim();
+  const hora = normalizarHoraLocal(slot?.hora);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !hora) return null;
+
+  const argumentos = {
+    data,
+    hora,
+    __contexto_temporal_herdado: true,
+  };
+  const resultado = await executarFerramenta(
+    "remarcar_agendamento",
+    argumentos,
+    ctx,
+  );
+  const item = {
+    nome: "remarcar_agendamento" as const,
     argumentos,
     resultado,
   };
@@ -3063,6 +3228,10 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     const preconsultas = ctx.respostaDeterministica?.length
       ? []
       : await preExecutarConsultasObvias(ctx, contexto.historico);
+
+    if (!ctx.respostaDeterministica?.length) {
+      await remarcarAgendamentoContextualDeterministico(ctx, preconsultas);
+    }
 
     if (!ctx.respostaDeterministica?.length) {
       await criarAgendamentoImediatoDeterministico(ctx, preconsultas);
