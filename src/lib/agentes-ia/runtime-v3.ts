@@ -1160,7 +1160,7 @@ function mensagemEscolheHorarioExplicitamente(mensagem: string) {
   const horarios = extrairHorariosExplicitosAgenda(mensagem);
   if (
     horarios.length === 1 &&
-    /^(?:(?:pode ser|prefiro|quero|fica melhor|fechado|combinado)\s+)?(?:as\s+)?\d{1,2}(?::\d{2})?\s*(?:h|hr|hrs|hora|horas)$/.test(
+    /^(?:(?:pode ser|prefiro|quero|fica melhor|fechado|combinado)\s+)?(?:as\s+)?\d{1,2}(?:(?::\d{2})\s*(?:h|hr|hrs|hora|horas)?|\s*(?:h|hr|hrs|hora|horas))$/.test(
       texto,
     )
   ) {
@@ -1229,11 +1229,15 @@ function textoHorarioAgendaNormalizado(mensagem: string) {
     .replace(/[?!.,;:]+$/g, "")
     .trim();
   const match = texto.match(
-    /^(?:(?:tem|pode ser|pode|as)\s+)?(\d{1,2})(?::(\d{2}))?\s*(?:h|hr|hrs|hora|horas)$/
+    /^(?:(tem|pode ser|pode|as)\s+)?(\d{1,2})(?::(\d{2}))?\s*(h|hr|hrs|hora|horas)?$/
   );
   if (!match) return mensagem;
-  const hora = Number(match[1]);
-  const minuto = Number(match[2] || 0);
+  const prefixo = match[1] || "";
+  const hora = Number(match[2]);
+  const minutoInformado = match[3] != null;
+  const sufixo = match[4] || "";
+  if (!prefixo && !minutoInformado && !sufixo) return mensagem;
+  const minuto = Number(match[3] || 0);
   if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) return mensagem;
   return `às ${hora}:${String(minuto).padStart(2, "0")}`;
 }
@@ -1244,6 +1248,7 @@ function mensagemEhFragmentoContextualAgenda(mensagem: string) {
   if (/^(?:de |pela |a )?(?:manha|tarde|noite)$/.test(texto)) return true;
   if (/^(?:depois|apos|antes|ate|a partir)(?:\s+das?|\s+de|\s+as?)?\s+\d{1,2}(?::\d{2})?(?:\s*(?:h|hr|hrs|hora|horas))?[?!.,;:]?$/.test(texto)) return true;
   if (/^(?:(?:tem|pode ser|pode|as)\s+)?\d{1,2}(?::\d{2})?\s*(?:h|hr|hrs|hora|horas)[?!.,;:]?$/.test(texto)) return true;
+  if (/^(?:(?:tem|pode ser|pode|as)\s+)?\d{1,2}:\d{2}[?!.,;:]?$/.test(texto)) return true;
   if (/^(?:mais cedo|mais tarde|nesse horario|esse horario|o primeiro|o segundo|o terceiro)$/.test(texto)) return true;
   return false;
 }
@@ -2008,17 +2013,28 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       return { ok: false, error: "Origem de agenda não configurada." };
     }
     const timezone = ctx.agendaAutorizada?.timezone || "America/Sao_Paulo";
-    const interpretacao = interpretarDataHorarioAgenda(
+    const mensagemInterpretavel = textoHorarioAgendaNormalizado(
       ctx.pendencia.conteudo_agregado,
+    );
+    const interpretacao = interpretarDataHorarioAgenda(
+      mensagemInterpretavel,
       timezone,
     );
     const agendamentoAtivoUnico =
       ctx.agendamentosAtivos.length === 1 ? ctx.agendamentosAtivos[0] : null;
     const contextoTemporalHerdado =
       args?.__contexto_temporal_herdado === true;
+    const dataMencionadaPeloCliente = mensagemMencionaDataAgenda(
+      ctx.pendencia.conteudo_agregado,
+    );
+    const buscaSemDataExplicita =
+      !agendamentoAtivoUnico &&
+      !dataMencionadaPeloCliente &&
+      !contextoTemporalHerdado &&
+      Boolean(interpretacao.preferencia);
     const preservarDataAtual =
       Boolean(agendamentoAtivoUnico) &&
-      !mensagemMencionaDataAgenda(ctx.pendencia.conteudo_agregado) &&
+      !dataMencionadaPeloCliente &&
       !contextoTemporalHerdado;
     const dataAtualAgendamento = agendamentoAtivoUnico
       ? dataLocalDeIso(agendamentoAtivoUnico.inicio_at, timezone)
@@ -2026,9 +2042,11 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     const dataArg = args.data ? String(args.data).trim() : "";
     const data = preservarDataAtual
       ? dataAtualAgendamento
-      : /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
-        ? dataArg
-        : interpretacao.data || null;
+      : buscaSemDataExplicita
+        ? null
+        : /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
+          ? dataArg
+          : interpretacao.data || null;
     const resultado = await listarSlotsOrigemAgenda({
       empresaId,
       agendaId: origem.agendaId,
@@ -2055,6 +2073,7 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
           ).slice(0, 12);
     return {
       ok: true,
+      busca_sem_data_explicita: buscaSemDataExplicita,
       agenda: resultado.grupo
         ? {
             nome: resultado.grupo.nome,
@@ -2602,8 +2621,11 @@ async function preExecutarConsultasObvias(
       historico,
       ctx.estadoConversa,
     );
-    const interpretacao = interpretarDataHorarioAgenda(
+    const mensagemInterpretavel = textoHorarioAgendaNormalizado(
       mensagemContextual,
+    );
+    const interpretacao = interpretarDataHorarioAgenda(
+      mensagemInterpretavel,
       timezone,
     );
     const herdouContextoTemporal = mensagemContextual !== mensagem;
@@ -2616,10 +2638,18 @@ async function preExecutarConsultasObvias(
     );
     const referencias = referenciasTemporaisDistintas(mensagemContextual);
     const recusaTemporal = mensagemRecusaReferenciaTemporal(mensagem);
-    if (!recusaTemporal && temIntencaoAgenda && interpretacao.data && referencias <= 1) {
+    if (
+      !recusaTemporal &&
+      temIntencaoAgenda &&
+      (interpretacao.data || interpretacao.preferencia) &&
+      referencias <= 1
+    ) {
       try {
         const argumentos = {
-          data: interpretacao.data,
+          ...(interpretacao.data ? { data: interpretacao.data } : {}),
+          ...(!interpretacao.data && interpretacao.preferencia
+            ? { __sem_data_explicita: true }
+            : {}),
           ...(herdouContextoTemporal
             ? {
                 __contexto_temporal_herdado: true,
@@ -2783,7 +2813,12 @@ function contextoPreconsultasParaModelo(executadas: Array<{ nome: TipoFerramenta
       const resumoSlots = slots.length
         ? slots.map((s: any) => `${s.data} ${s.hora}`).join(", ")
         : "nenhum horário disponível";
-      blocos.push(`AGENDA JÁ CONSULTADA (${agenda}): ${resumoSlots}.`);
+      const escopoData = item.resultado?.busca_sem_data_explicita
+        ? " Cliente não informou uma data; estes são os próximos horários futuros compatíveis. Não assuma 'hoje'."
+        : "";
+      blocos.push(
+        `AGENDA JÁ CONSULTADA (${agenda}): ${resumoSlots}.${escopoData}`,
+      );
     }
   }
   if (!blocos.length) return "";
