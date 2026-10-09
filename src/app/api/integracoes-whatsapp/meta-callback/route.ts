@@ -452,7 +452,7 @@ export async function POST(request: NextRequest) {
                 graphResolution.businessPortfolioId ||
                 integracao.business_portfolio_id ||
                 null,
-              coex_status: "selecao_numero_pendente",
+              coex_status: "pendente",
               config_json: {
                 ...configJsonAtual,
                 access_token: undefined,
