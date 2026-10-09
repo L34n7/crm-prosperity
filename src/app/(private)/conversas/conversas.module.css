@@ -1457,6 +1457,17 @@
   text-decoration-thickness: 1px;
 }
 
+.deletedOriginalText img.emoji {
+  width: 1.05em;
+  height: 1.05em;
+  max-width: 18px;
+  max-height: 18px;
+  margin: 0 0.04em;
+  vertical-align: -0.16em;
+  display: inline-block;
+  object-fit: contain;
+}
+
 .deletedBadge {
   width: fit-content;
   color: var(--crm-text-muted);
