@@ -296,13 +296,6 @@ async function processMessageEchoes(body: WhatsAppWebhookBody) {
       resultado: resultadoAssuncao,
     });
 
-    console.log("[COEX BUSINESS APP] Atendimento assumido", {
-      empresaId: integration.empresa_id,
-      integracaoId: integration.id,
-      conversaId: conversation.id,
-      mensagemExternaId: echo.messageId,
-      ...resultadoAssuncao,
-    });
   }
 
   return echoes.length;

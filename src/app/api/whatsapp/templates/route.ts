@@ -47,9 +47,6 @@ export async function POST(req: NextRequest) {
 
     const integracaoWhatsAppId = String(body.integracao_whatsapp_id || "").trim();
 
-    console.log("integracaoWhatsAppId recebido:", integracaoWhatsAppId);
-    console.log("usuario.empresa_id:", usuario.empresa_id);
-
     const componentesRecebidos = Array.isArray(body.components)
       ? (body.components as CreateTemplateInput["components"])
       : [];
@@ -103,9 +100,6 @@ export async function POST(req: NextRequest) {
       .eq("id", integracaoWhatsAppId)
       .eq("empresa_id", usuario.empresa_id)
       .single();
-
-    console.log("integracao encontrada:", integracao);
-    console.log("erro integracao:", integracaoError);
 
     if (integracaoError || !integracao) {
       return NextResponse.json(
@@ -174,10 +168,6 @@ export async function POST(req: NextRequest) {
       accessToken,
       data: input,
     });
-
-    console.log("metaResponse.ok:", metaResponse.ok);
-    console.log("metaResponse.status:", metaResponse.status);
-    console.log("metaResponse.data:", JSON.stringify(metaResponse.data, null, 2));
 
     const templateStatus = metaResponse.ok
       ? String(metaResponse.data?.status || "PENDING")
@@ -306,10 +296,8 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
 
-    console.log("templates listados:", data);
-    console.log("erro ao listar templates:", error);
-
     if (error) {
+      console.error("Erro ao listar templates no banco:", error);
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
