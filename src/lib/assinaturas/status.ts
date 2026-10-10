@@ -23,6 +23,8 @@ export type AssinaturaEmpresa = {
   plano_slug: string | null;
   plano_nome: string | null;
   checkout_url: string | null;
+  free_trial_4d: boolean;
+  affiliate_ref: string | null;
 };
 
 type EmpresaAssinaturaRow = {
@@ -35,6 +37,7 @@ type EmpresaAssinaturaRow = {
   assinatura_renovada_em: string | null;
   assinatura_gateway: string | null;
   assinatura_referencia: string | null;
+  assinatura_metadata_json: Record<string, unknown> | null;
   planos:
     | {
         id?: string;
@@ -169,6 +172,7 @@ export async function buscarAssinaturaEmpresa(
           assinatura_renovada_em,
           assinatura_gateway,
           assinatura_referencia,
+          assinatura_metadata_json,
           planos (
             id,
             nome,
@@ -201,6 +205,13 @@ export async function buscarAssinaturaEmpresa(
         plano_slug: planoSlug,
         plano_nome: plano?.nome ?? null,
         checkout_url: obterCheckoutUrlPorPlanoSlug(planoSlug),
+        free_trial_4d:
+          empresa.assinatura_gateway === "free_trial_4d" ||
+          empresa.assinatura_metadata_json?.free_trial_4d === true,
+        affiliate_ref:
+          typeof empresa.assinatura_metadata_json?.affiliate_ref === "string"
+            ? empresa.assinatura_metadata_json.affiliate_ref
+            : null,
       } satisfies AssinaturaEmpresa;
     }
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -33,6 +33,17 @@ export default function ComecarPage() {
     useState<DocumentoLegalId | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
+  const [freeTrial4d, setFreeTrial4d] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const oferta = String(
+      new URLSearchParams(window.location.search).get("oferta") ?? ""
+    )
+      .trim()
+      .toLowerCase();
+    setFreeTrial4d(oferta === "trial4d");
+  }, []);
 
   function formatarTelefone(valor: string) {
     const numeros = valor.replace(/\D/g, "").slice(0, 11);
@@ -87,6 +98,16 @@ export default function ComecarPage() {
     }
 
     return valor;
+  }
+
+  function ehFreeTrial4DiasDaUrl() {
+    if (typeof window === "undefined") return false;
+
+    return (
+      String(new URLSearchParams(window.location.search).get("oferta") ?? "")
+        .trim()
+        .toLowerCase() === "trial4d"
+    );
   }
 
   function obterTipoOfertaDaUrl(): TipoOferta {
@@ -149,6 +170,7 @@ export default function ComecarPage() {
 
     const tipoOferta = obterTipoOfertaDaUrl();
     const affiliateRef = obterAffiliateRefDaUrl();
+    const ativarFreeTrial4d = freeTrial4d || ehFreeTrial4DiasDaUrl();
 
     setLoading(true);
 
@@ -166,6 +188,7 @@ export default function ComecarPage() {
           segmento_codigo: segmento,
           tipo_oferta: tipoOferta,
           affiliate_ref: affiliateRef,
+          free_trial_4d: ativarFreeTrial4d,
           aceite_contrato: aceiteContrato,
           chave_free:
             tipoOferta === "free"
@@ -188,6 +211,28 @@ export default function ComecarPage() {
         localStorage.setItem("affiliate_ref", data.affiliate_ref);
       } else {
         localStorage.removeItem("affiliate_ref");
+      }
+
+      if (ativarFreeTrial4d) {
+        const trialResponse = await fetch("/api/public/free-trial", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ lead_id: data.lead_id }),
+        });
+        const trialData = await trialResponse.json();
+
+        if (!trialResponse.ok || !trialData?.ok) {
+          setErro(
+            trialData?.error ||
+              "Não foi possível ativar o teste gratuito de 4 dias."
+          );
+          return;
+        }
+
+        router.push("/trial-iniciado");
+        return;
       }
 
       router.push("/plano");
@@ -374,11 +419,19 @@ export default function ComecarPage() {
             {erro && <p className={styles.error}>{erro}</p>}
 
             <button className={styles.button} disabled={loading}>
-              {loading ? "Carregando..." : "Continuar"}
+              {loading
+                ? freeTrial4d
+                  ? "Ativando teste..."
+                  : "Carregando..."
+                : freeTrial4d
+                  ? "Começar teste grátis por 4 dias"
+                  : "Continuar"}
             </button>
 
             <p className={styles.helperText}>
-              Ao continuar, você seguirá para a página de planos para concluir a contratação.
+              {freeTrial4d
+                ? "O teste utiliza o plano Básico por 4 dias, sem cobrança. Depois do período, será necessário contratar o plano para continuar usando."
+                : "Ao continuar, você seguirá para a página de planos para concluir a contratação."}
             </p>
           </form>
         </div>

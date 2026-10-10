@@ -83,6 +83,26 @@ async function processarConversa(id: string) {
   return { ok: true, resultado };
 }
 
+async function processarExpiracaoFreeTrial(
+  empresaId: string,
+  executarEm?: string | null
+) {
+  const alvoMs = Date.parse(String(executarEm || ""));
+
+  if (Number.isFinite(alvoMs) && alvoMs > Date.now() + 1_000) {
+    return { ok: true, reagendarEm: new Date(alvoMs).toISOString() };
+  }
+
+  const { data, error } = await supabase.rpc(
+    "sincronizar_assinatura_empresa",
+    { p_empresa_id: empresaId }
+  );
+
+  if (error) throw error;
+
+  return { ok: true, status: data };
+}
+
 async function executar(payload: Payload) {
   switch (payload.tipo) {
     case "conversa_expirar":
@@ -103,6 +123,8 @@ async function executar(payload: Payload) {
       return processarRecuperacaoCheckoutPorId(payload.id);
     case "checkout_expiracao":
       return processarCheckoutExpiracaoPorId(payload.id);
+    case "free_trial_expirar":
+      return processarExpiracaoFreeTrial(payload.id, payload.executarEm);
     default:
       return { ok: true, ignorado: true, motivo: "tipo_nao_suportado" };
   }

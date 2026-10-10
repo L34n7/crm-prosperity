@@ -9,7 +9,8 @@ export type EventoAgendadoTipo =
   | "integracao_outbox"
   | "rotina_job"
   | "checkout_recuperacao"
-  | "checkout_expiracao";
+  | "checkout_expiracao"
+  | "free_trial_expirar";
 
 function baseUrlAplicacao() {
   const host =

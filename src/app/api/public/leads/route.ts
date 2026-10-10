@@ -60,6 +60,7 @@ export async function POST(request: Request) {
     const empresa = String(body?.empresa ?? "").trim();
     const segmento = getSegmentoEmpresa(body?.segmento_codigo);
     const aceiteContrato = body?.aceite_contrato === true;
+    const freeTrial4d = body?.free_trial_4d === true;
     const affiliateRefRaw = String(body?.affiliate_ref ?? "").trim();
     const affiliateRef =
       affiliateRefRaw &&
@@ -67,10 +68,9 @@ export async function POST(request: Request) {
       /^[A-Za-z0-9_-]+$/.test(affiliateRefRaw)
         ? affiliateRefRaw
         : null;
-    const tipoOferta = normalizarTipoOferta(
-      body?.tipo_oferta,
-      body?.chave_free
-    );
+    const tipoOferta = freeTrial4d
+      ? "normal"
+      : normalizarTipoOferta(body?.tipo_oferta, body?.chave_free);
 
     if (!nome) {
       throw new Error("Nome é obrigatório.");
@@ -153,6 +153,78 @@ export async function POST(request: Request) {
       );
     }
 
+    if (freeTrial4d) {
+      const buscarTrial = async (campo: "email" | "telefone", valor: string) => {
+        const { data, error } = await supabase
+          .from("leads_cadastro")
+          .select("id,empresa_id,metadata_json,tipo_oferta")
+          .eq(campo, valor)
+          .contains("metadata_json", { free_trial_4d: true })
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          throw new Error("Não foi possível validar o período de teste.");
+        }
+
+        return data;
+      };
+
+      const trialExistente =
+        (await buscarTrial("email", email)) ||
+        (await buscarTrial("telefone", telefone));
+
+      if (trialExistente) {
+        const metadataExistente =
+          trialExistente.metadata_json &&
+          typeof trialExistente.metadata_json === "object" &&
+          !Array.isArray(trialExistente.metadata_json)
+            ? (trialExistente.metadata_json as Record<string, unknown>)
+            : {};
+
+        if (
+          trialExistente.empresa_id &&
+          metadataExistente.trial_acesso_enviado_em
+        ) {
+          throw new Error(
+            "Este contato já utilizou o período de teste gratuito de 4 dias."
+          );
+        }
+
+        return NextResponse.json({
+          ok: true,
+          lead_id: trialExistente.id,
+          tipo_oferta: trialExistente.tipo_oferta || "normal",
+          affiliate_ref:
+            typeof metadataExistente.affiliate_ref === "string"
+              ? metadataExistente.affiliate_ref
+              : null,
+          free_trial_4d: true,
+          reaproveitado: true,
+        });
+      }
+    }
+
+    const metadataCadastro = {
+      ...(affiliate
+        ? {
+            affiliate_ref: affiliate.affiliate_ref,
+            affiliate_source: "prosperity_pay",
+            affiliate_membership_id: affiliate.external_membership_id,
+            affiliate_attributed_at: new Date().toISOString(),
+          }
+        : {}),
+      ...(freeTrial4d
+        ? {
+            free_trial_4d: true,
+            trial_dias: 4,
+            trial_plano_slug: "basico",
+            trial_solicitado_em: new Date().toISOString(),
+          }
+        : {}),
+    };
+
     const { data, error } = await supabase
       .from("leads_cadastro")
       .insert({
@@ -176,14 +248,8 @@ export async function POST(request: Request) {
         politica_privacidade_versao: VERSAO_POLITICA_PRIVACIDADE,
         contrato_responsabilidades_versao: VERSAO_CONTRATO_RESPONSABILIDADES,
         termo_aceite_texto: TEXTO_ACEITE_LGPD,
-        metadata_json: affiliate
-          ? {
-              affiliate_ref: affiliate.affiliate_ref,
-              affiliate_source: "prosperity_pay",
-              affiliate_membership_id: affiliate.external_membership_id,
-              affiliate_attributed_at: new Date().toISOString(),
-            }
-          : null,
+        metadata_json:
+          Object.keys(metadataCadastro).length > 0 ? metadataCadastro : null,
       })
       .select("id")
       .single();
@@ -198,6 +264,7 @@ export async function POST(request: Request) {
       lead_id: data.id,
       tipo_oferta: tipoOferta,
       affiliate_ref: affiliate?.affiliate_ref ?? null,
+      free_trial_4d: freeTrial4d,
     });
   } catch (error) {
     console.error("Erro ao criar cadastro:", error);

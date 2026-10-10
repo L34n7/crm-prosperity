@@ -29,10 +29,13 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
   const pathname = usePathname();
   const headerUser = useHeaderUser();
   const [popupAberto, setPopupAberto] = useState(false);
+  const [checkoutTrialLoading, setCheckoutTrialLoading] = useState(false);
+  const [checkoutTrialErro, setCheckoutTrialErro] = useState("");
 
   const status = assinatura?.status ?? "ativa";
   const bloqueada = status === "bloqueada";
   const vencida = status === "vencida";
+  const trialEncerrado = bloqueada && assinatura?.free_trial_4d === true;
   const intervaloLembrete = bloqueada
     ? INTERVALO_BLOQUEADA_MS
     : INTERVALO_VENCIDA_MS;
@@ -128,12 +131,66 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
     }
   }
 
-  const titulo = bloqueada
-    ? "Plano bloqueado"
-    : "Plano vencido";
-  const mensagem = bloqueada
-    ? "A renovacao nao foi identificada dentro do prazo. Os fluxos foram pausados e o acesso ficou limitado ate a renovacao."
-    : "O ciclo do plano terminou. Renove em ate 7 dias para evitar bloqueio dos fluxos e das permissoes.";
+  async function abrirCheckoutTrialBasico() {
+    if (checkoutTrialLoading) return;
+
+    const novaAba = window.open("about:blank", "_blank");
+
+    if (!novaAba) {
+      setCheckoutTrialErro(
+        "O navegador bloqueou a nova aba. Permita pop-ups e tente novamente."
+      );
+      return;
+    }
+
+    novaAba.opener = null;
+    setCheckoutTrialLoading(true);
+    setCheckoutTrialErro("");
+
+    try {
+      const response = await fetch("/api/assinaturas/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plano_slug: "basico",
+          renovar_plano_atual: true,
+          gateway: assinatura?.affiliate_ref
+            ? "prosperity_pay"
+            : "atomo",
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok || !data?.checkout_url) {
+        novaAba.close();
+        throw new Error(
+          data?.error || "Não foi possível gerar o checkout do plano Básico."
+        );
+      }
+
+      novaAba.location.href = data.checkout_url;
+    } catch (error) {
+      novaAba.close();
+      setCheckoutTrialErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o checkout do plano Básico."
+      );
+    } finally {
+      setCheckoutTrialLoading(false);
+    }
+  }
+
+  const titulo = trialEncerrado
+    ? "Período de teste encerrado"
+    : bloqueada
+      ? "Plano bloqueado"
+      : "Plano vencido";
+  const mensagem = trialEncerrado
+    ? "Seu teste gratuito de 4 dias terminou. Automações e IA foram pausadas, os tokens foram zerados e o acesso ficou limitado à área de conversas até a contratação do plano Básico."
+    : bloqueada
+      ? "A renovação não foi identificada dentro do prazo. Os fluxos foram pausados e o acesso ficou limitado até a renovação."
+      : "O ciclo do plano terminou. Renove em até 7 dias para evitar bloqueio dos fluxos e das permissões.";
   const podeFechar = vencida || (bloqueada && isAdmin);
   const bloquearTela = bloqueada && !isAdmin;
 
@@ -143,10 +200,15 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
         <div className={styles.assinaturaBlockOverlay} role="dialog" aria-modal="true">
           <div className={styles.assinaturaModal}>
             <span className={styles.assinaturaEyebrow}>Acesso bloqueado</span>
-            <h2>Plano aguardando renovacao</h2>
+            <h2>
+              {trialEncerrado
+                ? "Período de teste encerrado"
+                : "Plano aguardando renovação"}
+            </h2>
             <p>
-              Sua empresa esta com o plano bloqueado. As permissoes ficam
-              suspensas ate que um administrador renove a assinatura.
+              {trialEncerrado
+                ? "O teste gratuito terminou. Um administrador precisa contratar o plano Básico para liberar novamente o sistema."
+                : "Sua empresa está com o plano bloqueado. As permissões ficam suspensas até que um administrador renove a assinatura."}
             </p>
           </div>
         </div>
@@ -188,9 +250,16 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
               <button
                 type="button"
                 className={styles.assinaturaPrimary}
-                onClick={abrirModalPlanos}
+                onClick={
+                  trialEncerrado ? abrirCheckoutTrialBasico : abrirModalPlanos
+                }
+                disabled={trialEncerrado && checkoutTrialLoading}
               >
-                Renovar plano
+                {trialEncerrado
+                  ? checkoutTrialLoading
+                    ? "Preparando pagamento..."
+                    : "Continuar com plano Básico"
+                  : "Renovar plano"}
               </button>
 
               {podeFechar && (
@@ -204,10 +273,14 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
               )}
             </div>
 
+            {checkoutTrialErro && trialEncerrado && (
+              <p className={styles.assinaturaHint}>{checkoutTrialErro}</p>
+            )}
+
             {bloqueada && isAdmin && (
               <p className={styles.assinaturaHint}>
                 {headerUser.profileName}, enquanto o plano estiver bloqueado,
-                o administrador pode continuar apenas pela pagina de conversas.
+                o administrador pode continuar apenas pela página de conversas.
               </p>
             )}
           </div>
