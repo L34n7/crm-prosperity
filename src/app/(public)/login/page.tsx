@@ -10,6 +10,7 @@ import { ArrowRight, Check, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-session";
 
 const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
+const TRIAL_AVISO_LOGIN_STORAGE_KEY = "crm_trial_aviso_apos_login";
 
 async function obterRotaAposLogin() {
   try {
@@ -109,6 +110,7 @@ export default function LoginPage() {
     window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
     window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
     window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
+    window.sessionStorage.setItem(TRIAL_AVISO_LOGIN_STORAGE_KEY, "true");
     try {
       getClientSessionId();
       void enviarEventoSessao("login").catch(() => {

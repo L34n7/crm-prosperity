@@ -11,8 +11,10 @@ type Props = {
   isAdmin: boolean;
 };
 
+const INTERVALO_TRIAL_MS = 5 * 60 * 1000;
 const INTERVALO_VENCIDA_MS = 20 * 60 * 1000;
 const INTERVALO_BLOQUEADA_MS = 10 * 60 * 1000;
+const TRIAL_AVISO_LOGIN_STORAGE_KEY = "crm_trial_aviso_apos_login";
 
 function formatarData(valor: string | null) {
   if (!valor) return "-";
@@ -21,6 +23,18 @@ function formatarData(valor: string | null) {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+  }).format(new Date(valor));
+}
+
+function formatarDataHora(valor: string | null) {
+  if (!valor) return "-";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(new Date(valor));
 }
 
@@ -35,13 +49,26 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
   const status = assinatura?.status ?? "ativa";
   const bloqueada = status === "bloqueada";
   const vencida = status === "vencida";
+  const trialAtivo = status === "ativa" && assinatura?.free_trial_4d === true;
   const trialEncerrado = bloqueada && assinatura?.free_trial_4d === true;
-  const intervaloLembrete = bloqueada
-    ? INTERVALO_BLOQUEADA_MS
-    : INTERVALO_VENCIDA_MS;
+  const intervaloLembrete = trialAtivo
+    ? INTERVALO_TRIAL_MS
+    : bloqueada
+      ? INTERVALO_BLOQUEADA_MS
+      : INTERVALO_VENCIDA_MS;
 
   const storageKey = useMemo(() => {
-    if (!assinatura || status === "ativa") return null;
+    if (!assinatura) return null;
+
+    if (trialAtivo) {
+      return [
+        "assinatura-trial",
+        assinatura.plano_id || "sem-plano",
+        assinatura.vencimento_em || "sem-vencimento",
+      ].join(":");
+    }
+
+    if (status === "ativa") return null;
 
     return [
       "assinatura-renovacao",
@@ -50,7 +77,7 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
       assinatura.vencimento_em || "sem-vencimento",
       assinatura.bloqueio_em || "sem-bloqueio",
     ].join(":");
-  }, [assinatura, status]);
+  }, [assinatura, status, trialAtivo]);
 
   useEffect(() => {
     if (!bloqueada || !isAdmin) return;
@@ -60,11 +87,21 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
   }, [bloqueada, isAdmin, pathname, router]);
 
   useEffect(() => {
-    if (!assinatura || status === "ativa" || !storageKey) {
+    if (!assinatura || !storageKey) {
       return;
     }
 
+    const relevante = trialAtivo || status !== "ativa";
+    if (!relevante) return;
+
     const chaveStorage = storageKey;
+    const forcarAvisoAposLogin =
+      trialAtivo &&
+      window.sessionStorage.getItem(TRIAL_AVISO_LOGIN_STORAGE_KEY) === "true";
+
+    if (forcarAvisoAposLogin) {
+      window.sessionStorage.removeItem(TRIAL_AVISO_LOGIN_STORAGE_KEY);
+    }
 
     function deveAbrirPopup() {
       const ultimoAviso = Number(
@@ -76,19 +113,20 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
       );
     }
 
-    const aberturaInicialTimer = deveAbrirPopup()
-      ? window.setTimeout(() => {
-          setPopupAberto(true);
-          window.localStorage.setItem(chaveStorage, String(Date.now()));
-        }, 0)
-      : null;
+    const aberturaInicialTimer =
+      forcarAvisoAposLogin || deveAbrirPopup()
+        ? window.setTimeout(() => {
+            setPopupAberto(true);
+            window.localStorage.setItem(chaveStorage, String(Date.now()));
+          }, 0)
+        : null;
 
     const timer = window.setInterval(() => {
       if (deveAbrirPopup()) {
         setPopupAberto(true);
         window.localStorage.setItem(chaveStorage, String(Date.now()));
       }
-    }, 60_000);
+    }, trialAtivo ? 15_000 : 60_000);
 
     return () => {
       window.clearInterval(timer);
@@ -97,11 +135,17 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
         window.clearTimeout(aberturaInicialTimer);
       }
     };
-  }, [assinatura, intervaloLembrete, status, storageKey]);
+  }, [
+    assinatura,
+    intervaloLembrete,
+    status,
+    storageKey,
+    trialAtivo,
+  ]);
 
   useEffect(() => {
     function abrirPopup() {
-      if (status !== "ativa") {
+      if (status !== "ativa" || trialAtivo) {
         setPopupAberto(true);
         if (storageKey) {
           window.localStorage.setItem(storageKey, String(Date.now()));
@@ -114,9 +158,9 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
     return () => {
       window.removeEventListener("assinatura:abrir-renovacao", abrirPopup);
     };
-  }, [status, storageKey]);
+  }, [status, storageKey, trialAtivo]);
 
-  if (!assinatura || status === "ativa") return null;
+  if (!assinatura || (status === "ativa" && !trialAtivo)) return null;
 
   function abrirModalPlanos() {
     const detail = { handled: false };
@@ -181,17 +225,21 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
     }
   }
 
-  const titulo = trialEncerrado
-    ? "Período de teste encerrado"
-    : bloqueada
-      ? "Plano bloqueado"
-      : "Plano vencido";
-  const mensagem = trialEncerrado
-    ? "Seu teste gratuito de 4 dias terminou. Automações e IA foram pausadas, os tokens foram zerados e o acesso ficou limitado à área de conversas até a contratação do plano Básico."
-    : bloqueada
-      ? "A renovação não foi identificada dentro do prazo. Os fluxos foram pausados e o acesso ficou limitado até a renovação."
-      : "O ciclo do plano terminou. Renove em até 7 dias para evitar bloqueio dos fluxos e das permissões.";
-  const podeFechar = vencida || (bloqueada && isAdmin);
+  const titulo = trialAtivo
+    ? "Plano de teste ativo"
+    : trialEncerrado
+      ? "Período de teste encerrado"
+      : bloqueada
+        ? "Plano bloqueado"
+        : "Plano vencido";
+  const mensagem = trialAtivo
+    ? `Você está usando o plano Básico em período de teste por 4 dias. O teste encerra em ${formatarDataHora(assinatura.vencimento_em)}. Depois desse prazo, será necessário contratar um plano para continuar usando todos os recursos.`
+    : trialEncerrado
+      ? "Seu teste gratuito de 4 dias terminou. Automações e IA foram pausadas, os tokens foram zerados e o acesso ficou limitado à área de conversas até a contratação do plano Básico."
+      : bloqueada
+        ? "A renovação não foi identificada dentro do prazo. Os fluxos foram pausados e o acesso ficou limitado até a renovação."
+        : "O ciclo do plano terminou. Renove em até 7 dias para evitar bloqueio dos fluxos e das permissões.";
+  const podeFechar = trialAtivo || vencida || (bloqueada && isAdmin);
   const bloquearTela = bloqueada && !isAdmin;
 
   return (
@@ -229,7 +277,9 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
             )}
 
             <span className={styles.assinaturaEyebrow}>
-              {assinatura.plano_nome || "CRM Prosperity"}
+              {trialAtivo
+                ? `${assinatura.plano_nome || "Plano Básico"} · Teste de 4 dias`
+                : assinatura.plano_nome || "CRM Prosperity"}
             </span>
 
             <h2>{titulo}</h2>
@@ -237,12 +287,20 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
 
             <div className={styles.assinaturaDates}>
               <div>
-                <span>Vencimento</span>
-                <strong>{formatarData(assinatura.vencimento_em)}</strong>
+                <span>{trialAtivo ? "Início do teste" : "Vencimento"}</span>
+                <strong>
+                  {trialAtivo
+                    ? formatarDataHora(assinatura.inicio_em)
+                    : formatarData(assinatura.vencimento_em)}
+                </strong>
               </div>
               <div>
-                <span>Bloqueio</span>
-                <strong>{formatarData(assinatura.bloqueio_em)}</strong>
+                <span>{trialAtivo ? "Encerra em" : "Bloqueio"}</span>
+                <strong>
+                  {trialAtivo
+                    ? formatarDataHora(assinatura.vencimento_em)
+                    : formatarData(assinatura.bloqueio_em)}
+                </strong>
               </div>
             </div>
 
@@ -255,11 +313,13 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
                 }
                 disabled={trialEncerrado && checkoutTrialLoading}
               >
-                {trialEncerrado
-                  ? checkoutTrialLoading
-                    ? "Preparando pagamento..."
-                    : "Continuar com plano Básico"
-                  : "Renovar plano"}
+                {trialAtivo
+                  ? "Ver planos"
+                  : trialEncerrado
+                    ? checkoutTrialLoading
+                      ? "Preparando pagamento..."
+                      : "Continuar com plano Básico"
+                    : "Renovar plano"}
               </button>
 
               {podeFechar && (
