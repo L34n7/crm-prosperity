@@ -22,7 +22,6 @@ import {
   Workflow,
   Zap,
 } from "lucide-react";
-import { montarWaMeUrl } from "@/lib/contatos/sistema";
 import {
   AutomationVisual,
   ConversationVisual,
@@ -342,9 +341,9 @@ function SectionHeading({
 }
 
 export default function SitePage() {
-  const enterpriseWhatsAppUrl = montarWaMeUrl(
+  const enterpriseWhatsAppUrl = `https://wa.me/5531975117638?text=${encodeURIComponent(
     "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity.",
-  );
+  )}`;
 
   const structuredData = {
     "@context": "https://schema.org",

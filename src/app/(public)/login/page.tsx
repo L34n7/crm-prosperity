@@ -11,6 +11,9 @@ import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-sessi
 
 const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
 const TRIAL_AVISO_LOGIN_STORAGE_KEY = "crm_trial_aviso_apos_login";
+const SUPORTE_WHATSAPP_URL = `https://wa.me/5531975051275?text=${encodeURIComponent(
+  "Olá! Preciso de suporte com meu acesso ao CRM Prosperity.",
+)}`;
 
 async function obterRotaAposLogin() {
   try {
@@ -326,7 +329,15 @@ export default function LoginPage() {
           <p className={styles.cardFooter}>
             Ainda precisa de ajuda?{" "}
             <Link href="/recuperar-senha">Recupere seu acesso</Link>
-            {" "}ou fale com o suporte.
+            {" "}ou fale com o{" "}
+            <a
+              href={SUPORTE_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              suporte
+            </a>
+            .
           </p>
         </div>
       </section>
