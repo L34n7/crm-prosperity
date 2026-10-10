@@ -9,7 +9,11 @@ import {
   SEGMENTOS_EMPRESA,
   type SegmentoCodigo,
 } from "@/lib/segmentos/catalogo";
-import { isValidBuyerEmail } from "@/lib/checkout/buyer-validation";
+import {
+  isValidBuyerEmail,
+  isValidBuyerPhone,
+  normalizeBuyerPhone,
+} from "@/lib/checkout/buyer-validation";
 import LegalDocumentModal, {
   type DocumentoLegalId,
 } from "@/components/legal/LegalDocumentModal";
@@ -119,8 +123,8 @@ export default function ComecarPage() {
 
     setErro("");
 
-    if (!nome || !email || !segmento) {
-      setErro("Preencha nome, email e segmento da empresa.");
+    if (!nome || !email || !telefone || !segmento) {
+      setErro("Preencha nome, email, telefone pessoal e segmento da empresa.");
       return;
     }
 
@@ -129,10 +133,10 @@ export default function ComecarPage() {
       return;
     }
 
-    const telefoneLimpo = telefone.replace(/\D/g, "");
+    const telefoneLimpo = normalizeBuyerPhone(telefone);
 
-    if (telefone && telefoneLimpo.length < 10) {
-      setErro("Telefone inválido.");
+    if (!isValidBuyerPhone(telefoneLimpo)) {
+      setErro("Informe um telefone pessoal válido com DDD.");
       return;
     }
 
@@ -157,7 +161,7 @@ export default function ComecarPage() {
         body: JSON.stringify({
           nome,
           email,
-          telefone: telefoneLimpo || null,
+          telefone: telefoneLimpo,
           empresa,
           segmento_codigo: segmento,
           tipo_oferta: tipoOferta,
@@ -287,7 +291,7 @@ export default function ComecarPage() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Telefone Pessoal</label>
+              <label className={styles.label}>Telefone pessoal *</label>
               <input
                 placeholder="(00) 00000-0000"
                 type="tel"
@@ -295,6 +299,9 @@ export default function ComecarPage() {
                 onChange={handleTelefoneChange}
                 className={styles.input}
                 autoComplete="tel"
+                inputMode="tel"
+                required
+                aria-required="true"
               />
             </div>
 

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { isValidBuyerEmail } from "@/lib/checkout/buyer-validation";
+import {
+  isValidBuyerEmail,
+  isValidBuyerPhone,
+  normalizeBuyerPhone,
+} from "@/lib/checkout/buyer-validation";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   TEXTO_ACEITE_LGPD,
@@ -52,7 +56,7 @@ export async function POST(request: Request) {
 
     const nome = String(body?.nome ?? "").trim();
     const email = String(body?.email ?? "").toLowerCase().trim();
-    const telefone = String(body?.telefone ?? "").trim();
+    const telefone = normalizeBuyerPhone(String(body?.telefone ?? ""));
     const empresa = String(body?.empresa ?? "").trim();
     const segmento = getSegmentoEmpresa(body?.segmento_codigo);
     const aceiteContrato = body?.aceite_contrato === true;
@@ -78,6 +82,14 @@ export async function POST(request: Request) {
 
     if (!isValidBuyerEmail(email)) {
       throw new Error("Informe um e-mail válido, como nome@exemplo.com.br.");
+    }
+
+    if (!telefone) {
+      throw new Error("Telefone pessoal é obrigatório.");
+    }
+
+    if (!isValidBuyerPhone(telefone)) {
+      throw new Error("Informe um telefone pessoal válido com DDD.");
     }
 
     if (!segmento) {
@@ -146,7 +158,7 @@ export async function POST(request: Request) {
       .insert({
         nome,
         email,
-        telefone: telefone || null,
+        telefone,
         empresa: empresa || null,
         nicho_id: nicho.id,
         segmento_codigo: segmento.codigo,

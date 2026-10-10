@@ -6,3 +6,15 @@ export function isValidBuyerEmail(value: string) {
   if (domain.split(".").some((label) => label.length > 63)) return false;
   return /^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(email);
 }
+
+export function normalizeBuyerPhone(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+export function isValidBuyerPhone(value: string) {
+  const telefone = normalizeBuyerPhone(value);
+  return (
+    (telefone.length === 10 || telefone.length === 11) &&
+    !/^(\d)\1+$/.test(telefone)
+  );
+}
