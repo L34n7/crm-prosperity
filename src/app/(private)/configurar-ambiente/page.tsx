@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
 import FeedbackToast from "@/components/FeedbackToast";
+import Header from "@/components/Header";
 import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
@@ -1730,6 +1731,8 @@ async function salvarNichoEAvancar() {
 
 return (
   <main className={styles.page}>
+    <Header title="" />
+
     <FeedbackToast
       success={toastSucesso}
       error={toastErro}

@@ -230,6 +230,7 @@ export default function Header({
   mobileBackLabel = "Voltar",
 }: HeaderProps) {
   const router = useRouter();
+  const modalOnly = title.trim().length === 0 && !subtitle;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificacoesOpen, setNotificacoesOpen] = useState(false);
@@ -975,6 +976,9 @@ export default function Header({
 
   const assinaturaStatus = headerUser.assinatura?.status ?? "ativa";
   const assinaturaBloqueada = assinaturaStatus === "bloqueada";
+  const freeTrialAtivo =
+    assinaturaStatus === "ativa" &&
+    headerUser.assinatura?.free_trial_4d === true;
   const assinaturaPlanoNome = headerUser.assinatura?.plano_nome || "Plano atual";
   const assinaturaStatusLabel = formatarStatusAssinatura(assinaturaStatus);
   const assinaturaRenovacaoEm = assinaturaResumo?.plan.is_free
@@ -989,8 +993,9 @@ export default function Header({
     !assinaturaResumo?.plan.is_free &&
     !assinaturaPagaAntecipadamente &&
     !assinaturaResumo?.pending.plan_change;
-  const assinaturaAcaoPagamento =
-    assinaturaStatus === "ativa"
+  const assinaturaAcaoPagamento = freeTrialAtivo
+    ? "Contratar plano Básico"
+    : assinaturaStatus === "ativa"
       ? "Adiantar próxima mensalidade"
       : "Pagar / renovar";
   const assinaturaStatusBadgeClassName = `${styles.planCurrentStatus} ${
@@ -1018,7 +1023,9 @@ export default function Header({
   const somChatStatus = somChatAtivo ? "Ativo" : "Desativado";
 
   return (
-    <header className={styles.header}>
+    <header
+      className={`${styles.header} ${modalOnly ? styles.headerModalOnly : ""}`}
+    >
       <div className={styles.left}>
         {mobileBackHref && (
           <Link
@@ -1337,7 +1344,9 @@ export default function Header({
                     <small>
                       {assinaturaResumo?.plan.is_free
                         ? "Plano gratuito"
-                        : "Assinatura pré-paga · sem renovação automática via PIX"}
+                        : freeTrialAtivo
+                          ? "Teste gratuito de 4 dias · sem cobrança durante o período"
+                          : "Assinatura pré-paga · sem renovação automática via PIX"}
                     </small>
                   </div>
                 </div>
@@ -1351,7 +1360,9 @@ export default function Header({
                   </div>
 
                   <div>
-                    <span>Próxima renovação</span>
+                    <span>
+                      {freeTrialAtivo ? "Fim do teste" : "Próxima renovação"}
+                    </span>
                     <strong>
                       {assinaturaResumo?.plan.is_free
                         ? "Não se aplica"
@@ -1364,15 +1375,23 @@ export default function Header({
                   </div>
 
                   <div>
-                    <span>Próxima cobrança</span>
+                    <span>
+                      {freeTrialAtivo ? "Plano após teste" : "Próxima cobrança"}
+                    </span>
                     <strong>
                       {assinaturaResumo?.plan.is_free
                         ? "Sem cobrança"
-                        : assinaturaResumo
-                          ? formatarMoedaCentavos(
-                              assinaturaResumo.subscription.next_amount_cents
-                            )
-                          : "-"}
+                        : freeTrialAtivo
+                          ? assinaturaResumo
+                            ? `${formatarMoedaCentavos(
+                                assinaturaResumo.plan.price_cents
+                              )}/mês`
+                            : "R$ 137,00/mês"
+                          : assinaturaResumo
+                            ? formatarMoedaCentavos(
+                                assinaturaResumo.subscription.next_amount_cents
+                              )
+                            : "-"}
                     </strong>
                   </div>
                 </div>
@@ -1431,7 +1450,9 @@ export default function Header({
                             ? "Alteração de plano agendada"
                             : assinaturaResumo
                               ? `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
-                                  assinaturaResumo.subscription.next_amount_cents
+                                  freeTrialAtivo
+                                    ? assinaturaResumo.plan.price_cents
+                                    : assinaturaResumo.subscription.next_amount_cents
                                 )}`
                               : assinaturaAcaoPagamento}
                       </button>
