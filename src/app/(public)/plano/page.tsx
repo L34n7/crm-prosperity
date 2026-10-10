@@ -8,7 +8,6 @@ import PaymentProviderModal, {
   type PaymentGateway,
   type PaymentPlanSummary,
 } from "@/components/payments/PaymentProviderModal";
-import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import styles from "./plano.module.css";
 
 type Plano = {
@@ -186,11 +185,13 @@ export default function PlanoPage() {
   }
 
   function abrirCheckoutCotacao() {
-    window.open(
-      ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoCotacao337,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    const mensagem =
+      "Olá! Gostaria de fazer uma cotação do plano Profissional Enterprise.";
+    const whatsappUrl = `https://wa.me/553175117638?text=${encodeURIComponent(
+      mensagem
+    )}`;
+
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   }
 
   function togglePlanoExpandido(nomePlano: string) {
