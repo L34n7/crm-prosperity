@@ -25,8 +25,7 @@ type PacoteTokens = CompraCheckout & {
   destaque?: boolean;
 };
 
-const whatsappComercial =
-  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
+const WHATSAPP_COMERCIAL_NUMERO = "5531975117638";
 
 const PACOTE_50_PROSPERITY_PAY =
   "https://www.prosperitypay.com.br/checkout/a66f9a1dc10e";
@@ -85,7 +84,7 @@ const ofertaEssencial: CompraCheckout = {
 };
 
 function abrirWhatsApp(mensagem: string) {
-  const url = `https://api.whatsapp.com/send?phone=${whatsappComercial}&text=${encodeURIComponent(
+  const url = `https://api.whatsapp.com/send?phone=${WHATSAPP_COMERCIAL_NUMERO}&text=${encodeURIComponent(
     mensagem
   )}`;
 
