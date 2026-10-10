@@ -1458,10 +1458,10 @@
 }
 
 .deletedOriginalText img {
-  width: 18px;
-  height: 18px;
-  max-width: 18px;
-  max-height: 18px;
+  width: 20px;
+  height: 20px;
+  max-width: 20px;
+  max-height: 20px;
   margin: 0 2px;
   vertical-align: -3px;
   display: inline-block;
@@ -1517,7 +1517,7 @@
 }
 
 .reactionEmoji {
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
 }
 
@@ -1547,7 +1547,7 @@
   }
 
   .reactionEmoji {
-    font-size: 14px;
+    font-size: 16px;
   }
 }
 
@@ -6400,12 +6400,12 @@
 
 .messageText :global(img.emoji),
 .favoriteMessageText :global(img.emoji) {
-  width: 1.24em !important;
-  height: 1.24em !important;
-  min-width: 1.24em !important;
-  min-height: 1.24em !important;
-  max-width: 1.24em !important;
-  max-height: 1.24em !important;
+  width: calc(1.24em + 2px) !important;
+  height: calc(1.24em + 2px) !important;
+  min-width: calc(1.24em + 2px) !important;
+  min-height: calc(1.24em + 2px) !important;
+  max-width: calc(1.24em + 2px) !important;
+  max-height: calc(1.24em + 2px) !important;
   display: inline-block !important;
   vertical-align: -0.18em;
   margin: 0 0.04em;
@@ -6415,12 +6415,12 @@
 .disparoMessageTitle :global(img.emoji),
 .disparoMessageFooter :global(img.emoji),
 .buttonMessageOption :global(img.emoji) {
-  width: 1em !important;
-  height: 1em !important;
-  min-width: 1em !important;
-  min-height: 1em !important;
-  max-width: 1em !important;
-  max-height: 1em !important;
+  width: calc(1em + 2px) !important;
+  height: calc(1em + 2px) !important;
+  min-width: calc(1em + 2px) !important;
+  min-height: calc(1em + 2px) !important;
+  max-width: calc(1em + 2px) !important;
+  max-height: calc(1em + 2px) !important;
   display: inline-block !important;
   vertical-align: -0.12em;
   margin: 0 0.03em;
@@ -6667,12 +6667,12 @@ a.buttonMessageOption:hover {
 }
 
 .buttonMessageOption :global(img.emoji) {
-  width: 1em !important;
-  height: 1em !important;
-  min-width: 1em !important;
-  min-height: 1em !important;
-  max-width: 1em !important;
-  max-height: 1em !important;
+  width: calc(1em + 2px) !important;
+  height: calc(1em + 2px) !important;
+  min-width: calc(1em + 2px) !important;
+  min-height: calc(1em + 2px) !important;
+  max-width: calc(1em + 2px) !important;
+  max-height: calc(1em + 2px) !important;
   display: inline-block !important;
   vertical-align: -0.14em;
   margin: 0 0.04em;
