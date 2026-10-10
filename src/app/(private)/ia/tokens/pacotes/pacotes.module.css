@@ -299,6 +299,20 @@
   box-shadow: 0 14px 14px var(--crm-ui-private-shadow-rgb-19-147-102-0-3);
 }
 
+.primaryButton:disabled,
+.currentPlanButton {
+  cursor: default;
+  opacity: 0.72;
+  transform: none;
+  box-shadow: none;
+}
+
+.primaryButton:disabled:hover,
+.currentPlanButton:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .secondaryButton {
   background: linear-gradient(135deg, var(--crm-success-strong) 0%, var(--crm-accent) 100%);
   color: var(--crm-text-inverse);
@@ -553,6 +567,28 @@
 .paymentFallback button:disabled {
   cursor: wait;
   opacity: 0.58;
+}
+
+.paymentSuccess,
+.paymentError {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.paymentSuccess {
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-success-text);
+}
+
+.paymentError {
+  border: 1px solid var(--crm-danger-border);
+  background: var(--crm-danger-soft);
+  color: var(--crm-danger-text);
 }
 
 .paymentHelper {

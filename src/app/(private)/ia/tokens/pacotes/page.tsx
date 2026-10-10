@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
 import styles from "./pacotes.module.css";
@@ -11,8 +12,9 @@ type CompraCheckout = {
   nome: string;
   preco: string;
   descricaoCheckout: string;
-  prosperityPayUrl: string;
-  atomoUrl: string;
+  prosperityPayUrl?: string;
+  atomoUrl?: string;
+  planoSlug?: "essencial";
 };
 
 type PacoteTokens = CompraCheckout & {
@@ -27,9 +29,9 @@ const whatsappComercial =
   process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
 
 const PACOTE_50_PROSPERITY_PAY =
-  "https://www.prosperitypay.com.br/checkout/22203982607a";
-const PACOTE_200_PROSPERITY_PAY =
   "https://www.prosperitypay.com.br/checkout/a66f9a1dc10e";
+const PACOTE_200_PROSPERITY_PAY =
+  "https://www.prosperitypay.com.br/checkout/22203982607a";
 
 const PACOTE_50_ATOMO =
   process.env.NEXT_PUBLIC_TOKEN_PACKAGE_1M_URL ||
@@ -37,12 +39,6 @@ const PACOTE_50_ATOMO =
 const PACOTE_200_ATOMO =
   process.env.NEXT_PUBLIC_TOKEN_PACKAGE_5M_URL ||
   ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.recarga200MilTokens;
-
-const ESSENCIAL_PROSPERITY_PAY =
-  "https://www.prosperitypay.com.br/checkout/c7074bf9e18e";
-const ESSENCIAL_ATOMO =
-  process.env.NEXT_PUBLIC_ATOMOPAY_CHECKOUT_URL_ESSENCIAL ||
-  ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO.planoEssencial;
 
 const pacotes: PacoteTokens[] = [
   {
@@ -85,8 +81,7 @@ const ofertaEssencial: CompraCheckout = {
   preco: "R$ 267/mês",
   descricaoCheckout:
     "Upgrade para 400 mil tokens mensais e 6 usuários inclusos.",
-  prosperityPayUrl: ESSENCIAL_PROSPERITY_PAY,
-  atomoUrl: ESSENCIAL_ATOMO,
+  planoSlug: "essencial",
 };
 
 function abrirWhatsApp(mensagem: string) {
@@ -98,11 +93,19 @@ function abrirWhatsApp(mensagem: string) {
 }
 
 export default function PacotesTokensPage() {
+  const headerUser = useHeaderUser();
+  const planoAtualSlug = String(
+    headerUser.assinatura?.plano_slug || ""
+  ).trim().toLowerCase();
+  const essencialEhPlanoAtual = planoAtualSlug === "essencial";
+
   const [compraSelecionada, setCompraSelecionada] =
     useState<CompraCheckout | null>(null);
   const [gatewayAbrindo, setGatewayAbrindo] = useState<
     "prosperity_pay" | "atomo" | null
   >(null);
+  const [erroPagamento, setErroPagamento] = useState("");
+  const [mensagemPagamento, setMensagemPagamento] = useState("");
 
   useEffect(() => {
     solicitarAtualizacaoSaldoTokensIa();
@@ -130,6 +133,8 @@ export default function PacotesTokensPage() {
 
   function abrirModalPagamento(compra: CompraCheckout) {
     setGatewayAbrindo(null);
+    setErroPagamento("");
+    setMensagemPagamento("");
     setCompraSelecionada(compra);
   }
 
@@ -138,34 +143,76 @@ export default function PacotesTokensPage() {
     setCompraSelecionada(null);
   }
 
-  function abrirCheckout(gateway: "prosperity_pay" | "atomo") {
+  async function abrirCheckout(gateway: "prosperity_pay" | "atomo") {
     if (!compraSelecionada || gatewayAbrindo) return;
 
-    const url =
-      gateway === "prosperity_pay"
-        ? compraSelecionada.prosperityPayUrl
-        : compraSelecionada.atomoUrl;
-
-    if (!url) {
-      abrirWhatsApp(
-        `Olá! Preciso de ajuda para concluir a compra de ${compraSelecionada.nome}.`
-      );
-      return;
-    }
-
-    const novaAba = window.open("about:blank", "_blank");
+    const novaAba = window.open("/checkout-carregando", "_blank");
 
     if (!novaAba) {
-      abrirWhatsApp(
-        `Olá! Preciso de ajuda para concluir a compra de ${compraSelecionada.nome}.`
+      setErroPagamento(
+        "O navegador bloqueou a nova aba. Permita pop-ups e tente novamente."
       );
       return;
     }
 
     novaAba.opener = null;
     setGatewayAbrindo(gateway);
-    novaAba.location.href = url;
-    setGatewayAbrindo(null);
+    setErroPagamento("");
+    setMensagemPagamento("");
+
+    try {
+      let url =
+        gateway === "prosperity_pay"
+          ? compraSelecionada.prosperityPayUrl
+          : compraSelecionada.atomoUrl;
+
+      if (compraSelecionada.planoSlug) {
+        const response = await fetch("/api/assinaturas/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plano_slug: compraSelecionada.planoSlug,
+            renovar_plano_atual: false,
+            gateway,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data?.ok) {
+          novaAba.close();
+          setErroPagamento(
+            data?.error || "Não foi possível preparar o checkout do plano."
+          );
+          return;
+        }
+
+        if (data.scheduled) {
+          novaAba.close();
+          setMensagemPagamento(
+            data?.message ||
+              "A alteração foi agendada para o próximo ciclo da assinatura."
+          );
+          window.dispatchEvent(new CustomEvent("assinatura:atualizada"));
+          return;
+        }
+
+        url = data.checkout_url;
+      }
+
+      if (!url) {
+        novaAba.close();
+        setErroPagamento("Checkout não configurado para esta opção.");
+        return;
+      }
+
+      novaAba.location.replace(url);
+    } catch {
+      novaAba.close();
+      setErroPagamento("Erro inesperado ao preparar o checkout.");
+    } finally {
+      setGatewayAbrindo(null);
+    }
   }
 
   return (
@@ -272,10 +319,18 @@ export default function PacotesTokensPage() {
 
             <button
               type="button"
-              className={styles.primaryButton}
+              className={`${styles.primaryButton} ${
+                essencialEhPlanoAtual ? styles.currentPlanButton : ""
+              }`}
               onClick={() => abrirModalPagamento(ofertaEssencial)}
+              disabled={essencialEhPlanoAtual}
+              title={
+                essencialEhPlanoAtual
+                  ? "Este é o plano atual"
+                  : "Mudar para o Plano Essencial"
+              }
             >
-              Mudar para Essencial
+              {essencialEhPlanoAtual ? "Plano atual" : "Mudar para Essencial"}
             </button>
           </article>
 
@@ -372,6 +427,14 @@ export default function PacotesTokensPage() {
                   : "Usar Átomo como alternativa"}
               </button>
             </div>
+
+            {mensagemPagamento && (
+              <p className={styles.paymentSuccess}>{mensagemPagamento}</p>
+            )}
+
+            {erroPagamento && (
+              <p className={styles.paymentError}>{erroPagamento}</p>
+            )}
 
             <p className={styles.paymentHelper}>
               A Prosperity Pay é a forma principal de pagamento. A Átomo fica
