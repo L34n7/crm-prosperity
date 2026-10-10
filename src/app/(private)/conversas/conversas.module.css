@@ -1457,13 +1457,13 @@
   text-decoration-thickness: 1px;
 }
 
-.deletedOriginalText img.emoji {
-  width: 1.05em;
-  height: 1.05em;
+.deletedOriginalText img {
+  width: 18px;
+  height: 18px;
   max-width: 18px;
   max-height: 18px;
-  margin: 0 0.04em;
-  vertical-align: -0.16em;
+  margin: 0 2px;
+  vertical-align: -3px;
   display: inline-block;
   object-fit: contain;
 }
