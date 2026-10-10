@@ -261,6 +261,7 @@ export default function Header({
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
+  const alterarPlanoRef = useRef<HTMLDivElement | null>(null);
 
   const headerUser = useHeaderUser();
   const {
@@ -788,10 +789,17 @@ export default function Header({
     setPlanoPagamentoSelecionado(planoAtual);
   }
 
+  function verPlanosDisponiveis() {
+    alterarPlanoRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
   async function adicionarNumeroAssinatura() {
     if (abrindoCheckoutAddon) return;
 
-    const novaAba = window.open("about:blank", "_blank");
+    const novaAba = window.open("/checkout-carregando", "_blank");
     if (!novaAba) {
       setErroAssinaturaResumo(
         "O navegador bloqueou a nova aba. Permita pop-ups e tente novamente."
@@ -810,14 +818,28 @@ export default function Header({
       );
       const data = await response.json();
 
-      if (!response.ok || !data?.ok || !data?.checkout_url) {
+      if (!response.ok || !data?.ok) {
         novaAba.close();
         throw new Error(
           data?.error || "Não foi possível gerar o checkout do adicional."
         );
       }
 
-      novaAba.location.href = data.checkout_url;
+      if (data.scheduled) {
+        novaAba.close();
+        setErroAssinaturaResumo(
+          data?.message ||
+            "A alteração foi agendada para o próximo ciclo da assinatura."
+        );
+        return;
+      }
+
+      if (!data.checkout_url) {
+        novaAba.close();
+        throw new Error("A Prosperity Pay não retornou o checkout.");
+      }
+
+      novaAba.location.replace(data.checkout_url);
     } catch (error) {
       novaAba.close();
       setErroAssinaturaResumo(
@@ -1435,28 +1457,38 @@ export default function Header({
                       <h3>Composição atual</h3>
                     </div>
 
-                    {obterPlanoAtualCheckout() && (
+                    <div className={styles.subscriptionHeaderActions}>
                       <button
                         type="button"
-                        className={styles.subscriptionPayButton}
-                        onClick={pagarProximaRenovacao}
-                        disabled={
-                          carregandoAssinaturaResumo || !assinaturaPodeRenovar
-                        }
+                        className={styles.subscriptionViewPlansButton}
+                        onClick={verPlanosDisponiveis}
                       >
-                        {assinaturaPagaAntecipadamente
-                          ? "Próxima mensalidade já paga"
-                          : assinaturaResumo?.pending.plan_change
-                            ? "Alteração de plano agendada"
-                            : assinaturaResumo
-                              ? `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
-                                  freeTrialAtivo
-                                    ? assinaturaResumo.plan.price_cents
-                                    : assinaturaResumo.subscription.next_amount_cents
-                                )}`
-                              : assinaturaAcaoPagamento}
+                        Ver planos
                       </button>
-                    )}
+
+                      {obterPlanoAtualCheckout() && (
+                        <button
+                          type="button"
+                          className={styles.subscriptionPayButton}
+                          onClick={pagarProximaRenovacao}
+                          disabled={
+                            carregandoAssinaturaResumo || !assinaturaPodeRenovar
+                          }
+                        >
+                          {assinaturaPagaAntecipadamente
+                            ? "Próxima mensalidade já paga"
+                            : assinaturaResumo?.pending.plan_change
+                              ? "Alteração de plano agendada"
+                              : assinaturaResumo
+                                ? `${assinaturaAcaoPagamento} — ${formatarMoedaCentavos(
+                                    freeTrialAtivo
+                                      ? assinaturaResumo.plan.price_cents
+                                      : assinaturaResumo.subscription.next_amount_cents
+                                  )}`
+                                : assinaturaAcaoPagamento}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {carregandoAssinaturaResumo && !assinaturaResumo ? (
@@ -1777,7 +1809,10 @@ export default function Header({
                   )}
                 </section>
 
-                <div className={styles.planChangeHeader}>
+                <div
+                  ref={alterarPlanoRef}
+                  className={styles.planChangeHeader}
+                >
                   <span className={styles.planRenewalEyebrow}>Alterar plano</span>
                   <h3>Escolha outro plano</h3>
                   <p>

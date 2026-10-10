@@ -651,6 +651,36 @@
   gap: 16px;
 }
 
+.subscriptionHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subscriptionViewPlansButton {
+  min-height: 42px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 8px;
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  padding: 0 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.subscriptionViewPlansButton:hover {
+  background: var(--crm-primary-soft);
+  border-color: var(--crm-primary-strong);
+}
+
 .subscriptionSectionHeader h3,
 .planChangeHeader h3 {
   margin: 4px 0 0;
@@ -1996,7 +2026,8 @@
 
 .subscriptionPayButton,
 .subscriptionPayButtonFull,
-.subscriptionAddButton {
+.subscriptionAddButton,
+.subscriptionViewPlansButton {
   min-height: 44px;
   border-radius: 12px;
   padding: 0 17px;
@@ -2368,8 +2399,15 @@
     flex-direction: column;
   }
 
+  .subscriptionHeaderActions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .subscriptionPayButton,
-  .subscriptionAddButton {
+  .subscriptionAddButton,
+  .subscriptionViewPlansButton {
     width: 100%;
   }
 
