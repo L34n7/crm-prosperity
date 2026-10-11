@@ -2836,6 +2836,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
         mensagemTexto,
         numeroDestino,
         runtimeCache,
+        intencaoFallbackInput: input,
       });
     } else {
       await executarNo({
@@ -8820,6 +8821,7 @@ async function seguirParaProximoNo(params: {
   numeroDestino: string;
   runtimeCache?: FluxoRuntimeCache;
   permitirFallbackSempreAposValidacao?: boolean;
+  intencaoFallbackInput?: AutomationEngineInput | null;
 }) {
   const {
     empresaId,
@@ -8831,6 +8833,7 @@ async function seguirParaProximoNo(params: {
     numeroDestino,
     runtimeCache,
     permitirFallbackSempreAposValidacao = false,
+    intencaoFallbackInput = null,
   } = params;
 
   let conexoes: any[] = [];
@@ -9029,8 +9032,11 @@ async function seguirParaProximoNo(params: {
     }
 
     if (!conexaoEscolhida) {
-      const resultadoIntencaoFallback =
-        await tentarIntencaoComoFallbackDeRespostaInvalida(input);
+      const resultadoIntencaoFallback = intencaoFallbackInput
+        ? await tentarIntencaoComoFallbackDeRespostaInvalida(
+            intencaoFallbackInput
+          )
+        : null;
 
       if (resultadoIntencaoFallback?.correspondeu) {
         await registrarLog({
