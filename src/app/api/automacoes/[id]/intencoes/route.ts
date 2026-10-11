@@ -37,20 +37,28 @@ function objeto(valor: unknown): Record<string, unknown> {
     : {};
 }
 
-function normalizarPalavrasChave(valor: unknown) {
+function normalizarFrasesGatilho(valor: unknown) {
   const itens = Array.isArray(valor)
     ? valor
     : String(valor || "")
-        .split(",")
+        .split(/\r?\n|,/)
         .map((item) => item.trim());
 
-  return Array.from(
-    new Set(
-      itens
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-        .slice(0, 30)
-    )
+  const unicas = new Map<string, string>();
+
+  for (const item of itens) {
+    const frase = String(item || "").trim().replace(/\s+/g, " ");
+    if (!frase) continue;
+    const chave = frase.toLocaleLowerCase("pt-BR");
+    if (!unicas.has(chave)) unicas.set(chave, frase);
+  }
+
+  return Array.from(unicas.values()).slice(0, 30);
+}
+
+function frasesGatilhoInvalidas(frases: string[]) {
+  return frases.filter(
+    (frase) => frase.split(/\s+/).filter(Boolean).length < 2
   );
 }
 
@@ -255,8 +263,20 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const body = objeto(await req.json());
     const titulo = String(body.titulo || "").trim();
     const resposta = String(body.resposta || "").trim();
-    const palavrasChave = normalizarPalavrasChave(body.palavras_chave);
+    const frasesGatilho = normalizarFrasesGatilho(body.frases_gatilho);
+    const frasesInvalidas = frasesGatilhoInvalidas(frasesGatilho);
     const acoes = normalizarAcoes(body.acoes_json);
+
+    if (frasesInvalidas.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Use frases-gatilho com pelo menos 2 palavras. Evite gatilhos genéricos como “valor”, “preço” ou “endereço”.",
+        },
+        { status: 400 }
+      );
+    }
 
     if (!titulo || !resposta) {
       return NextResponse.json(
@@ -298,7 +318,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         titulo,
         resposta,
         contexto_ia: contextoIa,
-        palavras_chave: palavrasChave,
+        frases_gatilho: frasesGatilho,
         status: "ativa",
         ordem: Math.max(0, Number(ultima?.ordem ?? -1) + 1),
         acoes_json: acoes,
@@ -371,8 +391,17 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       atualizacao.contexto_ia = contexto;
     }
 
-    if (body.palavras_chave !== undefined) {
-      atualizacao.palavras_chave = normalizarPalavrasChave(body.palavras_chave);
+    if (body.frases_gatilho !== undefined) {
+      const frasesGatilho = normalizarFrasesGatilho(body.frases_gatilho);
+      const frasesInvalidas = frasesGatilhoInvalidas(frasesGatilho);
+
+      if (frasesInvalidas.length) {
+        throw new Error(
+          "Use frases-gatilho com pelo menos 2 palavras. Evite gatilhos genéricos como “valor”, “preço” ou “endereço”."
+        );
+      }
+
+      atualizacao.frases_gatilho = frasesGatilho;
     }
 
     if (body.status !== undefined) {

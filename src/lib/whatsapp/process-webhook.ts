@@ -1213,6 +1213,16 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             "arquivo_recebido",
           numeroDestino: message.from,
           mensagemTipo: tipoMensagemParaAutomacao(message.tipoMensagem),
+          mensagemEstruturada:
+            message.tipoMensagem === "botao" ||
+            Boolean(
+              message.rawMessage?.button?.payload ||
+                message.rawMessage?.interactive?.button_reply?.id ||
+                message.rawMessage?.interactive?.list_reply?.id ||
+                metadataJson?.button?.payload ||
+                metadataJson?.interactive?.button_reply?.id ||
+                metadataJson?.interactive?.list_reply?.id
+            ),
           mediaId,
           mimeType,
           arquivoNome,

@@ -54,7 +54,7 @@ type Intencao = {
   titulo: string;
   resposta: string;
   contexto_ia: string;
-  palavras_chave: string[];
+  frases_gatilho: string[];
   status: "ativa" | "pausada";
   ordem: number;
   acoes_json: AcaoIntencao[];
@@ -147,7 +147,7 @@ export default function IntencoesModal({
   const [titulo, setTitulo] = useState("");
   const [resposta, setResposta] = useState("");
   const [contextoIa, setContextoIa] = useState("");
-  const [palavrasChave, setPalavrasChave] = useState("");
+  const [frasesGatilho, setFrasesGatilho] = useState("");
   const [status, setStatus] = useState<"ativa" | "pausada">("ativa");
   const [acoes, setAcoes] = useState<AcaoIntencao[]>([]);
   const [tipoNovaAcao, setTipoNovaAcao] =
@@ -225,7 +225,7 @@ export default function IntencoesModal({
     setTitulo("");
     setResposta("");
     setContextoIa("");
-    setPalavrasChave("");
+    setFrasesGatilho("");
     setStatus("ativa");
     setAcoes([]);
     setTipoNovaAcao("enviar_texto");
@@ -242,9 +242,9 @@ export default function IntencoesModal({
     setTitulo(intencao.titulo);
     setResposta(intencao.resposta);
     setContextoIa(intencao.contexto_ia);
-    setPalavrasChave(
-      Array.isArray(intencao.palavras_chave)
-        ? intencao.palavras_chave.join(", ")
+    setFrasesGatilho(
+      Array.isArray(intencao.frases_gatilho)
+        ? intencao.frases_gatilho.join("\n")
         : ""
     );
     setStatus(intencao.status);
@@ -269,8 +269,8 @@ export default function IntencoesModal({
         body: JSON.stringify({
           titulo: titulo.trim(),
           resposta: resposta.trim(),
-          palavras_chave: palavrasChave
-            .split(",")
+          frases_gatilho: frasesGatilho
+            .split(/\r?\n/)
             .map((item) => item.trim())
             .filter(Boolean),
           acoes_json: acoes,
@@ -321,8 +321,8 @@ export default function IntencoesModal({
           titulo: titulo.trim(),
           resposta: resposta.trim(),
           contexto_ia: contextoIa.trim(),
-          palavras_chave: palavrasChave
-            .split(",")
+          frases_gatilho: frasesGatilho
+            .split(/\r?\n/)
             .map((item) => item.trim())
             .filter(Boolean),
           status,
@@ -724,10 +724,10 @@ export default function IntencoesModal({
               <p className={styles.eyebrow}>Fluxo · {fluxo.nome}</p>
               <h3 className={styles.modalTitle}>Intenções</h3>
               <p className={styles.modalSubtitle}>
-                Intenções respondem perguntas pontuais durante qualquer etapa deste fluxo. Palavras-chave são verificadas primeiro, sem consumo de IA. A IA só é usada como fallback quando a resposta não se encaixa no caminho atual.
+                Intenções respondem perguntas pontuais durante qualquer etapa deste fluxo. Frases-gatilho específicas são verificadas primeiro, sem consumo de IA. A IA só é usada como fallback quando a resposta não se encaixa no caminho atual.
               </p>
               <p className={styles.modalSubtitle}>
-                Ex.: enquanto o fluxo pergunta uma data, “valor”, “preço” ou “quanto custa” podem acionar a intenção de preço imediatamente e o fluxo continua aguardando a data.
+                Ex.: enquanto o fluxo pergunta uma data, “qual o valor da limpeza?” pode responder o preço e ainda aproveitar “sexta-feira” da mesma mensagem. Cliques em botões e listas sempre seguem o próprio fluxo e não disparam intenção paralela.
               </p>
             </div>
             <button type="button" className={styles.closePanelButton} onClick={onFechar}>
@@ -767,6 +767,12 @@ export default function IntencoesModal({
                           </p>
                           <p className={styles.variablePerson}>
                             <strong>Resposta: </strong>{resumoResposta(intencao.resposta)}
+                          </p>
+                          <p className={styles.variablePerson}>
+                            <strong>Frases-gatilho: </strong>
+                            {Array.isArray(intencao.frases_gatilho) && intencao.frases_gatilho.length
+                              ? intencao.frases_gatilho.join(" · ")
+                              : "Somente fallback por IA quando a resposta for inválida"}
                           </p>
                           <p className={styles.variablePerson}>
                             <strong>Ações adicionais: </strong>
@@ -826,16 +832,17 @@ export default function IntencoesModal({
                     />
                   </label>
                   <label className={styles.field}>
-                    <span className={styles.label}>Palavras-chave</span>
-                    <input
-                      className={styles.input}
-                      value={palavrasChave}
+                    <span className={styles.label}>Frases-gatilho</span>
+                    <textarea
+                      className={styles.textarea}
+                      rows={4}
+                      value={frasesGatilho}
                       disabled={!podeEditar}
-                      onChange={(e) => setPalavrasChave(e.target.value)}
-                      placeholder="Ex.: valor, preço, custo, quanto custa"
+                      onChange={(e) => setFrasesGatilho(e.target.value)}
+                      placeholder={"qual o valor da limpeza\nquanto custa a limpeza\nqual o preço do procedimento"}
                     />
                     <span className={styles.help}>
-                      Separe por vírgulas. Ao encontrar uma palavra ou frase, a intenção é acionada sem consumir IA.
+                      Use uma frase por linha, com pelo menos 2 palavras. Prefira frases específicas; termos isolados como “valor” ou “endereço” não são aceitos.
                     </span>
                   </label>
                   <label className={styles.field}>

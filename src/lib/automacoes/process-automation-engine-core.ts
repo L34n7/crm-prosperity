@@ -81,6 +81,7 @@ async function tentarIntencaoComoFallbackDeRespostaInvalida(
         mensagemId: input.mensagemId || null,
         mensagemTexto: input.mensagemTexto || "",
         mensagemTipo: input.mensagemTipo || null,
+        mensagemEstruturada: input.mensagemEstruturada === true,
         numeroDestino: input.numeroDestino || null,
       },
       { modo: "ia_fallback" }

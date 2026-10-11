@@ -475,6 +475,7 @@ function parametrosIntencoes(input: AutomationEngineInput) {
     mensagemId: input.mensagemId || null,
     mensagemTexto: input.mensagemTexto || "",
     mensagemTipo: input.mensagemTipo || null,
+    mensagemEstruturada: input.mensagemEstruturada === true,
     numeroDestino: input.numeroDestino || null,
   };
 }
@@ -493,7 +494,7 @@ async function processarDepoisDasRotinas(
 
   const resultadoIntencoes = await processarIntencoesMensagem(
     parametrosIntencoes(input),
-    { modo: "palavras_chave" }
+    { modo: "frases_gatilho" }
   );
 
   if (resultadoIntencoes?.interrompeuFluxo || resultadoIntencoes?.somenteIntencao) {
@@ -572,7 +573,7 @@ async function processarDepoisDasRotinas(
   if (!resultadoIntencoes?.correspondeu && execucaoCriadaAgora) {
     resultadoIntencaoAposInicio = await processarIntencoesMensagem(
       parametrosIntencoes(input),
-      { modo: "palavras_chave" }
+      { modo: "frases_gatilho" }
     );
   }
 

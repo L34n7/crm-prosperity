@@ -7,6 +7,7 @@ export type AutomationEngineInput = {
   integracaoWhatsappId?: string | null;
 
   mensagemTipo?: "texto" | "imagem" | "documento" | "audio" | "video";
+  mensagemEstruturada?: boolean;
   mediaId?: string | null;
   mimeType?: string | null;
   arquivoNome?: string | null;

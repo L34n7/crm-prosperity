@@ -42,7 +42,7 @@ type IntencaoRow = {
   titulo: string;
   resposta: string;
   contexto_ia: string;
-  palavras_chave: string[] | null;
+  frases_gatilho: string[] | null;
   status: "ativa" | "pausada";
   ordem: number;
   acoes_json: AcaoIntencao[] | null;
@@ -90,23 +90,64 @@ function normalizarTextoIntencao(valor: unknown) {
     .replace(/\s+/g, " ");
 }
 
-function correspondePalavraChave(mensagem: string, palavraChave: string) {
-  const texto = normalizarTextoIntencao(mensagem);
-  const chave = normalizarTextoIntencao(palavraChave);
-  if (!texto || !chave) return false;
-  return ` ${texto} `.includes(` ${chave} `);
+function fraseGatilhoValida(frase: string) {
+  return normalizarTextoIntencao(frase).split(" ").filter(Boolean).length >= 2;
 }
 
-function intencaoCorrespondePorPalavraChave(
-  intencao: IntencaoRow,
-  mensagem: string
-) {
-  const palavras = Array.isArray(intencao.palavras_chave)
-    ? intencao.palavras_chave
+function encontrarFrasesGatilho(intencao: IntencaoRow, mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  if (!texto) return [];
+
+  const frases = Array.isArray(intencao.frases_gatilho)
+    ? intencao.frases_gatilho
     : [];
-  return palavras.some((palavra) =>
-    correspondePalavraChave(mensagem, String(palavra || ""))
-  );
+
+  return frases
+    .map((frase) => String(frase || "").trim())
+    .filter((frase) => frase && fraseGatilhoValida(frase))
+    .filter((frase) => {
+      const normalizada = normalizarTextoIntencao(frase);
+      return Boolean(normalizada) && ` ${texto} `.includes(` ${normalizada} `);
+    });
+}
+
+function limparConectoresMensagemRestante(valor: string) {
+  let texto = normalizarTextoIntencao(valor);
+  if (!texto) return "";
+
+  const conectores =
+    "(?:e|tambem|por favor|por gentileza|pf|pfv|favor|ai|entao)";
+
+  texto = texto
+    .replace(new RegExp(`^(?:${conectores}\\s+)+`, "i"), "")
+    .replace(new RegExp(`(?:\\s+${conectores})+$`, "i"), "")
+    .trim();
+
+  return texto;
+}
+
+function removerFrasesGatilhoDaMensagem(
+  mensagem: string,
+  frases: string[]
+) {
+  let restante = normalizarTextoIntencao(mensagem);
+
+  const ordenadas = Array.from(
+    new Set(
+      frases
+        .map((frase) => normalizarTextoIntencao(frase))
+        .filter(Boolean)
+    )
+  ).sort((a, b) => b.length - a.length);
+
+  for (const frase of ordenadas) {
+    restante = ` ${restante} `
+      .replace(` ${frase} `, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  return limparConectoresMensagemRestante(restante);
 }
 
 function normalizarAcoes(valor: unknown): AcaoIntencao[] {
@@ -606,16 +647,23 @@ export async function processarIntencoesMensagem(
     mensagemId?: string | null;
     mensagemTexto?: string | null;
     mensagemTipo?: string | null;
+    mensagemEstruturada?: boolean;
     numeroDestino?: string | null;
   },
   opcoes?: {
-    modo?: "palavras_chave" | "ia_fallback";
+    modo?: "frases_gatilho" | "ia_fallback";
   }
 ): Promise<ResultadoProcessamentoIntencoes | null> {
   const mensagemTexto = String(params.mensagemTexto || "").trim();
   const numeroDestino = String(params.numeroDestino || "").trim();
 
   if (!mensagemCompativelComIntencao(params.mensagemTipo, mensagemTexto)) {
+    return null;
+  }
+
+  // Respostas vindas de botões/listas pertencem ao próprio fluxo e têm
+  // prioridade absoluta. Isso evita intenção + rota do botão em duplicidade.
+  if (params.mensagemEstruturada === true) {
     return null;
   }
 
@@ -640,7 +688,7 @@ export async function processarIntencoesMensagem(
 
   const { data: intencoes, error: intencoesError } = await supabaseAdmin
     .from("automacao_intencoes")
-    .select("id, empresa_id, fluxo_id, titulo, resposta, contexto_ia, palavras_chave, status, ordem, acoes_json")
+    .select("id, empresa_id, fluxo_id, titulo, resposta, contexto_ia, frases_gatilho, status, ordem, acoes_json")
     .eq("empresa_id", params.empresaId)
     .eq("fluxo_id", execucao.fluxo_id)
     .eq("status", "ativa")
@@ -655,47 +703,50 @@ export async function processarIntencoesMensagem(
   if (!intencoes?.length) return null;
 
   const intencoesAtivas = intencoes as IntencaoRow[];
+  const idsJaProcessadas = new Set<string>();
 
   if (params.mensagemId) {
-    const { data: jaProcessada } = await supabaseAdmin
+    const { data: jaProcessadas } = await supabaseAdmin
       .from("automacao_intencao_execucoes")
-      .select("id")
+      .select("intencao_id")
       .eq("empresa_id", params.empresaId)
-      .eq("mensagem_id", params.mensagemId)
-      .limit(1);
+      .eq("mensagem_id", params.mensagemId);
 
-    if (jaProcessada?.length) {
-      return {
-        correspondeu: true,
-        somenteIntencao: true,
-        mensagemFluxo: null,
-        interrompeuFluxo: false,
-        execucaoId: execucao.id,
-        intencoesExecutadas: [],
-      };
+    for (const item of jaProcessadas || []) {
+      const id = String(item.intencao_id || "").trim();
+      if (id) idsJaProcessadas.add(id);
     }
   }
 
-  const modo = opcoes?.modo || "palavras_chave";
+  const intencoesDisponiveis = intencoesAtivas.filter(
+    (intencao) => !idsJaProcessadas.has(intencao.id)
+  );
+
+  if (!intencoesDisponiveis.length) return null;
+
+  const modo = opcoes?.modo || "frases_gatilho";
   let interpretacao: Awaited<ReturnType<typeof interpretarIntencoesComIA>> = {
     correspondencias: [],
     mensagem_fluxo: mensagemTexto,
     somente_intencao: false,
-    motivo: "Avaliação determinística por palavra-chave.",
+    motivo: "Avaliação determinística por frase-gatilho.",
   };
   const confiancaPorId = new Map<string, number>();
+  const frasesPorIntencao = new Map<string, string[]>();
 
-  if (modo === "palavras_chave") {
-    for (const intencao of intencoesAtivas) {
-      if (intencaoCorrespondePorPalavraChave(intencao, mensagemTexto)) {
+  if (modo === "frases_gatilho") {
+    for (const intencao of intencoesDisponiveis) {
+      const frases = encontrarFrasesGatilho(intencao, mensagemTexto);
+      if (frases.length) {
         confiancaPorId.set(intencao.id, 1);
+        frasesPorIntencao.set(intencao.id, frases);
       }
     }
   } else {
     try {
       interpretacao = await interpretarIntencoesComIA({
         mensagemCliente: mensagemTexto,
-        intencoesDisponiveis: intencoesAtivas.map(
+        intencoesDisponiveis: intencoesDisponiveis.map(
           (intencao): IntencaoInterpretacaoIa => ({
             id: intencao.id,
             titulo: intencao.titulo,
@@ -728,7 +779,7 @@ export async function processarIntencoesMensagem(
     }
   }
 
-  const selecionadas = intencoesAtivas.filter((intencao) =>
+  const selecionadas = intencoesDisponiveis.filter((intencao) =>
     confiancaPorId.has(intencao.id)
   );
 
@@ -816,13 +867,25 @@ export async function processarIntencoesMensagem(
 
   if (intencoesExecutadas.length === 0 && !interrompeuFluxo) return null;
 
+  const frasesExecutadas =
+    modo === "frases_gatilho"
+      ? intencoesExecutadas.flatMap(
+          (intencaoId) => frasesPorIntencao.get(intencaoId) || []
+        )
+      : [];
+  const mensagemRestante =
+    modo === "frases_gatilho" && frasesExecutadas.length
+      ? removerFrasesGatilhoDaMensagem(mensagemTexto, frasesExecutadas)
+      : mensagemTexto;
+
   const somenteIntencao =
     interrompeuFluxo ||
+    (modo === "frases_gatilho" && !mensagemRestante) ||
     (modo === "ia_fallback" && interpretacao.somente_intencao === true);
   const mensagemFluxo = somenteIntencao
     ? null
-    : modo === "palavras_chave"
-      ? mensagemTexto
+    : modo === "frases_gatilho"
+      ? mensagemRestante
       : String(interpretacao.mensagem_fluxo || mensagemTexto).trim() || mensagemTexto;
 
   return {
