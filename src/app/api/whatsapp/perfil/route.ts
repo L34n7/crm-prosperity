@@ -117,6 +117,57 @@ function objetoConfig(configJson: ConfigJson) {
     : {};
 }
 
+function objetoSeguro(valor: unknown): Record<string, unknown> {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, unknown>)
+    : {};
+}
+
+function textoSeguro(valor: unknown) {
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
+function prepararIntegracaoParaRecuperacaoMeta(
+  integracao: IntegracaoWhatsapp
+): IntegracaoWhatsapp {
+  if (integracao.phone_number_id && integracao.waba_id) {
+    return integracao;
+  }
+
+  const config = objetoConfig(integracao.config_json);
+  const bindingAnterior = objetoSeguro(config.coex_previous_binding);
+  const embeddedSignup = objetoSeguro(config.embedded_signup);
+  const embeddedRaw = objetoSeguro(embeddedSignup.raw);
+  const embeddedData = objetoSeguro(embeddedRaw.data);
+  const metaHealth = objetoSeguro(config.whatsapp_meta_health);
+  const metaHealthRaw = objetoSeguro(metaHealth.raw);
+
+  const phoneNumberId =
+    integracao.phone_number_id ||
+    textoSeguro(bindingAnterior.phone_number_id) ||
+    textoSeguro(embeddedSignup.phone_number_id) ||
+    textoSeguro(embeddedData.phone_number_id) ||
+    textoSeguro(metaHealthRaw.id) ||
+    null;
+
+  const wabaId =
+    integracao.waba_id ||
+    textoSeguro(bindingAnterior.waba_id) ||
+    textoSeguro(embeddedSignup.waba_id) ||
+    textoSeguro(embeddedData.waba_id) ||
+    null;
+
+  if (!phoneNumberId && !wabaId) {
+    return integracao;
+  }
+
+  return {
+    ...integracao,
+    phone_number_id: phoneNumberId,
+    waba_id: wabaId,
+  };
+}
+
 function normalizarStatus(valor: unknown) {
   return String(valor || "").trim().toLowerCase();
 }
@@ -124,12 +175,19 @@ function normalizarStatus(valor: unknown) {
 function podeTentarRecuperacaoMeta(integracao: IntegracaoWhatsapp) {
   const status = normalizarStatus(integracao.status);
   const onboardingStatus = normalizarStatus(integracao.onboarding_status);
+  const config = objetoConfig(integracao.config_json);
+  const diagnostico = objetoSeguro(config.whatsapp_meta_diagnostic);
+  const desconexaoCausadaPelaMeta =
+    textoSeguro(diagnostico.motivo) === "business_account_locked" ||
+    Boolean(config.coex_last_disconnection);
 
   return Boolean(
     integracao.phone_number_id &&
       integracao.waba_id &&
       integracao.setup_completed_at &&
-      (status === "erro" || onboardingStatus === "erro")
+      (status === "erro" ||
+        onboardingStatus === "erro" ||
+        (status === "desconectada" && desconexaoCausadaPelaMeta))
   );
 }
 
@@ -457,9 +515,17 @@ async function marcarIntegracaoRecuperadaSeNecessario(params: {
   const agora = new Date().toISOString();
   const payload = {
     status: "ativa",
+    onboarding_etapa: "concluido",
     onboarding_status: "concluido",
     onboarding_erro: null,
+    phone_number_id: integracao.phone_number_id,
+    waba_id: integracao.waba_id,
     phone_number_status: phoneNumberStatus,
+    coex_status:
+      integracao.modo_integracao === "coexistence"
+        ? "ativo"
+        : integracao.coex_status || null,
+    app_assigned: true,
     ultimo_sync_at: agora,
     updated_at: agora,
     config_json: {
@@ -671,11 +737,14 @@ export async function GET(req: NextRequest) {
       return jsonErro("Sem acesso a esta integração WhatsApp.", 403);
     }
 
-    const integracaoSelecionada =
+    const integracaoSelecionadaOriginal =
       integracoes.find((item) => item.id === integracaoId) ||
       integracoes.find((item) => isWhatsAppProfileMetaAvailable(item)) ||
       integracoes[0] ||
       null;
+    const integracaoSelecionada = integracaoSelecionadaOriginal
+      ? prepararIntegracaoParaRecuperacaoMeta(integracaoSelecionadaOriginal)
+      : null;
 
     const administradorPromise = buscarAdministradorEmpresa(empresaId);
     const baseResposta = {
