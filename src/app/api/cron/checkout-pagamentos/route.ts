@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     // sem criar um novo cron nem aumentar a frequência de execução.
     const [reconciliacoes, legacyBillingSync] = await Promise.all([
       processarReconciliacoesCheckoutPendentes(limite),
-      sincronizarAssinaturasLegadasAtomoProsperityPay(12),
+      sincronizarAssinaturasLegadasAtomoProsperityPay(18),
     ]);
 
     return NextResponse.json({
