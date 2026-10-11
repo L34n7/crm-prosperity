@@ -91,7 +91,7 @@ function normalizarTextoIntencao(valor: unknown) {
 }
 
 function fraseGatilhoValida(frase: string) {
-  return normalizarTextoIntencao(frase).split(" ").filter(Boolean).length >= 2;
+  return Boolean(normalizarTextoIntencao(frase));
 }
 
 function encontrarFrasesGatilho(intencao: IntencaoRow, mensagem: string) {

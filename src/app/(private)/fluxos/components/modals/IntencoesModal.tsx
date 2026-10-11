@@ -724,7 +724,7 @@ export default function IntencoesModal({
               <p className={styles.eyebrow}>Fluxo · {fluxo.nome}</p>
               <h3 className={styles.modalTitle}>Intenções</h3>
               <p className={styles.modalSubtitle}>
-                Intenções respondem perguntas pontuais durante qualquer etapa deste fluxo. Frases-gatilho específicas são verificadas primeiro, sem consumo de IA. A IA só é usada como fallback quando a resposta não se encaixa no caminho atual.
+                Intenções respondem perguntas pontuais durante qualquer etapa deste fluxo. Frases ou palavras-gatilho são verificadas primeiro, sem consumo de IA. A IA só é usada como fallback quando a resposta não se encaixa no caminho atual.
               </p>
               <p className={styles.modalSubtitle}>
                 Ex.: enquanto o fluxo pergunta uma data, “qual o valor da limpeza?” pode responder o preço e ainda aproveitar “sexta-feira” da mesma mensagem. Cliques em botões e listas sempre seguem o próprio fluxo e não disparam intenção paralela.
@@ -769,7 +769,7 @@ export default function IntencoesModal({
                             <strong>Resposta: </strong>{resumoResposta(intencao.resposta)}
                           </p>
                           <p className={styles.variablePerson}>
-                            <strong>Frases-gatilho: </strong>
+                            <strong>Frases/palavras-gatilho: </strong>
                             {Array.isArray(intencao.frases_gatilho) && intencao.frases_gatilho.length
                               ? intencao.frases_gatilho.join(" · ")
                               : "Somente fallback por IA quando a resposta for inválida"}
@@ -832,17 +832,17 @@ export default function IntencoesModal({
                     />
                   </label>
                   <label className={styles.field}>
-                    <span className={styles.label}>Frases-gatilho</span>
+                    <span className={styles.label}>Frases ou palavras-gatilho</span>
                     <textarea
                       className={styles.textarea}
                       rows={4}
                       value={frasesGatilho}
                       disabled={!podeEditar}
                       onChange={(e) => setFrasesGatilho(e.target.value)}
-                      placeholder={"qual o valor da limpeza\nquanto custa a limpeza\nqual o preço do procedimento"}
+                      placeholder={"valor\nquanto custa\nqual o valor da limpeza"}
                     />
                     <span className={styles.help}>
-                      Use uma frase por linha, com pelo menos 2 palavras. Prefira frases específicas; termos isolados como “valor” ou “endereço” não são aceitos.
+                      Use um gatilho por linha. Pode ser uma palavra ou uma frase. Prefira frases específicas quando uma palavra genérica puder aparecer em outros assuntos; use termos isolados quando isso for intencional para o fluxo.
                     </span>
                   </label>
                   <label className={styles.field}>

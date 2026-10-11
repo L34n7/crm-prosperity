@@ -56,11 +56,6 @@ function normalizarFrasesGatilho(valor: unknown) {
   return Array.from(unicas.values()).slice(0, 30);
 }
 
-function frasesGatilhoInvalidas(frases: string[]) {
-  return frases.filter(
-    (frase) => frase.split(/\s+/).filter(Boolean).length < 2
-  );
-}
 
 function normalizarAcoes(valor: unknown) {
   if (!Array.isArray(valor)) return [];
@@ -264,19 +259,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const titulo = String(body.titulo || "").trim();
     const resposta = String(body.resposta || "").trim();
     const frasesGatilho = normalizarFrasesGatilho(body.frases_gatilho);
-    const frasesInvalidas = frasesGatilhoInvalidas(frasesGatilho);
     const acoes = normalizarAcoes(body.acoes_json);
-
-    if (frasesInvalidas.length) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "Use frases-gatilho com pelo menos 2 palavras. Evite gatilhos genéricos como “valor”, “preço” ou “endereço”.",
-        },
-        { status: 400 }
-      );
-    }
 
     if (!titulo || !resposta) {
       return NextResponse.json(
@@ -392,16 +375,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     }
 
     if (body.frases_gatilho !== undefined) {
-      const frasesGatilho = normalizarFrasesGatilho(body.frases_gatilho);
-      const frasesInvalidas = frasesGatilhoInvalidas(frasesGatilho);
-
-      if (frasesInvalidas.length) {
-        throw new Error(
-          "Use frases-gatilho com pelo menos 2 palavras. Evite gatilhos genéricos como “valor”, “preço” ou “endereço”."
-        );
-      }
-
-      atualizacao.frases_gatilho = frasesGatilho;
+      atualizacao.frases_gatilho = normalizarFrasesGatilho(
+        body.frases_gatilho
+      );
     }
 
     if (body.status !== undefined) {
