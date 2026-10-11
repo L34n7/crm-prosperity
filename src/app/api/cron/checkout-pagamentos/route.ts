@@ -2,6 +2,7 @@ import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "
 import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarReconciliacoesCheckoutPendentes } from "@/lib/automacoes/process-automation-engine-checkout-reconciliation";
+import { sincronizarAssinaturasLegadasAtomoProsperityPay } from "@/lib/prosperity-pay/subscriptions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,12 +25,18 @@ export async function GET(request: Request) {
     }
 
     // Webhooks tratam pagamentos em tempo real. Recuperação e expiração são
-    // tarefas QStash agendadas. O cron fica somente como reconciliação segura.
-    const reconciliacoes = await processarReconciliacoesCheckoutPendentes(limite);
+    // tarefas QStash agendadas. Este cron também espelha gradualmente as
+    // assinaturas legadas da Atomo para a cobrança recorrente da Prosperity Pay,
+    // sem criar um novo cron nem aumentar a frequência de execução.
+    const [reconciliacoes, legacyBillingSync] = await Promise.all([
+      processarReconciliacoesCheckoutPendentes(limite),
+      sincronizarAssinaturasLegadasAtomoProsperityPay(12),
+    ]);
 
     return NextResponse.json({
       ok: true,
       reconciliacoes,
+      legacy_billing_sync: legacyBillingSync,
     });
   } catch (error) {
     console.error("[CRON CHECKOUT] Erro:", error);
