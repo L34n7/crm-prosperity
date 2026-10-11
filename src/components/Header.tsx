@@ -33,7 +33,7 @@ import styles from "./Header.module.css";
 import { createPortal } from "react-dom";
 
 type HeaderProps = {
-  title: string;
+  title?: string;
   subtitle?: string;
   profileName?: string;
   creditLabel?: string;
@@ -222,7 +222,7 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
 ];
 
 export default function Header({
-  title,
+  title = "",
   subtitle,
   profileName,
   avatarUrl,
