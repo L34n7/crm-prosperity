@@ -621,10 +621,18 @@ async function aplicarAssinatura(input: {
   planoSlug: string;
   oferta: any;
   payload: ProsperityPayPayload;
+  metadataAtual?: unknown;
+  gatewayAnterior?: string | null;
 }) {
   const inicio = pagoEm(input.payload);
   const janela = calcularJanelaAssinatura(inicio);
   const referencia = transactionId(input.payload);
+  const metadataAnterior = metadataObjeto(input.metadataAtual);
+  const gatewayAnterior = String(
+    metadataAnterior.billing_legacy_gateway ||
+      input.gatewayAnterior ||
+      "",
+  ).trim().toLowerCase();
 
   const update = await supabase
     .from("empresas")
@@ -638,6 +646,7 @@ async function aplicarAssinatura(input: {
       assinatura_gateway: "prosperity_pay",
       assinatura_referencia: referencia,
       assinatura_metadata_json: {
+        ...metadataAnterior,
         origem: "webhook_prosperity_pay",
         event_id: input.payload.event_id,
         plano_slug: input.planoSlug,
@@ -650,6 +659,12 @@ async function aplicarAssinatura(input: {
           null,
         prosperity_pay_offer_id: input.payload.offer?.id || null,
         transaction_id: referencia,
+        prosperity_pay_billing_mirror: true,
+        billing_migration_status: "migrated",
+        billing_migrated_at: inicio,
+        ...(gatewayAnterior && gatewayAnterior !== "prosperity_pay"
+          ? { billing_legacy_gateway: gatewayAnterior }
+          : {}),
       },
       assinatura_fluxos_pausados_em: null,
       updated_at: new Date().toISOString(),
@@ -819,6 +834,8 @@ async function processarAprovado(
     planoSlug: plano.slug,
     oferta,
     payload,
+    metadataAtual: empresa.assinatura_metadata_json,
+    gatewayAnterior: empresa.assinatura_gateway,
   });
 
   const pagamentoUpdate = await supabase
