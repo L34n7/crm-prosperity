@@ -8,12 +8,13 @@ import styles from "./login.module.css";
 import Link from "next/link";
 import { ArrowRight, Check, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { enviarEventoSessao, getClientSessionId } from "@/lib/auth/browser-session";
+import { montarWaMeUrl } from "@/lib/contatos/sistema";
 
 const AMBIENTE_CONFIGURADO_STORAGE_KEY = "crm_ambiente_configurado";
 const TRIAL_AVISO_LOGIN_STORAGE_KEY = "crm_trial_aviso_apos_login";
-const SUPORTE_WHATSAPP_URL = `https://wa.me/5531975051275?text=${encodeURIComponent(
-  "Olá! Preciso de suporte com meu acesso ao CRM Prosperity.",
-)}`;
+const SUPORTE_WHATSAPP_URL = montarWaMeUrl(
+  "Olá! Preciso de suporte com meu acesso ao CRM Prosperity."
+);
 
 async function obterRotaAposLogin() {
   try {

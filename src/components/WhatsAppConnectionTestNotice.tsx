@@ -20,9 +20,6 @@ type StatusResponse = {
   pendentes?: IntegracaoPendente[];
 };
 
-const whatsappComercial =
-  process.env.NEXT_PUBLIC_WHATSAPP_COMERCIAL || "5531975233266";
-
 const SUPORTE_URL = montarWhatsappUrl(
   "Olá! Concluí o onboarding do WhatsApp no CRM Prosperity, mas a mensagem de teste não chegou ao CRM. Preciso de ajuda para validar a integração."
 );
@@ -177,7 +174,7 @@ export default function WhatsAppConnectionTestNotice() {
               </button>
               <Link href="/perfil-whatsapp">Refazer conexão</Link>
               <a
-                href={SUPORTE_URL.replace(/phone=[^&]+/, `phone=${whatsappComercial}`)}
+                href={SUPORTE_URL}
                 target="_blank"
                 rel="noreferrer"
               >

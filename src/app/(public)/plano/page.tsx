@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { montarWaMeUrl } from "@/lib/contatos/sistema";
 import PaymentProviderModal, {
   type PaymentGateway,
   type PaymentPlanSummary,
@@ -185,13 +186,13 @@ export default function PlanoPage() {
   }
 
   function abrirCheckoutCotacao() {
-    const mensagem =
-      "Olá! Gostaria de fazer uma cotação do plano Profissional Enterprise.";
-    const whatsappUrl = `https://wa.me/553175117638?text=${encodeURIComponent(
-      mensagem
-    )}`;
-
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    window.open(
+      montarWaMeUrl(
+        "Olá! Gostaria de fazer uma cotação do plano Profissional Enterprise."
+      ),
+      "_blank",
+      "noopener,noreferrer"
+    );
   }
 
   function togglePlanoExpandido(nomePlano: string) {

@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import { ATOMOPAY_CHECKOUTS_PAGAMENTO_UNICO } from "@/lib/atomopay/checkout-links";
 import { solicitarAtualizacaoSaldoTokensIa } from "@/lib/ia/tokens-client-events";
+import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import styles from "./pacotes.module.css";
 
 type CompraCheckout = {
@@ -24,8 +25,6 @@ type PacoteTokens = CompraCheckout & {
   recursos: string[];
   destaque?: boolean;
 };
-
-const WHATSAPP_COMERCIAL_NUMERO = "5531975117638";
 
 const PACOTE_50_PROSPERITY_PAY =
   "https://www.prosperitypay.com.br/checkout/a66f9a1dc10e";
@@ -84,11 +83,11 @@ const ofertaEssencial: CompraCheckout = {
 };
 
 function abrirWhatsApp(mensagem: string) {
-  const url = `https://api.whatsapp.com/send?phone=${WHATSAPP_COMERCIAL_NUMERO}&text=${encodeURIComponent(
-    mensagem
-  )}`;
-
-  window.open(url, "_blank", "noopener,noreferrer");
+  window.open(
+    montarWhatsappUrl(mensagem),
+    "_blank",
+    "noopener,noreferrer"
+  );
 }
 
 export default function PacotesTokensPage() {
