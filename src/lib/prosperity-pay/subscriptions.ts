@@ -496,6 +496,97 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
   });
 }
 
+export async function sincronizarAssinaturasLegadasAtomoProsperityPay(
+  limite = 20,
+) {
+  const maximo = Math.max(1, Math.min(50, Math.floor(limite)));
+
+  const { data: candidatas, error: candidatasError } = await supabase
+    .from("empresas")
+    .select(
+      "id,assinatura_gateway,assinatura_status,assinatura_vencimento_em,assinatura_metadata_json",
+    )
+    .in("assinatura_gateway", ["atomo", "atomopay"])
+    .in("assinatura_status", ["ativa", "vencida"])
+    .not("assinatura_vencimento_em", "is", null)
+    .order("assinatura_vencimento_em", { ascending: true })
+    .limit(Math.max(100, maximo * 5));
+
+  if (candidatasError) throw candidatasError;
+  if (!candidatas?.length) {
+    return {
+      encontradas: 0,
+      pendentes: 0,
+      sincronizadas: 0,
+      erros: 0,
+    };
+  }
+
+  const empresaIds = candidatas.map((empresa) => empresa.id);
+  const { data: espelhos, error: espelhosError } = await supabase
+    .from("prosperity_pay_assinaturas")
+    .select("empresa_id,external_subscription_id")
+    .in("empresa_id", empresaIds)
+    .not("external_subscription_id", "is", null);
+
+  if (espelhosError) throw espelhosError;
+
+  const jaEspelhadas = new Set(
+    (espelhos || [])
+      .map((item) => String(item.empresa_id || ""))
+      .filter(Boolean),
+  );
+
+  const targets = candidatas
+    .filter((empresa) => !jaEspelhadas.has(empresa.id))
+    .slice(0, maximo);
+
+  let sincronizadas = 0;
+  let erros = 0;
+
+  for (const empresa of targets) {
+    try {
+      await garantirAssinaturaProsperityPay(empresa.id);
+
+      const metadataAtual = obj(empresa.assinatura_metadata_json);
+      const agora = new Date().toISOString();
+      const { error: metadataError } = await supabase
+        .from("empresas")
+        .update({
+          assinatura_metadata_json: {
+            ...metadataAtual,
+            prosperity_pay_billing_mirror: true,
+            prosperity_pay_billing_mirror_at: agora,
+            billing_migration_status: "mirrored",
+            billing_legacy_gateway: String(
+              empresa.assinatura_gateway || "atomo",
+            ),
+          },
+          updated_at: agora,
+        })
+        .eq("id", empresa.id);
+
+      if (metadataError) throw metadataError;
+      sincronizadas += 1;
+    } catch (error) {
+      erros += 1;
+      console.error(
+        "[PROSPERITY_PAY] Falha ao espelhar assinatura legada Atomo",
+        empresa.id,
+        error,
+      );
+    }
+  }
+
+  return {
+    encontradas: candidatas.length,
+    pendentes: candidatas.length - jaEspelhadas.size,
+    processadas: targets.length,
+    sincronizadas,
+    erros,
+  };
+}
+
 export async function sincronizarAfiliadosAssinaturasProsperityPay() {
   const { data: mirrors, error: mirrorsError } = await supabase
     .from("prosperity_pay_assinaturas")
