@@ -152,28 +152,31 @@ export async function processarAvisosAssinatura(agora = new Date()) {
     erros: 0,
   };
 
-  const { data: assinaturasPrePagas, error: assinaturasPrePagasError } =
+  const { data: assinaturasProsperityPay, error: assinaturasProsperityPayError } =
     await supabase
       .from("prosperity_pay_assinaturas")
-      .select("empresa_id")
+      .select("empresa_id,external_subscription_id,current_period_start")
       .not("empresa_id", "is", null)
-      .gt("current_period_start", agora.toISOString());
+      .not("external_subscription_id", "is", null);
 
-  if (assinaturasPrePagasError) {
+  if (assinaturasProsperityPayError) {
     throw new Error(
-      `Erro ao verificar mensalidades antecipadas: ${assinaturasPrePagasError.message}`
+      `Erro ao verificar assinaturas da Prosperity Pay: ${assinaturasProsperityPayError.message}`
     );
   }
 
-  const empresasComMensalidadeFuturaPaga = new Set(
-    (assinaturasPrePagas || [])
+  const empresasComCobrancaProsperityPay = new Set(
+    (assinaturasProsperityPay || [])
       .map((item) => String(item.empresa_id || ""))
       .filter(Boolean)
   );
 
   for (const empresa of empresas || []) {
     try {
-      if (empresasComMensalidadeFuturaPaga.has(empresa.id)) {
+      // Quando já existe assinatura espelhada na Prosperity Pay, a cobrança e
+      // o e-mail de vencimento passam a ser responsabilidade exclusiva da PP.
+      // Isso evita duplicidade com os avisos legados do CRM/Atomo.
+      if (empresasComCobrancaProsperityPay.has(empresa.id)) {
         resultado.ignorados += 1;
         continue;
       }
