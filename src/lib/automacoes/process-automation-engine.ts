@@ -492,7 +492,8 @@ async function processarDepoisDasRotinas(
   }
 
   const resultadoIntencoes = await processarIntencoesMensagem(
-    parametrosIntencoes(input)
+    parametrosIntencoes(input),
+    { modo: "palavras_chave" }
   );
 
   if (resultadoIntencoes?.interrompeuFluxo || resultadoIntencoes?.somenteIntencao) {
@@ -570,7 +571,8 @@ async function processarDepoisDasRotinas(
 
   if (!resultadoIntencoes?.correspondeu && execucaoCriadaAgora) {
     resultadoIntencaoAposInicio = await processarIntencoesMensagem(
-      parametrosIntencoes(input)
+      parametrosIntencoes(input),
+      { modo: "palavras_chave" }
     );
   }
 

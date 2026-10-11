@@ -37,6 +37,23 @@ function objeto(valor: unknown): Record<string, unknown> {
     : {};
 }
 
+function normalizarPalavrasChave(valor: unknown) {
+  const itens = Array.isArray(valor)
+    ? valor
+    : String(valor || "")
+        .split(",")
+        .map((item) => item.trim());
+
+  return Array.from(
+    new Set(
+      itens
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+        .slice(0, 30)
+    )
+  );
+}
+
 function normalizarAcoes(valor: unknown) {
   if (!Array.isArray(valor)) return [];
 
@@ -238,6 +255,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const body = objeto(await req.json());
     const titulo = String(body.titulo || "").trim();
     const resposta = String(body.resposta || "").trim();
+    const palavrasChave = normalizarPalavrasChave(body.palavras_chave);
     const acoes = normalizarAcoes(body.acoes_json);
 
     if (!titulo || !resposta) {
@@ -280,6 +298,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         titulo,
         resposta,
         contexto_ia: contextoIa,
+        palavras_chave: palavrasChave,
         status: "ativa",
         ordem: Math.max(0, Number(ultima?.ordem ?? -1) + 1),
         acoes_json: acoes,
@@ -350,6 +369,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       const contexto = String(body.contexto_ia || "").trim();
       if (!contexto) throw new Error("O contexto para IA não pode ficar vazio.");
       atualizacao.contexto_ia = contexto;
+    }
+
+    if (body.palavras_chave !== undefined) {
+      atualizacao.palavras_chave = normalizarPalavrasChave(body.palavras_chave);
     }
 
     if (body.status !== undefined) {

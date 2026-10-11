@@ -42,6 +42,7 @@ type IntencaoRow = {
   titulo: string;
   resposta: string;
   contexto_ia: string;
+  palavras_chave: string[] | null;
   status: "ativa" | "pausada";
   ordem: number;
   acoes_json: AcaoIntencao[] | null;
@@ -77,6 +78,35 @@ function mensagemCompativelComIntencao(tipo: unknown, texto: string) {
   const valor = String(tipo || "").trim().toLowerCase();
   if (!valor) return true;
   return ["text", "texto", "button", "interactive", "botao"].includes(valor);
+}
+
+function normalizarTextoIntencao(valor: unknown) {
+  return String(valor || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function correspondePalavraChave(mensagem: string, palavraChave: string) {
+  const texto = normalizarTextoIntencao(mensagem);
+  const chave = normalizarTextoIntencao(palavraChave);
+  if (!texto || !chave) return false;
+  return ` ${texto} `.includes(` ${chave} `);
+}
+
+function intencaoCorrespondePorPalavraChave(
+  intencao: IntencaoRow,
+  mensagem: string
+) {
+  const palavras = Array.isArray(intencao.palavras_chave)
+    ? intencao.palavras_chave
+    : [];
+  return palavras.some((palavra) =>
+    correspondePalavraChave(mensagem, String(palavra || ""))
+  );
 }
 
 function normalizarAcoes(valor: unknown): AcaoIntencao[] {
@@ -568,15 +598,20 @@ async function executarAcoesIntencao(params: {
   return { acoesExecutadas, interrompeuFluxo };
 }
 
-export async function processarIntencoesMensagem(params: {
-  empresaId: string;
-  conversaId: string;
-  contatoId?: string | null;
-  mensagemId?: string | null;
-  mensagemTexto?: string | null;
-  mensagemTipo?: string | null;
-  numeroDestino?: string | null;
-}): Promise<ResultadoProcessamentoIntencoes | null> {
+export async function processarIntencoesMensagem(
+  params: {
+    empresaId: string;
+    conversaId: string;
+    contatoId?: string | null;
+    mensagemId?: string | null;
+    mensagemTexto?: string | null;
+    mensagemTipo?: string | null;
+    numeroDestino?: string | null;
+  },
+  opcoes?: {
+    modo?: "palavras_chave" | "ia_fallback";
+  }
+): Promise<ResultadoProcessamentoIntencoes | null> {
   const mensagemTexto = String(params.mensagemTexto || "").trim();
   const numeroDestino = String(params.numeroDestino || "").trim();
 
@@ -605,7 +640,7 @@ export async function processarIntencoesMensagem(params: {
 
   const { data: intencoes, error: intencoesError } = await supabaseAdmin
     .from("automacao_intencoes")
-    .select("id, empresa_id, fluxo_id, titulo, resposta, contexto_ia, status, ordem, acoes_json")
+    .select("id, empresa_id, fluxo_id, titulo, resposta, contexto_ia, palavras_chave, status, ordem, acoes_json")
     .eq("empresa_id", params.empresaId)
     .eq("fluxo_id", execucao.fluxo_id)
     .eq("status", "ativa")
@@ -641,40 +676,56 @@ export async function processarIntencoesMensagem(params: {
     }
   }
 
-  let interpretacao;
-  try {
-    interpretacao = await interpretarIntencoesComIA({
-      mensagemCliente: mensagemTexto,
-      intencoesDisponiveis: intencoesAtivas.map(
-        (intencao): IntencaoInterpretacaoIa => ({
-          id: intencao.id,
-          titulo: intencao.titulo,
-          contexto_ia: intencao.contexto_ia,
-        })
-      ),
-      empresaId: params.empresaId,
-      metadata: {
-        fluxo_id: execucao.fluxo_id,
-        execucao_id: execucao.id,
-        conversa_id: params.conversaId,
-        mensagem_id: params.mensagemId || null,
-      },
-    });
-  } catch (error) {
-    if (error instanceof SaldoTokensIaEsgotadoError) {
+  const modo = opcoes?.modo || "palavras_chave";
+  let interpretacao: Awaited<ReturnType<typeof interpretarIntencoesComIA>> = {
+    correspondencias: [],
+    mensagem_fluxo: mensagemTexto,
+    somente_intencao: false,
+    motivo: "Avaliação determinística por palavra-chave.",
+  };
+  const confiancaPorId = new Map<string, number>();
+
+  if (modo === "palavras_chave") {
+    for (const intencao of intencoesAtivas) {
+      if (intencaoCorrespondePorPalavraChave(intencao, mensagemTexto)) {
+        confiancaPorId.set(intencao.id, 1);
+      }
+    }
+  } else {
+    try {
+      interpretacao = await interpretarIntencoesComIA({
+        mensagemCliente: mensagemTexto,
+        intencoesDisponiveis: intencoesAtivas.map(
+          (intencao): IntencaoInterpretacaoIa => ({
+            id: intencao.id,
+            titulo: intencao.titulo,
+            contexto_ia: intencao.contexto_ia,
+          })
+        ),
+        empresaId: params.empresaId,
+        metadata: {
+          fluxo_id: execucao.fluxo_id,
+          execucao_id: execucao.id,
+          conversa_id: params.conversaId,
+          mensagem_id: params.mensagemId || null,
+          modo_intencao: "fallback_resposta_invalida",
+        },
+      });
+    } catch (error) {
+      if (error instanceof SaldoTokensIaEsgotadoError) {
+        return null;
+      }
+
+      console.error("[INTENCOES] Falha na interpretação por IA:", error);
       return null;
     }
 
-    console.error("[INTENCOES] Falha na interpretação por IA:", error);
-    return null;
-  }
-
-  const confiancaPorId = new Map<string, number>();
-  for (const correspondencia of interpretacao.correspondencias || []) {
-    const id = String(correspondencia.intencao_id || "");
-    const confianca = Number(correspondencia.confianca || 0);
-    if (!id || confianca < CONFIANCA_MINIMA_INTENCAO) continue;
-    confiancaPorId.set(id, Math.max(confiancaPorId.get(id) || 0, confianca));
+    for (const correspondencia of interpretacao.correspondencias || []) {
+      const id = String(correspondencia.intencao_id || "");
+      const confianca = Number(correspondencia.confianca || 0);
+      if (!id || confianca < CONFIANCA_MINIMA_INTENCAO) continue;
+      confiancaPorId.set(id, Math.max(confiancaPorId.get(id) || 0, confianca));
+    }
   }
 
   const selecionadas = intencoesAtivas.filter((intencao) =>
@@ -766,10 +817,13 @@ export async function processarIntencoesMensagem(params: {
   if (intencoesExecutadas.length === 0 && !interrompeuFluxo) return null;
 
   const somenteIntencao =
-    interrompeuFluxo || interpretacao.somente_intencao === true;
+    interrompeuFluxo ||
+    (modo === "ia_fallback" && interpretacao.somente_intencao === true);
   const mensagemFluxo = somenteIntencao
     ? null
-    : String(interpretacao.mensagem_fluxo || mensagemTexto).trim() || mensagemTexto;
+    : modo === "palavras_chave"
+      ? mensagemTexto
+      : String(interpretacao.mensagem_fluxo || mensagemTexto).trim() || mensagemTexto;
 
   return {
     correspondeu: true,

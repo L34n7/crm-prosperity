@@ -67,6 +67,33 @@ function logOperacional(...args: unknown[]) {
   console.log(...args);
 }
 
+async function tentarIntencaoComoFallbackDeRespostaInvalida(
+  input: AutomationEngineInput
+) {
+  try {
+    const { processarIntencoesMensagem } = await import("./intencoes-runtime");
+
+    return await processarIntencoesMensagem(
+      {
+        empresaId: input.empresaId,
+        conversaId: input.conversaId,
+        contatoId: input.contatoId || null,
+        mensagemId: input.mensagemId || null,
+        mensagemTexto: input.mensagemTexto || "",
+        mensagemTipo: input.mensagemTipo || null,
+        numeroDestino: input.numeroDestino || null,
+      },
+      { modo: "ia_fallback" }
+    );
+  } catch (error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Falha no fallback de intenção para resposta inválida:",
+      error
+    );
+    return null;
+  }
+}
+
 function normalizarInteiroAmbiente(
   valor: string | undefined,
   fallback: number,
@@ -9001,6 +9028,31 @@ async function seguirParaProximoNo(params: {
     }
 
     if (!conexaoEscolhida) {
+      const resultadoIntencaoFallback =
+        await tentarIntencaoComoFallbackDeRespostaInvalida(input);
+
+      if (resultadoIntencaoFallback?.correspondeu) {
+        await registrarLog({
+          empresaId,
+          execucaoId,
+          fluxoId,
+          noId: noAtualId,
+          tipoEvento: "resposta_invalida_interceptada_por_intencao",
+          descricao:
+            "A resposta seria inválida no nó atual, mas foi tratada por uma intenção antes da mensagem de erro.",
+          entrada: {
+            mensagemTexto,
+            intencoes_executadas:
+              resultadoIntencaoFallback.intencoesExecutadas || [],
+          },
+          saida: {
+            tratada_por_intencao: true,
+          },
+        });
+
+        return;
+      }
+
       const { data: execucaoAtual } = await supabaseAdmin
         .from("automacao_execucoes")
         .select("*")

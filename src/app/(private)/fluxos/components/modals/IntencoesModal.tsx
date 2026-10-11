@@ -54,6 +54,7 @@ type Intencao = {
   titulo: string;
   resposta: string;
   contexto_ia: string;
+  palavras_chave: string[];
   status: "ativa" | "pausada";
   ordem: number;
   acoes_json: AcaoIntencao[];
@@ -146,6 +147,7 @@ export default function IntencoesModal({
   const [titulo, setTitulo] = useState("");
   const [resposta, setResposta] = useState("");
   const [contextoIa, setContextoIa] = useState("");
+  const [palavrasChave, setPalavrasChave] = useState("");
   const [status, setStatus] = useState<"ativa" | "pausada">("ativa");
   const [acoes, setAcoes] = useState<AcaoIntencao[]>([]);
   const [tipoNovaAcao, setTipoNovaAcao] =
@@ -223,6 +225,7 @@ export default function IntencoesModal({
     setTitulo("");
     setResposta("");
     setContextoIa("");
+    setPalavrasChave("");
     setStatus("ativa");
     setAcoes([]);
     setTipoNovaAcao("enviar_texto");
@@ -239,6 +242,11 @@ export default function IntencoesModal({
     setTitulo(intencao.titulo);
     setResposta(intencao.resposta);
     setContextoIa(intencao.contexto_ia);
+    setPalavrasChave(
+      Array.isArray(intencao.palavras_chave)
+        ? intencao.palavras_chave.join(", ")
+        : ""
+    );
     setStatus(intencao.status);
     setAcoes(Array.isArray(intencao.acoes_json) ? intencao.acoes_json : []);
     setErro("");
@@ -261,6 +269,10 @@ export default function IntencoesModal({
         body: JSON.stringify({
           titulo: titulo.trim(),
           resposta: resposta.trim(),
+          palavras_chave: palavrasChave
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
           acoes_json: acoes,
         }),
       });
@@ -309,6 +321,10 @@ export default function IntencoesModal({
           titulo: titulo.trim(),
           resposta: resposta.trim(),
           contexto_ia: contextoIa.trim(),
+          palavras_chave: palavrasChave
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
           status,
           acoes_json: acoes,
         }),
@@ -708,10 +724,10 @@ export default function IntencoesModal({
               <p className={styles.eyebrow}>Fluxo · {fluxo.nome}</p>
               <h3 className={styles.modalTitle}>Intenções</h3>
               <p className={styles.modalSubtitle}>
-                Intenções respondem perguntas pontuais durante qualquer etapa deste fluxo. A IA identifica a pergunta e executa a resposta e as ações configuradas sem interromper o fluxo principal, exceto quando você adicionar uma ação como “Parar fluxo”.
+                Intenções respondem perguntas pontuais durante qualquer etapa deste fluxo. Palavras-chave são verificadas primeiro, sem consumo de IA. A IA só é usada como fallback quando a resposta não se encaixa no caminho atual.
               </p>
               <p className={styles.modalSubtitle}>
-                Ex.: enquanto o fluxo pergunta uma data, o contato pode perguntar “Qual o valor?”. A intenção responde o preço e o fluxo continua aguardando a data.
+                Ex.: enquanto o fluxo pergunta uma data, “valor”, “preço” ou “quanto custa” podem acionar a intenção de preço imediatamente e o fluxo continua aguardando a data.
               </p>
             </div>
             <button type="button" className={styles.closePanelButton} onClick={onFechar}>
@@ -808,6 +824,19 @@ export default function IntencoesModal({
                       onChange={(e) => setTitulo(e.target.value)}
                       placeholder="Ex.: Preço da limpeza"
                     />
+                  </label>
+                  <label className={styles.field}>
+                    <span className={styles.label}>Palavras-chave</span>
+                    <input
+                      className={styles.input}
+                      value={palavrasChave}
+                      disabled={!podeEditar}
+                      onChange={(e) => setPalavrasChave(e.target.value)}
+                      placeholder="Ex.: valor, preço, custo, quanto custa"
+                    />
+                    <span className={styles.help}>
+                      Separe por vírgulas. Ao encontrar uma palavra ou frase, a intenção é acionada sem consumir IA.
+                    </span>
                   </label>
                   <label className={styles.field}>
                     <span className={styles.label}>Resposta</span>
