@@ -942,7 +942,7 @@ export default function IntencoesModal({
                           onChange={(e) => setContextoIa(e.target.value)}
                         />
                         <span className={styles.help}>
-                          Gerado automaticamente na criação. Edite apenas se quiser refinar quando esta intenção deve ser identificada.
+                          Este contexto é gerado automaticamente e ajuda a IA a identificar esta intenção quando a resposta do contato não é válida para o caminho atual do fluxo. Nesses casos, a IA usa o contexto para interpretar se a mensagem corresponde a esta intenção.
                         </span>
                       </label>
                       <label className={styles.field}>
