@@ -544,38 +544,49 @@ export async function sincronizarAssinaturasLegadasAtomoProsperityPay(
   let sincronizadas = 0;
   let erros = 0;
 
-  for (const empresa of targets) {
-    try {
-      await garantirAssinaturaProsperityPay(empresa.id);
+  async function sincronizarEmpresa(empresa: (typeof targets)[number]) {
+    await garantirAssinaturaProsperityPay(empresa.id);
 
-      const metadataAtual = obj(empresa.assinatura_metadata_json);
-      const agora = new Date().toISOString();
-      const { error: metadataError } = await supabase
-        .from("empresas")
-        .update({
-          assinatura_metadata_json: {
-            ...metadataAtual,
-            prosperity_pay_billing_mirror: true,
-            prosperity_pay_billing_mirror_at: agora,
-            billing_migration_status: "mirrored",
-            billing_legacy_gateway: String(
-              empresa.assinatura_gateway || "atomo",
-            ),
-          },
-          updated_at: agora,
-        })
-        .eq("id", empresa.id);
+    const metadataAtual = obj(empresa.assinatura_metadata_json);
+    const agora = new Date().toISOString();
+    const { error: metadataError } = await supabase
+      .from("empresas")
+      .update({
+        assinatura_metadata_json: {
+          ...metadataAtual,
+          prosperity_pay_billing_mirror: true,
+          prosperity_pay_billing_mirror_at: agora,
+          billing_migration_status: "mirrored",
+          billing_legacy_gateway: String(
+            empresa.assinatura_gateway || "atomo",
+          ),
+        },
+        updated_at: agora,
+      })
+      .eq("id", empresa.id);
 
-      if (metadataError) throw metadataError;
-      sincronizadas += 1;
-    } catch (error) {
+    if (metadataError) throw metadataError;
+  }
+
+  for (let index = 0; index < targets.length; index += 3) {
+    const lote = targets.slice(index, index + 3);
+    const resultados = await Promise.allSettled(
+      lote.map((empresa) => sincronizarEmpresa(empresa)),
+    );
+
+    resultados.forEach((resultado, offset) => {
+      if (resultado.status === "fulfilled") {
+        sincronizadas += 1;
+        return;
+      }
+
       erros += 1;
       console.error(
         "[PROSPERITY_PAY] Falha ao espelhar assinatura legada Atomo",
-        empresa.id,
-        error,
+        lote[offset]?.id,
+        resultado.reason,
       );
-    }
+    });
   }
 
   return {
