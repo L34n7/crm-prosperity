@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
       await buscarTemplateWhatsappPorChave({
         supabase: supabaseAdmin,
         empresaId: usuario.empresa_id!,
+        wabaId: integracao.waba_id,
         nome: input.name,
         idioma: input.language,
       });
@@ -265,6 +266,12 @@ export async function GET(req: NextRequest) {
       empresaId: usuario.empresa_id,
     });
     const idsPermitidos = acessoIntegracoes.idsPermitidos;
+    const wabaAtualPorIntegracao = new Map(
+      acessoIntegracoes.integracoes.map((integracao) => [
+        integracao.id,
+        String(integracao.waba_id || "").trim(),
+      ])
+    );
 
     let query = supabaseAdmin
       .from("whatsapp_templates")
@@ -304,9 +311,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const templatesAtuais = (data || []).filter((template) => {
+      const integracaoId = String(template.integracao_whatsapp_id || "").trim();
+      const wabaAtual = wabaAtualPorIntegracao.get(integracaoId) || "";
+      const wabaTemplate = String(template.waba_id || "").trim();
+
+      return Boolean(wabaAtual) && wabaTemplate === wabaAtual;
+    });
+
     return NextResponse.json({
       ok: true,
-      data: data || [],
+      data: templatesAtuais,
     });
   } catch (error) {
     console.error("Erro ao listar templates:", error);

@@ -762,6 +762,7 @@ export async function POST(req: NextRequest) {
           id,
           empresa_id,
           integracao_whatsapp_id,
+          waba_id,
           nome,
           idioma,
           categoria,
@@ -800,6 +801,21 @@ export async function POST(req: NextRequest) {
           error: "O template nao pertence a integracao selecionada.",
         },
         { status: 400 }
+      );
+    }
+
+    const wabaAtual = String(integracao.waba_id || "").trim();
+    const wabaTemplate = String(template.waba_id || "").trim();
+
+    if (!wabaAtual || !wabaTemplate || wabaAtual !== wabaTemplate) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "TEMPLATE_WABA_DESATUALIZADO",
+          error:
+            "Este template pertence a uma configuracao anterior do WhatsApp. Sincronize ou recrie o template na integracao atual.",
+        },
+        { status: 409 }
       );
     }
 

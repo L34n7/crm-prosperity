@@ -91,6 +91,59 @@ function texto(valor: unknown) {
   return String(valor || "").trim();
 }
 
+async function validarTemplateNaWabaAtual(params: {
+  empresaId: string;
+  integracaoWhatsappId: string;
+  templateId: string;
+}) {
+  const [integracaoResult, templateResult] = await Promise.all([
+    supabaseAdmin
+      .from("integracoes_whatsapp")
+      .select("id,waba_id")
+      .eq("id", params.integracaoWhatsappId)
+      .eq("empresa_id", params.empresaId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("whatsapp_templates")
+      .select("id,integracao_whatsapp_id,waba_id")
+      .eq("id", params.templateId)
+      .eq("empresa_id", params.empresaId)
+      .maybeSingle(),
+  ]);
+
+  if (integracaoResult.error) {
+    throw new Error(
+      `Erro ao validar WABA da integracao: ${integracaoResult.error.message}`
+    );
+  }
+
+  if (templateResult.error) {
+    throw new Error(
+      `Erro ao validar WABA do template: ${templateResult.error.message}`
+    );
+  }
+
+  const integracaoAtual = integracaoResult.data;
+  const templateAtual = templateResult.data;
+
+  if (!integracaoAtual || !templateAtual) {
+    return "Template ou integracao WhatsApp nao encontrado para validar o envio.";
+  }
+
+  if (templateAtual.integracao_whatsapp_id !== params.integracaoWhatsappId) {
+    return "O template selecionado nao pertence a integracao WhatsApp atual.";
+  }
+
+  const wabaAtual = texto(integracaoAtual.waba_id);
+  const wabaTemplate = texto(templateAtual.waba_id);
+
+  if (!wabaAtual || !wabaTemplate || wabaAtual !== wabaTemplate) {
+    return "Este template pertence a uma configuracao anterior do WhatsApp. Sincronize ou recrie o template na integracao atual.";
+  }
+
+  return "";
+}
+
 function extrairChaveNomeCaptura(valor: unknown) {
   const match = String(valor || "")
     .trim()
@@ -799,6 +852,28 @@ export async function enviarTemplateDisparo({
       nomeContato,
       variaveis,
       erro: "Numero invalido.",
+      campanhaId,
+      itemId,
+      origem,
+    });
+  }
+
+  const erroVinculoWaba = await validarTemplateNaWabaAtual({
+    empresaId,
+    integracaoWhatsappId,
+    templateId: template.id,
+  });
+
+  if (erroVinculoWaba) {
+    return registrarFalhaDisparoSemContato({
+      empresaId,
+      integracaoWhatsappId,
+      template,
+      usuarioId,
+      numero: numeroLimpo,
+      nomeContato,
+      variaveis,
+      erro: erroVinculoWaba,
       campanhaId,
       itemId,
       origem,

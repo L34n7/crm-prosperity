@@ -24,13 +24,13 @@ type SupabaseLike = SupabaseClient;
 type BuscarTemplatePorChaveParams = {
   supabase: SupabaseLike;
   empresaId: string;
+  wabaId: string;
   nome: string;
   idioma: string;
 };
 
 type SalvarTemplateLocalParams = BuscarTemplatePorChaveParams & {
   integracaoWhatsAppId: string;
-  wabaId: string;
   metaTemplateId: string | null;
   categoria: string;
   status: string;
@@ -48,6 +48,7 @@ type ResultadoSalvarTemplateRpc = {
 export async function buscarTemplateWhatsappPorChave({
   supabase,
   empresaId,
+  wabaId,
   nome,
   idioma,
 }: BuscarTemplatePorChaveParams) {
@@ -55,6 +56,7 @@ export async function buscarTemplateWhatsappPorChave({
     .from("whatsapp_templates")
     .select("*")
     .eq("empresa_id", empresaId)
+    .eq("waba_id", wabaId)
     .eq("nome", nome)
     .eq("idioma", idioma)
     .order("updated_at", { ascending: false })

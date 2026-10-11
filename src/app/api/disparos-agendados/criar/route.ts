@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     const { data: integracao, error: integracaoError } = await supabase
       .from("integracoes_whatsapp")
       .select(
-        "id, nome_conexao, numero, status, phone_number_id, business_portfolio_id, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, quality_rating, config_json"
+        "id, nome_conexao, numero, status, phone_number_id, waba_id, business_portfolio_id, meta_messaging_limit, meta_messaging_limit_tier, meta_account_mode, quality_rating, config_json"
       )
       .eq("id", integracaoWhatsappId)
       .eq("empresa_id", usuario.empresa_id)
@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
     const { data: template, error: templateError } = await supabase
       .from("whatsapp_templates")
       .select(
-        "id, nome, idioma, categoria, status, integracao_whatsapp_id, opt_out_habilitado, payload"
+        "id, nome, idioma, categoria, status, integracao_whatsapp_id, waba_id, opt_out_habilitado, payload"
       )
       .eq("id", templateId)
       .eq("empresa_id", usuario.empresa_id)
@@ -270,6 +270,21 @@ export async function POST(request: NextRequest) {
           error: "O template selecionado não pertence à integração WhatsApp escolhida.",
         },
         { status: 400 }
+      );
+    }
+
+    const wabaAtual = String(integracao.waba_id || "").trim();
+    const wabaTemplate = String(template.waba_id || "").trim();
+
+    if (!wabaAtual || !wabaTemplate || wabaAtual !== wabaTemplate) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "TEMPLATE_WABA_DESATUALIZADO",
+          error:
+            "Este template pertence a uma configuração anterior do WhatsApp. Sincronize ou recrie o template na integração atual.",
+        },
+        { status: 409 }
       );
     }
 
