@@ -307,7 +307,9 @@ export async function POST() {
 
     const [limite, integracoes] = await Promise.all([
       obterLimiteIntegracoesWhatsapp(usuario.empresa_id),
-      listarIntegracoesWhatsappDaEmpresa(usuario.empresa_id),
+      listarIntegracoesWhatsappDaEmpresa(usuario.empresa_id, {
+        incluirDesconectadas: true,
+      }),
     ]);
 
     const proximaPosicao = calcularProximaPosicaoLivre(integracoes, limite);
@@ -356,6 +358,23 @@ export async function POST() {
       .single();
 
     if (createError) {
+      const erroPosicaoOcupada =
+        String(createError.message || "").includes(
+          "integracoes_whatsapp_empresa_posicao_uidx"
+        ) || String(createError.code || "") === "23505";
+
+      if (erroPosicaoOcupada) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Essa posição de WhatsApp já está ocupada por uma integração existente. Atualize a página para visualizar e gerenciar o número já cadastrado.",
+            code: "WHATSAPP_POSICAO_OCUPADA",
+          },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
         { ok: false, error: createError.message },
         { status: 500 }

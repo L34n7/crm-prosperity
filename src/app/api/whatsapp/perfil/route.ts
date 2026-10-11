@@ -645,7 +645,9 @@ export async function GET(req: NextRequest) {
     const [resumoLimitesWhatsapp, todasIntegracoesWhatsapp] =
       await Promise.all([
         obterResumoLimitesWhatsapp(empresaId),
-        listarIntegracoesWhatsappDaEmpresa(empresaId),
+        listarIntegracoesWhatsappDaEmpresa(empresaId, {
+          incluirDesconectadas: true,
+        }),
       ]);
     const limiteIntegracoesWhatsapp =
       resumoLimitesWhatsapp.limiteIntegracoesEfetivo;
@@ -658,6 +660,7 @@ export async function GET(req: NextRequest) {
     const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
       usuario: contexto.usuario,
       empresaId,
+      incluirDesconectadas: true,
     });
     const idsIntegracoesPermitidas = new Set(acessoIntegracoes.idsPermitidos);
     const integracoes = (await buscarIntegracao(empresaId, null)).filter((item) =>

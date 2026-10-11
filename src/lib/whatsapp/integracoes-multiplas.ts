@@ -174,8 +174,12 @@ export async function listarIntegracoesWhatsappPermitidas(params: {
     "id" | "empresa_id" | "perfis_dinamicos" | "perfil_dinamico_principal"
   >;
   empresaId: string;
+  incluirDesconectadas?: boolean;
 }) {
-  const integracoes = await listarIntegracoesWhatsappDaEmpresa(params.empresaId);
+  const integracoes = await listarIntegracoesWhatsappDaEmpresa(
+    params.empresaId,
+    { incluirDesconectadas: params.incluirDesconectadas === true }
+  );
 
   if (isAdministrador(params.usuario)) {
     return {
