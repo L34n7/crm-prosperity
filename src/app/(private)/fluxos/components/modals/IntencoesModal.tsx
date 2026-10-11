@@ -930,6 +930,15 @@ export default function IntencoesModal({
                     </span>
                   </label>
 
+                  {modo === "nova" && (
+                    <div className={styles.variablePreviewBox}>
+                      <strong>Contexto para IA</strong>
+                      <p className={styles.help}>
+                        O contexto ajuda a IA a identificar esta intenção quando a resposta do contato não é válida para o caminho atual do fluxo. A IA interpreta a mensagem usando esse contexto antes de decidir se deve executar a intenção.
+                      </p>
+                    </div>
+                  )}
+
                   {modo === "editar" && (
                     <>
                       <label className={styles.field}>
@@ -1076,6 +1085,7 @@ export default function IntencoesModal({
           itemSingular="contexto"
           itemPlural="contextos"
           acaoLabel="geração do contexto"
+          explicacao="Ele é usado quando a resposta do contato não é válida para o caminho atual do fluxo. Nessa situação, a IA usa o contexto interpretado para verificar se a mensagem corresponde a esta intenção."
           onCancelar={() => !salvando && setConfirmandoTokens(false)}
           onConfirmar={() => void criarDepoisDaConfirmacao()}
         />

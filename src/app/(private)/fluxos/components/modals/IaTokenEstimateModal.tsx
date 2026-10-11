@@ -12,6 +12,7 @@ type IaTokenEstimateModalProps = {
   itemSingular?: string;
   itemPlural?: string;
   acaoLabel?: string;
+  explicacao?: string;
 };
 
 export default function IaTokenEstimateModal({
@@ -23,6 +24,7 @@ export default function IaTokenEstimateModal({
   itemSingular = "conexão",
   itemPlural = "conexões",
   acaoLabel = "geração",
+  explicacao,
 }: IaTokenEstimateModalProps) {
   return (
     <div className={styles.modalOverlay}>
@@ -55,6 +57,13 @@ export default function IaTokenEstimateModal({
                 : `${previa.conexoes.length} ${itemPlural} serão gerados.`}
             </small>
           </div>
+
+          {explicacao && (
+            <div className={styles.variablePreviewBox}>
+              <strong>Para que serve o contexto?</strong>
+              <p className={styles.help}>{explicacao}</p>
+            </div>
+          )}
 
           <div className={styles.warningBox}>
             <strong>Essa é uma estimativa antes da chamada à IA.</strong>
