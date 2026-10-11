@@ -2323,6 +2323,124 @@
   justify-content: flex-end;
 }
 
+.intentTriggerComposer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.intentTriggerInput {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--crm-border-strong);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+}
+
+.intentTriggerInput:focus {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.intentTriggerInput:disabled {
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+}
+
+.intentTriggerAddButton {
+  border: none;
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.intentTriggerAddButton:hover:not(:disabled) {
+  background: var(--crm-ui-private-surface-hex-000000);
+  transform: translateY(-1px);
+}
+
+.intentTriggerAddButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.intentTriggerTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.intentTriggerTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 8px 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.intentTriggerTag > span {
+  overflow-wrap: anywhere;
+}
+
+.intentTriggerRemove {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: currentColor;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.72;
+}
+
+.intentTriggerRemove:hover {
+  background: var(--crm-surface);
+  opacity: 1;
+}
+
+.intentTriggerEmpty {
+  border: 1px dashed var(--crm-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 620px) {
+  .intentTriggerComposer {
+    grid-template-columns: 1fr;
+  }
+
+  .intentTriggerAddButton {
+    width: 100%;
+  }
+}
+
 .gatilhosBox {
   border: 1px solid var(--crm-border);
   background: var(--crm-surface-soft);

@@ -147,7 +147,8 @@ export default function IntencoesModal({
   const [titulo, setTitulo] = useState("");
   const [resposta, setResposta] = useState("");
   const [contextoIa, setContextoIa] = useState("");
-  const [frasesGatilho, setFrasesGatilho] = useState("");
+  const [frasesGatilho, setFrasesGatilho] = useState<string[]>([]);
+  const [gatilhoInput, setGatilhoInput] = useState("");
   const [status, setStatus] = useState<"ativa" | "pausada">("ativa");
   const [acoes, setAcoes] = useState<AcaoIntencao[]>([]);
   const [tipoNovaAcao, setTipoNovaAcao] =
@@ -225,7 +226,8 @@ export default function IntencoesModal({
     setTitulo("");
     setResposta("");
     setContextoIa("");
-    setFrasesGatilho("");
+    setFrasesGatilho([]);
+    setGatilhoInput("");
     setStatus("ativa");
     setAcoes([]);
     setTipoNovaAcao("enviar_texto");
@@ -244,9 +246,10 @@ export default function IntencoesModal({
     setContextoIa(intencao.contexto_ia);
     setFrasesGatilho(
       Array.isArray(intencao.frases_gatilho)
-        ? intencao.frases_gatilho.join("\n")
-        : ""
+        ? intencao.frases_gatilho
+        : []
     );
+    setGatilhoInput("");
     setStatus(intencao.status);
     setAcoes(Array.isArray(intencao.acoes_json) ? intencao.acoes_json : []);
     setErro("");
@@ -259,6 +262,35 @@ export default function IntencoesModal({
     setModo("lista");
   }
 
+  function adicionarGatilho() {
+    const novo = gatilhoInput.trim().replace(/\s+/g, " ");
+    if (!novo) return;
+
+    const duplicado = frasesGatilho.some(
+      (item) => item.toLocaleLowerCase("pt-BR") === novo.toLocaleLowerCase("pt-BR")
+    );
+
+    if (duplicado) {
+      setGatilhoInput("");
+      return;
+    }
+
+    if (frasesGatilho.length >= 30) {
+      setErro("Você pode cadastrar até 30 gatilhos por intenção.");
+      return;
+    }
+
+    setFrasesGatilho((atuais) => [...atuais, novo]);
+    setGatilhoInput("");
+    setErro("");
+  }
+
+  function removerGatilho(indice: number) {
+    setFrasesGatilho((atuais) =>
+      atuais.filter((_, itemIndice) => itemIndice !== indice)
+    );
+  }
+
   async function criarDepoisDaConfirmacao() {
     try {
       setSalvando(true);
@@ -269,10 +301,7 @@ export default function IntencoesModal({
         body: JSON.stringify({
           titulo: titulo.trim(),
           resposta: resposta.trim(),
-          frases_gatilho: frasesGatilho
-            .split(/\r?\n/)
-            .map((item) => item.trim())
-            .filter(Boolean),
+          frases_gatilho: frasesGatilho,
           acoes_json: acoes,
         }),
       });
@@ -321,10 +350,7 @@ export default function IntencoesModal({
           titulo: titulo.trim(),
           resposta: resposta.trim(),
           contexto_ia: contextoIa.trim(),
-          frases_gatilho: frasesGatilho
-            .split(/\r?\n/)
-            .map((item) => item.trim())
-            .filter(Boolean),
+          frases_gatilho: frasesGatilho,
           status,
           acoes_json: acoes,
         }),
@@ -831,20 +857,64 @@ export default function IntencoesModal({
                       placeholder="Ex.: Preço da limpeza"
                     />
                   </label>
-                  <label className={styles.field}>
+                  <div className={styles.field}>
                     <span className={styles.label}>Frases ou palavras-gatilho</span>
-                    <textarea
-                      className={styles.textarea}
-                      rows={4}
-                      value={frasesGatilho}
-                      disabled={!podeEditar}
-                      onChange={(e) => setFrasesGatilho(e.target.value)}
-                      placeholder={"valor\nquanto custa\nqual o valor da limpeza"}
-                    />
+                    <div className={styles.intentTriggerComposer}>
+                      <input
+                        className={styles.intentTriggerInput}
+                        value={gatilhoInput}
+                        disabled={!podeEditar}
+                        onChange={(e) => setGatilhoInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            adicionarGatilho();
+                          }
+                        }}
+                        placeholder="Ex.: valor, quanto custa, qual o valor da limpeza"
+                      />
+                      <button
+                        type="button"
+                        className={styles.intentTriggerAddButton}
+                        disabled={!podeEditar || !gatilhoInput.trim()}
+                        onClick={adicionarGatilho}
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+
+                    {frasesGatilho.length > 0 ? (
+                      <div className={styles.intentTriggerTags}>
+                        {frasesGatilho.map((gatilho, indice) => (
+                          <span
+                            key={`${gatilho}-${indice}`}
+                            className={styles.intentTriggerTag}
+                          >
+                            <span>{gatilho}</span>
+                            {podeEditar && (
+                              <button
+                                type="button"
+                                className={styles.intentTriggerRemove}
+                                onClick={() => removerGatilho(indice)}
+                                aria-label={`Remover gatilho ${gatilho}`}
+                                title="Remover"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.intentTriggerEmpty}>
+                        Nenhum gatilho cadastrado. Sem gatilho direto, a intenção ainda pode ser identificada pela IA quando a resposta do fluxo for inválida.
+                      </div>
+                    )}
+
                     <span className={styles.help}>
-                      Use um gatilho por linha. Pode ser uma palavra ou uma frase. Prefira frases específicas quando uma palavra genérica puder aparecer em outros assuntos; use termos isolados quando isso for intencional para o fluxo.
+                      Digite uma palavra ou frase e clique em Adicionar, ou pressione Enter. Termos genéricos são permitidos; use-os quando fizer sentido para o contexto do fluxo.
                     </span>
-                  </label>
+                  </div>
                   <label className={styles.field}>
                     <span className={styles.label}>Resposta</span>
                     <textarea
