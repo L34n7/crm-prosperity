@@ -112,14 +112,7 @@ function validarVariaveisTemplate(params: {
   variaveis: string[];
   variaveisConfig: string[];
 }) {
-  const { header, requisitos } = coletarRequisitosTemplate(params.payload);
-  const formatoHeader = String(header?.format || "").toUpperCase();
-
-  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(formatoHeader)) {
-    throw new Error(
-      "O template agendado possui cabecalho de midia, que ainda nao e suportado por este fluxo."
-    );
-  }
+  const { requisitos } = coletarRequisitosTemplate(params.payload);
 
   const faltantes = requisitos.filter(
     (requisito) =>
@@ -266,6 +259,31 @@ async function resolverValores(params: {
     .filter(Boolean);
   const mapaAutomacao = new Map<string, string>();
 
+  if (chaves.length > 0) {
+    const { data: globais, error: globaisError } = await supabaseAdmin
+      .from("automacao_variaveis")
+      .select("chave, valor")
+      .eq("empresa_id", params.empresaId)
+      .is("execucao_id", null)
+      .is("contato_id", null)
+      .eq("metadata_json->>tipo", "global_empresa")
+      .eq("metadata_json->>ativo", "true")
+      .in("chave", chaves);
+
+    if (globaisError) {
+      throw new Error(
+        `Erro ao resolver variaveis personalizadas da empresa: ${globaisError.message}`
+      );
+    }
+
+    for (const variavel of globais || []) {
+      mapaAutomacao.set(
+        normalizarChaveVariavelFluxo(String(variavel.chave || "")),
+        String(variavel.valor || "")
+      );
+    }
+  }
+
   if (params.execucaoId && chaves.length > 0) {
     const { data, error } = await supabaseAdmin
       .from("automacao_variaveis")
@@ -278,9 +296,11 @@ async function resolverValores(params: {
       throw new Error(`Erro ao resolver variaveis da automacao: ${error.message}`);
     }
 
+    // Variáveis da execução representam o valor mais atual do fluxo e,
+    // quando existirem, sobrescrevem a variável global de mesmo nome.
     for (const variavel of data || []) {
       mapaAutomacao.set(
-        String(variavel.chave || "").toLowerCase(),
+        normalizarChaveVariavelFluxo(String(variavel.chave || "")),
         String(variavel.valor || "")
       );
     }
