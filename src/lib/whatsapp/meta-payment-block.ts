@@ -50,4 +50,128 @@ export function lerBloqueioFinanceiroMeta(
   const pausas = objeto(bloqueio.pausas);
 
   return {
-    ativo: true¶»§q«^
+    ativo: true,
+    codigo: Number.isFinite(Number(bloqueio.codigo))
+      ? Number(bloqueio.codigo)
+      : null,
+    detalhe: bloqueio.detalhe ? String(bloqueio.detalhe) : null,
+    ocorrido_em: bloqueio.ocorrido_em ? String(bloqueio.ocorrido_em) : null,
+    ultima_falha_em: bloqueio.ultima_falha_em
+      ? String(bloqueio.ultima_falha_em)
+      : null,
+    mensagem_externa_id: bloqueio.mensagem_externa_id
+      ? String(bloqueio.mensagem_externa_id)
+      : null,
+    pausas: {
+      conversas_encerradas: Number(pausas.conversas_encerradas || 0),
+      execucoes_canceladas: Number(pausas.execucoes_canceladas || 0),
+      agendamentos_cancelados: Number(pausas.agendamentos_cancelados || 0),
+      pendencias_ia_canceladas: Number(pausas.pendencias_ia_canceladas || 0),
+      execucoes_ia_canceladas: Number(pausas.execucoes_ia_canceladas || 0),
+      jobs_fila_cancelados: Number(pausas.jobs_fila_cancelados || 0),
+      campanhas_pausadas: Number(pausas.campanhas_pausadas || 0),
+    },
+  };
+}
+
+export async function buscarBloqueioFinanceiroMetaIntegracao(params: {
+  empresaId: string;
+  integracaoId?: string | null;
+}) {
+  const integracaoId = String(params.integracaoId || "").trim();
+  if (!params.empresaId || !integracaoId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("id, meta_saude_raw_json")
+    .eq("empresa_id", params.empresaId)
+    .eq("id", integracaoId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(
+      "[META PAYMENT BLOCK] Erro ao consultar bloqueio financeiro:",
+      error
+    );
+    return null;
+  }
+
+  return lerBloqueioFinanceiroMeta(data?.meta_saude_raw_json);
+}
+
+export async function buscarBloqueioFinanceiroMetaConversa(params: {
+  empresaId: string;
+  conversaId: string;
+  integracaoId?: string | null;
+}) {
+  let integracaoId = String(params.integracaoId || "").trim();
+
+  if (!integracaoId) {
+    const { data: conversa, error } = await supabaseAdmin
+      .from("conversas")
+      .select("integracao_whatsapp_id")
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.conversaId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(
+        "[META PAYMENT BLOCK] Erro ao localizar integraÃ§Ã£o da conversa:",
+        error
+      );
+      return null;
+    }
+
+    integracaoId = String(conversa?.integracao_whatsapp_id || "").trim();
+  }
+
+  return buscarBloqueioFinanceiroMetaIntegracao({
+    empresaId: params.empresaId,
+    integracaoId,
+  });
+}
+
+
+export async function limparAvisoFinanceiroMetaAposEnvioConfirmado(params: {
+  empresaId: string;
+  integracaoId?: string | null;
+  mensagemCriadaEm?: string | null;
+}) {
+  const integracaoId = String(params.integracaoId || "").trim();
+  if (!params.empresaId || !integracaoId || !params.mensagemCriadaEm) return false;
+
+  const bloqueio = await buscarBloqueioFinanceiroMetaIntegracao({
+    empresaId: params.empresaId,
+    integracaoId,
+  });
+
+  if (
+    !bloqueio ||
+    !deveLimparAvisoPagamentoMeta({
+      ativo: bloqueio.ativo,
+      ultimaFalhaEm: bloqueio.ultima_falha_em,
+      mensagemCriadaEm: params.mensagemCriadaEm,
+    })
+  ) {
+    return false;
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "clear_whatsapp_meta_payment_warning_if_older",
+    {
+      p_empresa_id: params.empresaId,
+      p_integracao_id: integracaoId,
+      p_mensagem_criada_em: params.mensagemCriadaEm,
+    }
+  );
+
+  if (error) {
+    console.warn(
+      "[META PAYMENT BLOCK] Erro ao limpar aviso financeiro apÃ³s envio confirmado:",
+      error
+    );
+    return false;
+  }
+
+  return data === true;
+}

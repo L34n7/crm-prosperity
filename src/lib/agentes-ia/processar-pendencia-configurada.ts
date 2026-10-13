@@ -32,4 +32,67 @@ export async function processarPendenciaAgenteIa(
           erro: "Automações desabilitadas para o contato.",
           lock_token: null,
           locked_at: null,
-          updated_at: new Date().toIS���q�^
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pendenciaId)
+        .in("status", ["pendente", "processando"]);
+
+      return {
+        ok: true,
+        processado: false,
+        runtime: "contato_automacoes_desabilitadas",
+      };
+    }
+
+    const bloqueioService = await buscarBloqueioLimiteServiceConversa({
+      empresaId: pendencia.empresa_id,
+      conversaId: pendencia.conversa_id,
+    });
+
+    if (bloqueioService?.ativo) {
+      await supabaseAdmin
+        .from("agente_ia_pendencias")
+        .update({
+          status: "cancelado",
+          erro:
+            "Agente de IA pausado porque a integração atingiu o limite mensal de Meta Service configurado.",
+          locked_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pendenciaId)
+        .in("status", ["pendente", "processando"]);
+
+      return {
+        ok: true,
+        processado: false,
+        runtime: "limite_meta_service_atingido",
+      };
+    }
+  }
+
+  const politicaHorario = await processarPoliticaHorarioAtendimento(pendenciaId);
+  if (politicaHorario.tratado) {
+    return politicaHorario.resultado || {
+      ok: true,
+      processado: false,
+      runtime: "politica_horario_atendimento",
+    };
+  }
+
+  const politicaAgenda = await processarPoliticaAgendaPendencia(pendenciaId, options);
+  if (politicaAgenda.tratado) {
+    return politicaAgenda.resultado || {
+      ok: true,
+      processado: true,
+      runtime: "politica_agenda",
+    };
+  }
+
+  // Quando uma pendência agendada vence, uma conversa em `fila` só pode ser
+  // assumida pela IA se não estiver realmente aguardando atendimento humano.
+  // O update é protegido por estado para não atropelar transferência para setor
+  // nem um atendente que tenha assumido a conversa no intervalo.
+  await assumirConversaParaPendenciaAgenteIa(pendenciaId);
+
+  return processarPendenciaAgenteIaCore(pendenciaId, options);
+}

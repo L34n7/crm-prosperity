@@ -26,4 +26,865 @@ import {
 import {
   finalizarAgendamentoHorarioFluxo,
   interceptarMensagemForaHorarioFluxo,
-  listarAgendamentosHorarioFl���q�^
+  listarAgendamentosHorarioFluxoVencidos,
+  obterTimeoutSemRespostaPorId,
+  prepararAgendamentoHorarioFluxo,
+  reagendarFilaProcessamentoAutoSeForaHorario,
+  reagendarTimeoutSemRespostaSeForaHorario,
+} from "./horario-atendimento-fluxo-runtime";
+
+export * from "./process-automation-engine-agenda";
+
+const supabaseAdmin = getSupabaseAdmin();
+
+const TOLERANCIA_ORDEM_MENSAGEM_MS = 5_000;
+const ATRASO_MAXIMO_MENSAGEM_AUTOMACAO_PADRAO_SEGUNDOS = 5 * 60;
+
+type AutomationEngineInput = Parameters<typeof processAutomationEngineAgenda>[0];
+type TimeoutSemRespostaParams = Parameters<
+  typeof processarTimeoutSemRespostaAgendadoBase
+>[0];
+
+const LIMITE_EXECUCAO_ORFA_PADRAO_MS = 2 * 60 * 1000;
+
+async function buscarEstadoAtendimentoConversa(params: {
+  empresaId: string;
+  conversaId: string;
+}) {
+  const { data, error } = await supabaseAdmin
+    .from("conversas")
+    .select("id, status, responsavel_id, bot_ativo, aguardando_atendente")
+    .eq("empresa_id", params.empresaId)
+    .eq("id", params.conversaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Erro ao validar atendimento humano da conversa: ${error.message}`
+    );
+  }
+
+  return data;
+}
+
+function limiteExecucaoOrfaMs() {
+  const configurado = Number(process.env.AUTOMACAO_EXECUCAO_ORFA_MS);
+
+  if (!Number.isFinite(configurado)) {
+    return LIMITE_EXECUCAO_ORFA_PADRAO_MS;
+  }
+
+  return Math.min(
+    15 * 60 * 1000,
+    Math.max(30 * 1000, Math.floor(configurado))
+  );
+}
+
+async function recuperarExecucaoRodandoOrfa(params: {
+  empresaId: string;
+  conversaId: string;
+}) {
+  const limiteMs = limiteExecucaoOrfaMs();
+  const limiteIso = new Date(Date.now() - limiteMs).toISOString();
+
+  const { data: execucao, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, fluxo_id, no_atual_id, metadata_json, updated_at")
+    .eq("empresa_id", params.empresaId)
+    .eq("conversa_id", params.conversaId)
+    .eq("status", "rodando")
+    .lt("updated_at", limiteIso)
+    .order("updated_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (execucaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao verificar execução órfã:",
+      execucaoError
+    );
+    return null;
+  }
+
+  if (!execucao?.id) return null;
+
+  const [filaAtiva, agendamentoAtivo] = await Promise.all([
+    supabaseAdmin
+      .from("fila_processamento_auto")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("execucao_id", execucao.id)
+      .in("status", ["pendente", "executando"])
+      .neq("tipo_job", "arbitragem_hibrida")
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("automacao_agendamentos")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("execucao_id", execucao.id)
+      .in("status", ["pendente", "executando"])
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (filaAtiva.error || agendamentoAtivo.error) {
+    console.error("[AUTOMATION_ENGINE] Erro ao validar execução órfã:", {
+      fila: filaAtiva.error,
+      agendamento: agendamentoAtivo.error,
+    });
+    return null;
+  }
+
+  if (filaAtiva.data?.id || agendamentoAtivo.data?.id) {
+    return null;
+  }
+
+  const agora = new Date().toISOString();
+  const metadataAtual =
+    execucao.metadata_json &&
+    typeof execucao.metadata_json === "object" &&
+    !Array.isArray(execucao.metadata_json)
+      ? execucao.metadata_json
+      : {};
+
+  const { data: recuperada, error: recuperacaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .update({
+      status: "erro",
+      finished_at: agora,
+      updated_at: agora,
+      metadata_json: {
+        ...metadataAtual,
+        motivo_erro: "execucao_rodando_orfa",
+        execucao_orfa: {
+          detectada_em: agora,
+          ultima_atividade_em: execucao.updated_at,
+          limite_ms: limiteMs,
+        },
+      },
+    })
+    .eq("empresa_id", params.empresaId)
+    .eq("id", execucao.id)
+    .eq("status", "rodando")
+    .lt("updated_at", limiteIso)
+    .select("id, fluxo_id, no_atual_id")
+    .maybeSingle();
+
+  if (recuperacaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao recuperar execução órfã:",
+      recuperacaoError
+    );
+    return null;
+  }
+
+  if (!recuperada?.id) return null;
+
+  const { error: logError } = await supabaseAdmin
+    .from("automacao_execucao_logs")
+    .insert({
+      empresa_id: params.empresaId,
+      execucao_id: recuperada.id,
+      fluxo_id: recuperada.fluxo_id || null,
+      no_id: recuperada.no_atual_id || null,
+      tipo_evento: "execucao_rodando_orfa_recuperada",
+      descricao:
+        "Execução marcada como erro porque permaneceu em rodando sem atividade, job ou agendamento ativo.",
+      entrada_json: {
+        ultima_atividade_em: execucao.updated_at,
+        limite_ms: limiteMs,
+      },
+      saida_json: {
+        status: "erro",
+        recuperada_em: agora,
+      },
+    });
+
+  if (logError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao registrar recuperação de execução órfã:",
+      logError
+    );
+  }
+
+  return recuperada.id;
+}
+
+function normalizarAtrasoMaximoMensagemAutomacaoMs() {
+  const configurado = Number(
+    process.env.WHATSAPP_AUTOMACAO_MAX_ATRASO_MENSAGEM_SEGUNDOS
+  );
+
+  const segundos = Number.isFinite(configurado)
+    ? Math.min(24 * 60 * 60, Math.max(30, Math.floor(configurado)))
+    : ATRASO_MAXIMO_MENSAGEM_AUTOMACAO_PADRAO_SEGUNDOS;
+
+  return segundos * 1000;
+}
+
+function timestampMensagemParaMs(valor: unknown) {
+  if (valor === null || valor === undefined || valor === "") return null;
+
+  const numero = Number(valor);
+
+  if (Number.isFinite(numero) && numero > 0) {
+    const milissegundos = numero < 100_000_000_000 ? numero * 1000 : numero;
+    const data = new Date(milissegundos);
+
+    if (!Number.isNaN(data.getTime())) {
+      return data.getTime();
+    }
+  }
+
+  const data = new Date(String(valor));
+  return Number.isNaN(data.getTime()) ? null : data.getTime();
+}
+
+async function ignorarMensagemTemporalmenteInvalida(
+  input: AutomationEngineInput
+) {
+  const mensagemId = String(input.mensagemId || "").trim();
+
+  if (!mensagemId) return null;
+
+  const { data: mensagem, error: mensagemError } = await supabaseAdmin
+    .from("mensagens")
+    .select("id, remetente_tipo, created_at, metadata_json")
+    .eq("id", mensagemId)
+    .eq("empresa_id", input.empresaId)
+    .eq("conversa_id", input.conversaId)
+    .maybeSingle();
+
+  if (mensagemError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao validar temporalidade da mensagem:",
+      mensagemError
+    );
+    return null;
+  }
+
+  if (!mensagem || mensagem.remetente_tipo !== "contato") {
+    return null;
+  }
+
+  const metadata = mensagem.metadata_json || {};
+  const timestampOriginal =
+    metadata.timestamp_original_whatsapp ??
+    metadata.timestamp_whatsapp ??
+    mensagem.created_at;
+  const timestampMensagemMs = timestampMensagemParaMs(timestampOriginal);
+
+  if (timestampMensagemMs == null) {
+    return null;
+  }
+
+  const agoraMs = Date.now();
+  const atrasoMs = Math.max(0, agoraMs - timestampMensagemMs);
+  const atrasoMaximoMs = normalizarAtrasoMaximoMensagemAutomacaoMs();
+
+  const { data: execucaoAtiva, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, started_at, created_at")
+    .eq("empresa_id", input.empresaId)
+    .eq("conversa_id", input.conversaId)
+    .eq("status", "aguardando")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (execucaoError) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao validar ordem temporal da execução:",
+      execucaoError
+    );
+    return null;
+  }
+
+  const inicioExecucaoMs = execucaoAtiva
+    ? timestampMensagemParaMs(execucaoAtiva.started_at || execucaoAtiva.created_at)
+    : null;
+  const mensagemAnteriorExecucao =
+    inicioExecucaoMs != null &&
+    timestampMensagemMs + TOLERANCIA_ORDEM_MENSAGEM_MS < inicioExecucaoMs;
+  const mensagemEntregueComAtraso = atrasoMs > atrasoMaximoMs;
+
+  if (!mensagemAnteriorExecucao && !mensagemEntregueComAtraso) {
+    return null;
+  }
+
+  const motivo = mensagemAnteriorExecucao
+    ? "mensagem_anterior_execucao_ativa"
+    : "mensagem_entregue_com_atraso";
+
+  console.warn("[AUTOMATION_ENGINE] Mensagem ignorada por temporalidade", {
+    mensagemId,
+    conversaId: input.conversaId,
+    execucaoId: execucaoAtiva?.id || null,
+    motivo,
+    timestampMensagem: new Date(timestampMensagemMs).toISOString(),
+    inicioExecucao:
+      inicioExecucaoMs != null ? new Date(inicioExecucaoMs).toISOString() : null,
+    atrasoSegundos: Math.floor(atrasoMs / 1000),
+    atrasoMaximoSegundos: Math.floor(atrasoMaximoMs / 1000),
+  });
+
+  return {
+    ok: true,
+    status: "ignorado_mensagem_atrasada",
+    motivo,
+    mensagemId,
+    execucaoId: execucaoAtiva?.id || null,
+    timestampMensagem: new Date(timestampMensagemMs).toISOString(),
+    inicioExecucao:
+      inicioExecucaoMs != null ? new Date(inicioExecucaoMs).toISOString() : null,
+    atrasoSegundos: Math.floor(atrasoMs / 1000),
+  };
+}
+
+function formatarDataIsoParaEntrada(dataIso: string) {
+  const match = String(dataIso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return "";
+
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+async function tentarPriorizarPreferenciaHorario(input: AutomationEngineInput) {
+  const mensagemTexto = String(input.mensagemTexto || "").trim();
+
+  if (!mensagemTexto) return null;
+
+  const interpretacao = interpretarDataHorarioAgenda(
+    mensagemTexto,
+    "America/Sao_Paulo"
+  );
+  const preferencia = interpretacao.preferencia;
+
+  if (
+    !preferencia ||
+    preferencia.tipo === "exato" ||
+    interpretacao.data ||
+    interpretacao.data_invalida_motivo
+  ) {
+    return null;
+  }
+
+  const numeroDestino = String(input.numeroDestino || "").trim();
+  if (!numeroDestino) return null;
+
+  const { data: execucao, error: execucaoError } = await supabaseAdmin
+    .from("automacao_execucoes")
+    .select("id, fluxo_id, no_atual_id, status, metadata_json")
+    .eq("empresa_id", input.empresaId)
+    .eq("conversa_id", input.conversaId)
+    .eq("status", "aguardando")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (execucaoError || !execucao?.no_atual_id) return null;
+
+  const noAtualId = String(execucao.no_atual_id);
+  const metadata = execucao.metadata_json || {};
+  const estadoAgenda = metadata.agenda_estado?.[noAtualId] || {};
+  const dataEscolhida = String(estadoAgenda.data_escolhida || "").trim();
+
+  if (
+    estadoAgenda.etapa !== "aguardando_horario" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dataEscolhida)
+  ) {
+    return null;
+  }
+
+  const { data: noAtual, error: noError } = await supabaseAdmin
+    .from("automacao_nos")
+    .select("*")
+    .eq("id", noAtualId)
+    .eq("empresa_id", input.empresaId)
+    .eq("fluxo_id", execucao.fluxo_id)
+    .eq("ativo", true)
+    .maybeSingle();
+
+  if (noError || !noAtual || noAtual.tipo_no !== "agenda_escolher_horario") {
+    return null;
+  }
+
+  const dataParaInterpretacao = formatarDataIsoParaEntrada(dataEscolhida);
+  if (!dataParaInterpretacao) return null;
+
+  await executarNoCore({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    execucaoId: execucao.id,
+    fluxoId: execucao.fluxo_id,
+    no: noAtual,
+    mensagemTexto: `${mensagemTexto}\n${dataParaInterpretacao}`,
+    numeroDestino,
+    retomadaDelayAgendado: true,
+  });
+
+  return {
+    ok: true,
+    status: "agenda_aguardando_escolha_horario",
+    execucaoId: execucao.id,
+  };
+}
+
+async function continuarNosEspeciaisDepoisDoMotor(params: {
+  empresaId: string;
+  conversaId: string;
+  numeroDestino?: string | null;
+  mensagemTexto?: string;
+  execucaoId?: string | null;
+}) {
+  const comum = {
+    empresaId: params.empresaId,
+    conversaId: params.conversaId,
+    numeroDestino: String(params.numeroDestino || ""),
+    execucaoId: params.execucaoId,
+  };
+
+  await continuarConsultasEstoqueAutomacao({
+    ...comum,
+    mensagemTexto: params.mensagemTexto,
+  });
+
+  await continuarCheckoutPagamentoAutomacao(comum);
+}
+
+async function acordarArbitragemDepoisDaExecucao(params: {
+  empresaId: string;
+  execucaoId?: string | null;
+}) {
+  const execucaoId = String(params.execucaoId || "").trim();
+  if (!execucaoId) return;
+
+  await acordarArbitragensHibridasPendentes({
+    empresaId: params.empresaId,
+    execucaoId,
+  });
+}
+
+function parametrosIntencoes(input: AutomationEngineInput) {
+  return {
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    contatoId: input.contatoId || null,
+    mensagemId: input.mensagemId || null,
+    mensagemTexto: input.mensagemTexto || "",
+    mensagemTipo: input.mensagemTipo || null,
+    mensagemEstruturada: input.mensagemEstruturada === true,
+    numeroDestino: input.numeroDestino || null,
+  };
+}
+
+async function processarDepoisDasRotinas(
+  input: AutomationEngineInput,
+  opcoes?: {
+    permitirDiferimento?: boolean;
+    ignorarHorarioFluxo?: boolean;
+  }
+) {
+  if (opcoes?.permitirDiferimento !== false) {
+    const resultadoDiferimento = await deferirMensagemSeFluxoRodando(input);
+    if (resultadoDiferimento) return resultadoDiferimento;
+  }
+
+  const resultadoIntencoes = await processarIntencoesMensagem(
+    parametrosIntencoes(input),
+    { modo: "frases_gatilho" }
+  );
+
+  if (resultadoIntencoes?.interrompeuFluxo || resultadoIntencoes?.somenteIntencao) {
+    return {
+      ok: true,
+      status: resultadoIntencoes.interrompeuFluxo
+        ? "intencao_interrompeu_fluxo"
+        : "intencao_processada",
+      execucaoId: resultadoIntencoes.execucaoId,
+      intencoesExecutadas: resultadoIntencoes.intencoesExecutadas,
+    };
+  }
+
+  if (!resultadoIntencoes?.correspondeu) {
+    const resultadoAgente = await interceptarMensagemAgenteIa(input);
+    if (resultadoAgente) return resultadoAgente;
+  }
+
+  const inputPrincipal: AutomationEngineInput =
+    resultadoIntencoes?.mensagemFluxo &&
+    resultadoIntencoes.mensagemFluxo !== String(input.mensagemTexto || "")
+      ? { ...input, mensagemTexto: resultadoIntencoes.mensagemFluxo }
+      : input;
+
+  if (!opcoes?.ignorarHorarioFluxo) {
+    const resultadoHorario = await interceptarMensagemForaHorarioFluxo(
+      inputPrincipal
+    );
+    if (resultadoHorario) return resultadoHorario;
+  }
+
+  const resultadoPreferencia = await tentarPriorizarPreferenciaHorario(inputPrincipal);
+
+  if (resultadoPreferencia) {
+    await aplicarTipoAgendamentoFluxo({
+      empresaId: inputPrincipal.empresaId,
+      execucaoId: resultadoPreferencia.execucaoId,
+    });
+
+    await continuarNosEspeciaisDepoisDoMotor({
+      empresaId: inputPrincipal.empresaId,
+      conversaId: inputPrincipal.conversaId,
+      numeroDestino: inputPrincipal.numeroDestino,
+      mensagemTexto: inputPrincipal.mensagemTexto,
+      execucaoId: resultadoPreferencia.execucaoId,
+    });
+
+    await acordarArbitragemDepoisDaExecucao({
+      empresaId: inputPrincipal.empresaId,
+      execucaoId: resultadoPreferencia.execucaoId,
+    });
+
+    return resultadoPreferencia;
+  }
+
+  const resultado = await processAutomationEngineAgenda(inputPrincipal);
+  const execucaoIdResultado =
+    resultado && typeof resultado === "object" && "execucaoId" in resultado
+      ? String(resultado.execucaoId || "") || null
+      : null;
+
+  await aplicarTipoAgendamentoFluxo({
+    empresaId: inputPrincipal.empresaId,
+    execucaoId: execucaoIdResultado,
+  });
+
+  let resultadoIntencaoAposInicio: Awaited<
+    ReturnType<typeof processarIntencoesMensagem>
+  > = null;
+  const execucaoCriadaAgora =
+    resultado &&
+    typeof resultado === "object" &&
+    "status" in resultado &&
+    String(resultado.status || "") === "execucao_criada";
+
+  if (!resultadoIntencoes?.correspondeu && execucaoCriadaAgora) {
+    resultadoIntencaoAposInicio = await processarIntencoesMensagem(
+      parametrosIntencoes(input),
+      { modo: "frases_gatilho" }
+    );
+  }
+
+  await continuarNosEspeciaisDepoisDoMotor({
+    empresaId: inputPrincipal.empresaId,
+    conversaId: inputPrincipal.conversaId,
+    numeroDestino: inputPrincipal.numeroDestino,
+    mensagemTexto: inputPrincipal.mensagemTexto,
+    execucaoId: execucaoIdResultado,
+  });
+
+  await acordarArbitragemDepoisDaExecucao({
+    empresaId: inputPrincipal.empresaId,
+    execucaoId: execucaoIdResultado,
+  });
+
+  if (resultadoIntencaoAposInicio?.correspondeu) {
+    return {
+      ...(resultado && typeof resultado === "object" ? resultado : { ok: true }),
+      intencaoProcessadaAposInicio: true,
+      intencoesExecutadas: resultadoIntencaoAposInicio.intencoesExecutadas,
+      intencaoInterrompeuFluxo: resultadoIntencaoAposInicio.interrompeuFluxo,
+    };
+  }
+
+  return resultado;
+}
+
+export async function processAutomationEngine(
+  input: AutomationEngineInput,
+  options: { ignorarValidacaoTemporal?: boolean } = {}
+) {
+  const automacoesDesabilitadas = await automacoesContatoEstaoDesabilitadas({
+    empresaId: input.empresaId,
+    contatoId: input.contatoId || null,
+    conversaId: input.conversaId,
+    integracaoWhatsappId: input.integracaoWhatsappId || null,
+  });
+
+  if (automacoesDesabilitadas) {
+    return {
+      ok: true,
+      status: "contato_automacoes_desabilitadas",
+    };
+  }
+
+  const estadoConversa = await buscarEstadoAtendimentoConversa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+  });
+
+  if (!estadoConversa) {
+    return {
+      ok: false,
+      status: "conversa_nao_encontrada",
+      error: "Conversa não encontrada para validar o estado do atendimento.",
+    };
+  }
+
+  if (conversaEstaComHumano(estadoConversa)) {
+    return {
+      ok: true,
+      status: "ignorado_atendimento_humano",
+    };
+  }
+
+  const bloqueioLimiteService = await buscarBloqueioLimiteServiceConversa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    integracaoId: input.integracaoWhatsappId || null,
+  });
+
+  if (bloqueioLimiteService?.ativo) {
+    return {
+      ok: true,
+      status: "limite_meta_service_atingido",
+      error:
+        "Automação pausada porque esta integração atingiu o limite mensal de Meta Service configurado.",
+    };
+  }
+
+  const resultadoTemporal = options.ignorarValidacaoTemporal
+    ? null
+    : await ignorarMensagemTemporalmenteInvalida(input);
+  if (resultadoTemporal) return resultadoTemporal;
+
+  await recuperarExecucaoRodandoOrfa({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+  });
+
+  const checkoutPendente = await interceptarMensagemCheckoutPendente({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+  });
+  if (checkoutPendente) return checkoutPendente;
+
+  const resultadoRotinas = await processarMensagemRecebidaRotinas({
+    empresaId: input.empresaId,
+    conversaId: input.conversaId,
+    contatoId: input.contatoId || null,
+    mensagemId: input.mensagemId || null,
+    mensagemTexto: input.mensagemTexto || "",
+    mensagemTipo: input.mensagemTipo || null,
+  });
+
+  if (resultadoRotinas?.interromperFluxoAtual) {
+    return {
+      ok: !resultadoRotinas.erro,
+      status: resultadoRotinas.erro
+        ? "rotina_automacao_interrompeu_com_erro"
+        : "rotina_automacao_interrompeu_fluxo",
+      execucaoId: resultadoRotinas.execucaoIds[0] || undefined,
+      error: resultadoRotinas.erro || undefined,
+    };
+  }
+
+  return processarDepoisDasRotinas(input);
+}
+
+export async function processarFilaProcessamentoAutoPorId(jobId: string) {
+  const preparacaoHorario = await prepararAgendamentoHorarioFluxo(jobId);
+
+  if (preparacaoHorario.encontrado) {
+    if (!preparacaoHorario.pronto) {
+      return preparacaoHorario.resultado;
+    }
+
+    try {
+      const resultado = await processarDepoisDasRotinas(
+        preparacaoHorario.input,
+        { ignorarHorarioFluxo: true }
+      );
+      await finalizarAgendamentoHorarioFluxo(
+        preparacaoHorario.agendamentoId,
+        true
+      );
+
+      return {
+        ok: true,
+        processado: true,
+        motivo: "fluxo_retomado_no_horario",
+        resultado,
+      };
+    } catch (error) {
+      await finalizarAgendamentoHorarioFluxo(
+        preparacaoHorario.agendamentoId,
+        false,
+        error
+      );
+      throw error;
+    }
+  }
+
+  const timeout = await obterTimeoutSemRespostaPorId(jobId);
+  if (timeout?.status === "pendente") {
+    return processarTimeoutSemRespostaAgendado({
+      empresaId: timeout.empresa_id,
+      agendamentoId: timeout.id,
+    });
+  }
+
+  const reagendadoPorHorario =
+    await reagendarFilaProcessamentoAutoSeForaHorario(jobId);
+  if (reagendadoPorHorario) return reagendadoPorHorario;
+
+  const resultadoArbitragem = await processarJobArbitragemHibrida({
+    jobId,
+    processar: async (inputReavaliado, contexto) => {
+      if (contexto.fluxoAindaRodando) {
+        return {
+          acao: "adiar" as const,
+          motivo: "fluxo_ainda_rodando",
+        };
+      }
+
+      const resultado = await processarDepoisDasRotinas(inputReavaliado, {
+        permitirDiferimento: false,
+      });
+      return { acao: "concluir" as const, resultado };
+    },
+  });
+
+  if (resultadoArbitragem) return resultadoArbitragem;
+
+  const resultado = await processarFilaProcessamentoAutoPorIdBase(jobId);
+  const { data: job } = await supabaseAdmin
+    .from("fila_processamento_auto")
+    .select("empresa_id, conversa_id, execucao_id, payload_json")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  if (job) {
+    await aplicarTipoAgendamentoFluxo({
+      empresaId: job.empresa_id,
+      execucaoId: job.execucao_id,
+    });
+
+    const payload = job.payload_json || {};
+    await continuarNosEspeciaisDepoisDoMotor({
+      empresaId: job.empresa_id,
+      conversaId: job.conversa_id,
+      numeroDestino: payload.numero_destino,
+      execucaoId: job.execucao_id,
+    });
+    await acordarArbitragemDepoisDaExecucao({
+      empresaId: job.empresa_id,
+      execucaoId: job.execucao_id,
+    });
+  }
+
+  return resultado;
+}
+
+export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
+  const [{ data: jobs, error }, agendamentosHorario] = await Promise.all([
+    supabaseAdmin
+      .from("fila_processamento_auto")
+      .select("id")
+      .eq("status", "pendente")
+      .neq("tipo_job", "arbitragem_hibrida")
+      .neq("tipo_job", "recuperar_fluxo_conversa")
+      .lte("executar_em", new Date().toISOString())
+      .order("executar_em", { ascending: true })
+      .limit(limite),
+    listarAgendamentosHorarioFluxoVencidos(limite),
+  ]);
+
+  if (error) {
+    throw new Error(
+      `Erro ao buscar fila de processamento da automação: ${error.message}`
+    );
+  }
+
+  const ids = Array.from(
+    new Set([...(jobs || []).map((job) => job.id), ...agendamentosHorario.map((item) => item.id)])
+  ).slice(0, limite);
+
+  let processados = 0;
+  let erros = 0;
+  let ignorados = 0;
+
+  for (const jobId of ids) {
+    try {
+      const resultado = await processarFilaProcessamentoAutoPorId(jobId);
+      const resumo = resultado as {
+        processado?: unknown;
+        ignorado?: unknown;
+        cancelado?: unknown;
+      };
+
+      if (resumo?.processado) {
+        processados += 1;
+      } else if (resumo?.ignorado || resumo?.cancelado) {
+        ignorados += 1;
+      }
+    } catch (errorJob) {
+      erros += 1;
+      console.error("[FILA AUTO] Erro no cron fallback:", {
+        jobId,
+        erro: errorJob,
+      });
+    }
+  }
+
+  return {
+    encontrados: ids.length,
+    processados,
+    ignorados,
+    erros,
+  };
+}
+
+export async function processarTimeoutSemRespostaAgendado(
+  params: TimeoutSemRespostaParams
+) {
+  const reagendadoPorHorario =
+    await reagendarTimeoutSemRespostaSeForaHorario(params);
+  if (reagendadoPorHorario) return reagendadoPorHorario;
+
+  const resultado = await processarTimeoutSemRespostaAgendadoBase(params);
+
+  const { data: agendamento } = await supabaseAdmin
+    .from("automacao_agendamentos")
+    .select("execucao_id, payload_json")
+    .eq("id", params.agendamentoId)
+    .eq("empresa_id", params.empresaId)
+    .maybeSingle();
+
+  if (agendamento) {
+    await aplicarTipoAgendamentoFluxo({
+      empresaId: params.empresaId,
+      execucaoId: agendamento.execucao_id,
+    });
+
+    const payload = agendamento.payload_json || {};
+    const conversaId = String(payload.conversa_id || "").trim();
+
+    if (conversaId) {
+      await continuarNosEspeciaisDepoisDoMotor({
+        empresaId: params.empresaId,
+        conversaId,
+        numeroDestino: payload.numero_destino,
+        execucaoId: agendamento.execucao_id,
+      });
+
+      await acordarArbitragemDepoisDaExecucao({
+        empresaId: params.empresaId,
+        execucaoId: agendamento.execucao_id,
+      });
+    }
+  }
+
+  return resultado;
+}

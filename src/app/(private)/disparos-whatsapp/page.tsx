@@ -235,6 +235,7 @@ type ContatoOpcao = {
   whatsapp_disparo_cooldown_expira_em?: string | null;
   whatsapp_disparo_cooldown_ocorrencias?: number | null;
   whatsapp_disparo_cooldown_horas?: number | null;
+  ja_recebeu_disparo?: boolean;
   contexto_integracao_whatsapp_id?: string | null;
   contexto_integracao_nome?: string | null;
   contexto_integracao_numero?: string | null;
@@ -4596,43 +4597,82 @@ export default function DisparosWhatsAppPage() {
     params.set("pagina", String(paginaAtual));
     params.set("limite", String(limite));
     params.set("contagem_otimizada", "true");
+    params.set("incluir_historico_disparo", "true");
     return params;
   }
 
   async function buscarContatosParaAdicionarEmMassa(quantidade: number) {
-    const idsSelecionados = new Set(contatosSelecionados.map((contato) => contato.id));
-    const encontrados = new Map<string, ContatoOpcao>();
+    const idsProcessados = new Set(
+      contatosSelecionados.map((contato) => contato.id)
+    );
+    const semDisparoAnterior: ContatoOpcao[] = [];
+    const comDisparoAnterior: ContatoOpcao[] = [];
+
     const adicionar = (contato: ContatoOpcao) => {
-      if (!idsSelecionados.has(contato.id) && contatoElegivelParaAcaoMassa(contato)) {
-        encontrados.set(contato.id, contato);
+      if (idsProcessados.has(contato.id)) return;
+      idsProcessados.add(contato.id);
+
+      if (!contatoElegivelParaAcaoMassa(contato)) return;
+
+      if (contato.ja_recebeu_disparo === true) {
+        comDisparoAnterior.push(contato);
+        return;
       }
+
+      semDisparoAnterior.push(contato);
     };
 
-    contatosDisponiveisValidos.forEach(adicionar);
-
     const limitePagina = 500;
-    const totalPaginas = Math.max(1, Math.ceil(totalContatosDisponiveis / limitePagina));
+    let totalPaginas = Math.max(
+      1,
+      Math.ceil(totalContatosDisponiveis / limitePagina)
+    );
     let paginaAtual = 1;
 
-    while (encontrados.size < quantidade && paginaAtual <= totalPaginas) {
-      const params = montarParametrosContatosAcaoMassa(paginaAtual, limitePagina);
-      const resposta = await fetch("/api/contatos?" + params.toString(), { cache: "no-store" });
+    // Mantém a ordenação atual da consulta dentro de cada grupo. Primeiro
+    // percorremos contatos sem nenhum disparo enviado; somente se eles não
+    // preencherem a quantidade solicitada usamos contatos já disparados.
+    while (
+      semDisparoAnterior.length < quantidade &&
+      paginaAtual <= totalPaginas
+    ) {
+      const params = montarParametrosContatosAcaoMassa(
+        paginaAtual,
+        limitePagina
+      );
+      const resposta = await fetch("/api/contatos?" + params.toString(), {
+        cache: "no-store",
+      });
       const json = await resposta.json();
 
       if (!resposta.ok) {
-        throw new Error(json.error || "Erro ao carregar contatos para a seleção em massa.");
+        throw new Error(
+          json.error || "Erro ao carregar contatos para a seleção em massa."
+        );
       }
 
       const lista = Array.isArray(json.contatos)
         ? (json.contatos as ContatoOpcao[])
         : [];
+
+      const totalPaginasResposta = Number(json.totalPaginas || 0);
+      if (
+        Number.isFinite(totalPaginasResposta) &&
+        totalPaginasResposta > 0
+      ) {
+        totalPaginas = totalPaginasResposta;
+      }
+
       lista.forEach(adicionar);
 
-      if (lista.length < limitePagina) break;
+      if (lista.length < limitePagina || paginaAtual >= totalPaginas) break;
       paginaAtual += 1;
     }
 
-    return Array.from(encontrados.values()).slice(0, quantidade);
+    return [
+      ...semDisparoAnterior,
+      ...comDisparoAnterior,
+    ].slice(0, quantidade);
   }
 
   async function adicionarTodosDisponiveis() {

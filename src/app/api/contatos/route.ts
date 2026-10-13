@@ -155,6 +155,8 @@ export async function GET(request: Request) {
   const apenasNovos = searchParams.get("contato_novo") === "true";
   const contagemOtimizada =
     searchParams.get("contagem_otimizada") === "true";
+  const incluirHistoricoDisparo =
+    searchParams.get("incluir_historico_disparo") === "true";
 
   const pagina = Math.max(1, Number(searchParams.get("pagina") || "1"));
   const limiteMaximo = disparoAnteriorId || listaId ? 2000 : 500;
@@ -698,6 +700,48 @@ export async function GET(request: Request) {
         { status: 500 }
       );
     }
+  }
+
+  if (incluirHistoricoDisparo && contatos.length > 0) {
+    const contatoIds = contatos
+      .map((contato) => String(contato.id || "").trim())
+      .filter(Boolean);
+
+    const historicoResultado = await supabaseAdmin.rpc(
+      "classificar_contatos_historico_disparo",
+      {
+        p_empresa_id: usuario.empresa_id,
+        p_contato_ids: contatoIds,
+      }
+    );
+
+    if (historicoResultado.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Erro ao identificar contatos com disparos anteriores: " +
+            historicoResultado.error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    const historicoPorContato = new Map<string, boolean>(
+      (Array.isArray(historicoResultado.data)
+        ? historicoResultado.data
+        : []
+      ).map((item: any) => [
+        String(item.contato_id || ""),
+        item.ja_recebeu_disparo === true,
+      ])
+    );
+
+    contatos = contatos.map((contato) => ({
+      ...contato,
+      ja_recebeu_disparo:
+        historicoPorContato.get(String(contato.id || "")) === true,
+    }));
   }
 
   return NextResponse.json({
