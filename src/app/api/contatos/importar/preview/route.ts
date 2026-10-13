@@ -540,8 +540,72 @@ export async function POST(request: Request) {
       validos.push(base);
     }
 
+    const payloadImportacao = candidatos.map((item) => ({
+      nome: item.nome,
+      telefone_original: item.telefone_original,
+      telefone_normalizado: item.telefone_normalizado,
+      email: item.email,
+      origem: item.origem,
+      campanha: item.campanha,
+      campo_contato: item.campo_contato,
+      observacoes: item.observacoes,
+      telefone_revisar: item.telefone_revisar === true,
+    }));
+
+    // Remove análises antigas expiradas de forma oportunista para evitar
+    // acumular payloads grandes no banco.
+    await supabaseAdmin
+      .from("contatos_importacoes_previews")
+      .delete()
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("usuario_id", usuario.id)
+      .lt("expires_at", new Date().toISOString());
+
+    const { data: previewPersistido, error: previewPersistidoError } =
+      await supabaseAdmin
+        .from("contatos_importacoes_previews")
+        .insert({
+          empresa_id: usuario.empresa_id,
+          usuario_id: usuario.id,
+          arquivo_nome: file.name,
+          payload_json: payloadImportacao,
+          total: payloadImportacao.length,
+        })
+        .select("id")
+        .single();
+
+    if (previewPersistidoError || !previewPersistido) {
+      console.error(
+        "[IMPORTAÇÃO CONTATOS] Erro ao persistir preview:",
+        previewPersistidoError
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            previewPersistidoError?.message ||
+            "Não foi possível preparar a importação para confirmação.",
+        },
+        { status: 500 }
+      );
+    }
+
+    const itemPreviewTela = (item: LinhaPreview) => ({
+      linha: item.linha,
+      nome: item.nome,
+      telefone_original: item.telefone_original,
+      telefone_normalizado: item.telefone_normalizado,
+      campo_contato: item.campo_contato,
+      status_lead: item.status_lead,
+      motivo: item.motivo,
+      alerta: item.alerta,
+      telefone_revisar: item.telefone_revisar,
+    });
+
     return NextResponse.json({
       ok: true,
+      preview_id: previewPersistido.id,
       resumo: {
         total: rows.length,
         validos: validos.length,
@@ -551,11 +615,11 @@ export async function POST(request: Request) {
         invalidos: invalidos.length,
       },
       headers,
-      validos,
-      alertas,
-      duplicados_banco: duplicadosBanco,
-      duplicados_arquivo: duplicadosArquivo,
-      invalidos,
+      validos: validos.map(itemPreviewTela),
+      alertas: alertas.map(itemPreviewTela),
+      duplicados_banco: duplicadosBanco.map(itemPreviewTela),
+      duplicados_arquivo: duplicadosArquivo.map(itemPreviewTela),
+      invalidos: invalidos.map(itemPreviewTela),
       campos_detectados: {
         headers_recebidos: headers,
       },

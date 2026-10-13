@@ -368,6 +368,7 @@ export default function ContatosPage() {
   const itensPorPaginaPreview = 5;
 
   const [previewImportacao, setPreviewImportacao] = useState<{
+    preview_id: string;
     resumo: {
       total: number;
       validos: number;
@@ -619,7 +620,15 @@ export default function ContatosPage() {
         body: formData,
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await res.json()
+        : {
+            error:
+              res.status === 413
+                ? "O arquivo ultrapassa o limite de envio para análise. Divida o arquivo em partes menores e tente novamente."
+                : await res.text(),
+          };
 
     if (!res.ok) {
       setErroImportacao(data.error || "Erro ao analisar arquivo.");
@@ -693,14 +702,25 @@ export default function ContatosPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          preview_id: previewImportacao.preview_id || null,
           nome_lista: nomeLista,
           arquivo_nome: arquivoImportacao?.name || null,
           permitir_contatos_existentes: permitirContatosExistentes,
-          contatos: contatosImportaveis,
+          ...(previewImportacao.preview_id
+            ? {}
+            : { contatos: contatosImportaveis }),
         }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await res.json()
+        : {
+            error:
+              res.status === 413
+                ? "A importação ficou grande demais para ser enviada de uma vez. Analise o arquivo novamente para usar o processamento em fila."
+                : await res.text(),
+          };
 
       if (!res.ok) {
         setErroImportacao(data.error || "Erro ao importar contatos.");

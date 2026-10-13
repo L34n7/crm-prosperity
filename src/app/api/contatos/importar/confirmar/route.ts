@@ -17,6 +17,8 @@ export const dynamic = "force-dynamic";
 
 const supabaseAdmin = getSupabaseAdmin();
 const TAMANHO_LOTE = 100;
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type ContatoImportacao = {
   nome?: string | null;
@@ -188,10 +190,78 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
   }
 
   const body = JSON.parse(bodyText);
-  const contatos = Array.isArray(body?.contatos) ? body.contatos : [];
+  const previewId = String(body?.preview_id || "").trim();
+  let contatos = Array.isArray(body?.contatos) ? body.contatos : [];
   const nomeLista = String(body?.nome_lista || "").trim();
-  const arquivoNome = String(body?.arquivo_nome || "").trim() || null;
+  let arquivoNome = String(body?.arquivo_nome || "").trim() || null;
   const permitirContatosExistentes = body?.permitir_contatos_existentes === true;
+
+  if (previewId) {
+    if (!UUID_REGEX.test(previewId)) {
+      return NextResponse.json(
+        { ok: false, error: "Análise de importação inválida." },
+        { status: 400 }
+      );
+    }
+
+    const { data: preview, error: previewError } = await supabaseAdmin
+      .from("contatos_importacoes_previews")
+      .select("id, arquivo_nome, payload_json, expires_at")
+      .eq("id", previewId)
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("usuario_id", usuario.id)
+      .maybeSingle();
+
+    if (previewError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            previewError.message ||
+            "Não foi possível recuperar a análise da importação.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!preview) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta análise de importação não está mais disponível. Analise o arquivo novamente.",
+        },
+        { status: 410 }
+      );
+    }
+
+    const expiraEm = new Date(String(preview.expires_at || "")).getTime();
+    if (!Number.isFinite(expiraEm) || expiraEm <= Date.now()) {
+      await supabaseAdmin
+        .from("contatos_importacoes_previews")
+        .delete()
+        .eq("id", previewId)
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("usuario_id", usuario.id);
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta análise de importação expirou. Analise o arquivo novamente para continuar.",
+        },
+        { status: 410 }
+      );
+    }
+
+    contatos = Array.isArray(preview.payload_json)
+      ? preview.payload_json
+      : [];
+
+    if (!arquivoNome) {
+      arquivoNome = String(preview.arquivo_nome || "").trim() || null;
+    }
+  }
 
   if (!nomeLista) {
     return NextResponse.json(
@@ -400,6 +470,22 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       { ok: false, error: mensagemErro },
       { status: 500 }
     );
+  }
+
+  if (previewId) {
+    const { error: previewDeleteError } = await supabaseAdmin
+      .from("contatos_importacoes_previews")
+      .delete()
+      .eq("id", previewId)
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("usuario_id", usuario.id);
+
+    if (previewDeleteError) {
+      console.warn(
+        "[IMPORTAÇÃO CONTATOS] Importação enfileirada, mas o preview não foi removido:",
+        previewDeleteError
+      );
+    }
   }
 
   await registrarLogAuditoriaSeguro({
