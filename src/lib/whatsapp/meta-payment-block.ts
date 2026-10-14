@@ -15,6 +15,11 @@ export type MetaPaymentBlockState = {
   ocorrido_em: string | null;
   ultima_falha_em: string | null;
   mensagem_externa_id: string | null;
+  cooldown_nivel: number;
+  cooldown_segundos: number;
+  cooldown_ate: string | null;
+  probe_em_andamento_ate: string | null;
+  falhas_consecutivas: number;
   pausas: {
     conversas_encerradas: number;
     execucoes_canceladas: number;
@@ -62,6 +67,13 @@ export function lerBloqueioFinanceiroMeta(
     mensagem_externa_id: bloqueio.mensagem_externa_id
       ? String(bloqueio.mensagem_externa_id)
       : null,
+    cooldown_nivel: Number(bloqueio.cooldown_nivel || 0),
+    cooldown_segundos: Number(bloqueio.cooldown_segundos || 0),
+    cooldown_ate: bloqueio.cooldown_ate ? String(bloqueio.cooldown_ate) : null,
+    probe_em_andamento_ate: bloqueio.probe_em_andamento_ate
+      ? String(bloqueio.probe_em_andamento_ate)
+      : null,
+    falhas_consecutivas: Number(bloqueio.falhas_consecutivas || 0),
     pausas: {
       conversas_encerradas: Number(pausas.conversas_encerradas || 0),
       execucoes_canceladas: Number(pausas.execucoes_canceladas || 0),
@@ -131,6 +143,177 @@ export async function buscarBloqueioFinanceiroMetaConversa(params: {
   });
 }
 
+
+export type MetaPaymentSendGate = {
+  permitido: boolean;
+  modo: "normal" | "cooldown" | "aguardando_probe" | "probe";
+  retryAt: string | null;
+  delayMs: number;
+  cooldownNivel: number;
+};
+
+function timestampMs(valor?: string | null) {
+  if (!valor) return null;
+  const ms = new Date(valor).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function extrairCodigoErroMetaPagamentoResposta(
+  valor: unknown
+): number | null {
+  let candidato = valor;
+
+  if (typeof candidato === "string") {
+    try {
+      candidato = JSON.parse(candidato);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!candidato || typeof candidato !== "object" || Array.isArray(candidato)) {
+    return null;
+  }
+
+  const registro = candidato as Record<string, unknown>;
+  const erro =
+    registro.error && typeof registro.error === "object"
+      ? (registro.error as Record<string, unknown>)
+      : registro;
+  const codigo = Number(erro.code);
+
+  return codigoErroMetaPagamento(codigo) ? codigo : null;
+}
+
+export async function reservarEnvioAposCooldownPagamentoMeta(params: {
+  empresaId: string;
+  integracaoId?: string | null;
+}): Promise<MetaPaymentSendGate> {
+  const integracaoId = String(params.integracaoId || "").trim();
+
+  if (!params.empresaId || !integracaoId) {
+    return {
+      permitido: true,
+      modo: "normal",
+      retryAt: null,
+      delayMs: 0,
+      cooldownNivel: 0,
+    };
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "claim_whatsapp_meta_payment_send",
+    {
+      p_empresa_id: params.empresaId,
+      p_integracao_id: integracaoId,
+      p_agora: new Date().toISOString(),
+    }
+  );
+
+  if (error) {
+    console.warn(
+      "[META PAYMENT COOLDOWN] Erro ao consultar cooldown; envio seguirá para não bloquear indevidamente:",
+      error
+    );
+    return {
+      permitido: true,
+      modo: "normal",
+      retryAt: null,
+      delayMs: 0,
+      cooldownNivel: 0,
+    };
+  }
+
+  const estado = objeto(data);
+  const permitido = estado.permitido !== false;
+  const modoRaw = String(estado.modo || (permitido ? "normal" : "cooldown"));
+  const modo: MetaPaymentSendGate["modo"] =
+    modoRaw === "probe" ||
+    modoRaw === "aguardando_probe" ||
+    modoRaw === "cooldown"
+      ? modoRaw
+      : "normal";
+  const retryAt = estado.retry_at ? String(estado.retry_at) : null;
+  const retryMs = timestampMs(retryAt);
+  const delayMs =
+    !permitido && retryMs !== null
+      ? Math.max(1000, retryMs - Date.now() + 250)
+      : 0;
+
+  return {
+    permitido,
+    modo,
+    retryAt,
+    delayMs,
+    cooldownNivel: Number(estado.cooldown_nivel || 0),
+  };
+}
+
+export async function registrarFalhaFinanceiraMetaResposta(params: {
+  empresaId: string;
+  integracaoId?: string | null;
+  codigo: number;
+  detalhe?: string | null;
+  mensagemExternaId?: string | null;
+}) {
+  const integracaoId = String(params.integracaoId || "").trim();
+
+  if (
+    !params.empresaId ||
+    !integracaoId ||
+    !codigoErroMetaPagamento(params.codigo)
+  ) {
+    return null;
+  }
+
+  const ocorridoEm = new Date().toISOString();
+  const { data: avisoNovo, error } = await supabaseAdmin.rpc(
+    "claim_whatsapp_meta_payment_block",
+    {
+      p_empresa_id: params.empresaId,
+      p_integracao_id: integracaoId,
+      p_codigo: params.codigo,
+      p_detalhe:
+        String(params.detalhe || "").trim() ||
+        "Falha financeira retornada pela Meta.",
+      p_mensagem_externa_id:
+        String(params.mensagemExternaId || "").trim() || null,
+      p_ocorrido_em: ocorridoEm,
+    }
+  );
+
+  if (error) {
+    console.warn(
+      "[META PAYMENT COOLDOWN] Erro ao registrar falha financeira:",
+      error
+    );
+    return null;
+  }
+
+  const bloqueio = await buscarBloqueioFinanceiroMetaIntegracao({
+    empresaId: params.empresaId,
+    integracaoId,
+  });
+
+  return {
+    avisoNovo: avisoNovo === true,
+    ocorridoEm,
+    cooldownAte: bloqueio?.cooldown_ate || null,
+    cooldownNivel: bloqueio?.cooldown_nivel || 0,
+    cooldownSegundos: bloqueio?.cooldown_segundos || 0,
+  };
+}
+
+export async function confirmarEnvioAposCooldownPagamentoMeta(params: {
+  empresaId: string;
+  integracaoId?: string | null;
+}) {
+  return limparAvisoFinanceiroMetaAposEnvioConfirmado({
+    empresaId: params.empresaId,
+    integracaoId: params.integracaoId,
+    mensagemCriadaEm: new Date().toISOString(),
+  });
+}
 
 export async function limparAvisoFinanceiroMetaAposEnvioConfirmado(params: {
   empresaId: string;

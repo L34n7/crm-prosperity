@@ -49,6 +49,13 @@ import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import {
+  confirmarEnvioAposCooldownPagamentoMeta,
+  extrairCodigoErroMetaPagamentoResposta,
+  registrarFalhaFinanceiraMetaResposta,
+  reservarEnvioAposCooldownPagamentoMeta,
+  type MetaPaymentSendGate,
+} from "@/lib/whatsapp/meta-payment-block";
+import {
   condicaoCombinaComCandidatos,
   condicaoCombinaComMensagem,
   condicaoPrecisaDeResposta,
@@ -627,7 +634,76 @@ type ResultadoEnvioAutomacao = {
   metaResponse?: unknown;
   erro?: unknown;
   mensagemId?: string | null;
+  retryAfterMs?: number | null;
+  cooldownRetryAt?: string | null;
+  erroCodigoMeta?: number | null;
 };
+
+function resultadoCooldownPagamentoMeta(
+  gate: MetaPaymentSendGate
+): ResultadoEnvioAutomacao {
+  return {
+    ok: false,
+    status: null,
+    status_envio: "cooldown_meta_financeiro",
+    messageId: null,
+    metaResponse: null,
+    erro:
+      gate.modo === "aguardando_probe"
+        ? "Aguardando a tentativa controlada da integração após falha financeira da Meta."
+        : "Integração em cooldown temporário após falha financeira da Meta.",
+    retryAfterMs: Math.max(1000, gate.delayMs || 1000),
+    cooldownRetryAt: gate.retryAt,
+  };
+}
+
+async function finalizarTentativaCooldownPagamentoMeta(params: {
+  empresaId: string;
+  integracaoId?: string | null;
+  gate: MetaPaymentSendGate;
+  ok: boolean;
+  metaResponse?: unknown;
+  erro?: unknown;
+  messageId?: string | null;
+}) {
+  const codigo =
+    extrairCodigoErroMetaPagamentoResposta(params.metaResponse) ||
+    extrairCodigoErroMetaPagamentoResposta(params.erro);
+
+  if (codigo) {
+    const falha = await registrarFalhaFinanceiraMetaResposta({
+      empresaId: params.empresaId,
+      integracaoId: params.integracaoId,
+      codigo,
+      detalhe: textoErroMeta(params.metaResponse) || textoErroMeta(params.erro),
+      mensagemExternaId: params.messageId || null,
+    });
+
+    return {
+      erroCodigoMeta: codigo,
+      cooldownRetryAt: falha?.cooldownAte || null,
+      retryAfterMs: falha?.cooldownAte
+        ? Math.max(
+            1000,
+            new Date(falha.cooldownAte).getTime() - Date.now() + 250
+          )
+        : 60_000,
+    };
+  }
+
+  if (params.ok && params.gate.modo === "probe") {
+    await confirmarEnvioAposCooldownPagamentoMeta({
+      empresaId: params.empresaId,
+      integracaoId: params.integracaoId,
+    });
+  }
+
+  return {
+    erroCodigoMeta: null,
+    cooldownRetryAt: null,
+    retryAfterMs: null,
+  };
+}
 
 type FilaProcessamentoAutoJob = {
   id: string;
@@ -1870,6 +1946,105 @@ async function interromperNoPorFalhaEnvioAutomacao(params: {
   }
 
   const agora = new Date().toISOString();
+
+  if (
+    statusEnvio === "cooldown_meta_financeiro" ||
+    resultado.erroCodigoMeta === 131042 ||
+    resultado.erroCodigoMeta === 131044
+  ) {
+    const delayMs = Math.max(
+      1000,
+      Number(resultado.retryAfterMs || RETRY_ENVIO_AUTOMACAO_DELAY_MS)
+    );
+    const retryAt =
+      resultado.cooldownRetryAt ||
+      new Date(Date.now() + delayMs).toISOString();
+
+    const { data: execucaoCooldown, error: execucaoCooldownError } =
+      await supabaseAdmin
+        .from("automacao_execucoes")
+        .select("metadata_json")
+        .eq("id", execucaoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+    if (execucaoCooldownError) {
+      throw new Error(
+        `Erro ao preparar retry financeiro da Meta: ${execucaoCooldownError.message}`
+      );
+    }
+
+    const metadataCooldown = isRecord(execucaoCooldown?.metadata_json)
+      ? execucaoCooldown.metadata_json
+      : {};
+    const retryPagamentoAtual = isRecord(
+      metadataCooldown.retry_pagamento_meta
+    )
+      ? metadataCooldown.retry_pagamento_meta
+      : {};
+    const tentativasPagamento =
+      Number(retryPagamentoAtual[no.id] || 0) + 1;
+
+    await supabaseAdmin
+      .from("automacao_execucoes")
+      .update({
+        status: "rodando",
+        no_atual_id: no.id,
+        metadata_json: {
+          ...metadataCooldown,
+          retry_pagamento_meta: {
+            ...retryPagamentoAtual,
+            [no.id]: tentativasPagamento,
+            ultimo_retry_em: agora,
+            proximo_retry_em: retryAt,
+          },
+        },
+        updated_at: agora,
+      })
+      .eq("id", execucaoId)
+      .eq("empresa_id", empresaId);
+
+    await agendarFilaProcessamentoAuto({
+      tipoJob: "retry_envio_mensagem",
+      empresaId,
+      conversaId,
+      execucaoId,
+      fluxoId,
+      no,
+      numeroDestino,
+      delayMs,
+      idempotencySuffix: `meta_payment:${new Date(retryAt).getTime()}`,
+      payloadExtra: {
+        tipo_envio: tipoEnvio,
+        retry_pagamento_meta: true,
+        retry_pagamento_tentativa: tentativasPagamento,
+        cooldown_ate: retryAt,
+        erro_codigo_meta: resultado.erroCodigoMeta || null,
+        mensagem_texto: mensagemTexto || "",
+      },
+    });
+
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      fluxoId,
+      noId: no.id,
+      tipoEvento: "retry_pagamento_meta_agendado",
+      descricao:
+        "Envio preservado em fila durante cooldown financeiro temporário da Meta.",
+      entrada: {
+        tipo_envio: tipoEnvio,
+        tentativa: tentativasPagamento,
+        delay_ms: delayMs,
+      },
+      saida: {
+        cooldown_ate: retryAt,
+        erro_codigo_meta: resultado.erroCodigoMeta || null,
+      },
+    });
+
+    return true;
+  }
   const erroTexto = descreverErroEnvioAutomacao(resultado);
   const falhaTransitoria = falhaEnvioAutomacaoEhTransitoria(resultado);
 
@@ -10205,6 +10380,15 @@ export async function enviarMensagemAutomacao(params: {
     };
   }
 
+  const gatePagamentoMeta = await reservarEnvioAposCooldownPagamentoMeta({
+    empresaId,
+    integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+  });
+
+  if (!gatePagamentoMeta.permitido) {
+    return resultadoCooldownPagamentoMeta(gatePagamentoMeta);
+  }
+
   const inicioMeta = Date.now();
 
   const envio = await sendWhatsAppTextMessage({
@@ -10213,6 +10397,17 @@ export async function enviarMensagemAutomacao(params: {
     to: numeroDestino,
     body: conteudoComVariaveis,
   });
+
+  const resultadoPagamentoMeta =
+    await finalizarTentativaCooldownPagamentoMeta({
+      empresaId,
+      integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+      gate: gatePagamentoMeta,
+      ok: envio.ok,
+      metaResponse: envio.raw,
+      erro: envio.error,
+      messageId: envio.messageId,
+    });
 
   perf("SEND / Meta WhatsApp API", inicioMeta, {
     ok: envio.ok,
@@ -10278,6 +10473,7 @@ export async function enviarMensagemAutomacao(params: {
     metaResponse: envio.raw,
     erro: envio.error,
     mensagemId: mensagemSalva?.id,
+    ...resultadoPagamentoMeta,
   };
 }
 
@@ -10377,6 +10573,15 @@ async function enviarBotoesAutomacao({
       throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
     }
 
+  const gatePagamentoMeta = await reservarEnvioAposCooldownPagamentoMeta({
+    empresaId,
+    integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+  });
+
+  if (!gatePagamentoMeta.permitido) {
+    return resultadoCooldownPagamentoMeta(gatePagamentoMeta);
+  }
+
   const body = {
     messaging_product: "whatsapp",
     to: numeroDestino,
@@ -10413,6 +10618,16 @@ async function enviarBotoesAutomacao({
   const json = await response.json();
 
   const mensagemExternaId = json?.messages?.[0]?.id || null;
+  const resultadoPagamentoMeta =
+    await finalizarTentativaCooldownPagamentoMeta({
+      empresaId,
+      integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+      gate: gatePagamentoMeta,
+      ok: response.ok,
+      metaResponse: json,
+      erro: response.ok ? null : json,
+      messageId: mensagemExternaId,
+    });
 
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
     empresaId,
@@ -10470,6 +10685,7 @@ async function enviarBotoesAutomacao({
     metaResponse: json,
     erro: response.ok ? null : json,
     mensagemId: mensagemSalva?.id,
+    ...resultadoPagamentoMeta,
   };
 }
 
@@ -10624,6 +10840,15 @@ async function enviarBotaoRedirectAutomacao({
     };
   }
 
+  const gatePagamentoMeta = await reservarEnvioAposCooldownPagamentoMeta({
+    empresaId,
+    integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+  });
+
+  if (!gatePagamentoMeta.permitido) {
+    return resultadoCooldownPagamentoMeta(gatePagamentoMeta);
+  }
+
   const envio = await sendWhatsAppInteractiveCtaUrlMessage({
     phoneNumberId,
     accessToken,
@@ -10632,6 +10857,17 @@ async function enviarBotaoRedirectAutomacao({
     buttonText: botaoTextoComVariaveis,
     url: urlComVariaveis,
   });
+
+  const resultadoPagamentoMeta =
+    await finalizarTentativaCooldownPagamentoMeta({
+      empresaId,
+      integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+      gate: gatePagamentoMeta,
+      ok: envio.ok,
+      metaResponse: envio.raw,
+      erro: envio.error,
+      messageId: envio.messageId,
+    });
 
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
     empresaId,
@@ -10693,6 +10929,7 @@ async function enviarBotaoRedirectAutomacao({
     metaResponse: envio.raw,
     erro: envio.error,
     mensagemId: mensagemSalva?.id,
+    ...resultadoPagamentoMeta,
   };
 }
 
@@ -10828,6 +11065,15 @@ async function enviarMidiaAutomacao(params: {
     };
   }
 
+  const gatePagamentoMeta = await reservarEnvioAposCooldownPagamentoMeta({
+    empresaId,
+    integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+  });
+
+  if (!gatePagamentoMeta.permitido) {
+    return resultadoCooldownPagamentoMeta(gatePagamentoMeta);
+  }
+
   const body = {
     messaging_product: "whatsapp",
     to: numeroDestino,
@@ -10861,6 +11107,16 @@ async function enviarMidiaAutomacao(params: {
   const raw = await response.json().catch(() => null);
 
   const messageId = raw?.messages?.[0]?.id || null;
+  const resultadoPagamentoMeta =
+    await finalizarTentativaCooldownPagamentoMeta({
+      empresaId,
+      integracaoId: integracao?.id || conversa.integracao_whatsapp_id,
+      gate: gatePagamentoMeta,
+      ok: response.ok,
+      metaResponse: raw,
+      erro: response.ok ? null : raw,
+      messageId,
+    });
 
   const protocoloAtivo = await buscarOuCriarProtocoloAutomacao({
     empresaId,
@@ -10920,6 +11176,7 @@ async function enviarMidiaAutomacao(params: {
     metaResponse: raw,
     erro: response.ok ? null : raw,
     mensagemId: mensagemSalva?.id,
+    ...resultadoPagamentoMeta,
   };
 }
 
