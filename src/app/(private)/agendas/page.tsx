@@ -149,6 +149,7 @@ type Ag = {
   confirmacao_status: string;
   resultado: string | null;
   observacoes_internas: string | null;
+  feedback_respondido_em?: string | null;
   metadata_json?: {
     confirmacao_whatsapp?: { respondido_em?: string | null } | null;
   } | null;
@@ -300,6 +301,17 @@ const feedbackOriginLabel = (value?: string | null) => {
   if (origem === "api") return "API";
   if (origem === "google") return "Google";
   return "Manual";
+};
+type ResultadoRegistroVisual = "pendente" | "registrado" | null;
+const resultadoRegistroVisual = (agendamento: Ag): ResultadoRegistroVisual => {
+  if (agendamento.feedback_respondido_em) return "registrado";
+
+  if (!["agendado", "confirmado"].includes(agendamento.status)) return null;
+
+  const fim = new Date(agendamento.fim_at).getTime();
+  if (!Number.isFinite(fim) || fim > Date.now()) return null;
+
+  return "pendente";
 };
 const range = (m: Date) => ({
   start: new Date(m.getFullYear(), m.getMonth(), 1).toISOString(),
@@ -2153,15 +2165,29 @@ function Page() {
                     filter.origem === "todos" || filter.origem === "google"
                       ? gby.get(x.k) || []
                       : [],
-                  items = [...aa, ...gg].slice(0, 3);
+                  items = [...aa, ...gg].slice(0, 3),
+                  pendentesResultado = aa.filter(
+                    (item) => resultadoRegistroVisual(item) === "pendente",
+                  ).length;
                 return (
                   <div
                     key={x.k}
-                    className={`day ${!x.ok ? "muted" : ""} ${x.k === day ? "selected" : ""} ${x.k === key(new Date()) ? "today" : ""}`}
+                    className={`day ${!x.ok ? "muted" : ""} ${x.k === day ? "selected" : ""} ${x.k === key(new Date()) ? "today" : ""} ${pendentesResultado > 0 ? styles.dayHasPendingResult : ""}`}
                     onClick={() => setDay(x.k)}
                   >
                     <div className="dh">
-                      <span className="num">{x.d.getDate()}</span>
+                      <div className={styles.dayNumberGroup}>
+                        <span className="num">{x.d.getDate()}</span>
+                        {pendentesResultado > 0 ? (
+                          <span
+                            className={styles.dayPendingBadge}
+                            title={`${pendentesResultado} resultado(s) pendente(s) neste dia`}
+                          >
+                            <i aria-hidden="true" />
+                            {pendentesResultado}
+                          </span>
+                        ) : null}
+                      </div>
                       {podeEditarAgenda ? <button
                         className="add"
                         onClick={(e) => {
@@ -2194,7 +2220,7 @@ function Page() {
                         </div>
                       ) : (
                         <button
-                          className={`event ${it.status === "cancelado" ? "cancel" : ""}`}
+                          className={`event ${it.status === "cancelado" ? "cancel" : ""} ${resultadoRegistroVisual(it) === "pendente" ? styles.eventResultPending : resultadoRegistroVisual(it) === "registrado" ? styles.eventResultRegistered : ""}`}
                           style={
                             {
                               "--c": it.tipo?.cor || "#109b75",
@@ -2206,6 +2232,21 @@ function Page() {
                             view(it);
                           }}
                         >
+                          {resultadoRegistroVisual(it) ? (
+                            <i
+                              className={styles.eventResultDot}
+                              title={
+                                resultadoRegistroVisual(it) === "pendente"
+                                  ? "Resultado pendente"
+                                  : "Resultado registrado"
+                              }
+                              aria-label={
+                                resultadoRegistroVisual(it) === "pendente"
+                                  ? "Resultado pendente"
+                                  : "Resultado registrado"
+                              }
+                            />
+                          ) : null}
                           <b>
                             {time(it.inicio_at)} · {it.titulo}
                           </b>
@@ -2237,12 +2278,26 @@ function Page() {
           </section>
           <aside className="aside">
             <div className="card side">
-              <h3>
-                {new Intl.DateTimeFormat("pt-BR", {
-                  weekday: "long",
-                  day: "2-digit",
-                  month: "long",
-                }).format(new Date(`${day}T12:00`))}
+              <h3 className={styles.sideDayHeader}>
+                <span>
+                  {new Intl.DateTimeFormat("pt-BR", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "long",
+                  }).format(new Date(`${day}T12:00`))}
+                </span>
+                {(byDay.get(day) || []).filter(
+                  (item) => resultadoRegistroVisual(item) === "pendente",
+                ).length > 0 ? (
+                  <em
+                    title="Há agendamentos sem resultado registrado neste dia"
+                  >
+                    <i aria-hidden="true" />
+                    {(byDay.get(day) || []).filter(
+                      (item) => resultadoRegistroVisual(item) === "pendente",
+                    ).length} pend.
+                  </em>
+                ) : null}
               </h3>
               {(byDay.get(day) || []).map((a) => (
                 <div className="item" key={a.id} onClick={() => view(a)}>
@@ -2251,6 +2306,20 @@ function Page() {
                   >
                     {labels[a.status]}
                   </span>
+                  {resultadoRegistroVisual(a) ? (
+                    <span
+                      className={`${styles.sideResultBadge} ${
+                        resultadoRegistroVisual(a) === "pendente"
+                          ? styles.sideResultBadgePending
+                          : styles.sideResultBadgeRegistered
+                      }`}
+                    >
+                      <i aria-hidden="true" />
+                      {resultadoRegistroVisual(a) === "pendente"
+                        ? "Resultado pendente"
+                        : "Resultado registrado"}
+                    </span>
+                  ) : null}
                   <b>
                     {" "}
                     {time(a.inicio_at)} · {a.titulo}

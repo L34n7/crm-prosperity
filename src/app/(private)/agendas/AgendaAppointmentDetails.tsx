@@ -82,7 +82,7 @@ export default function AgendaAppointmentDetails({
                 className={styles.realizeButton}
                 onClick={onRealize}
               >
-                <CheckCircle2 size={16} /> Realizar atendimento
+                <CheckCircle2 size={16} /> Registrar resultado
               </button>
             ) : null}
             {onEdit ? (
