@@ -433,6 +433,13 @@ export default function UsuariosPage() {
       return;
     }
 
+    if (editandoId === usuarioLogado?.id && editStatus !== "ativo") {
+      setErro(
+        "Você não pode inativar ou bloquear seu próprio usuário. Peça a outro administrador para alterar o seu acesso."
+      );
+      return;
+    }
+
     const res = await fetch(`/api/usuarios/${editandoId}`, {
       method: "PUT",
       headers: {
@@ -466,6 +473,13 @@ export default function UsuariosPage() {
 
     if (!podeEditarUsuarios) {
       setErro("Você não tem permissão para alterar status de usuários.");
+      return;
+    }
+
+    if (usuario.id === usuarioLogado?.id) {
+      setErro(
+        "Você não pode inativar ou bloquear seu próprio usuário. Peça a outro administrador para alterar o seu acesso."
+      );
       return;
     }
 
@@ -943,6 +957,12 @@ export default function UsuariosPage() {
                                 className={styles.select}
                                 value={editStatus}
                                 onChange={(e) => setEditStatus(e.target.value)}
+                                disabled={editandoId === usuarioLogado?.id}
+                                title={
+                                  editandoId === usuarioLogado?.id
+                                    ? "Seu próprio usuário deve permanecer ativo."
+                                    : undefined
+                                }
                               >
                                 <option value="ativo">Ativo</option>
                                 <option value="inativo">Inativo</option>
@@ -1064,12 +1084,14 @@ export default function UsuariosPage() {
                               Editar
                             </button>
 
-                            <button
-                              onClick={() => alternarStatus(usuario)}
-                              className={styles.secondaryButton}
-                            >
-                              {usuario.status === "ativo" ? "Inativar" : "Ativar"}
-                            </button>
+                            {usuario.id !== usuarioLogado?.id && (
+                              <button
+                                onClick={() => alternarStatus(usuario)}
+                                className={styles.secondaryButton}
+                              >
+                                {usuario.status === "ativo" ? "Inativar" : "Ativar"}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

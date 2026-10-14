@@ -13,6 +13,8 @@ export default async function ContaIncompletaPage() {
     redirect("/login");
   }
 
+  const acessoDesativado = resultado.status === 403;
+
   async function sair() {
     "use server";
 
@@ -30,18 +32,21 @@ export default async function ContaIncompletaPage() {
           </p>
 
           <h1 className="mt-3 text-2xl font-semibold tracking-tight">
-            Não foi possível concluir seu acesso
+            {acessoDesativado
+              ? "Seu usuário está inativo ou bloqueado"
+              : "Não foi possível concluir seu acesso"}
           </h1>
 
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Sua sessão está válida, mas o cadastro interno da conta não pôde
-            ser recuperado automaticamente com segurança.
+            {acessoDesativado
+              ? "Seu login foi reconhecido, mas este usuário não está liberado para acessar o CRM no momento."
+              : "Sua sessão está válida, mas o cadastro interno da conta não pôde ser recuperado automaticamente com segurança."}
           </p>
 
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Nenhum vínculo com empresa foi criado automaticamente. Saia da
-            sessão e tente outro acesso ou entre em contato com o suporte para
-            revisar o cadastro.
+            {acessoDesativado
+              ? "Peça a outro administrador da empresa para reativar seu usuário em Configurações > Usuários. Depois disso, saia e faça o login novamente."
+              : "Nenhum vínculo com empresa foi criado automaticamente. Saia da sessão e tente outro acesso ou entre em contato com o suporte para revisar o cadastro."}
           </p>
 
           <form action={sair} className="mt-7">
@@ -49,7 +54,7 @@ export default async function ContaIncompletaPage() {
               type="submit"
               className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
             >
-              Sair e tentar outro acesso
+              {acessoDesativado ? "Sair" : "Sair e tentar outro acesso"}
             </button>
           </form>
         </section>

@@ -278,6 +278,17 @@ export async function PUT(
     );
   }
 
+  if (usuario.id === id && status !== "ativo") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Você não pode inativar ou bloquear seu próprio usuário. Peça a outro administrador da empresa para alterar o seu acesso.",
+      },
+      { status: 400 }
+    );
+  }
+
   if (!empresa_id) {
     return NextResponse.json(
       { ok: false, error: "Empresa é obrigatória" },
