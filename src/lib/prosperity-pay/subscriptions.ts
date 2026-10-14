@@ -56,6 +56,24 @@ async function signedPost<T>(path: string, body: Record<string, unknown>): Promi
   return data as T;
 }
 
+export async function atualizarEmailClienteAssinaturaProsperityPay(params: {
+  subscriptionId: string;
+  customerEmail: string;
+}) {
+  return signedPost<{
+    ok: boolean;
+    changed: boolean;
+    customer: {
+      id: string;
+      email: string;
+      name: string | null;
+    };
+  }>("/api/integrations/subscriptions/customer-email", {
+    subscriptionId: params.subscriptionId,
+    customerEmail: params.customerEmail.trim().toLowerCase(),
+  });
+}
+
 export async function criarSessaoPrefillCheckoutProsperityPay(params: {
   offerSlug: string;
   customerName: string;

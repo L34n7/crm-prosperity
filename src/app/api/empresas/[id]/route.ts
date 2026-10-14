@@ -12,6 +12,7 @@ const LIMITE_COMERCIAL_MAXIMO = 10;
 
 type EmpresaAtualRow = {
   id: string;
+  email: string;
   status: string;
   nicho_id: string | null;
   plano_id: string | null;
@@ -122,6 +123,7 @@ export async function PUT(
     .select(
       `
         id,
+        email,
         status,
         nicho_id,
         plano_id,
@@ -143,6 +145,19 @@ export async function PUT(
     return NextResponse.json(
       { ok: false, error: "Empresa não encontrada" },
       { status: 404 }
+    );
+  }
+
+  if (
+    email.trim().toLowerCase() !== String(empresaAtual.email || "").trim().toLowerCase()
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "O e-mail de acesso não pode ser alterado pela edição comum. Use “Corrigir e-mail de acesso” em Configurações > Empresas.",
+      },
+      { status: 409 }
     );
   }
 

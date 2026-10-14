@@ -294,6 +294,65 @@
   box-shadow: 0 0 0 4px var(--crm-ui-public-shadow-rgb-5-150-105-0-11);
 }
 
+.emailSuggestion {
+  display: grid;
+  gap: 10px;
+  padding: 12px 13px;
+  border: 1px solid var(--crm-ui-public-border-hex-facc15);
+  border-radius: 12px;
+  background: var(--crm-ui-public-surface-hex-fffbeb);
+  color: var(--crm-ui-public-content-hex-854d0e);
+}
+
+.emailSuggestion > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.emailSuggestion strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.emailSuggestion span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.emailSuggestionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.emailSuggestionPrimary,
+.emailSuggestionSecondary {
+  min-height: 34px;
+  border-radius: 10px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.emailSuggestionPrimary {
+  border: 1px solid var(--crm-ui-public-border-hex-059669);
+  background: var(--crm-ui-public-surface-hex-059669);
+  color: var(--crm-ui-public-content-hex-ffffff);
+}
+
+.emailSuggestionSecondary {
+  border: 1px solid var(--crm-ui-public-border-hex-dbe2ea);
+  background: var(--crm-ui-public-surface-hex-ffffff);
+  color: var(--crm-ui-public-content-hex-475569);
+}
+
+.emailConfirmed {
+  color: var(--crm-ui-public-content-hex-047857);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .consentBox {
   display: grid;
   grid-template-columns: 18px 1fr;

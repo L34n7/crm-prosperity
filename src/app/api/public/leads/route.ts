@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  getBuyerEmailSuggestion,
   isValidBuyerEmail,
   isValidBuyerPhone,
   normalizeBuyerPhone,
@@ -82,6 +83,19 @@ export async function POST(request: Request) {
 
     if (!isValidBuyerEmail(email)) {
       throw new Error("Informe um e-mail válido, como nome@exemplo.com.br.");
+    }
+
+    const emailSugerido = getBuyerEmailSuggestion(email);
+    if (emailSugerido && body?.email_suspeito_confirmado !== true) {
+      return NextResponse.json(
+        {
+          error: `Confira o e-mail informado. Você quis dizer ${emailSugerido}?`,
+          email_atual: email,
+          email_sugerido: emailSugerido,
+          requer_confirmacao_email: true,
+        },
+        { status: 409 }
+      );
     }
 
     if (!telefone) {

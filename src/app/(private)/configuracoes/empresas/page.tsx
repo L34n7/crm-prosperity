@@ -5,6 +5,10 @@ import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
+import {
+  getBuyerEmailSuggestion,
+  isValidBuyerEmail,
+} from "@/lib/checkout/buyer-validation";
 import styles from "./empresas.module.css";
 
 const OPCOES_LIMITE = Array.from({ length: 10 }, (_, index) => index + 1);
@@ -194,6 +198,11 @@ export default function EmpresasPage() {
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [reenviandoAcessoId, setReenviandoAcessoId] = useState<string | null>(null);
   const [acessandoEmpresaId, setAcessandoEmpresaId] = useState<string | null>(null);
+  const [empresaEmailModal, setEmpresaEmailModal] = useState<Empresa | null>(null);
+  const [novoEmailAcesso, setNovoEmailAcesso] = useState("");
+  const [emailSuspeitoConfirmado, setEmailSuspeitoConfirmado] = useState(false);
+  const [corrigindoEmailAcesso, setCorrigindoEmailAcesso] = useState(false);
+  const [erroEmailAcesso, setErroEmailAcesso] = useState("");
   const [empresaTokensModal, setEmpresaTokensModal] = useState<Empresa | null>(null);
   const [acaoTokens, setAcaoTokens] = useState<
     "restaurar_mensal" | "adicionar_avulso"
@@ -383,6 +392,112 @@ export default function EmpresasPage() {
       setErro("Não foi possível enviar o acesso alternativo.");
     } finally {
       setReenviandoAcessoId(null);
+    }
+  }
+
+  function abrirCorrecaoEmailAcesso(empresa: Empresa) {
+    setEmpresaEmailModal(empresa);
+    setNovoEmailAcesso("");
+    setEmailSuspeitoConfirmado(false);
+    setErroEmailAcesso("");
+    setMensagem("");
+    setErro("");
+  }
+
+  function fecharCorrecaoEmailAcesso() {
+    if (corrigindoEmailAcesso) return;
+    setEmpresaEmailModal(null);
+    setNovoEmailAcesso("");
+    setEmailSuspeitoConfirmado(false);
+    setErroEmailAcesso("");
+  }
+
+  async function confirmarCorrecaoEmailAcesso() {
+    if (!empresaEmailModal || corrigindoEmailAcesso) return;
+
+    const novoEmail = novoEmailAcesso.trim().toLowerCase();
+
+    if (!isValidBuyerEmail(novoEmail)) {
+      setErroEmailAcesso("Informe um e-mail válido.");
+      return;
+    }
+
+    if (novoEmail === empresaEmailModal.email.trim().toLowerCase()) {
+      setErroEmailAcesso("Informe um e-mail diferente do atual.");
+      return;
+    }
+
+    const sugestao = getBuyerEmailSuggestion(novoEmail);
+    if (sugestao && !emailSuspeitoConfirmado) {
+      setErroEmailAcesso(
+        `Confira o novo e-mail. Você quis dizer ${sugestao}?`
+      );
+      return;
+    }
+
+    setCorrigindoEmailAcesso(true);
+    setErroEmailAcesso("");
+    setMensagem("");
+    setErro("");
+
+    try {
+      const response = await fetch(
+        `/api/empresas/${empresaEmailModal.id}/corrigir-email-acesso`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            novo_email: novoEmail,
+            confirmar_email_suspeito: emailSuspeitoConfirmado,
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (data?.email_sugerido && data?.requer_confirmacao_email) {
+        setEmailSuspeitoConfirmado(false);
+        setErroEmailAcesso(
+          data.error || `Confira o e-mail. Você quis dizer ${data.email_sugerido}?`
+        );
+        return;
+      }
+
+      if (data?.email_corrigido) {
+        setEmpresas((atuais) =>
+          atuais.map((empresa) =>
+            empresa.id === empresaEmailModal.id
+              ? { ...empresa, email: novoEmail }
+              : empresa
+          )
+        );
+      }
+
+      if (!response.ok || !data?.ok) {
+        setErroEmailAcesso(
+          data?.error || "Não foi possível corrigir o e-mail de acesso."
+        );
+        return;
+      }
+
+      setEmpresas((atuais) =>
+        atuais.map((empresa) =>
+          empresa.id === empresaEmailModal.id
+            ? { ...empresa, email: data.email || novoEmail }
+            : empresa
+        )
+      );
+      setMensagem(
+        data.message ||
+          "E-mail de acesso corrigido e sincronizado com sucesso."
+      );
+      setEmpresaEmailModal(null);
+      setNovoEmailAcesso("");
+      setEmailSuspeitoConfirmado(false);
+      await carregarEmpresas();
+    } catch {
+      setErroEmailAcesso("Não foi possível corrigir o e-mail de acesso.");
+    } finally {
+      setCorrigindoEmailAcesso(false);
     }
   }
 
@@ -660,6 +775,41 @@ export default function EmpresasPage() {
   }, []);
 
   useEffect(() => {
+    if (empresas.length === 0 || typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("acao") !== "corrigir-email") return;
+
+    const empresaId = params.get("empresa");
+    if (!empresaId) return;
+
+    const empresa = empresas.find((item) => item.id === empresaId);
+    if (!empresa) return;
+
+    setBusca("");
+    setFiltroStatus("todos");
+    setFiltroPlano("todos");
+    setFiltroNicho("todos");
+    setExpandidoId(empresa.id);
+    abrirCorrecaoEmailAcesso(empresa);
+
+    params.delete("acao");
+    params.delete("empresa");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`
+    );
+
+    window.setTimeout(() => {
+      document
+        .querySelector(`[data-company-id="${empresa.id}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+  }, [empresas]);
+
+  useEffect(() => {
     if (!leadsModalAberto) return;
 
     const overflowAnterior = document.body.style.overflow;
@@ -893,7 +1043,11 @@ export default function EmpresasPage() {
                     : 0;
 
                 return (
-                  <article key={empresa.id} className={styles.itemCard}>
+                  <article
+                    key={empresa.id}
+                    data-company-id={empresa.id}
+                    className={styles.itemCard}
+                  >
                     <div className={styles.itemSummary}>
                       <div className={styles.itemLeft}>
                         <div className={styles.avatar}>
@@ -1013,12 +1167,20 @@ export default function EmpresasPage() {
                             </div>
 
                             <div className={styles.field}>
-                              <label className={styles.label}>Email</label>
+                              <label className={styles.label}>E-mail de acesso</label>
                               <input
                                 className={styles.input}
                                 value={editEmail}
-                                onChange={(e) => setEditEmail(e.target.value)}
+                                readOnly
+                                disabled
+                                aria-describedby="email-access-edit-help"
                               />
+                              <span
+                                id="email-access-edit-help"
+                                className={styles.fieldHelp}
+                              >
+                                Para alterar este endereço, use “Corrigir e-mail de acesso”.
+                              </span>
                             </div>
 
                             <div className={styles.field}>
@@ -1345,27 +1507,41 @@ export default function EmpresasPage() {
                               <div className={styles.accessBlock}>
                                 <div>
                                   <span className={styles.infoLabel}>
-                                    Primeiro acesso
+                                    Acesso e e-mail
                                   </span>
                                   <span className={styles.infoValue}>
-                                    Envie o modelo antigo do Supabase Auth como
-                                    contingência. Esse link expira em 1 hora e só
-                                    pode ser acessado uma única vez.
+                                    Corrija o e-mail de acesso de forma sincronizada
+                                    ou envie o modelo alternativo do Supabase Auth
+                                    como contingência.
                                   </span>
                                 </div>
 
-                                <button
-                                  type="button"
-                                  className={styles.secondaryButton}
-                                  onClick={() =>
-                                    reenviarPrimeiroAcessoAlternativo(empresa)
-                                  }
-                                  disabled={reenviandoAcessoId === empresa.id}
-                                >
-                                  {reenviandoAcessoId === empresa.id
-                                    ? "Enviando..."
-                                    : "Reenviar primeiro acesso alternativo"}
-                                </button>
+                                <div className={styles.accessActions}>
+                                  {podeAcessarTemporariamente && (
+                                    <button
+                                      type="button"
+                                      className={styles.primaryButton}
+                                      onClick={() =>
+                                        abrirCorrecaoEmailAcesso(empresa)
+                                      }
+                                    >
+                                      Corrigir e-mail de acesso
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() =>
+                                      reenviarPrimeiroAcessoAlternativo(empresa)
+                                    }
+                                    disabled={reenviandoAcessoId === empresa.id}
+                                  >
+                                    {reenviandoAcessoId === empresa.id
+                                      ? "Enviando..."
+                                      : "Reenviar primeiro acesso alternativo"}
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1559,6 +1735,159 @@ export default function EmpresasPage() {
                 </div>
               </div>
             )}
+          </section>
+        </div>
+      )}
+
+      {empresaEmailModal && (
+        <div
+          className={styles.emailAccessOverlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              fecharCorrecaoEmailAcesso();
+            }
+          }}
+        >
+          <section
+            className={styles.emailAccessModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="email-access-title"
+          >
+            <button
+              type="button"
+              className={styles.emailAccessClose}
+              onClick={fecharCorrecaoEmailAcesso}
+              disabled={corrigindoEmailAcesso}
+              aria-label="Fechar"
+            >
+              ×
+            </button>
+
+            <span className={styles.emailAccessEyebrow}>
+              Contingência de acesso
+            </span>
+            <h2 id="email-access-title">Corrigir e-mail de acesso</h2>
+            <p className={styles.emailAccessCompany}>
+              {empresaEmailModal.nome_fantasia}
+            </p>
+
+            <div className={styles.emailAccessCurrent}>
+              <span>E-mail atual</span>
+              <strong>{empresaEmailModal.email}</strong>
+            </div>
+
+            <div className={styles.emailAccessInfo}>
+              <strong>Uma única correção sincronizada</strong>
+              <p>
+                O novo endereço será atualizado no CRM Prosperity, no usuário
+                de autenticação e na assinatura da Prosperity Pay. Links de
+                primeiro acesso ainda não utilizados serão invalidados.
+              </p>
+              <p>
+                Se o cliente ainda não criou a senha, um novo primeiro acesso
+                será enviado automaticamente para o novo e-mail.
+              </p>
+            </div>
+
+            <div className={styles.emailAccessField}>
+              <label className={styles.label} htmlFor="novo-email-acesso">
+                Novo e-mail
+              </label>
+              <input
+                id="novo-email-acesso"
+                className={styles.input}
+                type="email"
+                value={novoEmailAcesso}
+                onChange={(event) => {
+                  setNovoEmailAcesso(event.target.value);
+                  setEmailSuspeitoConfirmado(false);
+                  setErroEmailAcesso("");
+                }}
+                placeholder="cliente@empresa.com.br"
+                autoComplete="off"
+                disabled={corrigindoEmailAcesso}
+              />
+            </div>
+
+            {getBuyerEmailSuggestion(novoEmailAcesso) &&
+              !emailSuspeitoConfirmado && (
+                <div className={styles.emailAccessSuggestion}>
+                  <div>
+                    <strong>Confira o domínio</strong>
+                    <span>
+                      Você quis dizer{" "}
+                      <b>{getBuyerEmailSuggestion(novoEmailAcesso)}</b>?
+                    </span>
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={() => {
+                        const sugestao =
+                          getBuyerEmailSuggestion(novoEmailAcesso);
+                        if (!sugestao) return;
+                        setNovoEmailAcesso(sugestao);
+                        setEmailSuspeitoConfirmado(false);
+                        setErroEmailAcesso("");
+                      }}
+                      disabled={corrigindoEmailAcesso}
+                    >
+                      Usar sugerido
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={() => {
+                        setEmailSuspeitoConfirmado(true);
+                        setErroEmailAcesso("");
+                      }}
+                      disabled={corrigindoEmailAcesso}
+                    >
+                      Manter como digitado
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            {emailSuspeitoConfirmado &&
+              getBuyerEmailSuggestion(novoEmailAcesso) && (
+                <div className={styles.emailAccessConfirmed}>
+                  Domínio confirmado manualmente pelo administrador.
+                </div>
+              )}
+
+            {erroEmailAcesso && (
+              <div className={styles.emailAccessError}>{erroEmailAcesso}</div>
+            )}
+
+            <div className={styles.emailAccessActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={fecharCorrecaoEmailAcesso}
+                disabled={corrigindoEmailAcesso}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={confirmarCorrecaoEmailAcesso}
+                disabled={
+                  corrigindoEmailAcesso ||
+                  !novoEmailAcesso.trim() ||
+                  novoEmailAcesso.trim().toLowerCase() ===
+                    empresaEmailModal.email.trim().toLowerCase()
+                }
+              >
+                {corrigindoEmailAcesso
+                  ? "Sincronizando..."
+                  : "Corrigir e sincronizar"}
+              </button>
+            </div>
           </section>
         </div>
       )}

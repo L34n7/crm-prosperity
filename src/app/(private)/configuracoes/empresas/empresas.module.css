@@ -464,7 +464,15 @@
   flex: 1;
 }
 
-.accessBlock button {
+.accessActions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.accessActions button {
   flex-shrink: 0;
 }
 
@@ -474,11 +482,244 @@
     align-items: stretch;
   }
 
-  .accessBlock button {
+  .accessActions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .accessActions button {
     width: 100%;
   }
 }
 
+
+.fieldHelp {
+  margin-top: -2px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.input:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  background: var(--crm-surface-soft);
+}
+
+.emailAccessOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2250;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 8, 12, 0.76);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.emailAccessModal {
+  position: relative;
+  width: min(100%, 600px);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.emailAccessClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emailAccessClose:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.emailAccessEyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 999px;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.emailAccessModal h2 {
+  margin: 0;
+  padding-right: 46px;
+  color: var(--crm-text-strong);
+  font-size: 27px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.emailAccessCompany {
+  margin: 8px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.emailAccessCurrent {
+  display: grid;
+  gap: 5px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.emailAccessCurrent span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.emailAccessCurrent strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.emailAccessInfo {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 16px;
+  background: var(--crm-primary-soft);
+}
+
+.emailAccessInfo strong {
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.emailAccessInfo p {
+  margin: 7px 0 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.emailAccessField {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.emailAccessSuggestion {
+  display: grid;
+  gap: 11px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 14px;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.emailAccessSuggestion > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.emailAccessSuggestion strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.emailAccessSuggestion span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.emailAccessSuggestion > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.emailAccessSuggestion button {
+  min-height: 38px;
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+.emailAccessConfirmed {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 12px;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.emailAccessError {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 12px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.emailAccessActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .emailAccessModal {
+    padding: 22px 18px;
+    border-radius: 20px;
+  }
+
+  .emailAccessActions,
+  .emailAccessSuggestion > div:last-child {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .emailAccessActions button,
+  .emailAccessSuggestion button {
+    width: 100%;
+  }
+}
 
 .filtersPanel {
   display: grid;

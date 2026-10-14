@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
 import { enviarPrimeiroAcesso } from "@/lib/auth/enviar-primeiro-acesso";
+import { notificarFalhaEntregaPrimeiroAcesso } from "@/lib/auth/primeiro-acesso-email-contingencia";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sincronizarAssinaturaProsperityPay } from "@/lib/prosperity-pay/sync-subscription";
 
@@ -893,6 +894,44 @@ async function processarAprovado(
           "[PROSPERITY PAY] Pagamento ativado, mas primeiro acesso falhou:",
           error
         );
+
+        const detalhe =
+          error instanceof Error
+            ? error.message
+            : "Falha ao enviar o primeiro acesso.";
+
+        const { data: tokenFalho, error: tokenFalhoError } = await supabase
+          .from("primeiro_acesso_tokens")
+          .select("id,resend_email_id")
+          .eq("empresa_id", empresa.id)
+          .ilike("email", email)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (tokenFalhoError) {
+          console.error(
+            "[PROSPERITY PAY] Falha ao localizar token do primeiro acesso:",
+            tokenFalhoError
+          );
+        }
+
+        try {
+          await notificarFalhaEntregaPrimeiroAcesso({
+            empresaId: empresa.id,
+            email,
+            status: "failed",
+            detalhe,
+            tokenId: tokenFalho?.id || null,
+            resendEmailId: tokenFalho?.resend_email_id || null,
+            eventId: `payment-first-access:${pagamentoId}`,
+          });
+        } catch (notificationError) {
+          console.error(
+            "[PROSPERITY PAY] Falha ao acionar contingência do primeiro acesso:",
+            notificationError
+          );
+        }
       }
     }
   }

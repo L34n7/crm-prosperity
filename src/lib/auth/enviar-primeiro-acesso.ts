@@ -238,20 +238,58 @@ export async function enviarPrimeiroAcesso(params: {
   const link = `${siteUrl}/primeiro-acesso?token=${encodeURIComponent(token)}`;
 
   const resend = new Resend(resendApiKey);
-  const envio = await resend.emails.send({
-    from: "CRM Prosperity <no-reply@crmprosperity.com>",
-    to: email,
-    subject: "Seu acesso ao CRM Prosperity foi liberado",
-    html: getPrimeiroAcessoTemplate({ nome: params.nome, link }),
-  });
+  const envio = await resend.emails.send(
+    {
+      from: "CRM Prosperity <no-reply@crmprosperity.com>",
+      to: email,
+      subject: "Seu acesso ao CRM Prosperity foi liberado",
+      html: getPrimeiroAcessoTemplate({ nome: params.nome, link }),
+      tags: [
+        { name: "tipo", value: "primeiro_acesso" },
+        { name: "empresa_id", value: params.empresaId },
+        { name: "token_id", value: insercao.data.id },
+      ],
+    },
+    {
+      idempotencyKey: `primeiro-acesso/${insercao.data.id}`,
+    }
+  );
 
   if (envio.error) {
+    const agoraFalha = new Date().toISOString();
     await supabaseAdmin
       .from("primeiro_acesso_tokens")
-      .delete()
+      .update({
+        email_delivery_status: "failed",
+        email_delivery_updated_at: agoraFalha,
+        email_delivery_error:
+          envio.error.message || "Erro ao enviar email de primeiro acesso.",
+        invalidado_em: agoraFalha,
+        updated_at: agoraFalha,
+      })
       .eq("id", insercao.data.id);
+
     throw new Error(
       envio.error.message || "Erro ao enviar email de primeiro acesso."
+    );
+  }
+
+  const resendEmailId = envio.data?.id || null;
+  const atualizacaoEntrega = await supabaseAdmin
+    .from("primeiro_acesso_tokens")
+    .update({
+      resend_email_id: resendEmailId,
+      email_delivery_status: "sent",
+      email_delivery_updated_at: new Date().toISOString(),
+      email_delivery_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", insercao.data.id);
+
+  if (atualizacaoEntrega.error) {
+    console.error(
+      "[PRIMEIRO ACESSO] E-mail enviado, mas falhou ao registrar o ID do Resend:",
+      atualizacaoEntrega.error
     );
   }
 
@@ -274,5 +312,7 @@ export async function enviarPrimeiroAcesso(params: {
     enviado: true as const,
     expira_em: expiraEm,
     max_aberturas: MAX_ABERTURAS_PRIMEIRO_ACESSO,
+    resend_email_id: envio.data?.id || null,
+    token_id: insercao.data.id,
   };
 }

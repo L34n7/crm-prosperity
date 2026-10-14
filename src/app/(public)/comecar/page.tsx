@@ -10,6 +10,7 @@ import {
   type SegmentoCodigo,
 } from "@/lib/segmentos/catalogo";
 import {
+  getBuyerEmailSuggestion,
   isValidBuyerEmail,
   isValidBuyerPhone,
   normalizeBuyerPhone,
@@ -25,6 +26,7 @@ export default function ComecarPage() {
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [emailSuspeitoConfirmado, setEmailSuspeitoConfirmado] = useState(false);
   const [telefone, setTelefone] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [segmento, setSegmento] = useState<SegmentoCodigo | "">("");
@@ -154,6 +156,15 @@ export default function ComecarPage() {
       return;
     }
 
+    const emailSugerido = getBuyerEmailSuggestion(email);
+
+    if (emailSugerido && !emailSuspeitoConfirmado) {
+      setErro(
+        `Confira o e-mail informado. Ele parece ter um erro de digitação. Você quis dizer ${emailSugerido}?`
+      );
+      return;
+    }
+
     const telefoneLimpo = normalizeBuyerPhone(telefone);
 
     if (!isValidBuyerPhone(telefoneLimpo)) {
@@ -190,6 +201,7 @@ export default function ComecarPage() {
           affiliate_ref: affiliateRef,
           free_trial_4d: ativarFreeTrial4d,
           aceite_contrato: aceiteContrato,
+          email_suspeito_confirmado: emailSuspeitoConfirmado,
           chave_free:
             tipoOferta === "free"
               ? "free_beta_crm_2026_liberado_92xA!kL"
@@ -200,6 +212,9 @@ export default function ComecarPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data?.email_sugerido) {
+          setEmailSuspeitoConfirmado(false);
+        }
         setErro(data?.error || "Erro ao iniciar cadastro.");
         setLoading(false);
         return;
@@ -329,10 +344,58 @@ export default function ComecarPage() {
                 placeholder="Digite seu email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailSuspeitoConfirmado(false);
+                  setErro("");
+                }}
                 className={styles.input}
                 autoComplete="email"
               />
+
+              {getBuyerEmailSuggestion(email) && !emailSuspeitoConfirmado && (
+                <div className={styles.emailSuggestion} role="alert">
+                  <div>
+                    <strong>Confira seu e-mail</strong>
+                    <span>
+                      Você quis dizer{" "}
+                      <b>{getBuyerEmailSuggestion(email)}</b>?
+                    </span>
+                  </div>
+
+                  <div className={styles.emailSuggestionActions}>
+                    <button
+                      type="button"
+                      className={styles.emailSuggestionPrimary}
+                      onClick={() => {
+                        const sugestao = getBuyerEmailSuggestion(email);
+                        if (!sugestao) return;
+                        setEmail(sugestao);
+                        setEmailSuspeitoConfirmado(false);
+                        setErro("");
+                      }}
+                    >
+                      Usar e-mail sugerido
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.emailSuggestionSecondary}
+                      onClick={() => {
+                        setEmailSuspeitoConfirmado(true);
+                        setErro("");
+                      }}
+                    >
+                      Manter como digitei
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {emailSuspeitoConfirmado && getBuyerEmailSuggestion(email) && (
+                <span className={styles.emailConfirmed}>
+                  Endereço confirmado por você.
+                </span>
+              )}
             </div>
 
             <div className={styles.field}>
