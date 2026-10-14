@@ -6,6 +6,7 @@ import { executarContingenciaAgente } from "./fallback";
 import { detectarAutomacaoExterna, type ResultadoDeteccaoAutomacaoExterna } from "./protecao-automacao-externa";
 import { processarPendenciaAgenteIa as processarPendenciaAgenteIaBase } from "./runtime-v3";
 import { processarPendenciaNegocio } from "./runtime-negocio";
+import { prepararImagensPendenciaAgente } from "./interpretacao-imagem";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -389,7 +390,7 @@ export async function processarPendenciaAgenteIa(
   const { data: pendencia, error } = await supabaseAdmin
     .from("agente_ia_pendencias")
     .select(
-      "id, empresa_id, agente_id, conversa_id, conteudo_agregado, processar_em, status"
+      "id, empresa_id, agente_id, conversa_id, contato_id, mensagem_ids, conteudo_agregado, processar_em, status"
     )
     .eq("id", pendenciaId)
     .maybeSingle();
@@ -430,6 +431,50 @@ export async function processarPendenciaAgenteIa(
   const saldo = await buscarSaldoTokensIa(pendencia.empresa_id);
   if (saldo.limite !== null && Number(saldo.restantes || 0) <= 0) {
     return processarSemTokens(pendenciaId, options);
+  }
+
+  try {
+    const imagens = await prepararImagensPendenciaAgente({
+      pendenciaId,
+      empresaId: pendencia.empresa_id,
+      agenteId: pendencia.agente_id,
+      conversaId: pendencia.conversa_id,
+      mensagemIds: Array.isArray(pendencia.mensagem_ids)
+        ? pendencia.mensagem_ids
+        : [],
+      conteudoAgregado: pendencia.conteudo_agregado,
+    });
+
+    if (imagens.conteudoAgregado) {
+      pendencia.conteudo_agregado = imagens.conteudoAgregado;
+    }
+
+    if (imagens.imagensDetectadas > 0) {
+      console.info("[AGENTE_IA_IMAGEM] Contexto visual preparado", {
+        pendenciaId,
+        conversaId: pendencia.conversa_id,
+        detectadas: imagens.imagensDetectadas,
+        interpretadas: imagens.imagensInterpretadas,
+        reutilizadas: imagens.reutilizadas,
+        falhas: imagens.falhas.length,
+      });
+    }
+
+    if (imagens.falhas.length > 0) {
+      console.warn(
+        "[AGENTE_IA_IMAGEM] Algumas imagens não puderam ser interpretadas",
+        {
+          pendenciaId,
+          falhas: imagens.falhas,
+        }
+      );
+    }
+  } catch (imagemError) {
+    // Fail-open: uma falha de visão não deve interromper o atendimento.
+    console.error(
+      "[AGENTE_IA_IMAGEM] Falha ao preparar interpretação visual; atendimento seguirá sem visão:",
+      imagemError
+    );
   }
 
   const negocio = await processarPendenciaNegocio(pendenciaId, options);
