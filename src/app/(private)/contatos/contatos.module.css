@@ -1204,11 +1204,15 @@
 
 .bulkToolbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-areas:
+    "selection fields"
+    "selection actions";
   align-items: end;
-  gap: 14px;
+  column-gap: 16px;
+  row-gap: 10px;
   margin-bottom: 12px;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 12px;
   background: var(--crm-primary-soft);
@@ -1221,6 +1225,7 @@
 }
 
 .bulkSelectionInfo {
+  grid-area: selection;
   min-width: 118px;
   min-height: 38px;
   display: flex;
@@ -1243,9 +1248,11 @@
 }
 
 .bulkFields {
+  grid-area: fields;
   display: grid;
-  grid-template-columns: repeat(2, minmax(140px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  align-items: end;
+  gap: 10px;
 }
 
 .bulkField {
@@ -1287,9 +1294,21 @@
 }
 
 .bulkActions {
+  grid-area: actions;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.bulkActions .secondaryButton,
+.bulkActions .dangerButton {
+  min-height: 38px;
+  border-radius: 9px;
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .bulkApplyButton,
@@ -1541,6 +1560,10 @@
 @media (max-width: 1180px) {
   .bulkToolbar {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "selection"
+      "fields"
+      "actions";
     align-items: stretch;
   }
 
@@ -1551,8 +1574,18 @@
     gap: 6px;
   }
 
+  .bulkFields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .bulkActions {
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 900px) and (min-width: 769px) {
+  .bulkFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
