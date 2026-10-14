@@ -721,6 +721,247 @@
   }
 }
 
+.renewalButton {
+  border: 1px solid var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.renewalButton:hover {
+  transform: translateY(-1px);
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.renewalModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 8, 12, 0.76);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.renewalModal {
+  position: relative;
+  width: min(100%, 620px);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.renewalModalClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.renewalModalClose:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.renewalModalEyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--crm-success-border);
+  border-radius: 999px;
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.renewalModal h2 {
+  margin: 0;
+  padding-right: 46px;
+  color: var(--crm-text-strong);
+  font-size: 27px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.renewalModalCompany {
+  margin: 8px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.renewalSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.renewalSummaryGrid > div {
+  padding: 13px 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.renewalSummaryGrid span {
+  display: block;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.renewalSummaryGrid strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.renewalNotice {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 16px;
+  background: var(--crm-primary-soft);
+}
+
+.renewalNotice strong {
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.renewalNotice p {
+  margin: 7px 0 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.renewalValueField {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.currencyInputWrap {
+  position: relative;
+}
+
+.currencyInputWrap > span {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  z-index: 1;
+  transform: translateY(-50%);
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.currencyInputWrap .input {
+  padding-left: 42px;
+}
+
+.renewalConfirmation {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-subtle);
+  cursor: pointer;
+}
+
+.renewalConfirmation input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--crm-primary-strong);
+}
+
+.renewalConfirmation span {
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.renewalError {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 12px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.renewalModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .renewalModal {
+    padding: 22px 18px;
+    border-radius: 20px;
+  }
+
+  .renewalSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .renewalModalActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .renewalModalActions button,
+  .renewalButton {
+    width: 100%;
+  }
+}
+
 .filtersPanel {
   display: grid;
   grid-template-columns: minmax(280px, 2fr) repeat(3, minmax(150px, 1fr)) auto;

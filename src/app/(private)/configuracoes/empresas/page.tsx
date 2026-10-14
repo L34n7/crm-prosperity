@@ -17,6 +17,7 @@ type Plano = {
   id: string;
   nome: string;
   slug: string;
+  preco_mensal_centavos?: number | null;
   limite_usuarios: number | null;
   limite_integracoes_whatsapp: number | null;
 };
@@ -82,6 +83,12 @@ type Empresa = {
   limite_integracoes_whatsapp: number | null;
   limite_usuarios: number | null;
   assinatura_status?: string | null;
+  assinatura_inicio_em?: string | null;
+  assinatura_vencimento_em?: string | null;
+  assinatura_bloqueio_em?: string | null;
+  assinatura_renovada_em?: string | null;
+  assinatura_gateway?: string | null;
+  assinatura_referencia?: string | null;
   empresa_tokens_ia?: SaldoTokensEmpresa | SaldoTokensEmpresa[] | null;
   nicho_id: string;
   nichos?: Nicho | null;
@@ -89,6 +96,7 @@ type Empresa = {
     id: string;
     nome: string;
     slug: string;
+    preco_mensal_centavos?: number | null;
     limite_usuarios: number | null;
     limite_integracoes_whatsapp: number | null;
   } | null;
@@ -161,6 +169,62 @@ function formatarTokens(valor: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR").format(valor);
 }
 
+function formatarMoedaCentavos(valor: number | null | undefined) {
+  if (valor === null || valor === undefined || !Number.isFinite(valor)) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(valor / 100);
+}
+
+function formatarDataAssinatura(valor: string | null | undefined) {
+  if (!valor) return "—";
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(data);
+}
+
+function valorInputParaCentavos(valor: string) {
+  const limpo = valor.trim().replace(/[^\d,.-]/g, "");
+  if (!limpo) return null;
+
+  const normalizado = limpo.includes(",")
+    ? limpo.replace(/\./g, "").replace(",", ".")
+    : limpo;
+
+  const numero = Number(normalizado);
+  if (!Number.isFinite(numero) || numero <= 0) return null;
+
+  const centavos = Math.round(numero * 100);
+  return Number.isSafeInteger(centavos) ? centavos : null;
+}
+
+function valorCentavosParaInput(valor: number | null | undefined) {
+  if (!valor || !Number.isFinite(valor)) return "";
+  return (valor / 100).toFixed(2).replace(".", ",");
+}
+
+function getAssinaturaStatusLabel(status: string | null | undefined) {
+  switch (status) {
+    case "ativa":
+      return "Ativa";
+    case "vencida":
+      return "Vencida";
+    case "bloqueada":
+      return "Bloqueada";
+    default:
+      return status || "—";
+  }
+}
+
 function formatarDataLead(valor: string | null) {
   if (!valor) return "—";
 
@@ -203,6 +267,11 @@ export default function EmpresasPage() {
   const [emailSuspeitoConfirmado, setEmailSuspeitoConfirmado] = useState(false);
   const [corrigindoEmailAcesso, setCorrigindoEmailAcesso] = useState(false);
   const [erroEmailAcesso, setErroEmailAcesso] = useState("");
+  const [empresaRenovacaoModal, setEmpresaRenovacaoModal] = useState<Empresa | null>(null);
+  const [valorRenovacao, setValorRenovacao] = useState("");
+  const [confirmouRenovacao, setConfirmouRenovacao] = useState(false);
+  const [renovandoMensalidade, setRenovandoMensalidade] = useState(false);
+  const [erroRenovacao, setErroRenovacao] = useState("");
   const [empresaTokensModal, setEmpresaTokensModal] = useState<Empresa | null>(null);
   const [acaoTokens, setAcaoTokens] = useState<
     "restaurar_mensal" | "adicionar_avulso"
@@ -530,6 +599,84 @@ export default function EmpresasPage() {
       setErro("Não foi possível iniciar a sessão temporária.");
     } finally {
       setAcessandoEmpresaId(null);
+    }
+  }
+
+  function abrirRenovacaoMensalidade(empresa: Empresa) {
+    setEmpresaRenovacaoModal(empresa);
+    setValorRenovacao(
+      valorCentavosParaInput(empresa.planos?.preco_mensal_centavos)
+    );
+    setConfirmouRenovacao(false);
+    setErroRenovacao("");
+    setMensagem("");
+    setErro("");
+  }
+
+  function fecharRenovacaoMensalidade() {
+    if (renovandoMensalidade) return;
+    setEmpresaRenovacaoModal(null);
+    setValorRenovacao("");
+    setConfirmouRenovacao(false);
+    setErroRenovacao("");
+  }
+
+  async function confirmarRenovacaoMensalidade() {
+    if (!empresaRenovacaoModal || renovandoMensalidade) return;
+
+    const valorCentavos = valorInputParaCentavos(valorRenovacao);
+
+    if (!valorCentavos) {
+      setErroRenovacao("Informe o valor pago da mensalidade.");
+      return;
+    }
+
+    if (!confirmouRenovacao) {
+      setErroRenovacao(
+        "Confirme que o pagamento foi recebido antes de renovar."
+      );
+      return;
+    }
+
+    setRenovandoMensalidade(true);
+    setErroRenovacao("");
+    setMensagem("");
+    setErro("");
+
+    try {
+      const response = await fetch(
+        `/api/empresas/${empresaRenovacaoModal.id}/renovar-mensalidade`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            valor_centavos: valorCentavos,
+            confirmado: true,
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        setErroRenovacao(
+          data?.error || "Não foi possível renovar a mensalidade."
+        );
+        return;
+      }
+
+      setMensagem(
+        `Mensalidade de ${empresaRenovacaoModal.nome_fantasia} renovada manualmente até ${formatarDataAssinatura(
+          data?.renovacao?.vencimento_em
+        )}.`
+      );
+      setEmpresaRenovacaoModal(null);
+      setValorRenovacao("");
+      setConfirmouRenovacao(false);
+      await carregarEmpresas();
+    } catch {
+      setErroRenovacao("Não foi possível renovar a mensalidade.");
+    } finally {
+      setRenovandoMensalidade(false);
     }
   }
 
@@ -1102,6 +1249,20 @@ export default function EmpresasPage() {
                               : "Acessar ambiente"}
                           </button>
                         )}
+
+                        {!editando &&
+                          podeEditarEmpresas &&
+                          podeAcessarTemporariamente && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                abrirRenovacaoMensalidade(empresa)
+                              }
+                              className={styles.renewalButton}
+                            >
+                              Renovar mensalidade
+                            </button>
+                          )}
 
                         {!editando && podeEditarEmpresas && (
                           <button
@@ -1735,6 +1896,160 @@ export default function EmpresasPage() {
                 </div>
               </div>
             )}
+          </section>
+        </div>
+      )}
+
+      {empresaRenovacaoModal && (
+        <div
+          className={styles.renewalModalOverlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              fecharRenovacaoMensalidade();
+            }
+          }}
+        >
+          <section
+            className={styles.renewalModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="renewal-modal-title"
+          >
+            <button
+              type="button"
+              className={styles.renewalModalClose}
+              onClick={fecharRenovacaoMensalidade}
+              disabled={renovandoMensalidade}
+              aria-label="Fechar"
+            >
+              ×
+            </button>
+
+            <span className={styles.renewalModalEyebrow}>
+              Renovação manual
+            </span>
+            <h2 id="renewal-modal-title">Renovar mensalidade</h2>
+            <p className={styles.renewalModalCompany}>
+              {empresaRenovacaoModal.nome_fantasia}
+            </p>
+
+            <div className={styles.renewalSummaryGrid}>
+              <div>
+                <span>Plano</span>
+                <strong>{empresaRenovacaoModal.planos?.nome || "—"}</strong>
+              </div>
+              <div>
+                <span>Status atual</span>
+                <strong>
+                  {getAssinaturaStatusLabel(
+                    empresaRenovacaoModal.assinatura_status
+                  )}
+                </strong>
+              </div>
+              <div>
+                <span>Vencimento atual</span>
+                <strong>
+                  {formatarDataAssinatura(
+                    empresaRenovacaoModal.assinatura_vencimento_em
+                  )}
+                </strong>
+              </div>
+              <div>
+                <span>Nova vigência</span>
+                <strong>30 dias a partir de hoje</strong>
+              </div>
+            </div>
+
+            <div className={styles.renewalNotice}>
+              <strong>Registro administrativo de pagamento</strong>
+              <p>
+                Esta ação será registrada como renovação manual. Ela não cria
+                uma transação fictícia em Mercado Pago ou Prosperity Pay.
+              </p>
+              <p>
+                A assinatura ficará ativa a partir de hoje, a franquia mensal
+                de IA será recomposta e a operação ficará vinculada ao
+                administrador responsável na auditoria.
+              </p>
+            </div>
+
+            <div className={styles.renewalValueField}>
+              <label className={styles.label} htmlFor="renewal-paid-value">
+                Valor pago
+              </label>
+              <div className={styles.currencyInputWrap}>
+                <span>R$</span>
+                <input
+                  id="renewal-paid-value"
+                  className={styles.input}
+                  type="text"
+                  inputMode="decimal"
+                  value={valorRenovacao}
+                  onChange={(event) => {
+                    setValorRenovacao(event.target.value);
+                    setConfirmouRenovacao(false);
+                    setErroRenovacao("");
+                  }}
+                  placeholder="0,00"
+                  autoComplete="off"
+                  disabled={renovandoMensalidade}
+                />
+              </div>
+              {empresaRenovacaoModal.planos?.preco_mensal_centavos ? (
+                <span className={styles.fieldHelp}>
+                  Valor atual do plano:{" "}
+                  {formatarMoedaCentavos(
+                    empresaRenovacaoModal.planos.preco_mensal_centavos
+                  )}
+                </span>
+              ) : null}
+            </div>
+
+            <label className={styles.renewalConfirmation}>
+              <input
+                type="checkbox"
+                checked={confirmouRenovacao}
+                onChange={(event) => {
+                  setConfirmouRenovacao(event.target.checked);
+                  setErroRenovacao("");
+                }}
+                disabled={renovandoMensalidade}
+              />
+              <span>
+                Confirmo que este pagamento foi recebido e autorizo renovar a
+                mensalidade desta empresa a partir de hoje.
+              </span>
+            </label>
+
+            {erroRenovacao && (
+              <div className={styles.renewalError}>{erroRenovacao}</div>
+            )}
+
+            <div className={styles.renewalModalActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={fecharRenovacaoMensalidade}
+                disabled={renovandoMensalidade}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={confirmarRenovacaoMensalidade}
+                disabled={
+                  renovandoMensalidade ||
+                  !confirmouRenovacao ||
+                  !valorInputParaCentavos(valorRenovacao)
+                }
+              >
+                {renovandoMensalidade
+                  ? "Renovando..."
+                  : "Confirmar renovação"}
+              </button>
+            </div>
           </section>
         </div>
       )}

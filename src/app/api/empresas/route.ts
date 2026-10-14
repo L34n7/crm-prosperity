@@ -50,6 +50,12 @@ export async function GET() {
       limite_integracoes_whatsapp,
       limite_usuarios,
       assinatura_status,
+      assinatura_inicio_em,
+      assinatura_vencimento_em,
+      assinatura_bloqueio_em,
+      assinatura_renovada_em,
+      assinatura_gateway,
+      assinatura_referencia,
       nicho_id,
       empresa_tokens_ia (
         limite_mensal,
@@ -71,6 +77,7 @@ export async function GET() {
         id,
         nome,
         slug,
+        preco_mensal_centavos,
         limite_integracoes_whatsapp,
         limite_usuarios
       )
