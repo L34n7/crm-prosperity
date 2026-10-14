@@ -857,22 +857,44 @@
 }
 
 .googleEventMuted {
-  border-color: color-mix(in srgb, var(--crm-text-muted) 26%, var(--crm-border)) !important;
-  border-left-color: color-mix(in srgb, var(--crm-text-muted) 58%, var(--crm-border)) !important;
-  background: color-mix(in srgb, var(--crm-surface-muted) 72%, var(--crm-surface)) !important;
-  color: var(--crm-text-muted) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--crm-warning-border) 62%,
+    var(--crm-surface)
+  ) !important;
+  border-left-color: color-mix(
+    in srgb,
+    var(--crm-warning-strong) 58%,
+    var(--crm-surface)
+  ) !important;
+  background: color-mix(
+    in srgb,
+    var(--crm-warning-bg) 62%,
+    var(--crm-surface)
+  ) !important;
+  color: color-mix(
+    in srgb,
+    var(--crm-warning-text) 70%,
+    var(--crm-text-muted)
+  ) !important;
   box-shadow: none !important;
 }
 
 .googleEventMuted :global(b) {
-  color: var(--crm-text) !important;
-  opacity: 0.88;
+  color: color-mix(
+    in srgb,
+    var(--crm-warning-text) 72%,
+    var(--crm-text)
+  ) !important;
 }
 
 .googleEventMuted :global(span),
 .googleEventMuted :global(small) {
-  color: var(--crm-text-muted) !important;
-  opacity: 0.82;
+  color: color-mix(
+    in srgb,
+    var(--crm-warning-text) 50%,
+    var(--crm-text-muted)
+  ) !important;
 }
 
 .dayNumberGroup {
