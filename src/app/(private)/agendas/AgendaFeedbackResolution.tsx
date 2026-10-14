@@ -74,6 +74,9 @@ type Draft = {
   agendamentoId: string;
   contatoId: string | null;
   nomeCliente: string;
+  telefoneCliente: string;
+  inicioAt: string;
+  tipoReuniao: string;
   status: FinalStatus;
   resultado: string;
   observacoesInternas: string;
@@ -108,6 +111,25 @@ function horarioDoAgendamento(value?: string | null) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(
     date.getMinutes(),
   ).padStart(2, "0")}`;
+}
+
+
+function dataHoraDoAgendamento(value?: string | null) {
+  if (!value) return "Não informado";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Não informado";
+
+  const data = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+  const hora = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+
+  return `${data} · ${hora}`;
 }
 
 export default function AgendaFeedbackResolution() {
@@ -196,12 +218,20 @@ export default function AgendaFeedbackResolution() {
         : "qualificado";
       const nome =
         feedback.nome_cliente || contato?.nome || "Contato";
+      const telefone = String(contato?.telefone || "").trim();
+      const tipoReuniao =
+        tipos.find((item) => item.id === feedback.tipo_id)?.nome ||
+        feedback.titulo ||
+        "Não informado";
 
       setError("");
       setDraft({
         agendamentoId: feedback.id,
         contatoId: feedback.contato_id || contato?.id || null,
         nomeCliente: nome,
+        telefoneCliente: telefone,
+        inicioAt: String(feedback.inicio_at || ""),
+        tipoReuniao,
         status,
         resultado: "",
         observacoesInternas: "",
@@ -220,7 +250,7 @@ export default function AgendaFeedbackResolution() {
         proximoDescricao: "",
       });
     },
-    [feedbackAtual, usuarioAtualId],
+    [feedbackAtual, tipos, usuarioAtualId],
   );
 
   useEffect(() => {
@@ -413,10 +443,10 @@ export default function AgendaFeedbackResolution() {
             <CircleDollarSign size={28} />
           </div>
           <div>
-            <h2 id="agenda-feedback-resolution-title">Finalizar atendimento</h2>
+            <h2 id="agenda-feedback-resolution-title">Resultado agendamento</h2>
             <p>
-              Registre o resultado do agendamento de {draft.nomeCliente} e a
-              classificação comercial do contato.
+              Registre o resultado do atendimento e a classificação comercial
+              do contato.
             </p>
           </div>
           <button
@@ -431,6 +461,25 @@ export default function AgendaFeedbackResolution() {
         </div>
 
         <div className="body">
+          <div className={styles.appointmentSummary}>
+            <div>
+              <span>Cliente</span>
+              <strong>{draft.nomeCliente}</strong>
+            </div>
+            <div>
+              <span>Número</span>
+              <strong>{draft.telefoneCliente || "Não informado"}</strong>
+            </div>
+            <div>
+              <span>Data / hora</span>
+              <strong>{dataHoraDoAgendamento(draft.inicioAt)}</strong>
+            </div>
+            <div>
+              <span>Tipo de reunião</span>
+              <strong>{draft.tipoReuniao}</strong>
+            </div>
+          </div>
+
           <section className="section">
             <h3>
               <Check size={15} />
