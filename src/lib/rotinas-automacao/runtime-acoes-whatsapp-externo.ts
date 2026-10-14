@@ -2,6 +2,7 @@ import {
   montarMapaVariaveisFixasContato,
   normalizarChaveVariavelFluxo,
 } from "@/lib/automacoes/variaveis-fixas-contato";
+import { analisarTelefoneParaRevisao } from "@/lib/contatos/revisao-telefone";
 import { buscarRecursoSistemaMapeado } from "@/lib/integracoes/sistemas-mapeados";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -20,6 +21,99 @@ function lerCaminho(objeto: unknown, caminho: string): unknown {
     atual = (atual as Record<string, unknown>)[parte];
   }
   return atual;
+}
+
+function normalizarTelefoneSeguroParaWhatsApp(valor: unknown) {
+  const original = String(valor || "").trim();
+  const analise = analisarTelefoneParaRevisao(original);
+
+  if (
+    analise.tipo === "formato_valido_revisao" &&
+    analise.sugestao
+  ) {
+    return analise.sugestao;
+  }
+
+  if (analise.sugestaoSegura && analise.sugestao) {
+    return analise.sugestao;
+  }
+
+  return analise.telefoneLimpo;
+}
+
+async function resolverTelefoneCanonicoContato(params: {
+  empresaId: string;
+  telefoneEvento: string;
+  email?: string | null;
+}) {
+  const telefoneBruto = String(params.telefoneEvento || "").replace(/\D/g, "");
+  const telefoneNormalizado = normalizarTelefoneSeguroParaWhatsApp(telefoneBruto);
+
+  const candidatos = Array.from(
+    new Set([telefoneBruto, telefoneNormalizado].filter(Boolean)),
+  );
+
+  if (candidatos.length > 0) {
+    const porTelefone = await supabase
+      .from("contatos")
+      .select("id,telefone,telefone_revisar,updated_at")
+      .eq("empresa_id", params.empresaId)
+      .in("telefone", candidatos)
+      .order("telefone_revisar", { ascending: true })
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (porTelefone.error) throw porTelefone.error;
+
+    const telefoneContato = normalizarTelefoneSeguroParaWhatsApp(
+      porTelefone.data?.telefone,
+    );
+    if (telefoneContato) {
+      return {
+        telefone: telefoneContato,
+        contatoId: porTelefone.data?.id || null,
+        origem: "contato_existente" as const,
+        telefoneEvento: telefoneBruto,
+      };
+    }
+  }
+
+  const email = String(params.email || "").trim();
+  if (email) {
+    const porEmail = await supabase
+      .from("contatos")
+      .select("id,telefone,telefone_revisar,updated_at")
+      .eq("empresa_id", params.empresaId)
+      .ilike("email", email)
+      .eq("telefone_revisar", false)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (porEmail.error) throw porEmail.error;
+
+    const telefoneContato = normalizarTelefoneSeguroParaWhatsApp(
+      porEmail.data?.telefone,
+    );
+    if (telefoneContato) {
+      return {
+        telefone: telefoneContato,
+        contatoId: porEmail.data?.id || null,
+        origem: "contato_existente_email" as const,
+        telefoneEvento: telefoneBruto,
+      };
+    }
+  }
+
+  return {
+    telefone: telefoneNormalizado || telefoneBruto,
+    contatoId: null,
+    origem: telefoneNormalizado !== telefoneBruto
+      ? ("normalizacao_segura" as const)
+      : ("evento" as const),
+    telefoneEvento: telefoneBruto,
+  };
 }
 
 function contarVariaveisNoTexto(texto: unknown) {
@@ -213,7 +307,7 @@ export async function enviarDisparoWhatsappEventoMapeado(params: {
   const campoNome = campoPreferencial(params.sistema, params.recurso, "text", [".nome"]);
   const campoEmail = campoPreferencial(params.sistema, params.recurso, "email");
 
-  const telefone = String(
+  const telefoneEvento = String(
     campoTelefone ? lerCaminho(params.contexto, campoTelefone.chave) || "" : "",
   ).replace(/\D/g, "");
   const nome = String(
@@ -223,9 +317,22 @@ export async function enviarDisparoWhatsappEventoMapeado(params: {
     campoEmail ? lerCaminho(params.contexto, campoEmail.chave) || "" : "",
   ).trim();
 
-  if (!telefone) {
+  if (!telefoneEvento) {
     throw new Error(
       "O evento não possui telefone mapeado para enviar o disparo WhatsApp.",
+    );
+  }
+
+  const telefoneResolvido = await resolverTelefoneCanonicoContato({
+    empresaId: params.empresaId,
+    telefoneEvento,
+    email,
+  });
+  const telefone = telefoneResolvido.telefone;
+
+  if (!telefone) {
+    throw new Error(
+      "Não foi possível normalizar o telefone do evento para o envio WhatsApp.",
     );
   }
 
@@ -297,6 +404,9 @@ export async function enviarDisparoWhatsappEventoMapeado(params: {
   return {
     disparo_whatsapp: true,
     telefone,
+    telefone_evento: telefoneResolvido.telefoneEvento,
+    telefone_origem: telefoneResolvido.origem,
+    contato_canonico_id: telefoneResolvido.contatoId,
     integracao_whatsapp_id: integracaoId,
     template_id: template.id,
     template_nome: template.nome,
