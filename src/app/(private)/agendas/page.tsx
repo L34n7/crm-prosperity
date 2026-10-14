@@ -2201,15 +2201,15 @@ function Page() {
                     {items.map((it) =>
                       "dia_inteiro" in it ? (
                         <div
-                          className="event g"
+                          className={`event g ${styles.googleEventMuted}`}
                           key={`g${it.agenda_id || "google"}:${it.id}`}
                         >
                           <b>
                             {it.dia_inteiro
-                              ? "Dia inteiro"
-                              : time(it.inicio_at)}
+                              ? "Dia inteiro · Google"
+                              : `${time(it.inicio_at)} · Google`}
                           </b>
-                          <span>{it.titulo} · Google</span>
+                          {it.titulo ? <span>{it.titulo}</span> : null}
                           {visualizacaoMultipla ? (
                             <small className={styles.eventCalendarName}>
                               {agendas.find(
@@ -2306,18 +2306,12 @@ function Page() {
                   >
                     {labels[a.status]}
                   </span>
-                  {resultadoRegistroVisual(a) ? (
+                  {resultadoRegistroVisual(a) === "pendente" ? (
                     <span
-                      className={`${styles.sideResultBadge} ${
-                        resultadoRegistroVisual(a) === "pendente"
-                          ? styles.sideResultBadgePending
-                          : styles.sideResultBadgeRegistered
-                      }`}
+                      className={`${styles.sideResultBadge} ${styles.sideResultBadgePending}`}
                     >
                       <i aria-hidden="true" />
-                      {resultadoRegistroVisual(a) === "pendente"
-                        ? "Resultado pendente"
-                        : "Resultado registrado"}
+                      Resultado pendente
                     </span>
                   ) : null}
                   <b>

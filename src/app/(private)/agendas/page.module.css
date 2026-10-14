@@ -856,6 +856,25 @@
   }
 }
 
+.googleEventMuted {
+  border-color: color-mix(in srgb, var(--crm-text-muted) 26%, var(--crm-border)) !important;
+  border-left-color: color-mix(in srgb, var(--crm-text-muted) 58%, var(--crm-border)) !important;
+  background: color-mix(in srgb, var(--crm-surface-muted) 72%, var(--crm-surface)) !important;
+  color: var(--crm-text-muted) !important;
+  box-shadow: none !important;
+}
+
+.googleEventMuted :global(b) {
+  color: var(--crm-text) !important;
+  opacity: 0.88;
+}
+
+.googleEventMuted :global(span),
+.googleEventMuted :global(small) {
+  color: var(--crm-text-muted) !important;
+  opacity: 0.82;
+}
+
 .dayNumberGroup {
   display: inline-flex;
   align-items: center;
@@ -992,16 +1011,6 @@
 
 .sideResultBadgePending i {
   background: var(--crm-warning-strong);
-}
-
-.sideResultBadgeRegistered {
-  border-color: var(--crm-success-border);
-  background: var(--crm-success-bg);
-  color: var(--crm-success-text);
-}
-
-.sideResultBadgeRegistered i {
-  background: var(--crm-success-strong);
 }
 
 @media (max-width: 820px) {
