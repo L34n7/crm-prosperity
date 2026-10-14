@@ -1204,52 +1204,76 @@
 
 .bulkToolbar {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
   grid-template-areas:
     "selection fields"
     "selection actions";
   align-items: stretch;
-  column-gap: 12px;
-  row-gap: 6px;
+  column-gap: 14px;
+  row-gap: 7px;
   margin-bottom: 10px;
   padding: 10px;
-  border: 1px solid var(--crm-primary-border);
-  border-radius: 12px;
-  background: var(--crm-primary-soft);
-  box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
+  border: 1px solid color-mix(in srgb, var(--crm-primary-border) 88%, transparent);
+  border-radius: 16px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--crm-primary-soft) 92%, var(--crm-surface)),
+      color-mix(in srgb, var(--crm-surface) 28%, var(--crm-primary-soft))
+    );
+  box-shadow:
+    0 10px 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-08),
+    inset 0 1px 0 color-mix(in srgb, var(--crm-surface) 78%, transparent);
 }
 
 .bulkToolbarActive {
-  border-color: var(--crm-primary-border);
-  box-shadow: 0 8px 24px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
+  border-color: color-mix(in srgb, var(--crm-primary-border) 92%, transparent);
+  box-shadow:
+    0 10px 28px var(--crm-ui-private-shadow-rgb-15-23-42-0-08),
+    inset 0 1px 0 color-mix(in srgb, var(--crm-surface) 78%, transparent);
 }
 
 .bulkSelectionInfo {
   grid-area: selection;
-  min-width: 118px;
+  min-width: 0;
   min-height: 100%;
   align-self: stretch;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--crm-primary-border) 75%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--crm-surface) 58%, transparent);
+  overflow: hidden;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--crm-primary-border) 82%, transparent);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--crm-surface) 90%, transparent),
+      color-mix(in srgb, var(--crm-primary-soft) 72%, var(--crm-surface))
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--crm-surface) 92%, transparent),
+    0 4px 14px color-mix(in srgb, var(--crm-primary-border) 18%, transparent);
 }
 
 .bulkSelectionInfo strong {
   color: var(--crm-primary-text);
-  font-size: 18px;
-  line-height: 1;
+  font-size: clamp(28px, 2vw, 34px);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
 }
 
 .bulkSelectionInfo span {
-  margin-top: 4px;
+  display: block;
+  max-width: 100%;
+  margin-top: 7px;
   color: var(--crm-text-muted);
   font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .bulkFields {
@@ -1257,7 +1281,8 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(160px, 1fr));
   align-items: end;
-  gap: 8px;
+  gap: 9px;
+  padding-top: 1px;
 }
 
 .bulkField {
@@ -1272,20 +1297,21 @@
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.065em;
 }
 
 .bulkField select {
   width: 100%;
-  min-height: 38px;
-  border: 1px solid var(--crm-border-strong);
-  border-radius: 9px;
-  padding: 0 30px 0 10px;
-  background: var(--crm-surface);
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--crm-border-strong) 86%, transparent);
+  border-radius: 10px;
+  padding: 0 32px 0 11px;
+  background: color-mix(in srgb, var(--crm-surface) 96%, transparent);
   color: var(--crm-text-strong);
   font-family: inherit;
   font-size: 12px;
   outline: none;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--crm-surface) 92%, transparent);
 }
 
 .bulkField select:focus {
@@ -1305,6 +1331,8 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 7px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--crm-primary-border) 45%, transparent);
 }
 
 .bulkActions .secondaryButton,
@@ -1313,6 +1341,7 @@
   border-radius: 9px;
   padding: 0 11px;
   font-size: 12px;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -1574,10 +1603,19 @@
 
   .bulkSelectionInfo {
     min-height: auto;
-    padding: 7px 10px;
+    padding: 8px 10px;
     flex-direction: row;
     align-items: baseline;
-    gap: 6px;
+    gap: 7px;
+  }
+
+  .bulkSelectionInfo strong {
+    font-size: 24px;
+  }
+
+  .bulkSelectionInfo span {
+    margin-top: 0;
+    white-space: normal;
   }
 
   .bulkFields {
