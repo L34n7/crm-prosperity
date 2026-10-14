@@ -2334,7 +2334,7 @@ function Page() {
               ))}
               {(gby.get(day) || []).map((g) => (
                 <div
-                  className="item"
+                  className={`item ${styles.googleSideItem}`}
                   key={`${g.agenda_id || "google"}:${g.id}`}
                 >
                   <span className="pill agendaSideBadge agendaSideBadge-google">

@@ -589,9 +589,21 @@
   color: var(--crm-danger-text) !important;
 }
 .scope :global(.agendaSideBadge-google) {
-  background: var(--crm-warning-bg) !important;
-  border-color: var(--crm-warning-border) !important;
-  color: var(--crm-warning-text) !important;
+  background: color-mix(
+    in srgb,
+    var(--crm-warning-bg) 32%,
+    var(--crm-surface)
+  ) !important;
+  border-color: color-mix(
+    in srgb,
+    var(--crm-warning-border) 36%,
+    var(--crm-surface)
+  ) !important;
+  color: color-mix(
+    in srgb,
+    var(--crm-warning-text) 52%,
+    var(--crm-text-muted)
+  ) !important;
 }
 .scope :global(.cancelConfirmBg) {
   z-index: 1300;
@@ -859,22 +871,22 @@
 .googleEventMuted {
   border-color: color-mix(
     in srgb,
-    var(--crm-warning-border) 62%,
+    var(--crm-warning-border) 34%,
     var(--crm-surface)
   ) !important;
   border-left-color: color-mix(
     in srgb,
-    var(--crm-warning-strong) 58%,
+    var(--crm-warning-strong) 38%,
     var(--crm-surface)
   ) !important;
   background: color-mix(
     in srgb,
-    var(--crm-warning-bg) 62%,
+    var(--crm-warning-bg) 28%,
     var(--crm-surface)
   ) !important;
   color: color-mix(
     in srgb,
-    var(--crm-warning-text) 70%,
+    var(--crm-warning-text) 48%,
     var(--crm-text-muted)
   ) !important;
   box-shadow: none !important;
@@ -883,7 +895,7 @@
 .googleEventMuted :global(b) {
   color: color-mix(
     in srgb,
-    var(--crm-warning-text) 72%,
+    var(--crm-warning-text) 45%,
     var(--crm-text)
   ) !important;
 }
@@ -892,7 +904,50 @@
 .googleEventMuted :global(small) {
   color: color-mix(
     in srgb,
-    var(--crm-warning-text) 50%,
+    var(--crm-warning-text) 28%,
+    var(--crm-text-muted)
+  ) !important;
+}
+
+.googleSideItem {
+  border-color: color-mix(
+    in srgb,
+    var(--crm-warning-border) 26%,
+    var(--crm-border)
+  ) !important;
+  background: color-mix(
+    in srgb,
+    var(--crm-warning-bg) 18%,
+    var(--crm-surface)
+  ) !important;
+  box-shadow: none !important;
+}
+
+.googleSideItem:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--crm-warning-border) 38%,
+    var(--crm-border)
+  ) !important;
+  background: color-mix(
+    in srgb,
+    var(--crm-warning-bg) 26%,
+    var(--crm-surface)
+  ) !important;
+}
+
+.googleSideItem :global(b) {
+  color: color-mix(
+    in srgb,
+    var(--crm-warning-text) 34%,
+    var(--crm-text-strong)
+  ) !important;
+}
+
+.googleSideItem :global(div) {
+  color: color-mix(
+    in srgb,
+    var(--crm-warning-text) 18%,
     var(--crm-text-muted)
   ) !important;
 }
