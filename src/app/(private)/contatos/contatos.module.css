@@ -1204,15 +1204,15 @@
 
 .bulkToolbar {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 132px minmax(0, 1fr);
   grid-template-areas:
     "selection fields"
     "selection actions";
-  align-items: end;
-  column-gap: 16px;
-  row-gap: 10px;
-  margin-bottom: 12px;
-  padding: 14px;
+  align-items: stretch;
+  column-gap: 12px;
+  row-gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px;
   border: 1px solid var(--crm-primary-border);
   border-radius: 12px;
   background: var(--crm-primary-soft);
@@ -1227,10 +1227,15 @@
 .bulkSelectionInfo {
   grid-area: selection;
   min-width: 118px;
-  min-height: 38px;
+  min-height: 100%;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--crm-primary-border) 75%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--crm-surface) 58%, transparent);
 }
 
 .bulkSelectionInfo strong {
@@ -1252,7 +1257,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(160px, 1fr));
   align-items: end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .bulkField {
@@ -1299,23 +1304,23 @@
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
 }
 
 .bulkActions .secondaryButton,
 .bulkActions .dangerButton {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 9px;
-  padding: 0 12px;
+  padding: 0 11px;
   font-size: 12px;
   white-space: nowrap;
 }
 
 .bulkApplyButton,
 .bulkClearButton {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 9px;
-  padding: 0 13px;
+  padding: 0 12px;
   font-family: inherit;
   font-size: 12px;
   font-weight: 800;
@@ -1569,6 +1574,7 @@
 
   .bulkSelectionInfo {
     min-height: auto;
+    padding: 7px 10px;
     flex-direction: row;
     align-items: baseline;
     gap: 6px;
