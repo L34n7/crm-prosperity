@@ -297,7 +297,6 @@
   border: 1px solid var(--crm-border);
   border-radius: 12px;
   background: var(--crm-surface);
-  cursor: pointer;
 }
 
 .item:has(input:checked) {
@@ -368,6 +367,102 @@
 
 .itemStatus {
   align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.editButton,
+.manualSaveButton,
+.manualCancelButton {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.editButton {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+}
+
+.editButton:hover {
+  border-color: var(--crm-primary);
+  color: var(--crm-primary-strong);
+}
+
+.manualEdit {
+  display: grid;
+  gap: 9px;
+  margin-top: 9px;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--crm-primary) 35%, var(--crm-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--crm-primary) 4%, var(--crm-surface));
+}
+
+.manualEdit label {
+  display: grid;
+  gap: 5px;
+}
+
+.manualEdit label > span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.manualEdit input {
+  width: min(420px, 100%);
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 9px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.manualEdit input:focus {
+  border-color: var(--crm-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--crm-primary) 14%, transparent);
+}
+
+.manualEdit small {
+  color: var(--crm-text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.manualEditActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.manualSaveButton {
+  border: 1px solid var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+  color: #fff;
+}
+
+.manualCancelButton {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--crm-text);
+}
+
+.manualSaveButton:disabled,
+.manualCancelButton:disabled {
+  cursor: not-allowed;
+  opacity: .55;
 }
 
 .safe,
@@ -548,6 +643,12 @@
   .itemStatus {
     grid-column: 2;
     justify-self: start;
+    align-items: flex-start;
+    flex-direction: row;
+  }
+
+  .manualEdit input {
+    width: 100%;
   }
 
   .pagination {

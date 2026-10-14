@@ -94,6 +94,9 @@ export default function CentralRevisaoTelefones({
   const [gerandoPreview, setGerandoPreview] = useState(false);
   const [aplicando, setAplicando] = useState(false);
   const [pagina, setPagina] = useState(1);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [telefoneEdicao, setTelefoneEdicao] = useState("");
+  const [salvandoEdicaoId, setSalvandoEdicaoId] = useState<string | null>(null);
 
   async function carregarResumo() {
     try {
@@ -157,6 +160,8 @@ export default function CentralRevisaoTelefones({
     setPreview(null);
     setErro("");
     setMensagem("");
+    setEditandoId(null);
+    setTelefoneEdicao("");
   }
 
   const contagemPorTipo = useMemo(() => {
@@ -232,6 +237,70 @@ export default function CentralRevisaoTelefones({
 
   const acaoPrecisaDdd =
     acao === "adicionar_ddd" || acao === "adicionar_ddd_nono";
+
+  function iniciarEdicaoManual(item: ItemRevisao) {
+    setErro("");
+    setMensagem("");
+    setPreview(null);
+    setEditandoId(item.id);
+    setTelefoneEdicao(item.telefone || "");
+  }
+
+  function cancelarEdicaoManual() {
+    if (salvandoEdicaoId) return;
+    setEditandoId(null);
+    setTelefoneEdicao("");
+  }
+
+  async function salvarEdicaoManual(item: ItemRevisao) {
+    const telefone = telefoneEdicao.trim();
+
+    if (!telefone) {
+      setErro("Informe o telefone corrigido.");
+      return;
+    }
+
+    setSalvandoEdicaoId(item.id);
+    setErro("");
+    setMensagem("");
+
+    try {
+      const response = await fetch("/api/contatos/revisao-telefones", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          telefone,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErro(data.error || "Não foi possível salvar o telefone.");
+        return;
+      }
+
+      setEditandoId(null);
+      setTelefoneEdicao("");
+
+      await Promise.all([
+        carregarCentral(),
+        carregarResumo(),
+        Promise.resolve(onAtualizado?.()),
+      ]);
+
+      setMensagem(
+        data.message ||
+          (data.permanece_em_revisao
+            ? "Telefone salvo, mas ainda precisa de revisão."
+            : "Telefone corrigido com sucesso.")
+      );
+    } catch {
+      setErro("Não foi possível salvar o telefone.");
+    } finally {
+      setSalvandoEdicaoId(null);
+    }
+  }
 
   async function solicitarPreview() {
     if (selecionados.size === 0) {
@@ -490,38 +559,112 @@ export default function CentralRevisaoTelefones({
                 ) : (
                   <>
                     <div className={styles.list}>
-                      {itensPagina.map((item) => (
-                        <label className={styles.item} key={item.id}>
-                          <input
-                            type="checkbox"
-                            checked={selecionados.has(item.id)}
-                            onChange={() => alternarSelecionado(item.id)}
-                          />
-                          <div className={styles.itemMain}>
-                            <div className={styles.itemTitle}>
-                              <strong>{item.nome || "Sem nome"}</strong>
-                              <span>{item.label}</span>
-                            </div>
-                            <div className={styles.phoneChange}>
-                              <code>{item.telefone || "—"}</code>
-                              {item.sugestao && (
+                      {itensPagina.map((item) => {
+                        const editando = editandoId === item.id;
+                        const salvando = salvandoEdicaoId === item.id;
+
+                        return (
+                          <div className={styles.item} key={item.id}>
+                            <input
+                              type="checkbox"
+                              checked={selecionados.has(item.id)}
+                              onChange={() => alternarSelecionado(item.id)}
+                              aria-label={`Selecionar ${item.nome || item.telefone}`}
+                            />
+
+                            <div className={styles.itemMain}>
+                              <div className={styles.itemTitle}>
+                                <strong>{item.nome || "Sem nome"}</strong>
+                                <span>{item.label}</span>
+                              </div>
+
+                              {editando ? (
+                                <div className={styles.manualEdit}>
+                                  <label>
+                                    <span>Telefone corrigido</span>
+                                    <input
+                                      autoFocus
+                                      value={telefoneEdicao}
+                                      inputMode="tel"
+                                      placeholder="Ex.: 5531999999999"
+                                      onChange={(event) =>
+                                        setTelefoneEdicao(event.target.value)
+                                      }
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter") {
+                                          event.preventDefault();
+                                          void salvarEdicaoManual(item);
+                                        }
+
+                                        if (event.key === "Escape") {
+                                          cancelarEdicaoManual();
+                                        }
+                                      }}
+                                      disabled={salvando}
+                                    />
+                                  </label>
+
+                                  <div className={styles.manualEditActions}>
+                                    <button
+                                      type="button"
+                                      className={styles.manualSaveButton}
+                                      onClick={() => void salvarEdicaoManual(item)}
+                                      disabled={salvando}
+                                    >
+                                      {salvando ? "Salvando..." : "Salvar"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={styles.manualCancelButton}
+                                      onClick={cancelarEdicaoManual}
+                                      disabled={salvando}
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+
+                                  <small>
+                                    Informe o número completo. Se estiver sem +55, o
+                                    sistema adiciona automaticamente quando o DDD e o
+                                    formato brasileiro forem identificados com segurança.
+                                  </small>
+                                </div>
+                              ) : (
                                 <>
-                                  <span>→</span>
-                                  <code>{item.sugestao}</code>
+                                  <div className={styles.phoneChange}>
+                                    <code>{item.telefone || "—"}</code>
+                                    {item.sugestao && (
+                                      <>
+                                        <span>→</span>
+                                        <code>{item.sugestao}</code>
+                                      </>
+                                    )}
+                                  </div>
+                                  <p>{item.descricao}</p>
                                 </>
                               )}
                             </div>
-                            <p>{item.descricao}</p>
+
+                            <div className={styles.itemStatus}>
+                              {item.sugestao_segura ? (
+                                <span className={styles.safe}>Automático</span>
+                              ) : (
+                                <span className={styles.review}>Revisar</span>
+                              )}
+
+                              {!editando && (
+                                <button
+                                  type="button"
+                                  className={styles.editButton}
+                                  onClick={() => iniciarEdicaoManual(item)}
+                                >
+                                  Editar
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <div className={styles.itemStatus}>
-                            {item.sugestao_segura ? (
-                              <span className={styles.safe}>Automático</span>
-                            ) : (
-                              <span className={styles.review}>Revisar</span>
-                            )}
-                          </div>
-                        </label>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className={styles.pagination}>

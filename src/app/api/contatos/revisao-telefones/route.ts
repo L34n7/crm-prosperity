@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   analisarTelefoneParaRevisao,
   dddBrasilValido,
+  limparTelefoneParaRevisao,
   proporCorrecaoTelefone,
   type AcaoCorrecaoTelefone,
   type TipoProblemaTelefone,
@@ -330,6 +331,202 @@ export async function GET(request: Request) {
     lista_id: listaId,
     resumo,
     itens,
+  });
+}
+
+export async function PATCH(request: Request) {
+  const resultado = await getUsuarioContexto();
+
+  if (!resultado.ok) {
+    return NextResponse.json(
+      { ok: false, error: resultado.error },
+      { status: resultado.status }
+    );
+  }
+
+  const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "contatos.editar",
+    "Sem permissão para editar contatos."
+  );
+  if (bloqueio) return bloqueio;
+
+  if (!usuario.empresa_id) {
+    return NextResponse.json(
+      { ok: false, error: "Usuário sem empresa vinculada." },
+      { status: 400 }
+    );
+  }
+
+  let body: Record<string, unknown>;
+
+  try {
+    const parsed = await request.json();
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("invalid");
+    }
+
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Corpo da requisição inválido." },
+      { status: 400 }
+    );
+  }
+
+  const contatoId = String(body.id || "").trim();
+  const telefoneInformado = String(body.telefone || "").trim();
+
+  if (!UUID_REGEX.test(contatoId)) {
+    return NextResponse.json(
+      { ok: false, error: "Contato inválido." },
+      { status: 400 }
+    );
+  }
+
+  const telefoneLimpo = limparTelefoneParaRevisao(telefoneInformado);
+
+  if (telefoneLimpo.length < 8 || telefoneLimpo.length > 15) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Informe um telefone válido, com DDD quando for necessário. Use entre 8 e 15 dígitos.",
+      },
+      { status: 400 }
+    );
+  }
+
+  const { data: contatoAtual, error: contatoAtualError } = await supabaseAdmin
+    .from("contatos")
+    .select("id,nome,telefone,telefone_revisar,created_at")
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("id", contatoId)
+    .maybeSingle();
+
+  if (contatoAtualError) {
+    return NextResponse.json(
+      { ok: false, error: contatoAtualError.message },
+      { status: 500 }
+    );
+  }
+
+  if (!contatoAtual) {
+    return NextResponse.json(
+      { ok: false, error: "Contato não encontrado." },
+      { status: 404 }
+    );
+  }
+
+  const analiseInformada = analisarTelefoneParaRevisao(
+    telefoneLimpo,
+    false
+  );
+
+  let telefoneFinal = telefoneLimpo;
+
+  if (analiseInformada.sugestaoSegura && analiseInformada.sugestao) {
+    telefoneFinal = analiseInformada.sugestao;
+  }
+
+  const analiseFinal = analisarTelefoneParaRevisao(telefoneFinal, false);
+  const telefoneRevisar =
+    analiseFinal.tipo !== "formato_valido_revisao";
+
+  const { data: conflito, error: conflitoError } = await supabaseAdmin
+    .from("contatos")
+    .select("id,nome")
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("telefone", telefoneFinal)
+    .neq("id", contatoId)
+    .maybeSingle();
+
+  if (conflitoError) {
+    return NextResponse.json(
+      { ok: false, error: conflitoError.message },
+      { status: 500 }
+    );
+  }
+
+  if (conflito) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "O telefone informado já pertence a outro contato desta empresa.",
+        conflito_contato_id: conflito.id,
+        conflito_contato_nome: conflito.nome || null,
+      },
+      { status: 409 }
+    );
+  }
+
+  const { data: contatoAtualizado, error: atualizarError } =
+    await supabaseAdmin
+      .from("contatos")
+      .update({
+        telefone: telefoneFinal,
+        telefone_revisar: telefoneRevisar,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("empresa_id", usuario.empresa_id)
+      .eq("id", contatoId)
+      .select("id,nome,telefone,telefone_revisar,created_at")
+      .single();
+
+  if (atualizarError) {
+    return NextResponse.json(
+      { ok: false, error: atualizarError.message },
+      { status: 500 }
+    );
+  }
+
+  const auditMeta = getRequestAuditMetadata(request);
+
+  await registrarLogAuditoriaSeguro({
+    empresa_id: usuario.empresa_id,
+    categoria: "contatos",
+    entidade: "contato",
+    entidade_id: contatoId,
+    acao: "telefone_corrigido_manualmente",
+    descricao: "Telefone corrigido manualmente pela central de revisão",
+    usuario_id: usuario.id,
+    usuario_nome: usuario.nome,
+    usuario_email: usuario.email,
+    antes: {
+      telefone: contatoAtual.telefone,
+      telefone_revisar: contatoAtual.telefone_revisar === true,
+    },
+    depois: {
+      telefone: contatoAtualizado.telefone,
+      telefone_revisar: contatoAtualizado.telefone_revisar === true,
+    },
+    metadata: {
+      normalizado_automaticamente: telefoneFinal !== telefoneLimpo,
+      tipo_resultante: analiseFinal.tipo,
+    },
+    ip: auditMeta.ip,
+    user_agent: auditMeta.user_agent,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    telefone: contatoAtualizado.telefone,
+    telefone_revisar: contatoAtualizado.telefone_revisar === true,
+    normalizado_automaticamente: telefoneFinal !== telefoneLimpo,
+    permanece_em_revisao: telefoneRevisar,
+    analise: {
+      tipo: analiseFinal.tipo,
+      label: analiseFinal.label,
+      descricao: analiseFinal.descricao,
+      sugestao: analiseFinal.sugestao,
+      sugestao_segura: analiseFinal.sugestaoSegura,
+    },
+    message: telefoneRevisar
+      ? "Telefone salvo, mas ainda precisa de revisão."
+      : "Telefone corrigido com sucesso.",
   });
 }
 
