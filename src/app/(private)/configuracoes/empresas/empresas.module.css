@@ -942,21 +942,154 @@
 }
 
 @media (max-width: 640px) {
+  .renewalModalOverlay {
+    align-items: flex-end;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      8px
+      max(8px, env(safe-area-inset-bottom));
+  }
+
   .renewalModal {
-    padding: 22px 18px;
-    border-radius: 20px;
+    width: 100%;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)));
+    padding: 20px 16px 0;
+    border-radius: 22px 22px 16px 16px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .renewalModalClose {
+    top: 12px;
+    right: 12px;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  .renewalModalEyebrow {
+    margin-bottom: 8px;
+    padding: 6px 9px;
+    font-size: 9px;
+  }
+
+  .renewalModal h2 {
+    max-width: calc(100% - 48px);
+    padding-right: 0;
+    font-size: 23px;
+    line-height: 1.12;
+  }
+
+  .renewalModalCompany {
+    margin-top: 5px;
+    font-size: 12px;
   }
 
   .renewalSummaryGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 14px;
+  }
+
+  .renewalSummaryGrid > div {
+    min-width: 0;
+    padding: 10px 11px;
+    border-radius: 12px;
+  }
+
+  .renewalSummaryGrid span {
+    font-size: 8.5px;
+    letter-spacing: 0.035em;
+  }
+
+  .renewalSummaryGrid strong {
+    margin-top: 3px;
+    font-size: 11.5px;
+    line-height: 1.32;
+    overflow-wrap: anywhere;
+  }
+
+  .renewalNotice {
+    margin-top: 10px;
+    padding: 11px 12px;
+    border-radius: 13px;
+  }
+
+  .renewalNotice strong {
+    font-size: 11.5px;
+  }
+
+  .renewalNotice p {
+    margin-top: 5px;
+    font-size: 10.5px;
+    line-height: 1.4;
+  }
+
+  .renewalValueField {
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .renewalValueField .label {
+    font-size: 12px;
+  }
+
+  .currencyInputWrap .input {
+    min-height: 44px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    font-size: 16px;
+  }
+
+  .renewalConfirmation {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 9px;
+    margin-top: 11px;
+    padding: 11px 12px;
+    border-radius: 12px;
+  }
+
+  .renewalConfirmation span {
+    font-size: 10.5px;
+    line-height: 1.4;
+  }
+
+  .renewalError {
+    margin-top: 9px;
+    padding: 10px 11px;
+    font-size: 10.5px;
   }
 
   .renewalModalActions {
-    flex-direction: column;
-    align-items: stretch;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.45fr);
+    gap: 8px;
+    margin: 14px -16px 0;
+    padding:
+      10px
+      16px
+      max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--crm-border);
+    background: color-mix(
+      in srgb,
+      var(--crm-surface) 96%,
+      transparent
+    );
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
-  .renewalModalActions button,
+  .renewalModalActions button {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 12px;
+    white-space: normal;
+  }
+
   .renewalButton {
     width: 100%;
   }
@@ -1379,36 +1512,190 @@
 }
 
 @media (max-width: 640px) {
+  .tokensManagementBlock {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
   .tokensManagementHeader {
     flex-direction: column;
+    gap: 10px;
+  }
+
+  .tokensTotalBadge {
+    align-self: flex-start;
+    padding: 7px 10px;
+    font-size: 10.5px;
   }
 
   .tokensStatsGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 12px;
   }
 
-  .tokensManagementActions,
-  .tokenModalActions {
+  .tokensStatsGrid > div {
+    min-width: 0;
+    padding: 9px 8px;
+    border-radius: 11px;
+  }
+
+  .tokensStatsGrid span {
+    font-size: 8px;
+    letter-spacing: 0.025em;
+  }
+
+  .tokensStatsGrid strong {
+    margin-top: 3px;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .tokensManagementActions {
     flex-direction: column-reverse;
   }
 
-  .tokensManagementActions button,
-  .tokenModalActions button {
+  .tokensManagementActions button {
     width: 100%;
   }
 
   .tokenModalOverlay {
     align-items: flex-end;
-    padding: 10px;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      8px
+      max(8px, env(safe-area-inset-bottom));
   }
 
   .tokenModal {
-    padding: 24px 18px 20px;
-    border-radius: 22px;
+    width: 100%;
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)));
+    padding: 20px 16px 0;
+    border-radius: 22px 22px 16px 16px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tokenModalClose {
+    top: 12px;
+    right: 12px;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  .tokenModalEyebrow {
+    margin-bottom: 8px;
+    padding: 6px 9px;
+    font-size: 9px;
   }
 
   .tokenModal h2 {
-    font-size: 24px;
+    max-width: calc(100% - 48px);
+    padding-right: 0;
+    font-size: 23px;
+    line-height: 1.12;
+  }
+
+  .tokenModalCompany {
+    margin-top: 5px;
+    font-size: 12px;
+  }
+
+  .tokenActionTabs {
+    gap: 5px;
+    margin-top: 14px;
+    padding: 4px;
+    border-radius: 12px;
+  }
+
+  .tokenActionTab,
+  .tokenActionTabActive {
+    min-height: 38px;
+    padding: 7px 8px;
+    font-size: 10.5px;
+    line-height: 1.25;
+  }
+
+  .tokenRestorePanel,
+  .tokenAmountPanel {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 13px;
+  }
+
+  .tokenRestorePanel > span {
+    font-size: 10.5px;
+  }
+
+  .tokenRestorePanel > strong {
+    margin-top: 2px;
+    font-size: 23px;
+  }
+
+  .tokenRestorePanel p,
+  .tokenAmountPanel p {
+    margin-top: 6px;
+    font-size: 10.5px;
+    line-height: 1.4;
+  }
+
+  .tokenQuickAmounts {
+    gap: 5px;
+    margin-top: 8px;
+  }
+
+  .tokenQuickAmounts button {
+    padding: 6px 8px;
+    font-size: 10.5px;
+  }
+
+  .tokenReasonField {
+    margin-top: 11px;
+  }
+
+  .tokenModal .label {
+    font-size: 12px;
+  }
+
+  .tokenModal .input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .tokenModal .textarea {
+    min-height: 78px;
+    font-size: 14px;
+  }
+
+  .tokenModalActions {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.35fr);
+    gap: 8px;
+    margin: 14px -16px 0;
+    padding:
+      10px
+      16px
+      max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--crm-border);
+    background: color-mix(
+      in srgb,
+      var(--crm-surface) 96%,
+      transparent
+    );
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .tokenModalActions button {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 12px;
+    white-space: normal;
   }
 }
 
