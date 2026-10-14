@@ -2366,6 +2366,23 @@ function Page() {
           relatedTypeLabels={relatedTypeLabels}
           googleCalendarUrl={googleLinks[viewing.id] || null}
           onClose={() => setViewing(null)}
+          onRealize={
+            podeGerenciarAgendamentos &&
+            ["agendado", "confirmado"].includes(viewing.status) &&
+            new Date(viewing.inicio_at).getTime() <= Date.now()
+              ? () => {
+                  const agendamentoId = viewing.id;
+                  setViewing(null);
+                  window.setTimeout(() => {
+                    window.dispatchEvent(
+                      new CustomEvent("crm:agenda-feedback:open", {
+                        detail: { agendamentoId },
+                      }),
+                    );
+                  }, 0);
+                }
+              : undefined
+          }
           onEdit={podeEditarAgenda ? () => edit(viewing) : undefined}
         />
       )}
@@ -2448,16 +2465,32 @@ function Page() {
                     <label>Status</label>
                     <select
                       value={form.status}
+                      disabled={
+                        Boolean(form.id) &&
+                        !["agendado", "confirmado"].includes(form.status)
+                      }
                       onChange={(e) =>
                         setForm({ ...form, status: e.target.value })
                       }
                     >
-                      {Object.entries(labels).map(([v, l]) => (
-                        <option key={v} value={v}>
-                          {l}
-                        </option>
-                      ))}
+                      {Object.entries(labels)
+                        .filter(
+                          ([v]) =>
+                            ["agendado", "confirmado"].includes(v) ||
+                            v === form.status,
+                        )
+                        .map(([v, l]) => (
+                          <option key={v} value={v}>
+                            {l}
+                          </option>
+                        ))}
                     </select>
+                    {form.id ? (
+                      <small>
+                        O status final é registrado pelo fluxo Realizar
+                        atendimento.
+                      </small>
+                    ) : null}
                   </div>
                   <div className="field">
                     <label>Início*</label>
@@ -3145,53 +3178,6 @@ function Page() {
                   );
                 })}
               </section>
-              {form.id && (
-              <section className="section">
-                <h3>
-                  <Check size={15} />
-                  Resultado e informações internas
-                </h3>
-                <div className="form">
-                  <div className="field">
-                    <label>Status final</label>
-                    <select
-                      value={form.status}
-                      onChange={(e) =>
-                        setForm({ ...form, status: e.target.value })
-                      }
-                    >
-                      {Object.entries(labels).map(([v, l]) => (
-                        <option key={v} value={v}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>Resumo do resultado</label>
-                    <input
-                      value={form.resultado}
-                      onChange={(e) =>
-                        setForm({ ...form, resultado: e.target.value })
-                      }
-                      placeholder="Ex.: proposta enviada"
-                    />
-                  </div>
-                  <div className="field full">
-                    <label>Observações internas</label>
-                    <textarea
-                      value={form.observacoes_internas}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          observacoes_internas: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </section>
-              )}
               {form.id && (
                 <section className="section">
                   <h3>

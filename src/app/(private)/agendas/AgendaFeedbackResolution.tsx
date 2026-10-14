@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Ban,
@@ -33,6 +33,14 @@ type ResponsavelOption = {
   email?: string | null;
 };
 
+type ResultadoComercialAnterior = {
+  id: string;
+  classificacao: AtendimentoClassificacao;
+  valor_venda: number | null;
+  agendamento_id: string;
+  created_at: string;
+};
+
 type FeedbackItem = {
   id: string;
   agenda_id?: string | null;
@@ -59,6 +67,7 @@ type FeedbackItem = {
         classificacao?: string | null;
       }>
     | null;
+  resultado_comercial_anterior?: ResultadoComercialAnterior | null;
 };
 
 type Draft = {
@@ -70,6 +79,8 @@ type Draft = {
   observacoesInternas: string;
   classificacao: AtendimentoClassificacao;
   valorVenda: string;
+  modoResultadoComercial: "" | "manter" | "novo";
+  resultadoComercialAnterior: ResultadoComercialAnterior | null;
   listaId: string;
   marcarProximo: boolean;
   proximoTitulo: string;
@@ -166,49 +177,141 @@ export default function AgendaFeedbackResolution() {
     };
   }, [feedbacks.length]);
 
-  const nomeCliente = useMemo(() => {
-    if (!feedbackAtual) return "Contato";
-    const contato = relationOne(feedbackAtual.contatos);
-    return feedbackAtual.nome_cliente || contato?.nome || "Contato";
-  }, [feedbackAtual]);
+  const abrirModal = useCallback(
+    (status: FinalStatus, feedback: FeedbackItem | null = feedbackAtual) => {
+      if (!feedback) return;
 
-  const abrirModal = (status: FinalStatus) => {
-    if (!feedbackAtual) return;
-    const contato = relationOne(feedbackAtual.contatos);
-    const rawClassificacao = String(contato?.classificacao || "").toLowerCase();
-    const classificacao = classificacoes.has(
-      rawClassificacao as AtendimentoClassificacao,
-    )
-      ? (rawClassificacao as AtendimentoClassificacao)
-      : "qualificado";
+      const contato = relationOne(feedback.contatos);
+      const resultadoComercialAnterior =
+        feedback.resultado_comercial_anterior || null;
+      const rawClassificacao = String(
+        resultadoComercialAnterior?.classificacao ||
+          contato?.classificacao ||
+          "",
+      ).toLowerCase();
+      const classificacao = classificacoes.has(
+        rawClassificacao as AtendimentoClassificacao,
+      )
+        ? (rawClassificacao as AtendimentoClassificacao)
+        : "qualificado";
+      const nome =
+        feedback.nome_cliente || contato?.nome || "Contato";
 
-    setError("");
-    setDraft({
-      agendamentoId: feedbackAtual.id,
-      contatoId: feedbackAtual.contato_id || contato?.id || null,
-      nomeCliente,
-      status,
-      resultado: "",
-      observacoesInternas: "",
-      classificacao,
-      valorVenda: "",
-      listaId: "",
-      marcarProximo: false,
-      proximoTitulo: feedbackAtual.titulo || "Próximo atendimento",
-      proximoTipoId: feedbackAtual.tipo_id || "",
-      proximoData: "",
-      proximoHora: horarioDoAgendamento(feedbackAtual.inicio_at),
-      proximoResponsavelId:
-        feedbackAtual.responsavel_id || usuarioAtualId || "",
-      proximoDescricao: "",
-    });
-  };
+      setError("");
+      setDraft({
+        agendamentoId: feedback.id,
+        contatoId: feedback.contato_id || contato?.id || null,
+        nomeCliente: nome,
+        status,
+        resultado: "",
+        observacoesInternas: "",
+        classificacao,
+        valorVenda: "",
+        modoResultadoComercial: resultadoComercialAnterior ? "" : "novo",
+        resultadoComercialAnterior,
+        listaId: "",
+        marcarProximo: false,
+        proximoTitulo: feedback.titulo || "Próximo atendimento",
+        proximoTipoId: feedback.tipo_id || "",
+        proximoData: "",
+        proximoHora: horarioDoAgendamento(feedback.inicio_at),
+        proximoResponsavelId:
+          feedback.responsavel_id || usuarioAtualId || "",
+        proximoDescricao: "",
+      });
+    },
+    [feedbackAtual, usuarioAtualId],
+  );
+
+  useEffect(() => {
+    const abrirPorEvento = async (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        agendamentoId?: string;
+      }>;
+      const agendamentoId = String(
+        customEvent.detail?.agendamentoId || "",
+      ).trim();
+
+      if (!agendamentoId) return;
+
+      let feedback =
+        feedbacks.find((item) => item.id === agendamentoId) || null;
+
+      if (!feedback) {
+        try {
+          const response = await fetch(
+            `/api/agendas/feedback?agendamento_id=${encodeURIComponent(
+              agendamentoId,
+            )}`,
+            { cache: "no-store" },
+          );
+          const data = await response.json();
+
+          if (!response.ok || !data?.ok) {
+            throw new Error(
+              data?.error || "Não foi possível abrir este atendimento.",
+            );
+          }
+
+          feedback = Array.isArray(data.pendencias)
+            ? data.pendencias[0] || null
+            : null;
+
+          if (Array.isArray(data.listas)) setListas(data.listas);
+          if (Array.isArray(data.tipos)) setTipos(data.tipos);
+          if (Array.isArray(data.responsaveis)) {
+            setResponsaveis(data.responsaveis);
+          }
+          setUsuarioAtualId(String(data.usuario_atual_id || ""));
+        } catch (cause) {
+          console.error(
+            "[AGENDA FEEDBACK] Erro ao abrir atendimento pelos detalhes:",
+            cause,
+          );
+          return;
+        }
+      }
+
+      if (feedback) {
+        abrirModal("realizado", feedback);
+      }
+    };
+
+    window.addEventListener(
+      "crm:agenda-feedback:open",
+      abrirPorEvento as EventListener,
+    );
+
+    return () =>
+      window.removeEventListener(
+        "crm:agenda-feedback:open",
+        abrirPorEvento as EventListener,
+      );
+  }, [feedbacks, abrirModal]);
 
   const salvar = async () => {
     if (!draft) return;
-    const valorVenda =
-      draft.classificacao === "convertido" ? Number(draft.valorVenda) : null;
+
     if (
+      draft.resultadoComercialAnterior &&
+      !draft.modoResultadoComercial
+    ) {
+      setError(
+        "Informe se deseja manter o resultado comercial anterior ou registrar um novo resultado.",
+      );
+      return;
+    }
+
+    const registrarNovoResultado =
+      !draft.resultadoComercialAnterior ||
+      draft.modoResultadoComercial === "novo";
+    const valorVenda =
+      registrarNovoResultado && draft.classificacao === "convertido"
+        ? Number(draft.valorVenda)
+        : null;
+
+    if (
+      registrarNovoResultado &&
       draft.classificacao === "convertido" &&
       (!Number.isFinite(valorVenda) || Number(valorVenda) <= 0)
     ) {
@@ -265,6 +368,8 @@ export default function AgendaFeedbackResolution() {
           resposta: draft.status,
           resultado: draft.resultado,
           observacoes_internas: draft.observacoesInternas,
+          modo_resultado_comercial:
+            draft.modoResultadoComercial || "novo",
           classificacao_atendimento: draft.classificacao,
           valor_venda: valorVenda,
           lista_id: draft.listaId || null,
@@ -393,68 +498,178 @@ export default function AgendaFeedbackResolution() {
           <section className={`section ${styles.commercialSection}`}>
             <h3>
               <UserRound size={15} />
-              Classificação do atendimento
+              Resultado comercial
             </h3>
-            <p className={styles.sectionHint}>
-              A classificação será salva diretamente no contato vinculado ao
-              agendamento.
-            </p>
-            <div className="form">
-              <div className="field full">
-                <label>Classificação</label>
-                <select
-                  value={draft.classificacao}
-                  onChange={(event) => {
-                    const classificacao =
-                      event.target.value as AtendimentoClassificacao;
-                    setDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            classificacao,
-                            valorVenda:
-                              classificacao === "convertido"
-                                ? current.valorVenda
-                                : "",
-                          }
-                        : current,
-                    );
-                  }}
-                >
-                  <option value="qualificado">Qualificado</option>
-                  <option value="convertido">Convertido</option>
-                  <option value="perdido">Perdido</option>
-                </select>
-              </div>
 
-              {draft.classificacao === "convertido" ? (
-                <div className="field full">
-                  <label>Valor da venda*</label>
-                  <div className={styles.moneyField}>
-                    <span>R$</span>
+            {draft.resultadoComercialAnterior ? (
+              <>
+                <div className={styles.previousResult}>
+                  <span>Resultado comercial anterior</span>
+                  <strong>
+                    {draft.resultadoComercialAnterior.classificacao ===
+                    "convertido"
+                      ? "Convertido"
+                      : draft.resultadoComercialAnterior.classificacao ===
+                          "perdido"
+                        ? "Perdido"
+                        : "Qualificado"}
+                    {draft.resultadoComercialAnterior.classificacao ===
+                      "convertido" &&
+                    draft.resultadoComercialAnterior.valor_venda
+                      ? ` · ${new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(
+                          draft.resultadoComercialAnterior.valor_venda,
+                        )}`
+                      : ""}
+                  </strong>
+                  <small>
+                    Este resultado continua sendo o atual até que você registre
+                    um novo resultado comercial.
+                  </small>
+                </div>
+
+                <p className={styles.sectionHint}>
+                  Este atendimento gerou um novo resultado comercial?
+                </p>
+
+                <div className={styles.commercialDecision}>
+                  <label
+                    className={
+                      draft.modoResultadoComercial === "manter"
+                        ? styles.commercialDecisionActive
+                        : ""
+                    }
+                  >
                     <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={draft.valorVenda}
-                      onChange={(event) =>
+                      type="radio"
+                      name="modo-resultado-comercial"
+                      checked={
+                        draft.modoResultadoComercial === "manter"
+                      }
+                      onChange={() =>
                         setDraft((current) =>
                           current
-                            ? { ...current, valorVenda: event.target.value }
+                            ? {
+                                ...current,
+                                modoResultadoComercial: "manter",
+                                valorVenda: "",
+                              }
                             : current,
                         )
                       }
-                      placeholder="0,00"
                     />
-                  </div>
-                  <small className={styles.saleHint}>
-                    Será registrado como Resultado comercial nos detalhes do
-                    contato.
-                  </small>
+                    <span>
+                      <strong>Não, manter o resultado anterior</strong>
+                      <small>
+                        Não altera classificação nem registra outro valor.
+                      </small>
+                    </span>
+                  </label>
+
+                  <label
+                    className={
+                      draft.modoResultadoComercial === "novo"
+                        ? styles.commercialDecisionActive
+                        : ""
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="modo-resultado-comercial"
+                      checked={draft.modoResultadoComercial === "novo"}
+                      onChange={() =>
+                        setDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                modoResultadoComercial: "novo",
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                    <span>
+                      <strong>Sim, registrar um novo resultado</strong>
+                      <small>
+                        Permite classificar este atendimento como qualificado,
+                        convertido ou perdido.
+                      </small>
+                    </span>
+                  </label>
                 </div>
-              ) : null}
-            </div>
+              </>
+            ) : (
+              <div className={styles.firstResult}>
+                <strong>Primeiro resultado comercial</strong>
+                <span>
+                  Como este contato ainda não possui resultado comercial de
+                  atendimento, o registro abaixo é obrigatório.
+                </span>
+              </div>
+            )}
+
+            {draft.modoResultadoComercial === "novo" ? (
+              <div className={`form ${styles.commercialForm}`}>
+                <div className="field full">
+                  <label>Novo resultado comercial</label>
+                  <select
+                    value={draft.classificacao}
+                    onChange={(event) => {
+                      const classificacao =
+                        event.target.value as AtendimentoClassificacao;
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              classificacao,
+                              valorVenda:
+                                classificacao === "convertido"
+                                  ? current.valorVenda
+                                  : "",
+                            }
+                          : current,
+                      );
+                    }}
+                  >
+                    <option value="qualificado">Qualificado</option>
+                    <option value="convertido">Convertido</option>
+                    <option value="perdido">Perdido</option>
+                  </select>
+                </div>
+
+                {draft.classificacao === "convertido" ? (
+                  <div className="field full">
+                    <label>Valor da venda*</label>
+                    <div className={styles.moneyField}>
+                      <span>R$</span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={draft.valorVenda}
+                        onChange={(event) =>
+                          setDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  valorVenda: event.target.value,
+                                }
+                              : current,
+                          )
+                        }
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <small className={styles.saleHint}>
+                      O valor pertence somente a este novo resultado comercial.
+                    </small>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <section className={`section ${styles.nextSection}`}>
@@ -682,7 +897,7 @@ export default function AgendaFeedbackResolution() {
                 type="button"
                 className="btn feedbackSuccess"
                 data-agenda-feedback-resolution="true"
-                onClick={() => abrirModal("realizado")}
+                onClick={() => abrirModal("realizado", feedbackAtual)}
               >
                 <Check size={13} />
                 Realizado
@@ -691,7 +906,7 @@ export default function AgendaFeedbackResolution() {
                 type="button"
                 className="btn feedbackMissed"
                 data-agenda-feedback-resolution="true"
-                onClick={() => abrirModal("faltou")}
+                onClick={() => abrirModal("faltou", feedbackAtual)}
               >
                 <X size={13} />
                 Não realizado
@@ -700,7 +915,7 @@ export default function AgendaFeedbackResolution() {
                 type="button"
                 className={`btn danger ${styles.cancelButton}`}
                 data-agenda-feedback-resolution="true"
-                onClick={() => abrirModal("cancelado")}
+                onClick={() => abrirModal("cancelado", feedbackAtual)}
               >
                 <Ban size={13} />
                 Cancelado

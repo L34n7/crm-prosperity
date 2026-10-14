@@ -19,7 +19,7 @@ const CLASSIFICACOES_ATENDIMENTO = new Set<ClassificacaoLead>([
 const VARIAVEL_RESULTADO_COMERCIAL = "agenda_resultado_comercial";
 const LIMITE_CARACTERES_NOTA = 600;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const resultado = await getUsuarioContexto({
       sincronizarAssinatura: false,
@@ -47,14 +47,12 @@ export async function GET() {
       );
     }
 
+    const agendamentoIdSolicitado = String(
+      new URL(request.url).searchParams.get("agendamento_id") || "",
+    ).trim();
+
     const supabase = getSupabaseAdmin();
-    const [
-      { data, error },
-      { data: listas, error: listasError },
-      { data: tipos, error: tiposError },
-      { data: responsaveis, error: responsaveisError },
-    ] = await Promise.all([
-      supabase
+    let pendenciasQuery = supabase
         .from("agenda_agendamentos")
         .select(
           `
@@ -93,10 +91,26 @@ export async function GET() {
         )
         .eq("empresa_id", usuario.empresa_id)
         .in("status", ["agendado", "confirmado"])
-        .not("feedback_solicitado_em", "is", null)
         .is("feedback_respondido_em", null)
-        .order("fim_at", { ascending: true })
-        .limit(100),
+        .order("fim_at", { ascending: true });
+
+    if (agendamentoIdSolicitado) {
+      pendenciasQuery = pendenciasQuery
+        .eq("id", agendamentoIdSolicitado)
+        .limit(1);
+    } else {
+      pendenciasQuery = pendenciasQuery
+        .not("feedback_solicitado_em", "is", null)
+        .limit(100);
+    }
+
+    const [
+      { data, error },
+      { data: listas, error: listasError },
+      { data: tipos, error: tiposError },
+      { data: responsaveis, error: responsaveisError },
+    ] = await Promise.all([
+      pendenciasQuery,
       supabase
         .from("conversas_listas")
         .select("id, nome")
@@ -122,9 +136,66 @@ export async function GET() {
     if (tiposError) throw tiposError;
     if (responsaveisError) throw responsaveisError;
 
+    const pendencias = data || [];
+    const contatoIds = Array.from(
+      new Set(
+        pendencias
+          .map((item) => String(item.contato_id || "").trim())
+          .filter(Boolean),
+      ),
+    );
+
+    const resultadoAnteriorPorContato = new Map<
+      string,
+      {
+        id: string;
+        classificacao: ClassificacaoLead;
+        valor_venda: number | null;
+        agendamento_id: string;
+        created_at: string;
+      }
+    >();
+
+    if (contatoIds.length > 0) {
+      const { data: resultadosAnteriores, error: resultadosAnterioresError } =
+        await supabase
+          .from("agenda_resultados_comerciais")
+          .select(
+            "id, contato_id, agendamento_id, classificacao, valor_venda, created_at",
+          )
+          .eq("empresa_id", usuario.empresa_id)
+          .in("contato_id", contatoIds)
+          .order("created_at", { ascending: false });
+
+      if (resultadosAnterioresError) throw resultadosAnterioresError;
+
+      for (const item of resultadosAnteriores || []) {
+        const contatoId = String(item.contato_id || "");
+        if (!contatoId || resultadoAnteriorPorContato.has(contatoId)) continue;
+
+        resultadoAnteriorPorContato.set(contatoId, {
+          id: String(item.id),
+          classificacao: item.classificacao as ClassificacaoLead,
+          valor_venda:
+            item.valor_venda === null || item.valor_venda === undefined
+              ? null
+              : Number(item.valor_venda),
+          agendamento_id: String(item.agendamento_id),
+          created_at: String(item.created_at),
+        });
+      }
+    }
+
+    const pendenciasEnriquecidas = pendencias.map((item) => ({
+      ...item,
+      resultado_comercial_anterior: item.contato_id
+        ? resultadoAnteriorPorContato.get(String(item.contato_id)) || null
+        : null,
+    }));
+
     return NextResponse.json({
       ok: true,
-      pendencias: data || [],
+      pendencias: pendenciasEnriquecidas,
       quantidade: data?.length || 0,
       listas: listas || [],
       tipos: tipos || [],
@@ -148,6 +219,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   let proximoCriadoId: string | null = null;
   let notaCriadaId: string | null = null;
+  let resultadoComercialCriadoId: string | null = null;
 
   try {
     const resultado = await getUsuarioContexto();
@@ -173,6 +245,11 @@ export async function PATCH(request: Request) {
     const classificacao = String(body?.classificacao_atendimento || "")
       .trim()
       .toLowerCase() as ClassificacaoLead;
+    const modoResultadoComercial = String(
+      body?.modo_resultado_comercial || "",
+    )
+      .trim()
+      .toLowerCase();
     const listaId = String(body?.lista_id || "").trim() || null;
     const proximoAtendimento =
       body?.proximo_atendimento && typeof body.proximo_atendimento === "object"
@@ -196,22 +273,13 @@ export async function PATCH(request: Request) {
       );
     }
 
-    if (!CLASSIFICACOES_ATENDIMENTO.has(classificacao)) {
+    if (!["novo", "manter"].includes(modoResultadoComercial)) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Selecione uma classificação válida para o atendimento.",
+          error:
+            "Informe se deseja manter o resultado comercial anterior ou registrar um novo resultado.",
         },
-        { status: 400 },
-      );
-    }
-
-    if (
-      classificacao === "convertido" &&
-      (valorVenda === null || !Number.isFinite(valorVenda) || valorVenda <= 0)
-    ) {
-      return NextResponse.json(
-        { ok: false, error: "Informe um valor de venda maior que zero." },
         { status: 400 },
       );
     }
@@ -238,7 +306,7 @@ export async function PATCH(request: Request) {
     const { data: agendamento, error: agendamentoError } = await supabase
       .from("agenda_agendamentos")
       .select(
-        "id, empresa_id, agenda_id, contato_id, conversa_id, titulo, tipo_id, responsavel_id, nome_cliente, telefone_cliente, email_cliente, status, resultado, observacoes_internas",
+        "id, empresa_id, agenda_id, contato_id, conversa_id, titulo, tipo_id, responsavel_id, nome_cliente, telefone_cliente, email_cliente, inicio_at, fim_at, status, resultado, observacoes_internas, metadata_json",
       )
       .eq("id", agendamentoId)
       .eq("empresa_id", empresaId)
@@ -250,6 +318,97 @@ export async function PATCH(request: Request) {
         { ok: false, error: "Agendamento não encontrado." },
         { status: 404 },
       );
+    }
+
+    const inicioAt = new Date(String(agendamento.inicio_at || ""));
+    if (
+      Number.isFinite(inicioAt.getTime()) &&
+      inicioAt.getTime() > Date.now()
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "O atendimento ainda não iniciou e não pode ser finalizado.",
+        },
+        { status: 400 },
+      );
+    }
+
+    let resultadoComercialAnterior:
+      | {
+          id: string;
+          classificacao: ClassificacaoLead;
+          valor_venda: number | null;
+          agendamento_id: string;
+          created_at: string;
+        }
+      | null = null;
+
+    if (agendamento.contato_id) {
+      const {
+        data: resultadoAnterior,
+        error: resultadoAnteriorError,
+      } = await supabase
+        .from("agenda_resultados_comerciais")
+        .select("id, classificacao, valor_venda, agendamento_id, created_at")
+        .eq("empresa_id", empresaId)
+        .eq("contato_id", agendamento.contato_id)
+        .neq("agendamento_id", agendamentoId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (resultadoAnteriorError) throw resultadoAnteriorError;
+
+      if (resultadoAnterior) {
+        resultadoComercialAnterior = {
+          id: String(resultadoAnterior.id),
+          classificacao:
+            resultadoAnterior.classificacao as ClassificacaoLead,
+          valor_venda:
+            resultadoAnterior.valor_venda === null ||
+            resultadoAnterior.valor_venda === undefined
+              ? null
+              : Number(resultadoAnterior.valor_venda),
+          agendamento_id: String(resultadoAnterior.agendamento_id),
+          created_at: String(resultadoAnterior.created_at),
+        };
+      }
+    }
+
+    if (!resultadoComercialAnterior && modoResultadoComercial !== "novo") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Este é o primeiro resultado comercial deste contato. Registre um novo resultado.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (modoResultadoComercial === "novo") {
+      if (!CLASSIFICACOES_ATENDIMENTO.has(classificacao)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Selecione uma classificação válida para o atendimento.",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (
+        classificacao === "convertido" &&
+        (valorVenda === null ||
+          !Number.isFinite(valorVenda) ||
+          valorVenda <= 0)
+      ) {
+        return NextResponse.json(
+          { ok: false, error: "Informe um valor de venda maior que zero." },
+          { status: 400 },
+        );
+      }
     }
 
     let conversaVinculadaId: string | null = agendamento.conversa_id || null;
@@ -457,9 +616,50 @@ export async function PATCH(request: Request) {
     }
 
     const agora = new Date().toISOString();
+
+    if (modoResultadoComercial === "novo" && agendamento.contato_id) {
+      const { data: resultadoComercial, error: resultadoComercialError } =
+        await supabase
+          .from("agenda_resultados_comerciais")
+          .insert({
+            empresa_id: empresaId,
+            contato_id: agendamento.contato_id,
+            agendamento_id: agendamentoId,
+            classificacao,
+            valor_venda:
+              classificacao === "convertido" ? valorVenda : null,
+            criado_por: resultado.usuario.id,
+            metadata_json: {
+              origem: "agenda_feedback",
+              status_final: resposta,
+              resultado: resumoResultado || null,
+            },
+          })
+          .select("id")
+          .single();
+
+      if (resultadoComercialError) {
+        if (proximoCriadoId) {
+          await supabase
+            .from("agenda_agendamentos")
+            .delete()
+            .eq("id", proximoCriadoId)
+            .eq("empresa_id", empresaId);
+          proximoCriadoId = null;
+        }
+        throw resultadoComercialError;
+      }
+      resultadoComercialCriadoId = String(resultadoComercial.id);
+    }
+
     const statusAnterior = agendamento.status;
     const resultadoAnterior = agendamento.resultado || null;
     const observacoesAnteriores = agendamento.observacoes_internas || null;
+    const metadataAnterior =
+      agendamento.metadata_json &&
+      typeof agendamento.metadata_json === "object"
+        ? agendamento.metadata_json
+        : {};
 
     const { data, error: feedbackError } = await supabase
       .from("agenda_agendamentos")
@@ -470,20 +670,64 @@ export async function PATCH(request: Request) {
         feedback_respondido_por: resultado.usuario.id,
         resultado: resumoResultado || null,
         observacoes_internas: observacoesInternas || null,
+        metadata_json: {
+          ...((agendamento.metadata_json &&
+          typeof agendamento.metadata_json === "object"
+            ? agendamento.metadata_json
+            : {}) as Record<string, unknown>),
+          feedback_resultado_comercial: {
+            modo: modoResultadoComercial,
+            resultado_comercial_id: resultadoComercialCriadoId,
+            resultado_anterior_id: resultadoComercialAnterior?.id || null,
+            classificacao:
+              modoResultadoComercial === "novo"
+                ? classificacao
+                : resultadoComercialAnterior?.classificacao || null,
+            valor_venda:
+              modoResultadoComercial === "novo"
+                ? classificacao === "convertido"
+                  ? valorVenda
+                  : null
+                : resultadoComercialAnterior?.valor_venda || null,
+            registrado_em: agora,
+          },
+        },
         updated_at: agora,
         updated_by: resultado.usuario.id,
       })
       .eq("id", agendamentoId)
       .eq("empresa_id", empresaId)
       .in("status", ["agendado", "confirmado"])
-      .not("feedback_solicitado_em", "is", null)
       .is("feedback_respondido_em", null)
       .select("*")
       .maybeSingle();
 
-    if (feedbackError) throw feedbackError;
+    if (feedbackError) {
+      if (resultadoComercialCriadoId) {
+        await supabase
+          .from("agenda_resultados_comerciais")
+          .delete()
+          .eq("id", resultadoComercialCriadoId)
+          .eq("empresa_id", empresaId);
+      }
+      if (proximoCriadoId) {
+        await supabase
+          .from("agenda_agendamentos")
+          .delete()
+          .eq("id", proximoCriadoId)
+          .eq("empresa_id", empresaId);
+      }
+      throw feedbackError;
+    }
 
     if (!data) {
+      if (resultadoComercialCriadoId) {
+        await supabase
+          .from("agenda_resultados_comerciais")
+          .delete()
+          .eq("id", resultadoComercialCriadoId)
+          .eq("empresa_id", empresaId);
+      }
       if (proximoCriadoId) {
         await supabase
           .from("agenda_agendamentos")
@@ -513,6 +757,13 @@ export async function PATCH(request: Request) {
         .single();
 
       if (notaError) {
+        if (resultadoComercialCriadoId) {
+          await supabase
+            .from("agenda_resultados_comerciais")
+            .delete()
+            .eq("id", resultadoComercialCriadoId)
+            .eq("empresa_id", empresaId);
+        }
         await supabase
           .from("agenda_agendamentos")
           .update({
@@ -522,6 +773,7 @@ export async function PATCH(request: Request) {
             feedback_respondido_por: null,
             resultado: resultadoAnterior,
             observacoes_internas: observacoesAnteriores,
+            metadata_json: metadataAnterior,
             updated_at: agora,
             updated_by: resultado.usuario.id,
           })
@@ -555,7 +807,10 @@ export async function PATCH(request: Request) {
       if (listaItemError) throw listaItemError;
     }
 
-    if (agendamento.contato_id) {
+    if (
+      agendamento.contato_id &&
+      modoResultadoComercial === "novo"
+    ) {
       await aplicarClassificacaoLeadContato({
         empresaId,
         contatoId: agendamento.contato_id,
@@ -672,8 +927,19 @@ export async function PATCH(request: Request) {
     return NextResponse.json({
       ok: true,
       agendamento: data,
-      classificacao,
-      valor_venda: classificacao === "convertido" ? valorVenda : null,
+      modo_resultado_comercial: modoResultadoComercial,
+      classificacao:
+        modoResultadoComercial === "novo"
+          ? classificacao
+          : resultadoComercialAnterior?.classificacao || null,
+      valor_venda:
+        modoResultadoComercial === "novo"
+          ? classificacao === "convertido"
+            ? valorVenda
+            : null
+          : resultadoComercialAnterior?.valor_venda || null,
+      resultado_comercial_id:
+        resultadoComercialCriadoId || resultadoComercialAnterior?.id || null,
       lista_id: listaId,
       nota_id: notaCriadaId,
       proximo_agendamento: proximoAgendamento,

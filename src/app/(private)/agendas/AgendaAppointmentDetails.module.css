@@ -596,6 +596,7 @@ a.relatedCard:hover {
   gap: 8px;
 }
 .secondaryButton,
+.realizeButton,
 .editButton,
 .googleButton {
   min-height: 42px;
@@ -615,6 +616,17 @@ a.relatedCard:hover {
   border: 1px solid var(--crm-border-strong);
   color: var(--crm-text);
   background: var(--crm-surface);
+}
+.realizeButton {
+  border: 1px solid color-mix(in srgb, var(--crm-success, #16a34a) 75%, var(--crm-border));
+  color: white;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--crm-success, #16a34a) 88%, #0f766e),
+    color-mix(in srgb, var(--crm-success, #16a34a) 66%, var(--crm-primary-strong))
+  );
+  box-shadow: 0 8px 20px
+    color-mix(in srgb, var(--crm-success, #16a34a) 20%, transparent);
 }
 .googleButton {
   border: 1px solid var(--crm-primary-border);
@@ -675,7 +687,8 @@ a.relatedCard:hover {
   .googleButton {
     width: 100%;
   }
-  .secondaryButton {
+  .secondaryButton,
+  .realizeButton {
     flex: 0 0 auto;
   }
   .editButton {

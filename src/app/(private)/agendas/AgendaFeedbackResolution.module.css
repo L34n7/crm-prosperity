@@ -40,6 +40,109 @@
   color: var(--crm-ui-private-content-hex-718096, #718096);
 }
 
+.previousResult,
+.firstResult {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--crm-ui-private-border, rgba(148, 163, 184, 0.3));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--crm-accent, #16a085) 6%, transparent);
+}
+
+.previousResult > span,
+.firstResult > strong {
+  color: var(--crm-text-strong, #172033);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.previousResult > strong {
+  color: var(--crm-accent, #16a085);
+  font-size: 15px;
+}
+
+.previousResult small,
+.firstResult span {
+  color: var(--crm-ui-private-content-hex-718096, #718096);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.commercialDecision {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.commercialDecision label {
+  min-height: 76px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--crm-ui-private-border, rgba(148, 163, 184, 0.3));
+  border-radius: 10px;
+  background: var(--crm-ui-private-surface, transparent);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.commercialDecision label:hover,
+.commercialDecisionActive {
+  border-color: color-mix(
+    in srgb,
+    var(--crm-accent, #16a085) 65%,
+    var(--crm-ui-private-border, rgba(148, 163, 184, 0.3))
+  ) !important;
+  background: color-mix(
+    in srgb,
+    var(--crm-accent, #16a085) 7%,
+    transparent
+  ) !important;
+}
+
+.commercialDecisionActive {
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--crm-accent, #16a085) 10%, transparent);
+}
+
+.commercialDecision input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  flex: 0 0 auto;
+  accent-color: var(--crm-accent, #16a085);
+}
+
+.commercialDecision span {
+  display: grid;
+  gap: 4px;
+}
+
+.commercialDecision strong {
+  color: var(--crm-text-strong, #172033);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.commercialDecision small {
+  color: var(--crm-ui-private-content-hex-718096, #718096);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.commercialForm {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--crm-ui-private-border, rgba(148, 163, 184, 0.22));
+}
+
 .scheduleToggle {
   min-height: 42px;
   display: flex;
@@ -130,6 +233,10 @@
   .modal {
     width: calc(100vw - 18px);
     max-height: calc(100vh - 18px);
+  }
+
+  .commercialDecision {
+    grid-template-columns: 1fr;
   }
 
   .nextForm {

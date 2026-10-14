@@ -1,5 +1,5 @@
 "use client";
-import { CalendarDays, Pencil } from "lucide-react";
+import { CalendarDays, CheckCircle2, Pencil } from "lucide-react";
 import AgendaAppointmentHero from "./AgendaAppointmentHero";
 import AgendaAppointmentMainSections from "./AgendaAppointmentMainSections";
 import AgendaAppointmentRelatedSection from "./AgendaAppointmentRelatedSection";
@@ -17,6 +17,7 @@ type Props = {
   googleCalendarUrl?: string | null;
   onClose: () => void;
   onEdit?: () => void;
+  onRealize?: () => void;
 };
 export default function AgendaAppointmentDetails({
   appointment,
@@ -28,6 +29,7 @@ export default function AgendaAppointmentDetails({
   googleCalendarUrl,
   onClose,
   onEdit,
+  onRealize,
 }: Props) {
   return (
     <div
@@ -74,13 +76,15 @@ export default function AgendaAppointmentDetails({
                 <CalendarDays size={17} /> Abrir no Google Calendar
               </a>
             ) : null}
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={onClose}
-            >
-              Fechar
-            </button>
+            {onRealize ? (
+              <button
+                type="button"
+                className={styles.realizeButton}
+                onClick={onRealize}
+              >
+                <CheckCircle2 size={16} /> Realizar atendimento
+              </button>
+            ) : null}
             {onEdit ? (
               <button
                 type="button"
