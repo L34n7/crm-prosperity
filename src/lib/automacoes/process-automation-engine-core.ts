@@ -4925,9 +4925,7 @@ export async function executarNo(params: {
 
   if (no.tipo_no === "transferir_setor") {
   const configTransferencia = no.configuracao_json || {};
-  const mensagem =
-    configTransferencia.mensagem ||
-    "Vou te encaminhar para um atendente.";
+  const mensagem = String(configTransferencia.mensagem || "").trim();
   // CRM_QUEUE_SCOPE_ENGINE_V1
   const escopoFilaTransferencia =
     String(configTransferencia.escopo_fila || "").trim() === "geral"
@@ -4951,29 +4949,31 @@ export async function executarNo(params: {
     conversaId,
   });
 
-  const envio = await enviarMensagemAutomacao({
-    empresaId,
-    conversaId,
-    numeroDestino,
-    conteudo: mensagem,
-    execucaoId,
-    noId: no.id,
-  });
-
-  if (
-    await interromperNoPorFalhaEnvioAutomacao({
+  if (mensagem) {
+    const envio = await enviarMensagemAutomacao({
       empresaId,
       conversaId,
-      execucaoId,
-      fluxoId,
-      no,
       numeroDestino,
-      resultado: envio,
-      tipoEnvio: "transferir_setor",
-      mensagemTexto,
-    })
-  ) {
-    return;
+      conteudo: mensagem,
+      execucaoId,
+      noId: no.id,
+    });
+
+    if (
+      await interromperNoPorFalhaEnvioAutomacao({
+        empresaId,
+        conversaId,
+        execucaoId,
+        fluxoId,
+        no,
+        numeroDestino,
+        resultado: envio,
+        tipoEnvio: "transferir_setor",
+        mensagemTexto,
+      })
+    ) {
+      return;
+    }
   }
 
   const agora = new Date().toISOString();
@@ -5013,6 +5013,7 @@ export async function executarNo(params: {
       : "Execução finalizada com transferência para a fila do setor.",
     entrada: configTransferencia,
     saida: {
+      mensagem_enviada: !!mensagem,
       mensagem,
       setor_id: setorDestino,
       responsavel_id: atribuicao.responsavelId,

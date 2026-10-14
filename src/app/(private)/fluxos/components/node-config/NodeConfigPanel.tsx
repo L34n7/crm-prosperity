@@ -180,6 +180,12 @@ export default function NodeConfigPanel({
             onChange={(e) => alterarMensagem(e.target.value)}
             placeholder="Digite o conteúdo"
           />
+          {tipoNode === "transferir_setor" && (
+            <p className={styles.help}>
+              Opcional. Se ficar vazio, o contato será transferido sem receber
+              nenhuma mensagem antes da transferência.
+            </p>
+          )}
           <p className={styles.help}>
             Use variaveis com duas chaves de cada lado. Exemplo: {"{{variavel}}"} ou {"{{teste}}"}.
           </p>
