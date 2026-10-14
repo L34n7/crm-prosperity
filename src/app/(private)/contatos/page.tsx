@@ -5,6 +5,7 @@ import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import ExclusaoContatosEmMassa from "./ExclusaoContatosEmMassa";
 import GerenciarListaContatosModal from "./GerenciarListaContatosModal";
+import CentralRevisaoTelefones from "./CentralRevisaoTelefones";
 import type { ListaCompartilhadaContato } from "./GerenciarListasCompartilhadasModal";
 import styles from "./contatos.module.css";
 
@@ -1862,6 +1863,18 @@ export default function ContatosPage() {
       <FeedbackToast
         success={mensagem}
         onSuccessDismiss={() => setMensagem("")}
+      />
+
+      <CentralRevisaoTelefones
+        listaIdInicial={
+          filtroOrigem.startsWith("lista:")
+            ? filtroOrigem.replace("lista:", "")
+            : null
+        }
+        onAtualizado={async () => {
+          await carregarContatos();
+          await carregarOpcoesFiltros();
+        }}
       />
       
         <section className={styles.card}>
