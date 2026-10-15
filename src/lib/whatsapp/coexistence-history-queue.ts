@@ -392,12 +392,12 @@ async function reconciliarCoexistenceHistoryStatsExato(
   };
 }
 
-async function integracaoPodeProcessarHistoricoCoex(
+export async function integracaoPodeProcessarHistoricoCoex(
   integrationId: string
 ) {
   const { data, error } = await supabase
     .from("integracoes_whatsapp")
-    .select("id, status")
+    .select("id, status, config_json")
     .eq("id", integrationId)
     .maybeSingle();
 
@@ -407,7 +407,29 @@ async function integracaoPodeProcessarHistoricoCoex(
     );
   }
 
-  return Boolean(data && data.status !== "desconectada");
+  if (!data || ["desconectada", "erro"].includes(String(data.status || ""))) {
+    return false;
+  }
+
+  const config = objectValue(data.config_json);
+  if (config.coexistence_sync_mode === "contacts_only") {
+    return false;
+  }
+
+  const { data: job, error: jobError } = await supabase
+    .from("whatsapp_coex_sync_jobs")
+    .select("status")
+    .eq("integracao_whatsapp_id", integrationId)
+    .eq("tipo", "history")
+    .maybeSingle();
+
+  if (jobError) {
+    throw new Error(
+      `Erro ao validar job do histórico Coex: ${jobError.message}`
+    );
+  }
+
+  return job?.status !== "recusado_usuario";
 }
 
 async function findNextQueueItem(integrationId: string) {
@@ -439,7 +461,7 @@ export async function scheduleCoexistenceHistoryBatch(
       ok: true,
       scheduled: false,
       cancelled: true,
-      reason: "integracao_desconectada",
+      reason: "historico_indisponivel_ou_cancelado",
     };
   }
 
@@ -579,6 +601,10 @@ export async function enqueueCoexistenceHistory(
       continue;
     }
 
+    if (!(await integracaoPodeProcessarHistoricoCoex(integration.id))) {
+      continue;
+    }
+
     integrations.add(integration.id);
     const rows = phoneMessages.map((message) => ({
       empresa_id: integration.empresa_id,
@@ -681,7 +707,7 @@ export async function processCoexistenceHistoryBatch(params: {
       ignored: 0,
       failed: 0,
       cancelled: true,
-      reason: "integracao_desconectada",
+      reason: "historico_indisponivel_ou_cancelado",
     };
   }
 
@@ -1003,7 +1029,7 @@ export async function processCoexistenceHistoryFallback(params: {
           integrationId: job.integracao_whatsapp_id,
           processed: 0,
           cancelled: true,
-          reason: "integracao_desconectada",
+          reason: "historico_indisponivel_ou_cancelado",
         });
         continue;
       }

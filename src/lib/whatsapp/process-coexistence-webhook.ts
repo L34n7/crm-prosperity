@@ -19,6 +19,7 @@ import { isCoexistenceSyncTerminalStatus } from "@/lib/whatsapp/coexistence-sync
 import {
   enqueueCoexistenceHistory,
   finishCoexistenceIntegrationIfReady,
+  integracaoPodeProcessarHistoricoCoex,
   refreshCoexistenceHistoryStats,
 } from "@/lib/whatsapp/coexistence-history-queue";
 import { assumirAtendimentoPeloWhatsappBusinessApp } from "@/lib/automacoes/assumir-atendimento-business-app";
@@ -398,6 +399,10 @@ async function updateHistorySyncState(body: WhatsAppWebhookBody) {
     const integration =
       await findWhatsAppIntegrationByPhoneNumberId(state.phoneNumberId);
     if (!integration) continue;
+
+    if (!(await integracaoPodeProcessarHistoricoCoex(integration.id))) {
+      continue;
+    }
 
     const declined = state.errorCode === 2593109;
     const completed = state.progress === 100;
