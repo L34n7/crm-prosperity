@@ -896,7 +896,8 @@
 
 .subscriptionCancelButton,
 .subscriptionCancelConfirm,
-.subscriptionCancelBack {
+.subscriptionCancelBack,
+.subscriptionUndoButton {
   min-height: 34px;
   padding: 0 10px;
   border-radius: 7px;
@@ -907,10 +908,15 @@
 }
 
 .subscriptionCancelButton,
-.subscriptionCancelBack {
+.subscriptionCancelBack,
+.subscriptionUndoButton {
   border: 1px solid var(--crm-border-strong);
   background: var(--crm-surface);
   color: var(--crm-text-strong);
+}
+
+.subscriptionUndoButton:hover:not(:disabled) {
+  background: var(--crm-surface-muted);
 }
 
 .subscriptionCancelConfirm {
@@ -920,7 +926,8 @@
 }
 
 .subscriptionCancelConfirm:disabled,
-.subscriptionCancelBack:disabled {
+.subscriptionCancelBack:disabled,
+.subscriptionUndoButton:disabled {
   opacity: 0.58;
   cursor: not-allowed;
 }

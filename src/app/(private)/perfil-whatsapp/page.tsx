@@ -313,6 +313,8 @@ export default function WhatsappPerfilPage() {
     cancelamentosWhatsappAgendados,
     setCancelamentosWhatsappAgendados,
   ] = useState<CancelamentoWhatsappAgendado[]>([]);
+  const [desfazendoCancelamentoId, setDesfazendoCancelamentoId] =
+    useState<string | null>(null);
 
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
@@ -381,6 +383,50 @@ export default function WhatsappPerfilPage() {
       setErroCheckoutAdicional("Erro inesperado ao preparar o checkout.");
     } finally {
       setAbrindoCheckoutAdicional(false);
+    }
+  }
+
+  async function desfazerCancelamentoAgendado(
+    cancellationId: string
+  ) {
+    if (desfazendoCancelamentoId) return;
+
+    setDesfazendoCancelamentoId(cancellationId);
+    setErro("");
+    setSucesso("");
+
+    try {
+      const response = await fetch(
+        "/api/assinaturas/adicionais/whatsapp/desfazer-cancelamento",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cancellation_id: cancellationId }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(
+          data?.error || "Não foi possível desfazer o cancelamento."
+        );
+      }
+
+      setSucesso(
+        "Cancelamento desfeito. O número adicional continuará ativo nas próximas mensalidades."
+      );
+      await carregarPerfil(integracaoId || undefined, {
+        preservarMensagens: true,
+      });
+      window.dispatchEvent(new CustomEvent("assinatura:atualizada"));
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível desfazer o cancelamento."
+      );
+    } finally {
+      setDesfazendoCancelamentoId(null);
     }
   }
 
@@ -1322,6 +1368,19 @@ export default function WhatsappPerfilPage() {
                       automaticamente com segurança, criará o backup da
                       integração e liberará a posição para outro número.
                     </p>
+
+                    <button
+                      type="button"
+                      className={styles.scheduledCancellationUndoButton}
+                      onClick={() =>
+                        desfazerCancelamentoAgendado(cancelamento.id)
+                      }
+                      disabled={desfazendoCancelamentoId === cancelamento.id}
+                    >
+                      {desfazendoCancelamentoId === cancelamento.id
+                        ? "Desfazendo..."
+                        : "Desfazer cancelamento"}
+                    </button>
                   </div>
                 ))}
               </div>

@@ -9,7 +9,8 @@ type SubscriptionAction =
   | { type: "change_plan"; offerReference: string }
   | { type: "add_addon"; addonCode: string; quantity?: number }
   | { type: "remove_addon"; addonCode: string; quantity?: number }
-  | { type: "cancel_scheduled_plan_change"; changeId?: string };
+  | { type: "cancel_scheduled_plan_change"; changeId?: string }
+  | { type: "cancel_scheduled_addon_change"; changeId: string };
 
 type CheckoutIntent = {
   status: "awaiting_payment" | "scheduled" | "cancelled";
@@ -704,6 +705,23 @@ export async function cancelarMudancaPlanoAgendadaProsperityPay(
       action: {
         type: "cancel_scheduled_plan_change",
         ...(changeId ? { changeId } : {}),
+      },
+    },
+  );
+}
+
+export async function cancelarMudancaAddonAgendadaProsperityPay(
+  empresaId: string,
+  changeId: string,
+) {
+  const subscription = await garantirAssinaturaProsperityPay(empresaId);
+  return signedPost<CheckoutIntent>(
+    "/api/integrations/subscriptions/checkout-sessions",
+    {
+      subscriptionId: subscription.external_subscription_id,
+      action: {
+        type: "cancel_scheduled_addon_change",
+        changeId,
       },
     },
   );

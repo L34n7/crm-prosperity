@@ -248,6 +248,8 @@ export default function Header({
   const [confirmandoCancelamentoAddonId, setConfirmandoCancelamentoAddonId] =
     useState<string | null>(null);
   const [cancelandoAddonId, setCancelandoAddonId] = useState<string | null>(null);
+  const [desfazendoCancelamentoAddonId, setDesfazendoCancelamentoAddonId] =
+    useState<string | null>(null);
   const [abrindoCheckoutAddon, setAbrindoCheckoutAddon] = useState(false);
   const [cancelandoAlteracaoPlano, setCancelandoAlteracaoPlano] =
     useState(false);
@@ -892,6 +894,44 @@ export default function Header({
       );
     } finally {
       setCancelandoAddonId(null);
+    }
+  }
+
+  async function desfazerCancelamentoNumeroAdicional(
+    cancellationId: string
+  ) {
+    if (desfazendoCancelamentoAddonId) return;
+
+    setDesfazendoCancelamentoAddonId(cancellationId);
+    setErroAssinaturaResumo("");
+
+    try {
+      const response = await fetch(
+        "/api/assinaturas/adicionais/whatsapp/desfazer-cancelamento",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cancellation_id: cancellationId }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(
+          data?.error || "Não foi possível desfazer o cancelamento."
+        );
+      }
+
+      await carregarResumoAssinatura();
+      window.dispatchEvent(new CustomEvent("assinatura:atualizada"));
+    } catch (error) {
+      setErroAssinaturaResumo(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível desfazer o cancelamento."
+      );
+    } finally {
+      setDesfazendoCancelamentoAddonId(null);
     }
   }
 
@@ -1621,9 +1661,29 @@ export default function Header({
                               </strong>
 
                               {addon.cancellation ? (
-                                <span className={styles.subscriptionPendingBadge}>
-                                  Sai na próxima renovação
-                                </span>
+                                <div className={styles.subscriptionCancelActions}>
+                                  <span className={styles.subscriptionPendingBadge}>
+                                    Sai na próxima renovação
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className={styles.subscriptionUndoButton}
+                                    onClick={() =>
+                                      desfazerCancelamentoNumeroAdicional(
+                                        addon.cancellation!.id
+                                      )
+                                    }
+                                    disabled={
+                                      desfazendoCancelamentoAddonId ===
+                                      addon.cancellation.id
+                                    }
+                                  >
+                                    {desfazendoCancelamentoAddonId ===
+                                    addon.cancellation.id
+                                      ? "Desfazendo..."
+                                      : "Desfazer cancelamento"}
+                                  </button>
+                                </div>
                               ) : (
                                 <>
                                   {!configurado && (
