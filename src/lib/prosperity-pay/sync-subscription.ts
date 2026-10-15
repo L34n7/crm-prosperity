@@ -127,10 +127,71 @@ async function planForBaseItem(payload: SubscriptionEventPayload) {
   return { mapping: data, plan, base };
 }
 
+function addonWhatsappQuantityFromItems(items: unknown) {
+  if (!Array.isArray(items)) return 0;
+
+  return items
+    .filter((item) => {
+      const row = objectValue(item);
+      return row.type === "addon" && row.code === "whatsapp_number";
+    })
+    .reduce((sum, item) => {
+      const row = objectValue(item);
+      return sum + Math.max(0, Number(row.quantity || 0));
+    }, 0);
+}
+
 function addonWhatsappQuantity(payload: SubscriptionEventPayload) {
-  return (payload.subscription?.items || [])
-    .filter(item => item.type === "addon" && item.code === "whatsapp_number")
-    .reduce((sum, item) => sum + Math.max(0, Number(item.quantity || 0)), 0);
+  return addonWhatsappQuantityFromItems(payload.subscription?.items || []);
+}
+
+async function sincronizarLimiteWhatsappPeloEspelho(empresaId: string) {
+  const [{ data: empresa, error: empresaError }, { data: mirror, error: mirrorError }] =
+    await Promise.all([
+      supabase
+        .from("empresas")
+        .select(
+          "plano_id,limite_total_numeros_whatsapp,planos:plano_id(limite_integracoes_whatsapp)",
+        )
+        .eq("id", empresaId)
+        .single(),
+      supabase
+        .from("prosperity_pay_assinaturas")
+        .select("items")
+        .eq("empresa_id", empresaId)
+        .maybeSingle(),
+    ]);
+
+  if (empresaError) throw empresaError;
+  if (mirrorError) throw mirrorError;
+  if (!mirror) return;
+
+  const plano = Array.isArray(empresa?.planos)
+    ? empresa.planos[0]
+    : empresa?.planos;
+  const limiteBase = Math.max(
+    1,
+    Number(plano?.limite_integracoes_whatsapp || 1),
+  );
+  const limiteTotal = Math.max(
+    limiteBase,
+    Number(empresa?.limite_total_numeros_whatsapp || limiteBase),
+  );
+  const adicionais = addonWhatsappQuantityFromItems(mirror.items);
+  const limiteAtualizado = Math.min(
+    limiteTotal,
+    limiteBase + adicionais,
+  );
+
+  const { error: updateError } = await supabase
+    .from("empresas")
+    .update({
+      limite_integracoes_whatsapp: limiteAtualizado,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", empresaId);
+
+  if (updateError) throw updateError;
 }
 
 async function preserveTokenUsageOnPlanChange(empresaId: string, newLimit: number | null) {
@@ -328,10 +389,15 @@ export async function processarCancelamentosWhatsappAgendadosVencidos(
   let aplicados = 0;
 
   for (const empresaId of empresas) {
-    aplicados += await aplicarCancelamentosWhatsappAgendados(
+    const aplicadosEmpresa = await aplicarCancelamentosWhatsappAgendados(
       empresaId,
       referenciaTempo,
     );
+    aplicados += aplicadosEmpresa;
+
+    if (aplicadosEmpresa > 0) {
+      await sincronizarLimiteWhatsappPeloEspelho(empresaId);
+    }
   }
 
   return {
@@ -397,7 +463,9 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     planTokenLimitRaw == null ? null : Number(planTokenLimitRaw);
 
   const currentCompany = await supabase.from("empresas")
-    .select("assinatura_metadata_json,limite_total_numeros_whatsapp")
+    .select(
+      "assinatura_metadata_json,limite_total_numeros_whatsapp,limite_integracoes_whatsapp",
+    )
     .eq("id", empresaId)
     .single();
   if (currentCompany.error) throw currentCompany.error;
@@ -417,6 +485,22 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   const whatsappLimit = Math.min(
     totalWhatsappLimit,
     baseWhatsappLimit + effectiveAdditionalNumbers,
+  );
+  const currentWhatsappLimit = Math.min(
+    totalWhatsappLimit,
+    Math.max(
+      baseWhatsappLimit,
+      Number(
+        currentCompany.data?.limite_integracoes_whatsapp ?? whatsappLimit,
+      ),
+    ),
+  );
+  const whatsappLimitApplied = renewalStartsInFuture
+    ? Math.max(currentWhatsappLimit, whatsappLimit)
+    : whatsappLimit;
+  const currentCycleAdditionalNumbers = Math.max(
+    0,
+    whatsappLimitApplied - baseWhatsappLimit,
   );
 
   const existingMetadata =
@@ -492,7 +576,7 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
 
   const companyUpdate = await supabase.from("empresas").update({
     plano_id: mapping.plano_id,
-    limite_integracoes_whatsapp: whatsappLimit,
+    limite_integracoes_whatsapp: whatsappLimitApplied,
     assinatura_status: "ativa",
     assinatura_inicio_em: periodStart,
     assinatura_vencimento_em: periodEnd,
@@ -510,7 +594,8 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
       current_amount_cents: Number(subscription?.current_amount_cents || 0) || null,
       cycle_number: Number(subscription?.cycle_number || 0) || null,
       whatsapp_addon_quantity: additionalNumbers,
-      whatsapp_addon_quantity_effective: effectiveAdditionalNumbers,
+      whatsapp_addon_quantity_effective: currentCycleAdditionalNumbers,
+      whatsapp_addon_quantity_next: effectiveAdditionalNumbers,
       whatsapp_addon_limit: additionalNumbersLimit,
       whatsapp_total_limit: totalWhatsappLimit,
       last_subscription_event: payload.event,
@@ -570,7 +655,7 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     empresaId,
     subscriptionId,
     planId: mapping.plano_id,
-    whatsappLimit,
+    whatsappLimit: whatsappLimitApplied,
     additionalNumbers,
     effectiveAdditionalNumbers,
     additionalNumbersLimit,

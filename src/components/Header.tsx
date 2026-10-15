@@ -273,6 +273,7 @@ export default function Header({
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
+  const assinaturaResumoRequestRef = useRef(0);
   const alterarPlanoRef = useRef<HTMLDivElement | null>(null);
 
   const headerUser = useHeaderUser();
@@ -804,6 +805,7 @@ export default function Header({
   }
 
   async function carregarResumoAssinatura() {
+    const requestId = ++assinaturaResumoRequestRef.current;
     setCarregandoAssinaturaResumo(true);
     setErroAssinaturaResumo("");
 
@@ -818,6 +820,8 @@ export default function Header({
         throw new Error(data?.error || "Não foi possível carregar a assinatura.");
       }
 
+      if (requestId !== assinaturaResumoRequestRef.current) return;
+
       setAssinaturaResumo({
         subscription: data.subscription,
         plan: data.plan,
@@ -825,13 +829,17 @@ export default function Header({
         pending: data.pending,
       });
     } catch (error) {
+      if (requestId !== assinaturaResumoRequestRef.current) return;
+
       setErroAssinaturaResumo(
         error instanceof Error
           ? error.message
           : "Não foi possível carregar a assinatura."
       );
     } finally {
-      setCarregandoAssinaturaResumo(false);
+      if (requestId === assinaturaResumoRequestRef.current) {
+        setCarregandoAssinaturaResumo(false);
+      }
     }
   }
 
@@ -1585,7 +1593,8 @@ export default function Header({
                           className={styles.subscriptionPayButton}
                           onClick={pagarProximaRenovacao}
                           disabled={
-                            carregandoAssinaturaResumo || !assinaturaPodeRenovar
+                            !assinaturaPodeRenovar ||
+                            (carregandoAssinaturaResumo && !assinaturaResumo)
                           }
                         >
                           {assinaturaPagaAntecipadamente
