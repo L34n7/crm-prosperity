@@ -989,6 +989,23 @@ export default function WhatsappPerfilPage() {
     carregarPerfil();
   }, []);
 
+  useEffect(() => {
+    function atualizarAssinaturaPerfil() {
+      void carregarPerfil(integracaoId || undefined, {
+        preservarMensagens: true,
+      });
+    }
+
+    window.addEventListener("assinatura:atualizada", atualizarAssinaturaPerfil);
+
+    return () => {
+      window.removeEventListener(
+        "assinatura:atualizada",
+        atualizarAssinaturaPerfil
+      );
+    };
+  }, [integracaoId]);
+
     function handleSelecionarFoto(file: File | null) {
     if (!file) {
         setFoto(null);

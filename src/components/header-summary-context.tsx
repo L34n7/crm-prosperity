@@ -650,6 +650,57 @@ export function HeaderSummaryProvider({
 
   useEffect(() => {
     const empresaId = contextoRealtime?.empresa_id;
+    if (!empresaId) return;
+
+    const supabase = getSupabaseRealtime();
+    let refreshTimer: number | null = null;
+
+    function atualizarAssinaturaRealtime() {
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+      }
+
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        window.dispatchEvent(new CustomEvent("assinatura:atualizada"));
+        void refreshResumo(true);
+      }, 250);
+    }
+
+    const channel = supabase
+      .channel(`crm-header-assinatura:${empresaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "prosperity_pay_assinaturas",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        atualizarAssinaturaRealtime
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "prosperity_pay_recursos_agendados",
+          filter: `empresa_id=eq.${empresaId}`,
+        },
+        atualizarAssinaturaRealtime
+      )
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+      }
+      void supabase.removeChannel(channel);
+    };
+  }, [contextoRealtime?.empresa_id, refreshResumo]);
+
+  useEffect(() => {
+    const empresaId = contextoRealtime?.empresa_id;
     const usuarioId = contextoRealtime?.usuario_id;
     if (!empresaId || !usuarioId) return;
 
