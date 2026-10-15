@@ -70,6 +70,7 @@ export async function POST() {
       empresaId,
       tipo: "add_whatsapp",
       changeId: intent.changeId ?? null,
+      sessionId: intent.sessionId ?? null,
       expiresAt: intent.expiresAt ?? null,
       targetAmountCents: intent.targetAmountCents ?? null,
     });

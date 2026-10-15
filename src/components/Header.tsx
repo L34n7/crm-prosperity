@@ -133,7 +133,7 @@ type AssinaturaResumo = {
         effective_at: string | null;
         can_undo: boolean;
         block_reason: "payment_pending" | "payment_confirmed" | null;
-        pending_payment_expires_at: string | null;
+        pending_payment_unlock_at: string | null;
       } | null;
     }>;
     others: Array<{
@@ -150,6 +150,7 @@ type AssinaturaResumo = {
       type: string;
       change_id: string | null;
       expires_at: string | null;
+      undo_locked_until: string | null;
       cancellation_ids: string[];
     } | null;
     plan_change: {
@@ -684,13 +685,13 @@ export default function Header({
   useEffect(() => {
     if (!modalPlanosOpen) return;
 
-    const expiresAt = assinaturaResumo?.pending.payment?.expires_at;
-    if (!expiresAt) return;
+    const unlockAt = assinaturaResumo?.pending.payment?.undo_locked_until;
+    if (!unlockAt) return;
 
-    const expiresMs = new Date(expiresAt).getTime();
-    if (!Number.isFinite(expiresMs)) return;
+    const unlockMs = new Date(unlockAt).getTime();
+    if (!Number.isFinite(unlockMs)) return;
 
-    const delay = expiresMs - Date.now();
+    const delay = unlockMs - Date.now();
     if (delay <= 0) {
       void carregarResumoAssinatura();
       return;
@@ -701,7 +702,7 @@ export default function Header({
     }, Math.min(delay + 500, 2_147_000_000));
 
     return () => window.clearTimeout(timer);
-  }, [modalPlanosOpen, assinaturaResumo?.pending.payment?.expires_at]);
+  }, [modalPlanosOpen, assinaturaResumo?.pending.payment?.undo_locked_until]);
 
   useEffect(() => {
     if (assinaturaEmAberto || !saldoTokensEmAlerta(saldoTokensIa)) {
@@ -1699,7 +1700,7 @@ export default function Header({
                                 <div className={styles.subscriptionCancelActions}>
                                   <span className={styles.subscriptionPendingBadge}>
                                     {motivoBloqueioDesfazer === "payment_pending"
-                                      ? "Pagamento em andamento"
+                                      ? "Aguarde 30 min"
                                       : motivoBloqueioDesfazer ===
                                           "payment_confirmed"
                                         ? "Pagamento confirmado"
@@ -1720,7 +1721,7 @@ export default function Header({
                                     }
                                     title={
                                       motivoBloqueioDesfazer === "payment_pending"
-                                        ? "Aguarde a expiração do checkout ou a confirmação do pagamento."
+                                        ? "Por segurança, o desfazer é liberado 30 minutos após a geração do checkout. O checkout continua válido; ao desfazer, o CRM verifica o pagamento antes de cancelá-lo."
                                         : motivoBloqueioDesfazer ===
                                             "payment_confirmed"
                                           ? "O pagamento foi confirmado com esta composição e o cancelamento não pode mais ser desfeito."

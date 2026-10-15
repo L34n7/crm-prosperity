@@ -10,12 +10,18 @@ type SubscriptionAction =
   | { type: "add_addon"; addonCode: string; quantity?: number }
   | { type: "remove_addon"; addonCode: string; quantity?: number }
   | { type: "cancel_scheduled_plan_change"; changeId?: string }
-  | { type: "cancel_scheduled_addon_change"; changeId: string };
+  | { type: "cancel_scheduled_addon_change"; changeId: string }
+  | { type: "cancel_pending_checkout"; sessionId: string };
 
 type CheckoutIntent = {
-  status: "awaiting_payment" | "scheduled" | "cancelled";
+  status:
+    | "awaiting_payment"
+    | "scheduled"
+    | "cancelled"
+    | "payment_confirmed";
   subscriptionId: string;
   changeId?: string;
+  sessionId?: string;
   amountCents: number;
   targetAmountCents?: number;
   currency: string;
@@ -697,6 +703,7 @@ export async function registrarPagamentoAssinaturaPendenteProsperityPay(params: 
   empresaId: string;
   tipo: "add_whatsapp" | "change_plan" | "renewal";
   changeId?: string | null;
+  sessionId?: string | null;
   expiresAt?: string | null;
   targetAmountCents?: number | null;
 }) {
@@ -711,6 +718,12 @@ export async function registrarPagamentoAssinaturaPendenteProsperityPay(params: 
           agora.getTime() +
             (params.tipo === "renewal" ? 24 * 60 : 30) * 60_000,
         );
+
+  const desbloqueioPadrao = new Date(agora.getTime() + 30 * 60_000);
+  const desbloqueiaEm =
+    expiraEm.getTime() < desbloqueioPadrao.getTime()
+      ? expiraEm
+      : desbloqueioPadrao;
 
   const { data: cancelamentos, error: cancelamentosError } = await supabase
     .from("prosperity_pay_recursos_agendados")
@@ -729,7 +742,9 @@ export async function registrarPagamentoAssinaturaPendenteProsperityPay(params: 
   const pendingPayment = {
     type: params.tipo,
     change_id: params.changeId || null,
+    session_id: params.sessionId || null,
     expires_at: expiraEm.toISOString(),
+    undo_locked_until: desbloqueiaEm.toISOString(),
     target_amount_cents:
       Number.isFinite(Number(params.targetAmountCents))
         ? Number(params.targetAmountCents)
@@ -749,6 +764,23 @@ export async function registrarPagamentoAssinaturaPendenteProsperityPay(params: 
   if (error) throw error;
 
   return pendingPayment;
+}
+
+export async function cancelarCheckoutAssinaturaPendenteProsperityPay(
+  empresaId: string,
+  sessionId: string,
+) {
+  const subscription = await garantirAssinaturaProsperityPay(empresaId);
+  return signedPost<CheckoutIntent>(
+    "/api/integrations/subscriptions/checkout-sessions",
+    {
+      subscriptionId: subscription.external_subscription_id,
+      action: {
+        type: "cancel_pending_checkout",
+        sessionId,
+      },
+    },
+  );
 }
 
 export async function cancelarMudancaPlanoAgendadaProsperityPay(

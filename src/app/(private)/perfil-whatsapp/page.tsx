@@ -79,7 +79,7 @@ type CancelamentoWhatsappAgendado = {
   effective_at: string | null;
   pode_desfazer: boolean;
   bloqueio_desfazer: "payment_pending" | "payment_confirmed" | null;
-  pagamento_expira_em: string | null;
+  pagamento_desbloqueia_em: string | null;
 };
 
 const categorias = [
@@ -1014,9 +1014,11 @@ export default function WhatsappPerfilPage() {
       .filter(
         (item) =>
           item.bloqueio_desfazer === "payment_pending" &&
-          item.pagamento_expira_em
+          item.pagamento_desbloqueia_em
       )
-      .map((item) => new Date(item.pagamento_expira_em as string).getTime())
+      .map((item) =>
+        new Date(item.pagamento_desbloqueia_em as string).getTime()
+      )
       .filter((valor) => Number.isFinite(valor) && valor > Date.now());
 
     if (expiracoes.length === 0) return;
@@ -1414,9 +1416,10 @@ export default function WhatsappPerfilPage() {
                     {cancelamento.bloqueio_desfazer === "payment_pending" && (
                       <p>
                         <strong>Pagamento em andamento.</strong> Por segurança,
-                        não é possível desfazer enquanto o checkout ainda puder
-                        ser pago. Quando ele expirar, o CRM verificará o
-                        pagamento antes de liberar esta ação.
+                        o cancelamento pode ser desfeito 30 minutos após a
+                        geração do checkout. O checkout continua válido por até
+                        24 horas; ao desfazer, o CRM verifica o pagamento e
+                        cancela o checkout se ele ainda estiver pendente.
                       </p>
                     )}
 
@@ -1443,7 +1446,7 @@ export default function WhatsappPerfilPage() {
                       {desfazendoCancelamentoId === cancelamento.id
                         ? "Desfazendo..."
                         : cancelamento.bloqueio_desfazer === "payment_pending"
-                          ? "Aguardando checkout"
+                          ? "Aguarde 30 min"
                           : cancelamento.bloqueio_desfazer ===
                               "payment_confirmed"
                             ? "Pagamento confirmado"

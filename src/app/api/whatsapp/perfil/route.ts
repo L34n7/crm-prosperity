@@ -753,6 +753,33 @@ export async function GET(req: NextRequest) {
     const pendingPaymentActive =
       Number.isFinite(pendingPaymentExpiresMs) &&
       pendingPaymentExpiresMs > Date.now();
+    const pendingPaymentSessionId = String(
+      pendingPayment.session_id || ""
+    ).trim();
+    const pendingPaymentCreatedMs =
+      typeof pendingPayment.created_at === "string"
+        ? new Date(pendingPayment.created_at).getTime()
+        : Number.NaN;
+    const pendingPaymentUnlockExplicitMs =
+      typeof pendingPayment.undo_locked_until === "string"
+        ? new Date(pendingPayment.undo_locked_until).getTime()
+        : Number.NaN;
+    const pendingPaymentUndoUnlockMs = Number.isFinite(
+      pendingPaymentUnlockExplicitMs
+    )
+      ? pendingPaymentUnlockExplicitMs
+      : pendingPaymentSessionId && Number.isFinite(pendingPaymentCreatedMs)
+        ? pendingPaymentCreatedMs + 30 * 60_000
+        : pendingPaymentExpiresMs;
+    const pendingPaymentUndoUnlockAt = Number.isFinite(
+      pendingPaymentUndoUnlockMs
+    )
+      ? new Date(pendingPaymentUndoUnlockMs).toISOString()
+      : null;
+    const pendingPaymentUndoLocked =
+      pendingPaymentActive &&
+      Number.isFinite(pendingPaymentUndoUnlockMs) &&
+      pendingPaymentUndoUnlockMs > Date.now();
     const pendingPaymentCancellationIds = new Set(
       Array.isArray(pendingPayment.cancellation_ids)
         ? pendingPayment.cancellation_ids
@@ -799,7 +826,7 @@ export async function GET(req: NextRequest) {
 
         const lockedByPayment = metadata.payment_locked === true;
         const blockedByPendingPayment =
-          pendingPaymentActive &&
+          pendingPaymentUndoLocked &&
           pendingPaymentCancellationIds.has(String(item.id));
 
         return {
@@ -819,8 +846,8 @@ export async function GET(req: NextRequest) {
             : blockedByPendingPayment
               ? "payment_pending"
               : null,
-          pagamento_expira_em: blockedByPendingPayment
-            ? pendingPaymentExpiresAt
+          pagamento_desbloqueia_em: blockedByPendingPayment
+            ? pendingPaymentUndoUnlockAt
             : null,
         };
       });

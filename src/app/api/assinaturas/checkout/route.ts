@@ -604,7 +604,11 @@ export async function POST(request: Request) {
       }
 
       const intent = renovarPlanoAtual
-        ? await criarCheckoutAssinaturaProsperityPay(usuario.empresa_id, { type: "renew" })
+        ? await criarCheckoutAssinaturaProsperityPay(
+            usuario.empresa_id,
+            { type: "renew" },
+            { renewalSessionTtlHours: 24 },
+          )
         : await criarCheckoutAssinaturaProsperityPay(usuario.empresa_id, {
             type: "change_plan",
             offerReference: await referenciaProsperityPayPorPlanoSlug(planoSlugSolicitado),
@@ -646,6 +650,7 @@ export async function POST(request: Request) {
         empresaId: usuario.empresa_id,
         tipo: renovarPlanoAtual ? "renewal" : "change_plan",
         changeId: intent.changeId ?? null,
+        sessionId: intent.sessionId ?? null,
         expiresAt: intent.expiresAt ?? null,
         targetAmountCents: intent.targetAmountCents ?? null,
       });
