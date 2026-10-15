@@ -392,6 +392,24 @@ async function reconciliarCoexistenceHistoryStatsExato(
   };
 }
 
+async function integracaoPodeProcessarHistoricoCoex(
+  integrationId: string
+) {
+  const { data, error } = await supabase
+    .from("integracoes_whatsapp")
+    .select("id, status")
+    .eq("id", integrationId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Erro ao validar integração do histórico Coex: ${error.message}`
+    );
+  }
+
+  return Boolean(data && data.status !== "desconectada");
+}
+
 async function findNextQueueItem(integrationId: string) {
   const { data, error } = await supabase
     .from("whatsapp_coex_historico_itens")
@@ -400,6 +418,7 @@ async function findNextQueueItem(integrationId: string) {
     .in("status", ["pendente", "erro"])
     .lt("tentativas", getMaxAttempts())
     .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
     .limit(1)
     .maybeSingle();
 
@@ -415,6 +434,15 @@ async function findNextQueueItem(integrationId: string) {
 export async function scheduleCoexistenceHistoryBatch(
   integrationId: string
 ) {
+  if (!(await integracaoPodeProcessarHistoricoCoex(integrationId))) {
+    return {
+      ok: true,
+      scheduled: false,
+      cancelled: true,
+      reason: "integracao_desconectada",
+    };
+  }
+
   const nextItem = await findNextQueueItem(integrationId);
   if (!nextItem) {
     await supabase
@@ -645,6 +673,17 @@ export async function processCoexistenceHistoryBatch(params: {
   scheduleNext?: boolean;
 }) {
   const servico = `whatsapp-coex-worker:${params.integrationId}`;
+
+  if (!(await integracaoPodeProcessarHistoricoCoex(params.integrationId))) {
+    return {
+      ok: true,
+      processed: 0,
+      ignored: 0,
+      failed: 0,
+      cancelled: true,
+      reason: "integracao_desconectada",
+    };
+  }
 
   if (circuitoSupabaseEstaAberto(servico)) {
     throw new Error(
@@ -954,6 +993,21 @@ export async function processCoexistenceHistoryFallback(params: {
 
   for (const job of jobs || []) {
     try {
+      if (
+        !(await integracaoPodeProcessarHistoricoCoex(
+          job.integracao_whatsapp_id
+        ))
+      ) {
+        results.push({
+          ok: true,
+          integrationId: job.integracao_whatsapp_id,
+          processed: 0,
+          cancelled: true,
+          reason: "integracao_desconectada",
+        });
+        continue;
+      }
+
       const nextItem = await findNextQueueItem(
         job.integracao_whatsapp_id
       );
