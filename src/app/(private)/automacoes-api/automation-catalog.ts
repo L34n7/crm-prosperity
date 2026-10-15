@@ -153,13 +153,11 @@ export const opcoesVazias: Opcoes = {
 
 const gatilhosCrmProsperity = CRM_PROSPERITY_SISTEMA_MAPEADO.recursos.flatMap(
   (recurso) =>
-    recurso.eventos
-      .filter((evento) => evento.tipo !== "relative_date")
-      .map((evento) => ({
-        evento: evento.chave,
-        nome: `CRM Prosperity · ${recurso.nome} · ${evento.nome}`,
-        tipo: "evento" as const,
-      })),
+    recurso.eventos.map((evento) => ({
+      evento: evento.chave,
+      nome: `CRM Prosperity · ${recurso.nome} · ${evento.nome}`,
+      tipo: evento.tipo === "relative_date" ? ("data_relativa" as const) : ("evento" as const),
+    })),
 );
 
 const camposCrmProsperity = Array.from(

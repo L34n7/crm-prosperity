@@ -31,7 +31,7 @@ async function registroAtual(params:{empresaId:string;integracaoId:string;sistem
   const conexao=await conexaoAtiva(params.integracaoId,params.empresaId); if(conexao.tipo!==params.sistema) throw new Error("A conexão não corresponde ao sistema mapeado do evento.");
   return buscarRegistroSistemaMapeado({sistema:params.sistema,conexao,recurso:params.recurso,entidadeId:params.entidadeId});
 }
-function gatilhoCombina(g:GatilhoRow,o:OutboxRow){ const c=obj(g.configuracao_json); const i=String(c.integracao_api_id||"").trim(),s=String(c.sistema||"").trim(),r=String(c.recurso||"").trim(); return(!i||i===o.integracao_id)&&(!s||s===o.sistema)&&(!r||r===o.recurso); }
+function gatilhoCombina(g:GatilhoRow,o:OutboxRow){ const c=obj(g.configuracao_json); const m=obj(o.payload_json); const alvo=String(m.gatilho_id||"").trim(); if(alvo&&alvo!==g.id)return false; const i=String(c.integracao_api_id||"").trim(),s=String(c.sistema||"").trim(),r=String(c.recurso||"").trim(); return(!i||i===o.integracao_id)&&(!s||s===o.sistema)&&(!r||r===o.recurso); }
 function minutos(config:Record<string,unknown>){ const q=Math.max(1,Number(config.quantidade||config.atraso||1)); const u=String(config.unidade||"minutos"); return u==="dias"?q*1440:u==="horas"?q*60:q; }
 function tituloAcao(a:AcaoRow){ if(a.tipo_acao==="aguardar"){const c=obj(a.configuracao_json);return `Aguardar ${Math.max(1,Number(c.quantidade||1))} ${String(c.unidade||"minutos")}`;} if(a.tipo_acao==="whatsapp.enviar_template")return"Enviar disparo WhatsApp"; if(a.tipo_acao==="integracao.consultar_api")return"Consultar estado atual"; return a.tipo_acao; }
 
@@ -171,8 +171,116 @@ export async function processarEventoIntegracaoMapeadaPorId(
   }
 }
 
+const EVENTOS_RELATIVOS_ASSINATURA = new Map<string, "assinatura_vencimento_em" | "assinatura_bloqueio_em">([
+  ["prosperity.assinatura.vencimento_proximo", "assinatura_vencimento_em"],
+  ["prosperity.assinatura.bloqueio_proximo", "assinatura_bloqueio_em"],
+]);
+
+async function enfileirarEventosRelativosAssinatura(limite=500){
+  const gatilhosResult=await supabase
+    .from("rotina_automacao_gatilhos")
+    .select("id,empresa_id,automacao_id,evento,offset_minutos,configuracao_json")
+    .eq("tipo","data_relativa")
+    .eq("ativo",true)
+    .in("evento",Array.from(EVENTOS_RELATIVOS_ASSINATURA.keys()));
+  if(gatilhosResult.error)throw gatilhosResult.error;
+  const gatilhos=(gatilhosResult.data||[]) as Array<{id:string;empresa_id:string;automacao_id:string;evento:string;offset_minutos:number|null;configuracao_json:Record<string,unknown>|null}>;
+  if(!gatilhos.length)return 0;
+
+  const automacaoIds=Array.from(new Set(gatilhos.map(item=>item.automacao_id)));
+  const automacoesResult=await supabase
+    .from("rotina_automacoes")
+    .select("id")
+    .in("id",automacaoIds)
+    .eq("status","ativa");
+  if(automacoesResult.error)throw automacoesResult.error;
+  const ativas=new Set((automacoesResult.data||[]).map(item=>String(item.id)));
+  const gatilhosAtivos=gatilhos.filter(item=>ativas.has(item.automacao_id));
+  if(!gatilhosAtivos.length)return 0;
+
+  const empresaOrigemIds=Array.from(new Set(gatilhosAtivos.map(item=>item.empresa_id)));
+  const integracoesResult=await supabase
+    .from("integracoes_api_externas")
+    .select("id,empresa_id")
+    .in("empresa_id",empresaOrigemIds)
+    .eq("tipo","crm_prosperity")
+    .eq("status","ativa");
+  if(integracoesResult.error)throw integracoesResult.error;
+  const integracoesPorEmpresa=new Map<string,string[]>();
+  for(const item of integracoesResult.data||[]){
+    const empresaId=String(item.empresa_id||"");
+    const atuais=integracoesPorEmpresa.get(empresaId)||[];
+    atuais.push(String(item.id));
+    integracoesPorEmpresa.set(empresaId,atuais);
+  }
+
+  const empresasResult=await supabase
+    .from("empresas")
+    .select("id,assinatura_vencimento_em,assinatura_bloqueio_em")
+    .not("assinatura_vencimento_em","is",null)
+    .order("assinatura_vencimento_em",{ascending:true})
+    .limit(Math.max(1,Math.min(Number(limite)||500,2000)));
+  if(empresasResult.error)throw empresasResult.error;
+
+  const agora=Date.now();
+  const linhas:Array<Record<string,unknown>>=[];
+  for(const gatilho of gatilhosAtivos){
+    const campo=EVENTOS_RELATIVOS_ASSINATURA.get(gatilho.evento);
+    if(!campo)continue;
+    const offsetMinutos=Math.max(1,Math.abs(Number(gatilho.offset_minutos||60)));
+    const integracoes=integracoesPorEmpresa.get(gatilho.empresa_id)||[];
+    if(!integracoes.length)continue;
+
+    for(const empresa of empresasResult.data||[]){
+      const referenciaBruta=empresa[campo as keyof typeof empresa];
+      const referenciaMs=Date.parse(String(referenciaBruta||""));
+      if(!Number.isFinite(referenciaMs)||referenciaMs<=agora)continue;
+      const executarMs=referenciaMs-offsetMinutos*60_000;
+      if(executarMs>agora)continue;
+      const referenciaIso=new Date(referenciaMs).toISOString();
+
+      for(const integracaoId of integracoes){
+        linhas.push({
+          empresa_id:gatilho.empresa_id,
+          integracao_id:integracaoId,
+          sistema:"crm_prosperity",
+          recurso:"assinaturas",
+          evento:gatilho.evento,
+          entidade_tipo:"empresa",
+          entidade_id:String(empresa.id),
+          evento_chave:`relativo:${gatilho.id}:${empresa.id}:${referenciaIso}`,
+          payload_json:{
+            gatilho_id:gatilho.id,
+            referencia_em:referenciaIso,
+            offset_minutos:offsetMinutos,
+            gerado_em:new Date(agora).toISOString(),
+          },
+          status:"pendente",
+          tentativas:0,
+          max_tentativas:5,
+          processar_em:new Date().toISOString(),
+        });
+      }
+    }
+  }
+
+  if(!linhas.length)return 0;
+  let criadas=0;
+  for(let inicio=0;inicio<linhas.length;inicio+=200){
+    const lote=linhas.slice(inicio,inicio+200);
+    const inserir=await supabase
+      .from("integracao_eventos_outbox")
+      .upsert(lote,{onConflict:"empresa_id,integracao_id,evento_chave",ignoreDuplicates:true})
+      .select("id");
+    if(inserir.error)throw inserir.error;
+    criadas+=(inserir.data||[]).length;
+  }
+  return criadas;
+}
+
 export async function processarEventosIntegracoesMapeadas(limite=50){
-  const max=Math.min(Math.max(limite,1),100),agora=new Date().toISOString();const resumo={outbox_encontrados:0,outbox_processados:0,outbox_ignorados:0,jobs_encontrados:0,jobs_processados:0,jobs_ignorados:0,erros:0};
+  const max=Math.min(Math.max(limite,1),100),agora=new Date().toISOString();const resumo={relativos_enfileirados:0,outbox_encontrados:0,outbox_processados:0,outbox_ignorados:0,jobs_encontrados:0,jobs_processados:0,jobs_ignorados:0,erros:0};
+  try{resumo.relativos_enfileirados=await enfileirarEventosRelativosAssinatura();}catch(error){resumo.erros+=1;console.error("[AUTOMACOES INTEGRACOES] Falha ao gerar eventos relativos",error);}
   const or=await supabase.from("integracao_eventos_outbox").select("id,empresa_id,integracao_id,sistema,recurso,evento,entidade_tipo,entidade_id,evento_chave,payload_json,tentativas,max_tentativas").eq("status","pendente").lte("processar_em",agora).order("created_at").limit(max);if(or.error)throw or.error;const outbox=(or.data||[]) as OutboxRow[];resumo.outbox_encontrados=outbox.length;
   for(const item of outbox){try{if(await processarOutbox(item))resumo.outbox_processados+=1;else resumo.outbox_ignorados+=1;}catch(error){resumo.erros+=1;console.error("[AUTOMACOES INTEGRACOES] Falha no outbox",item.id,error);}}
   const jr=await supabase.from("rotina_automacao_jobs").select("id,empresa_id,automacao_id,execucao_id,acao_id,ordem,executar_em,proxima_tentativa_em,tentativas,max_tentativas,depende_de_job_id,cancelamento_solicitado_em,contexto_json").eq("status","pendente").eq("contexto_json->>origem","integracao_mapeada").lte("executar_em",agora).order("executar_em").order("ordem").limit(max*2);if(jr.error)throw jr.error;const jobs=((jr.data||[]) as JobRow[]).filter(j=>!j.proxima_tentativa_em||j.proxima_tentativa_em<=agora).slice(0,max);resumo.jobs_encontrados=jobs.length;
