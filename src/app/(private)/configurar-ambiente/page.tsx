@@ -121,9 +121,12 @@ type CoexSyncJob = {
   updated_at?: string | null;
 };
 
+type CoexSyncMode = "contacts_only" | "contacts_and_history";
+
 type CoexActivationResponse = ApiResponse & {
   operational?: boolean;
   sync?: {
+    mode?: CoexSyncMode;
     jobs?: CoexSyncJob[];
     warnings?: string[];
   };
@@ -210,6 +213,14 @@ const ETAPAS: Etapa[] = [
   },
 ];
 
+function coexJobOmitidoPorPreferencia(job?: CoexSyncJob) {
+  return (
+    job?.tipo === "history" &&
+    job?.status === "recusado_usuario" &&
+    job?.metadata_json?.sync_mode === "contacts_only"
+  );
+}
+
 function getCoexSyncPresentation(job?: CoexSyncJob) {
   if (!job) {
     return {
@@ -241,6 +252,15 @@ function getCoexSyncPresentation(job?: CoexSyncJob) {
   }
 
   if (job.status === "recusado_usuario") {
+    if (coexJobOmitidoPorPreferencia(job)) {
+      return {
+        label: "Não solicitado",
+        detail:
+          "A configuração foi concluída importando somente os contatos.",
+        tone: "done" as const,
+      };
+    }
+
     return {
       label: "Não compartilhado",
       detail:
@@ -296,8 +316,11 @@ function CoexistenceSyncPanel({
     { key: "contacts", title: "Contatos", job: contacts },
     { key: "history", title: "Conversas anteriores", job: history },
   ];
-  const hasWarning = jobs.some((job) =>
-    ["erro", "recusado_usuario"].includes(job.status)
+  const hasWarning = jobs.some(
+    (job) =>
+      job.status === "erro" ||
+      (job.status === "recusado_usuario" &&
+        !coexJobOmitidoPorPreferencia(job))
   );
   const hasMissingJob = loaded && (!contacts || !history);
 
@@ -416,6 +439,8 @@ export default function ConfigurarAmbientePage() {
   const [integracao, setIntegracao] = useState<IntegracaoWhatsapp | null>(null);
   const [coexSyncJobs, setCoexSyncJobs] = useState<CoexSyncJob[]>([]);
   const [coexSyncCarregado, setCoexSyncCarregado] = useState(false);
+  const [coexSyncMode, setCoexSyncMode] =
+    useState<CoexSyncMode>("contacts_only");
   const [loading, setLoading] = useState(true);
   const [recarregando, setRecarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -806,6 +831,20 @@ export default function ConfigurarAmbientePage() {
       }
 
       setIntegracao(integracaoAtualizada);
+
+      const syncModeConfigurado = String(
+        integracaoAtualizada.config_json?.coexistence_sync_mode || ""
+      );
+      setCoexSyncMode(
+        syncModeConfigurado === "contacts_and_history"
+          ? "contacts_and_history"
+          : syncModeConfigurado === "contacts_only"
+            ? "contacts_only"
+            : integracaoAtualizada.coex_sync_started_at
+              ? "contacts_and_history"
+              : "contacts_only"
+      );
+
       if (integracaoAtualizada.modo_integracao === "coexistence") {
         setCoexSyncCarregado(false);
         await carregarSincronizacaoCoex(integracaoAtualizada.id);
@@ -1229,7 +1268,9 @@ async function handleRegistrarNumero(pinInformado?: string) {
   }
 }
 
-async function handleAtivarCoexistencia() {
+async function handleAtivarCoexistencia(
+  syncMode: CoexSyncMode = coexSyncMode
+) {
   try {
     if (!integracao?.id) {
       mostrarErroToast("Integração ainda não carregada.");
@@ -1246,6 +1287,7 @@ async function handleAtivarCoexistencia() {
         },
         body: JSON.stringify({
           integracao_id: integracao.id,
+          sync_mode: syncMode,
         }),
       }
     );
@@ -1267,11 +1309,17 @@ async function handleAtivarCoexistencia() {
       setCoexSyncCarregado(true);
     }
 
+    if (data.sync?.mode) {
+      setCoexSyncMode(data.sync.mode);
+    }
+
     const possuiAvisos = Boolean(data.sync?.warnings?.length);
     mostrarSucessoToast(
       possuiAvisos
         ? "Coexistência ativada. As mensagens novas estão disponíveis; confira o status da importação inicial."
-        : "Coexistência ativada. Contatos e histórico foram solicitados à Meta."
+        : syncMode === "contacts_and_history"
+          ? "Coexistência ativada. Contatos e conversas anteriores foram solicitados à Meta."
+          : "Coexistência ativada. A importação foi limitada aos contatos."
     );
     await carregarIntegracao(false);
     // Mantém o usuário nesta etapa para que ele veja os avisos e o status
@@ -2297,6 +2345,54 @@ return (
                       {numeroRegistrado && <div className={styles.quizCheckIcon}>✓</div>}
                     </div>
                   </div>
+
+                  {modoCoexistencia && !numeroRegistrado && (
+                    <div className={styles.coexImportChoice}>
+                      <div className={styles.coexImportChoiceMain}>
+                        <div>
+                          <span className={styles.coexImportEyebrow}>
+                            Importação inicial
+                          </span>
+                          <strong>Importar apenas contatos</strong>
+                          <p>
+                            Recomendado. Traz a base de contatos sem carregar o
+                            histórico antigo de conversas.
+                          </p>
+                        </div>
+                        <span className={styles.coexImportRecommended}>
+                          Padrão
+                        </span>
+                      </div>
+
+                      {coexSyncMode === "contacts_only" ? (
+                        <button
+                          type="button"
+                          className={styles.coexImportSecondaryAction}
+                          onClick={() =>
+                            setCoexSyncMode("contacts_and_history")
+                          }
+                        >
+                          Também importar conversas anteriores
+                        </button>
+                      ) : (
+                        <div className={styles.coexImportHistorySelected}>
+                          <div>
+                            <strong>Contatos + conversas anteriores</strong>
+                            <p>
+                              O histórico antigo também será solicitado à Meta
+                              e processado em segundo plano.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setCoexSyncMode("contacts_only")}
+                          >
+                            Usar apenas contatos
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {modoCoexistencia && numeroRegistrado && (
                     <CoexistenceSyncPanel

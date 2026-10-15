@@ -16,6 +16,7 @@ import {
 import { finishCoexistenceIntegrationIfReady } from "@/lib/whatsapp/coexistence-history-queue";
 
 type SyncType = "contacts" | "history";
+type CoexistenceSyncMode = "contacts_only" | "contacts_and_history";
 
 type SyncJobRecord = {
   id: string;
@@ -68,6 +69,18 @@ function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function normalizeSyncMode(value: unknown): CoexistenceSyncMode | null {
+  const normalized = String(value || "").trim();
+  if (
+    normalized === "contacts_only" ||
+    normalized === "contacts_and_history"
+  ) {
+    return normalized;
+  }
+
+  return null;
 }
 
 function metaErrorMessage(data: unknown, fallback: string) {
@@ -525,6 +538,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const integracaoId = String(body?.integracao_id || "").trim();
+    const syncModeSolicitado = normalizeSyncMode(body?.sync_mode);
 
     if (!integracaoId) {
       return NextResponse.json(
@@ -579,6 +593,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const configAtual = recordValue(integracao.config_json);
+    const syncMode =
+      syncModeSolicitado ||
+      normalizeSyncMode(configAtual.coexistence_sync_mode) ||
+      "contacts_only";
 
     const accessToken = getWhatsAppAccessToken(integracao, {
       allowGlobalFallback: false,
@@ -691,6 +711,10 @@ export async function POST(request: NextRequest) {
         onboarding_etapa: "numero_registrado",
         onboarding_status: "em_andamento",
         onboarding_erro: null,
+        config_json: {
+          ...configAtual,
+          coexistence_sync_mode: syncMode,
+        },
         coex_sync_started_at: null,
         coex_sync_completed_at: null,
         ultimo_sync_at: agora,
@@ -705,8 +729,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (syncMode === "contacts_and_history") {
+      const { data: historicoAnterior } = await supabase
+        .from("whatsapp_coex_sync_jobs")
+        .select("id,status,metadata_json")
+        .eq("integracao_whatsapp_id", integracao.id)
+        .eq("tipo", "history")
+        .maybeSingle();
+
+      const metadataHistorico = recordValue(
+        historicoAnterior?.metadata_json
+      );
+      if (
+        historicoAnterior &&
+        historicoAnterior.status === "recusado_usuario" &&
+        metadataHistorico.sync_mode === "contacts_only"
+      ) {
+        await supabase
+          .from("whatsapp_coex_sync_jobs")
+          .delete()
+          .eq("id", historicoAnterior.id);
+      }
+    }
+
+    const tiposSincronizacao: SyncType[] =
+      syncMode === "contacts_and_history"
+        ? ["contacts", "history"]
+        : ["contacts"];
+
     const syncResults = await Promise.allSettled(
-      (["contacts", "history"] as const).map((tipo) =>
+      tiposSincronizacao.map((tipo) =>
         solicitarSincronizacao({
           empresaId: contexto.usuario.empresa_id!,
           integracaoId: integracao.id,
@@ -732,6 +784,65 @@ export async function POST(request: NextRequest) {
           ? result.reason.message
           : "Não foi possível preparar uma das importações iniciais."
       );
+    }
+
+    if (syncMode === "contacts_only") {
+      const { data: historicoExistente, error: historicoExistenteError } =
+        await supabase
+          .from("whatsapp_coex_sync_jobs")
+          .select("*")
+          .eq("integracao_whatsapp_id", integracao.id)
+          .eq("tipo", "history")
+          .maybeSingle();
+
+      if (historicoExistenteError) throw historicoExistenteError;
+
+      let historicoIgnorado = historicoExistente;
+
+      if (!historicoExistente) {
+        const { data: criado, error: criarHistoricoError } = await supabase
+          .from("whatsapp_coex_sync_jobs")
+          .insert({
+            empresa_id: contexto.usuario.empresa_id!,
+            integracao_whatsapp_id: integracao.id,
+            tipo: "history",
+            status: "recusado_usuario",
+            progresso: 100,
+            processamento_progresso: 100,
+            itens_recebidos: 0,
+            itens_processados: 0,
+            itens_ignorados: 0,
+            itens_com_erro: 0,
+            meta_concluido: true,
+            solicitado_em: null,
+            concluido_em: agora,
+            metadata_json: {
+              coex_onboarded_at: integracao.coex_onboarded_at || null,
+              sync_mode: "contacts_only",
+              skipped_by_user: true,
+            },
+            updated_at: agora,
+          })
+          .select("*")
+          .single();
+
+        if (criarHistoricoError) throw criarHistoricoError;
+        historicoIgnorado = criado;
+      }
+
+      if (
+        historicoIgnorado?.status === "recusado_usuario" &&
+        recordValue(historicoIgnorado.metadata_json).sync_mode ===
+          "contacts_only"
+      ) {
+        syncOutcomes.push({
+          tipo: "history",
+          job: historicoIgnorado as SyncJobRecord,
+          requested: false,
+          skipped: true,
+          warning: null,
+        });
+      }
     }
 
     const syncStartedAt = syncOutcomes
@@ -771,6 +882,7 @@ export async function POST(request: NextRequest) {
       operational: true,
       integracao: sanitizeWhatsAppIntegrationForClient(atualizada),
       sync: {
+        mode: syncMode,
         jobs: syncOutcomes.map((outcome) => outcome.job),
         outcomes: syncOutcomes,
         warnings: [...new Set(syncWarnings)],
