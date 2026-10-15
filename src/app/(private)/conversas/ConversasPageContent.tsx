@@ -1225,6 +1225,52 @@ export default function ConversasPageContent() {
   const [imagemModalUrl, setImagemModalUrl] = useState<string | null>(null);
   const [imagemModalTitulo, setImagemModalTitulo] = useState<string | null>(null);
   const [imagemZoom, setImagemZoom] = useState(1);
+  const [imagemPan, setImagemPan] = useState({ x: 0, y: 0 });
+  const [imagemArrastando, setImagemArrastando] = useState(false);
+  const imagemViewportRef = useRef<HTMLDivElement | null>(null);
+  const imagemRef = useRef<HTMLImageElement | null>(null);
+  const imagemDragRef = useRef<{
+    pointerId: number;
+    inicioX: number;
+    inicioY: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
+
+  function limitarPanImagem(x: number, y: number, zoom = imagemZoom) {
+    const viewport = imagemViewportRef.current;
+    const imagem = imagemRef.current;
+
+    if (!viewport || !imagem || zoom <= 1) {
+      return { x: 0, y: 0 };
+    }
+
+    const padding = 24;
+    const larguraVisivel = Math.max(0, viewport.clientWidth - padding);
+    const alturaVisivel = Math.max(0, viewport.clientHeight - padding);
+    const larguraImagem = imagem.offsetWidth * zoom;
+    const alturaImagem = imagem.offsetHeight * zoom;
+    const limiteX = Math.max(0, (larguraImagem - larguraVisivel) / 2);
+    const limiteY = Math.max(0, (alturaImagem - alturaVisivel) / 2);
+
+    return {
+      x: Math.max(-limiteX, Math.min(limiteX, x)),
+      y: Math.max(-limiteY, Math.min(limiteY, y)),
+    };
+  }
+
+  function resetarPosicaoImagem() {
+    imagemDragRef.current = null;
+    setImagemArrastando(false);
+    setImagemPan({ x: 0, y: 0 });
+  }
+
+  function fecharImagemModal() {
+    setImagemModalUrl(null);
+    setImagemModalTitulo(null);
+    setImagemZoom(1);
+    resetarPosicaoImagem();
+  }
   
   const [arquivoPreview, setArquivoPreview] = useState<{
     url: string;
@@ -1595,6 +1641,7 @@ export default function ConversasPageContent() {
                 setImagemModalUrl(url);
                 setImagemModalTitulo(caption || "Imagem");
                 setImagemZoom(1);
+                resetarPosicaoImagem();
               }}
               className={styles.mediaImageButton}
             >
@@ -11042,6 +11089,7 @@ const templateFooterTexto = useMemo(() => {
                                               setImagemModalUrl(item.url);
                                               setImagemModalTitulo(item.nome);
                                               setImagemZoom(1);
+                                              resetarPosicaoImagem();
                                             }}
                                           >
                                             <img
@@ -12112,11 +12160,7 @@ const templateFooterTexto = useMemo(() => {
 
       {imagemModalUrl && (
         <div
-          onClick={() => {
-            setImagemModalUrl(null);
-            setImagemModalTitulo(null);
-            setImagemZoom(1);
-          }}
+          onClick={fecharImagemModal}
           style={{
             position: "fixed",
             inset: 0,
@@ -12153,7 +12197,12 @@ const templateFooterTexto = useMemo(() => {
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => setImagemZoom((z) => Math.max(0.8, Number((z - 0.1).toFixed(2))))}
+                  onClick={() => {
+                    resetarPosicaoImagem();
+                    setImagemZoom((z) =>
+                      Math.max(0.8, Number((z - 0.1).toFixed(2)))
+                    );
+                  }}
                   className={styles.secondaryButton}
                 >
                   −
@@ -12161,7 +12210,10 @@ const templateFooterTexto = useMemo(() => {
 
                 <button
                   type="button"
-                  onClick={() => setImagemZoom(1)}
+                  onClick={() => {
+                    setImagemZoom(1);
+                    resetarPosicaoImagem();
+                  }}
                   className={styles.secondaryButton}
                 >
                   100%
@@ -12169,7 +12221,12 @@ const templateFooterTexto = useMemo(() => {
 
                 <button
                   type="button"
-                  onClick={() => setImagemZoom((z) => Math.min(2.2, Number((z + 0.1).toFixed(2))))}
+                  onClick={() => {
+                    resetarPosicaoImagem();
+                    setImagemZoom((z) =>
+                      Math.min(2.2, Number((z + 0.1).toFixed(2)))
+                    );
+                  }}
                   className={styles.secondaryButton}
                 >
                   ＋
@@ -12177,11 +12234,7 @@ const templateFooterTexto = useMemo(() => {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setImagemModalUrl(null);
-                    setImagemModalTitulo(null);
-                    setImagemZoom(1);
-                  }}
+                  onClick={fecharImagemModal}
                   className={styles.dangerButton}
                 >
                   Fechar
@@ -12190,30 +12243,87 @@ const templateFooterTexto = useMemo(() => {
             </div>
 
             <div
+              ref={imagemViewportRef}
+              onPointerDown={(event) => {
+                if (imagemZoom <= 1) return;
+
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                imagemDragRef.current = {
+                  pointerId: event.pointerId,
+                  inicioX: event.clientX,
+                  inicioY: event.clientY,
+                  panX: imagemPan.x,
+                  panY: imagemPan.y,
+                };
+                setImagemArrastando(true);
+              }}
+              onPointerMove={(event) => {
+                const drag = imagemDragRef.current;
+                if (!drag || drag.pointerId !== event.pointerId) return;
+
+                event.preventDefault();
+                const proximoPan = limitarPanImagem(
+                  drag.panX + event.clientX - drag.inicioX,
+                  drag.panY + event.clientY - drag.inicioY
+                );
+                setImagemPan(proximoPan);
+              }}
+              onPointerUp={(event) => {
+                if (imagemDragRef.current?.pointerId !== event.pointerId) return;
+
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+                imagemDragRef.current = null;
+                setImagemArrastando(false);
+              }}
+              onPointerCancel={() => {
+                imagemDragRef.current = null;
+                setImagemArrastando(false);
+              }}
               style={{
-                overflow: "auto",
+                overflow: "hidden",
                 background: "var(--crm-ui-private-decoration-rgb-255-255-255-0-04)",
                 borderRadius: 16,
                 padding: 12,
                 display: "flex",
                 justifyContent: "center",
-                alignItems: imagemZoom > 1 ? "flex-start" : "center",
+                alignItems: "center",
                 maxHeight: "78vh",
+                cursor:
+                  imagemZoom > 1
+                    ? imagemArrastando
+                      ? "grabbing"
+                      : "grab"
+                    : "default",
+                touchAction: imagemZoom > 1 ? "none" : "auto",
+                userSelect: "none",
               }}
+              title={
+                imagemZoom > 1
+                  ? "Clique e arraste para navegar pela imagem"
+                  : undefined
+              }
             >
               <img
+                ref={imagemRef}
                 src={imagemModalUrl}
                 alt={imagemModalTitulo || "Imagem"}
+                draggable={false}
                 style={{
                   width: "auto",
                   height: "auto",
                   maxWidth: "82vw",
                   maxHeight: "72vh",
                   objectFit: "contain",
-                  transform: `scale(${imagemZoom})`,
-                  transformOrigin: "top center",
-                  transition: "transform 0.18s ease",
+                  transform: `translate3d(${imagemPan.x}px, ${imagemPan.y}px, 0) scale(${imagemZoom})`,
+                  transformOrigin: "center center",
+                  transition: imagemArrastando
+                    ? "none"
+                    : "transform 0.18s ease",
                   borderRadius: "12px",
+                  pointerEvents: "none",
                 }}
               />
             </div>
