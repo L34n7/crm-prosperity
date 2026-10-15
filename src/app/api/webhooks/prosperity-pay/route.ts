@@ -490,10 +490,54 @@ async function criarLead(payload: ProsperityPayPayload, oferta: any) {
   return data;
 }
 
+async function buscarEmpresaIdDoPagamento(
+  payload: ProsperityPayPayload,
+  leadId: string | null
+) {
+  const subscriptionId = String(payload.order?.subscription_id || "").trim();
+
+  if (subscriptionId) {
+    const mirror = await supabase
+      .from("prosperity_pay_assinaturas")
+      .select("empresa_id")
+      .eq("external_subscription_id", subscriptionId)
+      .maybeSingle();
+
+    if (mirror.error) throw mirror.error;
+    if (mirror.data?.empresa_id) return mirror.data.empresa_id as string;
+  }
+
+  if (leadId) {
+    const lead = await supabase
+      .from("leads_cadastro")
+      .select("empresa_id")
+      .eq("id", leadId)
+      .maybeSingle();
+
+    if (lead.error) throw lead.error;
+    if (lead.data?.empresa_id) return lead.data.empresa_id as string;
+  }
+
+  const customerEmail = normalizarEmail(payload.customer?.email);
+  if (!customerEmail) return null;
+
+  const company = await supabase
+    .from("empresas")
+    .select("id")
+    .ilike("email", customerEmail)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (company.error) throw company.error;
+  return company.data?.id as string | null ?? null;
+}
+
 async function salvarPagamento(
   payload: ProsperityPayPayload,
   leadId: string | null
 ) {
+  const empresaId = await buscarEmpresaIdDoPagamento(payload, leadId);
   const status = statusPagamento(payload.event);
   if (!status) {
     throw new Error(`Evento não suportado: ${payload.event}`);
@@ -503,6 +547,7 @@ async function salvarPagamento(
     .from("pagamentos")
     .upsert(
       {
+        empresa_id: empresaId,
         gateway: "prosperity_pay",
         evento: payload.event,
         transaction_id: transactionId(payload),
@@ -537,6 +582,55 @@ async function salvarPagamento(
   }
 
   return data;
+}
+
+async function reprocessarAssinaturaInicialFalha(
+  payload: ProsperityPayPayload
+) {
+  const subscriptionId = String(payload.order?.subscription_id || "").trim();
+  if (!subscriptionId) return;
+
+  const failed = await supabase
+    .from("prosperity_pay_webhook_eventos")
+    .select("id,payload")
+    .eq("event_type", "subscription.started")
+    .eq("status", "failed")
+    .contains("payload", { subscription: { id: subscriptionId } })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (failed.error) {
+    console.error(
+      "[PROSPERITY PAY] Falha ao localizar assinatura pendente de reconciliação:",
+      failed.error
+    );
+    return;
+  }
+
+  if (!failed.data?.payload) return;
+
+  try {
+    await sincronizarAssinaturaProsperityPay(failed.data.payload as any);
+
+    const update = await supabase
+      .from("prosperity_pay_webhook_eventos")
+      .update({
+        status: "processed",
+        processed_at: new Date().toISOString(),
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", failed.data.id)
+      .eq("status", "failed");
+
+    if (update.error) throw update.error;
+  } catch (error) {
+    console.error(
+      "[PROSPERITY PAY] Pagamento aprovado, mas a reconciliação da assinatura pendente falhou:",
+      error
+    );
+  }
 }
 
 async function obterOuCriarEmpresa(input: {
@@ -1087,6 +1181,7 @@ export async function POST(request: Request) {
       if (processarComoPagamentoLegado) {
         const resultado = await processarAprovado(payload, lead, pagamento.id);
         empresaId = resultado.empresa.id;
+        await reprocessarAssinaturaInicialFalha(payload);
       }
     }
 
