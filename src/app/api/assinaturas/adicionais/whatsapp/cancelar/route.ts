@@ -70,9 +70,38 @@ export async function POST(request: Request) {
       }
 
       integracao = data;
-      const posicao = Number(integracao.posicao || 1);
 
-      if (posicao <= limiteBase) {
+      const posicaoRegistrada = Number(integracao.posicao);
+      let posicaoEfetiva =
+        Number.isFinite(posicaoRegistrada) && posicaoRegistrada > 0
+          ? posicaoRegistrada
+          : null;
+
+      // Ao desconectar um número, a integração libera a posição e fica com
+      // posicao=null. Nesse caso, preserve a mesma ordenação usada no resumo
+      // da assinatura para não confundir um adicional antigo com o número base.
+      if (posicaoEfetiva === null) {
+        const { data: integracoesEmpresa, error: integracoesEmpresaError } =
+          await supabase
+            .from("integracoes_whatsapp")
+            .select("id,posicao,created_at")
+            .eq("empresa_id", empresaId)
+            .eq("provider", "meta_official")
+            .order("posicao", { ascending: true, nullsFirst: false })
+            .order("created_at", { ascending: true });
+
+        if (integracoesEmpresaError) throw integracoesEmpresaError;
+
+        const indiceIntegracao = (integracoesEmpresa || []).findIndex(
+          (item: any) => item.id === integrationId
+        );
+
+        if (indiceIntegracao >= 0) {
+          posicaoEfetiva = indiceIntegracao + 1;
+        }
+      }
+
+      if (posicaoEfetiva !== null && posicaoEfetiva <= limiteBase) {
         return NextResponse.json(
           {
             ok: false,

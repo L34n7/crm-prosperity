@@ -21,6 +21,17 @@ function moneyItem(items: Record<string, any>[], code: string) {
   return items.find((item) => String(item.code || "") === code);
 }
 
+function integracaoWhatsappConfigurada(item: Record<string, any>) {
+  const numero = String(item?.numero || "").trim();
+  const status = String(item?.status || "").trim().toLowerCase();
+
+  return (
+    Boolean(numero) &&
+    status !== "desconectada" &&
+    !numero.toLowerCase().startsWith("desconectada_")
+  );
+}
+
 export async function GET() {
   try {
     const contexto = await getUsuarioContexto();
@@ -129,10 +140,21 @@ export async function GET() {
     if (integracoesError) throw integracoesError;
     if (agendadosError) throw agendadosError;
 
-    const integracoesExtras = (integracoes || []).filter((item: any, index: number) => {
-      const posicao = Number(item.posicao || index + 1);
-      return posicao > baseLimit;
-    });
+    const integracoesConfiguradas = (integracoes || []).filter((item: any) =>
+      integracaoWhatsappConfigurada(item)
+    );
+
+    const integracoesExtras = integracoesConfiguradas.filter(
+      (item: any, index: number) => {
+        const posicaoRegistrada = Number(item.posicao);
+        const posicaoEfetiva =
+          Number.isFinite(posicaoRegistrada) && posicaoRegistrada > 0
+            ? posicaoRegistrada
+            : index + 1;
+
+        return posicaoEfetiva > baseLimit;
+      }
+    );
 
     const addonQuantityFromPay = Math.max(0, Number(whatsappItem?.quantity || 0));
     const addonQuantityFromLimit = Math.max(
