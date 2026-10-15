@@ -1093,6 +1093,13 @@ function consultaConhecimentoAutomatica(mensagem: string) {
   if (/\b(endereco|localizacao|onde fica|como chegar|fica onde|localizado|localizada)\b/.test(texto)) {
     return textoCurto(mensagem, 140);
   }
+  if (
+    /\b(cotacao|cotacoes|cotar|orcamento|orcamentos|seguro|seguros|seguradora|seguradoras|protecao veicular|protecao associativa)\b/.test(
+      texto,
+    )
+  ) {
+    return textoCurto(mensagem, 140);
+  }
   if (/\b(preco|precos|valor|valores|custa|custar|mensalidade|plano|planos)\b/.test(texto)) {
     return textoCurto(mensagem, 140);
   }
