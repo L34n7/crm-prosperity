@@ -70,6 +70,15 @@ type DiagnosticoWhatsApp = {
   bloqueiaOperacao: boolean;
 };
 
+type CancelamentoWhatsappAgendado = {
+  id: string;
+  integracao_id: string;
+  nome_integracao: string;
+  numero: string | null;
+  posicao: number | null;
+  effective_at: string | null;
+};
+
 const categorias = [
   { value: "", label: "Não informar" },
   { value: "AUTO", label: "Automotivo" },
@@ -300,6 +309,10 @@ export default function WhatsappPerfilPage() {
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
   const [abrindoCheckoutAdicional, setAbrindoCheckoutAdicional] = useState(false);
   const [erroCheckoutAdicional, setErroCheckoutAdicional] = useState("");
+  const [
+    cancelamentosWhatsappAgendados,
+    setCancelamentosWhatsappAgendados,
+  ] = useState<CancelamentoWhatsappAgendado[]>([]);
 
   const [modalNomeAberto, setModalNomeAberto] = useState(false);
   const [novoNomeExibicao, setNovoNomeExibicao] = useState("");
@@ -523,6 +536,11 @@ export default function WhatsappPerfilPage() {
       );
       setPodeCadastrarNovaIntegracao(json.pode_cadastrar_nova === true);
       setPodeExibirAddNumero(json.pode_exibir_add_numero === true);
+      setCancelamentosWhatsappAgendados(
+        Array.isArray(json.cancelamentos_whatsapp_agendados)
+          ? json.cancelamentos_whatsapp_agendados
+          : []
+      );
 
       const novaIntegracaoId = integracaoAtualizada?.id || "";
 
@@ -1270,6 +1288,44 @@ export default function WhatsappPerfilPage() {
                 <h1>Perfil Whatsapp Business</h1>
               </div>
             </div>
+
+            {cancelamentosWhatsappAgendados.length > 0 && (
+              <div className={styles.scheduledCancellationList}>
+                {cancelamentosWhatsappAgendados.map((cancelamento) => (
+                  <div
+                    key={cancelamento.id}
+                    className={styles.scheduledCancellationNotice}
+                    role="status"
+                  >
+                    <div className={styles.scheduledCancellationHeader}>
+                      <span>Cancelamento agendado</span>
+                      <strong>
+                        {cancelamento.posicao
+                          ? `Integração ${cancelamento.posicao} · `
+                          : ""}
+                        {cancelamento.nome_integracao}
+                      </strong>
+                    </div>
+
+                    <p>
+                      <strong>
+                        {cancelamento.numero || "Número não identificado"}
+                      </strong>{" "}
+                      continuará funcionando até o fim da mensalidade atual
+                      {cancelamento.effective_at
+                        ? ` (${formatarData(cancelamento.effective_at)})`
+                        : ""}.
+                    </p>
+
+                    <p>
+                      No encerramento do ciclo, o CRM fará a desconexão
+                      automaticamente com segurança, criará o backup da
+                      integração e liberará a posição para outro número.
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {deveMostrarControlesMultiIntegracao && integracoes.length > 1 && (
               <div

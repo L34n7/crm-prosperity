@@ -1,4 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  pausarDisparosIntegracaoQstash,
+  publicarDesconexaoIntegracaoQstash,
+} from "@/lib/whatsapp/integracao-desconexao-fila";
 
 const supabase = getSupabaseAdmin();
 
@@ -216,37 +220,54 @@ async function aplicarCancelamentosWhatsappAgendados(
     if (recursoId) {
       const { data: integracao, error: integracaoError } = await supabase
         .from("integracoes_whatsapp")
-        .select("id,status,config_json")
+        .select("id,status")
         .eq("id", recursoId)
         .eq("empresa_id", empresaId)
         .maybeSingle();
 
       if (integracaoError) throw integracaoError;
 
-      if (integracao) {
-        const configAtual =
-          integracao.config_json &&
-          typeof integracao.config_json === "object" &&
-          !Array.isArray(integracao.config_json)
-            ? (integracao.config_json as Record<string, unknown>)
-            : {};
+      if (
+        integracao &&
+        String(integracao.status || "").toLowerCase() !== "desconectada"
+      ) {
+        const { data: solicitacaoData, error: solicitacaoError } =
+          await supabase.rpc("solicitar_desconexao_integracao_whatsapp", {
+            p_integracao_id: integracao.id,
+            p_empresa_id: empresaId,
+            p_usuario_id: null,
+            p_meta_ja_desconectado: false,
+          });
 
-        const updateIntegracao = await supabase
-          .from("integracoes_whatsapp")
-          .update({
-            status: "desconectada",
-            config_json: {
-              ...configAtual,
-              subscription_access_disabled: true,
-              subscription_access_disabled_at: referenciaTempo,
-              subscription_access_disabled_reason: "whatsapp_addon_cancelled",
-            },
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", integracao.id)
-          .eq("empresa_id", empresaId);
+        if (solicitacaoError) throw solicitacaoError;
 
-        if (updateIntegracao.error) throw updateIntegracao.error;
+        const solicitacao = Array.isArray(solicitacaoData)
+          ? solicitacaoData[0] || null
+          : solicitacaoData || null;
+        const jobId = String(solicitacao?.job_id || "").trim();
+
+        if (!jobId) {
+          throw new Error(
+            "O cancelamento do adicional venceu, mas o backup da integração não pôde ser agendado."
+          );
+        }
+
+        const [publicacao] = await Promise.all([
+          publicarDesconexaoIntegracaoQstash(jobId),
+          pausarDisparosIntegracaoQstash(integracao.id),
+        ]);
+
+        if (!publicacao.ok) {
+          console.warn(
+            "[PROSPERITY PAY] Desconexão do adicional seguirá pelo cron fallback:",
+            {
+              empresaId,
+              integracaoId: integracao.id,
+              jobId,
+              erro: publicacao.erro,
+            }
+          );
+        }
       }
     }
 

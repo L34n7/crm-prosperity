@@ -715,12 +715,65 @@ export async function GET(req: NextRequest) {
           incluirDesconectadas: true,
         }),
       ]);
+
+    const integracoesOcupandoPosicao = todasIntegracoesWhatsapp.filter(
+      (item) => normalizarStatus(item.status) !== "desconectada"
+    );
     const limiteIntegracoesWhatsapp =
       resumoLimitesWhatsapp.limiteIntegracoesEfetivo;
     const proximaPosicaoIntegracao = calcularProximaPosicaoLivre(
-      todasIntegracoesWhatsapp,
+      integracoesOcupandoPosicao,
       limiteIntegracoesWhatsapp
     );
+
+    const { data: cancelamentosAgendadosData, error: cancelamentosAgendadosError } =
+      await supabaseAdmin
+        .from("prosperity_pay_recursos_agendados")
+        .select("id,recurso_id,recurso_tipo,effective_at,metadata_json")
+        .eq("empresa_id", empresaId)
+        .eq("addon_code", "whatsapp_number")
+        .eq("acao", "remove")
+        .eq("status", "scheduled");
+
+    if (cancelamentosAgendadosError) {
+      console.warn(
+        "[WHATSAPP PERFIL CANCELAMENTOS AGENDADOS ERROR]",
+        cancelamentosAgendadosError
+      );
+    }
+
+    const cancelamentosWhatsappAgendados = (cancelamentosAgendadosData || [])
+      .filter(
+        (item: any) =>
+          item.recurso_tipo === "whatsapp_integration" &&
+          Boolean(item.recurso_id)
+      )
+      .map((item: any) => {
+        const integracao =
+          todasIntegracoesWhatsapp.find(
+            (candidata) => candidata.id === item.recurso_id
+          ) || null;
+        const metadata = objetoSeguro(item.metadata_json);
+        const numeroIntegracao = String(integracao?.numero || "").trim();
+        const numeroMetadata = textoSeguro(metadata.numero);
+        const numero =
+          numeroIntegracao &&
+          !numeroIntegracao.toLowerCase().startsWith("desconectada_")
+            ? numeroIntegracao
+            : numeroMetadata || null;
+
+        return {
+          id: item.id,
+          integracao_id: item.recurso_id,
+          nome_integracao:
+            integracao?.nome_conexao ||
+            textoSeguro(metadata.nome_conexao) ||
+            "Integração WhatsApp",
+          numero,
+          posicao: integracao?.posicao || null,
+          effective_at: item.effective_at || null,
+        };
+      });
     const { searchParams } = new URL(req.url);
     const integracaoId = searchParams.get("integracao_id");
     const acessoIntegracoes = await listarIntegracoesWhatsappPermitidas({
@@ -761,12 +814,13 @@ export async function GET(req: NextRequest) {
         resumoLimitesWhatsapp.numerosAdicionaisContratados,
       atingiu_limite_numeros_adicionais:
         resumoLimitesWhatsapp.atingiuLimiteAdicionais,
-      total_integracoes_whatsapp: todasIntegracoesWhatsapp.length,
+      total_integracoes_whatsapp: integracoesOcupandoPosicao.length,
       proxima_posicao: proximaPosicaoIntegracao,
       pode_cadastrar_nova: Boolean(proximaPosicaoIntegracao),
       pode_exibir_add_numero:
-        todasIntegracoesWhatsapp.length <
+        integracoesOcupandoPosicao.length <
         resumoLimitesWhatsapp.limiteTotalPermitido,
+      cancelamentos_whatsapp_agendados: cancelamentosWhatsappAgendados,
     };
 
     if (!integracaoSelecionada) {

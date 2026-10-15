@@ -383,6 +383,50 @@
   line-height: 1.6;
 }
 
+.scheduledCancellationList {
+  display: grid;
+  gap: 10px;
+  margin: 16px 28px 0;
+}
+
+.scheduledCancellationNotice {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 16px;
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+
+.scheduledCancellationHeader {
+  display: grid;
+  gap: 3px;
+}
+
+.scheduledCancellationHeader span {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scheduledCancellationHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.scheduledCancellationNotice p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.scheduledCancellationNotice p strong {
+  color: var(--crm-text-strong);
+}
+
 .alertArea {
   padding: 12px 28px 0;
   display: grid;
@@ -1746,6 +1790,10 @@
 }
 
 @media (max-width: 768px) {
+  .scheduledCancellationList {
+    margin-inline: 16px;
+  }
+
   .pageContent {
     min-height: auto;
     padding: 0px 10px calc(96px + env(safe-area-inset-bottom));

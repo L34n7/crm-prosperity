@@ -307,9 +307,7 @@ export async function POST() {
 
     const [limite, integracoes] = await Promise.all([
       obterLimiteIntegracoesWhatsapp(usuario.empresa_id),
-      listarIntegracoesWhatsappDaEmpresa(usuario.empresa_id, {
-        incluirDesconectadas: true,
-      }),
+      listarIntegracoesWhatsappDaEmpresa(usuario.empresa_id),
     ]);
 
     const proximaPosicao = calcularProximaPosicaoLivre(integracoes, limite);
