@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sendMetaAccountBlockedEmail } from "@/lib/email/send-meta-account-blocked-email";
 import {
   aplicarBloqueioOperacionalWhatsappMeta,
   statusWhatsappMetaBloqueado,
@@ -62,10 +63,19 @@ async function garantirBloqueioOperacional(
 ) {
   const config = objetoConfig(integracao.config_json);
 
+  const motivo =
+    integracao.onboarding_erro || WHATSAPP_META_BLOCK_DESCRIPTION;
+
   await aplicarBloqueioOperacionalWhatsappMeta({
     empresaId: integracao.empresa_id,
     integracaoId: integracao.id,
-    motivo: integracao.onboarding_erro || WHATSAPP_META_BLOCK_DESCRIPTION,
+    motivo,
+  });
+
+  await sendMetaAccountBlockedEmail({
+    empresaId: integracao.empresa_id,
+    integracaoId: integracao.id,
+    motivo,
   });
 
   if (config.whatsapp_meta_operational_block_applied_at) {

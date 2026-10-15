@@ -8,6 +8,7 @@ import {
   type WhatsAppMetaErrorDiagnostic,
 } from "@/lib/whatsapp/meta-error-diagnostics";
 import { aplicarBloqueioOperacionalWhatsappMeta } from "@/lib/whatsapp/meta-block";
+import { sendMetaAccountBlockedEmail } from "@/lib/email/send-meta-account-blocked-email";
 import {
   obterResumoLimiteMeta,
   resolverLimitePorTier,
@@ -468,6 +469,15 @@ async function marcarIntegracaoComDiagnosticoMeta(params: {
       empresaId,
       integracaoId: integracao.id,
       motivo: diagnostico.descricao,
+    });
+
+    await sendMetaAccountBlockedEmail({
+      empresaId,
+      integracaoId: integracao.id,
+      codigoMeta: diagnostico.codigoMeta,
+      motivo: diagnostico.descricao,
+      detalhe: diagnostico.detalheTecnico,
+      ocorridoEm: agora,
     });
   }
 }

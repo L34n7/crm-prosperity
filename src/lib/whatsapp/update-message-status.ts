@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sendMetaPaymentBlockedEmail } from "@/lib/email/send-meta-payment-blocked-email";
+import { sendMetaAccountBlockedEmail } from "@/lib/email/send-meta-account-blocked-email";
 import {
   aplicarBloqueioOperacionalWhatsappMeta,
   statusWhatsappMetaBloqueado,
@@ -376,6 +377,15 @@ async function tratarErroMetaContaBloqueada(params: {
     empresaId: contexto.empresaId,
     integracaoId: contexto.integracaoId,
     motivo,
+  });
+
+  await sendMetaAccountBlockedEmail({
+    empresaId: contexto.empresaId,
+    integracaoId: contexto.integracaoId,
+    codigoMeta: ERRO_META_CONTA_BLOQUEADA,
+    motivo,
+    detalhe,
+    ocorridoEm: agora,
   });
 
   const campanhasPausadas = await pausarCampanhasDaIntegracao({
