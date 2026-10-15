@@ -301,10 +301,27 @@
 
 .itemRight {
   display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.itemPrimaryActions,
+.itemSecondaryActions {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.itemRight button {
+  min-height: 40px;
+  padding: 9px 13px;
+  font-size: 13px;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .itemExpanded {
@@ -399,6 +416,11 @@
   }
 
   .itemRight {
+    align-items: flex-start;
+  }
+
+  .itemPrimaryActions,
+  .itemSecondaryActions {
     justify-content: flex-start;
   }
 }
@@ -433,9 +455,16 @@
     width: 100%;
   }
 
-  .itemRight {
-    flex-direction: column;
+  .itemRight,
+  .itemPrimaryActions,
+  .itemSecondaryActions {
+    width: 100%;
     align-items: stretch;
+  }
+
+  .itemPrimaryActions,
+  .itemSecondaryActions {
+    flex-direction: column;
   }
 }
 

@@ -1238,61 +1238,59 @@ export default function EmpresasPage() {
 
                       <div className={styles.itemRight}>
                         {!editando && podeAcessarTemporariamente && (
-                          <button
-                            type="button"
-                            onClick={() => acessarTemporariamente(empresa)}
-                            className={styles.supportButton}
-                            disabled={acessandoEmpresaId === empresa.id}
-                          >
-                            {acessandoEmpresaId === empresa.id
-                              ? "Acessando..."
-                              : "Acessar ambiente"}
-                          </button>
-                        )}
-
-                        {!editando &&
-                          podeEditarEmpresas &&
-                          podeAcessarTemporariamente && (
+                          <div className={styles.itemPrimaryActions}>
                             <button
                               type="button"
-                              onClick={() =>
-                                abrirRenovacaoMensalidade(empresa)
-                              }
-                              className={styles.renewalButton}
+                              onClick={() => acessarTemporariamente(empresa)}
+                              className={styles.supportButton}
+                              disabled={acessandoEmpresaId === empresa.id}
                             >
-                              Renovar mensalidade
+                              {acessandoEmpresaId === empresa.id
+                                ? "Acessando..."
+                                : "Acessar ambiente"}
                             </button>
-                          )}
 
-                        {!editando && podeEditarEmpresas && (
-                          <button
-                            onClick={() => toggleExpandir(empresa.id)}
-                            className={styles.secondaryButton}
-                          >
-                            {expandido ? "Recolher" : "Expandir"}
-                          </button>
+                            {podeEditarEmpresas && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  abrirRenovacaoMensalidade(empresa)
+                                }
+                                className={styles.renewalButton}
+                              >
+                                Renovar mensalidade
+                              </button>
+                            )}
+                          </div>
                         )}
 
                         {!editando && podeEditarEmpresas && (
-                          <button
-                            onClick={() => iniciarEdicao(empresa)}
-                            className={styles.secondaryButton}
-                          >
-                            Editar
-                          </button>
-                        )}
-
-                        {!editando &&
-                          podeEditarEmpresas &&
-                          podeAcessarTemporariamente && (
+                          <div className={styles.itemSecondaryActions}>
                             <button
-                              type="button"
-                              onClick={() => abrirExclusaoEmpresa(empresa)}
-                              className={styles.dangerOutlineButton}
+                              onClick={() => toggleExpandir(empresa.id)}
+                              className={styles.secondaryButton}
                             >
-                              Excluir
+                              {expandido ? "Recolher" : "Expandir"}
                             </button>
-                          )}
+
+                            <button
+                              onClick={() => iniciarEdicao(empresa)}
+                              className={styles.secondaryButton}
+                            >
+                              Editar
+                            </button>
+
+                            {podeAcessarTemporariamente && (
+                              <button
+                                type="button"
+                                onClick={() => abrirExclusaoEmpresa(empresa)}
+                                className={styles.dangerOutlineButton}
+                              >
+                                Excluir
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
