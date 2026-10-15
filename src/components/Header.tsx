@@ -395,6 +395,35 @@ export default function Header({
     }).format(data);
   }
 
+  function formatarDataHoraNotificacao(valor: string | null | undefined) {
+    if (!valor) return "";
+
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return "";
+
+    const partes = new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(data);
+
+    const obterParte = (tipo: Intl.DateTimeFormatPartTypes) =>
+      partes.find((parte) => parte.type === tipo)?.value || "";
+
+    const dia = obterParte("day");
+    const mes = obterParte("month");
+    const ano = obterParte("year");
+    const hora = obterParte("hour");
+    const minuto = obterParte("minute");
+
+    if (!dia || !mes || !ano || !hora || !minuto) return "";
+
+    return `${dia}/${mes}/${ano} · ${hora}:${minuto}`;
+  }
+
   function formatarStatusAssinatura(status: string) {
     if (status === "bloqueada") return "Bloqueado";
     if (status === "vencida") return "Vencido";
@@ -1283,6 +1312,12 @@ export default function Header({
                       </div>
 
                       <p>{notificacao.mensagem}</p>
+
+                      <div className={styles.notificationItemFooter}>
+                        <time dateTime={notificacao.created_at}>
+                          {formatarDataHoraNotificacao(notificacao.created_at)}
+                        </time>
+                      </div>
                     </button>
                   ))}
 
@@ -1360,6 +1395,12 @@ export default function Header({
                     </div>
 
                     <p>{notificacao.mensagem}</p>
+
+                    <div className={styles.notificationItemFooter}>
+                      <time dateTime={notificacao.created_at}>
+                        {formatarDataHoraNotificacao(notificacao.created_at)}
+                      </time>
+                    </div>
                   </button>
                 ))}
               </div>

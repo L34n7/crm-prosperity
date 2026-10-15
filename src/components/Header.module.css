@@ -1389,6 +1389,23 @@
   line-height: 1.35;
 }
 
+.notificationItemFooter {
+  min-height: 12px;
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.notificationItemFooter time {
+  color: var(--crm-text-soft);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
 .unreadDot {
   width: 8px;
   height: 8px;
