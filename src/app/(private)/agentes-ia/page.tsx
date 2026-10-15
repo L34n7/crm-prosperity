@@ -1520,12 +1520,16 @@ export default function AgentesIaPage() {
                           style={estiloCampoConsumo(
                             nivelConsumo(editor.max_mensagens_contexto, REGRAS_CONSUMO.contexto)
                           )}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const valor = Number(event.currentTarget.value);
+                            const normalizado = Number.isFinite(valor) ? valor : 0;
+
+                            event.currentTarget.value = String(normalizado);
                             setEditor({
                               ...editor,
-                              max_mensagens_contexto: Number(event.target.value),
-                            })
-                          }
+                              max_mensagens_contexto: normalizado,
+                            });
+                          }}
                         />
                         <OrientacaoConsumo
                           valor={editor.max_mensagens_contexto}

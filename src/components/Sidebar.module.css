@@ -1,7 +1,8 @@
 .sidebar {
   width: 280px;
   min-width: 280px;
-  height: 100vh;
+  height: 100dvh;
+  align-self: flex-start;
   background: var(--crm-sidebar-bg);
   border-right: 1px solid var(--crm-sidebar-border);
   box-shadow: inset -1px 0 0 var(--crm-ui-private-shadow-hex-ffffff0d), 18px 0 45px var(--crm-ui-private-shadow-rgb-7-28-41-0-08);

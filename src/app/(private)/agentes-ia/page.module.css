@@ -1,7 +1,10 @@
 .page {
+  flex: 1 0 auto;
   width: 100%;
-  min-height: 100%;
-  padding: 5px 24px 28px;
+  min-height: 0;
+  padding: 5px 24px 48px;
+  box-sizing: border-box;
+  background: var(--crm-shell-bg);
   color: var(--crm-text);
 }
 
