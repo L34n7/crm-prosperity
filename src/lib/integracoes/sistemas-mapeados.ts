@@ -51,6 +51,7 @@ export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
       {chave:"pagamento.pix_url",api_path:"pix_url",nome:"Link do PIX",descricao:"Link específico da cobrança PIX quando fornecido pelo gateway.",tipo:"url",disponivel_como_variavel:true},
       {chave:"pagamento.pix_copia_cola",api_path:"pix_copia_cola",nome:"PIX Copia e Cola",descricao:"Código PIX Copia e Cola da cobrança atual.",tipo:"text",disponivel_como_variavel:true},
       {chave:"pagamento.item_cobranca",api_path:"item_cobranca",nome:"Item da cobrança",descricao:"Nome do plano ou pacote de tokens associado à cobrança atual.",tipo:"text",disponivel_como_variavel:true},
+      {chave:"empresa.id",api_path:"empresa.id",nome:"ID da empresa",descricao:"Identificador da empresa associada à cobrança.",tipo:"id"},
       {chave:"cliente.nome",api_path:"cliente.nome",nome:"Nome do cliente",descricao:"Nome associado à transação.",tipo:"text",disponivel_como_variavel:true},
       {chave:"cliente.email",api_path:"cliente.email",nome:"E-mail do cliente",descricao:"E-mail associado à transação.",tipo:"email",disponivel_como_variavel:true},
       {chave:"cliente.telefone",api_path:"cliente.telefone",nome:"Telefone do cliente",descricao:"Telefone/WhatsApp associado à transação.",tipo:"phone",disponivel_como_variavel:true},

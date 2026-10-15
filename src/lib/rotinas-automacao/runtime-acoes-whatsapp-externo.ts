@@ -212,17 +212,24 @@ async function resolverValorEventoDinamico(params: {
     return atual ?? calcularDiasAteBloqueioContexto(params.contexto);
   }
 
-  if (
+  const checkoutRenovacaoSolicitado =
     params.sistema === "crm_prosperity" &&
-    params.recurso === "assinaturas" &&
-    params.chaveEvento === "assinatura.checkout_url"
-  ) {
+    (
+      (params.recurso === "assinaturas" && params.chaveEvento === "assinatura.checkout_url") ||
+      (
+        params.recurso === "pagamentos" &&
+        params.chaveEvento === "pagamento.checkout_url" &&
+        String(lerCaminho(params.contexto, "pagamento.tipo_cobranca") || "").toLowerCase() === "renovacao"
+      )
+    );
+
+  if (checkoutRenovacaoSolicitado) {
     const checkoutExistente = String(atual || "").trim();
     if (checkoutExistente) return checkoutExistente;
 
     const empresaDestinoId = String(lerCaminho(params.contexto, "empresa.id") || "").trim();
     if (!empresaDestinoId) {
-      throw new Error("A assinatura não possui empresa identificada para gerar o checkout de renovação.");
+      throw new Error("A cobrança não possui empresa identificada para gerar o checkout de renovação.");
     }
 
     const intent = await criarCheckoutAssinaturaProsperityPay(
@@ -232,7 +239,7 @@ async function resolverValorEventoDinamico(params: {
     );
     const checkoutUrl = String(intent.checkoutUrl || "").trim();
     if (!checkoutUrl) {
-      throw new Error("A Prosperity Pay não retornou o checkout da renovação antecipada.");
+      throw new Error("A Prosperity Pay não retornou o checkout da renovação.");
     }
     return checkoutUrl;
   }
