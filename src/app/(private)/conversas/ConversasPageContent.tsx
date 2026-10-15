@@ -12197,7 +12197,7 @@ const templateFooterTexto = useMemo(() => {
                 padding: 12,
                 display: "flex",
                 justifyContent: "center",
-                alignItems: "center",
+                alignItems: imagemZoom > 1 ? "flex-start" : "center",
                 maxHeight: "78vh",
               }}
             >
@@ -12211,7 +12211,7 @@ const templateFooterTexto = useMemo(() => {
                   maxHeight: "72vh",
                   objectFit: "contain",
                   transform: `scale(${imagemZoom})`,
-                  transformOrigin: "center center",
+                  transformOrigin: "top center",
                   transition: "transform 0.18s ease",
                   borderRadius: "12px",
                 }}
