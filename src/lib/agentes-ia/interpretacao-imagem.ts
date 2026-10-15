@@ -291,9 +291,7 @@ async function interpretarImagem(params: {
         ],
       },
     ],
-    text: {
-      verbosity: "low",
-    },
+    max_output_tokens: 300,
   } as any);
 
   const resumo = String(response.output_text || "")
