@@ -148,12 +148,9 @@ async function preserveTokenUsageOnPlanChange(empresaId: string, newLimit: numbe
 
 async function aplicarCancelamentosWhatsappAgendados(
   empresaId: string,
-  payload: SubscriptionEventPayload,
+  referenciaTempo: string,
 ) {
-  if (payload.event !== "subscription.renewed") return;
-
-  const inicioNovoCiclo = validDate(payload.subscription?.current_period_start);
-  const referenciaTempo = inicioNovoCiclo || validDate(payload.occurred_at) || new Date().toISOString();
+  let aplicados = 0;
 
   const { data: agendados, error } = await supabase
     .from("prosperity_pay_recursos_agendados")
@@ -282,7 +279,55 @@ async function aplicarCancelamentosWhatsappAgendados(
       .eq("status", "scheduled");
 
     if (applied.error) throw applied.error;
+    aplicados += 1;
   }
+
+  return aplicados;
+}
+
+export async function processarCancelamentosWhatsappAgendadosVencidos(
+  params: { limite?: number; referenciaTempo?: string } = {},
+) {
+  const referenciaTempo =
+    validDate(params.referenciaTempo) || new Date().toISOString();
+  const limite = Math.min(Math.max(Number(params.limite || 20), 1), 100);
+
+  const { data: vencidos, error } = await supabase
+    .from("prosperity_pay_recursos_agendados")
+    .select("empresa_id")
+    .eq("addon_code", "whatsapp_number")
+    .in("recurso_tipo", ["whatsapp_integration", "whatsapp_addon_slot"])
+    .eq("acao", "remove")
+    .eq("status", "scheduled")
+    .lte("effective_at", referenciaTempo)
+    .order("effective_at", { ascending: true })
+    .limit(limite);
+
+  if (error) throw error;
+
+  const empresas = Array.from(
+    new Set(
+      (vencidos || [])
+        .map((item) => String(item.empresa_id || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  let aplicados = 0;
+
+  for (const empresaId of empresas) {
+    aplicados += await aplicarCancelamentosWhatsappAgendados(
+      empresaId,
+      referenciaTempo,
+    );
+  }
+
+  return {
+    verificados: (vencidos || []).length,
+    empresas: empresas.length,
+    aplicados,
+    referencia_tempo: referenciaTempo,
+  };
 }
 
 export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEventPayload) {
@@ -413,7 +458,16 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   if (companyUpdate.error) throw companyUpdate.error;
 
   if (payload.event === "subscription.renewed") {
-    await aplicarCancelamentosWhatsappAgendados(empresaId, payload);
+    // Pagamento antecipado não encerra a mensalidade atual. O cancelamento
+    // físico do número só acontece quando o novo ciclo realmente começa.
+    // O cron de desconexões também processa cancelamentos vencidos a cada
+    // poucos minutos, cobrindo antecipações e atrasos de webhook.
+    if (!renewalStartsInFuture) {
+      await aplicarCancelamentosWhatsappAgendados(
+        empresaId,
+        periodStart || validDate(payload.occurred_at) || new Date().toISOString(),
+      );
+    }
 
     // Em pagamento antecipado o próximo ciclo ainda não começou. A franquia
     // mensal de IA é renovada de forma preguiçosa em lib/ia/tokens.ts somente

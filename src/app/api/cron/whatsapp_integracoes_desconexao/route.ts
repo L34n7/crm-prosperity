@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { validarChamadaCron } from "@/lib/cron/auth";
 import { processarFilaDesconexoesWhatsapp } from "@/lib/whatsapp/integracao-desconexao-fila";
 import { processarSaudeAssinaturasWhatsapp } from "@/lib/whatsapp/webhook-subscription-health";
+import { processarCancelamentosWhatsappAgendadosVencidos } from "@/lib/prosperity-pay/sync-subscription";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -25,6 +26,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    const cancelamentosFinanceiros =
+      await processarCancelamentosWhatsappAgendadosVencidos({ limite: 20 });
     const resultado = await processarFilaDesconexoesWhatsapp();
     const webhookHealth = await processarSaudeAssinaturasWhatsapp({
       limite: 5,
@@ -53,6 +56,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ...resultado,
+      cancelamentos_financeiros: cancelamentosFinanceiros,
       webhook_health: webhookHealth,
     });
   } catch (error) {
