@@ -68,6 +68,80 @@ export async function POST(request: Request) {
     }
 
     const metadata = metadataObj(agendado.metadata_json);
+
+    if (metadata.payment_locked === true) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "O pagamento relacionado a esta composição já foi confirmado. Este cancelamento não pode mais ser desfeito.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const { data: assinatura, error: assinaturaError } = await supabase
+      .from("prosperity_pay_assinaturas")
+      .select("pending_payment,current_period_start")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (assinaturaError) throw assinaturaError;
+
+    const pendingPayment = metadataObj(assinatura?.pending_payment);
+    const pendingCancellationIds = Array.isArray(
+      pendingPayment.cancellation_ids
+    )
+      ? pendingPayment.cancellation_ids.map((item) =>
+          String(item || "").trim()
+        )
+      : [];
+    const expiresAt =
+      typeof pendingPayment.expires_at === "string"
+        ? new Date(pendingPayment.expires_at)
+        : null;
+    const pendingActive =
+      expiresAt &&
+      Number.isFinite(expiresAt.getTime()) &&
+      expiresAt.getTime() > Date.now() &&
+      pendingCancellationIds.includes(agendado.id);
+
+    if (pendingActive) {
+      const minutos = Math.max(
+        1,
+        Math.ceil((expiresAt.getTime() - Date.now()) / 60_000)
+      );
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            `Há um checkout de alteração em andamento. Aguarde cerca de ${minutos} min ou conclua o pagamento. Após o prazo, o pagamento será verificado antes de liberar o cancelamento.`,
+          pending_payment: true,
+          expires_at: expiresAt.toISOString(),
+        },
+        { status: 409 }
+      );
+    }
+
+    const currentPeriodStart = assinatura?.current_period_start
+      ? new Date(assinatura.current_period_start)
+      : null;
+    if (
+      currentPeriodStart &&
+      Number.isFinite(currentPeriodStart.getTime()) &&
+      currentPeriodStart.getTime() > Date.now() + 60_000
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "A próxima mensalidade já foi paga com esta composição. Este cancelamento não pode mais ser desfeito.",
+        },
+        { status: 409 }
+      );
+    }
+
     const payChangeId = String(metadata.pay_change_id || "").trim();
 
     if (!payChangeId) {
@@ -116,6 +190,21 @@ export async function POST(request: Request) {
 
     if (updateError) throw updateError;
 
+    if (
+      assinatura?.pending_payment &&
+      pendingCancellationIds.includes(agendado.id)
+    ) {
+      const { error: pendingClearError } = await supabase
+        .from("prosperity_pay_assinaturas")
+        .update({
+          pending_payment: null,
+          updated_at: agora,
+        })
+        .eq("empresa_id", empresaId);
+
+      if (pendingClearError) throw pendingClearError;
+    }
+
     return NextResponse.json({
       ok: true,
       cancellation_reversed: true,
@@ -124,15 +213,20 @@ export async function POST(request: Request) {
       effective_at: agendado.effective_at || null,
     });
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível desfazer o cancelamento agendado.";
+    const conflitoPagamento =
+      message.toLowerCase().includes("pagamento") ||
+      message.toLowerCase().includes("assinatura");
+
     return NextResponse.json(
       {
         ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível desfazer o cancelamento agendado.",
+        error: message,
       },
-      { status: 500 }
+      { status: conflitoPagamento ? 409 : 500 }
     );
   }
 }

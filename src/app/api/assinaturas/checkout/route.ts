@@ -10,6 +10,7 @@ import {
 import {
   criarCheckoutAssinaturaProsperityPay,
   referenciaProsperityPayPorPlanoSlug,
+  registrarPagamentoAssinaturaPendenteProsperityPay,
 } from "@/lib/prosperity-pay/subscriptions";
 
 type PlanoSlug = "basico" | "essencial";
@@ -640,6 +641,14 @@ export async function POST(request: Request) {
       if (!intent.checkoutUrl) {
         throw new Error("A Prosperity Pay não retornou o checkout da assinatura.");
       }
+
+      await registrarPagamentoAssinaturaPendenteProsperityPay({
+        empresaId: usuario.empresa_id,
+        tipo: renovarPlanoAtual ? "renewal" : "change_plan",
+        changeId: intent.changeId ?? null,
+        expiresAt: intent.expiresAt ?? null,
+        targetAmountCents: intent.targetAmountCents ?? null,
+      });
 
       return NextResponse.json({
         ok: true,

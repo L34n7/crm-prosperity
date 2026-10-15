@@ -131,6 +131,9 @@ type AssinaturaResumo = {
       cancellation: {
         id: string;
         effective_at: string | null;
+        can_undo: boolean;
+        block_reason: "payment_pending" | "payment_confirmed" | null;
+        pending_payment_expires_at: string | null;
       } | null;
     }>;
     others: Array<{
@@ -143,6 +146,12 @@ type AssinaturaResumo = {
   };
   pending: {
     whatsapp_cancellations: number;
+    payment: {
+      type: string;
+      change_id: string | null;
+      expires_at: string | null;
+      cancellation_ids: string[];
+    } | null;
     plan_change: {
       change_id: string | null;
       plan_id: string;
@@ -671,6 +680,28 @@ export default function Header({
     return () =>
       window.removeEventListener("assinatura:atualizada", atualizarAssinatura);
   }, [modalPlanosOpen]);
+
+  useEffect(() => {
+    if (!modalPlanosOpen) return;
+
+    const expiresAt = assinaturaResumo?.pending.payment?.expires_at;
+    if (!expiresAt) return;
+
+    const expiresMs = new Date(expiresAt).getTime();
+    if (!Number.isFinite(expiresMs)) return;
+
+    const delay = expiresMs - Date.now();
+    if (delay <= 0) {
+      void carregarResumoAssinatura();
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void carregarResumoAssinatura();
+    }, Math.min(delay + 500, 2_147_000_000));
+
+    return () => window.clearTimeout(timer);
+  }, [modalPlanosOpen, assinaturaResumo?.pending.payment?.expires_at]);
 
   useEffect(() => {
     if (assinaturaEmAberto || !saldoTokensEmAlerta(saldoTokensIa)) {
@@ -1624,6 +1655,10 @@ export default function Header({
                         const cancelando = addonKey === cancelandoAddonId;
                         const configurado =
                           addon.integration?.configured === true;
+                        const podeDesfazer =
+                          addon.cancellation?.can_undo !== false;
+                        const motivoBloqueioDesfazer =
+                          addon.cancellation?.block_reason || null;
 
                         return (
                           <div
@@ -1663,7 +1698,12 @@ export default function Header({
                               {addon.cancellation ? (
                                 <div className={styles.subscriptionCancelActions}>
                                   <span className={styles.subscriptionPendingBadge}>
-                                    Sai na próxima renovação
+                                    {motivoBloqueioDesfazer === "payment_pending"
+                                      ? "Pagamento em andamento"
+                                      : motivoBloqueioDesfazer ===
+                                          "payment_confirmed"
+                                        ? "Pagamento confirmado"
+                                        : "Sai na próxima renovação"}
                                   </span>
                                   <button
                                     type="button"
@@ -1674,8 +1714,17 @@ export default function Header({
                                       )
                                     }
                                     disabled={
+                                      !podeDesfazer ||
                                       desfazendoCancelamentoAddonId ===
-                                      addon.cancellation.id
+                                        addon.cancellation.id
+                                    }
+                                    title={
+                                      motivoBloqueioDesfazer === "payment_pending"
+                                        ? "Aguarde a expiração do checkout ou a confirmação do pagamento."
+                                        : motivoBloqueioDesfazer ===
+                                            "payment_confirmed"
+                                          ? "O pagamento foi confirmado com esta composição e o cancelamento não pode mais ser desfeito."
+                                          : "Manter este número adicional nas próximas mensalidades."
                                     }
                                   >
                                     {desfazendoCancelamentoAddonId ===

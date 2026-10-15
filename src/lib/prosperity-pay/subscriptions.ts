@@ -693,6 +693,64 @@ export async function criarCheckoutAssinaturaProsperityPay(
   });
 }
 
+export async function registrarPagamentoAssinaturaPendenteProsperityPay(params: {
+  empresaId: string;
+  tipo: "add_whatsapp" | "change_plan" | "renewal";
+  changeId?: string | null;
+  expiresAt?: string | null;
+  targetAmountCents?: number | null;
+}) {
+  const agora = new Date();
+  const expiraEmRecebido = params.expiresAt
+    ? new Date(params.expiresAt)
+    : null;
+  const expiraEm =
+    expiraEmRecebido && Number.isFinite(expiraEmRecebido.getTime())
+      ? expiraEmRecebido
+      : new Date(
+          agora.getTime() +
+            (params.tipo === "renewal" ? 24 * 60 : 30) * 60_000,
+        );
+
+  const { data: cancelamentos, error: cancelamentosError } = await supabase
+    .from("prosperity_pay_recursos_agendados")
+    .select("id")
+    .eq("empresa_id", params.empresaId)
+    .eq("addon_code", "whatsapp_number")
+    .eq("acao", "remove")
+    .eq("status", "scheduled");
+
+  if (cancelamentosError) throw cancelamentosError;
+
+  const cancellationIds = (cancelamentos || [])
+    .map((item) => String(item.id || "").trim())
+    .filter(Boolean);
+
+  const pendingPayment = {
+    type: params.tipo,
+    change_id: params.changeId || null,
+    expires_at: expiraEm.toISOString(),
+    target_amount_cents:
+      Number.isFinite(Number(params.targetAmountCents))
+        ? Number(params.targetAmountCents)
+        : null,
+    cancellation_ids: cancellationIds,
+    created_at: agora.toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("prosperity_pay_assinaturas")
+    .update({
+      pending_payment: pendingPayment,
+      updated_at: agora.toISOString(),
+    })
+    .eq("empresa_id", params.empresaId);
+
+  if (error) throw error;
+
+  return pendingPayment;
+}
+
 export async function cancelarMudancaPlanoAgendadaProsperityPay(
   empresaId: string,
   changeId?: string,

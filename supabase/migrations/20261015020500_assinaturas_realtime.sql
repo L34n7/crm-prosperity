@@ -25,12 +25,9 @@ as $$
         and s.logout_at is null
         and s.metadata_json ->> 'tipo' = 'acesso_temporario_empresa'
         and s.metadata_json ->> 'empresa_alvo_id' = target_empresa_id::text
-        and case
-          when coalesce(s.metadata_json ->> 'expira_em', '') ~
-            '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}'
-          then (s.metadata_json ->> 'expira_em')::timestamptz > now()
-          else false
-        end
+        and coalesce(s.metadata_json ->> 'expira_em', '') ~
+          '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
+        and (s.metadata_json ->> 'expira_em')::timestamptz > now()
     );
 $$;
 

@@ -726,6 +726,41 @@ export async function GET(req: NextRequest) {
       limiteIntegracoesWhatsapp
     );
 
+    const { data: assinaturaPagamento, error: assinaturaPagamentoError } =
+      await supabaseAdmin
+        .from("prosperity_pay_assinaturas")
+        .select("pending_payment,current_period_start")
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+
+    if (assinaturaPagamentoError) {
+      console.warn(
+        "[WHATSAPP PERFIL PAGAMENTO ASSINATURA ERROR]",
+        assinaturaPagamentoError
+      );
+    }
+
+    const pendingPayment = objetoSeguro(
+      assinaturaPagamento?.pending_payment
+    );
+    const pendingPaymentExpiresAt =
+      typeof pendingPayment.expires_at === "string"
+        ? pendingPayment.expires_at
+        : null;
+    const pendingPaymentExpiresMs = pendingPaymentExpiresAt
+      ? new Date(pendingPaymentExpiresAt).getTime()
+      : Number.NaN;
+    const pendingPaymentActive =
+      Number.isFinite(pendingPaymentExpiresMs) &&
+      pendingPaymentExpiresMs > Date.now();
+    const pendingPaymentCancellationIds = new Set(
+      Array.isArray(pendingPayment.cancellation_ids)
+        ? pendingPayment.cancellation_ids
+            .map((item: unknown) => String(item || "").trim())
+            .filter(Boolean)
+        : []
+    );
+
     const { data: cancelamentosAgendadosData, error: cancelamentosAgendadosError } =
       await supabaseAdmin
         .from("prosperity_pay_recursos_agendados")
@@ -762,6 +797,11 @@ export async function GET(req: NextRequest) {
             ? numeroIntegracao
             : numeroMetadata || null;
 
+        const lockedByPayment = metadata.payment_locked === true;
+        const blockedByPendingPayment =
+          pendingPaymentActive &&
+          pendingPaymentCancellationIds.has(String(item.id));
+
         return {
           id: item.id,
           integracao_id: item.recurso_id,
@@ -772,6 +812,16 @@ export async function GET(req: NextRequest) {
           numero,
           posicao: integracao?.posicao || null,
           effective_at: item.effective_at || null,
+          pode_desfazer:
+            !lockedByPayment && !blockedByPendingPayment,
+          bloqueio_desfazer: lockedByPayment
+            ? "payment_confirmed"
+            : blockedByPendingPayment
+              ? "payment_pending"
+              : null,
+          pagamento_expira_em: blockedByPendingPayment
+            ? pendingPaymentExpiresAt
+            : null,
         };
       });
     const { searchParams } = new URL(req.url);

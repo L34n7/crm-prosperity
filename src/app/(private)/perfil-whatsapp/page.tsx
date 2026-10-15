@@ -77,6 +77,9 @@ type CancelamentoWhatsappAgendado = {
   numero: string | null;
   posicao: number | null;
   effective_at: string | null;
+  pode_desfazer: boolean;
+  bloqueio_desfazer: "payment_pending" | "payment_confirmed" | null;
+  pagamento_expira_em: string | null;
 };
 
 const categorias = [
@@ -1006,6 +1009,28 @@ export default function WhatsappPerfilPage() {
     };
   }, [integracaoId]);
 
+  useEffect(() => {
+    const expiracoes = cancelamentosWhatsappAgendados
+      .filter(
+        (item) =>
+          item.bloqueio_desfazer === "payment_pending" &&
+          item.pagamento_expira_em
+      )
+      .map((item) => new Date(item.pagamento_expira_em as string).getTime())
+      .filter((valor) => Number.isFinite(valor) && valor > Date.now());
+
+    if (expiracoes.length === 0) return;
+
+    const proximaExpiracao = Math.min(...expiracoes);
+    const timer = window.setTimeout(() => {
+      void carregarPerfil(integracaoId || undefined, {
+        preservarMensagens: true,
+      });
+    }, Math.min(proximaExpiracao - Date.now() + 500, 2_147_000_000));
+
+    return () => window.clearTimeout(timer);
+  }, [cancelamentosWhatsappAgendados, integracaoId]);
+
     function handleSelecionarFoto(file: File | null) {
     if (!file) {
         setFoto(null);
@@ -1386,17 +1411,43 @@ export default function WhatsappPerfilPage() {
                       integração e liberará a posição para outro número.
                     </p>
 
+                    {cancelamento.bloqueio_desfazer === "payment_pending" && (
+                      <p>
+                        <strong>Pagamento em andamento.</strong> Por segurança,
+                        não é possível desfazer enquanto o checkout ainda puder
+                        ser pago. Quando ele expirar, o CRM verificará o
+                        pagamento antes de liberar esta ação.
+                      </p>
+                    )}
+
+                    {cancelamento.bloqueio_desfazer ===
+                      "payment_confirmed" && (
+                      <p>
+                        <strong>Pagamento confirmado.</strong> Esta composição
+                        financeira já foi confirmada e o cancelamento não pode
+                        mais ser desfeito.
+                      </p>
+                    )}
+
                     <button
                       type="button"
                       className={styles.scheduledCancellationUndoButton}
                       onClick={() =>
                         desfazerCancelamentoAgendado(cancelamento.id)
                       }
-                      disabled={desfazendoCancelamentoId === cancelamento.id}
+                      disabled={
+                        !cancelamento.pode_desfazer ||
+                        desfazendoCancelamentoId === cancelamento.id
+                      }
                     >
                       {desfazendoCancelamentoId === cancelamento.id
                         ? "Desfazendo..."
-                        : "Desfazer cancelamento"}
+                        : cancelamento.bloqueio_desfazer === "payment_pending"
+                          ? "Aguardando checkout"
+                          : cancelamento.bloqueio_desfazer ===
+                              "payment_confirmed"
+                            ? "Pagamento confirmado"
+                            : "Desfazer cancelamento"}
                     </button>
                   </div>
                 ))}

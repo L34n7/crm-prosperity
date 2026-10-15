@@ -49,6 +49,18 @@ function validDate(value: unknown) {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+}
+
 function blockDate(periodEnd: string | null) {
   if (!periodEnd) return null;
   const date = new Date(periodEnd);
@@ -340,6 +352,30 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     throw new Error("Não foi possível vincular a assinatura da Prosperity Pay a uma empresa.");
   }
 
+  const { data: mirrorAnterior, error: mirrorAnteriorError } = await supabase
+    .from("prosperity_pay_assinaturas")
+    .select("pending_payment")
+    .eq("external_subscription_id", subscriptionId)
+    .maybeSingle();
+
+  if (mirrorAnteriorError) throw mirrorAnteriorError;
+
+  const pendingPayment = objectValue(mirrorAnterior?.pending_payment);
+  const pendingPaymentType = String(pendingPayment.type || "").trim();
+  const pendingPaymentChangeId = String(
+    pendingPayment.change_id || "",
+  ).trim();
+  const payloadChangeId = String(payload.change?.id || "").trim();
+  const cancellationIds = stringArray(pendingPayment.cancellation_ids);
+  const pagamentoPendenteConfirmado =
+    (payload.event === "subscription.changed" &&
+      pendingPaymentType !== "renewal" &&
+      Boolean(pendingPaymentType) &&
+      (!pendingPaymentChangeId ||
+        pendingPaymentChangeId === payloadChangeId)) ||
+    (payload.event === "subscription.renewed" &&
+      pendingPaymentType === "renewal");
+
   const { mapping, plan } = await planForBaseItem(payload);
   const periodStart = validDate(subscription?.current_period_start);
   const periodEnd = validDate(subscription?.current_period_end);
@@ -406,6 +442,9 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     next_due_at: nextDueAt,
     items: subscription?.items || [],
     pending_change: payload.change || null,
+    pending_payment: pagamentoPendenteConfirmado
+      ? null
+      : mirrorAnterior?.pending_payment || null,
     last_event_id: payload.event_id || null,
     last_event_type: payload.event || null,
     payload,
@@ -413,6 +452,43 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     updated_at: new Date().toISOString(),
   }, { onConflict: "external_subscription_id" });
   if (mirror.error) throw mirror.error;
+
+  if (pagamentoPendenteConfirmado && cancellationIds.length > 0) {
+    const { data: cancelamentosRelacionados, error: cancelamentosError } =
+      await supabase
+        .from("prosperity_pay_recursos_agendados")
+        .select("id,metadata_json")
+        .eq("empresa_id", empresaId)
+        .eq("addon_code", "whatsapp_number")
+        .eq("acao", "remove")
+        .eq("status", "scheduled")
+        .in("id", cancellationIds);
+
+    if (cancelamentosError) throw cancelamentosError;
+
+    const confirmadoEm =
+      validDate(payload.occurred_at) || new Date().toISOString();
+
+    for (const cancelamento of cancelamentosRelacionados || []) {
+      const metadata = objectValue(cancelamento.metadata_json);
+      const { error: lockError } = await supabase
+        .from("prosperity_pay_recursos_agendados")
+        .update({
+          metadata_json: {
+            ...metadata,
+            payment_locked: true,
+            payment_locked_at: confirmadoEm,
+            payment_event_id: payload.event_id || null,
+            payment_order_id: payload.order?.id || null,
+          },
+          updated_at: confirmadoEm,
+        })
+        .eq("id", cancelamento.id)
+        .eq("status", "scheduled");
+
+      if (lockError) throw lockError;
+    }
+  }
 
   const companyUpdate = await supabase.from("empresas").update({
     plano_id: mapping.plano_id,

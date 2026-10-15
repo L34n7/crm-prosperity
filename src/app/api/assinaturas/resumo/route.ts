@@ -102,6 +102,7 @@ export async function GET() {
         pending: {
           whatsapp_cancellations: 0,
           plan_change: null,
+          payment: null,
         },
       });
     }
@@ -175,6 +176,25 @@ export async function GET() {
       (item: any) => item.addon_code === "whatsapp_number" && item.acao === "remove"
     );
 
+    const pendingPayment = recordValue(assinatura.pending_payment);
+    const pendingPaymentExpiresAt =
+      typeof pendingPayment.expires_at === "string"
+        ? pendingPayment.expires_at
+        : null;
+    const pendingPaymentExpiresMs = pendingPaymentExpiresAt
+      ? new Date(pendingPaymentExpiresAt).getTime()
+      : Number.NaN;
+    const pendingPaymentActive =
+      Number.isFinite(pendingPaymentExpiresMs) &&
+      pendingPaymentExpiresMs > Date.now();
+    const pendingPaymentCancellationIds = new Set(
+      Array.isArray(pendingPayment.cancellation_ids)
+        ? pendingPayment.cancellation_ids
+            .map((item: unknown) => String(item || "").trim())
+            .filter(Boolean)
+        : []
+    );
+
     const whatsappAddons = Array.from({ length: addonQuantity }, (_, index) => {
       const integracao = integracoesExtras[index] || null;
       const addonIndex = index + 1;
@@ -210,10 +230,31 @@ export async function GET() {
             }
           : null,
         cancellation: pending
-          ? {
-              id: pending.id,
-              effective_at: pending.effective_at,
-            }
+          ? (() => {
+              const cancellationMetadata = recordValue(
+                pending.metadata_json
+              );
+              const lockedByPayment =
+                cancellationMetadata.payment_locked === true;
+              const blockedByPendingPayment =
+                pendingPaymentActive &&
+                pendingPaymentCancellationIds.has(String(pending.id));
+
+              return {
+                id: pending.id,
+                effective_at: pending.effective_at,
+                can_undo:
+                  !lockedByPayment && !blockedByPendingPayment,
+                block_reason: lockedByPayment
+                  ? "payment_confirmed"
+                  : blockedByPendingPayment
+                    ? "payment_pending"
+                    : null,
+                pending_payment_expires_at: blockedByPendingPayment
+                  ? pendingPaymentExpiresAt
+                  : null,
+              };
+            })()
           : null,
       };
     });
@@ -315,6 +356,19 @@ export async function GET() {
       },
       pending: {
         whatsapp_cancellations: pendingWhatsappCount,
+        payment: pendingPaymentActive
+          ? {
+              type: String(pendingPayment.type || ""),
+              change_id:
+                typeof pendingPayment.change_id === "string"
+                  ? pendingPayment.change_id
+                  : null,
+              expires_at: pendingPaymentExpiresAt,
+              cancellation_ids: Array.from(
+                pendingPaymentCancellationIds
+              ),
+            }
+          : null,
         plan_change: pendingPlan
           ? {
               change_id:

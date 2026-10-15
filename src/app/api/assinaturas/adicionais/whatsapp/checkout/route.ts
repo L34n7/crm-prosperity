@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { criarCheckoutAssinaturaProsperityPay } from "@/lib/prosperity-pay/subscriptions";
+import {
+  criarCheckoutAssinaturaProsperityPay,
+  registrarPagamentoAssinaturaPendenteProsperityPay,
+} from "@/lib/prosperity-pay/subscriptions";
 import {
   listarIntegracoesWhatsappDaEmpresa,
   obterResumoLimitesWhatsapp,
@@ -62,6 +65,14 @@ export async function POST() {
     if (!intent.checkoutUrl) {
       throw new Error("A Prosperity Pay não retornou o checkout do adicional.");
     }
+
+    await registrarPagamentoAssinaturaPendenteProsperityPay({
+      empresaId,
+      tipo: "add_whatsapp",
+      changeId: intent.changeId ?? null,
+      expiresAt: intent.expiresAt ?? null,
+      targetAmountCents: intent.targetAmountCents ?? null,
+    });
 
     return NextResponse.json({
       ok: true,
