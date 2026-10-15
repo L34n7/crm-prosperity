@@ -23,6 +23,13 @@ function assinaturaEmDia(empresa: Record<string, any> | null) {
   return Number.isFinite(vencimento) && vencimento > Date.now();
 }
 
+function diasAteBloqueio(valor: unknown) {
+  if (!valor) return null;
+  const bloqueio = new Date(String(valor)).getTime();
+  if (!Number.isFinite(bloqueio)) return null;
+  return Math.max(0, Math.ceil((bloqueio - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
 function normalizarPlanoRelacao(plano: any) {
   if (Array.isArray(plano)) return plano[0] ?? null;
   return plano ?? null;
@@ -281,6 +288,7 @@ export async function GET(request: NextRequest) {
               inicio_em: empresa.assinatura_inicio_em,
               vencimento_em: empresa.assinatura_vencimento_em,
               bloqueio_em: empresa.assinatura_bloqueio_em,
+              dias_ate_bloqueio: diasAteBloqueio(empresa.assinatura_bloqueio_em),
               renovada_em: empresa.assinatura_renovada_em,
               gateway: empresa.assinatura_gateway,
               referencia: empresa.assinatura_referencia,

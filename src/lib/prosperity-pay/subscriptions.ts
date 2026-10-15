@@ -679,11 +679,16 @@ export async function sincronizarAfiliadosAssinaturasProsperityPay() {
 export async function criarCheckoutAssinaturaProsperityPay(
   empresaId: string,
   action: SubscriptionAction,
+  options: { renewalSessionTtlHours?: number } = {},
 ): Promise<CheckoutIntent> {
   const subscription = await garantirAssinaturaProsperityPay(empresaId);
+  const ttl = Number(options.renewalSessionTtlHours);
   return signedPost<CheckoutIntent>("/api/integrations/subscriptions/checkout-sessions", {
     subscriptionId: subscription.external_subscription_id,
     action,
+    ...(action.type === "renew" && Number.isFinite(ttl)
+      ? { renewalSessionTtlHours: Math.max(1, Math.min(24 * 30, Math.floor(ttl))) }
+      : {}),
   });
 }
 

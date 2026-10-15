@@ -71,7 +71,7 @@ type EmpresaRow = {
   updated_at: string;
 };
 
-type PlanoRow = { id: string; nome: string | null; slug: string | null };
+type PlanoRow = { id: string; nome: string | null; slug: string | null; preco_mensal_centavos: number | null };
 
 type OnboardingRow = {
   id: string;
@@ -107,6 +107,13 @@ function valorBooleano(valor: string | null) {
   if (["1", "true", "sim", "yes"].includes(valor.toLowerCase())) return true;
   if (["0", "false", "nao", "não", "no"].includes(valor.toLowerCase())) return false;
   return null;
+}
+
+function diasAteBloqueio(valor: string | null) {
+  if (!valor) return null;
+  const bloqueio = new Date(valor).getTime();
+  if (!Number.isFinite(bloqueio)) return null;
+  return Math.max(0, Math.ceil((bloqueio - Date.now()) / (24 * 60 * 60 * 1000)));
 }
 
 function contatoDoCliente(empresa: EmpresaRow, lead?: LeadRow | null) {
@@ -166,7 +173,7 @@ async function buscarPlanos(ids: string[]) {
   if (!unicos.length) return mapa;
   const { data, error } = await prosperityApiSupabase
     .from("planos")
-    .select("id,nome,slug")
+    .select("id,nome,slug,preco_mensal_centavos")
     .in("id", unicos);
   if (error) throw new Error(error.message);
   for (const item of (data || []) as PlanoRow[]) mapa.set(item.id, item);
@@ -314,9 +321,24 @@ async function listarAssinaturas(request: NextRequest) {
     buscarPlanos(empresas.map((item) => item.plano_id || "").filter(Boolean)),
   ]);
 
+  const espelhosResult = empresas.length
+    ? await prosperityApiSupabase
+        .from("prosperity_pay_assinaturas")
+        .select("empresa_id,current_amount_cents")
+        .in("empresa_id", empresas.map((item) => item.id))
+    : { data: [], error: null };
+  if (espelhosResult.error) throw new Error(espelhosResult.error.message);
+  const valoresAtuais = new Map<string, number>(
+    (espelhosResult.data || [])
+      .filter((item: any) => item.empresa_id && Number(item.current_amount_cents) > 0)
+      .map((item: any) => [String(item.empresa_id), Number(item.current_amount_cents)]),
+  );
+
   const itens = empresas.map((empresa) => {
     const lead = leadsPorEmpresa.get(empresa.id) || null;
     const plano = empresa.plano_id ? planos.get(empresa.plano_id) || null : null;
+    const valorAtualCentavos =
+      valoresAtuais.get(empresa.id) || Number(plano?.preco_mensal_centavos || 0) || null;
     return {
       empresa_id: empresa.id,
       nome: empresa.nome_fantasia || empresa.razao_social,
@@ -325,6 +347,9 @@ async function listarAssinaturas(request: NextRequest) {
       assinatura_inicio_em: empresa.assinatura_inicio_em,
       assinatura_vencimento_em: empresa.assinatura_vencimento_em,
       assinatura_bloqueio_em: empresa.assinatura_bloqueio_em,
+      assinatura_dias_ate_bloqueio: diasAteBloqueio(empresa.assinatura_bloqueio_em),
+      assinatura_valor_atual_centavos: valorAtualCentavos,
+      assinatura_checkout_url: null,
       assinatura_renovada_em: empresa.assinatura_renovada_em,
       assinatura_gateway: empresa.assinatura_gateway,
       assinatura_referencia: empresa.assinatura_referencia,

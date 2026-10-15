@@ -4,6 +4,7 @@ import {
 } from "@/lib/automacoes/variaveis-fixas-contato";
 import { analisarTelefoneParaRevisao } from "@/lib/contatos/revisao-telefone";
 import { buscarRecursoSistemaMapeado } from "@/lib/integracoes/sistemas-mapeados";
+import { criarCheckoutAssinaturaProsperityPay } from "@/lib/prosperity-pay/subscriptions";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   enviarTemplateDisparo,
@@ -181,6 +182,64 @@ function formatarValorEvento(
   return String(valor);
 }
 
+function calcularDiasAteBloqueioContexto(contexto: Record<string, unknown>) {
+  const valor = lerCaminho(contexto, "assinatura.bloqueio_em");
+  if (!valor) return null;
+  const bloqueio = new Date(String(valor)).getTime();
+  if (!Number.isFinite(bloqueio)) return null;
+  return Math.max(0, Math.ceil((bloqueio - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
+function horasValidadeCheckoutRenovacao(contexto: Record<string, unknown>) {
+  const fallback = 24 * 7;
+  const valor = lerCaminho(contexto, "assinatura.bloqueio_em");
+  if (!valor) return fallback;
+  const bloqueio = new Date(String(valor)).getTime();
+  if (!Number.isFinite(bloqueio) || bloqueio <= Date.now()) return fallback;
+  const horasAteBloqueio = Math.ceil((bloqueio - Date.now()) / (60 * 60 * 1000));
+  return Math.max(24, Math.min(24 * 30, horasAteBloqueio + 24));
+}
+
+async function resolverValorEventoDinamico(params: {
+  sistema: string;
+  recurso: string;
+  chaveEvento: string;
+  contexto: Record<string, unknown>;
+}) {
+  const atual = lerCaminho(params.contexto, params.chaveEvento);
+
+  if (params.chaveEvento === "assinatura.dias_ate_bloqueio") {
+    return atual ?? calcularDiasAteBloqueioContexto(params.contexto);
+  }
+
+  if (
+    params.sistema === "crm_prosperity" &&
+    params.recurso === "assinaturas" &&
+    params.chaveEvento === "assinatura.checkout_url"
+  ) {
+    const checkoutExistente = String(atual || "").trim();
+    if (checkoutExistente) return checkoutExistente;
+
+    const empresaDestinoId = String(lerCaminho(params.contexto, "empresa.id") || "").trim();
+    if (!empresaDestinoId) {
+      throw new Error("A assinatura não possui empresa identificada para gerar o checkout de renovação.");
+    }
+
+    const intent = await criarCheckoutAssinaturaProsperityPay(
+      empresaDestinoId,
+      { type: "renew" },
+      { renewalSessionTtlHours: horasValidadeCheckoutRenovacao(params.contexto) },
+    );
+    const checkoutUrl = String(intent.checkoutUrl || "").trim();
+    if (!checkoutUrl) {
+      throw new Error("A Prosperity Pay não retornou o checkout da renovação antecipada.");
+    }
+    return checkoutUrl;
+  }
+
+  return atual;
+}
+
 function campoPreferencial(
   sistema: string,
   recurso: string,
@@ -246,26 +305,31 @@ async function resolverVariaveis(params: {
     (recursoMapeado?.campos || []).map((campo) => [campo.chave, campo]),
   );
 
-  const resolvidas = params.configuradas.slice(0, params.total).map((configurada) => {
-    const original = String(configurada || "").trim();
-    if (!original) return "";
+  const resolvidas = await Promise.all(
+    params.configuradas.slice(0, params.total).map(async (configurada) => {
+      const original = String(configurada || "").trim();
+      if (!original) return "";
 
-    if (original.toLowerCase().startsWith("texto:")) {
-      return original.slice(original.indexOf(":") + 1).trim();
-    }
+      if (original.toLowerCase().startsWith("texto:")) {
+        return original.slice(original.indexOf(":") + 1).trim();
+      }
 
-    if (original.toLowerCase().startsWith("evento:")) {
-      const chaveEvento = original.slice(original.indexOf(":") + 1).trim();
-      const campo = camposPorChave.get(chaveEvento);
-      return formatarValorEvento(
-        lerCaminho(params.contexto, chaveEvento),
-        campo?.tipo,
-      );
-    }
+      if (original.toLowerCase().startsWith("evento:")) {
+        const chaveEvento = original.slice(original.indexOf(":") + 1).trim();
+        const campo = camposPorChave.get(chaveEvento);
+        const valor = await resolverValorEventoDinamico({
+          sistema: params.sistema,
+          recurso: params.recurso,
+          chaveEvento,
+          contexto: params.contexto,
+        });
+        return formatarValorEvento(valor, campo?.tipo);
+      }
 
-    const chave = normalizarChaveVariavelFluxo(original);
-    return mapaFixas.get(chave) || mapaPersonalizadas.get(chave) || "";
-  });
+      const chave = normalizarChaveVariavelFluxo(original);
+      return mapaFixas.get(chave) || mapaPersonalizadas.get(chave) || "";
+    }),
+  );
 
   const faltantes = resolvidas
     .map((valor, index) => ({ valor, index }))
