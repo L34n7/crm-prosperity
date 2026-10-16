@@ -136,25 +136,15 @@ async function sincronizarAfiliadoAssinatura(params: {
 async function ofertaProsperityPorPlanoValor(planoId: string, valorCentavos: number | null, metadata: unknown) {
   const metadataObj = obj(metadata);
   const refs = [
-    metadataObj.oferta_referencia,
+    metadataObj.prosperity_pay_offer_reference,
     metadataObj.offer_reference,
+    metadataObj.oferta_referencia,
     metadataObj.offer_hash,
   ].map(v => String(v || "").trim()).filter(Boolean);
 
-  if (refs.length) {
-    const exact = await supabase.from("ia_token_ofertas")
-      .select("referencia,metadata_json")
-      .eq("gateway", "prosperity_pay")
-      .eq("tipo", "mensalidade")
-      .eq("ativa", true)
-      .eq("plano_id", planoId)
-      .in("referencia", refs)
-      .limit(1)
-      .maybeSingle();
-    if (exact.error) throw exact.error;
-    if (exact.data) return exact.data;
-  }
-
+  // O valor contratado é a fonte de verdade para migrações legadas.
+  // Uma referência antiga pode apontar para o plano padrão mesmo quando o
+  // cliente possui preço VIP, portanto o valor precisa ter prioridade.
   if (valorCentavos) {
     const byValue = await supabase.from("ia_token_ofertas")
       .select("referencia,metadata_json")
@@ -168,6 +158,20 @@ async function ofertaProsperityPorPlanoValor(planoId: string, valorCentavos: num
       .maybeSingle();
     if (byValue.error) throw byValue.error;
     if (byValue.data) return byValue.data;
+  }
+
+  if (refs.length) {
+    const exact = await supabase.from("ia_token_ofertas")
+      .select("referencia,metadata_json")
+      .eq("gateway", "prosperity_pay")
+      .eq("tipo", "mensalidade")
+      .eq("ativa", true)
+      .eq("plano_id", planoId)
+      .in("referencia", refs)
+      .limit(1)
+      .maybeSingle();
+    if (exact.error) throw exact.error;
+    if (exact.data) return exact.data;
   }
 
   const fallback = await supabase.from("ia_token_ofertas")
@@ -188,16 +192,55 @@ async function ofertaProsperityPorPlanoValor(planoId: string, valorCentavos: num
 
 async function valorContratadoEmpresa(empresaId: string, planoId: string, metadata: unknown) {
   const meta = obj(metadata);
-  const metaValue = Number(meta.valor_contratado_centavos || meta.base_amount_cents || 0);
-  if (Number.isSafeInteger(metaValue) && metaValue > 0) return metaValue;
+  const valorContratado = Number(meta.valor_contratado_centavos || 0);
+  if (Number.isSafeInteger(valorContratado) && valorContratado > 0) {
+    return valorContratado;
+  }
+
+  const vipLegado =
+    String(meta.tipo_oferta || "").trim().toLowerCase() === "vip" ||
+    /beta.*60|r\\$\\s*60/i.test(
+      [
+        meta.oferta_nome,
+        meta.offer_title,
+        meta.nome_oferta,
+      ].map((value) => String(value || "")).join(" ")
+    );
+
+  if (vipLegado) {
+    const { data: pagamentoVip, error: pagamentoVipError } = await supabase
+      .from("pagamentos")
+      .select("valor,offer_preco")
+      .eq("empresa_id", empresaId)
+      .in("status", ["paid", "approved", "completed"])
+      .in("gateway", ["atomo", "atomopay"])
+      .order("paid_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pagamentoVipError) throw pagamentoVipError;
+
+    const valorVip = Number(
+      pagamentoVip?.offer_preco || pagamentoVip?.valor || 0
+    );
+    if (Number.isSafeInteger(valorVip) && valorVip > 0) {
+      return valorVip;
+    }
+  }
+
+  const baseMetadata = Number(meta.base_amount_cents || 0);
+  if (Number.isSafeInteger(baseMetadata) && baseMetadata > 0) {
+    return baseMetadata;
+  }
 
   const { data, error } = await supabase.from("pagamentos")
     .select("valor,offer_preco")
     .eq("empresa_id", empresaId)
     .in("status", ["paid", "approved", "completed"])
-    .in("gateway", ["prosperity_pay", "atomo", "manual"])
-    .order("paid_at", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true })
+    .in("gateway", ["prosperity_pay", "atomo", "atomopay", "manual"])
+    .order("paid_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
@@ -225,6 +268,8 @@ async function reconciliarComposicaoImportada(params: {
   ).trim().toLowerCase();
   const assinaturaImportadaLegada =
     metadata.billing_components_v2 === true ||
+    Boolean(String(metadata.billing_legacy_gateway || "").trim()) ||
+    Number(metadata.valor_contratado_centavos || 0) > 0 ||
     gatewayEmpresa === "manual" ||
     gatewayEmpresa === "atomo" ||
     gatewayEmpresa === "atomopay";
@@ -243,23 +288,15 @@ async function reconciliarComposicaoImportada(params: {
   );
   const whatsappNumberQuantity = Math.max(0, effectiveLimit - baseLimit);
 
-  const planoSlug = String(params.plano?.slug || "").trim().toLowerCase();
-  const pricingException = String(metadata.pricing_exception || "").trim();
-  const baseAmountCents =
-    pricingException === "navegue_veiculos_basico_100" &&
-    planoSlug === "basico"
-      ? 10_000
-      : Math.max(
-          1,
-          Number(params.plano?.preco_mensal_centavos || 0),
-        );
+  const baseAmountCents = await valorContratadoEmpresa(
+    params.empresaId,
+    params.empresa.plano_id,
+    params.empresa.assinatura_metadata_json,
+  );
   const oferta = await ofertaProsperityPorPlanoValor(
     params.empresa.plano_id,
     baseAmountCents,
-    pricingException === "navegue_veiculos_basico_100" &&
-      planoSlug === "basico"
-      ? params.empresa.assinatura_metadata_json
-      : {},
+    params.empresa.assinatura_metadata_json,
   );
 
   const items = Array.isArray(params.assinatura.items)
@@ -436,32 +473,15 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
     throw new Error("Ciclo atual da assinatura é inválido para importação.");
   }
 
-  const planoSlug = String(plano?.slug || "").trim().toLowerCase();
-  const pricingException = String(metadataEmpresa.pricing_exception || "").trim();
-  const valor =
-    metadataEmpresa.billing_components_v2 === true
-      ? pricingException === "navegue_veiculos_basico_100" &&
-        planoSlug === "basico"
-        ? 10_000
-        : Math.max(
-            1,
-            Number(plano?.preco_mensal_centavos || 0),
-          )
-      : await valorContratadoEmpresa(
-          empresaId,
-          empresa.plano_id,
-          empresa.assinatura_metadata_json,
-        );
+  const valor = await valorContratadoEmpresa(
+    empresaId,
+    empresa.plano_id,
+    empresa.assinatura_metadata_json,
+  );
   const oferta = await ofertaProsperityPorPlanoValor(
     empresa.plano_id,
     valor,
-    metadataEmpresa.billing_components_v2 === true &&
-      !(
-        pricingException === "navegue_veiculos_basico_100" &&
-        planoSlug === "basico"
-      )
-      ? {}
-      : empresa.assinatura_metadata_json,
+    empresa.assinatura_metadata_json,
   );
   const lead = await supabase.from("leads_cadastro")
     .select("metadata_json")
