@@ -1100,6 +1100,13 @@ function consultaConhecimentoAutomatica(mensagem: string) {
   ) {
     return textoCurto(mensagem, 140);
   }
+  if (
+    /(?:\b(?:utility|utilidade|informativa|informativo)\b|\b3\s*centavos?\b|\b33\s*centavos?\b|(?:^|\s)0[,.](?:03|33)(?:\s|$))/.test(
+      texto,
+    )
+  ) {
+    return "custo por mensagem Meta Utility R$ 0,03 Marketing R$ 0,33 disparos";
+  }
   if (/\b(preco|precos|valor|valores|custa|custar|mensalidade|plano|planos)\b/.test(texto)) {
     return textoCurto(mensagem, 140);
   }
@@ -1191,16 +1198,66 @@ function extrairHorariosExplicitosAgenda(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   const encontrados = new Set<string>();
   const padrao =
-    /\b([01]?\d|2[0-3])(?::([0-5]\d)|\s*(?:h|hr|hrs|hora|horas))\b/g;
+    /\b([01]?\d|2[0-3])(?:(?::([0-5]\d))|\s*(?:h|hr|hrs|hora|horas)(?:\s*([0-5]\d))?)\b/g;
   let match: RegExpExecArray | null;
 
   while ((match = padrao.exec(texto)) !== null) {
     const hora = String(Number(match[1])).padStart(2, "0");
-    const minuto = String(Number(match[2] || 0)).padStart(2, "0");
+    const minuto = String(Number(match[2] ?? match[3] ?? 0)).padStart(2, "0");
     encontrados.add(`${hora}:${minuto}`);
   }
 
   return Array.from(encontrados);
+}
+
+function extrairHorarioCurtoAgenda(mensagem: string) {
+  const texto = normalizarTextoIntencao(mensagem)
+    .replace(/[?!.,;]+$/g, "")
+    .trim();
+  if (!texto) return null;
+
+  const match = texto.match(
+    /^(?:(?:as|pode ser|pode|quero|prefiro|fica melhor|fechado|combinado)\s+)?(\d{1,2})(?:(?::([0-5]\d))|\s*(?:h|hr|hrs|hora|horas)(?:\s*([0-5]\d))?)?$/
+  );
+  if (!match) return null;
+
+  const hora = Number(match[1]);
+  const minuto = Number(match[2] ?? match[3] ?? 0);
+  if (hora < 0 || hora > 23 || minuto < 0 || minuto > 59) return null;
+
+  return `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
+}
+
+function resolverHorarioCurtoPelasOpcoesRecentes(
+  mensagem: string,
+  historico: Array<{ role?: string; content?: string }> = [],
+) {
+  const horarioInformado = extrairHorarioCurtoAgenda(mensagem);
+  if (!horarioInformado) return null;
+
+  const [horaTexto, minutoTexto] = horarioInformado.split(":");
+  const hora = Number(horaTexto);
+  const minuto = Number(minutoTexto);
+
+  for (let indice = historico.length - 1; indice >= 0; indice -= 1) {
+    const item = historico[indice];
+    if (item?.role !== "assistant") continue;
+
+    const opcoes = extrairHorariosExplicitosAgenda(String(item.content || ""));
+    if (!opcoes.length) continue;
+
+    if (opcoes.includes(horarioInformado)) return horarioInformado;
+
+    if (hora >= 1 && hora <= 11) {
+      const equivalente24h =
+        `${String(hora + 12).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
+      if (opcoes.includes(equivalente24h)) return equivalente24h;
+    }
+
+    return null;
+  }
+
+  return null;
 }
 
 function mensagemEscolheHorarioExplicitamente(mensagem: string) {
@@ -2109,21 +2166,32 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       limite: interpretacao.preferencia ? 50 : 12,
       timezone,
     });
-    const horariosExplicitos = extrairHorariosExplicitosAgenda(
-      ctx.pendencia.conteudo_agregado,
-    );
+    const horaContextual = normalizarHoraLocal(args?.__hora_contextual);
+    const horariosExplicitos = horaContextual
+      ? [horaContextual]
+      : extrairHorariosExplicitosAgenda(ctx.pendencia.conteudo_agregado);
     const filtrados =
-      horariosExplicitos.length > 1
+      horaContextual
         ? resultado.slots
-            .filter((slot: any) =>
-              horariosExplicitos.includes(String(slot.hora_label || "")),
+            .filter(
+              (slot: any) =>
+                normalizarHoraLocal(slot?.hora_label || slot?.hora) ===
+                horaContextual,
             )
             .slice(0, 12)
-        : filtrarSlotsPorPreferencia(
-            resultado.slots,
-            interpretacao.preferencia,
-            timezone,
-          ).slice(0, 12);
+        : horariosExplicitos.length > 1
+          ? resultado.slots
+              .filter((slot: any) =>
+                horariosExplicitos.includes(
+                  normalizarHoraLocal(slot?.hora_label || slot?.hora) || "",
+                ),
+              )
+              .slice(0, 12)
+          : filtrarSlotsPorPreferencia(
+              resultado.slots,
+              interpretacao.preferencia,
+              timezone,
+            ).slice(0, 12);
     return {
       ok: true,
       busca_sem_data_explicita: buscaSemDataExplicita,
@@ -2651,6 +2719,8 @@ async function preExecutarConsultasObvias(
 ) {
   const executadas: Array<{ nome: TipoFerramenta; argumentos: any; resultado: any }> = [];
   const mensagem = ctx.pendencia.conteudo_agregado;
+  const horarioEscolhidoNasOpcoes =
+    resolverHorarioCurtoPelasOpcoesRecentes(mensagem, historico);
 
   const consultaConhecimento = consultaConhecimentoComContexto(
     mensagem,
@@ -2672,8 +2742,10 @@ async function preExecutarConsultasObvias(
 
   if (ctx.ferramentasAtivas.has("consultar_agenda") && ctx.agendaAutorizada) {
     const timezone = ctx.agendaAutorizada.timezone || "America/Sao_Paulo";
+    const mensagemAgenda =
+      horarioEscolhidoNasOpcoes || mensagem;
     const mensagemContextual = mensagemAgendaComContexto(
-      mensagem,
+      mensagemAgenda,
       historico,
       ctx.estadoConversa,
     );
@@ -2710,9 +2782,10 @@ async function preExecutarConsultasObvias(
             ? {
                 __contexto_temporal_herdado: true,
                 __hora_contextual:
-                  horariosContextuais.length === 1
+                  horarioEscolhidoNasOpcoes ||
+                  (horariosContextuais.length === 1
                     ? horariosContextuais[0]
-                    : null,
+                    : null),
               }
             : {}),
         };
@@ -2878,7 +2951,7 @@ function contextoPreconsultasParaModelo(executadas: Array<{ nome: TipoFerramenta
     }
   }
   if (!blocos.length) return "";
-  return `${blocos.join("\n\n")}\nUse estes dados diretamente e não repita a mesma consulta, salvo se precisar de outra informação.`;
+  return `${blocos.join("\n\n")}\nUse estes dados diretamente. Se a base já responder à pergunta, responda ao cliente com a informação encontrada e não peça para ele explicar novamente. Não repita a mesma consulta, salvo se a primeira não tiver retornado informação útil.`;
 }
 
 function ferramentaExecutadaComSucesso(ctx: ContextoExecucao, nome: TipoFerramenta) {
@@ -3460,6 +3533,16 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
           resultado = { ok: false, error: error instanceof Error ? error.message : String(error) };
         }
         ctx.ferramentasExecutadas.push({ nome, argumentos: args, resultado });
+
+        if (
+          nome === "consultar_conhecimento" &&
+          resultado?.ok === true &&
+          Array.isArray(resultado?.resultados) &&
+          resultado.resultados.length > 0
+        ) {
+          ferramentasParaModelo.delete("consultar_conhecimento");
+        }
+
         inputIa.push({
           type: "function_call_output",
           call_id: chamada.call_id,
