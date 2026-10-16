@@ -45,6 +45,7 @@ type TemplateComponent = {
 };
 
 const LIMITE_IMAGEM_TEMPLATE_BYTES = 5 * 1024 * 1024;
+const LIMITE_UPLOAD_TEMPLATE_BYTES = 4 * 1024 * 1024;
 const MIME_IMAGENS_TEMPLATE = new Set(["image/jpeg", "image/png"]);
 const TEMPLATE_LANGUAGE = "pt_BR";
 
@@ -237,6 +238,127 @@ function substituirVariaveisTexto(texto: string, exemplos: string[]) {
     const valor = exemplos[Number(numero) - 1]?.trim();
     return valor || match;
   });
+}
+
+async function lerRespostaJsonSegura(
+  response: Response,
+  fallback: string
+): Promise<Record<string, any>> {
+  const raw = await response.text();
+
+  if (!raw.trim()) {
+    return { ok: response.ok, error: response.ok ? null : fallback };
+  }
+
+  try {
+    return JSON.parse(raw) as Record<string, any>;
+  } catch {
+    const texto = raw.trim();
+    const payloadGrande =
+      response.status === 413 ||
+      /request entity too large|payload too large|function_payload_too_large/i.test(
+        texto
+      );
+
+    return {
+      ok: false,
+      error: payloadGrande
+        ? "A imagem ficou grande demais para o envio. Tente novamente; o CRM irá otimizar o arquivo automaticamente."
+        : fallback,
+      raw: texto.slice(0, 300),
+    };
+  }
+}
+
+function carregarImagemNoNavegador(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Não foi possível preparar a imagem do template."));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function canvasParaBlob(
+  canvas: HTMLCanvasElement,
+  mimeType: string,
+  quality?: number
+) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+
+        reject(new Error("Não foi possível otimizar a imagem do template."));
+      },
+      mimeType,
+      quality
+    );
+  });
+}
+
+async function prepararImagemTemplateParaUpload(file: File) {
+  if (file.size <= LIMITE_UPLOAD_TEMPLATE_BYTES) {
+    return file;
+  }
+
+  const image = await carregarImagemNoNavegador(file);
+  const mimeType = file.type === "image/png" ? "image/png" : "image/jpeg";
+  let largura = image.naturalWidth;
+  let altura = image.naturalHeight;
+  let qualidade = mimeType === "image/jpeg" ? 0.9 : undefined;
+  let blobAtual: Blob | null = null;
+
+  for (let tentativa = 0; tentativa < 8; tentativa += 1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(largura));
+    canvas.height = Math.max(1, Math.round(altura));
+
+    const contexto = canvas.getContext("2d");
+    if (!contexto) {
+      throw new Error("Não foi possível otimizar a imagem do template.");
+    }
+
+    contexto.drawImage(image, 0, 0, canvas.width, canvas.height);
+    blobAtual = await canvasParaBlob(canvas, mimeType, qualidade);
+
+    if (blobAtual.size <= LIMITE_UPLOAD_TEMPLATE_BYTES) {
+      const nomeBase =
+        file.name.replace(/.(jpe?g|png)$/i, "") || "template-header";
+      const extensao = mimeType === "image/png" ? "png" : "jpg";
+
+      return new File([blobAtual], `${nomeBase}.${extensao}`, {
+        type: mimeType,
+        lastModified: Date.now(),
+      });
+    }
+
+    const fator = Math.min(
+      0.88,
+      Math.sqrt(LIMITE_UPLOAD_TEMPLATE_BYTES / blobAtual.size) * 0.94
+    );
+    largura = Math.max(1, Math.round(largura * fator));
+    altura = Math.max(1, Math.round(altura * fator));
+
+    if (mimeType === "image/jpeg" && qualidade) {
+      qualidade = Math.max(0.72, qualidade - 0.04);
+    }
+  }
+
+  throw new Error(
+    "Não foi possível reduzir a imagem para o tamanho seguro de envio. Use uma imagem um pouco menor."
+  );
 }
 
 function formatarStatusIntegracao(status?: string | null) {
@@ -746,15 +868,24 @@ export default function TemplatesWhatsAppPage() {
       const components: TemplateComponent[] = [];
 
       if (headerImageEnabled && headerImage) {
+        const imagemParaUpload =
+          await prepararImagemTemplateParaUpload(headerImage);
         const mediaFormData = new FormData();
         mediaFormData.append("integracao_whatsapp_id", integracaoId);
-        mediaFormData.append("file", headerImage, headerImage.name);
+        mediaFormData.append(
+          "file",
+          imagemParaUpload,
+          imagemParaUpload.name
+        );
 
         const mediaRes = await fetch("/api/whatsapp/templates/media", {
           method: "POST",
           body: mediaFormData,
         });
-        const mediaJson = await mediaRes.json();
+        const mediaJson = await lerRespostaJsonSegura(
+          mediaRes,
+          "Não foi possível enviar a imagem do template para a Meta."
+        );
 
         if (!mediaRes.ok || !mediaJson.ok || !mediaJson.handle) {
           const metaMsg =
@@ -840,7 +971,10 @@ export default function TemplatesWhatsAppPage() {
         }),
       });
 
-      const json = await res.json();
+      const json = await lerRespostaJsonSegura(
+        res,
+        "Não foi possível concluir a criação do template."
+      );
 
       if (!res.ok || !json.ok) {
         const metaMsg =
