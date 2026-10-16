@@ -461,7 +461,7 @@ export async function agendarFollowupAgenteIa(params: {
     proxima_acao: proximaAcao.slice(0, 500) || null,
     objetivo_followup: objetivoFollowup,
     estado_versao: estadoRow?.updated_at || null,
-    ultima_mensagem_saida_id: ultimaSaida.id,
+    ultima_mensagem_saida_id: String(ultimaSaida?.id || ""),
     janela_limite_em: new Date(limiteJanelaMs).toISOString(),
   };
 
