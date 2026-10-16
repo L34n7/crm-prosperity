@@ -2840,11 +2840,12 @@ async function criarAgendamentoImediatoDeterministico(
       ? normalizarHoraLocal(consulta.argumentos?.__hora_contextual)
       : null;
   const horaEscolhida =
-    horarios.length === 1
+    horaContextual ||
+    (horarios.length === 1
       ? horarios[0]
       : mensagemConfirmaAgendamento(ctx.pendencia.conteudo_agregado)
         ? horaContextual
-        : null;
+        : null);
   if (!horaEscolhida) return null;
   const candidatos = (consulta.resultado.slots || []).filter(
     (slot: any) => normalizarHoraLocal(slot?.hora) === horaEscolhida,
