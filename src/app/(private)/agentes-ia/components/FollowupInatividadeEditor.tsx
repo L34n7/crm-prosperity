@@ -271,7 +271,7 @@ export default function FollowupInatividadeEditor({
       <div className={styles.scopeHint} style={{ marginTop: 12 }}>
         <strong>Acompanhamento automático:</strong> configure cada tentativa
         como resposta do Agente IA, texto fixo ou áudio da biblioteca geral da
-        empresa. Os intervalos são contados após a tentativa anterior.
+        empresa. O tempo de cada tentativa é contado desde a última mensagem do cliente.
       </div>
 
       <label className={styles.checkRow}>
@@ -352,9 +352,7 @@ export default function FollowupInatividadeEditor({
                   <div className={styles.formGrid}>
                     <label className={styles.field}>
                       <span>
-                        {indice === 0
-                          ? "Enviar após"
-                          : "Enviar após a tentativa anterior"}
+                        Enviar após
                       </span>
                       <input
                         type="number"
@@ -508,9 +506,9 @@ export default function FollowupInatividadeEditor({
           </div>
 
           <small className={styles.fieldHint}>
-            O limite máximo por intervalo é de 23 horas. Se a soma das
-            tentativas ultrapassar a janela válida do WhatsApp, a tentativa
-            seguinte não será enviada.
+            Os tempos são contados desde a última mensagem do cliente e devem
+            ser crescentes. Ex.: 30 min, 3 horas e 22 horas. O limite por
+            tentativa é de 23 horas para permanecer dentro da janela válida do WhatsApp.
           </small>
         </>
       )}

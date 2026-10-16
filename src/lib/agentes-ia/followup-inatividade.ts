@@ -443,8 +443,10 @@ export async function agendarFollowupAgenteIa(params: {
     etapa?.intervalo_minutos ||
     config.intervalos_minutos[tentativa - 1] ||
     30;
-  const executarEmMs = Date.now() + intervaloMinutos * 60 * 1000;
-  const limiteJanelaMs = new Date(ultimaEntrada.created_at).getTime() + JANELA_WHATSAPP_MS - MARGEM_JANELA_MS;
+  const referenciaInatividadeMs = new Date(ultimaEntrada.created_at).getTime();
+  const executarEmMs = referenciaInatividadeMs + intervaloMinutos * 60 * 1000;
+  const limiteJanelaMs =
+    referenciaInatividadeMs + JANELA_WHATSAPP_MS - MARGEM_JANELA_MS;
   if (executarEmMs >= limiteJanelaMs) {
     return { agendado: false, motivo: "proxima_tentativa_fora_janela_24h" };
   }
@@ -489,7 +491,7 @@ export async function agendarFollowupAgenteIa(params: {
       fluxo_id: null,
       no_id: null,
       tipo_agendamento: "followup_agente_ia",
-      executar_em: new Date(executarEmMs).toISOString(),
+      executar_em: new Date(Math.max(Date.now() + 1000, executarEmMs)).toISOString(),
       status: "pendente",
       payload_json: payload,
     })

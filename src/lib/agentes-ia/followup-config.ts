@@ -187,9 +187,15 @@ export function erroValidacaoFollowupInatividade(
   const config = normalizarFollowupInatividade(valor);
   if (!config.ativo) return null;
 
+  let intervaloAnterior = 0;
   for (let indice = 0; indice < config.tentativas; indice += 1) {
     const etapa = config.etapas[indice];
     const numero = indice + 1;
+
+    if (etapa.intervalo_minutos <= intervaloAnterior) {
+      return `A ${numero}ª tentativa deve ocorrer depois da tentativa anterior. Configure tempos crescentes desde a última mensagem do cliente.`;
+    }
+    intervaloAnterior = etapa.intervalo_minutos;
 
     if (etapa.tipo === "texto" && !etapa.texto.trim()) {
       return `Informe o texto da ${numero}ª tentativa do acompanhamento automático.`;
