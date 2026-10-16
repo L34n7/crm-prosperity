@@ -1072,6 +1072,7 @@ export async function POST(request: Request) {
     "subscription.started",
     "subscription.renewed",
     "subscription.changed",
+    "subscription.reverted",
   ]);
 
   if (!supportedEvents.has(payload.event!)) {

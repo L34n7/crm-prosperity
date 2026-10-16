@@ -413,6 +413,9 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   const subscriptionId = String(subscription?.id || "").trim();
   if (!subscriptionId) throw new Error("Evento sem subscription.id.");
 
+  const eventoRevertido = payload.event === "subscription.reverted";
+  const subscriptionStatus = String(subscription?.status || "active");
+
   const empresaId = await findCompany(payload);
   if (!empresaId) {
     throw new Error("Não foi possível vincular a assinatura da Prosperity Pay a uma empresa.");
@@ -526,7 +529,7 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
     next_due_at: nextDueAt,
     items: subscription?.items || [],
     pending_change: payload.change || null,
-    pending_payment: pagamentoPendenteConfirmado
+    pending_payment: eventoRevertido || pagamentoPendenteConfirmado
       ? null
       : mirrorAnterior?.pending_payment || null,
     last_event_id: payload.event_id || null,
@@ -577,18 +580,30 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   const companyUpdate = await supabase.from("empresas").update({
     plano_id: mapping.plano_id,
     limite_integracoes_whatsapp: whatsappLimitApplied,
-    assinatura_status: "ativa",
+    ...(eventoRevertido ? {} : { assinatura_status: "ativa" }),
     assinatura_inicio_em: periodStart,
-    assinatura_vencimento_em: periodEnd,
-    assinatura_bloqueio_em: blockDate(periodEnd),
+    assinatura_vencimento_em:
+      periodEnd ||
+      (eventoRevertido
+        ? validDate(payload.occurred_at) || new Date().toISOString()
+        : null),
+    assinatura_bloqueio_em: blockDate(
+      periodEnd ||
+        (eventoRevertido
+          ? validDate(payload.occurred_at) || new Date().toISOString()
+          : null),
+    ),
     assinatura_renovada_em:
-      payload.event === "subscription.renewed" ? periodStart : undefined,
+      payload.event === "subscription.renewed" || eventoRevertido
+        ? periodStart
+        : undefined,
     assinatura_gateway: "prosperity_pay",
     assinatura_referencia: subscriptionId,
     assinatura_metadata_json: {
       ...existingMetadata,
       origem: "prosperity_pay_subscription",
       subscription_id: subscriptionId,
+      subscription_status: subscriptionStatus,
       offer_reference: mapping.referencia,
       base_amount_cents: Number(subscription?.base_amount_cents || 0) || null,
       current_amount_cents: Number(subscription?.current_amount_cents || 0) || null,
@@ -611,12 +626,28 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
                 }
               : null,
           }
-        : {}),
+        : eventoRevertido
+          ? {
+              prepaid_tokens_pending: null,
+              last_subscription_reversal_at:
+                validDate(payload.occurred_at) || new Date().toISOString(),
+              last_subscription_reversal_order_id:
+                payload.order?.id || null,
+            }
+          : {}),
     },
-    assinatura_fluxos_pausados_em: null,
+    ...(eventoRevertido ? {} : { assinatura_fluxos_pausados_em: null }),
     updated_at: new Date().toISOString(),
   }).eq("id", empresaId);
   if (companyUpdate.error) throw companyUpdate.error;
+
+  if (eventoRevertido) {
+    const { error: syncStatusError } = await supabase.rpc(
+      "sincronizar_assinatura_empresa",
+      { p_empresa_id: empresaId },
+    );
+    if (syncStatusError) throw syncStatusError;
+  }
 
   if (payload.event === "subscription.renewed") {
     // Pagamento antecipado não encerra a mensalidade atual. O cancelamento
