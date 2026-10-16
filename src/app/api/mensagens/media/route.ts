@@ -184,6 +184,83 @@ async function converterAudioWebmParaM4a(file: File): Promise<File> {
   });
 }
 
+async function validarAudioOggOpus(
+  ffmpegBinaryPath: string,
+  outputPath: string
+) {
+  const stderr = await new Promise<string>((resolve, reject) => {
+    const ffmpeg = spawn(ffmpegBinaryPath, [
+      "-hide_banner",
+      "-i",
+      outputPath,
+      "-map",
+      "0:a:0",
+      "-f",
+      "null",
+      "-",
+    ]);
+
+    let output = "";
+
+    ffmpeg.stderr.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+
+    ffmpeg.on("error", (error) => {
+      reject(error);
+    });
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve(output);
+        return;
+      }
+
+      reject(
+        new Error(
+          `Falha ao validar mensagem de voz OGG/Opus. Código: ${code}. Detalhes: ${output}`
+        )
+      );
+    });
+  });
+
+  const codecValido = /Audio:\s+opus\b/i.test(stderr);
+  const taxaValida = /48000\s+Hz/i.test(stderr);
+  const canaisValidos = /\bmono\b/i.test(stderr);
+  const inicioMatch = stderr.match(/start:\s*(-?\d+(?:\.\d+)?)/i);
+  const inicioSegundos = inicioMatch ? Number(inicioMatch[1]) : null;
+
+  if (!codecValido || !taxaValida || !canaisValidos) {
+    throw new Error(
+      "A mensagem de voz convertida não está no padrão OGG/Opus mono 48 kHz."
+    );
+  }
+
+  if (
+    inicioSegundos !== null &&
+    Number.isFinite(inicioSegundos) &&
+    inicioSegundos < -0.001
+  ) {
+    throw new Error(
+      `A mensagem de voz convertida ficou com timestamp inicial negativo (${inicioSegundos}s).`
+    );
+  }
+
+  const stats = await fs.stat(outputPath);
+
+  if (!stats.size) {
+    throw new Error("A mensagem de voz convertida ficou vazia.");
+  }
+
+  console.log("[MEDIA] mensagem de voz OGG/Opus validada:", {
+    size: stats.size,
+    codec: "opus",
+    sample_rate: 48000,
+    channels: 1,
+    start_time: inicioSegundos,
+  });
+}
+
 async function converterAudioParaOggOpus(file: File): Promise<File> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "crm-voice-"));
@@ -194,20 +271,20 @@ async function converterAudioParaOggOpus(file: File): Promise<File> {
   try {
     await fs.writeFile(inputPath, buffer);
 
-    await new Promise<void>(async (resolve, reject) => {
-      let ffmpegBinaryPath = "";
+    const ffmpegBinaryPath = await getFfmpegBinaryPath();
 
-      try {
-        ffmpegBinaryPath = await getFfmpegBinaryPath();
-      } catch (error) {
-        reject(error);
-        return;
-      }
-
+    await new Promise<void>((resolve, reject) => {
       const ffmpeg = spawn(ffmpegBinaryPath, [
+        "-hide_banner",
+        "-fflags",
+        "+genpts",
         "-i",
         inputPath,
         "-vn",
+        "-map",
+        "0:a:0",
+        "-af",
+        "aresample=async=1:first_pts=0,asetpts=N/SR/TB",
         "-ac",
         "1",
         "-ar",
@@ -218,6 +295,14 @@ async function converterAudioParaOggOpus(file: File): Promise<File> {
         "48k",
         "-application",
         "voip",
+        "-frame_duration",
+        "20",
+        "-mapping_family",
+        "0",
+        "-avoid_negative_ts",
+        "make_zero",
+        "-map_metadata",
+        "-1",
         "-f",
         "ogg",
         "-y",
@@ -248,15 +333,13 @@ async function converterAudioParaOggOpus(file: File): Promise<File> {
       });
     });
 
+    await validarAudioOggOpus(ffmpegBinaryPath, outputPath);
+
     const convertidoBuffer = await fs.readFile(outputPath);
 
-    return new File(
-      [convertidoBuffer],
-      `voice-${Date.now()}.ogg`,
-      {
-        type: "audio/ogg; codecs=opus",
-      }
-    );
+    return new File([convertidoBuffer], `voice-${Date.now()}.ogg`, {
+      type: "audio/ogg; codecs=opus",
+    });
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
   }
