@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   MAX_INTERVALO_FOLLOWUP_MINUTOS,
@@ -61,6 +61,11 @@ export default function FollowupInatividadeEditor({
   const [abaMidias, setAbaMidias] = useState<AbaMidias>("audio");
   const [confirmandoExclusaoId, setConfirmandoExclusaoId] = useState<string | null>(null);
   const [excluindoId, setExcluindoId] = useState<string | null>(null);
+  const callbacksRef = useRef({ onError, onSuccess });
+
+  useEffect(() => {
+    callbacksRef.current = { onError, onSuccess };
+  }, [onError, onSuccess]);
 
   const config = useMemo(
     () => normalizarFollowupInatividade(value),
@@ -84,7 +89,7 @@ export default function FollowupInatividadeEditor({
       }
       setMidias(Array.isArray(json.midias) ? json.midias : []);
     } catch (error) {
-      onError(
+      callbacksRef.current.onError(
         error instanceof Error
           ? error.message
           : "Não foi possível carregar as mídias.",
@@ -92,7 +97,7 @@ export default function FollowupInatividadeEditor({
     } finally {
       setCarregandoMidias(false);
     }
-  }, [onError]);
+  }, []);
 
   useEffect(() => {
     if (!config.ativo) return;
@@ -210,9 +215,9 @@ export default function FollowupInatividadeEditor({
         midia_nome: midia.nome,
         midia_url: midia.url,
       });
-      onSuccess("Áudio enviado e selecionado para o acompanhamento.");
+      callbacksRef.current.onSuccess("Áudio enviado e selecionado para o acompanhamento.");
     } catch (error) {
-      onError(
+      callbacksRef.current.onError(
         error instanceof Error
           ? error.message
           : "Não foi possível enviar o áudio.",
@@ -249,9 +254,9 @@ export default function FollowupInatividadeEditor({
       );
       atualizar({ etapas });
       setConfirmandoExclusaoId(null);
-      onSuccess("Mídia excluída da biblioteca da empresa.");
+      callbacksRef.current.onSuccess("Mídia excluída da biblioteca da empresa.");
     } catch (error) {
-      onError(
+      callbacksRef.current.onError(
         error instanceof Error
           ? error.message
           : "Não foi possível excluir a mídia.",

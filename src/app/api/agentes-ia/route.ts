@@ -1105,6 +1105,43 @@ export async function PATCH(request: Request) {
       );
     }
 
+    if (followupInatividade.ativo) {
+      const audioIds = Array.from(
+        new Set(
+          followupInatividade.etapas
+            .slice(0, followupInatividade.tentativas)
+            .filter((etapa) => etapa.tipo === "audio")
+            .map((etapa) => String(etapa.midia_id || "").trim())
+            .filter(Boolean),
+        ),
+      );
+
+      if (audioIds.length > 0) {
+        const { data: audios, error: audiosError } = await supabaseAdmin
+          .from("midias")
+          .select("id")
+          .eq("empresa_id", contexto.empresaId)
+          .eq("tipo", "audio")
+          .in("id", audioIds);
+
+        if (audiosError) throw new Error(audiosError.message);
+
+        const encontrados = new Set(
+          (audios || []).map((item) => String(item.id)),
+        );
+        if (audioIds.some((id) => !encontrados.has(id))) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                "Um dos áudios do acompanhamento não existe mais na biblioteca. Selecione outro áudio antes de salvar.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
     const update = {
       nome: String(body.nome ?? atual.nome).trim() || atual.nome,
       descricao: String(body.descricao ?? atual.descricao ?? "").trim() || null,

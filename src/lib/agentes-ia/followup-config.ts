@@ -140,7 +140,7 @@ function normalizarEtapa(
     intervalo_unidade: unidade,
     intervalo_minutos: intervaloMinutos,
     tipo: tipoValido(obj.tipo),
-    texto: String(obj.texto || "").trim().slice(0, 2000),
+    texto: String(obj.texto || "").slice(0, 2000),
     midia_id: String(obj.midia_id || "").trim() || null,
     midia_nome: String(obj.midia_nome || "").trim().slice(0, 255) || null,
     midia_url: String(obj.midia_url || "").trim().slice(0, 2000) || null,
