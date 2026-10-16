@@ -155,7 +155,34 @@ export async function buscarAssinaturaEmpresa(
       async () => {
         let statusAtual = await sincronizarAssinaturaEmpresa(empresaId);
 
-        if (statusAtual !== "ativa") {
+        const { data: empresaSincronizacao, error: empresaSincronizacaoError } =
+          await supabaseAdmin
+            .from("empresas")
+            .select(
+              "assinatura_gateway,assinatura_metadata_json",
+            )
+            .eq("id", empresaId)
+            .maybeSingle();
+
+        if (empresaSincronizacaoError) {
+          throw new Error(empresaSincronizacaoError.message);
+        }
+
+        const metadataSincronizacao =
+          empresaSincronizacao?.assinatura_metadata_json &&
+          typeof empresaSincronizacao.assinatura_metadata_json === "object" &&
+          !Array.isArray(empresaSincronizacao.assinatura_metadata_json)
+            ? empresaSincronizacao.assinatura_metadata_json as Record<string, unknown>
+            : {};
+        const forcarReconciliacao =
+          String(metadataSincronizacao.last_subscription_event || "") ===
+          "subscription.renewed.recovery";
+
+        if (
+          String(empresaSincronizacao?.assinatura_gateway || "") ===
+            "prosperity_pay" &&
+          (statusAtual !== "ativa" || forcarReconciliacao)
+        ) {
           try {
             const reconciliacao =
               await reconciliarEstadoAssinaturaProsperityPay(empresaId);
