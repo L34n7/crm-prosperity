@@ -1222,12 +1222,14 @@ function extrairHorariosExplicitosAgenda(mensagem: string) {
 
 function extrairHorarioCurtoAgenda(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem)
+    .replace(/[*_~`]/g, " ")
     .replace(/[?!.,;]+$/g, "")
+    .replace(/\s+/g, " ")
     .trim();
   if (!texto) return null;
 
   const match = texto.match(
-    /^(?:(?:as|pode ser|pode|quero|prefiro|fica melhor|fechado|combinado)\s+)?(\d{1,2})(?:(?::([0-5]\d))|\s*(?:h|hr|hrs|hora|horas)(?:\s*([0-5]\d))?)?$/
+    /^(?:(?:as|pode ser|poderia ser|seria|pode|quero|prefiro|fica melhor|fechado|combinado)\s+)?(?:as\s+)?(\d{1,2})(?:(?::([0-5]\d))|\s*(?:h|hr|hrs|hora|horas)(?:\s*([0-5]\d))?)?$/
   );
   if (!match) return null;
 
@@ -1272,15 +1274,18 @@ function resolverHorarioCurtoPelasOpcoesRecentes(
 
 function mensagemEscolheHorarioExplicitamente(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem)
+    .replace(/[*_~`]/g, " ")
     .replace(/[?!.,;:]+$/g, "")
+    .replace(/\s+/g, " ")
     .trim();
   if (!texto) return false;
   if (mensagemConfirmaAgendamento(mensagem)) return true;
+  if (extrairHorarioCurtoAgenda(mensagem)) return true;
 
   const horarios = extrairHorariosExplicitosAgenda(mensagem);
   if (
     horarios.length === 1 &&
-    /^(?:(?:pode ser|prefiro|quero|fica melhor|fechado|combinado)\s+)?(?:as\s+)?\d{1,2}(?:(?::\d{2})\s*(?:h|hr|hrs|hora|horas)?|\s*(?:h|hr|hrs|hora|horas))$/.test(
+    /^(?:(?:pode ser|poderia ser|seria|prefiro|quero|fica melhor|fechado|combinado)\s+)?(?:as\s+)?\d{1,2}(?:(?::\d{2})\s*(?:h|hr|hrs|hora|horas)?|\s*(?:h|hr|hrs|hora|horas))$/.test(
       texto,
     )
   ) {
@@ -2827,13 +2832,13 @@ async function criarAgendamentoImediatoDeterministico(
     return null;
   }
   if (ctx.agendamentosAtivos.length > 0) return null;
-  if (!mensagemEscolheHorarioExplicitamente(ctx.pendencia.conteudo_agregado)) {
-    return null;
-  }
 
-  const horarios = extrairHorariosExplicitosAgenda(
-    ctx.pendencia.conteudo_agregado,
-  );
+  const mensagemAtual = ctx.pendencia.conteudo_agregado;
+  const escolheuHorario = mensagemEscolheHorarioExplicitamente(mensagemAtual);
+  if (!escolheuHorario) return null;
+
+  const horarios = extrairHorariosExplicitosAgenda(mensagemAtual);
+  const horarioCurto = extrairHorarioCurtoAgenda(mensagemAtual);
 
   const consulta = [...preconsultas]
     .reverse()
@@ -2853,9 +2858,10 @@ async function criarAgendamentoImediatoDeterministico(
     horaContextual ||
     (horarios.length === 1
       ? horarios[0]
-      : mensagemConfirmaAgendamento(ctx.pendencia.conteudo_agregado)
-        ? horaContextual
-        : null);
+      : horarioCurto ||
+        (mensagemConfirmaAgendamento(mensagemAtual)
+          ? horaContextual
+          : null));
   if (!horaEscolhida) return null;
   const candidatos = (consulta.resultado.slots || []).filter(
     (slot: any) => normalizarHoraLocal(slot?.hora) === horaEscolhida,
@@ -2981,6 +2987,33 @@ function promessaOperacionalNaoExecutada(
 ): TipoFerramenta | "acao_sem_ferramenta" | null {
   const texto = normalizarTextoIntencao(mensagens.join(" "));
   if (!texto) return null;
+
+  const modoAgenda = normalizarModoExecucaoAgendamento(
+    ctx.ferramentasAtivas.get("criar_agendamento")?.modo_execucao,
+  );
+  const mencionaHoraExata =
+    /\b(?:as\s+)?(?:[01]?\d|2[0-3])(?:(?::[0-5]\d)|\s*(?:h|hr|hrs|hora|horas)(?:\s*[0-5]\d)?)\b/.test(
+      texto,
+    );
+  const afirmaDisponibilidadeExata =
+    /\b(?:tenho|temos|encontrei|achei)\b.{0,80}\b(?:horario|horarios|vaga|vagas|disponivel|disponiveis|livre|livres)\b/.test(
+      texto,
+    ) ||
+    /\b(?:horario|hora|as\s+\d{1,2})\b.{0,45}\b(?:esta|estao|fica|ficam)\s+disponivel/.test(
+      texto,
+    ) ||
+    /\bposso\s+(?:reservar|agendar|marcar)\b.{0,60}\b(?:hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|as\s+\d{1,2})\b/.test(
+      texto,
+    );
+
+  if (
+    modoAgenda === "imediato" &&
+    mencionaHoraExata &&
+    afirmaDisponibilidadeExata &&
+    !ferramentaExecutadaComSucesso(ctx, "consultar_agenda")
+  ) {
+    return "consultar_agenda";
+  }
 
   if (
     (/\b(?:vou|irei|vamos)\s+(?:consultar|verificar|checar|olhar)\b.{0,100}\b(?:agenda|horario|horarios|disponibilidade)\b/.test(texto) ||
@@ -3129,7 +3162,9 @@ function regrasModoAgendamento(
 
   return [
     "- REGRA PRIORITÁRIA DE AGENDA: modo Agendar imediatamente. Esta regra prevalece sobre instruções conflitantes do prompt geral.",
-    "- Quando o cliente informar ou escolher uma data e um horário de forma inequívoca, isso já autoriza o agendamento: se estiver disponível, crie/remarque no mesmo turno. Não peça 'posso confirmar?' novamente.",
+    "- Nunca afirme que um horário específico está livre/disponível sem consultar_agenda com sucesso naquele contexto.",
+    "- Quando o cliente informar ou escolher uma data e um horário de forma inequívoca, inclusive respostas curtas como '9', '15h30', '3:30', 'pode' ou a escolha de uma opção recém-oferecida, isso já autoriza o agendamento: se o slot consultado estiver disponível, execute criar_agendamento/remarcar_agendamento no mesmo turno.",
+    "- Depois que o cliente escolheu um slot disponível, NÃO faça uma confirmação adicional como 'posso confirmar?', 'quer que eu agende?' ou equivalente.",
     "- Para reservar o horário, não peça nome, email, telefone ou assunto. Use os dados já existentes e a configuração da ferramenta. Se não houver assunto padrão, gere um título contextual com no máximo 2 palavras.",
   ];
 }
