@@ -1103,6 +1103,13 @@ function consultaConhecimentoAutomatica(mensagem: string) {
   if (/\b(preco|precos|valor|valores|custa|custar|mensalidade|plano|planos)\b/.test(texto)) {
     return textoCurto(mensagem, 140);
   }
+  if (
+    /\b(fidelidade|fidelizacao|carencia|multa|contrato|contratual)\b/.test(texto) ||
+    /\b(cancelar|cancelamento)\b.{0,40}\b(plano|assinatura|mensalidade|crm)\b/.test(texto) ||
+    /\b(plano|assinatura|mensalidade|crm)\b.{0,40}\b(cancelar|cancelamento)\b/.test(texto)
+  ) {
+    return textoCurto(mensagem, 140);
+  }
   if (/\b(paciente|pacientes|prontuario|odontograma|odontologic)\w*/.test(texto)) {
     return "pacientes prontuário odontograma cadastro";
   }
@@ -1138,6 +1145,36 @@ function consultaConhecimentoAutomatica(mensagem: string) {
 function mensagemEhCurtaDeContinuidade(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   return /^(sim|nao|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|entendi|me mostra|mostra|manda|vamos|fechado)$/.test(texto);
+}
+
+function consultaConhecimentoComContexto(
+  mensagem: string,
+  historico: Array<{ role?: string; content?: string }> = [],
+) {
+  const direta = consultaConhecimentoAutomatica(mensagem);
+  if (direta) return direta;
+  if (!mensagemEhCurtaDeContinuidade(mensagem)) return null;
+
+  const promessaConsulta = /\b(?:posso|podemos|quer que eu|quer que a gente|se quiser(?:,)?\s+(?:eu\s+)?posso)\b.{0,120}\b(?:consultar|verificar|checar|confirmar|buscar|procurar)\b/;
+
+  for (let indice = historico.length - 1; indice >= 0; indice -= 1) {
+    const item = historico[indice];
+    if (item?.role !== "assistant") continue;
+    const conteudo = String(item.content || "").trim();
+    if (!conteudo || !promessaConsulta.test(normalizarTextoIntencao(conteudo))) {
+      continue;
+    }
+
+    for (let anterior = indice - 1; anterior >= 0; anterior -= 1) {
+      const origem = historico[anterior];
+      if (origem?.role !== "user") continue;
+      const pergunta = String(origem.content || "").trim();
+      if (!pergunta) continue;
+      return consultaConhecimentoAutomatica(pergunta) || textoCurto(pergunta, 140);
+    }
+  }
+
+  return null;
 }
 
 function mensagemMencionaDataAgenda(mensagem: string) {
@@ -2615,7 +2652,10 @@ async function preExecutarConsultasObvias(
   const executadas: Array<{ nome: TipoFerramenta; argumentos: any; resultado: any }> = [];
   const mensagem = ctx.pendencia.conteudo_agregado;
 
-  const consultaConhecimento = consultaConhecimentoAutomatica(mensagem);
+  const consultaConhecimento = consultaConhecimentoComContexto(
+    mensagem,
+    historico,
+  );
   if (consultaConhecimento && ctx.ferramentasAtivas.has("consultar_conhecimento")) {
     try {
       const argumentos = { consulta: consultaConhecimento };
@@ -2919,8 +2959,15 @@ function promessaOperacionalNaoExecutada(
     return "cancelar_agendamento";
   }
 
-  if (/\b(?:vou|irei)\s+(?:consultar|verificar|checar)\b.{0,100}\b(?:preco|plano|informacao|detalhe|recurso|funcionalidade|proposta|bandeira)\b/.test(texto) &&
-      !ferramentaExecutadaComSucesso(ctx, "consultar_conhecimento")) {
+  const prometeuConsultaConhecimento =
+    /\b(?:vou|irei|posso|podemos|quer que eu|quer que a gente)\b.{0,80}\b(?:consultar|verificar|checar|confirmar|buscar|procurar)\b/.test(texto) &&
+    !/\b(?:agenda|horario|horarios|disponibilidade)\b/.test(texto);
+
+  if (
+    prometeuConsultaConhecimento &&
+    ctx.ferramentasAtivas.has("consultar_conhecimento") &&
+    !ferramentaExecutadaComSucesso(ctx, "consultar_conhecimento")
+  ) {
     return "consultar_conhecimento";
   }
 
@@ -2932,7 +2979,7 @@ function promessaOperacionalNaoExecutada(
     return "consultar_conhecimento";
   }
 
-  if (/\b(?:vou|irei)\s+(?:consultar|verificar|checar|confirmar|analisar|retornar|retomar)\b/.test(texto) ||
+  if (/\b(?:vou|irei|posso|podemos)\s+(?:consultar|verificar|checar|confirmar|analisar|retornar|retomar)\b/.test(texto) ||
       /\b(?:vou|irei)\s+(?:te\s+)?chamar\b/.test(texto) ||
       /\b(?:ja|já)\s+te\s+(?:retorno|aviso|passo)\b/.test(texto)) {
     return "acao_sem_ferramenta";
