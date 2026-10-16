@@ -1107,6 +1107,16 @@ function consultaConhecimentoAutomatica(mensagem: string) {
   ) {
     return "custo por mensagem Meta Utility R$ 0,03 Marketing R$ 0,33 disparos";
   }
+  if (
+    /\b\d+(?:[.,]\d+)?\s*(?:mil|milhao|milhoes)?\s*(?:mensagem|mensagens|contato|contatos)\b/.test(
+      texto,
+    ) ||
+    /\b(?:envio|enviar|disparo|disparos)\b.{0,60}\b\d+(?:[.,]\d+)?\s*(?:mil|milhao|milhoes)?\b/.test(
+      texto,
+    )
+  ) {
+    return "disparos custo por mensagem Meta Marketing Utility volume quantidade";
+  }
   if (/\b(preco|precos|valor|valores|custa|custar|mensalidade|plano|planos)\b/.test(texto)) {
     return textoCurto(mensagem, 140);
   }
