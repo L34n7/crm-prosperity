@@ -14,6 +14,7 @@ type Props = {
   contatoNome?: string | null;
   texto: string;
   arquivo: File | null;
+  arquivos?: File[];
   podeAgendar: boolean;
   podeAgendarMidia: boolean;
   gravandoAudio: boolean;
@@ -54,6 +55,7 @@ export default function AgendarMensagemButton({
   contatoNome,
   texto,
   arquivo,
+  arquivos,
   podeAgendar,
   podeAgendarMidia,
   gravandoAudio,
@@ -95,7 +97,8 @@ export default function AgendarMensagemButton({
     ? limiteSeguro.getTime() - Date.now()
     : 0;
 
-  const temRascunhoBase = Boolean(arquivo || texto.trim());
+  const arquivosBase = arquivos?.length ? arquivos : arquivo ? [arquivo] : [];
+  const temRascunhoBase = Boolean(arquivosBase.length || texto.trim());
   const podeAbrir =
     podeAgendar && temRascunhoBase && !gravandoAudio && restanteSeguro > 0;
 
@@ -164,16 +167,19 @@ export default function AgendarMensagemButton({
     const arquivos: File[] = [];
     const itens: Array<Record<string, unknown>> = [];
 
-    if (arquivo) {
+    if (arquivosBase.length) {
       if (!podeAgendarMidia) {
         setErro("Você não tem permissão para agendar mídias nesta conversa.");
         return;
       }
-      const fileIndex = arquivos.push(arquivo) - 1;
-      itens.push({
-        tipo: "arquivo",
-        file_index: fileIndex,
-        legenda: texto.trim() || null,
+
+      arquivosBase.forEach((arquivoBase, index) => {
+        const fileIndex = arquivos.push(arquivoBase) - 1;
+        itens.push({
+          tipo: "arquivo",
+          file_index: fileIndex,
+          legenda: index === 0 ? texto.trim() || null : null,
+        });
       });
     } else if (texto.trim()) {
       itens.push({ tipo: "texto", conteudo: texto.trim() });

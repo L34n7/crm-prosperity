@@ -752,6 +752,9 @@ export default function ConversasPageContent() {
   const streamCameraRef = useRef<MediaStream | null>(null);
 
   const [arquivoEnvioPreviewUrl, setArquivoEnvioPreviewUrl] = useState<string | null>(null);
+  const [imagensEnvioAdicionais, setImagensEnvioAdicionais] = useState<
+    Array<{ id: string; arquivo: File; previewUrl: string }>
+  >([]);
   const documentoInputRef = useRef<HTMLInputElement | null>(null);
   const midiaInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
@@ -2077,9 +2080,13 @@ export default function ConversasPageContent() {
       if (arquivoEnvioPreviewUrl) {
         URL.revokeObjectURL(arquivoEnvioPreviewUrl);
       }
+      imagensEnvioAdicionais.forEach((item) =>
+        URL.revokeObjectURL(item.previewUrl)
+      );
 
       setArquivoEnvio(null);
       setArquivoEnvioPreviewUrl(null);
+      setImagensEnvioAdicionais([]);
       setArquivoEnvioEhMensagemVoz(false);
       setLegendaArquivo("");
       setConteudo("");
@@ -2266,6 +2273,87 @@ export default function ConversasPageContent() {
     }
   }
 
+  function criarIdAnexoImagem() {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function limparImagensAdicionais() {
+    imagensEnvioAdicionais.forEach((item) =>
+      URL.revokeObjectURL(item.previewUrl)
+    );
+    setImagensEnvioAdicionais([]);
+  }
+
+  function anexarImagens(files: File[], input?: HTMLInputElement | null) {
+    const imagens = files.filter((file) => file.type.startsWith("image/"));
+
+    if (!imagens.length) {
+      if (input) input.value = "";
+      return;
+    }
+
+    const novos = imagens.map((arquivo) => ({
+      id: criarIdAnexoImagem(),
+      arquivo,
+      previewUrl: URL.createObjectURL(arquivo),
+    }));
+
+    if (arquivoEnvio && arquivoSelecionadoEhImagem(arquivoEnvio)) {
+      setImagensEnvioAdicionais((atuais) => [...atuais, ...novos]);
+    } else {
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+
+      limparImagensAdicionais();
+
+      const [primeiro, ...restantes] = novos;
+      setArquivoEnvio(primeiro.arquivo);
+      setArquivoEnvioPreviewUrl(primeiro.previewUrl);
+      setImagensEnvioAdicionais(restantes);
+      setArquivoEnvioEhMensagemVoz(false);
+      setConteudo("");
+      conteudoRef.current = "";
+
+      if (editorRef.current) {
+        editorRef.current.textContent = "";
+      }
+    }
+
+    if (input) {
+      input.value = "";
+    }
+  }
+
+  function selecionarArquivos(
+    files: File[],
+    input?: HTMLInputElement | null
+  ) {
+    if (!files.length) {
+      if (input) input.value = "";
+      return;
+    }
+
+    if (!podeEnviarMidia) {
+      setErro("Você não tem permissão para enviar mídias e arquivos.");
+      if (input) input.value = "";
+      return;
+    }
+
+    if (files.every((file) => file.type.startsWith("image/"))) {
+      anexarImagens(files, input);
+      return;
+    }
+
+    if (files.length > 1) {
+      setErro("Para anexar vários arquivos de uma vez, selecione somente imagens.");
+      if (input) input.value = "";
+      return;
+    }
+
+    selecionarArquivo(files[0], input);
+  }
+
   function selecionarArquivo(
     file: File | null,
     input?: HTMLInputElement | null,
@@ -2277,9 +2365,15 @@ export default function ConversasPageContent() {
       return;
     }
 
+    if (file?.type.startsWith("image/") && !mensagemVozGravada) {
+      anexarImagens([file], input);
+      return;
+    }
+
     if (arquivoEnvioPreviewUrl) {
       URL.revokeObjectURL(arquivoEnvioPreviewUrl);
     }
+    limparImagensAdicionais();
 
     if (!file) {
       setArquivoEnvio(null);
@@ -2299,6 +2393,7 @@ export default function ConversasPageContent() {
     setArquivoEnvioPreviewUrl(previewUrl);
     setConteudo("");
     conteudoRef.current = "";
+
     if (editorRef.current) {
       editorRef.current.textContent = "";
     }
@@ -2308,14 +2403,51 @@ export default function ConversasPageContent() {
     }
   }
 
+  function removerImagemAnexada(id: string) {
+    if (id === "principal") {
+      if (arquivoEnvioPreviewUrl) {
+        URL.revokeObjectURL(arquivoEnvioPreviewUrl);
+      }
+
+      if (imagensEnvioAdicionais.length) {
+        const [proxima, ...restantes] = imagensEnvioAdicionais;
+        setArquivoEnvio(proxima.arquivo);
+        setArquivoEnvioPreviewUrl(proxima.previewUrl);
+        setImagensEnvioAdicionais(restantes);
+        return;
+      }
+
+      setArquivoEnvio(null);
+      setArquivoEnvioPreviewUrl(null);
+      setArquivoEnvioEhMensagemVoz(false);
+      setLegendaArquivo("");
+      legendaArquivoRef.current = "";
+
+      if (legendaEditorRef.current) {
+        legendaEditorRef.current.textContent = "";
+      }
+      return;
+    }
+
+    setImagensEnvioAdicionais((atuais) => {
+      const removida = atuais.find((item) => item.id === id);
+
+      if (removida) {
+        URL.revokeObjectURL(removida.previewUrl);
+      }
+
+      return atuais.filter((item) => item.id !== id);
+    });
+  }
+
   function colarImagemNoComposer(
     event: React.ClipboardEvent<HTMLDivElement>
   ) {
-    const itemImagem = Array.from(event.clipboardData.items).find(
+    const itensImagem = Array.from(event.clipboardData.items).filter(
       (item) => item.kind === "file" && item.type.startsWith("image/")
     );
 
-    if (!itemImagem) return;
+    if (!itensImagem.length) return;
 
     event.preventDefault();
 
@@ -2324,31 +2456,41 @@ export default function ConversasPageContent() {
       return;
     }
 
-    const arquivoColado = itemImagem.getAsFile();
-    if (!arquivoColado) {
+    const instante = Date.now();
+    const arquivos = itensImagem
+      .map((item, index) => {
+        const arquivoColado = item.getAsFile();
+
+        if (!arquivoColado) return null;
+
+        const tipo = arquivoColado.type || "image/png";
+        const extensao =
+          tipo === "image/jpeg"
+            ? "jpg"
+            : tipo === "image/webp"
+              ? "webp"
+              : tipo === "image/gif"
+                ? "gif"
+                : "png";
+
+        return new File(
+          [arquivoColado],
+          `imagem-colada-${instante}-${index + 1}.${extensao}`,
+          { type: tipo },
+        );
+      })
+      .filter((arquivo): arquivo is File => Boolean(arquivo));
+
+    if (!arquivos.length) {
       setErro("Não foi possível importar a imagem colada.");
       return;
     }
 
-    const tipo = arquivoColado.type || "image/png";
-    const extensao =
-      tipo === "image/jpeg"
-        ? "jpg"
-        : tipo === "image/webp"
-          ? "webp"
-          : tipo === "image/gif"
-            ? "gif"
-            : "png";
-    const arquivo = new File(
-      [arquivoColado],
-      `imagem-colada-${Date.now()}.${extensao}`,
-      { type: tipo },
-    );
     const textoAtual = arquivoEnvio
       ? legendaArquivoRef.current
       : conteudoRef.current;
 
-    selecionarArquivo(arquivo);
+    anexarImagens(arquivos);
     legendaArquivoRef.current = textoAtual;
     setLegendaArquivo(textoAtual);
     setMenuAnexoAberto(false);
@@ -5100,7 +5242,21 @@ async function baixarConversaPDF() {
   }
 
   async function enviarMidia(file?: File | null) {
-    const arquivo = file || arquivoEnvio;
+    const anexosAtuais = file
+      ? []
+      : arquivoEnvio
+        ? [
+            {
+              id: "principal",
+              arquivo: arquivoEnvio,
+              previewUrl: arquivoEnvioPreviewUrl,
+            },
+            ...imagensEnvioAdicionais,
+          ]
+        : [];
+    const arquivos = file
+      ? [file]
+      : anexosAtuais.map((item) => item.arquivo);
 
     setMensagemSucesso("");
     setErro("");
@@ -5115,53 +5271,80 @@ async function baixarConversaPDF() {
       return;
     }
 
-    if (!arquivo) {
+    if (!arquivos.length) {
       setErro("Selecione um arquivo.");
       return;
     }
 
+    let enviados = 0;
+
     try {
       setEnviando(true);
 
-      const formData = new FormData();
-      formData.append("conversa_id", conversaSelecionada.id);
-      formData.append("file", arquivo);
-
-      if (arquivoEnvioEhMensagemVoz && arquivo.type.startsWith("audio/")) {
-        formData.append("voice", "true");
-      }
-
       const legendaAtual = legendaArquivoRef.current.trim();
+      let ultimaResposta: { message?: string } | null = null;
 
-      if (legendaAtual) {
-        formData.append("caption", legendaAtual);
-      }
+      for (let index = 0; index < arquivos.length; index += 1) {
+        const arquivo = arquivos[index];
+        const formData = new FormData();
 
-      const res = await fetch("/api/mensagens/media", {
-        method: "POST",
-        body: formData,
-      });
+        formData.append("conversa_id", conversaSelecionada.id);
+        formData.append("file", arquivo);
 
-      const data = await res.json();
+        if (
+          arquivos.length === 1 &&
+          arquivoEnvioEhMensagemVoz &&
+          arquivo.type.startsWith("audio/")
+        ) {
+          formData.append("voice", "true");
+        }
 
-      if (!res.ok) {
-        setErro(data.error || "Erro ao enviar mídia");
-        return;
+        if (index === 0 && legendaAtual) {
+          formData.append("caption", legendaAtual);
+        }
+
+        const res = await fetch("/api/mensagens/media", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(
+            arquivos.length > 1
+              ? `Falha ao enviar a imagem ${index + 1} de ${arquivos.length}: ${data.error || "erro no envio"}`
+              : data.error || "Erro ao enviar mídia"
+          );
+        }
+
+        enviados += 1;
+        ultimaResposta = data;
       }
 
       if (arquivoEnvioPreviewUrl) {
         URL.revokeObjectURL(arquivoEnvioPreviewUrl);
       }
+      imagensEnvioAdicionais.forEach((item) =>
+        URL.revokeObjectURL(item.previewUrl)
+      );
 
       setArquivoEnvio(null);
       setArquivoEnvioPreviewUrl(null);
+      setImagensEnvioAdicionais([]);
       setArquivoEnvioEhMensagemVoz(false);
       setLegendaArquivo("");
       legendaArquivoRef.current = "";
+
       if (legendaEditorRef.current) {
         legendaEditorRef.current.textContent = "";
       }
-      setMensagemSucesso(data.message || "Mídia enviada com sucesso.");
+
+      setMensagemSucesso(
+        arquivos.length > 1
+          ? `${arquivos.length} imagens enviadas com sucesso.`
+          : ultimaResposta?.message || "Mídia enviada com sucesso."
+      );
 
       const listaAtualizada = await atualizarConversasCarregadas();
       const conversaAtualizada = listaAtualizada.find(
@@ -5186,8 +5369,40 @@ async function baixarConversaPDF() {
           modoMergeNovas: true,
         }
       );
-    } catch {
-      setErro("Erro ao enviar mídia");
+    } catch (error) {
+      if (!file && enviados > 0 && enviados < anexosAtuais.length) {
+        const enviadosComPreview = anexosAtuais.slice(0, enviados);
+        const pendentes = anexosAtuais.slice(enviados);
+
+        enviadosComPreview.forEach((item) => {
+          if (item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+          }
+        });
+
+        const [primeiroPendente, ...restantesPendentes] = pendentes;
+
+        setArquivoEnvio(primeiroPendente.arquivo);
+        setArquivoEnvioPreviewUrl(primeiroPendente.previewUrl);
+        setImagensEnvioAdicionais(
+          restantesPendentes.map((item) => ({
+            id: item.id,
+            arquivo: item.arquivo,
+            previewUrl: item.previewUrl || URL.createObjectURL(item.arquivo),
+          }))
+        );
+
+        if (legendaArquivoRef.current) {
+          legendaArquivoRef.current = "";
+          setLegendaArquivo("");
+
+          if (legendaEditorRef.current) {
+            legendaEditorRef.current.textContent = "";
+          }
+        }
+      }
+
+      setErro(error instanceof Error ? error.message : "Erro ao enviar mídia");
     } finally {
       setEnviando(false);
     }
@@ -7100,9 +7315,13 @@ const templateFooterTexto = useMemo(() => {
     if (arquivoEnvioPreviewUrl) {
       URL.revokeObjectURL(arquivoEnvioPreviewUrl);
     }
+    imagensEnvioAdicionais.forEach((item) =>
+      URL.revokeObjectURL(item.previewUrl)
+    );
 
     setArquivoEnvio(null);
     setArquivoEnvioPreviewUrl(null);
+    setImagensEnvioAdicionais([]);
     setArquivoEnvioEhMensagemVoz(false);
     setLegendaArquivo("");
     legendaArquivoRef.current = "";
@@ -8595,9 +8814,12 @@ const templateFooterTexto = useMemo(() => {
                                 type="file"
                                 className={styles.hiddenFileInput}
                                 accept="image/*,video/*"
+                                multiple
                                 onChange={(e) => {
-                                  const file = e.target.files?.[0] || null;
-                                  selecionarArquivo(file, e.currentTarget);
+                                  selecionarArquivos(
+                                    Array.from(e.target.files || []),
+                                    e.currentTarget
+                                  );
                                 }}
                               />
 
@@ -8630,7 +8852,10 @@ const templateFooterTexto = useMemo(() => {
                             >
                               <div className={styles.filePreviewHeader}>
                                 <div className={styles.filePreviewLabel}>
-                                  {getTipoArquivoSelecionado(arquivoEnvio)} selecionado
+                                  {arquivoSelecionadoEhImagem(arquivoEnvio) &&
+                                  imagensEnvioAdicionais.length
+                                    ? `${imagensEnvioAdicionais.length + 1} imagens selecionadas`
+                                    : `${getTipoArquivoSelecionado(arquivoEnvio)} selecionado`}
                                 </div>
 
                                 <button
@@ -8640,9 +8865,13 @@ const templateFooterTexto = useMemo(() => {
                                     if (arquivoEnvioPreviewUrl) {
                                       URL.revokeObjectURL(arquivoEnvioPreviewUrl);
                                     }
+                                    imagensEnvioAdicionais.forEach((item) =>
+                                      URL.revokeObjectURL(item.previewUrl)
+                                    );
 
                                     setArquivoEnvio(null);
                                     setArquivoEnvioPreviewUrl(null);
+                                    setImagensEnvioAdicionais([]);
                                     setArquivoEnvioEhMensagemVoz(false);
                                     setLegendaArquivo("");
                                     legendaArquivoRef.current = "";
@@ -8651,17 +8880,74 @@ const templateFooterTexto = useMemo(() => {
                                     }
                                   }}
                                 >
-                                  Apagar
+                                  {imagensEnvioAdicionais.length ? "Apagar todas" : "Apagar"}
                                 </button>
                               </div>
 
                               {arquivoSelecionadoEhImagem(arquivoEnvio) && arquivoEnvioPreviewUrl && (
-                                <div>
-                                  <img
-                                    src={arquivoEnvioPreviewUrl}
-                                    alt={arquivoEnvio.name}
-                                    className={styles.filePreviewImage}
-                                  />
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns:
+                                      "repeat(auto-fill, minmax(92px, 1fr))",
+                                    gap: 8,
+                                  }}
+                                >
+                                  {[
+                                    {
+                                      id: "principal",
+                                      arquivo: arquivoEnvio,
+                                      previewUrl: arquivoEnvioPreviewUrl,
+                                    },
+                                    ...imagensEnvioAdicionais,
+                                  ].map((item) => (
+                                    <div
+                                      key={item.id}
+                                      style={{
+                                        position: "relative",
+                                        minWidth: 0,
+                                        aspectRatio: "1 / 1",
+                                        borderRadius: 10,
+                                        overflow: "hidden",
+                                        border: "1px solid var(--crm-border)",
+                                      }}
+                                    >
+                                      <img
+                                        src={item.previewUrl}
+                                        alt={item.arquivo.name}
+                                        style={{
+                                          width: "100%",
+                                          height: "100%",
+                                          objectFit: "cover",
+                                          display: "block",
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => removerImagemAnexada(item.id)}
+                                        title="Remover imagem"
+                                        aria-label={`Remover ${item.arquivo.name}`}
+                                        style={{
+                                          position: "absolute",
+                                          top: 5,
+                                          right: 5,
+                                          width: 24,
+                                          height: 24,
+                                          borderRadius: "50%",
+                                          border: "none",
+                                          background: "rgba(15, 23, 42, .78)",
+                                          color: "#fff",
+                                          cursor: "pointer",
+                                          display: "grid",
+                                          placeItems: "center",
+                                          fontSize: 15,
+                                          lineHeight: 1,
+                                        }}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
 
@@ -8695,15 +8981,18 @@ const templateFooterTexto = useMemo(() => {
                                 </div>
                               )}
 
-                              <div
-                                style={{
-                                  fontSize: 13,
-                                  color: "var(--crm-ui-private-content-hex-64748b)",
-                                  wordBreak: "break-word",
-                                }}
-                              >
-                                {arquivoEnvio.name}
-                              </div>
+                              {(!arquivoSelecionadoEhImagem(arquivoEnvio) ||
+                                imagensEnvioAdicionais.length === 0) && (
+                                <div
+                                  style={{
+                                    fontSize: 13,
+                                    color: "var(--crm-ui-private-content-hex-64748b)",
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {arquivoEnvio.name}
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -9411,6 +9700,16 @@ const templateFooterTexto = useMemo(() => {
                                     contatoNome={conversaSelecionada.contatos?.nome}
                                     texto={arquivoEnvio ? legendaArquivo : conteudo}
                                     arquivo={arquivoEnvio}
+                                    arquivos={
+                                      arquivoEnvio && arquivoSelecionadoEhImagem(arquivoEnvio)
+                                        ? [
+                                            arquivoEnvio,
+                                            ...imagensEnvioAdicionais.map(
+                                              (item) => item.arquivo
+                                            ),
+                                          ]
+                                        : undefined
+                                    }
                                     podeAgendar={podeEnviarMensagem && janela24hAberta}
                                     podeAgendarMidia={podeEnviarMidia}
                                     gravandoAudio={gravandoAudio}
@@ -9419,8 +9718,12 @@ const templateFooterTexto = useMemo(() => {
                                       if (arquivoEnvioPreviewUrl) {
                                         URL.revokeObjectURL(arquivoEnvioPreviewUrl);
                                       }
+                                      imagensEnvioAdicionais.forEach((item) =>
+                                        URL.revokeObjectURL(item.previewUrl)
+                                      );
                                       setArquivoEnvio(null);
                                       setArquivoEnvioPreviewUrl(null);
+                                      setImagensEnvioAdicionais([]);
                                       setArquivoEnvioEhMensagemVoz(false);
                                       setLegendaArquivo("");
                                       legendaArquivoRef.current = "";
