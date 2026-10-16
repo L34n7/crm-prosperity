@@ -4,6 +4,7 @@ import {
   getTtlCacheKey,
   invalidateTtlCache,
 } from "@/lib/cache/ttl-cache";
+import { reconciliarEstadoAssinaturaProsperityPay } from "@/lib/prosperity-pay/subscriptions";
 
 const supabaseAdmin = getSupabaseAdmin();
 const ASSINATURA_CACHE_TTL_MS = 30_000;
@@ -151,7 +152,30 @@ export async function buscarAssinaturaEmpresa(
     await getOrSetTtlCache(
       getTtlCacheKey("assinatura-empresa-sync", [empresaId]),
       ASSINATURA_SYNC_CACHE_TTL_MS,
-      () => sincronizarAssinaturaEmpresa(empresaId)
+      async () => {
+        let statusAtual = await sincronizarAssinaturaEmpresa(empresaId);
+
+        if (statusAtual !== "ativa") {
+          try {
+            const reconciliacao =
+              await reconciliarEstadoAssinaturaProsperityPay(empresaId);
+
+            if (reconciliacao.atualizado) {
+              statusAtual = await sincronizarAssinaturaEmpresa(empresaId);
+            }
+          } catch (error) {
+            console.error(
+              "[ASSINATURA] Falha ao reconciliar estado com Prosperity Pay:",
+              {
+                empresaId,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            );
+          }
+        }
+
+        return statusAtual;
+      }
     );
   }
 

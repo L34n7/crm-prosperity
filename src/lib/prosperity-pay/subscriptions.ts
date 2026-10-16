@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sincronizarAssinaturaProsperityPay } from "@/lib/prosperity-pay/sync-subscription";
 
 const supabase = getSupabaseAdmin();
 const INTEGRATION_KEY = "crm_prosperity";
@@ -61,6 +62,138 @@ async function signedPost<T>(path: string, body: Record<string, unknown>): Promi
     throw new Error(String(data.error || data.message || `Prosperity Pay recusou a operação (HTTP ${response.status}).`));
   }
   return data as T;
+}
+
+type EstadoRemotoAssinaturaProsperityPay = {
+  ok: boolean;
+  subscription: {
+    id: string;
+    status: string;
+    billing_model: string;
+    base_amount_cents: number;
+    current_amount_cents: number;
+    currency: string;
+    current_period_start: string | null;
+    current_period_end: string | null;
+    next_due_at: string | null;
+    cycle_number: number;
+    items: Array<{
+      id?: string;
+      type?: string;
+      code?: string;
+      description?: string;
+      unit_amount_cents?: number;
+      quantity?: number;
+      total_amount_cents?: number;
+      offer_id?: string | null;
+      addon_id?: string | null;
+    }>;
+  };
+  offer: {
+    id: string;
+    name: string;
+    checkout_slug: string;
+    reference: string;
+  };
+  customer: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  };
+};
+
+function dataMs(valor: unknown) {
+  if (!valor) return Number.NaN;
+  const ms = new Date(String(valor)).getTime();
+  return Number.isFinite(ms) ? ms : Number.NaN;
+}
+
+export async function reconciliarEstadoAssinaturaProsperityPay(
+  empresaId: string,
+) {
+  const { data: mirror, error: mirrorError } = await supabase
+    .from("prosperity_pay_assinaturas")
+    .select(
+      "external_subscription_id,status,current_period_start,current_period_end,next_due_at,cycle_number,items,pending_payment",
+    )
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  if (mirrorError) throw mirrorError;
+  if (!mirror?.external_subscription_id) {
+    return { atualizado: false, motivo: "sem_assinatura_prosperity_pay" };
+  }
+
+  const remoto = await signedPost<EstadoRemotoAssinaturaProsperityPay>(
+    "/api/integrations/subscriptions/status",
+    { subscriptionId: mirror.external_subscription_id },
+  );
+
+  const periodoAnteriorFim = dataMs(mirror.current_period_end);
+  const periodoRemotoFim = dataMs(remoto.subscription.current_period_end);
+  const periodoAnteriorInicio = dataMs(mirror.current_period_start);
+  const periodoRemotoInicio = dataMs(remoto.subscription.current_period_start);
+  const periodoAvancou =
+    (Number.isFinite(periodoRemotoFim) &&
+      (!Number.isFinite(periodoAnteriorFim) ||
+        periodoRemotoFim > periodoAnteriorFim + 60_000)) ||
+    (Number.isFinite(periodoRemotoInicio) &&
+      (!Number.isFinite(periodoAnteriorInicio) ||
+        periodoRemotoInicio > periodoAnteriorInicio + 60_000));
+
+  const remotoAtivo =
+    String(remoto.subscription.status || "").toLowerCase() === "active" &&
+    Number.isFinite(periodoRemotoFim) &&
+    periodoRemotoFim > Date.now();
+
+  if (remotoAtivo) {
+    const evento = periodoAvancou ? "subscription.renewed" : "subscription.changed";
+
+    await sincronizarAssinaturaProsperityPay({
+      event_id: `reconcile:${remoto.subscription.id}:${remoto.subscription.current_period_start || remoto.subscription.current_period_end || Date.now()}`,
+      event: evento,
+      occurred_at: new Date().toISOString(),
+      subscription: remoto.subscription,
+      offer: remoto.offer,
+      customer: remoto.customer,
+      change: null,
+    });
+
+    return {
+      atualizado: true,
+      ativo: true,
+      periodoAvancou,
+      subscriptionId: remoto.subscription.id,
+    };
+  }
+
+  const agora = new Date().toISOString();
+  const { error: updateMirrorError } = await supabase
+    .from("prosperity_pay_assinaturas")
+    .update({
+      status: remoto.subscription.status,
+      billing_model: remoto.subscription.billing_model,
+      base_amount_cents: remoto.subscription.base_amount_cents,
+      current_amount_cents: remoto.subscription.current_amount_cents,
+      currency: remoto.subscription.currency,
+      cycle_number: remoto.subscription.cycle_number || null,
+      current_period_start: remoto.subscription.current_period_start,
+      current_period_end: remoto.subscription.current_period_end,
+      next_due_at: remoto.subscription.next_due_at,
+      items: remoto.subscription.items || [],
+      synced_at: agora,
+      updated_at: agora,
+    })
+    .eq("empresa_id", empresaId);
+
+  if (updateMirrorError) throw updateMirrorError;
+
+  return {
+    atualizado: true,
+    ativo: false,
+    periodoAvancou,
+    subscriptionId: remoto.subscription.id,
+  };
 }
 
 export async function atualizarEmailClienteAssinaturaProsperityPay(params: {
