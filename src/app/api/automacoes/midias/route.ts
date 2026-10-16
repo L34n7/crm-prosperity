@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
+import { normalizarFollowupInatividade } from "@/lib/agentes-ia/followup-config";
 
 const BUCKET_MIDIAS = "midias";
 const LIMITE_STORAGE_MIDIAS_EMPRESA_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -85,6 +86,116 @@ function removerCamposMidiaConfiguracao(
   }
 
   return config;
+}
+
+async function removerMidiaDosAcompanhamentosAgentes(params: {
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>;
+  empresaId: string;
+  midia: MidiaParaRemocaoFluxos;
+}) {
+  const { supabaseAdmin, empresaId, midia } = params;
+  const { data: agentes, error } = await supabaseAdmin
+    .from("agentes_ia")
+    .select("id, nome, metadata_json")
+    .eq("empresa_id", empresaId)
+    .neq("status", "arquivado");
+
+  if (error) {
+    throw new Error(
+      `Erro ao verificar acompanhamentos que usam a mídia: ${error.message}`,
+    );
+  }
+
+  const afetados: Array<{ id: string; nome: string | null }> = [];
+  const agora = new Date().toISOString();
+
+  for (const agente of agentes || []) {
+    const metadata =
+      agente.metadata_json &&
+      typeof agente.metadata_json === "object" &&
+      !Array.isArray(agente.metadata_json)
+        ? (agente.metadata_json as Record<string, unknown>)
+        : {};
+    const config = normalizarFollowupInatividade(
+      metadata.followup_inatividade,
+    );
+    const indicesAfetados = config.etapas
+      .map((etapa, indice) =>
+        etapa.tipo === "audio" &&
+        String(etapa.midia_id || "") === midia.id
+          ? indice
+          : -1,
+      )
+      .filter((indice) => indice >= 0);
+
+    if (!indicesAfetados.length) continue;
+
+    const etapas = config.etapas.map((etapa, indice) =>
+      indicesAfetados.includes(indice)
+        ? {
+            ...etapa,
+            midia_id: null,
+            midia_nome: null,
+            midia_url: null,
+          }
+        : etapa,
+    );
+
+    const { error: updateError } = await supabaseAdmin
+      .from("agentes_ia")
+      .update({
+        metadata_json: {
+          ...metadata,
+          followup_inatividade: {
+            ...config,
+            ativo: false,
+            etapas,
+            intervalos_minutos: etapas.map(
+              (etapa) => etapa.intervalo_minutos,
+            ),
+          },
+          followup_midia_removida: {
+            midia_id: midia.id,
+            midia_nome: midia.nome,
+            removida_em: agora,
+            tentativas_afetadas: indicesAfetados.map(
+              (indice) => indice + 1,
+            ),
+          },
+        },
+        updated_at: agora,
+      })
+      .eq("empresa_id", empresaId)
+      .eq("id", agente.id);
+
+    if (updateError) {
+      throw new Error(
+        `Erro ao higienizar acompanhamento do agente ${agente.nome || agente.id}: ${updateError.message}`,
+      );
+    }
+
+    await supabaseAdmin
+      .from("automacao_agendamentos")
+      .update({
+        status: "cancelado",
+        executed_at: agora,
+      })
+      .eq("empresa_id", empresaId)
+      .eq("tipo_agendamento", "followup_agente_ia")
+      .eq("status", "pendente")
+      .contains("payload_json", { agente_id: agente.id });
+
+    afetados.push({
+      id: String(agente.id),
+      nome: agente.nome || null,
+    });
+  }
+
+  return {
+    total_agentes_followup_afetados: afetados.length,
+    agentes_followup_afetados: afetados,
+    followup_desativado: afetados.length > 0,
+  };
 }
 
 async function removerMidiaDosFluxos(params: {
@@ -387,12 +498,19 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const impactoFluxos = await removerMidiaDosFluxos({
-      supabaseAdmin: contexto.supabaseAdmin,
-      empresaId: contexto.usuarioSistema.empresa_id,
-      usuarioId: contexto.usuarioSistema.id,
-      midia,
-    });
+    const [impactoFluxos, impactoAgentes] = await Promise.all([
+      removerMidiaDosFluxos({
+        supabaseAdmin: contexto.supabaseAdmin,
+        empresaId: contexto.usuarioSistema.empresa_id,
+        usuarioId: contexto.usuarioSistema.id,
+        midia,
+      }),
+      removerMidiaDosAcompanhamentosAgentes({
+        supabaseAdmin: contexto.supabaseAdmin,
+        empresaId: contexto.usuarioSistema.empresa_id,
+        midia,
+      }),
+    ]);
 
     const { error: deleteError } = await contexto.supabaseAdmin
       .from("midias")
@@ -426,10 +544,14 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       message:
-        impactoFluxos.total_blocos_afetados > 0
-          ? "Midia excluida e referencias removidas dos blocos afetados."
+        impactoFluxos.total_blocos_afetados > 0 ||
+        impactoAgentes.total_agentes_followup_afetados > 0
+          ? "Mídia excluída e referências dependentes foram higienizadas."
           : "Mídia excluída definitivamente.",
-      impacto: impactoFluxos,
+      impacto: {
+        ...impactoFluxos,
+        ...impactoAgentes,
+      },
       storage_removido: storageRemovido,
       storage_erro: storageErro,
     });

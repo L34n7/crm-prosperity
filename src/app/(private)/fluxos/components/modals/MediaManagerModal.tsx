@@ -298,10 +298,10 @@ export default function MediaManagerModal({
         </div>
 
         <p className={styles.help}>
-          A exclusão é definitiva: remove o registro da tabela e o arquivo do
-          Storage. Se algum bloco estiver usando essa mídia, ele ficará sem
-          mídia selecionada e precisará ser ajustado antes de ativar/salvar o
-          fluxo.
+          A exclusão é definitiva: remove o registro e o arquivo do Storage.
+          Se algum Fluxo estiver usando a mídia, ele será higienizado conforme
+          as regras atuais. Se um acompanhamento de Agente IA usar esse áudio,
+          o acompanhamento será desativado até que outra mídia seja selecionada.
         </p>
       </div>
     </div>
