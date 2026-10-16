@@ -3,8 +3,9 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   FOLLOWUP_INATIVIDADE_PADRAO,
+  erroValidacaoFollowupInatividade,
   normalizarFollowupInatividade,
-} from "@/lib/agentes-ia/followup-inatividade";
+} from "@/lib/agentes-ia/followup-config";
 import { listarGruposDistribuicao } from "@/lib/agendas/capacidade";
 import { obterGrupoDistribuicao } from "@/lib/agendas/distribuicao";
 
@@ -1096,6 +1097,13 @@ export async function PATCH(request: Request) {
     const followupInatividade = normalizarFollowupInatividade(
       body.followup_inatividade ?? metadataAtual.followup_inatividade
     );
+    const erroFollowup = erroValidacaoFollowupInatividade(followupInatividade);
+    if (erroFollowup) {
+      return NextResponse.json(
+        { ok: false, error: erroFollowup },
+        { status: 400 },
+      );
+    }
 
     const update = {
       nome: String(body.nome ?? atual.nome).trim() || atual.nome,
