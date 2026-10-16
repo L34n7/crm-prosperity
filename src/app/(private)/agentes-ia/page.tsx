@@ -29,6 +29,11 @@ import HorarioAtendimentoEditor from "@/components/agentes-ia/HorarioAtendimento
 import AgenteTesteModal from "./components/AgenteTesteModal";
 import ConhecimentoEditorModal from "./components/ConhecimentoEditorModal";
 import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerramentaSelect";
+import FollowupInatividadeEditor from "./components/FollowupInatividadeEditor";
+import {
+  erroValidacaoFollowupInatividade,
+  normalizarFollowupInatividade,
+} from "@/lib/agentes-ia/followup-config";
 import {
   normalizarModoExecucaoAgendamento,
   type ModoExecucaoAgendamento,
@@ -44,12 +49,6 @@ type EstrategiaTransferencia =
   | "rodizio_aleatorio"
   | "menos_conversas";
 type NivelConsumo = "ideal" | "atencao" | "alto";
-
-type FollowupInatividadeConfig = {
-  ativo: boolean;
-  tentativas: number;
-  intervalos_minutos: number[];
-};
 
 type Ferramenta = {
   id?: string;
@@ -171,12 +170,6 @@ type RespostaNicho = {
 const LIMITE_CARACTERISTICAS = 5;
 const MENSAGEM_TRANSFERENCIA_PADRAO =
   "Aguarde que um dos nossos atendentes já vai te responder...";
-const FOLLOWUP_INATIVIDADE_PADRAO: FollowupInatividadeConfig = {
-  ativo: false,
-  tentativas: 2,
-  intervalos_minutos: [30, 180, 720],
-};
-
 const TRANSFERENCIA_PADRAO: TransferenciaFallback = {
   escopo_fila: "geral",
   setor_id: null,
@@ -370,28 +363,6 @@ function OrientacaoConsumo({ valor, regra }: { valor: number; regra: RegraConsum
       <strong>{valor.toLocaleString("pt-BR")} {regra.unidade}</strong> - {mensagem}
     </small>
   );
-}
-
-function normalizarFollowupInatividade(valor: unknown): FollowupInatividadeConfig {
-  const obj = valor && typeof valor === "object" && !Array.isArray(valor)
-    ? (valor as Record<string, unknown>)
-    : {};
-  const tentativasBrutas = Number(obj.tentativas);
-  const tentativas = Number.isFinite(tentativasBrutas)
-    ? Math.min(3, Math.max(1, Math.floor(tentativasBrutas)))
-    : FOLLOWUP_INATIVIDADE_PADRAO.tentativas;
-  const recebidos = Array.isArray(obj.intervalos_minutos) ? obj.intervalos_minutos : [];
-  const intervalos = FOLLOWUP_INATIVIDADE_PADRAO.intervalos_minutos.map((padrao, indice) => {
-    const numero = Number(recebidos[indice]);
-    return Number.isFinite(numero)
-      ? Math.min(1380, Math.max(1, Math.floor(numero)))
-      : padrao;
-  });
-  return {
-    ativo: obj.ativo === true,
-    tentativas,
-    intervalos_minutos: intervalos,
-  };
 }
 
 function cloneAgente(agente: Agente): Agente {
@@ -735,24 +706,6 @@ export default function AgentesIaPage() {
     setEditor({ ...editor, ferramentas: proxima });
   }
 
-  function atualizarFollowup(patch: Partial<FollowupInatividadeConfig>) {
-    if (!editor) return;
-    const atual = normalizarFollowupInatividade(editor.metadata_json?.followup_inatividade);
-    setEditor({
-      ...editor,
-      metadata_json: {
-        ...(editor.metadata_json || {}),
-        followup_inatividade: { ...atual, ...patch },
-      },
-    });
-  }
-
-  function atualizarIntervaloFollowup(indice: number, valor: number) {
-    const intervalos = [...followupInatividade.intervalos_minutos];
-    intervalos[indice] = Math.min(1380, Math.max(1, Number.isFinite(valor) ? Math.floor(valor) : 1));
-    atualizarFollowup({ intervalos_minutos: intervalos });
-  }
-
   function alternarIntegracao(id: string) {
     if (!editor || integracoes.length <= 1) return;
     const atuais = editor.integracoes_whatsapp_ids || [];
@@ -909,6 +862,12 @@ export default function AgentesIaPage() {
 
   async function salvar() {
     if (!editor) return;
+    const erroFollowup = erroValidacaoFollowupInatividade(followupInatividade);
+    if (erroFollowup) {
+      setErro(erroFollowup);
+      setSucesso("");
+      return;
+    }
     if (usaFerramentasAgenda && !origemAgendaConfigurada) {
       setErro("Selecione uma agenda ou grupo de distribuição antes de salvar as ferramentas de agenda.");
       setSucesso("");
@@ -1554,92 +1513,27 @@ export default function AgentesIaPage() {
                       </label>
                     </div>
 
-                    <div className={styles.scopeHint} style={{ marginTop: 12 }}>
-                      <strong>Follow-up por inatividade:</strong> quando o agente terminar com uma pergunta e ainda houver uma próxima ação pendente, o CRM pode retomar a conversa automaticamente se o cliente não responder. A mensagem é gerada pela IA usando o contexto atual; não é um texto fixo.
-                    </div>
-                    <label className={styles.checkRow}>
-                      <input
-                        type="checkbox"
-                        checked={followupInatividade.ativo}
-                        onChange={(event) => atualizarFollowup({ ativo: event.target.checked })}
-                      />
-                      <span>
-                        <strong>Ativar acompanhamento automático</strong>
-                        <small>
-                          O follow-up é cancelado assim que o cliente responde, quando um humano assume ou quando a janela de 24 horas do WhatsApp não está mais aberta.
-                        </small>
-                      </span>
-                    </label>
-                    {followupInatividade.ativo && (
-                      <>
-                        <div className={styles.formGrid} style={{ marginTop: 10 }}>
-                          <label className={styles.field}>
-                            <span>Máximo de tentativas</span>
-                            <select
-                              value={followupInatividade.tentativas}
-                              onChange={(event) =>
-                                atualizarFollowup({ tentativas: Number(event.target.value) })
-                              }
-                            >
-                              <option value={1}>1 tentativa</option>
-                              <option value={2}>2 tentativas</option>
-                              <option value={3}>3 tentativas</option>
-                            </select>
-                          </label>
-                          <label className={styles.field}>
-                            <span>1ª tentativa após</span>
-                            <input
-                              type="number"
-                              min={1}
-                              max={1380}
-                              step={5}
-                              value={followupInatividade.intervalos_minutos[0]}
-                              onChange={(event) =>
-                                atualizarIntervaloFollowup(0, Number(event.target.value))
-                              }
-                            />
-                            <small className={styles.fieldHint}>Minutos sem resposta do cliente.</small>
-                          </label>
-                        </div>
-                        {followupInatividade.tentativas >= 2 && (
-                          <div className={styles.formGrid}>
-                            <label className={styles.field}>
-                              <span>2ª tentativa após a anterior</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={1380}
-                                step={5}
-                                value={followupInatividade.intervalos_minutos[1]}
-                                onChange={(event) =>
-                                  atualizarIntervaloFollowup(1, Number(event.target.value))
-                                }
-                              />
-                              <small className={styles.fieldHint}>Intervalo em minutos.</small>
-                            </label>
-                            {followupInatividade.tentativas >= 3 && (
-                              <label className={styles.field}>
-                                <span>3ª tentativa após a anterior</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={1380}
-                                  step={5}
-                                  value={followupInatividade.intervalos_minutos[2]}
-                                  onChange={(event) =>
-                                    atualizarIntervaloFollowup(2, Number(event.target.value))
-                                  }
-                                />
-                                <small className={styles.fieldHint}>Intervalo em minutos.</small>
-                              </label>
-                            )}
-                          </div>
-                        )}
-                        <small className={styles.fieldHint}>
-                          Se uma tentativa cair fora das 24 horas contadas desde a última mensagem do cliente, ela não será agendada nem enviada.
-                        </small>
-                      </>
-                    )}
+                    <FollowupInatividadeEditor
+                      value={followupInatividade}
+                      onChange={(followup) => {
+                        if (!editor) return;
+                        setEditor({
+                          ...editor,
+                          metadata_json: {
+                            ...(editor.metadata_json || {}),
+                            followup_inatividade: followup,
+                          },
+                        });
+                      }}
+                      onError={(message) => {
+                        setErro(message);
+                        setSucesso("");
+                      }}
+                      onSuccess={(message) => {
+                        setSucesso(message);
+                        setErro("");
+                      }}
+                    />
                   </section>
 
                   <div style={{ display: "grid", gap: 14, alignContent: "start" }}>
