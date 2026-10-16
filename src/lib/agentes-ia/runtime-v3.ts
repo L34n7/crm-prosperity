@@ -1087,32 +1087,6 @@ function mensagemConfirmaAgendamento(valor: unknown) {
   );
 }
 
-function mensagemPedePrecoOuCusto(mensagem: string) {
-  const texto = normalizarTextoIntencao(mensagem);
-  if (!texto) return false;
-
-  return /\b(preco|precos|valor|valores|custo|custos|custa|custam|custar|quanto custa|quanto fica|taxa|taxas|cobranca|cobrancas|cobrado|cobrada|cobram|pagar|pagamento|mensalidade)\b/.test(
-    texto,
-  );
-}
-
-function mensagemEhRespostaDeVolume(mensagem: string) {
-  const texto = normalizarTextoIntencao(mensagem)
-    .replace(/[?!.,;:]+$/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!texto) return false;
-
-  return (
-    /^(?:de\s+)?\d+(?:[.,]\d+)?\s*(?:a|-)\s*\d+(?:[.,]\d+)?\s*(?:k|mil)?(?:\s+(?:mensagem|mensagens|contato|contatos|envio|envios))?(?:\s+por\s+(?:dia|mes|semana))?$/.test(
-      texto,
-    ) ||
-    /^\d+(?:[.,]\d+)?\s*(?:k|mil)(?:\s+(?:mensagem|mensagens|contato|contatos|envio|envios))?(?:\s+por\s+(?:dia|mes|semana))?$/.test(
-      texto,
-    )
-  );
-}
-
 function consultaConhecimentoAutomatica(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   if (!texto) return null;
@@ -1133,20 +1107,15 @@ function consultaConhecimentoAutomatica(mensagem: string) {
   ) {
     return "custo por mensagem Meta Utility R$ 0,03 Marketing R$ 0,33 disparos";
   }
-  const mencionaVolumeDisparos =
-    /\b\d+(?:[.,]\d+)?\s*(?:k|mil|milhao|milhoes)?\s*(?:mensagem|mensagens|contato|contatos)\b/.test(
+  if (
+    /\b\d+(?:[.,]\d+)?\s*(?:mil|milhao|milhoes)?\s*(?:mensagem|mensagens|contato|contatos)\b/.test(
       texto,
     ) ||
-    /\b(?:envio|enviar|disparo|disparos)\b.{0,60}\b\d+(?:[.,]\d+)?\s*(?:k|mil|milhao|milhoes)?\b/.test(
+    /\b(?:envio|enviar|disparo|disparos)\b.{0,60}\b\d+(?:[.,]\d+)?\s*(?:mil|milhao|milhoes)?\b/.test(
       texto,
-    );
-
-  if (mencionaVolumeDisparos && mensagemPedePrecoOuCusto(mensagem)) {
+    )
+  ) {
     return "disparos custo por mensagem Meta Marketing Utility volume quantidade";
-  }
-
-  if (mencionaVolumeDisparos) {
-    return "disparos em massa volume capacidade funcionamento";
   }
   if (/\b(preco|precos|valor|valores|custa|custar|mensalidade|plano|planos)\b/.test(texto)) {
     return textoCurto(mensagem, 140);
@@ -1192,11 +1161,7 @@ function consultaConhecimentoAutomatica(mensagem: string) {
 
 function mensagemEhCurtaDeContinuidade(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
-  return (
-    /^(sim|nao|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|entendi|me mostra|mostra|manda|vamos|fechado)$/.test(
-      texto,
-    ) || mensagemEhRespostaDeVolume(mensagem)
-  );
+  return /^(sim|nao|quero|quero sim|pode|pode ser|ok|certo|blz|beleza|entendi|me mostra|mostra|manda|vamos|fechado)$/.test(texto);
 }
 
 function consultaConhecimentoComContexto(
@@ -1205,38 +1170,6 @@ function consultaConhecimentoComContexto(
 ) {
   const direta = consultaConhecimentoAutomatica(mensagem);
   if (direta) return direta;
-
-  if (mensagemEhRespostaDeVolume(mensagem)) {
-    const perguntaVolume =
-      /\b(?:quantos|quantas|quantidade|volume)\b.{0,100}\b(?:contato|contatos|mensagem|mensagens|envio|envios|disparo|disparos)\b/;
-    const contextoDisparos =
-      /\b(?:disparo|disparos|lista de transmissao|mensagem em massa|mensagens em massa|whatsapp)\b/;
-
-    let encontrouPerguntaVolume = false;
-    let encontrouContextoDisparos = false;
-
-    for (
-      let indice = historico.length - 1;
-      indice >= 0 && indice >= historico.length - 8;
-      indice -= 1
-    ) {
-      const item = historico[indice];
-      const conteudo = normalizarTextoIntencao(item?.content || "");
-      if (!conteudo) continue;
-
-      if (item?.role === "assistant" && perguntaVolume.test(conteudo)) {
-        encontrouPerguntaVolume = true;
-      }
-      if (contextoDisparos.test(conteudo)) {
-        encontrouContextoDisparos = true;
-      }
-    }
-
-    if (encontrouPerguntaVolume && encontrouContextoDisparos) {
-      return "disparos em massa volume capacidade funcionamento";
-    }
-  }
-
   if (!mensagemEhCurtaDeContinuidade(mensagem)) return null;
 
   const promessaConsulta = /\b(?:posso|podemos|quer que eu|quer que a gente|se quiser(?:,)?\s+(?:eu\s+)?posso)\b.{0,120}\b(?:consultar|verificar|checar|confirmar|buscar|procurar)\b/;
