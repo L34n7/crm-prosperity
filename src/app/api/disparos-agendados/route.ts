@@ -113,6 +113,52 @@ function valorContexto(contexto: any, chaves: string[], fallback = "") {
   return fallback;
 }
 
+const IDS_POR_LOTE_DISPAROS_AGENDADOS = 100;
+
+async function buscarMensagensDisparosEmLotes(params: {
+  supabase: ReturnType<typeof getSupabaseAdmin>;
+  empresaId: string;
+  messageIds: string[];
+}) {
+  const ids = Array.from(
+    new Set(
+      params.messageIds
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (!ids.length) {
+    return { data: [] as any[], error: null as any };
+  }
+
+  const lotes: string[][] = [];
+  for (let inicio = 0; inicio < ids.length; inicio += IDS_POR_LOTE_DISPAROS_AGENDADOS) {
+    lotes.push(ids.slice(inicio, inicio + IDS_POR_LOTE_DISPAROS_AGENDADOS));
+  }
+
+  const resultados = await Promise.all(
+    lotes.map((lote) =>
+      params.supabase
+        .from("mensagens")
+        .select("id, status_envio, mensagem_externa_id, metadata_json")
+        .eq("empresa_id", params.empresaId)
+        .in("mensagem_externa_id", lote)
+    )
+  );
+
+  const erro = resultados.find((item) => item.error)?.error || null;
+
+  if (erro) {
+    return { data: [] as any[], error: erro };
+  }
+
+  return {
+    data: resultados.flatMap((item) => item.data || []),
+    error: null as any,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const resultado = await getUsuarioContexto();
@@ -241,9 +287,11 @@ export async function GET(request: NextRequest) {
       flowIds.length
         ? supabase.from("automacao_fluxos").select("id, nome").eq("empresa_id", usuario.empresa_id).in("id", flowIds)
         : Promise.resolve({ data: [], error: null }),
-      messageIds.length
-        ? supabase.from("mensagens").select("id, status_envio, mensagem_externa_id, metadata_json").eq("empresa_id", usuario.empresa_id).in("mensagem_externa_id", messageIds)
-        : Promise.resolve({ data: [], error: null }),
+      buscarMensagensDisparosEmLotes({
+        supabase,
+        empresaId: usuario.empresa_id,
+        messageIds,
+      }),
     ]);
 
     const enriquecimentoError = templatesResult.error || responsaveisResult.error || flowsResult.error || mensagensResult.error;
