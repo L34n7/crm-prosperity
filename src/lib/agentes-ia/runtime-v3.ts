@@ -1077,13 +1077,22 @@ function normalizarTextoIntencao(valor: unknown) {
 }
 
 function mensagemConfirmaAgendamento(valor: unknown) {
-  const texto = normalizarTextoIntencao(valor);
+  const texto = normalizarTextoIntencao(valor)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!texto) return false;
+
+  const confirmacaoComposta =
+    /^(?:(?:sim|ok|okay|certo|perfeito|beleza|blz|pode|confirmo|confirmado|combinado|fechado|show|valeu)(?:\s+|$)){1,4}$/.test(
+      texto,
+    );
+
   return (
-    /\b(confirmo|confirmado|pode confirmar|pode agendar|pode marcar|pode reservar|pode ser|vamos agendar|fecha|fechado)\b/.test(
+    /\b(confirmo|confirmado|pode confirmar|pode agendar|pode marcar|pode reservar|pode ser|vamos agendar|fecha|fechado|combinado)\b/.test(
       texto,
     ) ||
-    /^(sim|ok|okay|certo|perfeito|beleza|blz|pode|confirmo)$/.test(texto)
+    confirmacaoComposta
   );
 }
 
@@ -1370,6 +1379,7 @@ function textoHorarioAgendaNormalizado(mensagem: string) {
 function mensagemEhFragmentoContextualAgenda(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   if (!texto || texto.length > 80) return false;
+  if (mensagemConfirmaAgendamento(mensagem)) return true;
   if (/^(?:de |pela |a )?(?:manha|tarde|noite)$/.test(texto)) return true;
   if (/^(?:depois|apos|antes|ate|a partir)(?:\s+das?|\s+de|\s+as?)?\s+\d{1,2}(?::\d{2})?(?:\s*(?:h|hr|hrs|hora|horas))?[?!.,;:]?$/.test(texto)) return true;
   if (/^(?:(?:tem|pode ser|pode|as)\s+)?\d{1,2}(?::\d{2})?\s*(?:h|hr|hrs|hora|horas)[?!.,;:]?$/.test(texto)) return true;
@@ -2165,26 +2175,60 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       ? dataLocalDeIso(agendamentoAtivoUnico.inicio_at, timezone)
       : null;
     const dataArg = args.data ? String(args.data).trim() : "";
-    const data = preservarDataAtual
-      ? dataAtualAgendamento
-      : buscaSemDataExplicita
-        ? null
-        : /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
-          ? dataArg
-          : interpretacao.data || null;
-    const resultado = await listarSlotsOrigemAgenda({
-      empresaId,
-      agendaId: origem.agendaId,
-      grupoDistribuicaoId: origem.grupoDistribuicaoId,
-      data,
-      janelaDias: data ? 1 : 14,
-      limite: interpretacao.preferencia ? 50 : 12,
-      timezone,
-    });
-    const horaContextual = normalizarHoraLocal(args?.__hora_contextual);
-    const horariosExplicitos = horaContextual
-      ? [horaContextual]
-      : extrairHorariosExplicitosAgenda(ctx.pendencia.conteudo_agregado);
+    const fallbackProximoDisponivel =
+      args?.__fallback_proximo_disponivel === true;
+    const ignorarHorarioSolicitado =
+      args?.__ignorar_horario_solicitado === true;
+    const data = fallbackProximoDisponivel
+      ? /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
+        ? dataArg
+        : interpretacao.data || null
+      : preservarDataAtual
+        ? dataAtualAgendamento
+        : buscaSemDataExplicita
+          ? null
+          : /^\d{4}-\d{2}-\d{2}$/.test(dataArg)
+            ? dataArg
+            : interpretacao.data || null;
+
+    let resultado: any = null;
+    if (fallbackProximoDisponivel && data) {
+      for (let offset = 0; offset < 14; offset += 1) {
+        const dataBusca = adicionarDiasData(data, offset);
+        const candidato = await listarSlotsOrigemAgenda({
+          empresaId,
+          agendaId: origem.agendaId,
+          grupoDistribuicaoId: origem.grupoDistribuicaoId,
+          data: dataBusca,
+          janelaDias: 1,
+          limite: interpretacao.preferencia ? 50 : 12,
+          timezone,
+        });
+        resultado = candidato;
+        if (Array.isArray(candidato?.slots) && candidato.slots.length > 0) {
+          break;
+        }
+      }
+    } else {
+      resultado = await listarSlotsOrigemAgenda({
+        empresaId,
+        agendaId: origem.agendaId,
+        grupoDistribuicaoId: origem.grupoDistribuicaoId,
+        data,
+        janelaDias: data ? 1 : 14,
+        limite: interpretacao.preferencia ? 50 : 12,
+        timezone,
+      });
+    }
+
+    const horaContextual = ignorarHorarioSolicitado
+      ? null
+      : normalizarHoraLocal(args?.__hora_contextual);
+    const horariosExplicitos = ignorarHorarioSolicitado
+      ? []
+      : horaContextual
+        ? [horaContextual]
+        : extrairHorariosExplicitosAgenda(ctx.pendencia.conteudo_agregado);
     const filtrados =
       horaContextual
         ? resultado.slots
@@ -2210,6 +2254,9 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     return {
       ok: true,
       busca_sem_data_explicita: buscaSemDataExplicita,
+      fallback_proximo_disponivel: fallbackProximoDisponivel,
+      ignorou_horario_solicitado: ignorarHorarioSolicitado,
+      data_solicitada: interpretacao.data || dataArg || null,
       agenda: resultado.grupo
         ? {
             nome: resultado.grupo.nome,
@@ -2809,6 +2856,65 @@ async function preExecutarConsultasObvias(
           const item = { nome: "consultar_agenda" as const, argumentos, resultado };
           executadas.push(item);
           ctx.ferramentasExecutadas.push(item);
+
+          if (
+            Array.isArray(resultado.slots) &&
+            resultado.slots.length === 0 &&
+            interpretacao.data
+          ) {
+            let encontrouAlternativaMesmoDia = false;
+            const tinhaHorarioEspecifico =
+              Boolean(argumentos.__hora_contextual) ||
+              horariosContextuais.length > 0;
+
+            if (tinhaHorarioEspecifico) {
+              const argumentosMesmoDia = {
+                data: interpretacao.data,
+                __ignorar_horario_solicitado: true,
+              };
+              const resultadoMesmoDia: any = await executarFerramenta(
+                "consultar_agenda",
+                argumentosMesmoDia,
+                ctx,
+              );
+
+              if (resultadoMesmoDia?.ok) {
+                encontrouAlternativaMesmoDia =
+                  Array.isArray(resultadoMesmoDia.slots) &&
+                  resultadoMesmoDia.slots.length > 0;
+                const itemMesmoDia = {
+                  nome: "consultar_agenda" as const,
+                  argumentos: argumentosMesmoDia,
+                  resultado: resultadoMesmoDia,
+                };
+                executadas.push(itemMesmoDia);
+                ctx.ferramentasExecutadas.push(itemMesmoDia);
+              }
+            }
+
+            if (!encontrouAlternativaMesmoDia) {
+              const argumentosProximoDia = {
+                data: adicionarDiasData(interpretacao.data, 1),
+                __fallback_proximo_disponivel: true,
+                __ignorar_horario_solicitado: true,
+              };
+              const resultadoProximoDia: any = await executarFerramenta(
+                "consultar_agenda",
+                argumentosProximoDia,
+                ctx,
+              );
+
+              if (resultadoProximoDia?.ok) {
+                const itemProximoDia = {
+                  nome: "consultar_agenda" as const,
+                  argumentos: argumentosProximoDia,
+                  resultado: resultadoProximoDia,
+                };
+                executadas.push(itemProximoDia);
+                ctx.ferramentasExecutadas.push(itemProximoDia);
+              }
+            }
+          }
         }
       } catch (error) {
         console.error("[AGENTE_IA] Pré-consulta de agenda falhou:", error);
@@ -2959,9 +3065,13 @@ function contextoPreconsultasParaModelo(executadas: Array<{ nome: TipoFerramenta
       const resumoSlots = slots.length
         ? slots.map((s: any) => `${s.data} ${s.hora}`).join(", ")
         : "nenhum horário disponível";
-      const escopoData = item.resultado?.busca_sem_data_explicita
-        ? " Cliente não informou uma data; estes são os próximos horários futuros compatíveis. Não assuma 'hoje'."
-        : "";
+      const escopoData = item.resultado?.fallback_proximo_disponivel
+        ? " O dia inicialmente solicitado não tinha disponibilidade; estes são horários reais do próximo dia encontrado com disponibilidade. Ofereça estas opções diretamente."
+        : item.resultado?.ignorou_horario_solicitado
+          ? " O horário exato solicitado não estava disponível; estes são outros horários reais no mesmo dia."
+          : item.resultado?.busca_sem_data_explicita
+            ? " Cliente não informou uma data; estes são os próximos horários futuros compatíveis. Não assuma 'hoje'."
+            : "";
       blocos.push(
         `AGENDA JÁ CONSULTADA (${agenda}): ${resumoSlots}.${escopoData}`,
       );
@@ -3163,7 +3273,11 @@ function regrasModoAgendamento(
   return [
     "- REGRA PRIORITÁRIA DE AGENDA: modo Agendar imediatamente. Esta regra prevalece sobre instruções conflitantes do prompt geral.",
     "- Nunca afirme que um horário específico está livre/disponível sem consultar_agenda com sucesso naquele contexto.",
+    "- Confirmações curtas ou combinadas como 'blz', 'combinado', 'blz combinado', 'ok combinado', 'certo' e equivalentes confirmam o slot que acabou de ser oferecido.",
     "- Quando o cliente informar ou escolher uma data e um horário de forma inequívoca, inclusive respostas curtas como '9', '15h30', '3:30', 'pode' ou a escolha de uma opção recém-oferecida, isso já autoriza o agendamento: se o slot consultado estiver disponível, execute criar_agendamento/remarcar_agendamento no mesmo turno.",
+    "- Se o horário escolhido deixar de estar disponível, consulte outros horários reais no mesmo dia. Se o dia estiver sem disponibilidade, consulte o próximo dia com horário livre e ofereça opções reais imediatamente.",
+    "- Nunca diga 'posso buscar outro horário?', 'posso te avisar quando surgir' ou equivalente se a agenda pode ser consultada agora. Consulte primeiro e só então ofereça disponibilidade real.",
+    "- Não invente justificativas como 'tive um imprevisto na agenda'. Se um slot não estiver mais disponível, diga apenas que aquele horário não está mais disponível e apresente as alternativas consultadas.",
     "- Depois que o cliente escolheu um slot disponível, NÃO faça uma confirmação adicional como 'posso confirmar?', 'quer que eu agende?' ou equivalente.",
     "- Para reservar o horário, não peça nome, email, telefone ou assunto. Use os dados já existentes e a configuração da ferramenta. Se não houver assunto padrão, gere um título contextual com no máximo 2 palavras.",
   ];
