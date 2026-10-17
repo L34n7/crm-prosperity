@@ -178,8 +178,36 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || "todos";
     const busca = String(searchParams.get("busca") || "").trim().toLowerCase();
+    const grupoManualId = String(searchParams.get("grupo_manual_id") || "").trim();
 
-    const [fluxosResult, agendaResult, rotinasResult] = await Promise.all([
+    if (grupoManualId) {
+      const { data: itensGrupo, error: itensGrupoError } = await supabase
+        .from("automacao_agendamentos")
+        .select(
+          "id, empresa_id, execucao_id, fluxo_id, no_id, tipo_agendamento, executar_em, status, payload_json, created_at, executed_at"
+        )
+        .eq("empresa_id", usuario.empresa_id)
+        .eq("tipo_agendamento", "disparo_template")
+        .eq("payload_json->>origem", "manual_agendado")
+        .eq("payload_json->>agendamento_grupo_id", grupoManualId)
+        .order("executar_em", { ascending: false });
+
+      if (itensGrupoError) {
+        throw new Error(
+          `Erro ao buscar contatos do disparo agendado: ${itensGrupoError.message}`
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        disparos: itensGrupo || [],
+      });
+    }
+
+    const [resumosManuaisResult, fluxosResult, agendaResult, rotinasResult] = await Promise.all([
+      supabase.rpc("listar_disparos_agendados_manuais_resumo", {
+        p_empresa_id: usuario.empresa_id,
+      }),
       supabase
         .from("automacao_agendamentos")
         .select(`
@@ -190,6 +218,7 @@ export async function GET(request: NextRequest) {
         `)
         .eq("empresa_id", usuario.empresa_id)
         .in("tipo_agendamento", ["disparo_template", "mensagem_manual"])
+        .neq("payload_json->>origem", "manual_agendado")
         .order("executar_em", { ascending: false }),
       supabase
         .from("agenda_automacao_execucoes")
@@ -227,10 +256,12 @@ export async function GET(request: NextRequest) {
         .order("executar_em", { ascending: false }),
     ]);
 
+    if (resumosManuaisResult.error) throw new Error(`Erro ao resumir campanhas agendadas: ${resumosManuaisResult.error.message}`);
     if (fluxosResult.error) throw new Error(`Erro ao buscar disparos dos fluxos: ${fluxosResult.error.message}`);
     if (agendaResult.error) throw new Error(`Erro ao buscar disparos da agenda: ${agendaResult.error.message}`);
     if (rotinasResult.error) throw new Error(`Erro ao buscar disparos das automações: ${rotinasResult.error.message}`);
 
+    const resumosManuais = resumosManuaisResult.data || [];
     const disparosFluxo = fluxosResult.data || [];
     const execucoesAgenda = agendaResult.data || [];
     const jobsRotina = rotinasResult.data || [];
@@ -496,7 +527,55 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    let disparos = [...normalizadosFluxo, ...normalizadosAgenda, ...normalizadosRotina];
+    const resumosManuaisNormalizados = resumosManuais.map((item: any) => ({
+      id: item.representative_id,
+      empresa_id: usuario.empresa_id,
+      execucao_id: null,
+      fluxo_id: null,
+      no_id: null,
+      tipo_agendamento: "disparo_template",
+      executar_em: item.executar_em,
+      status: item.status_geral,
+      created_at: item.created_at,
+      executed_at: null,
+      origem_disparo: "manual",
+      automacao_fluxos: null,
+      automacao_nos: null,
+      payload_json: {
+        origem: "manual_agendado",
+        origem_disparo: "manual",
+        agendamento_grupo_id: item.grupo_id,
+        nome_campanha: item.nome_campanha,
+        template_id: item.template_id,
+        template_nome: item.template_nome,
+        template_idioma: item.template_idioma,
+        template_categoria: item.template_categoria,
+        integracao_whatsapp_id: item.integracao_whatsapp_id,
+        integracao_nome: item.integracao_nome,
+        canal_agenda: "whatsapp",
+        resumo_grupo: {
+          total: Number(item.total || 0),
+          pendentes: Number(item.pendentes || 0),
+          executando: Number(item.executando || 0),
+          executados: Number(item.executados || 0),
+          cancelados: Number(item.cancelados || 0),
+          erros: Number(item.erros || 0),
+        },
+      },
+      envio_status: null,
+      envio_label: null,
+      envio_message_id: null,
+      envio_erro_codigo_meta: null,
+      envio_erro_tecnico: null,
+      envio_erro_amigavel: null,
+    }));
+
+    let disparos = [
+      ...resumosManuaisNormalizados,
+      ...normalizadosFluxo,
+      ...normalizadosAgenda,
+      ...normalizadosRotina,
+    ];
     if (status !== "todos") disparos = disparos.filter((item: any) => item.status === status);
     if (busca) {
       disparos = disparos.filter((item: any) => {

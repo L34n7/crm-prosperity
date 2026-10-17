@@ -295,18 +295,30 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
 
     const primeiro = itens[0];
     const payload = primeiro.payload_json || {};
-    const pendentes = itens.filter((item) => item.status === "pendente").length;
-    const executando = itens.filter((item) => item.status === "executando").length;
-    const executados = itens.filter((item) => item.status === "executado").length;
-    const cancelados = itens.filter((item) => item.status === "cancelado").length;
-    const erros = itens.filter((item) => item.status === "erro").length;
+    const resumoGrupo = payload.resumo_grupo || null;
+    const total = resumoGrupo ? Number(resumoGrupo.total || 0) : itens.length;
+    const pendentes = resumoGrupo
+      ? Number(resumoGrupo.pendentes || 0)
+      : itens.filter((item) => item.status === "pendente").length;
+    const executando = resumoGrupo
+      ? Number(resumoGrupo.executando || 0)
+      : itens.filter((item) => item.status === "executando").length;
+    const executados = resumoGrupo
+      ? Number(resumoGrupo.executados || 0)
+      : itens.filter((item) => item.status === "executado").length;
+    const cancelados = resumoGrupo
+      ? Number(resumoGrupo.cancelados || 0)
+      : itens.filter((item) => item.status === "cancelado").length;
+    const erros = resumoGrupo
+      ? Number(resumoGrupo.erros || 0)
+      : itens.filter((item) => item.status === "erro").length;
 
     let status: StatusGrupoDisparo = "parcial";
     if (erros > 0) status = "erro";
     else if (executando > 0) status = "executando";
     else if (pendentes > 0) status = "pendente";
-    else if (executados === itens.length) status = "executado";
-    else if (cancelados === itens.length) status = "cancelado";
+    else if (executados === total) status = "executado";
+    else if (cancelados === total) status = "cancelado";
 
     const proximaExecucao = itens.find((item) =>
       ["pendente", "executando"].includes(item.status)
@@ -326,9 +338,13 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
       sistema: 0,
       fluxo: 0,
     };
-    itens.forEach((item) => {
-      canais[obterCanalDisparo(item)] += 1;
-    });
+    if (resumoGrupo) {
+      canais.whatsapp = total;
+    } else {
+      itens.forEach((item) => {
+        canais[obterCanalDisparo(item)] += 1;
+      });
+    }
 
     return {
       id,
@@ -346,7 +362,7 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
       compromissoEm: payload.agendamento_inicio_at || null,
       local: payload.agendamento_local || null,
       status,
-      total: itens.length,
+      total,
       pendentes,
       executando,
       executados,
@@ -460,11 +476,12 @@ function compararNumeroContatoDesc(
 function grupoPossuiStatus(grupo: GrupoDisparos, filtro: StatusDisparo) {
   if (filtro === "todos") return true;
   if (filtro === "pendente") {
-    return grupo.itens.some((item) =>
-      ["pendente", "executando"].includes(item.status)
-    );
+    return grupo.pendentes + grupo.executando > 0;
   }
-  return grupo.itens.some((item) => item.status === filtro);
+  if (filtro === "executado") return grupo.executados > 0;
+  if (filtro === "cancelado") return grupo.cancelados > 0;
+  if (filtro === "erro") return grupo.erros > 0;
+  return false;
 }
 
 function formatarHora(valor?: string | null) {
@@ -777,6 +794,9 @@ function DisparosAgendadosPageContent() {
   const [grupoSelecionado, setGrupoSelecionado] = useState<GrupoDisparos | null>(null);
   const [grupoParaCancelar, setGrupoParaCancelar] = useState<GrupoDisparos | null>(null);
   const [grupoManualModalId, setGrupoManualModalId] = useState<string | null>(null);
+  const [grupoManualDetalhe, setGrupoManualDetalhe] =
+    useState<GrupoDisparos | null>(null);
+  const [carregandoGrupoManual, setCarregandoGrupoManual] = useState(false);
   const [buscaGrupoManual, setBuscaGrupoManual] = useState("");
   const [
     confirmarCancelamentoManualId,
@@ -1320,36 +1340,34 @@ function DisparosAgendadosPageContent() {
 
 
   const metricas = useMemo(() => {
-    const total = disparos.length;
-    const pendentes = disparos.filter((item) =>
-      ["pendente", "executando"].includes(item.status)
-    ).length;
-    const executados = disparos.filter((item) => item.status === "executado").length;
-    const cancelados = disparos.filter((item) => item.status === "cancelado").length;
-    const erros = disparos.filter((item) => item.status === "erro").length;
+    return disparos.reduce(
+      (acc, item) => {
+        const resumo = item.payload_json?.resumo_grupo;
 
-    return {
-      total,
-      pendentes,
-      executados,
-      cancelados,
-      erros,
-    };
+        if (resumo) {
+          acc.total += Number(resumo.total || 0);
+          acc.pendentes +=
+            Number(resumo.pendentes || 0) + Number(resumo.executando || 0);
+          acc.executados += Number(resumo.executados || 0);
+          acc.cancelados += Number(resumo.cancelados || 0);
+          acc.erros += Number(resumo.erros || 0);
+          return acc;
+        }
+
+        acc.total += 1;
+        if (["pendente", "executando"].includes(item.status)) acc.pendentes += 1;
+        if (item.status === "executado") acc.executados += 1;
+        if (item.status === "cancelado") acc.cancelados += 1;
+        if (item.status === "erro") acc.erros += 1;
+        return acc;
+      },
+      { total: 0, pendentes: 0, executados: 0, cancelados: 0, erros: 0 }
+    );
   }, [disparos]);
 
   const grupos = useMemo(() => criarGruposDisparos(disparos), [disparos]);
 
-  const grupoManualModal = useMemo(
-    () =>
-      grupoManualModalId
-        ? grupos.find(
-            (grupo) =>
-              grupo.id === grupoManualModalId &&
-              grupoEhDisparoManual(grupo)
-          ) || null
-        : null,
-    [grupoManualModalId, grupos]
-  );
+  const grupoManualModal = grupoManualDetalhe;
 
   const itensGrupoManualModal = useMemo(() => {
     if (!grupoManualModal) return [];
@@ -1534,14 +1552,52 @@ function DisparosAgendadosPageContent() {
     router.push("/disparos-agendados?grupo=" + encodeURIComponent(grupo.id));
   }
 
-  function abrirGrupoManual(grupo: GrupoDisparos) {
+  async function buscarGrupoManualDetalhe(grupo: GrupoDisparos) {
+    const grupoId = grupo.id.replace(/^manual:/, "");
+
+    const res = await fetch(
+      `/api/disparos-agendados?grupo_manual_id=${encodeURIComponent(grupoId)}`,
+      { cache: "no-store" }
+    );
+    const json = await res.json();
+
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || "Erro ao carregar contatos da campanha.");
+    }
+
+    const detalhe =
+      criarGruposDisparos(json.disparos || []).find(
+        (item) => item.id === grupo.id
+      ) || null;
+
+    if (!detalhe) {
+      throw new Error("Campanha agendada não encontrada.");
+    }
+
+    return detalhe;
+  }
+
+  async function abrirGrupoManual(grupo: GrupoDisparos) {
     setGrupoManualModalId(grupo.id);
+    setGrupoManualDetalhe(grupo);
+    setCarregandoGrupoManual(true);
     setBuscaGrupoManual("");
     setConfirmarCancelamentoManualId(null);
+
+    try {
+      const detalhe = await buscarGrupoManualDetalhe(grupo);
+      setGrupoManualDetalhe(detalhe);
+    } catch (error: any) {
+      setErro(error?.message || "Erro ao carregar contatos da campanha.");
+    } finally {
+      setCarregandoGrupoManual(false);
+    }
   }
 
   function fecharGrupoManual() {
     setGrupoManualModalId(null);
+    setGrupoManualDetalhe(null);
+    setCarregandoGrupoManual(false);
     setBuscaGrupoManual("");
     setConfirmarCancelamentoManualId(null);
     setCancelandoManualId(null);
@@ -1577,6 +1633,12 @@ function DisparosAgendadosPageContent() {
       setConfirmarCancelamentoManualId(null);
       solicitarAtualizacaoDisparosPendentesHeader();
       await carregarDisparos();
+
+      if (grupoManualModal) {
+        const detalheAtualizado = await buscarGrupoManualDetalhe(grupoManualModal);
+        setGrupoManualDetalhe(detalheAtualizado);
+      }
+
       setSucesso("Disparo do contato cancelado com sucesso.");
     } catch (error: any) {
       setErro(error?.message || "Erro ao cancelar disparo do contato.");
@@ -3519,7 +3581,11 @@ function DisparosAgendadosPageContent() {
               </div>
 
               <div className={styles.manualCampaignList}>
-                {itensGrupoManualModal.length === 0 ? (
+                {carregandoGrupoManual ? (
+                  <div className={styles.manualCampaignEmpty}>
+                    Carregando contatos da campanha...
+                  </div>
+                ) : itensGrupoManualModal.length === 0 ? (
                   <div className={styles.manualCampaignEmpty}>
                     Nenhum contato encontrado para esta busca.
                   </div>
