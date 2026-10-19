@@ -813,7 +813,7 @@ export async function GET(req: NextRequest) {
     const logoPath = path.join(
       process.cwd(),
       "public",
-      "logo-relatorio.png"
+      "logo.png"
     );
 
     if (existsSync(logoPath)) {
@@ -1424,7 +1424,7 @@ export async function POST(req: NextRequest) {
     const logoPath = path.join(
       process.cwd(),
       "public",
-      "logo-relatorio.png"
+      "logo.png"
     );
 
     if (existsSync(logoPath)) {
