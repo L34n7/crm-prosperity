@@ -813,7 +813,7 @@ export async function GET(req: NextRequest) {
     const logoPath = path.join(
       process.cwd(),
       "public",
-      "android-chrome-192x192.png"
+      "logo-relatorio.png"
     );
 
     if (existsSync(logoPath)) {
@@ -822,8 +822,8 @@ export async function GET(req: NextRequest) {
         extension: "png",
       });
       worksheet.addImage(logoId, {
-        tl: { col: 0.08, row: 0.15 },
-        ext: { width: 58, height: 58 },
+        tl: { col: 0.02, row: 0.08 },
+        ext: { width: 84, height: 84 },
         editAs: "oneCell",
       });
     } else {
@@ -1192,6 +1192,33 @@ export async function POST(req: NextRequest) {
       empresaId,
     });
     const idsPermitidos = new Set(acessoIntegracoes.idsPermitidos.map(String));
+    const integracoesPorId = new Map(
+      acessoIntegracoes.integracoes.map((integracao) => [
+        integracao.id,
+        integracao,
+      ])
+    );
+
+    const nomeIntegracaoRelatorio = (integracaoId?: string | null) => {
+      const integracao = integracoesPorId.get(String(integracaoId || ""));
+      return (
+        integracao?.nome_conexao ||
+        integracao?.numero ||
+        "Integração não identificada"
+      );
+    };
+
+    const nomesCampanhasSelecionadas = campanhas
+      .map((campanha) => nomeCampanhaRelatorio(campanha))
+      .join(" • ");
+
+    const nomesIntegracoesSelecionadas = Array.from(
+      new Set(
+        campanhas.map((campanha) =>
+          nomeIntegracaoRelatorio(campanha.integracao_whatsapp_id)
+        )
+      )
+    ).join(" • ");
 
     const campanhaSemAcesso = campanhas.find(
       (campanha) =>
@@ -1302,7 +1329,7 @@ export async function POST(req: NextRequest) {
           footer: 0.2,
         },
       },
-      views: [{ state: "frozen", ySplit: 13 }],
+      views: [{ state: "frozen", ySplit: 14 }],
     });
 
     worksheet.columns = [
@@ -1362,26 +1389,42 @@ export async function POST(req: NextRequest) {
 
     worksheet.mergeCells("A4:H4");
     worksheet.getCell("A4").value =
+      `Campanhas: ${nomesCampanhasSelecionadas}   |   Integrações: ${nomesIntegracoesSelecionadas}`;
+    worksheet.getCell("A4").font = {
+      name: "Aptos",
+      size: 10,
+      bold: true,
+      color: { argb: COR.texto },
+    };
+    worksheet.getCell("A4").alignment = {
+      vertical: "middle",
+      horizontal: "left",
+      wrapText: true,
+    };
+    worksheet.getRow(4).height = 40;
+
+    worksheet.mergeCells("A5:H5");
+    worksheet.getCell("A5").value =
       menorData && maiorData
         ? `Período das campanhas: ${formatarDataHora(
             new Date(menorData).toISOString()
           )} até ${formatarDataHora(new Date(maiorData).toISOString())}`
         : `${campanhas.length} campanhas consolidadas`;
-    worksheet.getCell("A4").font = {
+    worksheet.getCell("A5").font = {
       name: "Aptos",
       size: 10,
       color: { argb: COR.textoSuave },
     };
-    worksheet.getCell("A4").alignment = {
+    worksheet.getCell("A5").alignment = {
       vertical: "middle",
       horizontal: "left",
     };
-    worksheet.getRow(4).height = 22;
+    worksheet.getRow(5).height = 22;
 
     const logoPath = path.join(
       process.cwd(),
       "public",
-      "android-chrome-192x192.png"
+      "logo-relatorio.png"
     );
 
     if (existsSync(logoPath)) {
@@ -1390,8 +1433,8 @@ export async function POST(req: NextRequest) {
         extension: "png",
       });
       worksheet.addImage(logoId, {
-        tl: { col: 0.08, row: 0.15 },
-        ext: { width: 58, height: 58 },
+        tl: { col: 0.02, row: 0.08 },
+        ext: { width: 84, height: 84 },
         editAs: "oneCell",
       });
     } else {
@@ -1418,12 +1461,12 @@ export async function POST(req: NextRequest) {
       { col: 8, label: "CANCELADOS", value: totais.cancelado, fill: COR.cinzaClaro, color: COR.cinzaTexto },
     ];
 
-    worksheet.getRow(6).height = 20;
-    worksheet.getRow(7).height = 28;
+    worksheet.getRow(7).height = 20;
+    worksheet.getRow(8).height = 28;
 
     for (const card of cards) {
-      const labelCell = worksheet.getCell(6, card.col);
-      const valueCell = worksheet.getCell(7, card.col);
+      const labelCell = worksheet.getCell(7, card.col);
+      const valueCell = worksheet.getCell(8, card.col);
       labelCell.value = card.label;
       labelCell.font = {
         name: "Aptos",
@@ -1461,76 +1504,76 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    worksheet.mergeCells("A9:C9");
-    worksheet.mergeCells("A10:C11");
-    worksheet.mergeCells("D9:H9");
-    worksheet.mergeCells("D10:H11");
+    worksheet.mergeCells("A10:C10");
+    worksheet.mergeCells("A11:C12");
+    worksheet.mergeCells("D10:H10");
+    worksheet.mergeCells("D11:H12");
 
-    worksheet.getCell("A9").value = "CUSTO ESTIMADO ACUMULADO";
-    worksheet.getCell("A9").font = {
+    worksheet.getCell("A10").value = "CUSTO ESTIMADO ACUMULADO";
+    worksheet.getCell("A10").font = {
       size: 9,
       bold: true,
       color: { argb: COR.verdeEscuro },
     };
-    worksheet.getCell("A9").fill = {
+    worksheet.getCell("A10").fill = {
       type: "pattern",
       pattern: "solid",
       fgColor: { argb: COR.verdeClaro },
     };
-    worksheet.getCell("A9").border = BORDA_CARD;
+    worksheet.getCell("A10").border = BORDA_CARD;
 
-    worksheet.getCell("A10").value = valorTotalBrlEstimado;
-    worksheet.getCell("A10").numFmt = '"R$" #,##0.00';
-    worksheet.getCell("A10").font = {
+    worksheet.getCell("A11").value = valorTotalBrlEstimado;
+    worksheet.getCell("A11").numFmt = '"R$" #,##0.00';
+    worksheet.getCell("A11").font = {
       size: 18,
       bold: true,
       color: { argb: COR.texto },
     };
-    worksheet.getCell("A10").fill = {
+    worksheet.getCell("A11").fill = {
       type: "pattern",
       pattern: "solid",
       fgColor: { argb: "FFFFFF" },
     };
-    worksheet.getCell("A10").border = BORDA_CARD;
-    worksheet.getCell("A10").alignment = {
+    worksheet.getCell("A11").border = BORDA_CARD;
+    worksheet.getCell("A11").alignment = {
       vertical: "middle",
       horizontal: "left",
     };
 
-    worksheet.getCell("D9").value = "CRITÉRIO DA ESTIMATIVA";
-    worksheet.getCell("D9").font = {
-      size: 9,
-      bold: true,
-      color: { argb: COR.textoSuave },
-    };
-    worksheet.getCell("D9").fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: COR.fundo },
-    };
-    worksheet.getCell("D9").border = BORDA_CARD;
-
-    worksheet.getCell("D10").value =
-      `Estimativa acumulada de ${quantidadeCobravelEstimada} envios em ${campanhas.length} campanhas. Cotação: ${cotacao.fonte}.` +
-      (categoriasSemPreco
-        ? ` ${categoriasSemPreco} campanha(s) sem categoria de preço reconhecida não entraram no custo.`
-        : "");
+    worksheet.getCell("D10").value = "CRITÉRIO DA ESTIMATIVA";
     worksheet.getCell("D10").font = {
       size: 9,
+      bold: true,
       color: { argb: COR.textoSuave },
     };
     worksheet.getCell("D10").fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FFFFFF" },
+      fgColor: { argb: COR.fundo },
     };
     worksheet.getCell("D10").border = BORDA_CARD;
-    worksheet.getCell("D10").alignment = {
+
+    worksheet.getCell("D11").value =
+      `Estimativa acumulada de ${quantidadeCobravelEstimada} envios em ${campanhas.length} campanhas. Cotação: ${cotacao.fonte}.` +
+      (categoriasSemPreco
+        ? ` ${categoriasSemPreco} campanha(s) sem categoria de preço reconhecida não entraram no custo.`
+        : "");
+    worksheet.getCell("D11").font = {
+      size: 9,
+      color: { argb: COR.textoSuave },
+    };
+    worksheet.getCell("D11").fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFFFF" },
+    };
+    worksheet.getCell("D11").border = BORDA_CARD;
+    worksheet.getCell("D11").alignment = {
       vertical: "middle",
       wrapText: true,
     };
 
-    aplicarCabecalhoTabelaExcel(worksheet, 13, [
+    aplicarCabecalhoTabelaExcel(worksheet, 14, [
       "CAMPANHA",
       "NÚMERO",
       "NOME",
@@ -1542,7 +1585,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     linhasDetalhadas.forEach((linha, index) => {
-      const rowNumber = 14 + index;
+      const rowNumber = 15 + index;
       const row = worksheet.getRow(rowNumber);
       const status = String(linha.status_final || "pendente").toLowerCase();
       const statusStyle = estiloStatusExcel(status);
@@ -1604,9 +1647,9 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    worksheet.autoFilter = { from: "A13", to: "H13" };
+    worksheet.autoFilter = { from: "A14", to: "H14" };
     worksheet.pageSetup.printArea =
-      `A1:H${Math.max(14, 13 + linhasDetalhadas.length)}`;
+      `A1:H${Math.max(15, 14 + linhasDetalhadas.length)}`;
 
     const resumo = workbook.addWorksheet("Campanhas selecionadas", {
       properties: { defaultRowHeight: 20 },
@@ -1615,6 +1658,7 @@ export async function POST(req: NextRequest) {
 
     resumo.columns = [
       { width: 34 },
+      { width: 24 },
       { width: 26 },
       { width: 15 },
       { width: 22 },
@@ -1629,7 +1673,7 @@ export async function POST(req: NextRequest) {
       { width: 18 },
     ];
 
-    resumo.mergeCells("A1:M1");
+    resumo.mergeCells("A1:N1");
     resumo.getCell("A1").value =
       `Campanhas selecionadas · ${campanhas.length} campanhas`;
     resumo.getCell("A1").font = {
@@ -1642,6 +1686,7 @@ export async function POST(req: NextRequest) {
 
     aplicarCabecalhoTabelaExcel(resumo, 3, [
       "CAMPANHA",
+      "INTEGRAÇÃO",
       "TEMPLATE",
       "CATEGORIA",
       "CRIADA EM",
@@ -1662,6 +1707,7 @@ export async function POST(req: NextRequest) {
 
       row.values = [
         item.nome,
+        nomeIntegracaoRelatorio(item.campanha.integracao_whatsapp_id),
         item.campanha.template_nome || "-",
         String(item.campanha.template_categoria || "-").toUpperCase(),
         formatarDataHora(item.campanha.created_at) || "-",
@@ -1676,10 +1722,10 @@ export async function POST(req: NextRequest) {
         custo?.disponivel ? custo.valorBrl : "Não disponível",
       ];
 
-      row.getCell(13).numFmt =
+      row.getCell(14).numFmt =
         custo?.disponivel ? '"R$" #,##0.00' : "@";
 
-      for (let col = 1; col <= 13; col += 1) {
+      for (let col = 1; col <= 14; col += 1) {
         const cell = row.getCell(col);
         cell.font = {
           name: "Aptos",
@@ -1689,8 +1735,8 @@ export async function POST(req: NextRequest) {
         };
         cell.alignment = {
           vertical: "middle",
-          horizontal: col >= 5 && col <= 12 ? "center" : "left",
-          wrapText: col <= 4,
+          horizontal: col >= 6 && col <= 13 ? "center" : "left",
+          wrapText: col <= 5,
         };
         cell.border = {
           bottom: { style: "thin", color: { argb: COR.borda } },
@@ -1703,7 +1749,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    resumo.autoFilter = { from: "A3", to: "M3" };
+    resumo.autoFilter = { from: "A3", to: "N3" };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const arquivo = Buffer.from(buffer);

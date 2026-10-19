@@ -1550,6 +1550,26 @@ function camposDataHoraLocal(data?: string | null) {
   };
 }
 
+function dataCampanhaParaFiltro(createdAt?: string | null) {
+  if (!createdAt) return "";
+
+  const data = new Date(createdAt);
+  if (Number.isNaN(data.getTime())) return "";
+
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(data);
+
+  const ano = partes.find((parte) => parte.type === "year")?.value || "";
+  const mes = partes.find((parte) => parte.type === "month")?.value || "";
+  const dia = partes.find((parte) => parte.type === "day")?.value || "";
+
+  return ano && mes && dia ? `${ano}-${mes}-${dia}` : "";
+}
+
 function formatarDataHoraListaFiltro(createdAt?: string | null) {
   if (!createdAt) return "";
 
@@ -2325,6 +2345,11 @@ export default function DisparosWhatsAppPage() {
   const [campanhasRelatorioAcumuladoIds, setCampanhasRelatorioAcumuladoIds] =
     useState<string[]>([]);
   const [buscaRelatorioAcumulado, setBuscaRelatorioAcumulado] = useState("");
+  const [diaRelatorioAcumulado, setDiaRelatorioAcumulado] = useState("");
+  const [integracaoRelatorioAcumulado, setIntegracaoRelatorioAcumulado] =
+    useState("");
+  const [templateRelatorioAcumulado, setTemplateRelatorioAcumulado] =
+    useState("");
   const [exportandoRelatorioAcumulado, setExportandoRelatorioAcumulado] =
     useState(false);
   const [loadingRelatorioCampanhaDetalhado, setLoadingRelatorioCampanhaDetalhado] =
@@ -2732,6 +2757,9 @@ export default function DisparosWhatsAppPage() {
   function abrirModalRelatorioAcumulado() {
     setCampanhasRelatorioAcumuladoIds([]);
     setBuscaRelatorioAcumulado("");
+    setDiaRelatorioAcumulado("");
+    setIntegracaoRelatorioAcumulado("");
+    setTemplateRelatorioAcumulado("");
     setModalRelatorioAcumuladoAberto(true);
   }
 
@@ -2741,6 +2769,29 @@ export default function DisparosWhatsAppPage() {
         ? atuais.filter((id) => id !== campanhaId)
         : [...atuais, campanhaId]
     );
+  }
+
+  function alternarTodasCampanhasRelatorioAcumulado(
+    campanhasVisiveis: CampanhaHistoricoFiltro[]
+  ) {
+    if (!campanhasVisiveis.length) return;
+
+    const idsVisiveis = campanhasVisiveis.map((campanha) => campanha.id);
+
+    setCampanhasRelatorioAcumuladoIds((atuais) => {
+      const selecionadas = new Set(atuais);
+      const todasSelecionadas = idsVisiveis.every((id) =>
+        selecionadas.has(id)
+      );
+
+      if (todasSelecionadas) {
+        idsVisiveis.forEach((id) => selecionadas.delete(id));
+      } else {
+        idsVisiveis.forEach((id) => selecionadas.add(id));
+      }
+
+      return Array.from(selecionadas);
+    });
   }
 
   async function gerarRelatorioExcelAcumulado() {
@@ -4383,11 +4434,60 @@ export default function DisparosWhatsAppPage() {
     integracoes,
   ]);
 
+  const integracoesRelatorioAcumuladoDisponiveis = useMemo(() => {
+    const idsComCampanha = new Set(
+      campanhasHistorico
+        .map((campanha) => String(campanha.integracao_whatsapp_id || ""))
+        .filter(Boolean)
+    );
+
+    return integracoes
+      .filter((integracao) => idsComCampanha.has(integracao.id))
+      .sort((a, b) =>
+        String(a.nome_conexao || a.numero || "").localeCompare(
+          String(b.nome_conexao || b.numero || ""),
+          "pt-BR"
+        )
+      );
+  }, [campanhasHistorico, integracoes]);
+
+  const templatesRelatorioAcumuladoDisponiveis = useMemo(() => {
+    return Array.from(
+      new Set(
+        campanhasHistorico
+          .map((campanha) => String(campanha.template_nome || "").trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [campanhasHistorico]);
+
   const campanhasRelatorioAcumuladoDisponiveis = useMemo(() => {
     const termo = normalizarTextoBusca(buscaRelatorioAcumulado);
 
     return [...campanhasHistorico]
       .filter((campanha) => {
+        if (
+          diaRelatorioAcumulado &&
+          dataCampanhaParaFiltro(campanha.created_at) !== diaRelatorioAcumulado
+        ) {
+          return false;
+        }
+
+        if (
+          integracaoRelatorioAcumulado &&
+          campanha.integracao_whatsapp_id !== integracaoRelatorioAcumulado
+        ) {
+          return false;
+        }
+
+        if (
+          templateRelatorioAcumulado &&
+          String(campanha.template_nome || "").trim() !==
+            templateRelatorioAcumulado
+        ) {
+          return false;
+        }
+
         if (!termo) return true;
 
         const integracao = integracoes.find(
@@ -4412,7 +4512,26 @@ export default function DisparosWhatsAppPage() {
           timestampRelatorio(b.created_at) -
           timestampRelatorio(a.created_at)
       );
-  }, [campanhasHistorico, integracoes, buscaRelatorioAcumulado]);
+  }, [
+    campanhasHistorico,
+    integracoes,
+    buscaRelatorioAcumulado,
+    diaRelatorioAcumulado,
+    integracaoRelatorioAcumulado,
+    templateRelatorioAcumulado,
+  ]);
+
+  const todasCampanhasRelatorioAcumuladoVisiveisSelecionadas = useMemo(
+    () =>
+      campanhasRelatorioAcumuladoDisponiveis.length > 0 &&
+      campanhasRelatorioAcumuladoDisponiveis.every((campanha) =>
+        campanhasRelatorioAcumuladoIds.includes(campanha.id)
+      ),
+    [
+      campanhasRelatorioAcumuladoDisponiveis,
+      campanhasRelatorioAcumuladoIds,
+    ]
+  );
 
   const totalContatosComConflitoSelecionados = useMemo(() => {
     const ids = new Set<string>();
@@ -9075,6 +9194,60 @@ export default function DisparosWhatsAppPage() {
                 />
               </div>
 
+              <div className={styles.accumulatedReportFilters}>
+                <label className={styles.accumulatedReportFilterField}>
+                  <span>Dia</span>
+                  <input
+                    type="date"
+                    className={styles.input}
+                    value={diaRelatorioAcumulado}
+                    onChange={(event) =>
+                      setDiaRelatorioAcumulado(event.target.value)
+                    }
+                  />
+                </label>
+
+                <label className={styles.accumulatedReportFilterField}>
+                  <span>Integração</span>
+                  <select
+                    className={styles.input}
+                    value={integracaoRelatorioAcumulado}
+                    onChange={(event) =>
+                      setIntegracaoRelatorioAcumulado(event.target.value)
+                    }
+                  >
+                    <option value="">Todas as integrações</option>
+                    {integracoesRelatorioAcumuladoDisponiveis.map(
+                      (integracao) => (
+                        <option key={integracao.id} value={integracao.id}>
+                          {integracao.nome_conexao ||
+                            integracao.numero ||
+                            "Integração"}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+
+                <label className={styles.accumulatedReportFilterField}>
+                  <span>Template</span>
+                  <select
+                    className={styles.input}
+                    value={templateRelatorioAcumulado}
+                    onChange={(event) =>
+                      setTemplateRelatorioAcumulado(event.target.value)
+                    }
+                  >
+                    <option value="">Todos os templates</option>
+                    {templatesRelatorioAcumuladoDisponiveis.map((template) => (
+                      <option key={template} value={template}>
+                        {template}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
               <div className={styles.accumulatedReportList}>
                 {campanhasRelatorioAcumuladoDisponiveis.length === 0 ? (
                   <div className={styles.accumulatedReportEmpty}>
@@ -9134,30 +9307,55 @@ export default function DisparosWhatsAppPage() {
               ) : null}
             </div>
 
-            <div className={styles.modalFooter}>
+            <div
+              className={`${styles.modalFooter} ${styles.accumulatedReportFooter}`}
+            >
               <button
                 type="button"
                 className={styles.secondaryButton}
-                onClick={() => setModalRelatorioAcumuladoAberto(false)}
-                disabled={exportandoRelatorioAcumulado}
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={gerarRelatorioExcelAcumulado}
+                onClick={() =>
+                  alternarTodasCampanhasRelatorioAcumulado(
+                    campanhasRelatorioAcumuladoDisponiveis
+                  )
+                }
                 disabled={
-                  campanhasRelatorioAcumuladoIds.length < 2 ||
-                  exportandoRelatorioAcumulado
+                  exportandoRelatorioAcumulado ||
+                  campanhasRelatorioAcumuladoDisponiveis.length === 0
                 }
               >
-                <FileSpreadsheet size={17} />
-                {exportandoRelatorioAcumulado
-                  ? "Gerando Excel..."
-                  : "Baixar Excel acumulado"}
+                {todasCampanhasRelatorioAcumuladoVisiveisSelecionadas
+                  ? "Remover todos"
+                  : "Selecionar todos"}
+                {campanhasRelatorioAcumuladoDisponiveis.length
+                  ? ` (${campanhasRelatorioAcumuladoDisponiveis.length})`
+                  : ""}
               </button>
+
+              <div className={styles.accumulatedReportFooterActions}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => setModalRelatorioAcumuladoAberto(false)}
+                  disabled={exportandoRelatorioAcumulado}
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={gerarRelatorioExcelAcumulado}
+                  disabled={
+                    campanhasRelatorioAcumuladoIds.length < 2 ||
+                    exportandoRelatorioAcumulado
+                  }
+                >
+                  <FileSpreadsheet size={17} />
+                  {exportandoRelatorioAcumulado
+                    ? "Gerando Excel..."
+                    : "Baixar Excel acumulado"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
