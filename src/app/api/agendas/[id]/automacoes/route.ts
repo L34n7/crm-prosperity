@@ -280,8 +280,9 @@ export async function PUT(
       }
     }
 
-    const activePostAttendanceRules = rules.filter(
-      (item) => item.tipo === "pos_atendimento" && item.ativo
+    const activeRules = rules.filter((item) => item.ativo);
+    const activePostAttendanceRules = activeRules.filter(
+      (item) => item.tipo === "pos_atendimento"
     );
     if (
       activePostAttendanceRules.length > 1 ||
@@ -299,26 +300,36 @@ export async function PUT(
       );
     }
 
+    // Regras desativadas preservam a configuração para uma futura reativação,
+    // mas não devem bloquear o salvamento por referências atualmente inativas.
     const integrationIds = Array.from(
-      new Set(rules.map((item) => item.integracao_whatsapp_id).filter(Boolean) as string[])
+      new Set(
+        activeRules
+          .map((item) => item.integracao_whatsapp_id)
+          .filter(Boolean) as string[]
+      )
     );
     const templateIds = Array.from(
-      new Set(rules.map((item) => item.whatsapp_template_id).filter(Boolean) as string[])
+      new Set(
+        activeRules
+          .map((item) => item.whatsapp_template_id)
+          .filter(Boolean) as string[]
+      )
     );
-    const mappedFlowIds = rules.flatMap((rule) =>
+    const mappedFlowIds = activeRules.flatMap((rule) =>
       normalizeButtonMappings(asRecord(rule.configuracao_json).template_botoes)
         .map((item) => uuidOrNull(item.fluxo_id))
         .filter(Boolean) as string[]
     );
     const flowIds = Array.from(
       new Set([
-        ...(rules.map((item) => item.fluxo_id).filter(Boolean) as string[]),
+        ...(activeRules.map((item) => item.fluxo_id).filter(Boolean) as string[]),
         ...mappedFlowIds,
       ])
     );
     const customVariableKeys = Array.from(
       new Set(
-        rules.flatMap((rule) =>
+        activeRules.flatMap((rule) =>
           normalizeVariableMappings(asRecord(rule.configuracao_json).template_variaveis)
             .map((mapping) => templateCustomVariableKey(mapping.fonte))
             .filter(Boolean)
@@ -408,7 +419,7 @@ export async function PUT(
     const templatesById = new Map<string, any>(
       (templates.data || []).map((item: any) => [String(item.id), item])
     );
-    for (const rule of rules) {
+    for (const rule of activeRules) {
       if (!rule.whatsapp_template_id || rule.canal !== "whatsapp") continue;
       const template = templatesById.get(rule.whatsapp_template_id);
       if (
@@ -427,7 +438,6 @@ export async function PUT(
           { status: 400 }
         );
       }
-      if (!rule.ativo) continue;
       if (category === "marketing" && rule.configuracao_json.marketing_aceito !== true) {
         return NextResponse.json(
           {
