@@ -2320,6 +2320,13 @@ export default function DisparosWhatsAppPage() {
   const [historicoTemMais, setHistoricoTemMais] = useState(false);
   const [exportandoRelatorioCampanha, setExportandoRelatorioCampanha] =
     useState(false);
+  const [modalRelatorioAcumuladoAberto, setModalRelatorioAcumuladoAberto] =
+    useState(false);
+  const [campanhasRelatorioAcumuladoIds, setCampanhasRelatorioAcumuladoIds] =
+    useState<string[]>([]);
+  const [buscaRelatorioAcumulado, setBuscaRelatorioAcumulado] = useState("");
+  const [exportandoRelatorioAcumulado, setExportandoRelatorioAcumulado] =
+    useState(false);
   const [loadingRelatorioCampanhaDetalhado, setLoadingRelatorioCampanhaDetalhado] =
     useState(false);
   const [relatorioCampanhaDetalhado, setRelatorioCampanhaDetalhado] =
@@ -2720,6 +2727,83 @@ export default function DisparosWhatsAppPage() {
     },
     []
   );
+
+
+  function abrirModalRelatorioAcumulado() {
+    setCampanhasRelatorioAcumuladoIds([]);
+    setBuscaRelatorioAcumulado("");
+    setModalRelatorioAcumuladoAberto(true);
+  }
+
+  function alternarCampanhaRelatorioAcumulado(campanhaId: string) {
+    setCampanhasRelatorioAcumuladoIds((atuais) =>
+      atuais.includes(campanhaId)
+        ? atuais.filter((id) => id !== campanhaId)
+        : [...atuais, campanhaId]
+    );
+  }
+
+  async function gerarRelatorioExcelAcumulado() {
+    if (
+      campanhasRelatorioAcumuladoIds.length < 2 ||
+      exportandoRelatorioAcumulado
+    ) {
+      return;
+    }
+
+    try {
+      setExportandoRelatorioAcumulado(true);
+      setErro("");
+      setMensagem("");
+
+      const res = await fetch("/api/whatsapp/disparos/relatorio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campanha_ids: campanhasRelatorioAcumuladoIds,
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(
+          json?.error || "Não foi possível gerar o relatório acumulado."
+        );
+      }
+
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get("Content-Disposition") || "";
+      const nomeUtf8 = contentDisposition.match(
+        /filename\*=UTF-8''([^;]+)/i
+      )?.[1];
+      const nomeSimples = contentDisposition.match(
+        /filename="?([^";]+)"?/i
+      )?.[1];
+      const nomeArquivo = nomeUtf8
+        ? decodeURIComponent(nomeUtf8)
+        : nomeSimples || "relatorio-acumulado-disparos.xlsx";
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = nomeArquivo;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setModalRelatorioAcumuladoAberto(false);
+      setMensagem(
+        `Relatório acumulado de ${campanhasRelatorioAcumuladoIds.length} campanhas gerado com sucesso.`
+      );
+    } catch (error: any) {
+      setErro(
+        error?.message || "Não foi possível gerar o relatório acumulado."
+      );
+    } finally {
+      setExportandoRelatorioAcumulado(false);
+    }
+  }
 
   async function gerarRelatorioExcelCampanha() {
     if (!filtroHistoricoCampanha || exportandoRelatorioCampanha) {
@@ -4298,6 +4382,37 @@ export default function DisparosWhatsAppPage() {
     buscaHistorico,
     integracoes,
   ]);
+
+  const campanhasRelatorioAcumuladoDisponiveis = useMemo(() => {
+    const termo = normalizarTextoBusca(buscaRelatorioAcumulado);
+
+    return [...campanhasHistorico]
+      .filter((campanha) => {
+        if (!termo) return true;
+
+        const integracao = integracoes.find(
+          (item) => item.id === campanha.integracao_whatsapp_id
+        );
+
+        return normalizarTextoBusca(
+          [
+            nomeCampanhaHistorico(campanha),
+            campanha.template_nome,
+            campanha.template_categoria,
+            statusCampanhaHistorico(campanha),
+            integracao?.nome_conexao,
+            integracao?.numero,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        ).includes(termo);
+      })
+      .sort(
+        (a, b) =>
+          timestampRelatorio(b.created_at) -
+          timestampRelatorio(a.created_at)
+      );
+  }, [campanhasHistorico, integracoes, buscaRelatorioAcumulado]);
 
   const totalContatosComConflitoSelecionados = useMemo(() => {
     const ids = new Set<string>();
@@ -7386,14 +7501,29 @@ export default function DisparosWhatsAppPage() {
           abaAtiva !== "resultados" ? styles.tabPanelHidden : ""
         }`}
       >
-        <div className={styles.cardHeader}>
-          <div>
+        <div className={`${styles.cardHeader} ${styles.historyResultsHeader}`}>
+          <div className={styles.historyResultsHeaderText}>
             <p className={styles.eyebrow}>Histórico</p>
             <h2 className={styles.cardTitle}>Resultados dos disparos</h2>
             <p className={styles.cardSubtitle}>
               Cada disparo em massa aparece em um único card com os totais da campanha.
             </p>
           </div>
+
+          <button
+            type="button"
+            className={styles.historyAccumulatedReportButton}
+            onClick={abrirModalRelatorioAcumulado}
+            disabled={campanhasHistorico.length < 2}
+            title={
+              campanhasHistorico.length < 2
+                ? "É necessário ter pelo menos 2 campanhas"
+                : "Gerar relatório acumulado de 2 ou mais campanhas"
+            }
+          >
+            <FileSpreadsheet size={17} />
+            Relatório acumulado
+          </button>
         </div>
 
           <div className={styles.historySearchBar}>
@@ -8882,6 +9012,151 @@ export default function DisparosWhatsAppPage() {
                 {cancelandoCampanha
                   ? "Cancelando..."
                   : "Cancelar disparos pendentes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+
+      {modalRelatorioAcumuladoAberto ? (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => {
+            if (!exportandoRelatorioAcumulado) {
+              setModalRelatorioAcumuladoAberto(false);
+            }
+          }}
+        >
+          <div
+            className={`${styles.modalConfirmacao} ${styles.accumulatedReportModal}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.modalEyebrow}>Relatório acumulado</p>
+                <h3 className={styles.modalTitle}>Selecionar campanhas</h3>
+                <p className={styles.modalSubtitle}>
+                  Selecione 2 ou mais campanhas para consolidar os resultados em um único Excel.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setModalRelatorioAcumuladoAberto(false)}
+                disabled={exportandoRelatorioAcumulado}
+                aria-label="Fechar relatório acumulado"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.accumulatedReportToolbar}>
+                <div>
+                  <span className={styles.accumulatedReportCountLabel}>
+                    Selecionadas
+                  </span>
+                  <strong className={styles.accumulatedReportCount}>
+                    {campanhasRelatorioAcumuladoIds.length}
+                  </strong>
+                </div>
+
+                <input
+                  type="search"
+                  className={styles.input}
+                  value={buscaRelatorioAcumulado}
+                  onChange={(event) =>
+                    setBuscaRelatorioAcumulado(event.target.value)
+                  }
+                  placeholder="Buscar campanha, template ou integração..."
+                  aria-label="Buscar campanha para relatório acumulado"
+                />
+              </div>
+
+              <div className={styles.accumulatedReportList}>
+                {campanhasRelatorioAcumuladoDisponiveis.length === 0 ? (
+                  <div className={styles.accumulatedReportEmpty}>
+                    Nenhuma campanha encontrada.
+                  </div>
+                ) : (
+                  campanhasRelatorioAcumuladoDisponiveis.map((campanha) => {
+                    const selecionada =
+                      campanhasRelatorioAcumuladoIds.includes(campanha.id);
+                    const integracao = integracoes.find(
+                      (item) =>
+                        item.id === campanha.integracao_whatsapp_id
+                    );
+
+                    return (
+                      <label
+                        key={campanha.id}
+                        className={`${styles.accumulatedReportItem} ${
+                          selecionada
+                            ? styles.accumulatedReportItemSelected
+                            : ""
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selecionada}
+                          onChange={() =>
+                            alternarCampanhaRelatorioAcumulado(campanha.id)
+                          }
+                          disabled={exportandoRelatorioAcumulado}
+                        />
+
+                        <span className={styles.accumulatedReportItemContent}>
+                          <strong>{nomeCampanhaHistorico(campanha)}</strong>
+                          <small>
+                            {integracao?.nome_conexao ||
+                              integracao?.numero ||
+                              "Integração"}{" "}
+                            · Template: {campanha.template_nome || "-"}
+                          </small>
+                          <small>
+                            {formatarDataHora(campanha.created_at) || "-"} ·{" "}
+                            {Number(campanha.total_itens || 0)} contatos ·{" "}
+                            {statusCampanhaHistorico(campanha)}
+                          </small>
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+
+              {campanhasRelatorioAcumuladoIds.length === 1 ? (
+                <div className={styles.modalAlert}>
+                  Selecione mais 1 campanha para liberar o relatório acumulado.
+                </div>
+              ) : null}
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setModalRelatorioAcumuladoAberto(false)}
+                disabled={exportandoRelatorioAcumulado}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={gerarRelatorioExcelAcumulado}
+                disabled={
+                  campanhasRelatorioAcumuladoIds.length < 2 ||
+                  exportandoRelatorioAcumulado
+                }
+              >
+                <FileSpreadsheet size={17} />
+                {exportandoRelatorioAcumulado
+                  ? "Gerando Excel..."
+                  : "Baixar Excel acumulado"}
               </button>
             </div>
           </div>
