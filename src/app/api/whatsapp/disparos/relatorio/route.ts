@@ -1139,11 +1139,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => null);
-    const campanhaIds = Array.from(
-      new Set(
+    const campanhaIds: string[] = Array.from(
+      new Set<string>(
         (Array.isArray(body?.campanha_ids) ? body.campanha_ids : [])
           .map((item: unknown) => String(item || "").trim())
-          .filter(Boolean)
+          .filter((item: string) => Boolean(item))
       )
     );
 
