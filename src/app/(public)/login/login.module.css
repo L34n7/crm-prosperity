@@ -475,6 +475,20 @@
   text-decoration: none;
 }
 
+.poweredBy {
+  margin: 10px 0 0;
+  color: var(--crm-ui-public-content-hex-94a3b8);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.poweredBy strong {
+  color: var(--crm-ui-public-content-hex-64748b);
+  font-weight: 800;
+}
+
 @media (max-width: 1024px) {
 
   .brandLogo {

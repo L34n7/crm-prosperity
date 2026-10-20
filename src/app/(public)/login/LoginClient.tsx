@@ -376,6 +376,12 @@ export default function LoginClient({ branding }: LoginClientProps) {
               "."
             )}
           </p>
+
+          {branding.is_white_label ? (
+            <p className={styles.poweredBy}>
+              By <strong>Prosperity Developer</strong>
+            </p>
+          ) : null}
         </div>
       </section>
     </main>
