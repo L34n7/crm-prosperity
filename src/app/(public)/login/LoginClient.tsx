@@ -203,6 +203,14 @@ export default function LoginClient({ branding }: LoginClientProps) {
               <span className={styles.brandIdentity}>
                 <span className={styles.brandProduct}>Plataforma empresarial</span>
                 <span className={styles.brandName}>{branding.nome_produto}</span>
+                {branding.is_white_label ? (
+                  <span className={styles.brandPoweredBy}>
+                    <span className={styles.brandPoweredByLabel}>By</span>
+                    <span className={styles.brandPoweredByName}>
+                      Prosperity Developer
+                    </span>
+                  </span>
+                ) : null}
               </span>
             </Link>
 
@@ -377,11 +385,6 @@ export default function LoginClient({ branding }: LoginClientProps) {
             )}
           </p>
 
-          {branding.is_white_label ? (
-            <p className={styles.poweredBy}>
-              By <strong>Prosperity Developer</strong>
-            </p>
-          ) : null}
         </div>
       </section>
     </main>

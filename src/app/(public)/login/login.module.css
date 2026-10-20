@@ -148,6 +148,30 @@
   text-transform: uppercase;
 }
 
+.brandPoweredBy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--crm-ui-public-content-hex-cbd5e1);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.brandPoweredByLabel {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  opacity: 0.72;
+}
+
+.brandPoweredByName {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.015em;
+  opacity: 0.9;
+}
+
 .eyebrow {
   position: relative;
   z-index: 1;
@@ -475,20 +499,6 @@
   text-decoration: none;
 }
 
-.poweredBy {
-  margin: 10px 0 0;
-  color: var(--crm-ui-public-content-hex-94a3b8);
-  font-size: 10px;
-  line-height: 1.4;
-  text-align: center;
-  letter-spacing: 0.04em;
-}
-
-.poweredBy strong {
-  color: var(--crm-ui-public-content-hex-64748b);
-  font-weight: 800;
-}
-
 @media (max-width: 1024px) {
 
   .brandLogo {
@@ -603,6 +613,19 @@
   .brandName {
     margin-top: 8px;
     font-size: 20px;
+  }
+
+  .brandPoweredBy {
+    margin-top: 6px;
+    gap: 5px;
+  }
+
+  .brandPoweredByLabel {
+    font-size: 8px;
+  }
+
+  .brandPoweredByName {
+    font-size: 10px;
   }
 
   .brandHeader {
