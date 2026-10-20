@@ -2,6 +2,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getOrSetTtlCache, getTtlCacheKey } from "@/lib/cache/ttl-cache";
 import {
   BRANDING_PROSPERITY,
   type WhiteLabelBranding,
@@ -69,21 +70,27 @@ export async function buscarWhiteLabelAtivoPorDominio(
     return null;
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("white_labels")
-    .select(
-      "id, nome, slug, dominio, nome_produto, logo_url, favicon_url, cor_primaria, licencas_contratadas, plano_padrao_id, empresa_gestora_id, status"
-    )
-    .ilike("dominio", dominio)
-    .eq("status", "ativo")
-    .maybeSingle<WhiteLabelRow>();
+  return await getOrSetTtlCache(
+    getTtlCacheKey("white-label-branding", [dominio]),
+    30_000,
+    async () => {
+      const { data, error } = await supabaseAdmin
+        .from("white_labels")
+        .select(
+          "id, nome, slug, dominio, nome_produto, logo_url, favicon_url, cor_primaria, licencas_contratadas, plano_padrao_id, empresa_gestora_id, status"
+        )
+        .ilike("dominio", dominio)
+        .eq("status", "ativo")
+        .maybeSingle<WhiteLabelRow>();
 
-  if (error) {
-    console.error("[WHITE LABEL] Falha ao identificar domínio:", error);
-    return null;
-  }
+      if (error) {
+        console.error("[WHITE LABEL] Falha ao identificar domínio:", error);
+        return null;
+      }
 
-  return data ?? null;
+      return data ?? null;
+    }
+  );
 }
 
 export async function obterBrandingPorHost(

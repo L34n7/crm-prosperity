@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
+import { obterBrandingPorHost } from "@/lib/white-label/branding";
 
 const UI_CONSISTENCY_STYLES = `
   [class*="editorPanel"] > [class*="editorHeader"] {
@@ -132,7 +134,7 @@ const title = "CRM Prosperity | CRM com IA para WhatsApp";
 const description =
   "Centralize o atendimento pelo WhatsApp, automatize conversas, faça disparos, acompanhe leads e gerencie sua operação em uma única plataforma empresarial.";
 
-export const metadata: Metadata = {
+const prosperityMetadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: title,
@@ -212,6 +214,47 @@ export const metadata: Metadata = {
   },
 };
 
+export async function generateMetadata(): Promise<Metadata> {
+  const headerStore = await headers();
+  const host =
+    headerStore.get("x-forwarded-host") || headerStore.get("host");
+  const branding = await obterBrandingPorHost(host);
+
+  if (!branding.is_white_label || !branding.dominio) {
+    return prosperityMetadata;
+  }
+
+  const whiteLabelUrl = "https://" + branding.dominio;
+  const favicon = branding.favicon_url || "/favicon.ico";
+  const nomeProduto = branding.nome_produto;
+  const descricao =
+    "Acesse o " +
+    nomeProduto +
+    " para gerenciar atendimento, automações e operação em uma única plataforma.";
+
+  return {
+    metadataBase: new URL(whiteLabelUrl),
+    title: {
+      default: nomeProduto,
+      template: "%s | " + nomeProduto,
+    },
+    description: descricao,
+    applicationName: nomeProduto,
+    generator: "Next.js",
+    creator: branding.nome_marca,
+    publisher: branding.nome_marca,
+    icons: {
+      icon: [{ url: favicon }],
+      shortcut: [{ url: favicon }],
+      apple: branding.favicon_url ? [{ url: branding.favicon_url }] : undefined,
+    },
+    robots: {
+      index: false,
+      follow: false,
+    },
+  };
+}
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -222,11 +265,17 @@ export const viewport: Viewport = {
   colorScheme: "light dark",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headerStore = await headers();
+  const host =
+    headerStore.get("x-forwarded-host") || headerStore.get("host");
+  const branding = await obterBrandingPorHost(host);
+  const favicon = branding.favicon_url || "/favicon.ico";
+
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
@@ -259,26 +308,38 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link
-          rel="icon"
-          href="/favicon-32x32.png"
-          type="image/png"
-          sizes="32x32"
-        />
-        <link
-          rel="icon"
-          href="/favicon-16x16.png"
-          type="image/png"
-          sizes="16x16"
-        />
-        <link rel="shortcut icon" href="/favicon.ico" />
-        <link
-          rel="apple-touch-icon"
-          href="/apple-touch-icon.png"
-          sizes="180x180"
-        />
-        <link rel="manifest" href="/site.webmanifest" />
+        {branding.is_white_label ? (
+          <>
+            <link rel="icon" href={favicon} />
+            <link rel="shortcut icon" href={favicon} />
+            {branding.favicon_url ? (
+              <link rel="apple-touch-icon" href={branding.favicon_url} />
+            ) : null}
+          </>
+        ) : (
+          <>
+            <link rel="icon" href="/favicon.ico" sizes="any" />
+            <link
+              rel="icon"
+              href="/favicon-32x32.png"
+              type="image/png"
+              sizes="32x32"
+            />
+            <link
+              rel="icon"
+              href="/favicon-16x16.png"
+              type="image/png"
+              sizes="16x16"
+            />
+            <link rel="shortcut icon" href="/favicon.ico" />
+            <link
+              rel="apple-touch-icon"
+              href="/apple-touch-icon.png"
+              sizes="180x180"
+            />
+            <link rel="manifest" href="/site.webmanifest" />
+          </>
+        )}
         <style>{UI_CONSISTENCY_STYLES}</style>
       </head>
       <body className="antialiased">
@@ -300,21 +361,25 @@ export default function RootLayout({
         <Script id="crm-contact-capture-order" strategy="afterInteractive">
           {CONTACT_CAPTURE_SORT_SCRIPT}
         </Script>
-        <Script
-          id="crm-organization-schema"
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
-        />
-        <Script
-          id="crm-website-schema"
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
-        />
-        <Script
-          id="crm-software-schema"
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
-        />
+        {!branding.is_white_label ? (
+          <>
+            <Script
+              id="crm-organization-schema"
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+            />
+            <Script
+              id="crm-website-schema"
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+            />
+            <Script
+              id="crm-software-schema"
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareSchema) }}
+            />
+          </>
+        ) : null}
         {children}
       </body>
     </html>
