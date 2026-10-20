@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 import { META_PAYMENT_SETTINGS_URL } from "@/lib/whatsapp/meta-payment-block";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -80,12 +81,8 @@ export async function sendMetaPaymentBlockedEmail({
     String(empresa?.nome_fantasia || "").trim() ||
     String(empresa?.razao_social || "").trim() ||
     "sua empresa";
-  const appUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${appUrl}/logo.png`;
+  const emailBranding = await obterEmailBrandingEmpresa(empresaId);
+  const logoUrl = emailBranding.logoUrl;
   const nomeNumero = String(numero || integracaoNome || "Número WhatsApp");
   const resumo = [
     [pausas.execucoesCanceladas, "execução(ões) de fluxo"],
@@ -105,7 +102,7 @@ export async function sendMetaPaymentBlockedEmail({
 
   try {
     await resend.emails.send({
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
+      from: emailBranding.from,
       to: destinatario,
       subject: `Ação necessária: pagamento da Meta pendente · ${nomeNumero}`,
       text: [
@@ -115,6 +112,7 @@ export async function sendMetaPaymentBlockedEmail({
         resumo ? `Pausado: ${resumo}.` : "",
         "Cadastre ou regularize a forma de pagamento na Meta. Assim que um novo envio for confirmado com sucesso, o aviso será removido automaticamente.",
         META_PAYMENT_SETTINGS_URL,
+        emailBranding.rodapeWhiteLabelTexto,
       ]
         .filter(Boolean)
         .join("\n"),
@@ -127,11 +125,11 @@ export async function sendMetaPaymentBlockedEmail({
                   <td style="background:linear-gradient(135deg,#20b486,#07131a);padding:28px 32px;color:#fff;">
                     <table width="100%" cellpadding="0" cellspacing="0"><tr>
                       <td>
-                        <div style="font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.86;">CRM Prosperity</div>
+                        <div style="font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.86;">${escaparHtml(emailBranding.nomeProduto)}</div>
                         <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;">Forma de pagamento da Meta necessária</h1>
                         <p style="margin:9px 0 0;font-size:14px;line-height:1.55;opacity:.92;">As automações do número afetado foram pausadas preventivamente.</p>
                       </td>
-                      <td width="86" align="right"><img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;" /></td>
+                      <td width="86" align="right"><img src="${logoUrl}" alt="${escaparHtml(emailBranding.nomeProduto)}" width="72" style="display:block;width:72px;height:auto;border:0;" /></td>
                     </tr></table>
                   </td>
                 </tr>
@@ -159,7 +157,7 @@ export async function sendMetaPaymentBlockedEmail({
                   <a href="${META_PAYMENT_SETTINGS_URL}" style="display:inline-block;background:#20b486;color:#fff;text-decoration:none;padding:14px 22px;border-radius:999px;font-size:14px;font-weight:800;">Configurar forma de pagamento na Meta</a>
                 </td></tr>
                 <tr><td style="background:#f6f9f8;padding:17px 32px;border-top:1px solid #dce7e4;color:#8ca09b;font-size:12px;line-height:1.5;">
-                  Este e-mail foi enviado automaticamente pelo CRM Prosperity após uma falha financeira reportada pela Meta.
+                  Este e-mail foi enviado automaticamente pelo ${escaparHtml(emailBranding.nomeProduto)} após uma falha financeira reportada pela Meta.${emailBranding.rodapeWhiteLabelHtml}
                 </td></tr>
               </table>
             </td></tr>

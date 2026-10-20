@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 import {
   buildCalendarInvite,
   calendarInviteContentType,
@@ -85,15 +86,13 @@ export async function sendAppointmentCreatedEmail({
     return;
   }
 
-  const empresaNome = await buscarNomeEmpresa(empresaId);
+  const [empresaNome, emailBranding] = await Promise.all([
+    buscarNomeEmpresa(empresaId),
+    obterEmailBrandingEmpresa(empresaId),
+  ]);
   const empresaSeguro = escaparHtml(empresaNome);
   const empresaCabecalho = textoCabecalhoSeguro(empresaNome || "CRM Prosperity");
-  const appUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${appUrl}/logo.png`;
+  const logoUrl = emailBranding.logoUrl;
   const contatoSeguro = escaparHtml(contatoNome || "Cliente");
   const dataSeguro = escaparHtml(dataLabel || "");
   const horaSeguro = escaparHtml(horaLabel || "");
@@ -150,7 +149,7 @@ export async function sendAppointmentCreatedEmail({
 
   try {
     await resend.emails.send({
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
+      from: emailBranding.from,
       to: destinatario,
       subject: `${tituloEmail} - ${empresaCabecalho}`,
       text: [
@@ -160,7 +159,8 @@ export async function sendAppointmentCreatedEmail({
         `Horario: ${horaLabel || ""}`,
         textoCalendario,
         textoAcao,
-      ].join("\n"),
+        emailBranding.rodapeWhiteLabelTexto,
+      ].filter(Boolean).join("\n"),
       ...(conviteCalendario
         ? {
             attachments: [
@@ -187,7 +187,7 @@ export async function sendAppointmentCreatedEmail({
                           <p style="margin:8px 0 0;font-size:15px;line-height:1.45;font-weight:700;opacity:0.95;">${subtituloEmail}</p>
                         </td>
                         <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle;">
-                          <img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
+                          <img src="${logoUrl}" alt="${escaparHtml(emailBranding.nomeProduto)}" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
                         </td>
                       </tr></table>
                     </td>
@@ -244,8 +244,9 @@ export async function sendAppointmentCreatedEmail({
                   <tr>
                     <td style="background:#f6f9f8;padding:16px 30px;border-top:1px solid #dce7e4;">
                       <p style="margin:0;color:#8ca09b;font-size:12px;line-height:1.5;">
-                        Este email foi enviado automaticamente porque ${rodapeMotivo} no CRM Prosperity.
+                        Este email foi enviado automaticamente porque ${rodapeMotivo} no ${escaparHtml(emailBranding.nomeProduto)}.
                       </p>
+                      ${emailBranding.rodapeWhiteLabelHtml}
                     </td>
                   </tr>
                 </table>

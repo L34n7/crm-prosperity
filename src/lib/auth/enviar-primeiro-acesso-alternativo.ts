@@ -1,5 +1,7 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterBrandingDaEmpresa } from "@/lib/white-label/branding";
+import { montarEmailBranding, type EmailBrandingContext } from "@/lib/email/white-label-branding";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -16,13 +18,16 @@ function normalizarEmail(valor: string) {
   return String(valor || "").trim().toLowerCase();
 }
 
-function getTemplate(params: { nome: string; link: string }) {
-  const siteUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${siteUrl}/logo.png`;
+function getTemplate(params: {
+  nome: string;
+  link: string;
+  contexto: EmailBrandingContext;
+}) {
   const nome = escaparHtml(params.nome || "cliente");
   const link = escaparHtml(params.link);
+  const nomeProduto = escaparHtml(params.contexto.nomeProduto);
+  const nomeMarca = escaparHtml(params.contexto.nomeMarca);
+  const logoUrl = escaparHtml(params.contexto.logoUrl);
 
   return `
   <!DOCTYPE html>
@@ -30,7 +35,7 @@ function getTemplate(params: { nome: string; link: string }) {
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Seu acesso ao CRM Prosperity</title>
+      <title>Seu acesso ao ${nomeProduto}</title>
     </head>
     <body style="margin:0;padding:0;background:#eef3ff;font-family:Arial,Helvetica,sans-serif;">
       <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef3ff;padding:40px 16px;">
@@ -39,16 +44,16 @@ function getTemplate(params: { nome: string; link: string }) {
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 20px 60px rgba(15,23,42,.14);">
               <tr>
                 <td style="background:linear-gradient(135deg,#04254d 0%,#0b1526 25%,#0b1526 75%,#082d29 100%);padding:40px 32px;text-align:center;">
-                  <img src="${logoUrl}" alt="CRM Prosperity" width="170" style="display:block;margin:0 auto 18px;max-width:170px;height:auto;" />
+                  <img src="${logoUrl}" alt="${nomeProduto}" width="170" style="display:block;margin:0 auto 18px;max-width:170px;max-height:82px;object-fit:contain;height:auto;" />
                   <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;">Seu acesso foi liberado</h1>
-                  <p style="margin:10px 0 0;color:#cbd5f5;font-size:15px;">Acesso alternativo CRM Prosperity</p>
+                  <p style="margin:10px 0 0;color:#cbd5f5;font-size:15px;">Acesso alternativo ${nomeProduto}</p>
                 </td>
               </tr>
               <tr>
                 <td style="padding:40px 34px 32px;">
                   <p style="margin:0 0 18px;color:#0f172a;font-size:18px;line-height:1.6;font-weight:700;">Olá, ${nome}!</p>
-                  <p style="margin:0 0 18px;color:#475569;font-size:15px;line-height:1.7;">Este é um link alternativo para criar sua senha de acesso ao <strong>CRM Prosperity</strong>.</p>
-                  <p style="margin:0 0 28px;color:#475569;font-size:15px;line-height:1.7;">Clique no botão abaixo para continuar pelo processo seguro do Supabase Auth.</p>
+                  <p style="margin:0 0 18px;color:#475569;font-size:15px;line-height:1.7;">Este é um link alternativo para criar sua senha de acesso ao <strong>${nomeProduto}</strong>.</p>
+                  <p style="margin:0 0 28px;color:#475569;font-size:15px;line-height:1.7;">Clique no botão abaixo para continuar pelo processo seguro de autenticação.</p>
                   <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                       <td align="center" style="padding:8px 0 32px;">
@@ -65,8 +70,9 @@ function getTemplate(params: { nome: string; link: string }) {
               </tr>
               <tr>
                 <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 32px;text-align:center;">
-                  <p style="margin:0 0 8px;color:#0f172a;font-size:14px;font-weight:700;">CRM Prosperity</p>
-                  <p style="margin:0;color:#94a3b8;font-size:12px;">© ${new Date().getFullYear()} CRM Prosperity. Todos os direitos reservados.</p>
+                  <p style="margin:0 0 8px;color:#0f172a;font-size:14px;font-weight:700;">${nomeProduto}</p>
+                  <p style="margin:0;color:#94a3b8;font-size:12px;">© ${new Date().getFullYear()} ${nomeMarca}. Todos os direitos reservados.</p>
+                  ${params.contexto.rodapeWhiteLabelHtml}
                 </td>
               </tr>
             </table>
@@ -93,10 +99,10 @@ export async function enviarPrimeiroAcessoAlternativo(params: {
     throw new Error("A empresa não possui um e-mail válido.");
   }
 
-  const siteUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const redirectTo = `${siteUrl}/auth/callback?next=/definir-senha`;
+  const branding = await obterBrandingDaEmpresa(params.empresaId);
+  const contextoEmail = montarEmailBranding(branding);
+  const redirectTo =
+    contextoEmail.siteUrl + "/auth/callback?next=/definir-senha";
 
   let generated = await supabaseAdmin.auth.admin.generateLink({
     type: "invite",
@@ -141,10 +147,14 @@ export async function enviarPrimeiroAcessoAlternativo(params: {
 
   const resend = new Resend(resendApiKey);
   const envio = await resend.emails.send({
-    from: "CRM Prosperity <no-reply@crmprosperity.com>",
+    from: contextoEmail.from,
     to: email,
-    subject: "Seu acesso alternativo ao CRM Prosperity",
-    html: getTemplate({ nome: params.nome, link }),
+    subject: "Seu acesso alternativo ao " + contextoEmail.nomeProduto,
+    html: getTemplate({
+      nome: params.nome,
+      link,
+      contexto: contextoEmail,
+    }),
   });
 
   if (envio.error) {

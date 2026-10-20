@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 import {
   buildCalendarInvite,
   calendarInviteContentType,
@@ -122,14 +123,13 @@ export async function sendAgendaAutomationEmail(
     });
   }
 
-  const company = await companyName(params.empresaId);
+  const [company, emailBranding] = await Promise.all([
+    companyName(params.empresaId),
+    obterEmailBrandingEmpresa(params.empresaId),
+  ]);
   const content = copy(params, company);
-  const appUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${appUrl}/logo.png`;
+  const appUrl = emailBranding.siteUrl;
+  const logoUrl = emailBranding.logoUrl;
   const agendaUrl = `${appUrl}/agendas?agenda=${encodeURIComponent(
     params.agendaId
   )}&agendamento=${encodeURIComponent(params.appointmentId)}`;
@@ -155,7 +155,7 @@ export async function sendAgendaAutomationEmail(
     : null;
 
   const result = await resend.emails.send({
-    from: "CRM Prosperity <no-reply@crmprosperity.com>",
+    from: emailBranding.from,
     to: recipient,
     subject: safeHeader(content.subject),
     headers: {
@@ -182,6 +182,7 @@ export async function sendAgendaAutomationEmail(
       calendarInvite ? "O convite de calendário está anexado a este e-mail." : "",
       content.closing,
       params.kind === "aviso_responsavel" ? agendaUrl : "",
+      emailBranding.rodapeWhiteLabelTexto,
     ]
       .filter(Boolean)
       .join("\n"),
@@ -193,12 +194,12 @@ export async function sendAgendaAutomationEmail(
               <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#20b486,#07131a);color:#fff;">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                   <td style="padding:0;vertical-align:middle;">
-                    <div style="font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;opacity:.86;">CRM Prosperity · ${escapeHtml(company)}</div>
+                    <div style="font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;opacity:.86;">${escapeHtml(emailBranding.nomeProduto)} · ${escapeHtml(company)}</div>
                     <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">${escapeHtml(content.headline)}</h1>
                     <p style="margin:8px 0 0;font-size:14px;line-height:1.5;opacity:.92;">${escapeHtml(content.subtitle)}</p>
                   </td>
                   <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle;">
-                    <img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
+                    <img src="${logoUrl}" alt="${escapeHtml(emailBranding.nomeProduto)}" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
                   </td>
                 </tr></table>
               </td></tr>
@@ -219,7 +220,7 @@ export async function sendAgendaAutomationEmail(
                     : ""
                 }
               </td></tr>
-              <tr><td style="padding:16px 30px;background:#f6f9f8;border-top:1px solid #dce7e4;color:#8ca09b;font-size:11px;">Mensagem automática enviada pelo CRM Prosperity.</td></tr>
+              <tr><td style="padding:16px 30px;background:#f6f9f8;border-top:1px solid #dce7e4;color:#8ca09b;font-size:11px;">Mensagem automática enviada pelo ${escapeHtml(emailBranding.nomeProduto)}.${emailBranding.rodapeWhiteLabelHtml}</td></tr>
             </table>
           </td></tr>
         </table>

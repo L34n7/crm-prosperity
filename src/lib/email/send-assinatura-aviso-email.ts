@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -28,6 +29,7 @@ function formatarData(data: string) {
 }
 
 export async function sendAssinaturaAvisoEmail(params: {
+  empresaId: string;
   to: string[];
   nome: string;
   vencimentoEm: string;
@@ -111,9 +113,9 @@ export async function sendAssinaturaAvisoEmail(params: {
     },
     reativacao_20d: {
       etiqueta: "Queremos você de volta",
-      titulo: "Sentimos sua falta na Prosperity",
+      titulo: "Sentimos sua falta",
       cor: "#0f766e",
-      texto: "Sua estrutura continua preservada no CRM Prosperity e você pode retomar o atendimento sem começar tudo novamente.",
+      texto: "Sua estrutura continua preservada no sistema e você pode retomar o atendimento sem começar tudo novamente.",
       acao: "Reativar minha conta",
       pontos: [
         `Sua conta está bloqueada desde ${bloqueio}.`,
@@ -147,21 +149,17 @@ export async function sendAssinaturaAvisoEmail(params: {
     )
     .join("");
   const pontosTexto = conteudo.pontos.map((ponto) => `• ${ponto}`).join("\n");
-  const appUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${appUrl}/logo.png`;
+  const emailBranding = await obterEmailBrandingEmpresa(params.empresaId);
+  const logoUrl = emailBranding.logoUrl;
   const cta = params.checkoutUrl
     ? `<a href="${escaparHtml(params.checkoutUrl)}" style="display:inline-block;background:${conteudo.cor};color:#fff;text-decoration:none;padding:15px 24px;border-radius:10px;font-size:15px;font-weight:700;">${conteudo.acao}</a>`
     : "";
 
   try {
     const email = {
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
-      subject: `${conteudo.titulo} • CRM Prosperity`,
-      text: [conteudo.titulo, conteudo.texto, "", "O que acontece:", pontosTexto].join("\n"),
+      from: emailBranding.from,
+      subject: `${conteudo.titulo} • ${emailBranding.nomeProduto}`,
+      text: [conteudo.titulo, conteudo.texto, "", "O que acontece:", pontosTexto, emailBranding.rodapeWhiteLabelTexto].filter(Boolean).join("\n"),
       html: `
         <div style="margin:0;padding:32px 16px;background:#eef4f2;font-family:Arial,Helvetica,sans-serif">
           <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
@@ -170,10 +168,10 @@ export async function sendAssinaturaAvisoEmail(params: {
                 <tr><td style="padding:30px 32px;background:linear-gradient(135deg,${conteudo.cor},#07131a);color:#fff">
                   <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                     <td style="padding:0;vertical-align:middle">
-                      <div style="font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.85">CRM Prosperity · ${conteudo.etiqueta}</div>
+                      <div style="font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.85">${escaparHtml(emailBranding.nomeProduto)} · ${conteudo.etiqueta}</div>
                       <h1 style="margin:12px 0 0;font-size:25px;line-height:1.25">${conteudo.titulo}</h1>
                     </td>
-                    <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle"><img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none" /></td>
+                    <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle"><img src="${logoUrl}" alt="${escaparHtml(emailBranding.nomeProduto)}" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none" /></td>
                   </tr></table>
                 </td></tr>
                 <tr><td style="padding:30px 32px;color:#3f5752;font-size:15px;line-height:1.65">
@@ -185,7 +183,7 @@ export async function sendAssinaturaAvisoEmail(params: {
                   </div>
                   <div style="text-align:center;margin-top:26px">${cta}</div>
                 </td></tr>
-                <tr><td style="padding:16px 32px;background:#f6f9f8;border-top:1px solid #dce7e4;color:#8ca09b;font-size:12px;line-height:1.5">Este é um aviso automático sobre sua assinatura do CRM Prosperity.</td></tr>
+                <tr><td style="padding:16px 32px;background:#f6f9f8;border-top:1px solid #dce7e4;color:#8ca09b;font-size:12px;line-height:1.5">Este é um aviso automático sobre sua assinatura do ${escaparHtml(emailBranding.nomeProduto)}.${emailBranding.rodapeWhiteLabelHtml}</td></tr>
               </table>
             </td></tr>
           </table>

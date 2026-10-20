@@ -193,6 +193,7 @@ function getPrimeiroAcessoTemplate(params: {
                 <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 32px;text-align:center;">
                   <p style="margin:0 0 8px 0;color:#0f172a;font-size:14px;font-weight:700;">${nomeProduto}</p>
                   <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">© ${new Date().getFullYear()} ${nomeMarca}. Todos os direitos reservados.</p>
+                  ${params.branding.is_white_label ? '<div style="margin-top:8px;color:#94a3b8;font-size:10px;line-height:1.5;letter-spacing:.03em;">By <strong style="color:#64748b;font-size:11px;">Prosperity Developer</strong></div>' : ""}
                 </td>
               </tr>
             </table>

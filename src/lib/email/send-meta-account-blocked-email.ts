@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 import {
   WHATSAPP_META_BLOCK_HELP_URL,
   WHATSAPP_META_MANAGER_URL,
@@ -170,7 +171,10 @@ export async function sendMetaAccountBlockedEmail(params: Params) {
     return { enviado: false, motivo: "ja_notificado_ou_em_processamento" };
   }
 
-  const contexto = await buscarContexto(params);
+  const [contexto, emailBranding] = await Promise.all([
+    buscarContexto(params),
+    obterEmailBrandingEmpresa(params.empresaId),
+  ]);
   if (!contexto.destinatario) {
     console.warn("[META ACCOUNT BLOCK EMAIL] Empresa sem e-mail válido.", {
       empresaId: params.empresaId,
@@ -179,12 +183,7 @@ export async function sendMetaAccountBlockedEmail(params: Params) {
     return { enviado: false, motivo: "sem_email" };
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${appUrl}/logo.png`;
+  const logoUrl = emailBranding.logoUrl;
   const numeroLabel = contexto.numero || contexto.integracaoNome;
   const codigoMeta = Number(params.codigoMeta || 0) || null;
   const detalhe = String(params.detalhe || params.motivo || "").trim();
@@ -205,13 +204,14 @@ export async function sendMetaAccountBlockedEmail(params: Params) {
     "Enquanto a conta estiver bloqueada, o CRM interrompe as automações desse número para evitar novas tentativas de envio.",
     "Se precisar de ajuda durante o processo, nossa equipe está disponível para orientar você.",
     "",
-    `Suporte CRM Prosperity: ${WHATSAPP_META_BLOCK_HELP_URL}`,
+    `Suporte ${emailBranding.nomeProduto}: ${WHATSAPP_META_BLOCK_HELP_URL}`,
     `Gerenciador da Meta: ${WHATSAPP_META_MANAGER_URL}`,
-  ].join("\n");
+    emailBranding.rodapeWhiteLabelTexto,
+  ].filter(Boolean).join("\n");
 
   try {
     const { error } = await resend.emails.send({
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
+      from: emailBranding.from,
       to: contexto.destinatario,
       subject: assunto,
       text: texto,
@@ -224,11 +224,11 @@ export async function sendMetaAccountBlockedEmail(params: Params) {
                   <td style="background:linear-gradient(135deg,#20b486,#07131a);padding:28px 32px;color:#fff;">
                     <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                       <td>
-                        <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.86;">CRM Prosperity · WhatsApp</div>
+                        <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.86;">${escaparHtml(emailBranding.nomeProduto)} · WhatsApp</div>
                         <h1 style="margin:10px 0 0;font-size:24px;line-height:1.28;">${escaparHtml(titulo)}</h1>
                         <p style="margin:9px 0 0;font-size:14px;line-height:1.55;opacity:.92;">Estamos aqui para ajudar você a seguir com a revisão da conta.</p>
                       </td>
-                      <td width="86" align="right"><img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;" /></td>
+                      <td width="86" align="right"><img src="${logoUrl}" alt="${escaparHtml(emailBranding.nomeProduto)}" width="72" style="display:block;width:72px;height:auto;border:0;" /></td>
                     </tr></table>
                   </td>
                 </tr>
@@ -282,7 +282,7 @@ export async function sendMetaAccountBlockedEmail(params: Params) {
                 </td></tr>
 
                 <tr><td style="background:#f6f9f8;padding:17px 32px;border-top:1px solid #dce7e4;color:#8ca09b;font-size:12px;line-height:1.5;">
-                  Este e-mail foi enviado automaticamente porque o CRM Prosperity identificou que a Meta bloqueou ou desativou a conta WhatsApp vinculada a esta integração.
+                  Este e-mail foi enviado automaticamente porque o ${escaparHtml(emailBranding.nomeProduto)} identificou que a Meta bloqueou ou desativou a conta WhatsApp vinculada a esta integração.${emailBranding.rodapeWhiteLabelHtml}
                 </td></tr>
               </table>
             </td></tr>

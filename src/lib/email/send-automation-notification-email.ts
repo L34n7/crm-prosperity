@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -76,13 +77,11 @@ export async function sendAutomationNotificationEmail({
     return;
   }
 
-  const appUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crmprosperity.com";
+  const emailBranding = await obterEmailBrandingEmpresa(empresaId);
+  const appUrl = emailBranding.siteUrl;
 
   const linkConversa = `${appUrl}/conversas?id=${conversaId}`;
-  const logoUrl = `${appUrl.replace(/\/$/, "")}/logo.png`;
+  const logoUrl = emailBranding.logoUrl;
 
   const tituloSeguro = escaparHtml(titulo || "Nova notificação da automação");
   const ehExcessoTentativas =
@@ -113,7 +112,7 @@ export async function sendAutomationNotificationEmail({
 
   try {
     await resend.emails.send({
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
+      from: emailBranding.from,
       to: destinatarios,
       subject: `${tituloPrincipal} • ${titulo || "Nova notificação"}`,
       html: `
@@ -128,12 +127,12 @@ export async function sendAutomationNotificationEmail({
                       <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                         <tr>
                           <td style="padding:0;vertical-align:middle;">
-                            <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">CRM Prosperity</div>
+                            <div style="font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.85;">${escaparHtml(emailBranding.nomeProduto)}</div>
                             <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">${tituloPrincipal}</h1>
                             <p style="margin:10px 0 0;font-size:14px;line-height:1.6;opacity:0.9;">${subtituloPrincipal}</p>
                           </td>
                           <td width="86" align="right" style="width:86px;padding:0 0 0 18px;vertical-align:middle;">
-                            <img src="${logoUrl}" alt="CRM Prosperity" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
+                            <img src="${logoUrl}" alt="${escaparHtml(emailBranding.nomeProduto)}" width="72" style="display:block;width:72px;height:auto;border:0;outline:none;text-decoration:none;" />
                           </td>
                         </tr>
                       </table>
@@ -281,8 +280,9 @@ export async function sendAutomationNotificationEmail({
                   <tr>
                     <td style="background:#f6f9f8;padding:18px 32px;border-top:1px solid #dce7e4;">
                       <p style="margin:0;color:#8ca09b;font-size:12px;line-height:1.5;">
-                        Este email foi enviado automaticamente pelo CRM Prosperity porque um bloco do fluxo foi configurado para gerar notificação.
+                        Este email foi enviado automaticamente pelo ${escaparHtml(emailBranding.nomeProduto)} porque um bloco do fluxo foi configurado para gerar notificação.
                       </p>
+                      ${emailBranding.rodapeWhiteLabelHtml}
                     </td>
                   </tr>
 

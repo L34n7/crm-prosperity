@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -75,7 +76,10 @@ export async function sendAppointmentReminderEmail({
     return;
   }
 
-  const empresaNome = await buscarNomeEmpresa(empresaId);
+  const [empresaNome, emailBranding] = await Promise.all([
+    buscarNomeEmpresa(empresaId),
+    obterEmailBrandingEmpresa(empresaId),
+  ]);
   const empresaSeguro = escaparHtml(empresaNome);
   const empresaCabecalho = textoCabecalhoSeguro(empresaNome || "CRM Prosperity");
   const contatoSeguro = escaparHtml(contatoNome || "Cliente");
@@ -84,7 +88,7 @@ export async function sendAppointmentReminderEmail({
 
   try {
     await resend.emails.send({
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
+      from: emailBranding.from,
       to: destinatario,
       subject: `Lembrete de agendamento - ${empresaCabecalho}`,
       text: [
@@ -93,7 +97,8 @@ export async function sendAppointmentReminderEmail({
         `Data: ${dataLabel || ""}`,
         `Horario: ${horaLabel || ""}`,
         "Para remarcar ou cancelar, responda pelo mesmo canal em que realizou o agendamento.",
-      ].join("\n"),
+        emailBranding.rodapeWhiteLabelTexto,
+      ].filter(Boolean).join("\n"),
       html: `
         <div style="margin:0;padding:0;background:#eef4f2;font-family:Arial,Helvetica,sans-serif;">
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef4f2;padding:32px 16px;">
@@ -153,8 +158,9 @@ export async function sendAppointmentReminderEmail({
                   <tr>
                     <td style="background:#f6f9f8;padding:16px 30px;border-top:1px solid #dce7e4;">
                       <p style="margin:0;color:#8ca09b;font-size:12px;line-height:1.5;">
-                        Este email foi enviado automaticamente como lembrete de um agendamento criado no CRM Prosperity.
+                        Este email foi enviado automaticamente como lembrete de um agendamento criado no ${escaparHtml(emailBranding.nomeProduto)}.
                       </p>
+                      ${emailBranding.rodapeWhiteLabelHtml}
                     </td>
                   </tr>
                 </table>

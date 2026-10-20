@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { obterEmailBrandingEmpresa } from "@/lib/email/white-label-branding";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -228,12 +229,9 @@ export async function sendTemplateStatusEmail(params: {
   const motivo = String(params.motivo || "").trim();
   const idioma = String(params.idioma || "").trim() || "-";
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${appUrl}/logo.png`;
+  const emailBranding = await obterEmailBrandingEmpresa(params.empresaId);
+  const appUrl = emailBranding.siteUrl;
+  const logoUrl = emailBranding.logoUrl;
   const templatesUrl = `${appUrl}/templates-whatsapp`;
 
   const templateSeguro = escaparHtml(params.templateNome || "Template");
@@ -269,14 +267,15 @@ export async function sendTemplateStatusEmail(params: {
     info.descricao,
     "",
     `Acesse: ${templatesUrl}`,
+    emailBranding.rodapeWhiteLabelTexto,
   ]
     .filter(Boolean)
     .join("\n");
 
   try {
     const emailBase = {
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
-      subject: `${info.titulo}: ${params.templateNome} • CRM Prosperity`,
+      from: emailBranding.from,
+      subject: `${info.titulo}: ${params.templateNome} • ${emailBranding.nomeProduto}`,
       text: texto,
       html: `
         <div style="margin:0;padding:32px 16px;background:#eef4f2;font-family:Arial,Helvetica,sans-serif">
@@ -286,11 +285,11 @@ export async function sendTemplateStatusEmail(params: {
                 <tr><td style="padding:28px 32px;background:linear-gradient(135deg,${info.cor},#07131a);color:#fff">
                   <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                     <td style="vertical-align:middle">
-                      <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.85">CRM Prosperity · Templates WhatsApp</div>
+                      <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.85">${escaparHtml(emailBranding.nomeProduto)} · Templates WhatsApp</div>
                       <h1 style="margin:11px 0 0;font-size:25px;line-height:1.25">${tituloSeguro}</h1>
                     </td>
                     <td width="82" align="right" style="padding-left:18px;vertical-align:middle">
-                      <img src="${logoUrl}" alt="CRM Prosperity" width="68" style="display:block;width:68px;height:auto;border:0" />
+                      <img src="${logoUrl}" alt="${escaparHtml(emailBranding.nomeProduto)}" width="68" style="display:block;width:68px;height:auto;border:0" />
                     </td>
                   </tr></table>
                 </td></tr>
@@ -327,6 +326,7 @@ export async function sendTemplateStatusEmail(params: {
 
                 <tr><td style="padding:16px 32px;background:#f6f9f8;border-top:1px solid #dce7e4;color:#8ca09b;font-size:12px;line-height:1.5">
                   Este email foi enviado automaticamente porque a Meta alterou o status de um template do WhatsApp.
+                  ${emailBranding.rodapeWhiteLabelHtml}
                 </td></tr>
               </table>
             </td></tr>

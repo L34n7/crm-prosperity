@@ -306,6 +306,7 @@ export async function processarAvisosAssinatura(agora = new Date()) {
       }
 
       const enviado = await sendAssinaturaAvisoEmail({
+        empresaId: empresa.id,
         to: emails,
         nome: String(
           empresa.nome_fantasia || empresa.razao_social || "Cliente"
