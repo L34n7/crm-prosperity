@@ -10,6 +10,7 @@ import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import styles from "./CrmShell.module.css";
 import type { NichoCodigo } from "@/lib/nichos/config";
 import type { WhiteLabelBranding } from "@/lib/white-label/types";
+import WhiteLabelThemeRuntime from "@/components/WhiteLabelThemeRuntime";
 
 type CrmShellProps = {
   children: React.ReactNode;
@@ -41,6 +42,9 @@ export default function CrmShell({
       value={{ profileName, avatarUrl, permissoes, assinatura, isAdmin, nichoCodigo }}
     >
       <HeaderSummaryProvider>
+        {branding?.is_white_label ? (
+          <WhiteLabelThemeRuntime branding={branding} />
+        ) : null}
         <div className={styles.shell}>
           <SessionActivityTracker />
 

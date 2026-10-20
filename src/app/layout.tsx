@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
 import { obterBrandingPorHost } from "@/lib/white-label/branding";
+import { gerarCssTemaWhiteLabel } from "@/lib/white-label/theme";
 
 const UI_CONSISTENCY_STYLES = `
   [class*="editorPanel"] > [class*="editorHeader"] {
@@ -275,6 +276,7 @@ export default async function RootLayout({
     headerStore.get("x-forwarded-host") || headerStore.get("host");
   const branding = await obterBrandingPorHost(host);
   const favicon = branding.favicon_url || "/favicon.ico";
+  const whiteLabelThemeCss = gerarCssTemaWhiteLabel(branding);
 
   const organizationSchema = {
     "@context": "https://schema.org",
@@ -306,7 +308,12 @@ export default async function RootLayout({
   };
 
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html
+      lang="pt-BR"
+      suppressHydrationWarning
+      data-white-label-theme={branding.is_white_label ? "true" : undefined}
+      data-white-label-host={branding.is_white_label ? "true" : undefined}
+    >
       <head>
         {branding.is_white_label ? (
           <>
@@ -340,6 +347,9 @@ export default async function RootLayout({
             <link rel="manifest" href="/site.webmanifest" />
           </>
         )}
+        {whiteLabelThemeCss ? (
+          <style id="crm-white-label-theme">{whiteLabelThemeCss}</style>
+        ) : null}
         <style>{UI_CONSISTENCY_STYLES}</style>
       </head>
       <body className="antialiased">

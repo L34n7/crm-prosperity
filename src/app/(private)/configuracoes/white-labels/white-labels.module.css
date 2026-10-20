@@ -62,6 +62,14 @@
 .uploadText strong { max-width:100%; overflow:hidden; color:var(--crm-text-strong); font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
 .uploadText small { color:var(--crm-text-muted); font-size:10px; line-height:1.35; }
 .formGrid input[type="color"] { padding:5px; }
+.colorField { display:flex; flex-direction:column; gap:7px; }
+.colorLabel { color:var(--crm-text); font-size:12px; font-weight:800; }
+.colorControl { display:flex; align-items:center; gap:10px; }
+.colorControl input[type="color"] { width:54px; min-width:54px; height:44px; min-height:44px; padding:4px; cursor:pointer; }
+.colorControl code { min-height:44px; display:inline-flex; align-items:center; padding:0 12px; border:1px solid var(--crm-border); border-radius:11px; background:var(--crm-surface-soft); color:var(--crm-text-strong); font-family:inherit; font-size:12px; font-weight:850; letter-spacing:.04em; }
+.colorPreview { height:12px; display:grid; grid-template-columns:repeat(4,1fr); overflow:hidden; border:1px solid var(--crm-border); border-radius:999px; }
+.colorPreview span { display:block; min-width:0; }
+.colorHelp { color:var(--crm-text-muted); font-size:10px; line-height:1.45; }
 .formGrid input:focus,.formGrid select:focus { border-color:var(--crm-primary-strong); }
 .full { grid-column:1 / -1; }
 .modalActions { justify-content:flex-end; margin-top:20px; }

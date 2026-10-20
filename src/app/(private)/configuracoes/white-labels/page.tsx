@@ -1,7 +1,7 @@
 
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Building2,
   DollarSign,
@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import styles from "./white-labels.module.css";
+import { gerarPaletaWhiteLabel } from "@/lib/white-label/theme";
 
 type Plano = {
   id: string;
@@ -71,6 +72,10 @@ export default function WhiteLabelsPage() {
   const [faviconArquivo, setFaviconArquivo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
   const [faviconPreview, setFaviconPreview] = useState("");
+  const paletaPreview = useMemo(
+    () => gerarPaletaWhiteLabel(form.cor_primaria),
+    [form.cor_primaria]
+  );
 
   async function carregar() {
     setCarregando(true);
@@ -479,16 +484,42 @@ export default function WhiteLabelsPage() {
                   </span>
                 </label>
               </div>
-              <label>
-                Cor principal
-                <input
-                  type="color"
-                  value={form.cor_primaria}
-                  onChange={(event) =>
-                    setForm({ ...form, cor_primaria: event.target.value })
-                  }
-                />
-              </label>
+              <div className={styles.colorField}>
+                <span className={styles.colorLabel}>Cor principal do sistema</span>
+                <div className={styles.colorControl}>
+                  <input
+                    type="color"
+                    value={form.cor_primaria}
+                    onChange={(event) =>
+                      setForm({ ...form, cor_primaria: event.target.value })
+                    }
+                    aria-label="Cor principal do White Label"
+                  />
+                  <code>{form.cor_primaria.toUpperCase()}</code>
+                </div>
+                <div className={styles.colorPreview} aria-label="Prévia dos tons gerados">
+                  <span
+                    title="Tom forte"
+                    style={{ background: paletaPreview.light["--crm-primary-strong"] }}
+                  />
+                  <span
+                    title="Tom principal"
+                    style={{ background: paletaPreview.light["--crm-primary"] }}
+                  />
+                  <span
+                    title="Tom hover"
+                    style={{ background: paletaPreview.light["--crm-primary-hover"] }}
+                  />
+                  <span
+                    title="Tom suave"
+                    style={{ background: paletaPreview.light["--crm-primary-soft"] }}
+                  />
+                </div>
+                <small className={styles.colorHelp}>
+                  O sistema gera automaticamente os tons de hover, seleção,
+                  borda, foco e dark mode para todos os módulos.
+                </small>
+              </div>
               <label>
                 Licenças contratadas
                 <input
