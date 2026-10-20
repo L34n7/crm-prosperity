@@ -3116,13 +3116,28 @@ function promessaOperacionalNaoExecutada(
       texto,
     );
 
+  const mencionaDataExata =
+    /\b(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])(?:\/\d{2,4})?\b/.test(
+      texto,
+    );
+  const ofereceDisponibilidadeConcreta =
+    afirmaDisponibilidadeExata ||
+    /\bhorarios?\s+(?:livres?|disponiveis?)\b/.test(texto) ||
+    /\b(?:opcoes?|alternativas?)\b.{0,100}\b(?:\d{1,2}\/\d{1,2}|as\s+\d{1,2}|\d{1,2}:\d{2})\b/.test(
+      texto,
+    ) ||
+    /\b(?:tenho|temos|encontrei|achei)\b.{0,100}\b(?:\d{1,2}\/\d{1,2}|as\s+\d{1,2}|\d{1,2}:\d{2})\b/.test(
+      texto,
+    );
+
   if (
-    modoAgenda === "imediato" &&
-    mencionaHoraExata &&
-    afirmaDisponibilidadeExata &&
+    (mencionaHoraExata || mencionaDataExata) &&
+    ofereceDisponibilidadeConcreta &&
     !ferramentaExecutadaComSucesso(ctx, "consultar_agenda")
   ) {
-    return "consultar_agenda";
+    return ctx.ferramentasAtivas.has("consultar_agenda")
+      ? "consultar_agenda"
+      : "acao_sem_ferramenta";
   }
 
   if (
@@ -3289,6 +3304,7 @@ function promptDoAgente(
   agendas: any[],
   agendamentosAtivos: any[],
   ferramentasAtivas: Map<TipoFerramenta, Record<string, unknown>>,
+  contatoNome: string | null,
 ) {
   const agenda = agendas[0] || null;
   const agendaInfo = agenda
@@ -3308,6 +3324,9 @@ function promptDoAgente(
     agente.tom_voz ? `Características: ${agente.tom_voz}` : "",
     agente.instrucoes ? `Instruções: ${agente.instrucoes}` : "",
     "REGRAS DO RUNTIME:",
+    contatoNome
+      ? `IDENTIDADE DO CONTATO — DADO AUTORITATIVO: o nome cadastrado do cliente é ${contatoNome}. Se usar o nome do cliente, use somente esse cadastro. Nomes mencionados pelo cliente nas mensagens podem ser atendentes, vendedores, familiares ou terceiros; nunca assuma que um nome citado pelo cliente é o nome dele.`
+      : "IDENTIDADE DO CONTATO: o nome do cliente não está confirmado no cadastro. Não chame o cliente por um nome inferido das mensagens.",
     "- PT-BR, WhatsApp natural, 1–3 mensagens curtas e no máximo uma pergunta principal. Continue o contexto sem repetir.",
     "- Memória/histórico dão continuidade, mas agenda ativa só existe se estiver no ESTADO OPERACIONAL abaixo.",
     "- Produto, preço, plano, integração, recurso, endereço e localização: use a base consultada/ferramenta e não invente.",
@@ -3596,6 +3615,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         contexto.agendas,
         contexto.agendamentosAtivos,
         ferramentasAtivas,
+        String(contato?.nome || "").trim() || null,
       ),
       contexto.ativacaoManual
         ? [

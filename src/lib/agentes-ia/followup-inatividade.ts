@@ -600,6 +600,26 @@ function followupFallbackSeguro(proximaAcao: string, tentativa = 1) {
   return "Quer que eu continue de onde paramos?";
 }
 
+function followupAgendaSemConsultaMencionaDataHora(
+  textoOriginal: string,
+  proximaAcao: string,
+) {
+  const acao = normalizarFollowupAnalise(proximaAcao);
+  if (!/\b(?:agend\w*|demonstr\w*|reuniao|horario\w*)\b/.test(acao)) {
+    return false;
+  }
+
+  const texto = normalizarFollowupAnalise(textoOriginal);
+  return (
+    /\b(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])(?:\/\d{2,4})?\b/.test(texto) ||
+    /\b(?:[01]?\d|2[0-3]):[0-5]\d\b/.test(texto) ||
+    /\b(?:as\s+)?(?:[01]?\d|2[0-3])\s*(?:h|hr|hrs|hora|horas)\b/.test(texto) ||
+    /\b(?:segunda|terca|quarta|quinta|sexta|sabado|domingo|hoje|amanha|depois de amanha)\b/.test(texto) ||
+    /\b(?:horario|horarios|vaga|vagas)\b.{0,40}\b(?:disponivel|disponiveis|livre|livres)\b/.test(texto) ||
+    /\b(?:tenho|temos|encontrei|achei)\b.{0,80}\b(?:horario|horarios|vaga|vagas|opcao|opcoes)\b/.test(texto)
+  );
+}
+
 function followupInvalido(params: {
   texto: string;
   proximaAcao: string;
@@ -627,6 +647,14 @@ function followupInvalido(params: {
     return true;
   }
   if (/^(?:tudo bem[,! ]*)?(?:obrigad[oa]|valeu)\b/.test(texto)) {
+    return true;
+  }
+  if (
+    followupAgendaSemConsultaMencionaDataHora(
+      params.texto,
+      params.proximaAcao,
+    )
+  ) {
     return true;
   }
   if (
@@ -1109,6 +1137,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       "- Nunca envie mensagens de encerramento automático ou diga que a janela de 24 horas expirou; este follow-up só executa quando a janela está aberta.",
       "- Não diga que esta é uma mensagem automática ou um follow-up.",
       "- Não invente preço, disponibilidade, confirmação, ação executada ou informação que dependa de ferramenta.",
+      "- REGRA CRÍTICA DE AGENDA NO FOLLOW-UP: este gerador NÃO consulta a agenda. Se o ponto pendente for demonstração, reunião ou agendamento, NUNCA cite data, dia da semana, horário, vaga, opção ou \"horários disponíveis\". Faça apenas uma pergunta curta para retomar; a disponibilidade real só pode ser apresentada depois de uma consulta de agenda no atendimento normal.",
       `- Ponto pendente: ${proximaAcao}`,
       estadoRow?.resumo ? `- Contexto resumido: ${String(estadoRow.resumo).slice(0, 1200)}` : "",
     ].filter(Boolean).join("\n\n");
