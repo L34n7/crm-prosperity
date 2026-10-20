@@ -5,6 +5,7 @@ import { CheckCircle2, Sparkles, X } from "lucide-react";
 import { can } from "@/lib/permissoes/frontend";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./usuarios.module.css";
 
 const CHECKOUT_PLANO_ESSENCIAL =
@@ -135,6 +136,9 @@ function erroEhLimitePlano(mensagem: string) {
 }
 
 export default function UsuariosPage() {
+  const headerUser = useHeaderUser();
+  const clienteWhiteLabel =
+    headerUser.assinatura?.white_label_client === true;
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
 
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -347,7 +351,14 @@ export default function UsuariosPage() {
 
         if (erroEhLimitePlano(mensagemErro)) {
           setModalNovoUsuarioAberto(false);
-          setModalPlanoAberto(true);
+
+          if (clienteWhiteLabel) {
+            setErro(
+              "O limite de usuários contratado foi atingido. Solicite ao responsável pelo seu White Label a liberação de um usuário adicional."
+            );
+          } else {
+            setModalPlanoAberto(true);
+          }
           return;
         }
 
@@ -1159,7 +1170,7 @@ export default function UsuariosPage() {
           </section>
         </div>
       )}
-      {modalPlanoAberto && (
+      {modalPlanoAberto && !clienteWhiteLabel && (
         <div className={styles.modalOverlay} role="presentation">
           <div
             className={styles.upgradeModal}

@@ -45,7 +45,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("empresas")
     .select(
-      "id, nome_fantasia, razao_social, email, telefone, nome_responsavel, status, created_at, plano_id, nicho_id, planos(nome, slug), nichos(nome, codigo)"
+      "id, nome_fantasia, razao_social, email, telefone, nome_responsavel, status, created_at, nicho_id, limite_integracoes_whatsapp, limite_total_numeros_whatsapp, limite_usuarios, nichos(nome, codigo)"
     )
     .eq("white_label_id", admin.white_label_id)
     .eq("white_label_tipo", "cliente")
@@ -203,19 +203,24 @@ export async function POST(request: Request) {
       status: "ativa",
       timezone,
       logo_url: admin.white_label.logo_url,
+      limite_integracoes_whatsapp: 1,
+      limite_total_numeros_whatsapp: 6,
+      limite_usuarios: 2,
       observacoes: "Cliente cadastrado pelo White Label " + admin.white_label.nome_marca + ".",
       white_label_id: admin.white_label_id,
       white_label_tipo: "cliente",
       assinatura_status: "ativa",
       assinatura_inicio_em: agora,
-      assinatura_vencimento_em: "2099-12-31T23:59:59.000Z",
-      assinatura_bloqueio_em: "2100-01-07T23:59:59.000Z",
-      assinatura_gateway: "white_label",
-      assinatura_referencia: "white-label:" + admin.white_label_id,
+      assinatura_vencimento_em: null,
+      assinatura_bloqueio_em: null,
+      assinatura_gateway: "white_label_client",
+      assinatura_referencia: null,
       assinatura_metadata_json: {
         origem: "white_label",
         white_label_id: admin.white_label_id,
         plano_slug: "basico",
+        sem_mensalidade_propria: true,
+        cobranca_responsavel: "white_label_gestora",
       },
     })
     .select("id, nome_fantasia, email, nome_responsavel")

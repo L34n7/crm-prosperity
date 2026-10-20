@@ -49,6 +49,7 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
   const status = assinatura?.status ?? "ativa";
   const bloqueada = status === "bloqueada";
   const vencida = status === "vencida";
+  const clienteWhiteLabel = assinatura?.white_label_client === true;
   const trialAtivo = status === "ativa" && assinatura?.free_trial_4d === true;
   const trialEncerrado = bloqueada && assinatura?.free_trial_4d === true;
   const intervaloLembrete = trialAtivo
@@ -225,20 +226,28 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
     }
   }
 
-  const titulo = trialAtivo
-    ? "Plano de teste ativo"
-    : trialEncerrado
-      ? "Período de teste encerrado"
-      : bloqueada
-        ? "Plano bloqueado"
-        : "Plano vencido";
-  const mensagem = trialAtivo
-    ? `Você está usando o plano Básico em período de teste por 4 dias. O teste encerra em ${formatarDataHora(assinatura.vencimento_em)}. Depois desse prazo, será necessário contratar um plano para continuar usando todos os recursos.`
-    : trialEncerrado
-      ? "Seu teste gratuito de 4 dias terminou. Automações e IA foram pausadas, os tokens foram zerados e o acesso ficou limitado à área de conversas até a contratação do plano Básico."
-      : bloqueada
-        ? "A renovação não foi identificada dentro do prazo. Os fluxos foram pausados e o acesso ficou limitado até a renovação."
-        : "O ciclo do plano terminou. Renove em até 7 dias para evitar bloqueio dos fluxos e das permissões.";
+  const titulo = clienteWhiteLabel
+    ? bloqueada
+      ? "White Label temporariamente bloqueado"
+      : "Mensalidade do White Label vencida"
+    : trialAtivo
+      ? "Plano de teste ativo"
+      : trialEncerrado
+        ? "Período de teste encerrado"
+        : bloqueada
+          ? "Plano bloqueado"
+          : "Plano vencido";
+  const mensagem = clienteWhiteLabel
+    ? bloqueada
+      ? "A assinatura do responsável pelo seu White Label não foi renovada dentro do prazo. O acesso será normalizado automaticamente após a regularização."
+      : "A mensalidade do responsável pelo seu White Label está vencida. A regularização é feita diretamente pelo proprietário da plataforma."
+    : trialAtivo
+      ? `Você está usando o plano Básico em período de teste por 4 dias. O teste encerra em ${formatarDataHora(assinatura.vencimento_em)}. Depois desse prazo, será necessário contratar um plano para continuar usando todos os recursos.`
+      : trialEncerrado
+        ? "Seu teste gratuito de 4 dias terminou. Automações e IA foram pausadas, os tokens foram zerados e o acesso ficou limitado à área de conversas até a contratação do plano Básico."
+        : bloqueada
+          ? "A renovação não foi identificada dentro do prazo. Os fluxos foram pausados e o acesso ficou limitado até a renovação."
+          : "O ciclo do plano terminou. Renove em até 7 dias para evitar bloqueio dos fluxos e das permissões.";
   const podeFechar = trialAtivo || vencida || (bloqueada && isAdmin);
   const bloquearTela = bloqueada && !isAdmin;
 
@@ -254,9 +263,11 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
                 : "Plano aguardando renovação"}
             </h2>
             <p>
-              {trialEncerrado
-                ? "O teste gratuito terminou. Um administrador precisa contratar o plano Básico para liberar novamente o sistema."
-                : "Sua empresa está com o plano bloqueado. As permissões ficam suspensas até que um administrador renove a assinatura."}
+              {clienteWhiteLabel
+                ? "O responsável pelo seu White Label precisa regularizar a mensalidade para liberar novamente o sistema."
+                : trialEncerrado
+                  ? "O teste gratuito terminou. Um administrador precisa contratar o plano Básico para liberar novamente o sistema."
+                  : "Sua empresa está com o plano bloqueado. As permissões ficam suspensas até que um administrador renove a assinatura."}
             </p>
           </div>
         </div>
@@ -305,22 +316,24 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
             </div>
 
             <div className={styles.assinaturaActions}>
-              <button
-                type="button"
-                className={styles.assinaturaPrimary}
-                onClick={
-                  trialEncerrado ? abrirCheckoutTrialBasico : abrirModalPlanos
-                }
-                disabled={trialEncerrado && checkoutTrialLoading}
-              >
-                {trialAtivo
-                  ? "Ver planos"
-                  : trialEncerrado
-                    ? checkoutTrialLoading
-                      ? "Preparando pagamento..."
-                      : "Continuar com plano Básico"
-                    : "Renovar plano"}
-              </button>
+              {!clienteWhiteLabel ? (
+                <button
+                  type="button"
+                  className={styles.assinaturaPrimary}
+                  onClick={
+                    trialEncerrado ? abrirCheckoutTrialBasico : abrirModalPlanos
+                  }
+                  disabled={trialEncerrado && checkoutTrialLoading}
+                >
+                  {trialAtivo
+                    ? "Ver planos"
+                    : trialEncerrado
+                      ? checkoutTrialLoading
+                        ? "Preparando pagamento..."
+                        : "Continuar com plano Básico"
+                      : "Renovar plano"}
+                </button>
+              ) : null}
 
               {podeFechar && (
                 <button

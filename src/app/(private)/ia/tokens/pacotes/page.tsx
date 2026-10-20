@@ -96,6 +96,8 @@ export default function PacotesTokensPage() {
     headerUser.assinatura?.plano_slug || ""
   ).trim().toLowerCase();
   const essencialEhPlanoAtual = planoAtualSlug === "essencial";
+  const clienteWhiteLabel =
+    headerUser.assinatura?.white_label_client === true;
 
   const [compraSelecionada, setCompraSelecionada] =
     useState<CompraCheckout | null>(null);
@@ -217,7 +219,11 @@ export default function PacotesTokensPage() {
     <>
       <Header
         title="Pacotes de tokens"
-        subtitle="Adicione saldo de IA ou ajuste o plano da sua operação."
+        subtitle={
+          clienteWhiteLabel
+            ? "Adicione saldo extra de IA quando precisar."
+            : "Adicione saldo de IA ou ajuste o plano da sua operação."
+        }
       />
 
       <main className={styles.pageContent}>
@@ -228,15 +234,25 @@ export default function PacotesTokensPage() {
             <p>
               Quando os tokens acabam, a IA deixa de interpretar respostas,
               analisar arquivos e transcrever áudios. Use pacotes avulsos para
-              complementar o ciclo atual ou migre para um plano com mais volume
-              mensal.
+              {clienteWhiteLabel
+                ? " complementar o saldo disponível."
+                : " complementar o ciclo atual ou migrar para um plano com mais volume mensal."}
             </p>
           </div>
 
           <div className={styles.heroPanel}>
-            <span>Planos atuais</span>
-            <strong>Básico: 100 mil tokens</strong>
-            <strong>Essencial: 400 mil tokens</strong>
+            {clienteWhiteLabel ? (
+              <>
+                <span>Recargas avulsas</span>
+                <strong>Compre somente quando precisar</strong>
+              </>
+            ) : (
+              <>
+                <span>Planos atuais</span>
+                <strong>Básico: 100 mil tokens</strong>
+                <strong>Essencial: 400 mil tokens</strong>
+              </>
+            )}
             <Link href="/ia/tokens" className={styles.heroLink}>
               Ver extrato de consumo
             </Link>
@@ -295,6 +311,8 @@ export default function PacotesTokensPage() {
           ))}
         </section>
 
+        {!clienteWhiteLabel ? (
+          <>
         <section className={styles.planGrid}>
           <article className={`${styles.planCard} ${styles.essentialCard}`}>
             <span className={styles.eyebrow}>Upgrade mensal</span>
@@ -353,6 +371,8 @@ export default function PacotesTokensPage() {
             </button>
           </article>
         </section>
+          </>
+        ) : null}
       </main>
 
       {compraSelecionada && (

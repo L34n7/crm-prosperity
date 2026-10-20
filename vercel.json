@@ -25,6 +25,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/cron/assinaturas",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/cron/whatsapp_disparos_fila",
       "schedule": "*/15 * * * *"
     },

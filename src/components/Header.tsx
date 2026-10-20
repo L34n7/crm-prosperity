@@ -144,6 +144,24 @@ type AssinaturaResumo = {
       total_amount_cents: number;
     }>;
   };
+  white_label?: {
+    id: string;
+    nome: string;
+    valor_base_centavos: number;
+    numeros_adicionais: number;
+    preco_numero_adicional_centavos: number;
+    valor_numeros_adicionais_centavos: number;
+    usuarios_adicionais: number;
+    preco_usuario_adicional_centavos: number;
+    valor_usuarios_adicionais_centavos: number;
+    valor_total_centavos: number;
+    clientes: Array<{
+      id: string;
+      nome: string;
+      numeros_adicionais: number;
+      usuarios_adicionais: number;
+    }>;
+  };
   pending: {
     whatsapp_cancellations: number;
     payment: {
@@ -261,6 +279,7 @@ export default function Header({
   const [desfazendoCancelamentoAddonId, setDesfazendoCancelamentoAddonId] =
     useState<string | null>(null);
   const [abrindoCheckoutAddon, setAbrindoCheckoutAddon] = useState(false);
+  const [pagandoWhiteLabel, setPagandoWhiteLabel] = useState(false);
   const [cancelandoAlteracaoPlano, setCancelandoAlteracaoPlano] =
     useState(false);
   const [feedbackAgendaPopup, setFeedbackAgendaPopup] =
@@ -810,10 +829,15 @@ export default function Header({
     setErroAssinaturaResumo("");
 
     try {
-      const response = await fetch("/api/assinaturas/resumo", {
-        method: "GET",
-        cache: "no-store",
-      });
+      const response = await fetch(
+        headerUser.assinatura?.white_label_gestora
+          ? "/api/white-label/assinatura"
+          : "/api/assinaturas/resumo",
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
       const data = await response.json();
 
       if (!response.ok || !data?.ok) {
@@ -827,6 +851,7 @@ export default function Header({
         plan: data.plan,
         addons: data.addons,
         pending: data.pending,
+        white_label: data.white_label || undefined,
       });
     } catch (error) {
       if (requestId !== assinaturaResumoRequestRef.current) return;
@@ -844,7 +869,7 @@ export default function Header({
   }
 
   function obterPlanoAtualCheckout() {
-    if (assinaturaResumo?.plan.is_free) return null;
+    if (assinaturaResumo?.white_label || assinaturaResumo?.plan.is_free) return null;
 
     return (
       PLANOS_RENOVACAO.find(
@@ -858,6 +883,59 @@ export default function Header({
     const planoAtual = obterPlanoAtualCheckout();
     if (!planoAtual) return;
     setPlanoPagamentoSelecionado(planoAtual);
+  }
+
+  async function pagarMensalidadeWhiteLabel() {
+    if (pagandoWhiteLabel) return;
+
+    const novaAba = window.open("/checkout-carregando", "_blank");
+
+    if (!novaAba) {
+      setErroAssinaturaResumo(
+        "O navegador bloqueou a nova aba. Permita pop-ups e tente novamente."
+      );
+      return;
+    }
+
+    novaAba.opener = null;
+    setPagandoWhiteLabel(true);
+    setErroAssinaturaResumo("");
+
+    try {
+      const response = await fetch("/api/white-label/assinatura", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        novaAba.close();
+        throw new Error(
+          data?.error || "Não foi possível preparar a mensalidade White Label."
+        );
+      }
+
+      if (data.scheduled) {
+        novaAba.close();
+        await carregarResumoAssinatura();
+        return;
+      }
+
+      if (!data.checkout_url) {
+        novaAba.close();
+        throw new Error("A Prosperity Pay não retornou o checkout.");
+      }
+
+      novaAba.location.replace(data.checkout_url);
+    } catch (error) {
+      novaAba.close();
+      setErroAssinaturaResumo(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível preparar a mensalidade White Label."
+      );
+    } finally {
+      setPagandoWhiteLabel(false);
+    }
   }
 
   function verPlanosDisponiveis() {
@@ -1455,12 +1533,19 @@ export default function Header({
               <div className={styles.planRenewalHeader}>
                 <div>
                   <span className={styles.planRenewalEyebrow}>
-                    Plano e assinatura
+                    {assinaturaResumo?.white_label
+                      ? "White Label e assinatura"
+                      : "Plano e assinatura"}
                   </span>
-                  <h2 id="plan-renewal-title">Gerenciar plano</h2>
+                  <h2 id="plan-renewal-title">
+                    {assinaturaResumo?.white_label
+                      ? "Gerenciar White Label"
+                      : "Gerenciar plano"}
+                  </h2>
                   <p>
-                    Controle sua assinatura, adicionais e pagamentos em um só
-                    lugar, com total transparência sobre o próximo ciclo.
+                    {assinaturaResumo?.white_label
+                      ? "Acompanhe sua mensalidade base, adicionais dos clientes e o total do próximo ciclo."
+                      : "Controle sua assinatura, adicionais e pagamentos em um só lugar, com total transparência sobre o próximo ciclo."}
                   </p>
                 </div>
 
@@ -1480,7 +1565,11 @@ export default function Header({
                     <Sparkles size={20} strokeWidth={2.1} />
                   </div>
                   <div className={styles.planCurrentIdentity}>
-                    <span>Plano atual</span>
+                    <span>
+                      {assinaturaResumo?.white_label
+                        ? "Contrato atual"
+                        : "Plano atual"}
+                    </span>
                     <strong>
                       {assinaturaResumo?.plan.name || assinaturaPlanoNome}
                     </strong>
@@ -1489,7 +1578,9 @@ export default function Header({
                         ? "Plano gratuito"
                         : freeTrialAtivo
                           ? "Teste gratuito de 4 dias · sem cobrança durante o período"
-                          : "Assinatura pré-paga · sem renovação automática via PIX"}
+                          : assinaturaResumo?.white_label
+                            ? "Mensalidade White Label · cobrança centralizada"
+                            : "Assinatura pré-paga · sem renovação automática via PIX"}
                     </small>
                   </div>
                 </div>
@@ -1579,15 +1670,34 @@ export default function Header({
                     </div>
 
                     <div className={styles.subscriptionHeaderActions}>
-                      <button
-                        type="button"
-                        className={styles.subscriptionViewPlansButton}
-                        onClick={verPlanosDisponiveis}
-                      >
-                        Ver planos
-                      </button>
+                      {!assinaturaResumo?.white_label ? (
+                        <button
+                          type="button"
+                          className={styles.subscriptionViewPlansButton}
+                          onClick={verPlanosDisponiveis}
+                        >
+                          Ver planos
+                        </button>
+                      ) : null}
 
-                      {obterPlanoAtualCheckout() && (
+                      {assinaturaResumo?.white_label ? (
+                        <button
+                          type="button"
+                          className={styles.subscriptionPayButton}
+                          onClick={pagarMensalidadeWhiteLabel}
+                          disabled={
+                            pagandoWhiteLabel ||
+                            assinaturaResumo.plan.is_free ||
+                            (carregandoAssinaturaResumo && !assinaturaResumo)
+                          }
+                        >
+                          {pagandoWhiteLabel
+                            ? "Preparando pagamento..."
+                            : `Pagar / adiantar — ${formatarMoedaCentavos(
+                                assinaturaResumo.subscription.next_amount_cents
+                              )}`}
+                        </button>
+                      ) : obterPlanoAtualCheckout() ? (
                         <button
                           type="button"
                           className={styles.subscriptionPayButton}
@@ -1609,7 +1719,7 @@ export default function Header({
                                   )}`
                                 : assinaturaAcaoPagamento}
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -1624,14 +1734,20 @@ export default function Header({
                           <CreditCard size={19} strokeWidth={2.1} />
                         </div>
                         <div className={styles.subscriptionItemMain}>
-                          <span>Plano base</span>
+                          <span>
+                            {assinaturaResumo?.white_label
+                              ? "Mensalidade base"
+                              : "Plano base"}
+                          </span>
                           <strong>
                             {assinaturaResumo?.plan.name || assinaturaPlanoNome}
                           </strong>
                           <small>
                             {assinaturaResumo?.plan.users_limit
                               ? `${assinaturaResumo.plan.users_limit} usuários`
-                              : "Plano contratado"}
+                              : assinaturaResumo?.white_label
+                                ? "Até as licenças de clientes contratadas"
+                                : "Plano contratado"}
                             {assinaturaResumo?.plan.tokens_limit
                               ? ` · ${formatarQuantidadeCompacta(
                                   assinaturaResumo.plan.tokens_limit
@@ -1865,7 +1981,8 @@ export default function Header({
                         </div>
                       ))}
 
-                      {!assinaturaResumo?.plan.is_free && (
+                      {!assinaturaResumo?.plan.is_free &&
+                        !assinaturaResumo?.white_label && (
                         <button
                           type="button"
                           className={styles.subscriptionAddButton}
@@ -1936,6 +2053,23 @@ export default function Header({
                             </div>
                           )}
 
+                          {assinaturaResumo.addons.others.map((addon) => (
+                            <div
+                              className={styles.subscriptionSummaryLine}
+                              key={"summary:" + addon.code}
+                            >
+                              <span>
+                                {addon.quantity} × {addon.description}
+                              </span>
+                              <strong>
+                                {formatarMoedaCentavos(
+                                  addon.total_amount_cents ||
+                                    addon.unit_amount_cents * addon.quantity
+                                )}
+                              </strong>
+                            </div>
+                          ))}
+
                           <div
                             className={`${styles.subscriptionSummaryLine} ${styles.subscriptionSummaryTotal}`}
                           >
@@ -1947,7 +2081,20 @@ export default function Header({
                             </strong>
                           </div>
 
-                          {obterPlanoAtualCheckout() && (
+                          {assinaturaResumo.white_label ? (
+                            <button
+                              type="button"
+                              className={styles.subscriptionPayButtonFull}
+                              onClick={pagarMensalidadeWhiteLabel}
+                              disabled={pagandoWhiteLabel}
+                            >
+                              {pagandoWhiteLabel
+                                ? "Preparando pagamento..."
+                                : `Pagar / adiantar mensalidade — ${formatarMoedaCentavos(
+                                    assinaturaResumo.subscription.next_amount_cents
+                                  )}`}
+                            </button>
+                          ) : obterPlanoAtualCheckout() ? (
                             <button
                               type="button"
                               className={styles.subscriptionPayButtonFull}
@@ -1962,13 +2109,15 @@ export default function Header({
                                       assinaturaResumo.subscription.next_amount_cents
                                     )}`}
                             </button>
-                          )}
+                          ) : null}
                         </div>
                       )}
                     </>
                   )}
                 </section>
 
+                {!assinaturaResumo?.white_label ? (
+                  <>
                 <div
                   ref={alterarPlanoRef}
                   className={styles.planChangeHeader}
@@ -2054,6 +2203,9 @@ export default function Header({
                     );
                   })}
                 </div>
+
+                  </>
+                ) : null}
               </div>
             </div>
           </div>

@@ -548,6 +548,17 @@ export async function POST(request: Request) {
 
     const { usuario } = resultado;
 
+    if (usuario.assinatura?.white_label_client) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "A mensalidade desta empresa é administrada pelo responsável do White Label.",
+        },
+        { status: 403 }
+      );
+    }
+
     if (!usuario.empresa_id) {
       return NextResponse.json(
         { ok: false, error: "Usuário sem empresa vinculada." },

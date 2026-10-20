@@ -15,6 +15,7 @@ import {
 } from "@/lib/whatsapp/meta-limites";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { isWhatsAppProfileMetaAvailable } from "@/lib/whatsapp/profile-availability";
+import { buscarWhiteLabelDaEmpresa } from "@/lib/white-label/acesso";
 import {
   calcularProximaPosicaoLivre,
   listarIntegracoesWhatsappDaEmpresa,
@@ -718,13 +719,40 @@ export async function GET(req: NextRequest) {
     const empresaId = contexto.usuario.empresa_id;
     if (!empresaId) return jsonErro("Usuário sem empresa vinculada.", 403);
 
-    const [resumoLimitesWhatsapp, todasIntegracoesWhatsapp] =
+    const [resumoLimitesWhatsapp, todasIntegracoesWhatsapp, whiteLabelContexto] =
       await Promise.all([
         obterResumoLimitesWhatsapp(empresaId),
         listarIntegracoesWhatsappDaEmpresa(empresaId, {
           incluirDesconectadas: true,
         }),
+        buscarWhiteLabelDaEmpresa(empresaId),
       ]);
+
+    let whiteLabelProprietario: {
+      nome: string;
+      telefone: string | null;
+    } | null = null;
+
+    if (
+      whiteLabelContexto?.tipo === "cliente" &&
+      whiteLabelContexto.white_label.empresa_gestora_id
+    ) {
+      const { data: gestora } = await supabaseAdmin
+        .from("empresas")
+        .select("nome_fantasia,nome_responsavel,telefone")
+        .eq("id", whiteLabelContexto.white_label.empresa_gestora_id)
+        .maybeSingle();
+
+      if (gestora) {
+        whiteLabelProprietario = {
+          nome:
+            String(gestora.nome_responsavel || "").trim() ||
+            String(gestora.nome_fantasia || "").trim() ||
+            whiteLabelContexto.white_label.nome_marca,
+          telefone: String(gestora.telefone || "").trim() || null,
+        };
+      }
+    }
 
     const integracoesOcupandoPosicao = todasIntegracoesWhatsapp.filter(
       (item) => normalizarStatus(item.status) !== "desconectada"
@@ -908,6 +936,8 @@ export async function GET(req: NextRequest) {
         integracoesOcupandoPosicao.length <
         resumoLimitesWhatsapp.limiteTotalPermitido,
       cancelamentos_whatsapp_agendados: cancelamentosWhatsappAgendados,
+      white_label_cliente: whiteLabelContexto?.tipo === "cliente",
+      white_label_proprietario: whiteLabelProprietario,
     };
 
     if (!integracaoSelecionada) {

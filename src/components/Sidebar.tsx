@@ -303,7 +303,10 @@ export default function Sidebar({
 
   const assinaturaBloqueada = assinatura?.status === "bloqueada";
   const disparosPendentesVisiveis = assinaturaBloqueada ? 0 : disparosPendentes;
-  const planoNome = assinatura?.plano_nome || "Plano atual";
+  const whiteLabelGestora = assinatura?.white_label_gestora === true;
+  const planoNome = whiteLabelGestora
+    ? "White Label"
+    : assinatura?.plano_nome || "Plano atual";
   const assinaturaStatus = assinatura?.status ?? "ativa";
   const assinaturaStatusLabel = getAssinaturaStatusLabel(assinaturaStatus);
   const planoTitle = `Plano atual: ${planoNome} (${assinaturaStatusLabel})`;
@@ -728,7 +731,9 @@ export default function Sidebar({
 
             {!collapsed && (
               <span className={styles.planText}>
-                <span className={styles.planLabel}>Plano atual</span>
+                <span className={styles.planLabel}>
+                  {whiteLabelGestora ? "Plano" : "Plano atual"}
+                </span>
                 <strong>{planoNome}</strong>
               </span>
             )}
@@ -861,7 +866,7 @@ export default function Sidebar({
               >
                 <CreditCard size={18} strokeWidth={2.2} />
                 <span>
-                  <small>Plano atual</small>
+                  <small>{whiteLabelGestora ? "Plano" : "Plano atual"}</small>
                   <strong>{planoNome}</strong>
                 </span>
               </button>

@@ -6,8 +6,12 @@ import {
   Building2,
   ExternalLink,
   KeyRound,
+  Minus,
   Plus,
+  Power,
   RefreshCw,
+  Smartphone,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -29,6 +33,9 @@ type Cliente = {
   status: string;
   created_at: string;
   nicho_id: string;
+  limite_integracoes_whatsapp: number | null;
+  limite_total_numeros_whatsapp: number | null;
+  limite_usuarios: number | null;
   nichos?: { nome?: string; codigo?: string } | Array<{ nome?: string; codigo?: string }> | null;
 };
 
@@ -48,6 +55,7 @@ export default function WhiteLabelClientesPage() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [acessandoId, setAcessandoId] = useState("");
+  const [alterandoCliente, setAlterandoCliente] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
@@ -186,6 +194,44 @@ export default function WhiteLabelClientesPage() {
     }
   }
 
+  async function alterarCliente(
+    clienteId: string,
+    payload: Record<string, unknown>,
+    chave: string
+  ) {
+    if (alterandoCliente) return;
+
+    setAlterandoCliente(clienteId + ":" + chave);
+    setErro("");
+    setSucesso("");
+    setWarning("");
+
+    try {
+      const response = await fetch("/api/white-label/clientes/" + clienteId, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível atualizar o cliente.");
+      }
+
+      setSucesso(data.message || "Cliente atualizado.");
+      setWarning(data.warning || "");
+      await carregar();
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o cliente."
+      );
+    } finally {
+      setAlterandoCliente("");
+    }
+  }
+
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
@@ -301,6 +347,8 @@ export default function WhiteLabelClientesPage() {
                   <th>Empresa</th>
                   <th>Responsável</th>
                   <th>Segmento</th>
+                  <th>Números adicionais</th>
+                  <th>Usuários extras</th>
                   <th>Status</th>
                   <th />
                 </tr>
@@ -320,16 +368,147 @@ export default function WhiteLabelClientesPage() {
                       </td>
                       <td>{nicho?.nome || "—"}</td>
                       <td>
-                        <span className={styles.statusBadge}>
-                          {cliente.status}
-                        </span>
+                        <div className={styles.addonControl}>
+                          <button
+                            type="button"
+                            className={styles.addonButton}
+                            onClick={() =>
+                              void alterarCliente(
+                                cliente.id,
+                                { acao: "numero_adicional", delta: -1 },
+                                "numero-"
+                              )
+                            }
+                            disabled={
+                              Math.max(
+                                0,
+                                Number(cliente.limite_integracoes_whatsapp || 1) - 1
+                              ) <= 0 ||
+                              alterandoCliente.startsWith(cliente.id + ":")
+                            }
+                            title="Remover número adicional"
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <span className={styles.addonValue}>
+                            <Smartphone size={14} />
+                            {Math.max(
+                              0,
+                              Number(cliente.limite_integracoes_whatsapp || 1) - 1
+                            )} / 5
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.addonButton}
+                            onClick={() =>
+                              void alterarCliente(
+                                cliente.id,
+                                { acao: "numero_adicional", delta: 1 },
+                                "numero+"
+                              )
+                            }
+                            disabled={
+                              Math.max(
+                                0,
+                                Number(cliente.limite_integracoes_whatsapp || 1) - 1
+                              ) >= 5 ||
+                              alterandoCliente.startsWith(cliente.id + ":")
+                            }
+                            title="Adicionar número por R$ 60/mês"
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                        <small className={styles.addonPrice}>R$ 60/mês cada</small>
+                      </td>
+                      <td>
+                        <div className={styles.addonControl}>
+                          <button
+                            type="button"
+                            className={styles.addonButton}
+                            onClick={() =>
+                              void alterarCliente(
+                                cliente.id,
+                                { acao: "usuario_adicional", delta: -1 },
+                                "usuario-"
+                              )
+                            }
+                            disabled={
+                              Math.max(
+                                0,
+                                Number(cliente.limite_usuarios || 2) - 2
+                              ) <= 0 ||
+                              alterandoCliente.startsWith(cliente.id + ":")
+                            }
+                            title="Remover usuário adicional"
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <span className={styles.addonValue}>
+                            <UserPlus size={14} />
+                            {Math.max(
+                              0,
+                              Number(cliente.limite_usuarios || 2) - 2
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.addonButton}
+                            onClick={() =>
+                              void alterarCliente(
+                                cliente.id,
+                                { acao: "usuario_adicional", delta: 1 },
+                                "usuario+"
+                              )
+                            }
+                            disabled={alterandoCliente.startsWith(cliente.id + ":")}
+                            title="Adicionar usuário por R$ 20/mês"
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                        <small className={styles.addonPrice}>R$ 20/mês cada</small>
+                      </td>
+                      <td>
+                        <div className={styles.statusActions}>
+                          <span
+                            className={`${styles.statusBadge} ${
+                              cliente.status === "ativa"
+                                ? styles.statusActive
+                                : styles.statusInactive
+                            }`}
+                          >
+                            {cliente.status === "ativa" ? "Ativo" : "Inativo"}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.statusButton}
+                            onClick={() =>
+                              void alterarCliente(
+                                cliente.id,
+                                {
+                                  acao: "status",
+                                  ativo: cliente.status !== "ativa",
+                                },
+                                "status"
+                              )
+                            }
+                            disabled={alterandoCliente.startsWith(cliente.id + ":")}
+                          >
+                            <Power size={13} />
+                            {cliente.status === "ativa" ? "Desativar" : "Ativar"}
+                          </button>
+                        </div>
                       </td>
                       <td>
                         <button
                           type="button"
                           className={styles.accessButton}
                           onClick={() => void acessarCliente(cliente.id)}
-                          disabled={acessandoId === cliente.id}
+                          disabled={
+                            acessandoId === cliente.id ||
+                            cliente.status !== "ativa"
+                          }
                         >
                           <ExternalLink size={15} />
                           {acessandoId === cliente.id

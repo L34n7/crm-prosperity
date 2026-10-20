@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sincronizarEstadoOperacionalPorEmpresaGestora } from "@/lib/white-label/operacional";
 import {
   pausarDisparosIntegracaoQstash,
   publicarDesconexaoIntegracaoQstash,
@@ -681,6 +682,11 @@ export async function sincronizarAssinaturaProsperityPay(payload: SubscriptionEv
   } else if (payload.event === "subscription.changed") {
     await preserveTokenUsageOnPlanChange(empresaId, planTokenLimit);
   }
+
+  await sincronizarEstadoOperacionalPorEmpresaGestora(empresaId, {
+    renovarTokens:
+      payload.event === "subscription.renewed" && !renewalStartsInFuture,
+  });
 
   return {
     empresaId,

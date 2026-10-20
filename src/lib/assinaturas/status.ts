@@ -26,6 +26,10 @@ export type AssinaturaEmpresa = {
   checkout_url: string | null;
   free_trial_4d: boolean;
   affiliate_ref: string | null;
+  white_label_client?: boolean;
+  white_label_gestora?: boolean;
+  white_label_id?: string | null;
+  billing_owner_empresa_id?: string | null;
 };
 
 type EmpresaAssinaturaRow = {
@@ -145,8 +149,96 @@ function obterCheckoutUrlPorPlanoSlug(planoSlug: string | null | undefined) {
 export async function buscarAssinaturaEmpresa(
   empresaId: string | null | undefined,
   options: { sincronizar?: boolean } = {}
-) {
+): Promise<AssinaturaEmpresa | null> {
   if (!empresaId) return null;
+
+  const { data: vinculoWhiteLabel, error: vinculoWhiteLabelError } =
+    await supabaseAdmin
+      .from("empresas")
+      .select("status,white_label_id,white_label_tipo")
+      .eq("id", empresaId)
+      .maybeSingle<{
+        status: string | null;
+        white_label_id: string | null;
+        white_label_tipo: "gestora" | "cliente" | null;
+      }>();
+
+  if (vinculoWhiteLabelError) {
+    throw new Error(
+      `Erro ao verificar vínculo White Label: ${vinculoWhiteLabelError.message}`
+    );
+  }
+
+  if (
+    vinculoWhiteLabel?.white_label_id &&
+    vinculoWhiteLabel.white_label_tipo === "cliente"
+  ) {
+    const { data: whiteLabel, error: whiteLabelError } = await supabaseAdmin
+      .from("white_labels")
+      .select("empresa_gestora_id")
+      .eq("id", vinculoWhiteLabel.white_label_id)
+      .maybeSingle<{ empresa_gestora_id: string | null }>();
+
+    if (whiteLabelError) {
+      throw new Error(
+        `Erro ao buscar responsável financeiro do White Label: ${whiteLabelError.message}`
+      );
+    }
+
+    const { data: empresaCliente, error: empresaClienteError } =
+      await supabaseAdmin
+        .from("empresas")
+        .select(
+          `
+          id,
+          plano_id,
+          planos (
+            id,
+            nome,
+            slug
+          )
+        `
+        )
+        .eq("id", empresaId)
+        .maybeSingle();
+
+    if (empresaClienteError) {
+      throw new Error(
+        `Erro ao buscar plano do cliente White Label: ${empresaClienteError.message}`
+      );
+    }
+
+    const assinaturaGestora = whiteLabel?.empresa_gestora_id
+      ? await buscarAssinaturaEmpresa(whiteLabel.empresa_gestora_id, options)
+      : null;
+    const planoCliente = Array.isArray(empresaCliente?.planos)
+      ? empresaCliente.planos[0] || null
+      : empresaCliente?.planos || null;
+    const clienteAtivo =
+      String(vinculoWhiteLabel.status || "").trim().toLowerCase() === "ativa";
+
+    return {
+      status: clienteAtivo
+        ? assinaturaGestora?.status ?? "ativa"
+        : "bloqueada",
+      inicio_em: assinaturaGestora?.inicio_em ?? null,
+      vencimento_em: assinaturaGestora?.vencimento_em ?? null,
+      bloqueio_em: assinaturaGestora?.bloqueio_em ?? null,
+      renovada_em: assinaturaGestora?.renovada_em ?? null,
+      gateway: "white_label_client",
+      referencia: assinaturaGestora?.referencia ?? null,
+      plano_id: empresaCliente?.plano_id ?? null,
+      plano_slug: planoCliente?.slug ?? "basico",
+      plano_nome: planoCliente?.nome ?? "Básico",
+      checkout_url: null,
+      free_trial_4d: false,
+      affiliate_ref: null,
+      white_label_client: true,
+      white_label_gestora: false,
+      white_label_id: vinculoWhiteLabel.white_label_id,
+      billing_owner_empresa_id: whiteLabel?.empresa_gestora_id ?? null,
+    } satisfies AssinaturaEmpresa;
+  }
 
   if (options.sincronizar !== false) {
     await getOrSetTtlCache(
@@ -262,6 +354,14 @@ export async function buscarAssinaturaEmpresa(
         affiliate_ref:
           typeof empresa.assinatura_metadata_json?.affiliate_ref === "string"
             ? empresa.assinatura_metadata_json.affiliate_ref
+            : null,
+        white_label_client: false,
+        white_label_gestora:
+          vinculoWhiteLabel?.white_label_tipo === "gestora",
+        white_label_id: vinculoWhiteLabel?.white_label_id ?? null,
+        billing_owner_empresa_id:
+          vinculoWhiteLabel?.white_label_tipo === "gestora"
+            ? empresaId
             : null,
       } satisfies AssinaturaEmpresa;
     }

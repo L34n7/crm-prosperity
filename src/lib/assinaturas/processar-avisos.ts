@@ -4,6 +4,8 @@ import {
   type TipoAvisoAssinatura,
 } from "@/lib/email/send-assinatura-aviso-email";
 import { resolverCheckoutRenovacao } from "@/lib/assinaturas/resolver-checkout-renovacao";
+import { sincronizarCobrancasWhiteLabelAtivas } from "@/lib/white-label/billing";
+import { sincronizarEstadoOperacionalClientesWhiteLabel } from "@/lib/white-label/operacional";
 
 const supabase = getSupabaseAdmin();
 const DIA_MS = 24 * 60 * 60 * 1000;
@@ -131,10 +133,12 @@ async function buscarEmailsAdministradores(empresaId: string) {
 }
 
 export async function processarAvisosAssinatura(agora = new Date()) {
+  await sincronizarCobrancasWhiteLabelAtivas();
+
   const { data: empresas, error } = await supabase
     .from("empresas")
     .select(
-      "id,email,nome_fantasia,razao_social,assinatura_vencimento_em,assinatura_bloqueio_em,planos(slug)"
+      "id,email,nome_fantasia,razao_social,assinatura_vencimento_em,assinatura_bloqueio_em,white_label_id,white_label_tipo,planos(slug)"
     )
     .not("assinatura_vencimento_em", "is", null)
     .order("assinatura_vencimento_em", { ascending: true })
@@ -173,10 +177,7 @@ export async function processarAvisosAssinatura(agora = new Date()) {
 
   for (const empresa of empresas || []) {
     try {
-      // Quando já existe assinatura espelhada na Prosperity Pay, a cobrança e
-      // o e-mail de vencimento passam a ser responsabilidade exclusiva da PP.
-      // Isso evita duplicidade com os avisos legados do CRM/Atomo.
-      if (empresasComCobrancaProsperityPay.has(empresa.id)) {
+      if (empresa.white_label_tipo === "cliente") {
         resultado.ignorados += 1;
         continue;
       }
@@ -192,6 +193,27 @@ export async function processarAvisosAssinatura(agora = new Date()) {
 
       resultado.atualizadas += 1;
 
+      if (
+        empresa.white_label_tipo === "gestora" &&
+        empresa.white_label_id
+      ) {
+        await sincronizarEstadoOperacionalClientesWhiteLabel(
+          String(empresa.white_label_id)
+        );
+      }
+
+      // Assinaturas espelhadas na Prosperity Pay continuam tendo o status
+      // sincronizado pelo CRM para garantir o bloqueio operacional no prazo,
+      // mas os e-mails financeiros ficam sob responsabilidade da Pay.
+      const cobrancaProsperityPay =
+        empresasComCobrancaProsperityPay.has(empresa.id);
+      const gestoraWhiteLabel = empresa.white_label_tipo === "gestora";
+
+      if (cobrancaProsperityPay && !gestoraWhiteLabel) {
+        resultado.ignorados += 1;
+        continue;
+      }
+
       const vencimento = new Date(String(empresa.assinatura_vencimento_em));
       const bloqueioRaw = empresa.assinatura_bloqueio_em
         ? new Date(String(empresa.assinatura_bloqueio_em))
@@ -200,12 +222,28 @@ export async function processarAvisosAssinatura(agora = new Date()) {
         ? null
         : bloqueioRaw;
 
-      const tipo = avisoElegivel({
+      let tipo = avisoElegivel({
         status: String(status),
         vencimento,
         bloqueio,
         agora,
       });
+
+      // No White Label com cobrança pela Prosperity Pay, o e-mail do dia do
+      // vencimento é enviado pela própria Pay. O CRM mantém o pré-vencimento,
+      // o pós-vencimento a partir do 3º dia e os avisos de bloqueio.
+      if (
+        gestoraWhiteLabel &&
+        cobrancaProsperityPay &&
+        String(status) === "vencida"
+      ) {
+        const diasDesdeVencimento =
+          (agora.getTime() - vencimento.getTime()) / DIA_MS;
+
+        if (diasDesdeVencimento < 3) {
+          tipo = null;
+        }
+      }
 
       const emails = Array.from(
         new Set(

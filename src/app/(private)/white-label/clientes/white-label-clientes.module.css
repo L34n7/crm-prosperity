@@ -130,12 +130,24 @@
   white-space: nowrap;
 }
 .tableScroll { overflow-x: auto; }
-.table { width: 100%; min-width: 840px; border-collapse: collapse; }
+.table { width: 100%; min-width: 1120px; border-collapse: collapse; }
 .table th { padding: 11px 14px; background: var(--crm-surface-soft); color: var(--crm-text-muted); font-size: 10px; text-align: left; text-transform: uppercase; letter-spacing: .06em; }
 .table td { padding: 13px 14px; border-top: 1px solid var(--crm-border); font-size: 13px; vertical-align: middle; }
 .table td strong, .table td span { display: block; }
 .table td > span:not(.statusBadge) { margin-top: 3px; color: var(--crm-text-muted); font-size: 11px; }
 .accessButton { min-height: 34px; padding: 0 11px; font-size: 12px; }
+.addonControl { display:inline-flex; align-items:center; gap:5px; }
+.addonButton { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid var(--crm-border); border-radius:8px; background:var(--crm-surface); color:var(--crm-primary-text); cursor:pointer; }
+.addonButton:hover:not(:disabled) { border-color:var(--crm-primary-border); background:var(--crm-primary-soft); }
+.addonButton:disabled { opacity:.4; cursor:not-allowed; }
+.addonValue { min-width:64px; display:inline-flex !important; align-items:center; justify-content:center; gap:5px; color:var(--crm-text-strong) !important; font-size:12px !important; font-weight:850; white-space:nowrap; }
+.addonPrice { display:block; margin-top:5px; color:var(--crm-text-muted); font-size:9px; font-weight:750; white-space:nowrap; }
+.statusActions { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
+.statusActive { border-color:var(--crm-success-border); background:var(--crm-success-bg); color:var(--crm-success-text); }
+.statusInactive { border-color:var(--crm-border); background:var(--crm-surface-soft); color:var(--crm-text-muted); }
+.statusButton { min-height:28px; display:inline-flex; align-items:center; gap:5px; padding:0 8px; border:1px solid var(--crm-border); border-radius:8px; background:var(--crm-surface); color:var(--crm-text); font-size:10px; font-weight:800; cursor:pointer; }
+.statusButton:hover:not(:disabled) { border-color:var(--crm-primary-border); color:var(--crm-primary-text); }
+.statusButton:disabled { opacity:.45; cursor:not-allowed; }
 .emptyState { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 30px; color: var(--crm-text-muted); text-align: center; }
 .emptyState strong { color: var(--crm-text-strong); }
 .overlay { position: fixed; inset: 0; z-index: 2200; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(2,8,12,.78); backdrop-filter: blur(10px); }

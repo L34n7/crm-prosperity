@@ -308,6 +308,11 @@ export default function WhatsappPerfilPage() {
   const [podeCadastrarNovaIntegracao, setPodeCadastrarNovaIntegracao] =
     useState(false);
   const [podeExibirAddNumero, setPodeExibirAddNumero] = useState(false);
+  const [whiteLabelCliente, setWhiteLabelCliente] = useState(false);
+  const [whiteLabelProprietario, setWhiteLabelProprietario] = useState<{
+    nome: string;
+    telefone: string | null;
+  } | null>(null);
   const [cadastrandoIntegracao, setCadastrandoIntegracao] = useState(false);
   const [modalUpgradeAberto, setModalUpgradeAberto] = useState(false);
   const [abrindoCheckoutAdicional, setAbrindoCheckoutAdicional] = useState(false);
@@ -585,6 +590,13 @@ export default function WhatsappPerfilPage() {
       );
       setPodeCadastrarNovaIntegracao(json.pode_cadastrar_nova === true);
       setPodeExibirAddNumero(json.pode_exibir_add_numero === true);
+      setWhiteLabelCliente(json.white_label_cliente === true);
+      setWhiteLabelProprietario(
+        json.white_label_proprietario &&
+          typeof json.white_label_proprietario === "object"
+          ? json.white_label_proprietario
+          : null
+      );
       setCancelamentosWhatsappAgendados(
         Array.isArray(json.cancelamentos_whatsapp_agendados)
           ? json.cancelamentos_whatsapp_agendados
@@ -631,6 +643,39 @@ export default function WhatsappPerfilPage() {
     if (cadastrandoIntegracao) return;
 
     if (!podeCadastrarNovaIntegracao) {
+      if (whiteLabelCliente) {
+        const telefone = String(
+          whiteLabelProprietario?.telefone || ""
+        ).replace(/\D/g, "");
+
+        if (!telefone) {
+          setErro(
+            "Solicite ao responsável pelo seu White Label a liberação de um número adicional."
+          );
+          return;
+        }
+
+        const posicao =
+          proximaPosicaoIntegracao ||
+          Math.min(integracoes.length + 1, limiteTotalNumerosWhatsapp);
+        const mensagem =
+          "Olá, " +
+          (whiteLabelProprietario?.nome || "") +
+          "! Gostaria de solicitar a liberação do número WhatsApp adicional " +
+          posicao +
+          " para minha empresa.";
+
+        window.open(
+          "https://api.whatsapp.com/send?phone=" +
+            encodeURIComponent(telefone) +
+            "&text=" +
+            encodeURIComponent(mensagem),
+          "_blank",
+          "noopener,noreferrer"
+        );
+        return;
+      }
+
       setModalUpgradeAberto(true);
       return;
     }
@@ -2017,7 +2062,7 @@ export default function WhatsappPerfilPage() {
       </div>
     )}
 
-    {modalUpgradeAberto && (
+    {modalUpgradeAberto && !whiteLabelCliente && (
       <div
         className={styles.modalOverlay}
         onClick={() => setModalUpgradeAberto(false)}

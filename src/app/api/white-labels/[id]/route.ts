@@ -6,6 +6,7 @@ import { can } from "@/lib/permissoes/can";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 import { contarLicencasUsadas } from "@/lib/white-label/acesso";
 import { normalizarDominioWhiteLabel } from "@/lib/white-label/branding";
+import { sincronizarCobrancaWhiteLabel } from "@/lib/white-label/billing";
 import {
   enviarWhiteLabelAsset,
   removerWhiteLabelAssetPorUrl,
@@ -284,8 +285,21 @@ export async function PATCH(
     }
   }
 
+  let billingWarning: string | null = null;
+
+  try {
+    const cobranca = await sincronizarCobrancaWhiteLabel(id);
+    billingWarning = cobranca.warning;
+  } catch (billingError) {
+    billingWarning =
+      billingError instanceof Error
+        ? billingError.message
+        : "Não foi possível sincronizar a mensalidade do White Label.";
+  }
+
   return NextResponse.json({
     ok: true,
     message: "White Label atualizado com sucesso.",
+    warning: billingWarning,
   });
 }

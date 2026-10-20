@@ -16,6 +16,17 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: contexto.error }, { status: contexto.status });
     }
 
+    if (contexto.usuario.assinatura?.white_label_client) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Solicite o número adicional ao responsável pelo seu White Label.",
+        },
+        { status: 403 },
+      );
+    }
+
     const empresaId = contexto.usuario.empresa_id;
     if (!empresaId) {
       return NextResponse.json({ ok: false, error: "Usuário sem empresa vinculada." }, { status: 400 });

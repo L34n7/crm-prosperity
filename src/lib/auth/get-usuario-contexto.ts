@@ -451,15 +451,26 @@ export async function getUsuarioContexto(
       perfis: perfisRaw,
     });
 
+    if (assinatura?.white_label_client) {
+      permissoes = permissoes.filter(
+        (codigo) => codigo !== "assinaturas.plano.visualizar"
+      );
+    }
+
     if (whiteLabelAdminOperador) {
       permissoes = permissoes.filter(
-        (codigo) =>
-          !codigo.startsWith("ia.tokens") &&
-          codigo !== "assinaturas.plano.visualizar"
+        (codigo) => !codigo.startsWith("ia.tokens")
       );
 
       if (!permissoes.includes(PERMISSAO_WHITE_LABEL_CLIENTES)) {
         permissoes.push(PERMISSAO_WHITE_LABEL_CLIENTES);
+      }
+
+      if (
+        !assinatura?.white_label_client &&
+        !permissoes.includes("assinaturas.plano.visualizar")
+      ) {
+        permissoes.push("assinaturas.plano.visualizar");
       }
     }
 

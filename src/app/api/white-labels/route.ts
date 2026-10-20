@@ -9,6 +9,8 @@ import {
   contarLicencasUsadas,
 } from "@/lib/white-label/acesso";
 import { normalizarDominioWhiteLabel } from "@/lib/white-label/branding";
+import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
+import { sincronizarCobrancaWhiteLabel } from "@/lib/white-label/billing";
 import {
   enviarWhiteLabelAsset,
   removerWhiteLabelAssetsPorCaminhos,
@@ -295,8 +297,7 @@ export async function POST(request: Request) {
   }
 
   const agora = new Date().toISOString();
-  const vencimentoTecnico = "2099-12-31T23:59:59.000Z";
-  const bloqueioTecnico = "2100-01-07T23:59:59.000Z";
+  const janelaAssinatura = calcularJanelaAssinatura(new Date());
 
   const { data: whiteLabel, error: whiteLabelError } = await supabaseAdmin
     .from("white_labels")
@@ -397,16 +398,23 @@ export async function POST(request: Request) {
       white_label_id: whiteLabel.id,
       white_label_tipo: "gestora",
       assinatura_status: "ativa",
-      assinatura_inicio_em: agora,
-      assinatura_vencimento_em: vencimentoTecnico,
-      assinatura_bloqueio_em: bloqueioTecnico,
-      assinatura_gateway: "white_label",
+      assinatura_inicio_em:
+        valorMensalCentavos > 0 ? janelaAssinatura.inicioEm : null,
+      assinatura_vencimento_em:
+        valorMensalCentavos > 0 ? janelaAssinatura.vencimentoEm : null,
+      assinatura_bloqueio_em:
+        valorMensalCentavos > 0 ? janelaAssinatura.bloqueioEm : null,
+      assinatura_gateway:
+        valorMensalCentavos > 0 ? "prosperity_pay" : "white_label",
       assinatura_referencia: "white-label:" + whiteLabel.id,
       assinatura_metadata_json: {
         origem: "white_label",
         white_label_id: whiteLabel.id,
         tipo: "gestora",
+        billing_components_v2: true,
         valor_mensal_centavos: valorMensalCentavos,
+        valor_contratado_centavos: valorMensalCentavos,
+        white_label_base_centavos: valorMensalCentavos,
       },
     })
     .select("id")
@@ -468,6 +476,17 @@ export async function POST(request: Request) {
   let warning: string | null = null;
 
   try {
+    const cobranca = await sincronizarCobrancaWhiteLabel(whiteLabel.id);
+    if (cobranca.warning) {
+      warning = "White Label criado, mas a cobrança precisa de atenção: " + cobranca.warning;
+    }
+  } catch (error) {
+    warning =
+      "White Label criado, mas a assinatura mensal não foi sincronizada: " +
+      (error instanceof Error ? error.message : "erro desconhecido");
+  }
+
+  try {
     await enviarPrimeiroAcesso({
       email: administradorEmail,
       nome: administradorNome,
@@ -476,10 +495,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     emailEnviado = false;
-    warning =
+    const avisoEmail =
       error instanceof Error
         ? "White Label criado, mas o e-mail de ativação falhou: " + error.message
         : "White Label criado, mas o e-mail de ativação falhou.";
+    warning = warning ? warning + " " + avisoEmail : avisoEmail;
   }
 
   return NextResponse.json(
