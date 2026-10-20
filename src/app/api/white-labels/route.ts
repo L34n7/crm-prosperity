@@ -64,7 +64,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("white_labels")
     .select(
-      "id, nome, slug, dominio, nome_produto, logo_url, favicon_url, cor_primaria, licencas_contratadas, plano_padrao_id, empresa_gestora_id, status, created_at, updated_at"
+      "id, nome, slug, dominio, nome_produto, logo_url, favicon_url, cor_primaria, licencas_contratadas, valor_mensal_centavos, plano_padrao_id, empresa_gestora_id, status, created_at, updated_at"
     )
     .order("created_at", { ascending: false });
 
@@ -132,6 +132,7 @@ export async function POST(request: Request) {
     String(body?.administrador_telefone || "").trim() || null;
   const planoPadraoId = String(body?.plano_padrao_id || "").trim();
   const licencasContratadas = Number(body?.licencas_contratadas || 5);
+  const valorMensalCentavos = Number(body?.valor_mensal_centavos ?? 0);
 
   if (!nome || !nomeProduto || !dominio || !administradorNome) {
     return NextResponse.json(
@@ -195,6 +196,17 @@ export async function POST(request: Request) {
     );
   }
 
+  if (
+    !Number.isInteger(valorMensalCentavos) ||
+    valorMensalCentavos < 0 ||
+    valorMensalCentavos > 100_000_000
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Valor mensal do White Label inválido." },
+      { status: 400 }
+    );
+  }
+
   if (dominio === "crmprosperity.com" || dominio.endsWith(".vercel.app")) {
     return NextResponse.json(
       { ok: false, error: "Use o domínio próprio do parceiro." },
@@ -252,6 +264,7 @@ export async function POST(request: Request) {
       favicon_url: faviconUrl,
       cor_primaria: corPrimaria,
       licencas_contratadas: licencasContratadas,
+      valor_mensal_centavos: valorMensalCentavos,
       plano_padrao_id: planoPadraoId,
       status: "ativo",
       updated_at: agora,
@@ -295,6 +308,7 @@ export async function POST(request: Request) {
         origem: "white_label",
         white_label_id: whiteLabel.id,
         tipo: "gestora",
+        valor_mensal_centavos: valorMensalCentavos,
       },
     })
     .select("id")

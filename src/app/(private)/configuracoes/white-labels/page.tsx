@@ -4,6 +4,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import {
   Building2,
+  DollarSign,
   Globe2,
   KeyRound,
   Pencil,
@@ -30,6 +31,7 @@ type WhiteLabel = {
   licencas_contratadas: number;
   licencas_usadas: number;
   licencas_disponiveis: number;
+  valor_mensal_centavos: number;
   plano_padrao_id: string | null;
   empresa_gestora_id: string | null;
   status: "ativo" | "inativo";
@@ -47,6 +49,7 @@ const FORM_INICIAL = {
   favicon_url: "",
   cor_primaria: "#0f509a",
   licencas_contratadas: "5",
+  valor_mensal: "0.00",
   plano_padrao_id: "",
   administrador_nome: "",
   administrador_email: "",
@@ -133,6 +136,7 @@ export default function WhiteLabelsPage() {
       favicon_url: item.favicon_url || "",
       cor_primaria: item.cor_primaria || "#0f509a",
       licencas_contratadas: String(item.licencas_contratadas),
+      valor_mensal: (item.valor_mensal_centavos / 100).toFixed(2),
       plano_padrao_id: item.plano_padrao_id || planos[0]?.id || "",
       administrador_nome: item.administrador?.nome || "",
       administrador_email: item.administrador?.email || "",
@@ -150,9 +154,16 @@ export default function WhiteLabelsPage() {
     setWarning("");
 
     try {
+      const valorMensal = Number(form.valor_mensal.replace(",", "."));
+
+      if (!Number.isFinite(valorMensal) || valorMensal < 0) {
+        throw new Error("Informe um valor mensal válido.");
+      }
+
       const payload = {
         ...form,
         licencas_contratadas: Number(form.licencas_contratadas),
+        valor_mensal_centavos: Math.round(valorMensal * 100),
       };
       const response = await fetch(
         editandoId ? "/api/white-labels/" + editandoId : "/api/white-labels",
@@ -191,6 +202,18 @@ export default function WhiteLabelsPage() {
     (total, item) => total + item.licencas_usadas,
     0
   );
+  const receitaMensalCentavos = itens.reduce(
+    (total, item) =>
+      item.status === "ativo" ? total + item.valor_mensal_centavos : total,
+    0
+  );
+
+  function formatarMoedaCentavos(valor: number) {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(valor / 100);
+  }
 
   return (
     <main className={styles.page}>
@@ -235,6 +258,13 @@ export default function WhiteLabelsPage() {
         <article>
           <Globe2 size={20} />
           <div><span>Licenças em uso</span><strong>{totalEmUso}</strong></div>
+        </article>
+        <article>
+          <DollarSign size={20} />
+          <div>
+            <span>Mensalidades White Label</span>
+            <strong>{formatarMoedaCentavos(receitaMensalCentavos)}</strong>
+          </div>
         </article>
       </section>
 
@@ -295,6 +325,11 @@ export default function WhiteLabelsPage() {
                     <span>Disponíveis</span>
                     <strong>{item.licencas_disponiveis}</strong>
                   </div>
+                </div>
+
+                <div className={styles.financialLine}>
+                  <span>Valor mensal do White Label</span>
+                  <strong>{formatarMoedaCentavos(item.valor_mensal_centavos)}</strong>
                 </div>
 
                 <div className={styles.adminLine}>
@@ -412,7 +447,21 @@ export default function WhiteLabelsPage() {
                   required
                 />
               </label>
-              <label className={styles.full}>
+              <label>
+                Valor mensal do White Label (R$)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.valor_mensal}
+                  onChange={(event) =>
+                    setForm({ ...form, valor_mensal: event.target.value })
+                  }
+                  placeholder="500.00"
+                  required
+                />
+              </label>
+              <label>
                 Plano padrão de recursos
                 <select
                   value={form.plano_padrao_id}

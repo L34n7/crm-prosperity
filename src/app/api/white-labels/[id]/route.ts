@@ -45,6 +45,7 @@ export async function PATCH(
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
   const licencas = Number(body?.licencas_contratadas);
+  const valorMensalCentavos = Number(body?.valor_mensal_centavos ?? 0);
   const dominio = normalizarDominioWhiteLabel(body?.dominio);
   const nome = String(body?.nome || "").trim();
   const nomeProduto = String(body?.nome_produto || "").trim();
@@ -64,6 +65,17 @@ export async function PATCH(
   ) {
     return NextResponse.json(
       { ok: false, error: "Dados do White Label inválidos." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    !Number.isInteger(valorMensalCentavos) ||
+    valorMensalCentavos < 0 ||
+    valorMensalCentavos > 100_000_000
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Valor mensal do White Label inválido." },
       { status: 400 }
     );
   }
@@ -136,6 +148,7 @@ export async function PATCH(
       favicon_url: faviconUrl,
       cor_primaria: corPrimaria,
       licencas_contratadas: licencas,
+      valor_mensal_centavos: valorMensalCentavos,
       plano_padrao_id: planoPadraoId,
       status,
       updated_at: new Date().toISOString(),

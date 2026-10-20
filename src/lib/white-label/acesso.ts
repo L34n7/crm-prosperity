@@ -35,6 +35,7 @@ type WhiteLabelRow = {
   favicon_url: string | null;
   cor_primaria: string | null;
   licencas_contratadas: number;
+  valor_mensal_centavos: number;
   plano_padrao_id: string | null;
   empresa_gestora_id: string | null;
   status: "ativo" | "inativo";
@@ -61,7 +62,7 @@ async function carregarWhiteLabel(
   const { data, error } = await supabaseAdmin
     .from("white_labels")
     .select(
-      "id, nome, slug, dominio, nome_produto, logo_url, favicon_url, cor_primaria, licencas_contratadas, plano_padrao_id, empresa_gestora_id, status"
+      "id, nome, slug, dominio, nome_produto, logo_url, favicon_url, cor_primaria, licencas_contratadas, valor_mensal_centavos, plano_padrao_id, empresa_gestora_id, status"
     )
     .eq("id", whiteLabelId)
     .maybeSingle<WhiteLabelRow>();
@@ -80,6 +81,7 @@ async function carregarWhiteLabel(
       data.licencas_contratadas - licencasUsadas,
       0
     ),
+    valor_mensal_centavos: data.valor_mensal_centavos,
     plano_padrao_id: data.plano_padrao_id,
     empresa_gestora_id: data.empresa_gestora_id,
     status: data.status,

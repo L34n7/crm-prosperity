@@ -15,6 +15,7 @@ export type WhiteLabelResumo = WhiteLabelBranding & {
   licencas_contratadas: number;
   licencas_usadas: number;
   licencas_disponiveis: number;
+  valor_mensal_centavos: number;
   plano_padrao_id: string | null;
   empresa_gestora_id: string | null;
   status: "ativo" | "inativo";
