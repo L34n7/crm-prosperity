@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Upload,
   X,
 } from "lucide-react";
 import styles from "./white-labels.module.css";
@@ -45,8 +46,6 @@ const FORM_INICIAL = {
   nome: "",
   nome_produto: "",
   dominio: "",
-  logo_url: "",
-  favicon_url: "",
   cor_primaria: "#0f509a",
   licencas_contratadas: "5",
   valor_mensal: "0.00",
@@ -68,6 +67,10 @@ export default function WhiteLabelsPage() {
   const [sucesso, setSucesso] = useState("");
   const [warning, setWarning] = useState("");
   const [form, setForm] = useState(FORM_INICIAL);
+  const [logoArquivo, setLogoArquivo] = useState<File | null>(null);
+  const [faviconArquivo, setFaviconArquivo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState("");
+  const [faviconPreview, setFaviconPreview] = useState("");
 
   async function carregar() {
     setCarregando(true);
@@ -117,6 +120,10 @@ export default function WhiteLabelsPage() {
     setEditandoId("");
     setErro("");
     setWarning("");
+    setLogoArquivo(null);
+    setFaviconArquivo(null);
+    setLogoPreview("");
+    setFaviconPreview("");
     setForm({
       ...FORM_INICIAL,
       plano_padrao_id: planos[0]?.id || "",
@@ -128,12 +135,14 @@ export default function WhiteLabelsPage() {
     setEditandoId(item.id);
     setErro("");
     setWarning("");
+    setLogoArquivo(null);
+    setFaviconArquivo(null);
+    setLogoPreview(item.logo_url || "");
+    setFaviconPreview(item.favicon_url || "");
     setForm({
       nome: item.nome,
       nome_produto: item.nome_produto,
       dominio: item.dominio,
-      logo_url: item.logo_url || "",
-      favicon_url: item.favicon_url || "",
       cor_primaria: item.cor_primaria || "#0f509a",
       licencas_contratadas: String(item.licencas_contratadas),
       valor_mensal: (item.valor_mensal_centavos / 100).toFixed(2),
@@ -160,17 +169,29 @@ export default function WhiteLabelsPage() {
         throw new Error("Informe um valor mensal válido.");
       }
 
-      const payload = {
-        ...form,
-        licencas_contratadas: Number(form.licencas_contratadas),
-        valor_mensal_centavos: Math.round(valorMensal * 100),
-      };
+      const payload = new FormData();
+
+      Object.entries(form).forEach(([chave, valor]) => {
+        payload.append(chave, String(valor));
+      });
+
+      payload.set(
+        "licencas_contratadas",
+        String(Number(form.licencas_contratadas))
+      );
+      payload.set(
+        "valor_mensal_centavos",
+        String(Math.round(valorMensal * 100))
+      );
+
+      if (logoArquivo) payload.append("logo", logoArquivo);
+      if (faviconArquivo) payload.append("favicon", faviconArquivo);
+
       const response = await fetch(
         editandoId ? "/api/white-labels/" + editandoId : "/api/white-labels",
         {
           method: editandoId ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: payload,
         }
       );
       const data = await response.json();
@@ -402,26 +423,62 @@ export default function WhiteLabelsPage() {
                   required
                 />
               </label>
-              <label>
-                URL da logo
-                <input
-                  value={form.logo_url}
-                  onChange={(event) =>
-                    setForm({ ...form, logo_url: event.target.value })
-                  }
-                  placeholder="https://..."
-                />
-              </label>
-              <label>
-                URL do favicon
-                <input
-                  value={form.favicon_url}
-                  onChange={(event) =>
-                    setForm({ ...form, favicon_url: event.target.value })
-                  }
-                  placeholder="https://..."
-                />
-              </label>
+              <div className={styles.uploadField}>
+                <span className={styles.uploadLabel}>Logo</span>
+                <label className={styles.uploadBox}>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(event) => {
+                      const arquivo = event.target.files?.[0] || null;
+                      setLogoArquivo(arquivo);
+                      setLogoPreview(
+                        arquivo ? URL.createObjectURL(arquivo) : logoPreview
+                      );
+                    }}
+                  />
+                  <span className={styles.uploadPreviewLogo}>
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Prévia da logo" />
+                    ) : (
+                      <Upload size={22} />
+                    )}
+                  </span>
+                  <span className={styles.uploadText}>
+                    <strong>{logoArquivo ? logoArquivo.name : "Selecionar logo"}</strong>
+                    <small>PNG, JPG ou WEBP · até 3 MB</small>
+                  </span>
+                </label>
+              </div>
+              <div className={styles.uploadField}>
+                <span className={styles.uploadLabel}>Favicon</span>
+                <label className={styles.uploadBox}>
+                  <input
+                    type="file"
+                    accept="image/png,image/webp,image/x-icon,image/vnd.microsoft.icon,.ico"
+                    onChange={(event) => {
+                      const arquivo = event.target.files?.[0] || null;
+                      setFaviconArquivo(arquivo);
+                      setFaviconPreview(
+                        arquivo ? URL.createObjectURL(arquivo) : faviconPreview
+                      );
+                    }}
+                  />
+                  <span className={styles.uploadPreviewFavicon}>
+                    {faviconPreview ? (
+                      <img src={faviconPreview} alt="Prévia do favicon" />
+                    ) : (
+                      <Upload size={20} />
+                    )}
+                  </span>
+                  <span className={styles.uploadText}>
+                    <strong>
+                      {faviconArquivo ? faviconArquivo.name : "Selecionar favicon"}
+                    </strong>
+                    <small>PNG, WEBP ou ICO · até 512 KB</small>
+                  </span>
+                </label>
+              </div>
               <label>
                 Cor principal
                 <input

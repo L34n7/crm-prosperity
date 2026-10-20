@@ -9,6 +9,11 @@ import {
   contarLicencasUsadas,
 } from "@/lib/white-label/acesso";
 import { normalizarDominioWhiteLabel } from "@/lib/white-label/branding";
+import {
+  enviarWhiteLabelAsset,
+  removerWhiteLabelAssetsPorCaminhos,
+  validarWhiteLabelAsset,
+} from "@/lib/white-label/assets";
 
 const supabaseAdmin = getSupabaseAdmin();
 const NICHO_PADRAO_ID = "10000000-0000-4000-8000-000000000001";
@@ -117,12 +122,50 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = await request.json().catch(() => null);
+  const contentType = request.headers.get("content-type") || "";
+  let body: Record<string, unknown> | null = null;
+  let logoArquivo: File | null = null;
+  let faviconArquivo: File | null = null;
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    body = Object.fromEntries(
+      Array.from(formData.entries()).filter(([, valor]) => typeof valor === "string")
+    );
+    const logoEntrada = formData.get("logo");
+    const faviconEntrada = formData.get("favicon");
+    logoArquivo =
+      logoEntrada && typeof logoEntrada !== "string" && logoEntrada.size > 0
+        ? logoEntrada
+        : null;
+    faviconArquivo =
+      faviconEntrada &&
+      typeof faviconEntrada !== "string" &&
+      faviconEntrada.size > 0
+        ? faviconEntrada
+        : null;
+  } else {
+    body = await request.json().catch(() => null);
+  }
+
+  try {
+    validarWhiteLabelAsset(logoArquivo, "logo");
+    validarWhiteLabelAsset(faviconArquivo, "favicon");
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Arquivo inválido.",
+      },
+      { status: 400 }
+    );
+  }
+
   const nome = String(body?.nome || "").trim();
   const nomeProduto = String(body?.nome_produto || nome).trim();
-  const dominio = normalizarDominioWhiteLabel(body?.dominio);
-  const logoUrl = String(body?.logo_url || "").trim() || null;
-  const faviconUrl = String(body?.favicon_url || "").trim() || null;
+  const dominio = normalizarDominioWhiteLabel(String(body?.dominio || ""));
+  let logoUrl: string | null = null;
+  let faviconUrl: string | null = null;
   const corPrimaria = String(body?.cor_primaria || "#0f509a").trim();
   const administradorNome = String(body?.administrador_nome || "").trim();
   const administradorEmail = String(body?.administrador_email || "")
@@ -260,8 +303,8 @@ export async function POST(request: Request) {
       slug: slugBase,
       dominio,
       nome_produto: nomeProduto,
-      logo_url: logoUrl,
-      favicon_url: faviconUrl,
+      logo_url: null,
+      favicon_url: null,
       cor_primaria: corPrimaria,
       licencas_contratadas: licencasContratadas,
       valor_mensal_centavos: valorMensalCentavos,
@@ -277,6 +320,59 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: whiteLabelError?.message || "Não foi possível criar o White Label.",
+      },
+      { status: 500 }
+    );
+  }
+
+  const caminhosUploads: string[] = [];
+
+  try {
+    if (logoArquivo) {
+      const upload = await enviarWhiteLabelAsset({
+        whiteLabelId: whiteLabel.id,
+        arquivo: logoArquivo,
+        tipo: "logo",
+      });
+      logoUrl = upload.url;
+      caminhosUploads.push(upload.caminho);
+    }
+
+    if (faviconArquivo) {
+      const upload = await enviarWhiteLabelAsset({
+        whiteLabelId: whiteLabel.id,
+        arquivo: faviconArquivo,
+        tipo: "favicon",
+      });
+      faviconUrl = upload.url;
+      caminhosUploads.push(upload.caminho);
+    }
+
+    if (logoUrl || faviconUrl) {
+      const { error: brandingError } = await supabaseAdmin
+        .from("white_labels")
+        .update({
+          logo_url: logoUrl,
+          favicon_url: faviconUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", whiteLabel.id);
+
+      if (brandingError) {
+        throw new Error(brandingError.message);
+      }
+    }
+  } catch (error) {
+    await removerWhiteLabelAssetsPorCaminhos(caminhosUploads);
+    await supabaseAdmin.from("white_labels").delete().eq("id", whiteLabel.id);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível salvar a identidade visual.",
       },
       { status: 500 }
     );
@@ -315,6 +411,7 @@ export async function POST(request: Request) {
     .single();
 
   if (empresaError || !empresaGestora) {
+    await removerWhiteLabelAssetsPorCaminhos(caminhosUploads);
     await supabaseAdmin.from("white_labels").delete().eq("id", whiteLabel.id);
 
     return NextResponse.json(
@@ -335,6 +432,7 @@ export async function POST(request: Request) {
     .eq("id", whiteLabel.id);
 
   if (atualizacao.error) {
+    await removerWhiteLabelAssetsPorCaminhos(caminhosUploads);
     await supabaseAdmin.from("empresas").delete().eq("id", empresaGestora.id);
     await supabaseAdmin.from("white_labels").delete().eq("id", whiteLabel.id);
 
@@ -354,6 +452,7 @@ export async function POST(request: Request) {
     });
 
   if (adminInsert.error) {
+    await removerWhiteLabelAssetsPorCaminhos(caminhosUploads);
     await supabaseAdmin.from("empresas").delete().eq("id", empresaGestora.id);
     await supabaseAdmin.from("white_labels").delete().eq("id", whiteLabel.id);
 

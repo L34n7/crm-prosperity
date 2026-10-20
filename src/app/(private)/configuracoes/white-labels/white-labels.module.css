@@ -49,6 +49,18 @@
 .formGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; margin-top:20px; }
 .formGrid label { display:flex; flex-direction:column; gap:6px; color:var(--crm-text); font-size:12px; font-weight:800; }
 .formGrid input,.formGrid select { min-height:44px; width:100%; padding:0 12px; border:1px solid var(--crm-border); border-radius:11px; background:var(--crm-surface); color:var(--crm-text); font-size:14px; outline:none; }
+.uploadField { display:flex; flex-direction:column; gap:6px; }
+.uploadLabel { color:var(--crm-text); font-size:12px; font-weight:800; }
+.uploadBox { min-height:86px; display:flex !important; flex-direction:row !important; align-items:center; gap:12px !important; padding:10px 12px; border:1px dashed var(--crm-border); border-radius:12px; background:var(--crm-surface-soft); cursor:pointer; transition:border-color .18s ease,background .18s ease; }
+.uploadBox:hover { border-color:var(--crm-primary-strong); background:var(--crm-primary-soft); }
+.uploadBox input[type="file"] { position:absolute; width:1px; height:1px; min-height:0; padding:0; opacity:0; pointer-events:none; }
+.uploadPreviewLogo,.uploadPreviewFavicon { flex:0 0 auto; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--crm-border); background:var(--crm-surface); color:var(--crm-primary-text); }
+.uploadPreviewLogo { width:74px; height:56px; border-radius:10px; }
+.uploadPreviewFavicon { width:56px; height:56px; border-radius:12px; }
+.uploadPreviewLogo img,.uploadPreviewFavicon img { width:100%; height:100%; object-fit:contain; }
+.uploadText { min-width:0; display:flex; flex-direction:column; gap:4px; }
+.uploadText strong { max-width:100%; overflow:hidden; color:var(--crm-text-strong); font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+.uploadText small { color:var(--crm-text-muted); font-size:10px; line-height:1.35; }
 .formGrid input[type="color"] { padding:5px; }
 .formGrid input:focus,.formGrid select:focus { border-color:var(--crm-primary-strong); }
 .full { grid-column:1 / -1; }

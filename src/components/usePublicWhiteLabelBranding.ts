@@ -18,7 +18,23 @@ export function usePublicWhiteLabelBranding() {
       .then((response) => response.json())
       .then((data) => {
         if (ativo && data?.ok && data?.branding) {
-          setBranding(data.branding as WhiteLabelBranding);
+          const proximoBranding = data.branding as WhiteLabelBranding;
+          setBranding(proximoBranding);
+
+          if (proximoBranding.favicon_url) {
+            let favicon = document.querySelector<HTMLLinkElement>(
+              'link[rel="icon"][data-white-label-favicon="true"]'
+            );
+
+            if (!favicon) {
+              favicon = document.createElement("link");
+              favicon.rel = "icon";
+              favicon.dataset.whiteLabelFavicon = "true";
+              document.head.appendChild(favicon);
+            }
+
+            favicon.href = proximoBranding.favicon_url;
+          }
         }
       })
       .catch(() => {
