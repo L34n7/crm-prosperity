@@ -14,6 +14,10 @@ import {
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import { obterDisponibilidadeAgendamentoMeta } from "@/lib/whatsapp/meta-limites";
+import {
+  converterDataHoraLocalParaUtc,
+  normalizarTimezoneEmpresa,
+} from "@/lib/datetime/timezone";
 
 function somenteDigitos(valor: string) {
   return String(valor || "").replace(/\D/g, "");
@@ -31,9 +35,9 @@ function normalizarVariavelTemplate(valor: unknown) {
     .replace(/^_|_$/g, "");
 }
 
-function formatarDataHoraBrasil(dataIso: string) {
+function formatarDataHoraEmpresa(dataIso: string, timezone: string) {
   return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
+    timeZone: timezone,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -138,11 +142,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabase = getSupabaseAdmin();
+
+    const { data: empresaTimezone, error: empresaTimezoneError } = await supabase
+      .from("empresas")
+      .select("timezone")
+      .eq("id", usuario.empresa_id)
+      .maybeSingle();
+
+    if (empresaTimezoneError) {
+      console.warn(
+        "[CRIAR_DISPARO_AGENDADO] Falha ao buscar timezone da empresa:",
+        empresaTimezoneError.message
+      );
+    }
+
+    const timezoneEmpresa = normalizarTimezoneEmpresa(
+      empresaTimezone?.timezone
+    );
+
     const body = await request.json();
 
     const integracaoWhatsappId = String(body.integracao_whatsapp_id || "").trim();
     const templateId = String(body.template_id || "").trim();
-    const executarEm = String(body.executar_em || "").trim();
+    const executarEmLocal = String(body.executar_em_local || "").trim();
+    const executarEmLegado = String(body.executar_em || "").trim();
+
+    let executarEm = executarEmLegado;
+
+    if (executarEmLocal) {
+      try {
+        executarEm = converterDataHoraLocalParaUtc(
+          executarEmLocal,
+          timezoneEmpresa
+        );
+      } catch (error) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Informe uma data e hora válida para o agendamento.",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const nomeCampanha = String(body.nome_campanha || "")
       .replace(/\s+/g, " ")
       .trim()
@@ -221,8 +268,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const supabase = getSupabaseAdmin();
 
     const { data: integracao, error: integracaoError } = await supabase
       .from("integracoes_whatsapp")
@@ -521,8 +566,9 @@ export async function POST(request: NextRequest) {
           ok: false,
           code: "WHATSAPP_META_AGENDAMENTO_ANTES_DA_LIBERACAO",
           error: disponivelApartirDe
-            ? `Nesse horario ainda nao existe capacidade suficiente para a quantidade selecionada. Agende a partir de ${formatarDataHoraBrasil(
-                disponivelApartirDe
+            ? `Nesse horario ainda nao existe capacidade suficiente para a quantidade selecionada. Agende a partir de ${formatarDataHoraEmpresa(
+                disponivelApartirDe,
+                timezoneEmpresa
               )}.`
             : "Nesse horario ainda nao existe capacidade suficiente para a quantidade selecionada.",
           disponivel_a_partir_de: disponivelApartirDe,
@@ -570,6 +616,8 @@ export async function POST(request: NextRequest) {
 
         origem: "manual_agendado",
         agendamento_grupo_id: agendamentoGrupoId,
+        timezone_empresa: timezoneEmpresa,
+        executar_em_local: executarEmLocal || null,
         usuario_id: usuario.id,
         nome_campanha: nomeCampanha || null,
         total_contatos_frios: classificacaoLista.totalFrios,
@@ -611,6 +659,8 @@ export async function POST(request: NextRequest) {
       depois: {
         quantidade: disparosCriados?.length || 0,
         executar_em: executarEm,
+        executar_em_local: executarEmLocal || null,
+        timezone_empresa: timezoneEmpresa,
         template_id: template.id,
         template_nome: template.nome,
         integracao_whatsapp_id: integracaoWhatsappId,
@@ -634,6 +684,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       quantidade: disparosCriados?.length || 0,
       agendamento_grupo_id: agendamentoGrupoId,
+      timezone_empresa: timezoneEmpresa,
       disparos: disparosCriados || [],
     });
   } catch (error: any) {

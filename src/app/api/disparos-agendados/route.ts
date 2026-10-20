@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { normalizarTimezoneEmpresa } from "@/lib/datetime/timezone";
 
 function traduzirErroMetaWhatsApp(
   codigo?: number | string | null,
@@ -175,6 +176,24 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
+
+    const { data: empresaTimezone, error: empresaTimezoneError } = await supabase
+      .from("empresas")
+      .select("timezone")
+      .eq("id", usuario.empresa_id)
+      .maybeSingle();
+
+    if (empresaTimezoneError) {
+      console.warn(
+        "[DISPAROS AGENDADOS] Falha ao buscar timezone da empresa:",
+        empresaTimezoneError.message
+      );
+    }
+
+    const timezoneEmpresa = normalizarTimezoneEmpresa(
+      empresaTimezone?.timezone
+    );
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status") || "todos";
     const busca = String(searchParams.get("busca") || "").trim().toLowerCase();
@@ -200,6 +219,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         ok: true,
+        timezone_empresa: timezoneEmpresa,
         disparos: itensGrupo || [],
       });
     }
@@ -601,7 +621,11 @@ export async function GET(request: NextRequest) {
       return dataB - dataA;
     });
 
-    return NextResponse.json({ ok: true, disparos });
+    return NextResponse.json({
+      ok: true,
+      timezone_empresa: timezoneEmpresa,
+      disparos,
+    });
   } catch (error: any) {
     console.error("[DISPAROS AGENDADOS] Erro geral:", error);
     return NextResponse.json(

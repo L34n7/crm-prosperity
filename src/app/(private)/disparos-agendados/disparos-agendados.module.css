@@ -898,6 +898,15 @@
   letter-spacing: 0.08em;
 }
 
+.timezoneHint {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--crm-text-muted);
+}
+
 .disparoPreviewSidebar {
   display: grid;
   align-content: start;

@@ -8,6 +8,10 @@ import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
 import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import {
+  TIMEZONE_PADRAO_EMPRESA,
+  normalizarTimezoneEmpresa,
+} from "@/lib/datetime/timezone";
 import styles from "./disparos-agendados.module.css";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
@@ -484,10 +488,14 @@ function grupoPossuiStatus(grupo: GrupoDisparos, filtro: StatusDisparo) {
   return false;
 }
 
-function formatarHora(valor?: string | null) {
+function formatarHoraNoFuso(
+  valor?: string | null,
+  timezone = TIMEZONE_PADRAO_EMPRESA
+) {
   if (!valor) return "-";
   try {
     return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: normalizarTimezoneEmpresa(timezone),
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(valor));
@@ -496,11 +504,15 @@ function formatarHora(valor?: string | null) {
   }
 }
 
-function formatarData(valor?: string | null) {
+function formatarDataNoFuso(
+  valor?: string | null,
+  timezone = TIMEZONE_PADRAO_EMPRESA
+) {
   if (!valor) return "-";
 
   try {
     return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: normalizarTimezoneEmpresa(timezone),
       dateStyle: "short",
       timeStyle: "short",
     }).format(new Date(valor));
@@ -780,6 +792,9 @@ function DisparosAgendadosPageContent() {
   const podeRealizarDisparos = usuarioPodeRealizarDisparos(headerUser);
 
   const [disparos, setDisparos] = useState<DisparoAgendado[]>([]);
+  const [timezoneEmpresa, setTimezoneEmpresa] = useState(
+    TIMEZONE_PADRAO_EMPRESA
+  );
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
@@ -865,6 +880,15 @@ function DisparosAgendadosPageContent() {
   } | null>(null);
   const [loadingPreviewCusto, setLoadingPreviewCusto] = useState(false);
 
+  const formatarHora = (valor?: string | null) =>
+    formatarHoraNoFuso(valor, timezoneEmpresa);
+  const formatarData = (valor?: string | null) =>
+    formatarDataNoFuso(valor, timezoneEmpresa);
+  const rotuloTimezoneEmpresa =
+    timezoneEmpresa === "America/Sao_Paulo"
+      ? "Horário de São Paulo"
+      : `Fuso da empresa: ${timezoneEmpresa}`;
+
   async function carregarDisparos() {
     try {
       setCarregando(true);
@@ -889,6 +913,9 @@ function DisparosAgendadosPageContent() {
       }
 
       const listaDisparos = json.disparos || [];
+      setTimezoneEmpresa(
+        normalizarTimezoneEmpresa(json.timezone_empresa)
+      );
       setDisparos(listaDisparos);
 
       const disparoDaUrl = disparoParam
@@ -1217,9 +1244,8 @@ function DisparosAgendadosPageContent() {
       setErro("");
       setSucesso("");
 
-      const executar_em = new Date(
-        `${agendamentoData}T${agendamentoHora}:00`
-      ).toISOString();
+      const executar_em_local =
+        `${agendamentoData}T${agendamentoHora}:00`;
 
       const res = await fetch(
         "/api/disparos-agendados/criar",
@@ -1231,7 +1257,7 @@ function DisparosAgendadosPageContent() {
           body: JSON.stringify({
             integracao_whatsapp_id: integracaoSelecionada,
             template_id: templateSelecionado,
-            executar_em,
+            executar_em_local,
 
             variaveis: variaveisObrigatorias,
             confirmacao_responsabilidade_lista_fria:
@@ -2855,6 +2881,9 @@ function DisparosAgendadosPageContent() {
                             value={agendamentoHora}
                             onChange={(e) => setAgendamentoHora(e.target.value)}
                           />
+                          <span className={styles.timezoneHint}>
+                            {rotuloTimezoneEmpresa}
+                          </span>
                         </div>
 
                       </div>
@@ -3327,8 +3356,8 @@ function DisparosAgendadosPageContent() {
                       </strong>
 
                       <p className={styles.scheduleDescription}>
-                        O disparo será enviado automaticamente
-                        na data configurada.
+                        O disparo será enviado automaticamente na data
+                        configurada, considerando {rotuloTimezoneEmpresa}.
                       </p>
                     </div>
                                         
