@@ -9,6 +9,7 @@ import SessionActivityTracker from "@/components/SessionActivityTracker";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import styles from "./CrmShell.module.css";
 import type { NichoCodigo } from "@/lib/nichos/config";
+import type { WhiteLabelBranding } from "@/lib/white-label/types";
 
 type CrmShellProps = {
   children: React.ReactNode;
@@ -20,6 +21,7 @@ type CrmShellProps = {
   isAdmin?: boolean;
   nichoCodigo?: NichoCodigo;
   podeAcessarWhatsappWebLocal?: boolean;
+  branding?: WhiteLabelBranding;
 };
 
 export default function CrmShell({
@@ -32,6 +34,7 @@ export default function CrmShell({
   isAdmin = false,
   nichoCodigo = "comercio",
   podeAcessarWhatsappWebLocal = false,
+  branding,
 }: CrmShellProps) {
   return (
     <HeaderUserProvider
@@ -48,6 +51,7 @@ export default function CrmShell({
             isAdmin={isAdmin}
             nichoCodigo={nichoCodigo}
             podeAcessarWhatsappWebLocal={podeAcessarWhatsappWebLocal}
+            branding={branding}
           />
 
           <div className={styles.contentArea}>

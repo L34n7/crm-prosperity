@@ -16,9 +16,11 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import styles from "../definir-senha/definir-senha.module.css";
+import { usePublicWhiteLabelBranding } from "@/components/usePublicWhiteLabelBranding";
 
 export default function PrimeiroAcessoPage() {
   const router = useRouter();
+  const branding = usePublicWhiteLabelBranding();
   const aberturaRegistrada = useRef(false);
 
   const [token, setToken] = useState("");
@@ -183,7 +185,7 @@ export default function PrimeiroAcessoPage() {
 
         <div className={styles.header}>
           <h1>Primeiro acesso</h1>
-          <p>Crie sua senha para acessar o CRM Prosperity.</p>
+          <p>Crie sua senha para acessar o {branding.nome_produto}.</p>
           {emailUsuario ? <strong>{emailUsuario}</strong> : null}
         </div>
 

@@ -18,6 +18,15 @@ const SUPORTE_WHATSAPP_URL = montarWaMeUrl(
 
 async function obterRotaAposLogin() {
   try {
+    const whiteLabelResponse = await fetch("/api/white-label/clientes", {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (whiteLabelResponse.ok) {
+      return "/white-label/clientes";
+    }
+
     const response = await fetch("/api/integracoes-whatsapp/status", {
       method: "GET",
       cache: "no-store",

@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import CrmShell from "@/components/CrmShell";
 import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
@@ -12,6 +12,8 @@ import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import type { NichoCodigo } from "@/lib/nichos/config";
 import { empresaPodeAcessarWhatsappWebLocal } from "@/lib/whatsapp-web/acesso";
+import { obterBrandingPorHost } from "@/lib/white-label/branding";
+import { BRANDING_PROSPERITY } from "@/lib/white-label/types";
 
 export default async function PrivateLayout({
   children,
@@ -21,6 +23,10 @@ export default async function PrivateLayout({
   const cookieStore = await cookies();
   const sidebarCookie = cookieStore.get("crm-sidebar-collapsed")?.value;
   const initialCollapsed = sidebarCookie === "true";
+  const headerStore = await headers();
+  const host =
+    headerStore.get("x-forwarded-host") || headerStore.get("host");
+  let branding = await obterBrandingPorHost(host);
 
   let profileName = "Usuario";
   let avatarUrl = "";
@@ -42,6 +48,13 @@ export default async function PrivateLayout({
   }
 
   const acessoTemporario = resultado.usuario.acesso_temporario ?? null;
+
+  if (
+    branding.id === BRANDING_PROSPERITY.id &&
+    resultado.usuario.white_label_admin?.white_label
+  ) {
+    branding = resultado.usuario.white_label_admin.white_label;
+  }
 
   profileName =
     acessoTemporario?.operador.nome || resultado.usuario.nome || "Usuario";
@@ -93,6 +106,7 @@ export default async function PrivateLayout({
       isAdmin={isAdmin}
       nichoCodigo={nichoCodigo}
       podeAcessarWhatsappWebLocal={podeAcessarWhatsappWebLocal}
+      branding={branding}
     >
       {acessoTemporario && (
         <AcessoTemporarioEmpresaBanner acesso={acessoTemporario} />

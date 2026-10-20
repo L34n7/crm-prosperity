@@ -1,6 +1,7 @@
 export const PERMISSAO_INTERNA_EMPRESAS = "empresas.acesso_interno";
 export const PERMISSAO_RELATORIOS_INTERNOS = "relatorios_internos.visualizar";
 export const PERMISSAO_RELATORIOS = "relatorios.visualizar";
+export const PERMISSAO_WHITE_LABEL_CLIENTES = "white_label.clientes.gerenciar";
 
 export const PERMISSOES_INTERNAS_OCULTAS = [
   PERMISSAO_INTERNA_EMPRESAS,

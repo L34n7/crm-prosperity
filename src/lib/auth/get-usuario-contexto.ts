@@ -8,7 +8,12 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { obterAcessoTemporarioEmpresaAtual } from "@/lib/auth/acesso-temporario-empresa";
-import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
+import {
+  PERMISSAO_INTERNA_EMPRESAS,
+  PERMISSAO_WHITE_LABEL_CLIENTES,
+} from "@/lib/permissoes/internas";
+import { buscarWhiteLabelAdminPorUsuario } from "@/lib/white-label/acesso";
+import type { WhiteLabelAdminContexto } from "@/lib/white-label/types";
 import { listarSetoresDoUsuario } from "@/lib/usuarios/setores";
 import {
   listarPermissoesDoUsuario,
@@ -90,6 +95,7 @@ export type UsuarioContexto = {
   }>;
   setor_principal_id: string | null;
   acesso_temporario?: AcessoTemporarioEmpresaContexto | null;
+  white_label_admin?: WhiteLabelAdminContexto | null;
 };
 
 export type ResultadoUsuarioContexto =
@@ -332,6 +338,9 @@ export async function getUsuarioContexto(
       };
     }
 
+    const whiteLabelAdminOperador =
+      await buscarWhiteLabelAdminPorUsuario(operadorBase);
+
     let usuarioBase = operadorBase;
     let acessoTemporario: AcessoTemporarioEmpresaContexto | null = null;
 
@@ -347,7 +356,11 @@ export async function getUsuarioContexto(
           { empresaId: operadorBase.empresa_id }
         );
 
-        if (permissoesOperador.includes(PERMISSAO_INTERNA_EMPRESAS)) {
+        const operadorEhInterno = permissoesOperador.includes(
+          PERMISSAO_INTERNA_EMPRESAS
+        );
+
+        if (operadorEhInterno || whiteLabelAdminOperador) {
           const supabaseAdmin = getSupabaseAdmin();
 
           const [{ data: usuarioAlvo }, { data: empresaAlvo }] =
@@ -363,12 +376,24 @@ export async function getUsuarioContexto(
                 .maybeSingle<UsuarioBase>(),
               supabaseAdmin
                 .from("empresas")
-                .select("id, nome_fantasia")
+                .select("id, nome_fantasia, white_label_id, white_label_tipo")
                 .eq("id", acesso.empresa_id)
-                .maybeSingle<{ id: string; nome_fantasia: string }>(),
+                .maybeSingle<{
+                  id: string;
+                  nome_fantasia: string;
+                  white_label_id: string | null;
+                  white_label_tipo: "gestora" | "cliente" | null;
+                }>(),
             ]);
 
-          if (usuarioAlvo && empresaAlvo) {
+          const empresaPermitidaAoWhiteLabel =
+            operadorEhInterno ||
+            (whiteLabelAdminOperador &&
+              empresaAlvo?.white_label_id ===
+                whiteLabelAdminOperador.white_label_id &&
+              empresaAlvo?.white_label_tipo === "cliente");
+
+          if (usuarioAlvo && empresaAlvo && empresaPermitidaAoWhiteLabel) {
             const perfisAlvo = await listarPerfisDoUsuario(usuarioAlvo.id);
             const alvoEhAdministrador = (perfisAlvo ?? []).some((item) => {
               const perfil = Array.isArray(item.perfis_empresa)
@@ -420,11 +445,23 @@ export async function getUsuarioContexto(
         : null,
     ]);
 
-    const permissoes = await listarPermissoesDoUsuario(usuarioBase.id, {
+    let permissoes = await listarPermissoesDoUsuario(usuarioBase.id, {
       empresaId: usuarioBase.empresa_id,
       assinatura,
       perfis: perfisRaw,
     });
+
+    if (whiteLabelAdminOperador) {
+      permissoes = permissoes.filter(
+        (codigo) =>
+          !codigo.startsWith("ia.tokens") &&
+          codigo !== "assinaturas.plano.visualizar"
+      );
+
+      if (!permissoes.includes(PERMISSAO_WHITE_LABEL_CLIENTES)) {
+        permissoes.push(PERMISSAO_WHITE_LABEL_CLIENTES);
+      }
+    }
 
     const perfis_dinamicos = (perfisRaw ?? [])
       .map((item) => {
@@ -474,6 +511,7 @@ export async function getUsuarioContexto(
         usuarios_setores: vinculosSetores,
         setor_principal_id: setorPrincipal,
         acesso_temporario: acessoTemporario,
+        white_label_admin: whiteLabelAdminOperador,
       },
     };
   } catch (error) {

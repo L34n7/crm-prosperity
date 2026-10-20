@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -29,6 +31,7 @@ import {
 } from "./ProductVisuals";
 import SiteHeader from "./SiteHeader";
 import styles from "./site.module.css";
+import { obterBrandingPorHost } from "@/lib/white-label/branding";
 
 export const metadata: Metadata = {
   title: "CRM com IA para atendimento no WhatsApp",
@@ -340,7 +343,15 @@ function SectionHeading({
   );
 }
 
-export default function SitePage() {
+export default async function SitePage() {
+  const headerStore = await headers();
+  const branding = await obterBrandingPorHost(
+    headerStore.get("x-forwarded-host") || headerStore.get("host")
+  );
+
+  if (branding.is_white_label) {
+    redirect("/login");
+  }
   const enterpriseWhatsAppUrl = `https://wa.me/5531975117638?text=${encodeURIComponent(
     "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity.",
   )}`;

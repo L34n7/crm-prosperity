@@ -14,6 +14,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { can } from "@/lib/permissoes/can";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buscarWhiteLabelAdminPorUsuario } from "@/lib/white-label/acesso";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -35,12 +36,12 @@ async function validarOperadorInterno() {
     };
   }
 
-  const permitido = await can(
-    contexto.usuario.id,
-    PERMISSAO_INTERNA_EMPRESAS
-  );
+  const [permitido, whiteLabelAdmin] = await Promise.all([
+    can(contexto.usuario.id, PERMISSAO_INTERNA_EMPRESAS),
+    buscarWhiteLabelAdminPorUsuario(contexto.usuario),
+  ]);
 
-  if (!permitido) {
+  if (!permitido && !whiteLabelAdmin) {
     return {
       ok: false as const,
       response: NextResponse.json(
@@ -53,7 +54,12 @@ async function validarOperadorInterno() {
     };
   }
 
-  return { ok: true as const, usuario: contexto.usuario };
+  return {
+    ok: true as const,
+    usuario: contexto.usuario,
+    operadorEhInterno: permitido,
+    whiteLabelAdmin,
+  };
 }
 
 async function buscarAdministradorAtivo(empresaId: string) {
@@ -148,9 +154,14 @@ export async function POST(request: Request) {
 
     const { data: empresa, error: empresaError } = await supabaseAdmin
       .from("empresas")
-      .select("id, nome_fantasia")
+      .select("id, nome_fantasia, white_label_id, white_label_tipo")
       .eq("id", empresaId)
-      .maybeSingle<{ id: string; nome_fantasia: string }>();
+      .maybeSingle<{
+        id: string;
+        nome_fantasia: string;
+        white_label_id: string | null;
+        white_label_tipo: "gestora" | "cliente" | null;
+      }>();
 
     if (empresaError) {
       throw new Error(empresaError.message);
@@ -160,6 +171,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, error: "Empresa não encontrada." },
         { status: 404 }
+      );
+    }
+
+    if (
+      !operador.operadorEhInterno &&
+      operador.whiteLabelAdmin &&
+      (empresa.white_label_id !== operador.whiteLabelAdmin.white_label_id ||
+        empresa.white_label_tipo !== "cliente")
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Este cliente não pertence ao seu White Label.",
+        },
+        { status: 403 }
       );
     }
 

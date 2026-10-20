@@ -45,10 +45,15 @@ import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import {
   PERMISSAO_INTERNA_EMPRESAS,
   PERMISSAO_RELATORIOS_INTERNOS,
+  PERMISSAO_WHITE_LABEL_CLIENTES,
 } from "@/lib/permissoes/internas";
 import { PERMISSAO_VISUALIZAR_DISPAROS } from "@/lib/whatsapp/disparo-permissoes";
 import styles from "./Sidebar.module.css";
 import { getNichoConfig, type NichoCodigo } from "@/lib/nichos/config";
+import {
+  BRANDING_PROSPERITY,
+  type WhiteLabelBranding,
+} from "@/lib/white-label/types";
 
 type MenuItem = {
   label: string;
@@ -64,6 +69,7 @@ type SidebarProps = {
   isAdmin?: boolean;
   nichoCodigo?: NichoCodigo;
   podeAcessarWhatsappWebLocal?: boolean;
+  branding?: WhiteLabelBranding;
 };
 
 type WhatsappSidebarPerfil = {
@@ -182,6 +188,18 @@ const menuItems: MenuItem[] = [
     permissao: PERMISSAO_INTERNA_EMPRESAS,
   },
   {
+    label: "White Labels",
+    href: "/configuracoes/white-labels",
+    icon: Building2,
+    permissao: PERMISSAO_INTERNA_EMPRESAS,
+  },
+  {
+    label: "Clientes White Label",
+    href: "/white-label/clientes",
+    icon: Building2,
+    permissao: PERMISSAO_WHITE_LABEL_CLIENTES,
+  },
+  {
     label: "Configuração de setores",
     href: "/configuracoes/setores",
     icon: Layers3,
@@ -228,6 +246,7 @@ const menuItems: MenuItem[] = [
 const configuracoesHrefs = new Set([
   "/configuracoes/usuarios",
   "/configuracoes/empresas",
+  "/configuracoes/white-labels",
   "/configuracoes/setores",
   "/configuracoes/perfis",
   "/configuracoes/permissoes",
@@ -251,6 +270,7 @@ export default function Sidebar({
   isAdmin = false,
   nichoCodigo = "comercio",
   podeAcessarWhatsappWebLocal = false,
+  branding = BRANDING_PROSPERITY,
 }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -503,20 +523,34 @@ export default function Sidebar({
         <div className={styles.topBar}>
           <div className={styles.brand}>
             <div className={styles.logo}>
-              <Image
-                src="/logo.png"
-                alt="CRM Prosperity"
-                width={2096}
-                height={2048}
-                className={styles.logoImage}
-                priority
-              />
+              {branding.logo_url ? (
+                branding.is_white_label ? (
+                  <img
+                    src={branding.logo_url}
+                    alt={branding.nome_produto}
+                    className={styles.logoImage}
+                  />
+                ) : (
+                  <Image
+                    src={branding.logo_url}
+                    alt={branding.nome_produto}
+                    width={2096}
+                    height={2048}
+                    className={styles.logoImage}
+                    priority
+                  />
+                )
+              ) : (
+                <span className={styles.logoImage} aria-hidden="true">
+                  {branding.nome_produto.charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
 
             {!collapsed && (
               <div className={styles.brandText}>
                 <p className={styles.brandLabel}>Plataforma</p>
-                <h1 className={styles.brandTitle}>Prosperity CRM</h1>
+                <h1 className={styles.brandTitle}>{branding.nome_produto}</h1>
               </div>
             )}
           </div>

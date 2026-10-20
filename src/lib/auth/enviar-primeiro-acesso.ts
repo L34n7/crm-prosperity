@@ -1,6 +1,11 @@
 import { createHash, randomBytes } from "crypto";
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  obterBrandingDaEmpresa,
+  obterSiteUrlBranding,
+} from "@/lib/white-label/branding";
+import type { WhiteLabelBranding } from "@/lib/white-label/types";
 
 const supabaseAdmin = getSupabaseAdmin();
 const DURACAO_PRIMEIRO_ACESSO_MS = 24 * 60 * 60 * 1000;
@@ -115,13 +120,30 @@ async function garantirUsuarioAuth(params: {
 function getPrimeiroAcessoTemplate(params: {
   nome: string;
   link: string;
+  branding: WhiteLabelBranding;
+  siteUrl: string;
 }) {
-  const siteUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const logoUrl = `${siteUrl}/logo.png`;
   const nomeCliente = escaparHtml(params.nome?.trim() || "cliente");
   const link = escaparHtml(params.link);
+  const nomeProduto = escaparHtml(params.branding.nome_produto);
+  const nomeMarca = escaparHtml(params.branding.nome_marca);
+  const logoConfigurada = params.branding.logo_url;
+  const logoUrl = logoConfigurada
+    ? logoConfigurada.startsWith("http")
+      ? logoConfigurada
+      : params.siteUrl + (logoConfigurada.startsWith("/") ? "" : "/") + logoConfigurada
+    : params.branding.is_white_label
+      ? null
+      : params.siteUrl + "/logo.png";
+  const logoHtml = logoUrl
+    ? '<img src="' +
+      escaparHtml(logoUrl) +
+      '" alt="' +
+      nomeProduto +
+      '" width="170" style="display:block;margin:0 auto 18px auto;max-width:170px;max-height:72px;object-fit:contain;height:auto;" />'
+    : '<div style="display:inline-block;margin:0 auto 18px auto;padding:10px 16px;border-radius:12px;background:rgba(255,255,255,0.1);color:#ffffff;font-size:20px;font-weight:800;">' +
+      nomeProduto +
+      "</div>";
 
   return `
   <!DOCTYPE html>
@@ -141,16 +163,16 @@ function getPrimeiroAcessoTemplate(params: {
                 <td style="background:linear-gradient(135deg,#04254d 0%,#0b1526 25%,#0b1526 75%,#082d29 100%);padding:40px 32px;text-align:center;position:relative;">
                   <div style="position:absolute;inset:0;background:radial-gradient(circle at top left,rgba(59,130,246,0.18),transparent 40%),radial-gradient(circle at bottom right,rgba(16,185,129,0.12),transparent 40%);opacity:0.6;"></div>
                   <div style="position:relative;z-index:1;">
-                    <img src="${logoUrl}" alt="CRM Prosperity" width="170" style="display:block;margin:0 auto 18px auto;max-width:170px;height:auto;" />
+                    ${logoHtml}
                     <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;">Seu acesso foi liberado</h1>
-                    <p style="margin:10px 0 0;color:#cbd5f5;font-size:15px;">Bem-vindo ao CRM Prosperity</p>
+                    <p style="margin:10px 0 0;color:#cbd5f5;font-size:15px;">Bem-vindo ao ${nomeProduto}</p>
                   </div>
                 </td>
               </tr>
               <tr>
                 <td style="padding:40px 34px 32px 34px;">
                   <p style="margin:0 0 18px 0;color:#0f172a;font-size:18px;line-height:1.6;font-weight:700;">Olá, ${nomeCliente}!</p>
-                  <p style="margin:0 0 18px 0;color:#475569;font-size:15px;line-height:1.7;">Seu acesso ao <strong>CRM Prosperity</strong> já está pronto.</p>
+                  <p style="margin:0 0 18px 0;color:#475569;font-size:15px;line-height:1.7;">Seu acesso ao <strong>${nomeProduto}</strong> já está pronto.</p>
                   <p style="margin:0 0 18px 0;color:#475569;font-size:15px;line-height:1.7;">O link abaixo é válido por <strong>24 horas</strong> e pode ser aberto em até <strong>3 vezes</strong>. A senha poderá ser cadastrada apenas uma vez.</p>
                   <p style="margin:0 0 28px 0;color:#475569;font-size:15px;line-height:1.7;">Para começar a usar a plataforma, clique no botão abaixo e crie sua senha de acesso com segurança.</p>
                   <table width="100%" cellpadding="0" cellspacing="0">
@@ -169,8 +191,8 @@ function getPrimeiroAcessoTemplate(params: {
               </tr>
               <tr>
                 <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 32px;text-align:center;">
-                  <p style="margin:0 0 8px 0;color:#0f172a;font-size:14px;font-weight:700;">CRM Prosperity</p>
-                  <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">© ${new Date().getFullYear()} CRM Prosperity. Todos os direitos reservados.</p>
+                  <p style="margin:0 0 8px 0;color:#0f172a;font-size:14px;font-weight:700;">${nomeProduto}</p>
+                  <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">© ${new Date().getFullYear()} ${nomeMarca}. Todos os direitos reservados.</p>
                 </td>
               </tr>
             </table>
@@ -232,18 +254,24 @@ export async function enviarPrimeiroAcesso(params: {
     );
   }
 
-  const siteUrl = (
-    process.env.NEXT_PUBLIC_SITE_URL || "https://crmprosperity.com"
-  ).replace(/\/$/, "");
-  const link = `${siteUrl}/primeiro-acesso?token=${encodeURIComponent(token)}`;
+  const branding = await obterBrandingDaEmpresa(params.empresaId);
+  const siteUrl = obterSiteUrlBranding(branding);
+  const link = siteUrl + "/primeiro-acesso?token=" + encodeURIComponent(token);
 
   const resend = new Resend(resendApiKey);
   const envio = await resend.emails.send(
     {
-      from: "CRM Prosperity <no-reply@crmprosperity.com>",
+      from:
+        branding.nome_produto.replace(/[<>"]/g, "").trim() +
+        " <no-reply@crmprosperity.com>",
       to: email,
-      subject: "Seu acesso ao CRM Prosperity foi liberado",
-      html: getPrimeiroAcessoTemplate({ nome: params.nome, link }),
+      subject: "Seu acesso ao " + branding.nome_produto + " foi liberado",
+      html: getPrimeiroAcessoTemplate({
+        nome: params.nome,
+        link,
+        branding,
+        siteUrl,
+      }),
       tags: [
         { name: "tipo", value: "primeiro_acesso" },
         { name: "empresa_id", value: params.empresaId },

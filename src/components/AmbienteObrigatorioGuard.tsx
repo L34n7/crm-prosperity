@@ -47,6 +47,7 @@ export default function AmbienteObrigatorioGuard() {
     useState<IntegracaoWhatsappAmbiente | null>(null);
 
   const estaNaPaginaConfiguracao = pathname === "/configurar-ambiente";
+  const estaNoPainelWhiteLabel = pathname.startsWith("/white-label/");
   const fluxoNovoNumero =
     searchParams.get("fluxo") === "novo-numero" ||
     Boolean(searchParams.get("integracao_id"));
@@ -100,6 +101,11 @@ export default function AmbienteObrigatorioGuard() {
   );
 
   useEffect(() => {
+    if (estaNoPainelWhiteLabel) {
+      setCarregando(false);
+      return;
+    }
+
     if (ambienteConfiguradoEmCache()) {
       setAmbienteConfiguradoLocal(true);
       setCarregando(false);
@@ -115,9 +121,14 @@ export default function AmbienteObrigatorioGuard() {
     return () => {
       window.removeEventListener("crm_ambiente_configurado", marcarComoConfigurado);
     };
-  }, []);
+  }, [estaNoPainelWhiteLabel]);
 
   useEffect(() => {
+    if (estaNoPainelWhiteLabel) {
+      setCarregando(false);
+      return;
+    }
+
     if (estaNaPaginaConfiguracao) {
       if (fluxoNovoNumero) {
         setCarregando(false);
@@ -148,9 +159,11 @@ export default function AmbienteObrigatorioGuard() {
     fluxoNovoNumero,
     router,
     verificarAmbiente,
+    estaNoPainelWhiteLabel,
   ]);
 
   useEffect(() => {
+    if (estaNoPainelWhiteLabel) return;
     if (carregando) return;
     if (ambienteConfigurado) return;
     if (estaNaPaginaConfiguracao) return;
@@ -163,8 +176,15 @@ export default function AmbienteObrigatorioGuard() {
 
     window.sessionStorage.setItem("crm_ambiente_redirect_apos_login", "true");
     router.replace("/configurar-ambiente");
-  }, [carregando, ambienteConfigurado, estaNaPaginaConfiguracao, router]);
+  }, [
+    carregando,
+    ambienteConfigurado,
+    estaNaPaginaConfiguracao,
+    estaNoPainelWhiteLabel,
+    router,
+  ]);
 
+  if (estaNoPainelWhiteLabel) return null;
   if (carregando) return null;
   if (ambienteConfigurado) return null;
   if (estaNaPaginaConfiguracao) return null;
