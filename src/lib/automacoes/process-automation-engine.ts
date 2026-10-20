@@ -241,6 +241,52 @@ function timestampMensagemParaMs(valor: unknown) {
   return Number.isNaN(data.getTime()) ? null : data.getTime();
 }
 
+async function mensagemAtrasadaPodeSerProcessadaPeloAgenteIa(params: {
+  empresaId: string;
+  conversaId: string;
+  mensagemId: string;
+}) {
+  const [conversaResult, ultimaMensagemResult] = await Promise.all([
+    supabaseAdmin
+      .from("conversas")
+      .select("status, bot_ativo, aguardando_atendente, agente_ia_id")
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.conversaId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("mensagens")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("conversa_id", params.conversaId)
+      .eq("remetente_tipo", "contato")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (conversaResult.error || ultimaMensagemResult.error) {
+    console.error(
+      "[AUTOMATION_ENGINE] Erro ao validar exceção de mensagem atrasada para agente IA:",
+      {
+        conversa: conversaResult.error,
+        ultimaMensagem: ultimaMensagemResult.error,
+      }
+    );
+    return false;
+  }
+
+  const conversa = conversaResult.data;
+  const agenteIaAtivo =
+    conversa?.bot_ativo === true &&
+    conversa?.aguardando_atendente !== true &&
+    Boolean(conversa?.agente_ia_id) &&
+    !["fila", "em_atendimento"].includes(String(conversa?.status || ""));
+
+  if (!agenteIaAtivo) return false;
+
+  return ultimaMensagemResult.data?.id === params.mensagemId;
+}
+
 async function ignorarMensagemTemporalmenteInvalida(
   input: AutomationEngineInput
 ) {
@@ -311,6 +357,29 @@ async function ignorarMensagemTemporalmenteInvalida(
 
   if (!mensagemAnteriorExecucao && !mensagemEntregueComAtraso) {
     return null;
+  }
+
+  if (!mensagemAnteriorExecucao && mensagemEntregueComAtraso) {
+    const podeProcessarComoUltimaEntrada =
+      await mensagemAtrasadaPodeSerProcessadaPeloAgenteIa({
+        empresaId: input.empresaId,
+        conversaId: input.conversaId,
+        mensagemId,
+      });
+
+    if (podeProcessarComoUltimaEntrada) {
+      console.info(
+        "[AUTOMATION_ENGINE] Mensagem atrasada liberada por ser a última entrada de conversa com agente IA ativo",
+        {
+          mensagemId,
+          conversaId: input.conversaId,
+          timestampMensagem: new Date(timestampMensagemMs).toISOString(),
+          atrasoSegundos: Math.floor(atrasoMs / 1000),
+          atrasoMaximoSegundos: Math.floor(atrasoMaximoMs / 1000),
+        }
+      );
+      return null;
+    }
   }
 
   const motivo = mensagemAnteriorExecucao
