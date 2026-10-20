@@ -173,7 +173,6 @@ export async function POST(request: Request) {
     .toLowerCase();
   const administradorTelefone =
     String(body?.administrador_telefone || "").trim() || null;
-  const planoPadraoId = String(body?.plano_padrao_id || "").trim();
   const licencasContratadas = Number(body?.licencas_contratadas || 5);
   const valorMensalCentavos = Number(body?.valor_mensal_centavos ?? 0);
 
@@ -257,17 +256,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: plano } = await supabaseAdmin
+  const { data: planoBasico, error: planoBasicoError } = await supabaseAdmin
     .from("planos")
     .select("id")
-    .eq("id", planoPadraoId)
+    .eq("slug", "basico")
     .eq("status", "ativo")
-    .maybeSingle();
+    .maybeSingle<{ id: string }>();
 
-  if (!plano) {
+  if (planoBasicoError || !planoBasico) {
     return NextResponse.json(
-      { ok: false, error: "Selecione um plano ativo para o White Label." },
-      { status: 400 }
+      {
+        ok: false,
+        error: "O Plano Básico não está disponível. Verifique a configuração dos planos.",
+      },
+      { status: 500 }
     );
   }
 
@@ -308,7 +310,7 @@ export async function POST(request: Request) {
       cor_primaria: corPrimaria,
       licencas_contratadas: licencasContratadas,
       valor_mensal_centavos: valorMensalCentavos,
-      plano_padrao_id: planoPadraoId,
+      plano_padrao_id: planoBasico.id,
       status: "ativo",
       updated_at: agora,
     })
@@ -381,7 +383,7 @@ export async function POST(request: Request) {
   const { data: empresaGestora, error: empresaError } = await supabaseAdmin
     .from("empresas")
     .insert({
-      plano_id: planoPadraoId,
+      plano_id: planoBasico.id,
       nicho_id: NICHO_PADRAO_ID,
       nome_fantasia: nome + " - Gestão",
       razao_social: nome,

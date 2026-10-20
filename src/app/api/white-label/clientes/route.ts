@@ -93,16 +93,14 @@ export async function POST(request: Request) {
   const email = String(body?.email || "").trim().toLowerCase();
   const telefone = String(body?.telefone || "").trim() || null;
   const nomeResponsavel = String(body?.nome_responsavel || "").trim();
-  const planoId =
-    String(body?.plano_id || admin.white_label.plano_padrao_id || "").trim();
   const nichoId = String(body?.nicho_id || "").trim();
   const timezone = String(body?.timezone || "America/Sao_Paulo").trim();
 
-  if (!nomeFantasia || !email || !nomeResponsavel || !planoId || !nichoId) {
+  if (!nomeFantasia || !email || !nomeResponsavel || !nichoId) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Preencha empresa, responsável, e-mail, plano e segmento.",
+        error: "Preencha empresa, responsável, e-mail e segmento.",
       },
       { status: 400 }
     );
@@ -158,24 +156,35 @@ export async function POST(request: Request) {
     );
   }
 
-  const [{ data: plano }, { data: nicho }] = await Promise.all([
-    supabaseAdmin
-      .from("planos")
-      .select("id")
-      .eq("id", planoId)
-      .eq("status", "ativo")
-      .maybeSingle(),
-    supabaseAdmin
-      .from("nichos")
-      .select("id")
-      .eq("id", nichoId)
-      .eq("ativo", true)
-      .maybeSingle(),
-  ]);
+  const [{ data: planoBasico, error: planoBasicoError }, { data: nicho }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("planos")
+        .select("id")
+        .eq("slug", "basico")
+        .eq("status", "ativo")
+        .maybeSingle<{ id: string }>(),
+      supabaseAdmin
+        .from("nichos")
+        .select("id")
+        .eq("id", nichoId)
+        .eq("ativo", true)
+        .maybeSingle(),
+    ]);
 
-  if (!plano || !nicho) {
+  if (planoBasicoError || !planoBasico) {
     return NextResponse.json(
-      { ok: false, error: "Plano ou segmento inválido." },
+      {
+        ok: false,
+        error: "O Plano Básico não está disponível. Verifique a configuração dos planos.",
+      },
+      { status: 500 }
+    );
+  }
+
+  if (!nicho) {
+    return NextResponse.json(
+      { ok: false, error: "Segmento inválido." },
       { status: 400 }
     );
   }
@@ -184,7 +193,7 @@ export async function POST(request: Request) {
   const { data: empresa, error } = await supabaseAdmin
     .from("empresas")
     .insert({
-      plano_id: planoId,
+      plano_id: planoBasico.id,
       nicho_id: nichoId,
       nome_fantasia: nomeFantasia,
       razao_social: razaoSocial,
@@ -206,6 +215,7 @@ export async function POST(request: Request) {
       assinatura_metadata_json: {
         origem: "white_label",
         white_label_id: admin.white_label_id,
+        plano_slug: "basico",
       },
     })
     .select("id, nome_fantasia, email, nome_responsavel")

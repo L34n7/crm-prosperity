@@ -13,12 +13,6 @@ import {
 } from "lucide-react";
 import styles from "./white-label-clientes.module.css";
 
-type Plano = {
-  id: string;
-  nome: string;
-  slug: string;
-};
-
 type Nicho = {
   id: string;
   nome: string;
@@ -34,9 +28,7 @@ type Cliente = {
   nome_responsavel: string | null;
   status: string;
   created_at: string;
-  plano_id: string;
   nicho_id: string;
-  planos?: { nome?: string; slug?: string } | Array<{ nome?: string; slug?: string }> | null;
   nichos?: { nome?: string; codigo?: string } | Array<{ nome?: string; codigo?: string }> | null;
 };
 
@@ -47,18 +39,11 @@ type WhiteLabel = {
   licencas_contratadas: number;
   licencas_usadas: number;
   licencas_disponiveis: number;
-  plano_padrao_id: string | null;
 };
-
-function valorRelacao<T>(valor: T | T[] | null | undefined): T | null {
-  if (Array.isArray(valor)) return valor[0] || null;
-  return valor || null;
-}
 
 export default function WhiteLabelClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [whiteLabel, setWhiteLabel] = useState<WhiteLabel | null>(null);
-  const [planos, setPlanos] = useState<Plano[]>([]);
   const [nichos, setNichos] = useState<Nicho[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -73,7 +58,6 @@ export default function WhiteLabelClientesPage() {
     nome_responsavel: "",
     email: "",
     telefone: "",
-    plano_id: "",
     nicho_id: "",
   });
 
@@ -95,16 +79,13 @@ export default function WhiteLabelClientesPage() {
     setErro("");
 
     try {
-      const [clientesResponse, planosResponse, nichosResponse] =
-        await Promise.all([
-          fetch("/api/white-label/clientes", { cache: "no-store" }),
-          fetch("/api/white-label/planos", { cache: "no-store" }),
-          fetch("/api/nichos", { cache: "no-store" }),
-        ]);
+      const [clientesResponse, nichosResponse] = await Promise.all([
+        fetch("/api/white-label/clientes", { cache: "no-store" }),
+        fetch("/api/nichos", { cache: "no-store" }),
+      ]);
 
-      const [clientesJson, planosJson, nichosJson] = await Promise.all([
+      const [clientesJson, nichosJson] = await Promise.all([
         clientesResponse.json(),
-        planosResponse.json(),
         nichosResponse.json(),
       ]);
 
@@ -115,16 +96,10 @@ export default function WhiteLabelClientesPage() {
       setClientes(clientesJson.clientes || []);
       setWhiteLabel(clientesJson.white_label || null);
 
-      if (planosResponse.ok) setPlanos(planosJson.planos || []);
       if (nichosResponse.ok) setNichos(nichosJson.nichos || []);
 
       setForm((atual) => ({
         ...atual,
-        plano_id:
-          atual.plano_id ||
-          clientesJson.white_label?.plano_padrao_id ||
-          planosJson.planos?.[0]?.id ||
-          "",
         nicho_id: atual.nicho_id || nichosJson.nichos?.[0]?.id || "",
       }));
     } catch (error) {
@@ -325,7 +300,6 @@ export default function WhiteLabelClientesPage() {
                 <tr>
                   <th>Empresa</th>
                   <th>Responsável</th>
-                  <th>Plano</th>
                   <th>Segmento</th>
                   <th>Status</th>
                   <th />
@@ -333,8 +307,7 @@ export default function WhiteLabelClientesPage() {
               </thead>
               <tbody>
                 {clientes.map((cliente) => {
-                  const plano = valorRelacao(cliente.planos);
-                  const nicho = valorRelacao(cliente.nichos);
+                  const nicho = Array.isArray(cliente.nichos) ? cliente.nichos[0] : cliente.nichos;
                   return (
                     <tr key={cliente.id}>
                       <td>
@@ -345,7 +318,6 @@ export default function WhiteLabelClientesPage() {
                         <strong>{cliente.nome_responsavel || "—"}</strong>
                         <span>{cliente.telefone || "Sem telefone"}</span>
                       </td>
-                      <td>{plano?.nome || "—"}</td>
                       <td>{nicho?.nome || "—"}</td>
                       <td>
                         <span className={styles.statusBadge}>
@@ -389,8 +361,8 @@ export default function WhiteLabelClientesPage() {
             <span className={styles.eyebrow}>Nova licença</span>
             <h2>Cadastrar cliente</h2>
             <p>
-              A empresa será criada e o responsável receberá o e-mail de
-              ativação com a sua marca.
+              A empresa será criada no Plano Básico e o responsável receberá
+              o e-mail de ativação com a sua marca.
             </p>
 
             <div className={styles.formGrid}>
@@ -442,23 +414,6 @@ export default function WhiteLabelClientesPage() {
                     setForm({ ...form, telefone: event.target.value })
                   }
                 />
-              </label>
-              <label>
-                Plano de recursos
-                <select
-                  value={form.plano_id}
-                  onChange={(event) =>
-                    setForm({ ...form, plano_id: event.target.value })
-                  }
-                  required
-                >
-                  <option value="">Selecione</option>
-                  {planos.map((plano) => (
-                    <option key={plano.id} value={plano.id}>
-                      {plano.nome}
-                    </option>
-                  ))}
-                </select>
               </label>
               <label className={styles.fullField}>
                 Segmento

@@ -96,7 +96,6 @@ export async function PATCH(
   const logoUrlLegado = String(body?.logo_url || "").trim() || null;
   const faviconUrlLegado = String(body?.favicon_url || "").trim() || null;
   const corPrimaria = String(body?.cor_primaria || "#0f509a").trim();
-  const planoPadraoId = String(body?.plano_padrao_id || "").trim();
   const status = body?.status === "inativo" ? "inativo" : "ativo";
 
   if (
@@ -154,17 +153,20 @@ export async function PATCH(
     );
   }
 
-  const { data: plano } = await supabaseAdmin
+  const { data: planoBasico, error: planoBasicoError } = await supabaseAdmin
     .from("planos")
     .select("id")
-    .eq("id", planoPadraoId)
+    .eq("slug", "basico")
     .eq("status", "ativo")
-    .maybeSingle();
+    .maybeSingle<{ id: string }>();
 
-  if (!plano) {
+  if (planoBasicoError || !planoBasico) {
     return NextResponse.json(
-      { ok: false, error: "Plano padrão inválido." },
-      { status: 400 }
+      {
+        ok: false,
+        error: "O Plano Básico não está disponível. Verifique a configuração dos planos.",
+      },
+      { status: 500 }
     );
   }
 
@@ -249,7 +251,7 @@ export async function PATCH(
       cor_primaria: corPrimaria,
       licencas_contratadas: licencas,
       valor_mensal_centavos: valorMensalCentavos,
-      plano_padrao_id: planoPadraoId,
+      plano_padrao_id: planoBasico.id,
       status,
       updated_at: new Date().toISOString(),
     })

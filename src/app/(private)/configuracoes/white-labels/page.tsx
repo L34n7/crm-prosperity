@@ -16,11 +16,6 @@ import {
 import styles from "./white-labels.module.css";
 import { gerarPaletaWhiteLabel } from "@/lib/white-label/theme";
 
-type Plano = {
-  id: string;
-  nome: string;
-};
-
 type WhiteLabel = {
   id: string;
   nome: string;
@@ -34,7 +29,6 @@ type WhiteLabel = {
   licencas_usadas: number;
   licencas_disponiveis: number;
   valor_mensal_centavos: number;
-  plano_padrao_id: string | null;
   empresa_gestora_id: string | null;
   status: "ativo" | "inativo";
   administrador: {
@@ -50,7 +44,6 @@ const FORM_INICIAL = {
   cor_primaria: "#0f509a",
   licencas_contratadas: "5",
   valor_mensal: "0.00",
-  plano_padrao_id: "",
   administrador_nome: "",
   administrador_email: "",
   administrador_telefone: "",
@@ -59,7 +52,6 @@ const FORM_INICIAL = {
 
 export default function WhiteLabelsPage() {
   const [itens, setItens] = useState<WhiteLabel[]>([]);
-  const [planos, setPlanos] = useState<Plano[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [modalAberto, setModalAberto] = useState(false);
@@ -82,14 +74,10 @@ export default function WhiteLabelsPage() {
     setErro("");
 
     try {
-      const [whiteLabelsResponse, planosResponse] = await Promise.all([
-        fetch("/api/white-labels", { cache: "no-store" }),
-        fetch("/api/planos", { cache: "no-store" }),
-      ]);
-      const [whiteLabelsJson, planosJson] = await Promise.all([
-        whiteLabelsResponse.json(),
-        planosResponse.json(),
-      ]);
+      const whiteLabelsResponse = await fetch("/api/white-labels", {
+        cache: "no-store",
+      });
+      const whiteLabelsJson = await whiteLabelsResponse.json();
 
       if (!whiteLabelsResponse.ok) {
         throw new Error(
@@ -98,14 +86,6 @@ export default function WhiteLabelsPage() {
       }
 
       setItens(whiteLabelsJson.white_labels || []);
-      if (planosResponse.ok) {
-        setPlanos(planosJson.planos || []);
-        setForm((atual) => ({
-          ...atual,
-          plano_padrao_id:
-            atual.plano_padrao_id || planosJson.planos?.[0]?.id || "",
-        }));
-      }
     } catch (error) {
       setErro(
         error instanceof Error
@@ -129,10 +109,7 @@ export default function WhiteLabelsPage() {
     setFaviconArquivo(null);
     setLogoPreview("");
     setFaviconPreview("");
-    setForm({
-      ...FORM_INICIAL,
-      plano_padrao_id: planos[0]?.id || "",
-    });
+    setForm(FORM_INICIAL);
     setModalAberto(true);
   }
 
@@ -151,7 +128,6 @@ export default function WhiteLabelsPage() {
       cor_primaria: item.cor_primaria || "#0f509a",
       licencas_contratadas: String(item.licencas_contratadas),
       valor_mensal: (item.valor_mensal_centavos / 100).toFixed(2),
-      plano_padrao_id: item.plano_padrao_id || planos[0]?.id || "",
       administrador_nome: item.administrador?.nome || "",
       administrador_email: item.administrador?.email || "",
       administrador_telefone: "",
@@ -548,23 +524,6 @@ export default function WhiteLabelsPage() {
                   placeholder="500.00"
                   required
                 />
-              </label>
-              <label>
-                Plano padrão de recursos
-                <select
-                  value={form.plano_padrao_id}
-                  onChange={(event) =>
-                    setForm({ ...form, plano_padrao_id: event.target.value })
-                  }
-                  required
-                >
-                  <option value="">Selecione</option>
-                  {planos.map((plano) => (
-                    <option key={plano.id} value={plano.id}>
-                      {plano.nome}
-                    </option>
-                  ))}
-                </select>
               </label>
 
               {!editandoId ? (
