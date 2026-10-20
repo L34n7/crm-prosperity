@@ -102,6 +102,129 @@ export async function PATCH(
     });
   }
 
+  if (acao === "salvar_adicionais") {
+    const numerosAdicionais = Number(body?.numeros_adicionais);
+    const usuariosAdicionais = Number(body?.usuarios_adicionais);
+
+    if (
+      !Number.isInteger(numerosAdicionais) ||
+      numerosAdicionais < 0 ||
+      numerosAdicionais > WHITE_LABEL_MAX_NUMEROS_ADICIONAIS_POR_CLIENTE ||
+      !Number.isInteger(usuariosAdicionais) ||
+      usuariosAdicionais < 0 ||
+      usuariosAdicionais > 10000
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Quantidade de adicionais inválida." },
+        { status: 400 },
+      );
+    }
+
+    const limiteWhatsappAtual = Math.max(
+      WHITE_LABEL_NUMEROS_INCLUSOS_POR_CLIENTE,
+      Number(
+        empresa.limite_integracoes_whatsapp ??
+          WHITE_LABEL_NUMEROS_INCLUSOS_POR_CLIENTE,
+      ),
+    );
+    const limiteUsuariosAtual = Math.max(
+      WHITE_LABEL_USUARIOS_INCLUSOS_POR_CLIENTE,
+      Number(
+        empresa.limite_usuarios ??
+          WHITE_LABEL_USUARIOS_INCLUSOS_POR_CLIENTE,
+      ),
+    );
+    const novoLimiteWhatsapp =
+      WHITE_LABEL_NUMEROS_INCLUSOS_POR_CLIENTE + numerosAdicionais;
+    const novoLimiteUsuarios =
+      WHITE_LABEL_USUARIOS_INCLUSOS_POR_CLIENTE + usuariosAdicionais;
+
+    if (novoLimiteWhatsapp < limiteWhatsappAtual) {
+      const { count, error: countError } = await supabase
+        .from("integracoes_whatsapp")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresa.id)
+        .eq("provider", "meta_official")
+        .neq("status", "desconectada");
+
+      if (countError) {
+        return NextResponse.json(
+          { ok: false, error: countError.message },
+          { status: 500 },
+        );
+      }
+
+      if ((count ?? 0) > novoLimiteWhatsapp) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Desconecte primeiro um dos números WhatsApp deste cliente antes de salvar a redução.",
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    if (novoLimiteUsuarios < limiteUsuariosAtual) {
+      const { count, error: countError } = await supabase
+        .from("usuarios")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresa.id)
+        .eq("status", "ativo");
+
+      if (countError) {
+        return NextResponse.json(
+          { ok: false, error: countError.message },
+          { status: 500 },
+        );
+      }
+
+      if ((count ?? 0) > novoLimiteUsuarios) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Inative usuários deste cliente até ficar dentro do novo limite antes de salvar a redução.",
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    const { error } = await supabase
+      .from("empresas")
+      .update({
+        limite_integracoes_whatsapp: novoLimiteWhatsapp,
+        limite_total_numeros_whatsapp:
+          WHITE_LABEL_NUMEROS_INCLUSOS_POR_CLIENTE +
+          WHITE_LABEL_MAX_NUMEROS_ADICIONAIS_POR_CLIENTE,
+        limite_usuarios: novoLimiteUsuarios,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", empresa.id);
+
+    if (error) {
+      return NextResponse.json(
+        { ok: false, error: error.message },
+        { status: 500 },
+      );
+    }
+
+    const cobranca = await sincronizarCobrancaWhiteLabel(admin.white_label_id);
+
+    return NextResponse.json({
+      ok: true,
+      message: "Quantidades de números e usuários salvas com sucesso.",
+      numeros_adicionais: numerosAdicionais,
+      usuarios_adicionais: usuariosAdicionais,
+      limite_integracoes_whatsapp: novoLimiteWhatsapp,
+      limite_usuarios: novoLimiteUsuarios,
+      cobranca,
+      warning: cobranca.warning,
+    });
+  }
+
   if (acao === "numero_adicional") {
     const delta = deltaValido(body?.delta);
     if (!delta) {

@@ -48,6 +48,11 @@ type WhiteLabel = {
   licencas_disponiveis: number;
 };
 
+type AjustePendente = {
+  numeros_adicionais: number;
+  usuarios_adicionais: number;
+};
+
 export default function WhiteLabelClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [whiteLabel, setWhiteLabel] = useState<WhiteLabel | null>(null);
@@ -56,6 +61,9 @@ export default function WhiteLabelClientesPage() {
   const [salvando, setSalvando] = useState(false);
   const [acessandoId, setAcessandoId] = useState("");
   const [alterandoCliente, setAlterandoCliente] = useState("");
+  const [ajustesPendentes, setAjustesPendentes] = useState<
+    Record<string, AjustePendente>
+  >({});
   const [modalAberto, setModalAberto] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
@@ -102,6 +110,7 @@ export default function WhiteLabelClientesPage() {
       }
 
       setClientes(clientesJson.clientes || []);
+      setAjustesPendentes({});
       setWhiteLabel(clientesJson.white_label || null);
 
       if (nichosResponse.ok) setNichos(nichosJson.nichos || []);
@@ -232,6 +241,94 @@ export default function WhiteLabelClientesPage() {
     }
   }
 
+  function obterAdicionaisPersistidos(cliente: Cliente): AjustePendente {
+    return {
+      numeros_adicionais: Math.max(
+        0,
+        Number(cliente.limite_integracoes_whatsapp || 1) - 1
+      ),
+      usuarios_adicionais: Math.max(
+        0,
+        Number(cliente.limite_usuarios || 2) - 2
+      ),
+    };
+  }
+
+  function ajustarAdicional(
+    cliente: Cliente,
+    campo: keyof AjustePendente,
+    delta: number
+  ) {
+    const persistidos = obterAdicionaisPersistidos(cliente);
+
+    setAjustesPendentes((atual) => {
+      const corrente = atual[cliente.id] || persistidos;
+      const proximo: AjustePendente = { ...corrente };
+
+      if (campo === "numeros_adicionais") {
+        proximo.numeros_adicionais = Math.min(
+          5,
+          Math.max(0, corrente.numeros_adicionais + delta)
+        );
+      } else {
+        proximo.usuarios_adicionais = Math.max(
+          0,
+          corrente.usuarios_adicionais + delta
+        );
+      }
+
+      if (
+        proximo.numeros_adicionais === persistidos.numeros_adicionais &&
+        proximo.usuarios_adicionais === persistidos.usuarios_adicionais
+      ) {
+        const copia = { ...atual };
+        delete copia[cliente.id];
+        return copia;
+      }
+
+      return { ...atual, [cliente.id]: proximo };
+    });
+  }
+
+  async function salvarAdicionais(cliente: Cliente) {
+    const ajuste = ajustesPendentes[cliente.id];
+    if (!ajuste || alterandoCliente) return;
+
+    setAlterandoCliente(cliente.id + ":adicionais");
+    setErro("");
+    setSucesso("");
+    setWarning("");
+
+    try {
+      const response = await fetch("/api/white-label/clientes/" + cliente.id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          acao: "salvar_adicionais",
+          numeros_adicionais: ajuste.numeros_adicionais,
+          usuarios_adicionais: ajuste.usuarios_adicionais,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível salvar os adicionais.");
+      }
+
+      setSucesso(data.message || "Adicionais salvos com sucesso.");
+      setWarning(data.warning || "");
+      await carregar();
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar os adicionais."
+      );
+    } finally {
+      setAlterandoCliente("");
+    }
+  }
+
   return (
     <main className={styles.page}>
       <section className={styles.hero}>
@@ -356,6 +453,13 @@ export default function WhiteLabelClientesPage() {
               <tbody>
                 {clientes.map((cliente) => {
                   const nicho = Array.isArray(cliente.nichos) ? cliente.nichos[0] : cliente.nichos;
+                  const persistidos = obterAdicionaisPersistidos(cliente);
+                  const ajuste = ajustesPendentes[cliente.id];
+                  const numerosAdicionais =
+                    ajuste?.numeros_adicionais ?? persistidos.numeros_adicionais;
+                  const usuariosAdicionais =
+                    ajuste?.usuarios_adicionais ?? persistidos.usuarios_adicionais;
+                  const temAlteracao = Boolean(ajuste);
                   return (
                     <tr key={cliente.id}>
                       <td>
@@ -373,17 +477,10 @@ export default function WhiteLabelClientesPage() {
                             type="button"
                             className={styles.addonButton}
                             onClick={() =>
-                              void alterarCliente(
-                                cliente.id,
-                                { acao: "numero_adicional", delta: -1 },
-                                "numero-"
-                              )
+                              ajustarAdicional(cliente, "numeros_adicionais", -1)
                             }
                             disabled={
-                              Math.max(
-                                0,
-                                Number(cliente.limite_integracoes_whatsapp || 1) - 1
-                              ) <= 0 ||
+                              numerosAdicionais <= 0 ||
                               alterandoCliente.startsWith(cliente.id + ":")
                             }
                             title="Remover número adicional"
@@ -392,26 +489,16 @@ export default function WhiteLabelClientesPage() {
                           </button>
                           <span className={styles.addonValue}>
                             <Smartphone size={14} />
-                            {Math.max(
-                              0,
-                              Number(cliente.limite_integracoes_whatsapp || 1) - 1
-                            )} / 5
+                            {numerosAdicionais} / 5
                           </span>
                           <button
                             type="button"
                             className={styles.addonButton}
                             onClick={() =>
-                              void alterarCliente(
-                                cliente.id,
-                                { acao: "numero_adicional", delta: 1 },
-                                "numero+"
-                              )
+                              ajustarAdicional(cliente, "numeros_adicionais", 1)
                             }
                             disabled={
-                              Math.max(
-                                0,
-                                Number(cliente.limite_integracoes_whatsapp || 1) - 1
-                              ) >= 5 ||
+                              numerosAdicionais >= 5 ||
                               alterandoCliente.startsWith(cliente.id + ":")
                             }
                             title="Adicionar número por R$ 60/mês"
@@ -427,17 +514,10 @@ export default function WhiteLabelClientesPage() {
                             type="button"
                             className={styles.addonButton}
                             onClick={() =>
-                              void alterarCliente(
-                                cliente.id,
-                                { acao: "usuario_adicional", delta: -1 },
-                                "usuario-"
-                              )
+                              ajustarAdicional(cliente, "usuarios_adicionais", -1)
                             }
                             disabled={
-                              Math.max(
-                                0,
-                                Number(cliente.limite_usuarios || 2) - 2
-                              ) <= 0 ||
+                              usuariosAdicionais <= 0 ||
                               alterandoCliente.startsWith(cliente.id + ":")
                             }
                             title="Remover usuário adicional"
@@ -446,20 +526,13 @@ export default function WhiteLabelClientesPage() {
                           </button>
                           <span className={styles.addonValue}>
                             <UserPlus size={14} />
-                            {Math.max(
-                              0,
-                              Number(cliente.limite_usuarios || 2) - 2
-                            )}
+                            {usuariosAdicionais}
                           </span>
                           <button
                             type="button"
                             className={styles.addonButton}
                             onClick={() =>
-                              void alterarCliente(
-                                cliente.id,
-                                { acao: "usuario_adicional", delta: 1 },
-                                "usuario+"
-                              )
+                              ajustarAdicional(cliente, "usuarios_adicionais", 1)
                             }
                             disabled={alterandoCliente.startsWith(cliente.id + ":")}
                             title="Adicionar usuário por R$ 20/mês"
@@ -501,20 +574,34 @@ export default function WhiteLabelClientesPage() {
                         </div>
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className={styles.accessButton}
-                          onClick={() => void acessarCliente(cliente.id)}
-                          disabled={
-                            acessandoId === cliente.id ||
-                            cliente.status !== "ativa"
-                          }
-                        >
-                          <ExternalLink size={15} />
-                          {acessandoId === cliente.id
-                            ? "Abrindo..."
-                            : "Acessar"}
-                        </button>
+                        <div className={styles.rowActions}>
+                          {temAlteracao ? (
+                            <button
+                              type="button"
+                              className={styles.saveButton}
+                              onClick={() => void salvarAdicionais(cliente)}
+                              disabled={alterandoCliente.startsWith(cliente.id + ":")}
+                            >
+                              {alterandoCliente === cliente.id + ":adicionais"
+                                ? "Salvando..."
+                                : "Salvar"}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className={styles.accessButton}
+                            onClick={() => void acessarCliente(cliente.id)}
+                            disabled={
+                              acessandoId === cliente.id ||
+                              cliente.status !== "ativa"
+                            }
+                          >
+                            <ExternalLink size={15} />
+                            {acessandoId === cliente.id
+                              ? "Abrindo..."
+                              : "Acessar"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

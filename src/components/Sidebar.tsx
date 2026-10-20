@@ -495,6 +495,11 @@ export default function Sidebar({
     );
 
     if (!detail.handled) {
+      if (whiteLabelGestora) {
+        router.push("/white-label/clientes");
+        return;
+      }
+
       router.push("/plano");
     }
   }
