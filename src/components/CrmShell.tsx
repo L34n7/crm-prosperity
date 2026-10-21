@@ -11,7 +11,6 @@ import styles from "./CrmShell.module.css";
 import type { NichoCodigo } from "@/lib/nichos/config";
 import type { WhiteLabelBranding } from "@/lib/white-label/types";
 import WhiteLabelThemeRuntime from "@/components/WhiteLabelThemeRuntime";
-import WhiteLabelAssinaturaModal from "@/components/WhiteLabelAssinaturaModal";
 
 type CrmShellProps = {
   children: React.ReactNode;
@@ -65,9 +64,6 @@ export default function CrmShell({
             {children}
           </div>
 
-          <WhiteLabelAssinaturaModal
-            enabled={assinatura?.white_label_gestora === true}
-          />
           <AssinaturaStatusGuard assinatura={assinatura} isAdmin={isAdmin} />
           <WhatsAppDisparoProgressCard />
         </div>
