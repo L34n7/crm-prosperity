@@ -93,14 +93,13 @@ export async function POST(request: Request) {
   const email = String(body?.email || "").trim().toLowerCase();
   const telefone = String(body?.telefone || "").trim() || null;
   const nomeResponsavel = String(body?.nome_responsavel || "").trim();
-  const nichoId = String(body?.nicho_id || "").trim();
   const timezone = String(body?.timezone || "America/Sao_Paulo").trim();
 
-  if (!nomeFantasia || !email || !nomeResponsavel || !nichoId) {
+  if (!nomeFantasia || !email || !nomeResponsavel) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Preencha empresa, responsável, e-mail e segmento.",
+        error: "Preencha empresa, responsável e e-mail.",
       },
       { status: 400 }
     );
@@ -156,21 +155,23 @@ export async function POST(request: Request) {
     );
   }
 
-  const [{ data: planoBasico, error: planoBasicoError }, { data: nicho }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("planos")
-        .select("id")
-        .eq("slug", "basico")
-        .eq("status", "ativo")
-        .maybeSingle<{ id: string }>(),
-      supabaseAdmin
-        .from("nichos")
-        .select("id")
-        .eq("id", nichoId)
-        .eq("ativo", true)
-        .maybeSingle(),
-    ]);
+  const [
+    { data: planoBasico, error: planoBasicoError },
+    { data: nichoComercial, error: nichoComercialError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("planos")
+      .select("id")
+      .eq("slug", "basico")
+      .eq("status", "ativo")
+      .maybeSingle<{ id: string }>(),
+    supabaseAdmin
+      .from("nichos")
+      .select("id")
+      .eq("codigo", "comercio")
+      .eq("ativo", true)
+      .maybeSingle<{ id: string }>(),
+  ]);
 
   if (planoBasicoError || !planoBasico) {
     return NextResponse.json(
@@ -182,10 +183,13 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!nicho) {
+  if (nichoComercialError || !nichoComercial) {
     return NextResponse.json(
-      { ok: false, error: "Segmento inválido." },
-      { status: 400 }
+      {
+        ok: false,
+        error: "O nicho Comercial não está disponível. Verifique a configuração de nichos.",
+      },
+      { status: 500 }
     );
   }
 
@@ -194,7 +198,7 @@ export async function POST(request: Request) {
     .from("empresas")
     .insert({
       plano_id: planoBasico.id,
-      nicho_id: nichoId,
+      nicho_id: nichoComercial.id,
       nome_fantasia: nomeFantasia,
       razao_social: razaoSocial,
       email,

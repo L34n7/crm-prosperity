@@ -17,12 +17,6 @@ import {
 } from "lucide-react";
 import styles from "./white-label-clientes.module.css";
 
-type Nicho = {
-  id: string;
-  nome: string;
-  codigo: string;
-};
-
 type Cliente = {
   id: string;
   nome_fantasia: string;
@@ -56,7 +50,6 @@ type AjustePendente = {
 export default function WhiteLabelClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [whiteLabel, setWhiteLabel] = useState<WhiteLabel | null>(null);
-  const [nichos, setNichos] = useState<Nicho[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [acessandoId, setAcessandoId] = useState("");
@@ -74,7 +67,6 @@ export default function WhiteLabelClientesPage() {
     nome_responsavel: "",
     email: "",
     telefone: "",
-    nicho_id: "",
   });
 
   const limiteAtingido =
@@ -95,15 +87,10 @@ export default function WhiteLabelClientesPage() {
     setErro("");
 
     try {
-      const [clientesResponse, nichosResponse] = await Promise.all([
-        fetch("/api/white-label/clientes", { cache: "no-store" }),
-        fetch("/api/nichos", { cache: "no-store" }),
-      ]);
-
-      const [clientesJson, nichosJson] = await Promise.all([
-        clientesResponse.json(),
-        nichosResponse.json(),
-      ]);
+      const clientesResponse = await fetch("/api/white-label/clientes", {
+        cache: "no-store",
+      });
+      const clientesJson = await clientesResponse.json();
 
       if (!clientesResponse.ok) {
         throw new Error(clientesJson.error || "Não foi possível carregar os clientes.");
@@ -113,12 +100,6 @@ export default function WhiteLabelClientesPage() {
       setAjustesPendentes({});
       setWhiteLabel(clientesJson.white_label || null);
 
-      if (nichosResponse.ok) setNichos(nichosJson.nichos || []);
-
-      setForm((atual) => ({
-        ...atual,
-        nicho_id: atual.nicho_id || nichosJson.nichos?.[0]?.id || "",
-      }));
     } catch (error) {
       setErro(
         error instanceof Error
@@ -627,8 +608,8 @@ export default function WhiteLabelClientesPage() {
             <span className={styles.eyebrow}>Nova licença</span>
             <h2>Cadastrar cliente</h2>
             <p>
-              A empresa será criada no Plano Básico e o responsável receberá
-              o e-mail de ativação com a sua marca.
+              A empresa será criada no Plano Básico, com nicho Comercial
+              predefinido, e o responsável receberá o e-mail de ativação com a sua marca.
             </p>
 
             <div className={styles.formGrid}>
@@ -681,23 +662,7 @@ export default function WhiteLabelClientesPage() {
                   }
                 />
               </label>
-              <label className={styles.fullField}>
-                Segmento
-                <select
-                  value={form.nicho_id}
-                  onChange={(event) =>
-                    setForm({ ...form, nicho_id: event.target.value })
-                  }
-                  required
-                >
-                  <option value="">Selecione</option>
-                  {nichos.map((nicho) => (
-                    <option key={nicho.id} value={nicho.id}>
-                      {nicho.nome}
-                    </option>
-                  ))}
-                </select>
-              </label>
+
             </div>
 
             <div className={styles.modalActions}>

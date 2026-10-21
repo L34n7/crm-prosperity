@@ -43,6 +43,8 @@ type Empresa = {
   estado: string | null;
   nicho_id: string;
   nicho: Nicho | null;
+  white_label_id: string | null;
+  white_label_tipo: string | null;
 };
 type FormEmpresa = {
   nome_fantasia: string;
@@ -132,7 +134,10 @@ export default function ConfiguracoesClient({
     [form.nicho_id, nichos]
   );
   const configSelecionada = getNichoConfig(nichoSelecionado?.codigo);
-  const alterouNicho = Boolean(empresa && form.nicho_id !== empresa.nicho_id);
+  const empresaWhiteLabel = Boolean(empresa?.white_label_id);
+  const alterouNicho =
+    !empresaWhiteLabel &&
+    Boolean(empresa && form.nicho_id !== empresa.nicho_id);
   const alterouFormulario = Boolean(empresa) && JSON.stringify(form) !== JSON.stringify(paraForm(empresa!));
   const trocaDeGrupo = Boolean(empresa?.nicho && nichoSelecionado) && empresa?.nicho?.grupo !== nichoSelecionado?.grupo;
 
@@ -266,7 +271,11 @@ export default function ConfiguracoesClient({
                 <div>
                   <span className={styles.eyebrow}>Dados cadastrais</span>
                   <h2>Empresa</h2>
-                  <p>Atualize os dados institucionais, localização, identidade visual e nicho.</p>
+                  <p>
+                    {empresaWhiteLabel
+                      ? "Atualize os dados institucionais, localização e identidade visual."
+                      : "Atualize os dados institucionais, localização, identidade visual e nicho."}
+                  </p>
                 </div>
               </div>
             </div>
@@ -283,26 +292,34 @@ export default function ConfiguracoesClient({
               <label className={`${styles.companyField} ${styles.fieldWide}`}><span>Logo da empresa (URL)</span><div className={styles.logoField}><span className={styles.logoPreview}>{form.logo_url ? <img src={form.logo_url} alt="Logo da empresa" /> : <ImageIcon size={22} />}</span><input type="url" value={form.logo_url} maxLength={500} placeholder="https://..." onChange={(e) => atualizar("logo_url", e.target.value)} /></div><small>Informe uma URL pública da imagem. O upload direto poderá ser adicionado depois.</small></label>
             </div>
 
-            <div className={styles.nicheDivider} />
-            <div className={styles.sectionHeader}>
-              <div><span className={styles.eyebrow}>Nicho e módulos</span><h2>Nicho da empresa</h2><p>Escolha o segmento que adapta cadastros e módulos do CRM.</p></div>
-            </div>
-            <div className={styles.nicheGrid}>
-              {nichos.map((nicho) => {
+            {!empresaWhiteLabel ? (
+              <>
+                <div className={styles.nicheDivider} />
+                <div className={styles.sectionHeader}>
+                <div><span className={styles.eyebrow}>Nicho e módulos</span><h2>Nicho da empresa</h2><p>Escolha o segmento que adapta cadastros e módulos do CRM.</p></div>
+                </div>
+                <div className={styles.nicheGrid}>
+                {nichos.map((nicho) => {
                 const selecionado = nicho.id === form.nicho_id;
                 return <button key={nicho.id} type="button" className={`${styles.nicheOption} ${selecionado ? styles.nicheOptionSelected : ""}`} onClick={() => atualizar("nicho_id", nicho.id)} aria-pressed={selecionado}>
-                  <span className={styles.optionIcon}><IconeNicho codigo={nicho.codigo} /></span>
-                  <span className={styles.optionContent}><strong>{nicho.nome}</strong><small>{nicho.grupo === "saude" ? "Saúde" : "Comercial"} · {nicho.rotulo_cadastro_plural}</small></span>
-                  <span className={`${styles.radio} ${selecionado ? styles.radioSelected : ""}`} />
+                <span className={styles.optionIcon}><IconeNicho codigo={nicho.codigo} /></span>
+                <span className={styles.optionContent}><strong>{nicho.nome}</strong><small>{nicho.grupo === "saude" ? "Saúde" : "Comercial"} · {nicho.rotulo_cadastro_plural}</small></span>
+                <span className={`${styles.radio} ${selecionado ? styles.radioSelected : ""}`} />
                 </button>;
-              })}
-            </div>
-            {nichoSelecionado && <div className={styles.preview}><div><span className={styles.previewLabel}>O sistema será exibido como</span><strong>{configSelecionada.cadastroPlural}</strong></div><div className={styles.moduleList}>{configSelecionada.modulos.map((modulo) => <span key={modulo}><CheckCircle2 size={14} />{MODULOS_LABEL[modulo] ?? modulo}</span>)}</div></div>}
-
-            {confirmandoNicho && alterouNicho && <div className={styles.confirmBox}><CircleAlert size={22} /><div className={styles.confirmContent}><strong>Confirmar mudança para {nichoSelecionado?.nome}?</strong><p>Os dados existentes não serão apagados. Módulos fora do novo nicho deixarão de aparecer.</p>{trocaDeGrupo && <p className={styles.groupWarning}>Esta mudança troca o grupo de módulos da empresa, preservando os cadastros existentes.</p>}</div></div>}
+                })}
+                </div>
+                {nichoSelecionado && <div className={styles.preview}><div><span className={styles.previewLabel}>O sistema será exibido como</span><strong>{configSelecionada.cadastroPlural}</strong></div><div className={styles.moduleList}>{configSelecionada.modulos.map((modulo) => <span key={modulo}><CheckCircle2 size={14} />{MODULOS_LABEL[modulo] ?? modulo}</span>)}</div></div>}
+                
+                {confirmandoNicho && alterouNicho && <div className={styles.confirmBox}><CircleAlert size={22} /><div className={styles.confirmContent}><strong>Confirmar mudança para {nichoSelecionado?.nome}?</strong><p>Os dados existentes não serão apagados. Módulos fora do novo nicho deixarão de aparecer.</p>{trocaDeGrupo && <p className={styles.groupWarning}>Esta mudança troca o grupo de módulos da empresa, preservando os cadastros existentes.</p>}</div></div>}
+              </>
+            ) : null}
 
             <div className={styles.footer}>
-              <p>Todos os dados e o nicho serão salvos juntos.</p>
+              <p>
+                {empresaWhiteLabel
+                  ? "Os dados cadastrais serão salvos mantendo o nicho Comercial predefinido."
+                  : "Todos os dados e o nicho serão salvos juntos."}
+              </p>
               <button type="button" className={styles.primaryButton} onClick={salvar} disabled={salvando || !alterouFormulario || form.nome_fantasia.trim().length < 2 || !form.email.trim()}><Save size={17} />{salvando ? "Salvando..." : confirmandoNicho ? "Confirmar e salvar" : "Salvar alterações"}</button>
             </div>
           </section>

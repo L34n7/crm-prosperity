@@ -22,6 +22,8 @@ const EMPRESA_SELECT = `
   cidade,
   estado,
   nicho_id,
+  white_label_id,
+  white_label_tipo,
   nichos (
     id,
     codigo,
@@ -132,7 +134,7 @@ export async function PUT(request: Request) {
     const endereco = texto(body.endereco, 240);
     const cidade = texto(body.cidade, 120);
     const estado = texto(body.estado, 2).toUpperCase();
-    const nichoId = texto(body.nicho_id, 80);
+    let nichoId = texto(body.nicho_id, 80);
 
     if (nomeFantasia.length < 2) {
       return NextResponse.json({ ok: false, error: "Informe um nome de empresa válido." }, { status: 400 });
@@ -140,14 +142,33 @@ export async function PUT(request: Request) {
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       return NextResponse.json({ ok: false, error: "Informe um e-mail comercial válido." }, { status: 400 });
     }
-    if (!nichoId) {
-      return NextResponse.json({ ok: false, error: "Selecione o nicho da empresa." }, { status: 400 });
-    }
     if (estado && estado.length !== 2) {
       return NextResponse.json({ ok: false, error: "Informe o estado usando a sigla com 2 letras." }, { status: 400 });
     }
 
     const contextoAtual = await carregarEmpresa(empresaId);
+    const empresaWhiteLabel = Boolean(contextoAtual.empresa.white_label_id);
+
+    if (empresaWhiteLabel) {
+      const nichoComercial = contextoAtual.nichos.find(
+        (nicho) => nicho.codigo === "comercio"
+      );
+
+      if (!nichoComercial) {
+        return NextResponse.json(
+          { ok: false, error: "O nicho Comercial não está disponível." },
+          { status: 500 }
+        );
+      }
+
+      nichoId = nichoComercial.id;
+    } else if (!nichoId) {
+      return NextResponse.json(
+        { ok: false, error: "Selecione o nicho da empresa." },
+        { status: 400 }
+      );
+    }
+
     const novoNicho = contextoAtual.nichos.find((nicho) => nicho.id === nichoId);
     if (!novoNicho) {
       return NextResponse.json({ ok: false, error: "Nicho não encontrado ou inativo." }, { status: 404 });

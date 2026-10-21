@@ -23,6 +23,8 @@ type EmpresaNichoRow = {
   id: string;
   nome_fantasia: string;
   nicho_id: string;
+  white_label_id: string | null;
+  white_label_tipo: string | null;
   nichos: NichoRow | NichoRow[] | null;
 };
 
@@ -42,6 +44,8 @@ async function carregarContextoNicho(empresaId: string) {
           id,
           nome_fantasia,
           nicho_id,
+          white_label_id,
+          white_label_tipo,
           nichos (
             id,
             codigo,
@@ -74,6 +78,8 @@ async function carregarContextoNicho(empresaId: string) {
       id: empresaTipada.id,
       nome_fantasia: empresaTipada.nome_fantasia,
       nicho_id: empresaTipada.nicho_id,
+      white_label_id: empresaTipada.white_label_id,
+      white_label_tipo: empresaTipada.white_label_tipo,
       nicho: normalizarRelacao(empresaTipada.nichos),
     },
     nichos: (nichos ?? []) as NichoRow[],
@@ -173,6 +179,18 @@ export async function PUT(request: Request) {
     }
 
     const contextoAtual = await carregarContextoNicho(empresaId);
+
+    if (contextoAtual.empresa.white_label_id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "O nicho das empresas White Label é fixo em Comercial e não pode ser alterado.",
+        },
+        { status: 403 }
+      );
+    }
+
     const nichoAtual = contextoAtual.empresa.nicho;
     const novoNicho =
       contextoAtual.nichos.find((nicho) => nicho.id === nichoId) ?? null;
