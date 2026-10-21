@@ -311,6 +311,9 @@ export default function Header({
   );
   const assinaturaEmAberto =
     headerUser.assinatura !== null && headerUser.assinatura.status !== "ativa";
+  const assinaturaWhiteLabel =
+    headerUser.assinatura?.white_label_gestora === true ||
+    Boolean(assinaturaResumo?.white_label);
 
   const nomeFinal = profileName || headerUser.profileName || "Usuário";
   const avatarFinal = avatarUrl || headerUser.avatarUrl || "";
@@ -869,7 +872,7 @@ export default function Header({
   }
 
   function obterPlanoAtualCheckout() {
-    if (assinaturaResumo?.white_label || assinaturaResumo?.plan.is_free) return null;
+    if (assinaturaWhiteLabel || assinaturaResumo?.plan.is_free) return null;
 
     return (
       PLANOS_RENOVACAO.find(
@@ -1533,17 +1536,17 @@ export default function Header({
               <div className={styles.planRenewalHeader}>
                 <div>
                   <span className={styles.planRenewalEyebrow}>
-                    {assinaturaResumo?.white_label
+                    {assinaturaWhiteLabel
                       ? "White Label e assinatura"
                       : "Plano e assinatura"}
                   </span>
                   <h2 id="plan-renewal-title">
-                    {assinaturaResumo?.white_label
+                    {assinaturaWhiteLabel
                       ? "Gerenciar White Label"
                       : "Gerenciar plano"}
                   </h2>
                   <p>
-                    {assinaturaResumo?.white_label
+                    {assinaturaWhiteLabel
                       ? "Acompanhe sua mensalidade base, adicionais dos clientes e o total do próximo ciclo."
                       : "Controle sua assinatura, adicionais e pagamentos em um só lugar, com total transparência sobre o próximo ciclo."}
                   </p>
@@ -1566,19 +1569,21 @@ export default function Header({
                   </div>
                   <div className={styles.planCurrentIdentity}>
                     <span>
-                      {assinaturaResumo?.white_label
+                      {assinaturaWhiteLabel
                         ? "Contrato atual"
                         : "Plano atual"}
                     </span>
                     <strong>
-                      {assinaturaResumo?.plan.name || assinaturaPlanoNome}
+                      {assinaturaWhiteLabel && !assinaturaResumo
+                        ? "White Label"
+                        : assinaturaResumo?.plan.name || assinaturaPlanoNome}
                     </strong>
                     <small>
                       {assinaturaResumo?.plan.is_free
                         ? "Plano gratuito"
                         : freeTrialAtivo
                           ? "Teste gratuito de 4 dias · sem cobrança durante o período"
-                          : assinaturaResumo?.white_label
+                          : assinaturaWhiteLabel
                             ? "Mensalidade White Label · cobrança centralizada"
                             : "Assinatura pré-paga · sem renovação automática via PIX"}
                     </small>
@@ -1670,7 +1675,7 @@ export default function Header({
                     </div>
 
                     <div className={styles.subscriptionHeaderActions}>
-                      {!assinaturaResumo?.white_label ? (
+                      {!assinaturaWhiteLabel ? (
                         <button
                           type="button"
                           className={styles.subscriptionViewPlansButton}
@@ -1680,16 +1685,12 @@ export default function Header({
                         </button>
                       ) : null}
 
-                      {assinaturaResumo?.white_label ? (
+                      {assinaturaWhiteLabel && assinaturaResumo ? (
                         <button
                           type="button"
                           className={styles.subscriptionPayButton}
                           onClick={pagarMensalidadeWhiteLabel}
-                          disabled={
-                            pagandoWhiteLabel ||
-                            assinaturaResumo.plan.is_free ||
-                            (carregandoAssinaturaResumo && !assinaturaResumo)
-                          }
+                          disabled={pagandoWhiteLabel || assinaturaResumo.plan.is_free}
                         >
                           {pagandoWhiteLabel
                             ? "Preparando pagamento..."
@@ -1697,7 +1698,7 @@ export default function Header({
                                 assinaturaResumo.subscription.next_amount_cents
                               )}`}
                         </button>
-                      ) : obterPlanoAtualCheckout() ? (
+                      ) : !assinaturaWhiteLabel && obterPlanoAtualCheckout() ? (
                         <button
                           type="button"
                           className={styles.subscriptionPayButton}
@@ -1735,17 +1736,19 @@ export default function Header({
                         </div>
                         <div className={styles.subscriptionItemMain}>
                           <span>
-                            {assinaturaResumo?.white_label
+                            {assinaturaWhiteLabel
                               ? "Mensalidade base"
                               : "Plano base"}
                           </span>
                           <strong>
-                            {assinaturaResumo?.plan.name || assinaturaPlanoNome}
+                            {assinaturaWhiteLabel && !assinaturaResumo
+                              ? "White Label"
+                              : assinaturaResumo?.plan.name || assinaturaPlanoNome}
                           </strong>
                           <small>
                             {assinaturaResumo?.plan.users_limit
                               ? `${assinaturaResumo.plan.users_limit} usuários`
-                              : assinaturaResumo?.white_label
+                              : assinaturaWhiteLabel
                                 ? "Até as licenças de clientes contratadas"
                                 : "Plano contratado"}
                             {assinaturaResumo?.plan.tokens_limit
@@ -1982,7 +1985,7 @@ export default function Header({
                       ))}
 
                       {!assinaturaResumo?.plan.is_free &&
-                        !assinaturaResumo?.white_label && (
+                        !assinaturaWhiteLabel && (
                         <button
                           type="button"
                           className={styles.subscriptionAddButton}
@@ -2081,7 +2084,7 @@ export default function Header({
                             </strong>
                           </div>
 
-                          {assinaturaResumo.white_label ? (
+                          {assinaturaWhiteLabel ? (
                             <button
                               type="button"
                               className={styles.subscriptionPayButtonFull}
@@ -2116,7 +2119,7 @@ export default function Header({
                   )}
                 </section>
 
-                {!assinaturaResumo?.white_label ? (
+                {!assinaturaWhiteLabel ? (
                   <>
                 <div
                   ref={alterarPlanoRef}
