@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ASSINATURA_WHATSAPP_MAX_LENGTH } from "@/lib/whatsapp/message-signature";
 import styles from "./perfil.module.css";
 import Header from "@/components/Header";
+import { useHeaderUser } from "@/components/header-user-context";
 
 type PerfilItem = {
   id: string;
@@ -189,6 +190,7 @@ async function gerarImagemCortada(
 
 export default function PerfilPage() {
   const supabase = useMemo(() => createClient(), []);
+  const headerUser = useHeaderUser();
 
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -205,7 +207,10 @@ export default function PerfilPage() {
   const [setores, setSetores] = useState<SetorItem[]>([]);
 
   const [form, setForm] = useState({
-    nome: "",
+    nome:
+      headerUser.profileName && headerUser.profileName !== "Usuario"
+        ? headerUser.profileName
+        : "",
     email: "",
     assinatura_whatsapp: "",
     data_nascimento: "",
@@ -214,10 +219,12 @@ export default function PerfilPage() {
     rg_uf: "",
     cidade: "",
     estado: "",
-    avatar_url: "",
+    avatar_url: headerUser.avatarUrl || "",
   });
 
-  const [previewAvatar, setPreviewAvatar] = useState("");
+  const [previewAvatar, setPreviewAvatar] = useState(
+    headerUser.avatarUrl || ""
+  );
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [imagemOriginalParaCrop, setImagemOriginalParaCrop] = useState("");
@@ -384,6 +391,10 @@ export default function PerfilPage() {
       }));
 
       setPreviewAvatar(atualizado.avatar_url ?? "");
+      headerUser.atualizarPerfilHeader({
+        profileName: atualizado.nome ?? headerUser.profileName,
+        avatarUrl: atualizado.avatar_url ?? "",
+      });
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao salvar perfil.");
     } finally {
@@ -550,11 +561,17 @@ export default function PerfilPage() {
 
   if (loading) {
     return (
-      <div className={styles.page}>
-        <div className={styles.container}>
-          <div className={styles.card}>Carregando perfil...</div>
+      <>
+        <Header
+          title="Meu perfil"
+          subtitle="Atualize seus dados pessoais, documentos e foto de perfil."
+        />
+        <div className={styles.page}>
+          <div className={styles.container}>
+            <div className={styles.card}>Carregando perfil...</div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 

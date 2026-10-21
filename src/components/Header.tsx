@@ -288,7 +288,6 @@ export default function Header({
   const [somSininhoAtivo, setSomSininhoAtivo] = useState(true);
   const [somChatAtivo, setSomChatAtivo] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const [avatarCarregado, setAvatarCarregado] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificacoesRef = useRef<HTMLDivElement | null>(null);
@@ -318,10 +317,6 @@ export default function Header({
   const nomeFinal = profileName || headerUser.profileName || "Usuário";
   const avatarFinal = avatarUrl || headerUser.avatarUrl || "";
   const letraAvatar = nomeFinal?.trim()?.charAt(0)?.toUpperCase() || "U";
-
-  useEffect(() => {
-    setAvatarCarregado(false);
-  }, [avatarFinal]);
 
   const LIMITE_NOTIFICACOES_POR_PAGINA = 60;
   const INTERVALO_LEMBRETE_TOKENS_MS = 30 * 60 * 1000;
@@ -2236,20 +2231,21 @@ export default function Header({
             onClick={toggleMenu}
           >
             <div className={styles.avatar}>
-              {(!avatarFinal || !avatarCarregado) && (
-                <span className={styles.avatarFallback}>{letraAvatar}</span>
-              )}
+              <span className={styles.avatarFallback} aria-hidden="true">
+                {letraAvatar}
+              </span>
               {avatarFinal ? (
                 <img
+                  key={avatarFinal}
                   src={avatarFinal}
                   alt={`Foto de ${nomeFinal}`}
-                  className={`${styles.avatarImage} ${
-                    avatarCarregado ? styles.avatarImageLoaded : ""
-                  }`}
+                  className={styles.avatarImage}
                   loading="eager"
+                  fetchPriority="high"
                   decoding="async"
-                  onLoad={() => setAvatarCarregado(true)}
-                  onError={() => setAvatarCarregado(false)}
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                  }}
                 />
               ) : null}
             </div>
