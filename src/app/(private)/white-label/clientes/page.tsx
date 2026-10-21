@@ -4,6 +4,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Building2,
+  DollarSign,
   ExternalLink,
   KeyRound,
   Minus,
@@ -15,6 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import Header from "@/components/Header";
 import styles from "./white-label-clientes.module.css";
 
 type Cliente = {
@@ -40,6 +42,9 @@ type WhiteLabel = {
   licencas_contratadas: number;
   licencas_usadas: number;
   licencas_disponiveis: number;
+  valor_mensal_centavos: number;
+  preco_numero_adicional_centavos: number;
+  preco_usuario_adicional_centavos: number;
 };
 
 type AjustePendente = {
@@ -81,6 +86,41 @@ export default function WhiteLabelClientesPage() {
       )
     );
   }, [whiteLabel]);
+
+  const mensalidadeAoVivoCentavos = useMemo(() => {
+    if (!whiteLabel) return 0;
+
+    const adicionais = clientes.reduce((total, cliente) => {
+      const persistidos = {
+        numeros_adicionais: Math.max(
+          0,
+          Number(cliente.limite_integracoes_whatsapp || 1) - 1
+        ),
+        usuarios_adicionais: Math.max(
+          0,
+          Number(cliente.limite_usuarios || 2) - 2
+        ),
+      };
+      const ajuste = ajustesPendentes[cliente.id] || persistidos;
+
+      return (
+        total +
+        ajuste.numeros_adicionais *
+          whiteLabel.preco_numero_adicional_centavos +
+        ajuste.usuarios_adicionais *
+          whiteLabel.preco_usuario_adicional_centavos
+      );
+    }, 0);
+
+    return Math.max(0, Number(whiteLabel.valor_mensal_centavos || 0)) + adicionais;
+  }, [ajustesPendentes, clientes, whiteLabel]);
+
+  function formatarMoeda(valorCentavos: number) {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(valorCentavos / 100);
+  }
 
   async function carregar() {
     setCarregando(true);
@@ -311,15 +351,20 @@ export default function WhiteLabelClientesPage() {
   }
 
   return (
-    <main className={styles.page}>
+    <>
+      <Header
+        title={
+          whiteLabel?.nome_marca
+            ? "Clientes " + whiteLabel.nome_marca
+            : "Clientes White Label"
+        }
+        subtitle="Gerencie clientes, licenças, adicionais e a mensalidade do seu White Label."
+      />
+      <main className={styles.page}>
       <section className={styles.hero}>
-        <div>
+        <div className={styles.heroIntro}>
           <span className={styles.eyebrow}>Administração White Label</span>
-          <h1>Clientes {whiteLabel?.nome_marca || ""}</h1>
-          <p>
-            Cadastre seus clientes, acompanhe as licenças e envie o acesso
-            inicial automaticamente.
-          </p>
+          <p>Cadastre clientes e ajuste os adicionais de cada operação.</p>
         </div>
 
         <div className={styles.heroActions}>
@@ -373,6 +418,20 @@ export default function WhiteLabelClientesPage() {
           <div>
             <span>Disponíveis</span>
             <strong>{whiteLabel?.licencas_disponiveis ?? "—"}</strong>
+          </div>
+        </article>
+        <article className={`${styles.statCard} ${styles.monthlyCard}`}>
+          <span className={styles.statIcon}><DollarSign size={19} /></span>
+          <div>
+            <span>Mensalidade White Label</span>
+            <strong>
+              {whiteLabel ? formatarMoeda(mensalidadeAoVivoCentavos) : "—"}
+            </strong>
+            {whiteLabel ? (
+              <small>
+                Base {formatarMoeda(whiteLabel.valor_mensal_centavos)} + adicionais
+              </small>
+            ) : null}
           </div>
         </article>
       </section>
@@ -685,6 +744,7 @@ export default function WhiteLabelClientesPage() {
           </form>
         </div>
       ) : null}
-    </main>
+      </main>
+    </>
   );
 }

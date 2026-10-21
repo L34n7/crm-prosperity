@@ -4,6 +4,10 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { enviarPrimeiroAcesso } from "@/lib/auth/enviar-primeiro-acesso";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buscarWhiteLabelAdminPorUsuario } from "@/lib/white-label/acesso";
+import {
+  WHITE_LABEL_PRECO_NUMERO_ADICIONAL_CENTAVOS,
+  WHITE_LABEL_PRECO_USUARIO_ADICIONAL_CENTAVOS,
+} from "@/lib/white-label/billing";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -71,6 +75,10 @@ export async function GET() {
         admin.white_label.licencas_contratadas - usadas,
         0
       ),
+      preco_numero_adicional_centavos:
+        WHITE_LABEL_PRECO_NUMERO_ADICIONAL_CENTAVOS,
+      preco_usuario_adicional_centavos:
+        WHITE_LABEL_PRECO_USUARIO_ADICIONAL_CENTAVOS,
     },
     clientes: data ?? [],
   });

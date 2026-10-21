@@ -6,7 +6,7 @@
 }
 .hero {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 22px;
@@ -27,6 +27,8 @@
   letter-spacing: -.025em;
 }
 .hero h1 { font-size: 30px; }
+.heroIntro { min-width: 0; }
+.heroIntro p { margin-top: 2px; }
 .hero p, .panelHeader p, .modal > p {
   margin: 7px 0 0;
   color: var(--crm-text-muted);
@@ -45,6 +47,7 @@
   gap: 7px;
   padding: 0 15px;
   border-radius: 12px;
+  font-size: 12px;
   font-weight: 850;
   cursor: pointer;
 }
@@ -74,7 +77,7 @@
 .warning { border: 1px solid var(--crm-warning-border); background: var(--crm-warning-bg); color: var(--crm-warning-text); }
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 .statCard {
@@ -98,6 +101,7 @@
 }
 .statCard span { color: var(--crm-text-muted); font-size: 12px; font-weight: 800; }
 .statCard strong { display: block; margin-top: 3px; color: var(--crm-text-strong); font-size: 24px; }
+.monthlyCard small { display:block; margin-top:4px; color:var(--crm-text-muted); font-size:10px; font-weight:750; line-height:1.35; }
 .licensePanel {
   margin-top: 12px;
   padding: 16px 18px;
@@ -132,16 +136,16 @@
 .tableScroll { overflow-x: auto; }
 .table { width: 100%; min-width: 1120px; border-collapse: collapse; }
 .table th { padding: 11px 14px; background: var(--crm-surface-soft); color: var(--crm-text-muted); font-size: 10px; text-align: left; text-transform: uppercase; letter-spacing: .06em; }
-.table td { padding: 13px 14px; border-top: 1px solid var(--crm-border); font-size: 13px; vertical-align: middle; }
+.table td { padding: 14px; border-top: 1px solid var(--crm-border); font-size: 14px; vertical-align: middle; }
 .table td strong, .table td span { display: block; }
-.table td > span:not(.statusBadge) { margin-top: 3px; color: var(--crm-text-muted); font-size: 11px; }
+.table td > span:not(.statusBadge) { margin-top: 4px; color: var(--crm-text-muted); font-size: 13px; line-height:1.35; }
 .accessButton { min-height: 34px; padding: 0 11px; font-size: 12px; }
 .addonControl { display:inline-flex; align-items:center; gap:5px; }
 .addonButton { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid var(--crm-border); border-radius:8px; background:var(--crm-surface); color:var(--crm-primary-text); cursor:pointer; }
 .addonButton:hover:not(:disabled) { border-color:var(--crm-primary-border); background:var(--crm-primary-soft); }
 .addonButton:disabled { opacity:.4; cursor:not-allowed; }
-.addonValue { min-width:64px; display:inline-flex !important; align-items:center; justify-content:center; gap:5px; color:var(--crm-text-strong) !important; font-size:12px !important; font-weight:850; white-space:nowrap; }
-.addonPrice { display:block; margin-top:5px; color:var(--crm-text-muted); font-size:9px; font-weight:750; white-space:nowrap; }
+.addonValue { min-width:64px; display:inline-flex !important; align-items:center; justify-content:center; gap:5px; color:var(--crm-text-strong) !important; font-size:13px !important; font-weight:850; white-space:nowrap; }
+.addonPrice { display:block; margin-top:6px; color:var(--crm-text-muted); font-size:12px; font-weight:800; white-space:nowrap; }
 .statusActions { display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
 .statusActive { border-color:var(--crm-success-border); background:var(--crm-success-bg); color:var(--crm-success-text); }
 .statusInactive { border-color:var(--crm-border); background:var(--crm-surface-soft); color:var(--crm-text-muted); }
@@ -160,6 +164,9 @@
 .formGrid input:focus, .formGrid select:focus { border-color: var(--crm-primary-strong); }
 .fullField { grid-column: 1 / -1; }
 .modalActions { justify-content: flex-end; margin-top: 20px; }
+@media (max-width: 1180px) {
+  .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 760px) {
   .page { padding: 18px 14px 110px; }
   .hero { flex-direction: column; }
