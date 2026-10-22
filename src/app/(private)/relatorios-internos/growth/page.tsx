@@ -18,6 +18,7 @@ type EmpresaRow = {
   assinatura_status: string | null;
   assinatura_gateway: string | null;
   assinatura_referencia: string | null;
+  assinatura_vencimento_em: string | null;
   assinatura_metadata_json: unknown;
   planos: PlanoRelacao;
 };
@@ -40,6 +41,7 @@ type AssinaturaProsperityRow = {
   base_amount_cents: number | null;
   current_amount_cents: number | null;
   items: unknown;
+  synced_at: string | null;
 };
 
 type OfertaRow = { plano_id: string | null; empresa_id: string | null; referencia: string | null; nome: string | null };
@@ -267,11 +269,11 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     { data: usuariosData },
     { data: assinaturasData },
   ] = await Promise.all([
-    supabase.from("empresas").select(`id, nome_fantasia, razao_social, created_at, plano_id, assinatura_status, assinatura_gateway, assinatura_referencia, assinatura_metadata_json, planos (id, nome, slug)`),
+    supabase.from("empresas").select(`id, nome_fantasia, razao_social, created_at, plano_id, assinatura_status, assinatura_gateway, assinatura_referencia, assinatura_vencimento_em, assinatura_metadata_json, planos (id, nome, slug)`),
     supabase.from("pagamentos").select("id, empresa_id, status, paid_at, created_at, valor, offer_hash, offer_titulo, metodo").not("empresa_id", "is", null).in("status", STATUS_PAGAMENTO_CONFIRMADO).order("paid_at", { ascending: true }).limit(20000),
     supabase.from("ia_token_ofertas").select("plano_id, empresa_id, referencia, nome").eq("tipo", "mensalidade").eq("ativa", true),
     supabase.from("usuarios").select("empresa_id, nome, email, created_at").order("created_at", { ascending: true }),
-    supabase.from("prosperity_pay_assinaturas").select("empresa_id,status,base_amount_cents,current_amount_cents,items"),
+    supabase.from("prosperity_pay_assinaturas").select("empresa_id,status,base_amount_cents,current_amount_cents,items,synced_at").order("synced_at", { ascending: false, nullsFirst: false }),
   ]);
 
   const empresas = (empresasData ?? []) as EmpresaRow[];
@@ -281,11 +283,11 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const usuarios = (usuariosData ?? []) as UsuarioRow[];
   const assinaturas = (assinaturasData ?? []) as AssinaturaProsperityRow[];
   const empresaPorId = new Map(empresas.map((empresa) => [empresa.id, empresa]));
-  const assinaturaPorEmpresa = new Map(
-    assinaturas
-      .filter((assinatura) => Boolean(assinatura.empresa_id))
-      .map((assinatura) => [assinatura.empresa_id as string, assinatura])
-  );
+  const assinaturaPorEmpresa = new Map<string, AssinaturaProsperityRow>();
+  for (const assinatura of assinaturas) {
+    if (!assinatura.empresa_id || assinaturaPorEmpresa.has(assinatura.empresa_id)) continue;
+    assinaturaPorEmpresa.set(assinatura.empresa_id, assinatura);
+  }
   const usuarioPorEmpresa = new Map<string, UsuarioRow>();
   for (const usuario of usuarios) if (usuario.empresa_id && !usuarioPorEmpresa.has(usuario.empresa_id)) usuarioPorEmpresa.set(usuario.empresa_id, usuario);
 
@@ -344,6 +346,10 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const agoraPartes = partesData();
   const inicioMesAtual = dataSaoPaulo(agoraPartes.ano, agoraPartes.mes, 1);
   const fimMesAtual = new Date();
+  const inicioProximoMes =
+    agoraPartes.mes === 12
+      ? dataSaoPaulo(agoraPartes.ano + 1, 1, 1)
+      : dataSaoPaulo(agoraPartes.ano, agoraPartes.mes + 1, 1);
   const fimMesPassado = new Date(inicioMesAtual.getTime() - 1);
   const anteriorPartes = partesData(fimMesPassado);
   const inicioMesPassado = dataSaoPaulo(anteriorPartes.ano, anteriorPartes.mes, 1);
@@ -354,10 +360,23 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   const aguardandoRenovacao = empresas.flatMap((empresa) => {
     const status = String(empresa.assinatura_status || "").trim().toLowerCase();
     if (!STATUS_RENOVACAO.includes(status) || pagadoresMesAtual.has(empresa.id)) return [];
+
+    const vencimento = empresa.assinatura_vencimento_em;
+    if (!vencimento) return [];
+
+    const vencimentoEm = new Date(vencimento).getTime();
+    if (
+      !Number.isFinite(vencimentoEm) ||
+      vencimentoEm < inicioMesAtual.getTime() ||
+      vencimentoEm >= inicioProximoMes.getTime()
+    ) {
+      return [];
+    }
+
     const pagamentosEmpresa = pagamentosPorEmpresa.get(empresa.id) ?? [];
     const ultimoMesPassado = [...pagamentosEmpresa].reverse().find((p) => noPeriodo(dataPagamento(p), inicioMesPassado, fimMesPassado));
     if (!ultimoMesPassado) return [];
-    return [{ empresa, pagamento: ultimoMesPassado }];
+    return [{ empresa, pagamento: ultimoMesPassado, vencimento }];
   });
 
   const novoMrr = atuais.reduce((total, cliente) => total + cliente.valorMensalAtual, 0);
@@ -409,8 +428,11 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     };
   };
 
-  const renovacaoDetalhes: GrowthDetailRow[] = aguardandoRenovacao.map(({ empresa, pagamento }) => {
+  const renovacaoDetalhes: GrowthDetailRow[] = aguardandoRenovacao.map(({ empresa, pagamento, vencimento }) => {
     const usuario = usuarioPorEmpresa.get(empresa.id);
+    const assinatura = assinaturaPorEmpresa.get(empresa.id);
+    const valorPendente = valorMensalAtual(assinatura, empresa, pagamento);
+
     return {
       id: empresa.id,
       empresa: nomeEmpresa(empresa),
@@ -418,13 +440,15 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       email: usuario?.email || "",
       plano: rotuloComposicaoPlano(
         empresa,
-        assinaturaPorEmpresa.get(empresa.id),
+        assinatura,
         pagamento,
         encontrarOferta(empresa, pagamento)
       ),
       data: data.format(new Date(dataPagamento(pagamento))),
       dataOrdenacao: dataPagamento(pagamento),
-      valor: moeda.format(valorPagamento(pagamento)),
+      vencimento: data.format(new Date(vencimento)),
+      vencimentoOrdenacao: vencimento,
+      valor: moeda.format(valorPendente),
       status: formatarStatus(empresa.assinatura_status),
     };
   });
@@ -436,7 +460,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
     { id: "receita", label: "Receita do período", value: moeda.format(receitaPeriodo), detail: `${numero.format(pagamentosPeriodo.length)} pagamentos confirmados`, icon: "card", modalTitle: "Receita do período", modalDescription: "Todos os pagamentos comerciais confirmados dentro do filtro selecionado.", rows: pagamentosPeriodo.map(detalhePagamento) },
     { id: "historico", label: "Total geral recebido", value: moeda.format(totalHistorico), detail: "Pagamentos comerciais, independente do filtro", icon: "wallet", modalTitle: "Total geral recebido", modalDescription: "Histórico completo de pagamentos comerciais confirmados, sem clientes gratuitos.", rows: pagamentos.map(detalhePagamento).reverse() },
     { id: "ticket", label: "Ticket médio inicial", value: moeda.format(ticketMedio), detail: `Conversão média: ${tempoMedio.toFixed(1)} dias`, icon: "trend", modalTitle: "Ticket médio inicial", modalDescription: "Primeiro pagamento dos novos clientes do período. Adicionais contratados depois não alteram este indicador.", rows: atuais.map(detalheClienteInicial) },
-    { id: "aguardando-renovacao", label: "Aguardando renovação", value: numero.format(renovacaoDetalhes.length), detail: "Pagaram no mês passado e ainda não renovaram", icon: "alert", modalTitle: "Aguardando renovação", modalDescription: "Clientes pagantes do mês passado sem pagamento comercial confirmado no mês atual. Inclui assinaturas ativas, vencidas e bloqueadas.", rows: renovacaoDetalhes },
+    { id: "aguardando-renovacao", label: "Aguardando renovação", value: numero.format(renovacaoDetalhes.length), detail: "Vencem neste mês e ainda não renovaram", icon: "alert", modalTitle: "Aguardando renovação", modalDescription: "Clientes com vencimento no mês atual, pagamento comercial no mês passado e sem renovação confirmada neste mês. Inclui assinaturas ativas, vencidas e bloqueadas.", rows: renovacaoDetalhes },
   ];
 
   const porPlano = Array.from(atuais.reduce((mapa, cliente) => {
