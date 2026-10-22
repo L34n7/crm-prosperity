@@ -203,6 +203,70 @@ export async function processarEventoIntegracaoMapeadaPorId(
   }
 }
 
+function horarioValido(valor:unknown){
+  const texto=String(valor||"").trim();
+  const match=/^(\\d{2}):(\\d{2})$/.exec(texto);
+  if(!match)return null;
+  const hora=Number(match[1]),minuto=Number(match[2]);
+  if(hora<0||hora>23||minuto<0||minuto>59)return null;
+  return {hora,minuto};
+}
+
+function partesDataNoFuso(timestamp:number,fuso:string){
+  const partes=new Intl.DateTimeFormat("en-US",{
+    timeZone:fuso,
+    year:"numeric",
+    month:"2-digit",
+    day:"2-digit",
+    hour:"2-digit",
+    minute:"2-digit",
+    second:"2-digit",
+    hourCycle:"h23",
+  }).formatToParts(new Date(timestamp));
+  const mapa=new Map(partes.map(item=>[item.type,item.value]));
+  return {
+    ano:Number(mapa.get("year")),
+    mes:Number(mapa.get("month")),
+    dia:Number(mapa.get("day")),
+    hora:Number(mapa.get("hour")),
+    minuto:Number(mapa.get("minute")),
+    segundo:Number(mapa.get("second")),
+  };
+}
+
+function offsetFusoMs(timestamp:number,fuso:string){
+  const base=Math.floor(timestamp/1000)*1000;
+  const p=partesDataNoFuso(base,fuso);
+  return Date.UTC(p.ano,p.mes-1,p.dia,p.hora,p.minuto,p.segundo)-base;
+}
+
+function instanteLocalParaUtc(params:{ano:number;mes:number;dia:number;hora:number;minuto:number;fuso:string}){
+  const base=Date.UTC(params.ano,params.mes-1,params.dia,params.hora,params.minuto,0,0);
+  let resultado=base-offsetFusoMs(base,params.fuso);
+  resultado=base-offsetFusoMs(resultado,params.fuso);
+  return resultado;
+}
+
+function executarRelativoComHorario(params:{
+  referenciaMs:number;
+  offsetMinutos:number;
+  horario:{hora:number;minuto:number};
+  fuso:string;
+}){
+  const dias=params.offsetMinutos/1440;
+  if(!Number.isInteger(dias))return params.referenciaMs-params.offsetMinutos*60_000;
+  const referencia=partesDataNoFuso(params.referenciaMs,params.fuso);
+  const dataAlvoUtc=new Date(Date.UTC(referencia.ano,referencia.mes-1,referencia.dia-dias));
+  return instanteLocalParaUtc({
+    ano:dataAlvoUtc.getUTCFullYear(),
+    mes:dataAlvoUtc.getUTCMonth()+1,
+    dia:dataAlvoUtc.getUTCDate(),
+    hora:params.horario.hora,
+    minuto:params.horario.minuto,
+    fuso:params.fuso,
+  });
+}
+
 const EVENTOS_RELATIVOS_ASSINATURA = new Map<string, "assinatura_vencimento_em" | "assinatura_bloqueio_em">([
   ["prosperity.assinatura.vencimento_proximo", "assinatura_vencimento_em"],
   ["prosperity.assinatura.bloqueio_proximo", "assinatura_bloqueio_em"],
@@ -222,11 +286,17 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
   const automacaoIds=Array.from(new Set(gatilhos.map(item=>item.automacao_id)));
   const automacoesResult=await supabase
     .from("rotina_automacoes")
-    .select("id")
+    .select("id,updated_at")
     .in("id",automacaoIds)
     .eq("status","ativa");
   if(automacoesResult.error)throw automacoesResult.error;
   const ativas=new Set((automacoesResult.data||[]).map(item=>String(item.id)));
+  const marcoAtivacaoPorAutomacao=new Map(
+    (automacoesResult.data||[]).map(item=>[
+      String(item.id),
+      Date.parse(String(item.updated_at||""))||0,
+    ]),
+  );
   const gatilhosAtivos=gatilhos.filter(item=>ativas.has(item.automacao_id));
   if(!gatilhosAtivos.length)return 0;
 
@@ -260,6 +330,12 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
     const campo=EVENTOS_RELATIVOS_ASSINATURA.get(gatilho.evento);
     if(!campo)continue;
     const offsetMinutos=Math.max(1,Math.abs(Number(gatilho.offset_minutos||60)));
+    const config=obj(gatilho.configuracao_json);
+    const horario=horarioValido(config.horario_execucao);
+    const fuso=String(config.fuso_horario||"America/Sao_Paulo").trim()||"America/Sao_Paulo";
+    const naoExecutarRetroativo=config.nao_executar_retroativo===true;
+    const janelaExecucaoMinutos=Math.max(10,Math.min(120,Number(config.janela_execucao_minutos||30)));
+    const marcoAtivacaoMs=marcoAtivacaoPorAutomacao.get(gatilho.automacao_id)||0;
     const integracoes=integracoesPorEmpresa.get(gatilho.empresa_id)||[];
     if(!integracoes.length)continue;
 
@@ -267,8 +343,14 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
       const referenciaBruta=empresa[campo as keyof typeof empresa];
       const referenciaMs=Date.parse(String(referenciaBruta||""));
       if(!Number.isFinite(referenciaMs)||referenciaMs<=agora)continue;
-      const executarMs=referenciaMs-offsetMinutos*60_000;
+      const executarMs=horario
+        ? executarRelativoComHorario({referenciaMs,offsetMinutos,horario,fuso})
+        : referenciaMs-offsetMinutos*60_000;
       if(executarMs>agora)continue;
+      if(naoExecutarRetroativo){
+        if(marcoAtivacaoMs&&executarMs<marcoAtivacaoMs)continue;
+        if(agora-executarMs>janelaExecucaoMinutos*60_000)continue;
+      }
       const referenciaIso=new Date(referenciaMs).toISOString();
 
       for(const integracaoId of integracoes){
@@ -285,6 +367,10 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
             gatilho_id:gatilho.id,
             referencia_em:referenciaIso,
             offset_minutos:offsetMinutos,
+            horario_execucao:horario?String(config.horario_execucao):null,
+            fuso_horario:fuso,
+            nao_executar_retroativo:naoExecutarRetroativo,
+            executar_em_previsto:new Date(executarMs).toISOString(),
             gerado_em:new Date(agora).toISOString(),
           },
           status:"pendente",
