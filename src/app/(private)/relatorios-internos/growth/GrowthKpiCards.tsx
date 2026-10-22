@@ -36,6 +36,7 @@ export type GrowthCardData = {
   icon: "users" | "refresh" | "money" | "card" | "wallet" | "trend" | "alert";
   modalTitle: string;
   modalDescription: string;
+  summaryLabel: string;
   rows: GrowthDetailRow[];
 };
 
@@ -151,7 +152,7 @@ export default function GrowthKpiCards({ cards }: { cards: GrowthCardData[] }) {
             </header>
 
             <div className="gk-summary">
-              <div><span>Total</span><strong>{active.value}</strong></div>
+              <div><span>{active.summaryLabel}</span><strong>{active.value}</strong></div>
               <div><span>Registros</span><strong>{active.rows.length}</strong></div>
               {pendingValue != null && <div><span>Valor pendente</span><strong>{pendingValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></div>}
             </div>
