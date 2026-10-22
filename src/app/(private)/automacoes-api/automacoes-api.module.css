@@ -904,6 +904,30 @@
   gap: 12px;
   margin-top: 15px;
 }
+.checkboxOption {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  cursor: pointer;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+.formField .checkboxOption input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  flex: 0 0 17px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--crm-primary);
+}
+.checkboxOption span {
+  line-height: 1.25;
+}
 .reviewGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;

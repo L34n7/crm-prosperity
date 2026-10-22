@@ -7,6 +7,7 @@ import {
   Ban,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock3,
   Loader2,
@@ -48,6 +49,11 @@ type Execucao = {
   iniciada_em: string;
   finalizada_em: string | null;
   referencia: string | null;
+  contato: {
+    id: string;
+    nome: string | null;
+    telefone: string | null;
+  } | null;
   resumo: {
     total: number;
     pendentes: number;
@@ -61,6 +67,14 @@ type Execucao = {
 
 type Dados = {
   pode_gerenciar: boolean;
+  paginacao: {
+    pagina: number;
+    por_pagina: number;
+    total: number;
+    total_paginas: number;
+    tem_anterior: boolean;
+    tem_proxima: boolean;
+  };
   resumo: {
     execucoes: number;
     em_andamento: number;
@@ -111,6 +125,17 @@ function descricaoJob(job: Job) {
   return formatarData(job.executar_em);
 }
 
+function tituloExecucao(execucao: Execucao, rotina: Rotina) {
+  const base = `Execução ${execucao.id.slice(0, 8)}`;
+  if (rotina.categoria === "contatos" && execucao.contato) {
+    const detalhes = [execucao.contato.nome, execucao.contato.telefone]
+      .map((valor) => String(valor || "").trim())
+      .filter(Boolean);
+    return detalhes.length ? `${base} · ${detalhes.join(" · ")}` : base;
+  }
+  return execucao.referencia || base;
+}
+
 export default function AutomationExecutionsModal({
   rotina,
   onClose,
@@ -123,29 +148,40 @@ export default function AutomationExecutionsModal({
   onError: (mensagem: string) => void;
 }) {
   const [dados, setDados] = useState<Dados | null>(null);
+  const [pagina, setPagina] = useState(1);
   const [carregando, setCarregando] = useState(true);
+  const [carregandoPagina, setCarregandoPagina] = useState(false);
   const [cancelando, setCancelando] = useState<string | null>(null);
   const [abertas, setAbertas] = useState<Set<string>>(new Set());
   const [confirmar, setConfirmar] = useState<Job | null>(null);
 
-  const carregar = useCallback(async () => {
-    setCarregando(true);
+  const carregar = useCallback(async (paginaAlvo = 1, trocaPagina = false) => {
+    if (trocaPagina) setCarregandoPagina(true);
+    else setCarregando(true);
+
     try {
-      const response = await fetch(`/api/rotinas-automacao/${rotina.id}/execucoes`, {
-        cache: "no-store",
-      });
+      const response = await fetch(
+        `/api/rotinas-automacao/${rotina.id}/execucoes?pagina=${paginaAlvo}`,
+        { cache: "no-store" },
+      );
       const json = await response.json();
-      if (!response.ok || !json.ok) throw new Error(json.error || "Não foi possível carregar as execuções.");
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error || "Não foi possível carregar as execuções.");
+      }
       setDados(json);
+      setPagina(Number(json.paginacao?.pagina || paginaAlvo));
     } catch (error) {
       onError(error instanceof Error ? error.message : "Erro ao carregar execuções.");
     } finally {
       setCarregando(false);
+      setCarregandoPagina(false);
     }
   }, [onError, rotina.id]);
 
   useEffect(() => {
-    void carregar();
+    setPagina(1);
+    setAbertas(new Set());
+    void carregar(1);
   }, [carregar]);
 
   const dependentesPorJob = useMemo(() => {
@@ -174,6 +210,13 @@ export default function AutomationExecutionsModal({
     });
   }
 
+  function mudarPagina(proxima: number) {
+    if (!dados?.paginacao) return;
+    if (proxima < 1 || proxima > dados.paginacao.total_paginas || proxima === pagina) return;
+    setAbertas(new Set());
+    void carregar(proxima, true);
+  }
+
   async function cancelarJob(job: Job) {
     setCancelando(job.id);
     try {
@@ -185,7 +228,7 @@ export default function AutomationExecutionsModal({
       const json = await response.json();
       if (!response.ok || !json.ok) throw new Error(json.error || "Não foi possível cancelar a etapa.");
       setConfirmar(null);
-      await carregar();
+      await carregar(pagina);
       const dependentes = Number(json.resultado?.dependentes || 0);
       onFeedback(dependentes ? `Etapa e ${dependentes} dependente(s) cancelada(s).` : "Etapa cancelada.");
     } catch (error) {
@@ -196,6 +239,7 @@ export default function AutomationExecutionsModal({
   }
 
   const resumo = dados?.resumo;
+  const paginacao = dados?.paginacao;
 
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -221,71 +265,98 @@ export default function AutomationExecutionsModal({
           ) : null}
 
           <div className={styles.toolbar}>
-            <p>As execuções mais recentes aparecem primeiro. Etapas futuras permanecem rastreáveis até serem concluídas ou canceladas.</p>
-            <button className={styles.refreshButton} onClick={() => void carregar()} disabled={carregando}>
-              {carregando ? <Loader2 size={15} /> : <RefreshCw size={15} />} Atualizar
+            <p>As execuções mais recentes aparecem primeiro. São carregados somente 10 registros por página.</p>
+            <button className={styles.refreshButton} onClick={() => void carregar(pagina)} disabled={carregando || carregandoPagina}>
+              {carregando || carregandoPagina ? <Loader2 size={15} className={styles.spin} /> : <RefreshCw size={15} />} Atualizar
             </button>
           </div>
 
           {carregando && !dados ? <div className={styles.loading}>Carregando execuções...</div> : null}
           {!carregando && dados && !dados.execucoes.length ? <div className={styles.empty}>Esta automação ainda não possui execuções registradas.</div> : null}
 
-          <div className={styles.list}>
-            {dados?.execucoes.map((execucao) => {
-              const aberta = abertas.has(execucao.id);
-              return (
-                <article className={styles.groupCard} key={execucao.id}>
-                  <button className={styles.groupHeader} onClick={() => alternar(execucao.id)}>
-                    <div className={styles.groupIdentity}>
-                      <div className={styles.groupTitleRow}>
-                        <div className={styles.groupIcon}><Workflow size={20} /></div>
-                        <div className={styles.groupTitle}>
-                          <strong>{execucao.referencia || `Execução ${execucao.id.slice(0, 8)}`}</strong>
-                          <small>{execucao.evento_chave || "Evento da automação"} · {formatarData(execucao.iniciada_em)}</small>
+          {carregandoPagina ? (
+            <div className={styles.loading}><Loader2 size={18} className={styles.spin} /> Carregando página...</div>
+          ) : (
+            <div className={styles.list}>
+              {dados?.execucoes.map((execucao) => {
+                const aberta = abertas.has(execucao.id);
+                return (
+                  <article className={styles.groupCard} key={execucao.id}>
+                    <button className={styles.groupHeader} onClick={() => alternar(execucao.id)}>
+                      <div className={styles.groupIdentity}>
+                        <div className={styles.groupTitleRow}>
+                          <div className={styles.groupIcon}><Workflow size={20} /></div>
+                          <div className={styles.groupTitle}>
+                            <strong>{tituloExecucao(execucao, rotina)}</strong>
+                            <small>{execucao.evento_chave || "Evento da automação"} · {formatarData(execucao.iniciada_em)}</small>
+                          </div>
+                        </div>
+                        <div className={styles.groupStatus}>
+                          <span className={badgeClass(execucao.status)}>{statusLabel(execucao.status)}</span>
+                          {aberta ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
                         </div>
                       </div>
-                      <div className={styles.groupStatus}>
-                        <span className={badgeClass(execucao.status)}>{statusLabel(execucao.status)}</span>
-                        {aberta ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+                      <div className={styles.groupStats}>
+                        <span><strong>{execucao.resumo.total}</strong> etapas</span>
+                        {execucao.resumo.concluidas ? <span>{execucao.resumo.concluidas} concluídas</span> : null}
+                        {execucao.resumo.pendentes + execucao.resumo.processando ? <span>{execucao.resumo.pendentes + execucao.resumo.processando} pendentes</span> : null}
+                        {execucao.resumo.erros ? <span>{execucao.resumo.erros} com erro</span> : null}
+                        {execucao.resumo.canceladas ? <span>{execucao.resumo.canceladas} canceladas</span> : null}
                       </div>
-                    </div>
-                    <div className={styles.groupStats}>
-                      <span><strong>{execucao.resumo.total}</strong> etapas</span>
-                      {execucao.resumo.concluidas ? <span>{execucao.resumo.concluidas} concluídas</span> : null}
-                      {execucao.resumo.pendentes + execucao.resumo.processando ? <span>{execucao.resumo.pendentes + execucao.resumo.processando} pendentes</span> : null}
-                      {execucao.resumo.erros ? <span>{execucao.resumo.erros} com erro</span> : null}
-                      {execucao.resumo.canceladas ? <span>{execucao.resumo.canceladas} canceladas</span> : null}
-                    </div>
-                  </button>
+                    </button>
 
-                  {aberta ? (
-                    <div className={styles.groupItems}>
-                      {!execucao.etapas.length ? <div className={styles.empty}>Nenhuma etapa materializada nesta execução.</div> : null}
-                      {execucao.etapas.map((job, index) => {
-                        const cancelavel = ["pendente", "processando"].includes(job.status) && dados.pode_gerenciar;
-                        return (
-                          <div className={styles.groupItem} key={job.id}>
-                            <div className={styles.stepIndex}>{String(index + 1).padStart(2, "0")}</div>
-                            <div className={styles.stepInfo}>
-                              <strong>{tituloJob(job)}</strong>
-                              <small>{descricaoJob(job)}{job.canal ? ` · ${job.canal === "email" ? "E-mail" : job.canal === "whatsapp" ? "WhatsApp" : job.canal}` : ""}</small>
+                    {aberta ? (
+                      <div className={styles.groupItems}>
+                        {!execucao.etapas.length ? <div className={styles.empty}>Nenhuma etapa materializada nesta execução.</div> : null}
+                        {execucao.etapas.map((job, index) => {
+                          const cancelavel = ["pendente", "processando"].includes(job.status) && dados.pode_gerenciar;
+                          return (
+                            <div className={styles.groupItem} key={job.id}>
+                              <div className={styles.stepIndex}>{String(index + 1).padStart(2, "0")}</div>
+                              <div className={styles.stepInfo}>
+                                <strong>{tituloJob(job)}</strong>
+                                <small>{descricaoJob(job)}{job.canal ? ` · ${job.canal === "email" ? "E-mail" : job.canal === "whatsapp" ? "WhatsApp" : job.canal}` : ""}</small>
+                              </div>
+                              <div className={styles.stepActions}>
+                                <span className={badgeClass(job.status_exibicao)}>
+                                  {job.status === "concluido" ? <CheckCircle2 size={12} /> : job.status === "erro" ? <AlertTriangle size={12} /> : job.status === "cancelado" ? <Ban size={12} /> : <Clock3 size={12} />}
+                                  {statusLabel(job.status_exibicao)}
+                                </span>
+                                {cancelavel ? <button className={styles.cancelStep} onClick={() => setConfirmar(job)} disabled={cancelando === job.id}>Cancelar</button> : null}
+                              </div>
                             </div>
-                            <div className={styles.stepActions}>
-                              <span className={badgeClass(job.status_exibicao)}>
-                                {job.status === "concluido" ? <CheckCircle2 size={12} /> : job.status === "erro" ? <AlertTriangle size={12} /> : job.status === "cancelado" ? <Ban size={12} /> : <Clock3 size={12} />}
-                                {statusLabel(job.status_exibicao)}
-                              </span>
-                              {cancelavel ? <button className={styles.cancelStep} onClick={() => setConfirmar(job)} disabled={cancelando === job.id}>Cancelar</button> : null}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {paginacao && paginacao.total_paginas > 1 ? (
+            <div className={styles.pagination}>
+              <button
+                className={styles.paginationButton}
+                onClick={() => mudarPagina(pagina - 1)}
+                disabled={!paginacao.tem_anterior || carregandoPagina}
+              >
+                <ChevronLeft size={16} /> Anterior
+              </button>
+              <span className={styles.paginationInfo}>
+                Página <strong>{pagina}</strong> de <strong>{paginacao.total_paginas}</strong>
+                <small>{paginacao.total} execuções</small>
+              </span>
+              <button
+                className={styles.paginationButton}
+                onClick={() => mudarPagina(pagina + 1)}
+                disabled={!paginacao.tem_proxima || carregandoPagina}
+              >
+                Próxima <ChevronRight size={16} />
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {confirmar ? (
@@ -298,7 +369,7 @@ export default function AutomationExecutionsModal({
               <div className={styles.confirmActions}>
                 <button className={styles.secondaryButton} onClick={() => setConfirmar(null)} disabled={Boolean(cancelando)}>Voltar</button>
                 <button className={styles.dangerButton} onClick={() => void cancelarJob(confirmar)} disabled={Boolean(cancelando)}>
-                  {cancelando ? <Loader2 size={15} /> : <Ban size={15} />} Cancelar etapa
+                  {cancelando ? <Loader2 size={15} className={styles.spin} /> : <Ban size={15} />} Cancelar etapa
                 </button>
               </div>
             </div>

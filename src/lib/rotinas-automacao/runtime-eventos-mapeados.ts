@@ -331,9 +331,13 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
     if(!campo)continue;
     const offsetMinutos=Math.max(1,Math.abs(Number(gatilho.offset_minutos||60)));
     const config=obj(gatilho.configuracao_json);
-    const horario=horarioValido(config.horario_execucao);
+    const horarioConfigurado=horarioValido(config.horario_execucao);
+    const usarHorarioFixo=
+      config.usar_horario_fixo===true ||
+      (typeof config.usar_horario_fixo!=="boolean"&&horarioConfigurado!==null);
+    const horario=usarHorarioFixo?horarioConfigurado:null;
     const fuso=String(config.fuso_horario||"America/Sao_Paulo").trim()||"America/Sao_Paulo";
-    const naoExecutarRetroativo=config.nao_executar_retroativo===true;
+    const naoExecutarRetroativo=config.nao_executar_retroativo!==false;
     const janelaExecucaoMinutos=Math.max(10,Math.min(120,Number(config.janela_execucao_minutos||30)));
     const marcoAtivacaoMs=marcoAtivacaoPorAutomacao.get(gatilho.automacao_id)||0;
     const integracoes=integracoesPorEmpresa.get(gatilho.empresa_id)||[];
@@ -367,6 +371,7 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
             gatilho_id:gatilho.id,
             referencia_em:referenciaIso,
             offset_minutos:offsetMinutos,
+            usar_horario_fixo:usarHorarioFixo,
             horario_execucao:horario?String(config.horario_execucao):null,
             fuso_horario:fuso,
             nao_executar_retroativo:naoExecutarRetroativo,

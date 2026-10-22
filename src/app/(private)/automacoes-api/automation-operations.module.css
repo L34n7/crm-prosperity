@@ -117,6 +117,52 @@
 .refreshButton:disabled, .secondaryButton:disabled, .primaryButton:disabled, .dangerButton:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 
 .list { display: grid; gap: 11px; }
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--crm-border-soft);
+}
+.paginationButton {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.paginationButton:hover:not(:disabled) { background: var(--crm-surface-soft); }
+.paginationButton:disabled { opacity: .45; cursor: not-allowed; }
+.paginationInfo {
+  min-width: 150px;
+  display: grid;
+  grid-template-columns: auto auto auto auto;
+  justify-content: center;
+  align-items: baseline;
+  column-gap: 4px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+.paginationInfo strong { color: var(--crm-text-strong); }
+.paginationInfo small {
+  grid-column: 1 / -1;
+  margin-top: 3px;
+  color: var(--crm-text-soft);
+  font-size: 10px;
+}
+.spin { animation: operations-spin .8s linear infinite; }
+@keyframes operations-spin { to { transform: rotate(360deg); } }
 .groupCard {
   overflow: hidden;
   border: 1px solid var(--crm-border);
@@ -286,6 +332,9 @@
   .header { padding: 17px; }
   .body { padding: 14px; }
   .metrics { grid-template-columns: 1fr 1fr; }
+  .pagination { gap: 8px; }
+  .paginationButton { flex: 1; }
+  .paginationInfo { min-width: 112px; }
   .footer { flex-direction: column-reverse; }
   .footer > *, .confirmActions > * { width: 100%; }
   .confirmActions { flex-direction: column-reverse; }

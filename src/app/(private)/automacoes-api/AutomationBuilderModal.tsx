@@ -191,31 +191,14 @@ export default function AutomationBuilderModal({
   const gatilhoAssinaturaRelativa =
     form.gatilho.tipo === "data_relativa" &&
     form.gatilho.evento.startsWith("prosperity.assinatura.");
-
-  useEffect(() => {
-    if (!gatilhoAssinaturaRelativa) return;
-    const config = form.gatilho.configuracao_json || {};
-    const horarioAtual = String(config.horario_execucao || "").trim();
-    const possuiRetroativo = typeof config.nao_executar_retroativo === "boolean";
-    const fusoAtual = String(config.fuso_horario || "").trim();
-    if (horarioAtual && possuiRetroativo && fusoAtual) return;
-
-    onChange({
-      ...form,
-      gatilho: {
-        ...form.gatilho,
-        configuracao_json: {
-          ...config,
-          horario_execucao: horarioAtual || "10:00",
-          nao_executar_retroativo: possuiRetroativo
-            ? config.nao_executar_retroativo
-            : true,
-          fuso_horario: fusoAtual || "America/Sao_Paulo",
-          janela_execucao_minutos: Number(config.janela_execucao_minutos || 30),
-        },
-      },
-    });
-  }, [form, gatilhoAssinaturaRelativa, onChange]);
+  const horarioFixoConfigurado = String(
+    form.gatilho.configuracao_json.horario_execucao || "",
+  ).trim();
+  const usarHorarioFixo =
+    gatilhoAssinaturaRelativa &&
+    (form.gatilho.configuracao_json.usar_horario_fixo === true ||
+      (typeof form.gatilho.configuracao_json.usar_horario_fixo !== "boolean" &&
+        Boolean(horarioFixoConfigurado)));
 
   useEffect(() => {
     if (!unicaIntegracaoAtivaId) return;
@@ -395,9 +378,8 @@ export default function AutomationBuilderModal({
               offset_unidade: form.gatilho.configuracao_json.offset_unidade || "horas",
               ...(evento.startsWith("prosperity.assinatura.")
                 ? {
-                    horario_execucao:
-                      String(form.gatilho.configuracao_json.horario_execucao || "").trim() ||
-                      "10:00",
+                    usar_horario_fixo: false,
+                    horario_execucao: null,
                     nao_executar_retroativo:
                       typeof form.gatilho.configuracao_json.nao_executar_retroativo === "boolean"
                         ? form.gatilho.configuracao_json.nao_executar_retroativo
@@ -1041,51 +1023,66 @@ export default function AutomationBuilderModal({
               {form.categoria === "agenda" ? <label className={styles.formField} style={{ marginTop: 12 }}><span>Calendário</span><select value={String(form.gatilho.configuracao_json.calendario_id || "")} onChange={(event) => onChange({ ...form, gatilho: { ...form.gatilho, configuracao_json: { ...form.gatilho.configuracao_json, calendario_id: event.target.value || null } } })}><option value="">Todos os calendários</option>{opcoes.calendarios.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label> : null}
               {form.gatilho.tipo === "data_relativa" ? <div className={styles.scheduleGrid}><label className={styles.formField}><span>Antecedência / intervalo</span><input type="number" min="1" value={quantidadeOffset(form.gatilho)} onChange={(event) => alterarOffset(Number(event.target.value || 1))} /></label><label className={styles.formField}><span>Unidade</span><select value={unidadeOffset(form.gatilho)} onChange={(event) => alterarOffset(quantidadeOffset(form.gatilho), event.target.value)}><option value="minutos">Minutos</option><option value="horas">Horas</option><option value="dias">Dias</option></select></label></div> : null}
               {gatilhoAssinaturaRelativa ? (
-                <div
-                  className={styles.scheduleGrid}
-                  style={{ marginTop: 12 }}
-                >
-                  <label className={styles.formField}>
-                    <span>Horário de envio</span>
-                    <input
-                      type="time"
-                      value={String(form.gatilho.configuracao_json.horario_execucao || "10:00")}
-                      onChange={(event) =>
-                        onChange({
-                          ...form,
-                          gatilho: {
-                            ...form.gatilho,
-                            configuracao_json: {
-                              ...form.gatilho.configuracao_json,
-                              horario_execucao: event.target.value || "10:00",
-                              fuso_horario: "America/Sao_Paulo",
+                <div className={styles.scheduleGrid} style={{ marginTop: 12 }}>
+                  <div className={styles.formField}>
+                    <span>Horário fixo (opcional)</span>
+                    <label className={styles.checkboxOption}>
+                      <input
+                        type="checkbox"
+                        checked={usarHorarioFixo}
+                        onChange={(event) =>
+                          onChange({
+                            ...form,
+                            gatilho: {
+                              ...form.gatilho,
+                              configuracao_json: {
+                                ...form.gatilho.configuracao_json,
+                                usar_horario_fixo: event.target.checked,
+                                horario_execucao: event.target.checked
+                                  ? horarioFixoConfigurado || "10:00"
+                                  : null,
+                                fuso_horario: "America/Sao_Paulo",
+                              },
                             },
-                          },
-                        })
-                      }
-                    />
-                    <small style={{ color: "var(--crm-text-muted)" }}>
-                      Horário de Brasília (America/Sao_Paulo). O cron pode executar alguns minutos depois.
-                    </small>
-                  </label>
-                  <label
-                    className={styles.formField}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "center",
-                    }}
-                  >
+                          })
+                        }
+                      />
+                      <span>Usar horário fixo</span>
+                    </label>
+                    {usarHorarioFixo ? (
+                      <>
+                        <input
+                          type="time"
+                          value={horarioFixoConfigurado || "10:00"}
+                          onChange={(event) =>
+                            onChange({
+                              ...form,
+                              gatilho: {
+                                ...form.gatilho,
+                                configuracao_json: {
+                                  ...form.gatilho.configuracao_json,
+                                  usar_horario_fixo: true,
+                                  horario_execucao: event.target.value || "10:00",
+                                  fuso_horario: "America/Sao_Paulo",
+                                },
+                              },
+                            })
+                          }
+                        />
+                        <small style={{ color: "var(--crm-text-muted)" }}>
+                          Usa o dia calculado pela automação e envia nesse horário de Brasília.
+                        </small>
+                      </>
+                    ) : (
+                      <small style={{ color: "var(--crm-text-muted)" }}>
+                        Desligado: considera a data e a hora exatas do vencimento/bloqueio.
+                      </small>
+                    )}
+                  </div>
+
+                  <div className={styles.formField}>
                     <span>Proteção contra envio atrasado</span>
-                    <label
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 9,
-                        minHeight: 40,
-                        cursor: "pointer",
-                      }}
-                    >
+                    <label className={styles.checkboxOption}>
                       <input
                         type="checkbox"
                         checked={form.gatilho.configuracao_json.nao_executar_retroativo !== false}
@@ -1106,10 +1103,10 @@ export default function AutomationBuilderModal({
                       <span>Não executar retroativo</span>
                     </label>
                     <small style={{ color: "var(--crm-text-muted)" }}>
-                      Se o horário deste ciclo já passou antes da criação/reativação, o aviso é ignorado.
+                      Se o momento previsto já passou antes da criação/reativação, o aviso é ignorado.
                       Também não envia com mais de 30 minutos de atraso.
                     </small>
-                  </label>
+                  </div>
                 </div>
               ) : null}
               <div className={styles.infoBox}><CalendarClock size={19} /><div><b>{gatilhoLabel(form.gatilho)}</b><p>O motor usará esse gatilho como ponto de entrada da rotina.</p></div></div>
