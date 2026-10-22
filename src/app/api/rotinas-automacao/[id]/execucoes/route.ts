@@ -28,6 +28,20 @@ function referenciaExecucao(contexto: Record<string, unknown> | null | undefined
   return candidatos.find((valor) => typeof valor === "string" && valor.trim()) || null;
 }
 
+function contatoContextoExecucao(execucao: { contexto_json?: unknown }) {
+  const contexto = objeto(execucao.contexto_json);
+  const contato = objeto(contexto.contato);
+  const nome = String(contato.nome || contexto.contato_nome || "").trim();
+  const telefone = String(contato.telefone || contexto.contato_telefone || "").trim();
+
+  if (!nome && !telefone) return null;
+  return {
+    id: String(contato.id || contexto.contato_id || "").trim() || null,
+    nome: nome || null,
+    telefone: telefone || null,
+  };
+}
+
 function contatoIdExecucao(execucao: {
   entidade_tipo?: string | null;
   entidade_id?: string | null;
@@ -227,7 +241,12 @@ export async function GET(
   const contatosPorId = new Map<string, { id: string; nome: string | null; telefone: string | null }>();
   if (automacao.categoria === "contatos" && execucoes.length) {
     const contatoIds = Array.from(
-      new Set(execucoes.map((item) => contatoIdExecucao(item)).filter(Boolean)),
+      new Set(
+        execucoes
+          .filter((item) => !contatoContextoExecucao(item))
+          .map((item) => contatoIdExecucao(item))
+          .filter(Boolean),
+      ),
     ) as string[];
 
     if (contatoIds.length) {
@@ -277,6 +296,7 @@ export async function GET(
     const concluidas = etapas.filter((item) => item.status === "concluido").length;
     const canceladas = etapas.filter((item) => item.status === "cancelado").length;
     const erros = etapas.filter((item) => item.status === "erro").length;
+    const contatoContexto = contatoContextoExecucao(execucao);
     const contatoId = automacao.categoria === "contatos" ? contatoIdExecucao(execucao) : null;
 
     return {
@@ -284,7 +304,7 @@ export async function GET(
       referencia: referenciaExecucao(
         execucao.contexto_json as Record<string, unknown> | null,
       ),
-      contato: contatoId ? contatosPorId.get(contatoId) || null : null,
+      contato: contatoContexto || (contatoId ? contatosPorId.get(contatoId) || null : null),
       etapas,
       resumo: {
         total: etapas.length,

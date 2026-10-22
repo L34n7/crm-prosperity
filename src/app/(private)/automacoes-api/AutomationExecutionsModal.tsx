@@ -127,11 +127,12 @@ function descricaoJob(job: Job) {
 
 function tituloExecucao(execucao: Execucao, rotina: Rotina) {
   const base = `Execução ${execucao.id.slice(0, 8)}`;
-  if (rotina.categoria === "contatos" && execucao.contato) {
-    const detalhes = [execucao.contato.nome, execucao.contato.telefone]
-      .map((valor) => String(valor || "").trim())
-      .filter(Boolean);
-    return detalhes.length ? `${base} · ${detalhes.join(" · ")}` : base;
+  if (execucao.contato) {
+    const nome = String(execucao.contato.nome || "").trim();
+    const telefone = String(execucao.contato.telefone || "").trim();
+    if (nome && telefone) return `${base} - ${nome} (${telefone})`;
+    if (nome) return `${base} - ${nome}`;
+    if (telefone) return `${base} - ${telefone}`;
   }
   return execucao.referencia || base;
 }
