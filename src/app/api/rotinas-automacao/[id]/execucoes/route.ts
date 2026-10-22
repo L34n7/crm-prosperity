@@ -31,12 +31,32 @@ function referenciaExecucao(contexto: Record<string, unknown> | null | undefined
 function contatoContextoExecucao(execucao: { contexto_json?: unknown }) {
   const contexto = objeto(execucao.contexto_json);
   const contato = objeto(contexto.contato);
-  const nome = String(contato.nome || contexto.contato_nome || "").trim();
-  const telefone = String(contato.telefone || contexto.contato_telefone || "").trim();
+  const cliente = objeto(contexto.cliente);
+
+  const nome = String(
+    contato.nome ||
+    cliente.nome ||
+    contexto.contato_nome ||
+    contexto.cliente_nome ||
+    "",
+  ).trim();
+  const telefone = String(
+    contato.telefone ||
+    cliente.telefone ||
+    contexto.contato_telefone ||
+    contexto.cliente_telefone ||
+    "",
+  ).trim();
 
   if (!nome && !telefone) return null;
   return {
-    id: String(contato.id || contexto.contato_id || "").trim() || null,
+    id: String(
+      contato.id ||
+      cliente.id ||
+      contexto.contato_id ||
+      contexto.cliente_id ||
+      "",
+    ).trim() || null,
     nome: nome || null,
     telefone: telefone || null,
   };
