@@ -1115,13 +1115,15 @@ export default function TemplatesWhatsAppPage() {
                           <label className={styles.label}>Nome do template</label>
                           <input
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) =>
+                              setName(e.target.value.replace(/\s+/g, "_"))
+                            }
                             className={styles.input}
                             placeholder="Ex.: notificacao_atendimento_iniciado"
                             required
                           />
                           <p className={styles.help}>
-                            Use um nome simples, sem espaços. O backend normaliza automaticamente.
+                            Espaços são convertidos automaticamente em <strong>_</strong>.
                           </p>
                         </div>
                         
