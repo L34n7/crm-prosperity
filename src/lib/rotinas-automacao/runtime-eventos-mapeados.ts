@@ -79,7 +79,39 @@ async function processarOutbox(o:OutboxRow){
 }
 
 function snapshots(c:Record<string,unknown>){return Array.isArray(c.condicoes_snapshot)?c.condicoes_snapshot as CondicaoRotina[]:[];}
-function estadoValido(evento:string,contexto:Record<string,unknown>,meta:Record<string,unknown>){if(evento==="prosperity.carrinho.abandonado")return ler(contexto,"carrinho.pago_atualmente")!==true;if(["prosperity.pagamento.criado","prosperity.pagamento.status_alterado"].includes(evento)&&String(meta.status_novo||"").toLowerCase()==="waiting_payment")return ler(contexto,"pagamento.pago_atualmente")!==true&&String(ler(contexto,"pagamento.status")||"").toLowerCase()==="waiting_payment";return true;}
+function timestampValido(valor:unknown){
+  const timestamp=new Date(String(valor||"")).getTime();
+  return Number.isFinite(timestamp)?timestamp:null;
+}
+function pagamentoPendenteAindaValido(contexto:Record<string,unknown>){
+  if(ler(contexto,"pagamento.pago_atualmente")===true)return false;
+  if(String(ler(contexto,"pagamento.status")||"").toLowerCase()!=="waiting_payment")return false;
+
+  const tipoCobranca=String(ler(contexto,"pagamento.tipo_cobranca")||"").toLowerCase();
+  if(tipoCobranca!=="renovacao")return true;
+
+  const pagamentoCriadoEm=timestampValido(ler(contexto,"pagamento.criado_em"));
+  const assinaturaRenovadaEm=timestampValido(ler(contexto,"assinatura.renovada_em"));
+
+  // A tentativa pendente pode iniciar a automação normalmente. Porém, se outra
+  // tentativa renovar a assinatura depois que este PIX foi criado, esta cobrança
+  // ficou obsoleta e o lembrete deve ser cancelado antes do envio.
+  if(
+    pagamentoCriadoEm!==null &&
+    assinaturaRenovadaEm!==null &&
+    assinaturaRenovadaEm>pagamentoCriadoEm
+  )return false;
+
+  return true;
+}
+function estadoValido(evento:string,contexto:Record<string,unknown>,meta:Record<string,unknown>){
+  if(evento==="prosperity.carrinho.abandonado")return ler(contexto,"carrinho.pago_atualmente")!==true;
+  if(
+    ["prosperity.pagamento.criado","prosperity.pagamento.status_alterado"].includes(evento) &&
+    String(meta.status_novo||"").toLowerCase()==="waiting_payment"
+  )return pagamentoPendenteAindaValido(contexto);
+  return true;
+}
 async function revalidarJob(job:JobRow){const c=obj(job.contexto_json),s=String(c.sistema||""),r=String(c.recurso||""),e=String(c.evento||""),i=String(c.integracao_api_id||""),id=String(c.entidade_id||""),m=obj(c.evento_payload);const registro=await registroAtual({empresaId:job.empresa_id,integracaoId:i,sistema:s,recurso:r,entidadeId:id});if(!registro)return{valido:false,contexto:obj(c.contexto_evento)};const contexto=montarContexto({sistema:s,recurso:r,evento:e,integracaoId:i,registro:obj(registro),metadata:m});return{valido:avaliarCondicoes(snapshots(c),contexto as ContextoEvento)&&estadoValido(e,contexto,m),contexto};}
 async function cancelarPosteriores(job:JobRow,motivo:string){if(!job.execucao_id)return;await supabase.from("rotina_automacao_jobs").update({status:"cancelado",cancelado_em:new Date().toISOString(),origem_cancelamento:motivo,updated_at:new Date().toISOString()}).eq("execucao_id",job.execucao_id).eq("status","pendente").gt("ordem",job.ordem);}
 async function finalizarExecucao(id:string){const q=await supabase.from("rotina_automacao_jobs").select("status,resultado_json,erro").eq("execucao_id",id);if(q.error)throw q.error;const jobs=q.data||[];if(!jobs.length||jobs.some(j=>["pendente","processando"].includes(j.status)))return;const falha=jobs.find(j=>j.status==="erro");await supabase.from("rotina_automacao_execucoes").update({status:falha?"erro":"concluida",erro:falha?.erro||null,finalizada_em:new Date().toISOString(),resultado_json:{origem:"integracao_mapeada",jobs},updated_at:new Date().toISOString()}).eq("id",id);}

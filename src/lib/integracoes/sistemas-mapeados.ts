@@ -13,7 +13,7 @@ const opcoesAssinaturaStatus=[{value:"ativa",label:"Ativa"},{value:"vencida",lab
 const opcoesOnboardingStatus=[{value:"pendente",label:"Pendente"},{value:"concluido",label:"Concluído"},{value:"erro",label:"Com erro"}] as OpcaoCampoSistemaMapeado[];
 
 export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
-  chave:"crm_prosperity",nome:"CRM Prosperity",descricao:"Conector oficial do próprio CRM Prosperity para cobrança, checkout, assinaturas e onboarding.",tipo_integracao:"crm_prosperity",versao_mapeamento:4,base_url_padrao:"https://crmprosperity.com/api/integracoes/prosperity/v1",
+  chave:"crm_prosperity",nome:"CRM Prosperity",descricao:"Conector oficial do próprio CRM Prosperity para cobrança, checkout, assinaturas e onboarding.",tipo_integracao:"crm_prosperity",versao_mapeamento:5,base_url_padrao:"https://crmprosperity.com/api/integracoes/prosperity/v1",
   autenticacao:{tipo:"bearer",descricao:"Token Bearer emitido especificamente para a integração."},
   recursos:[
     {chave:"clientes",nome:"Clientes e leads",descricao:"Cadastros originados do checkout e da contratação do CRM Prosperity.",endpoint:"/clientes",identificador:"cliente.id",eventos:[
@@ -59,6 +59,7 @@ export const CRM_PROSPERITY_SISTEMA_MAPEADO:SistemaIntegracaoMapeado={
       {chave:"assinatura.status",api_path:"assinatura.status",nome:"Status da assinatura atual",descricao:"Situação atual da assinatura do cliente.",tipo:"select",opcoes:opcoesAssinaturaStatus},
       {chave:"assinatura.em_dia",api_path:"assinatura.em_dia",nome:"Assinatura está em dia",descricao:"Verdadeiro somente quando a assinatura está ativa e ainda não venceu.",tipo:"boolean"},
       {chave:"assinatura.vencimento_em",api_path:"assinatura.vencimento_em",nome:"Vencimento da assinatura",descricao:"Data de vencimento da assinatura atual.",tipo:"datetime",disponivel_como_variavel:true},
+      {chave:"assinatura.renovada_em",api_path:"assinatura.renovada_em",nome:"Última renovação da assinatura",descricao:"Data e hora da renovação mais recente da assinatura. Usada na revalidação de cobranças pendentes para evitar lembrete de uma tentativa substituída por outro pagamento aprovado.",tipo:"datetime"},
       {chave:"assinatura.bloqueio_em",api_path:"assinatura.bloqueio_em",nome:"Bloqueio previsto",descricao:"Data prevista para bloqueio da assinatura.",tipo:"datetime",disponivel_como_variavel:true},
       {chave:"assinatura.dias_ate_bloqueio",api_path:"assinatura.dias_ate_bloqueio",nome:"Dias até o bloqueio",descricao:"Quantidade de dias restantes até o bloqueio da assinatura.",tipo:"number",disponivel_como_variavel:true},
       {chave:"plano.nome",api_path:"plano.nome",nome:"Plano",descricao:"Nome do plano associado à cobrança, formatado como Plano Básico ou Plano Essencial.",tipo:"text",disponivel_como_variavel:true},
