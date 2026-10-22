@@ -37,6 +37,8 @@ export type GrowthCardData = {
   modalTitle: string;
   modalDescription: string;
   summaryLabel: string;
+  summaryTotalLabel: string;
+  summaryTotalValue: string;
   rows: GrowthDetailRow[];
 };
 
@@ -71,15 +73,6 @@ export default function GrowthKpiCards({ cards }: { cards: GrowthCardData[] }) {
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", close);
     };
-  }, [active]);
-
-  const pendingValue = useMemo(() => {
-    if (!active || active.id !== "aguardando-renovacao") return null;
-    return active.rows.reduce((total, row) => {
-      const raw = String(row.valor || "").replace(/[^0-9,.-]/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
-      const value = Number(raw);
-      return Number.isFinite(value) ? total + value : total;
-    }, 0);
   }, [active]);
 
   const rowsOrdenadas = useMemo(() => {
@@ -154,7 +147,7 @@ export default function GrowthKpiCards({ cards }: { cards: GrowthCardData[] }) {
             <div className="gk-summary">
               <div><span>{active.summaryLabel}</span><strong>{active.value}</strong></div>
               <div><span>Registros</span><strong>{active.rows.length}</strong></div>
-              {pendingValue != null && <div><span>Valor pendente</span><strong>{pendingValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></div>}
+              <div><span>{active.summaryTotalLabel}</span><strong>{active.summaryTotalValue}</strong></div>
             </div>
 
             {active.rows.length === 0 ? (
