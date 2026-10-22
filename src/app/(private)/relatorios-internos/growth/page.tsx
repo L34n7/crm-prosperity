@@ -52,6 +52,7 @@ type ClienteGrowth = {
   responsavel: string;
   email: string;
   plano: string;
+  planoInicial: string;
   status: string;
   primeiroPagamentoEm: string;
   gateway: string;
@@ -257,6 +258,24 @@ function rotuloPlano(empresa: EmpresaRow, pagamento: PagamentoRow, oferta: Ofert
   return titulo && titulo.toLowerCase() !== planoBase.toLowerCase() ? `${planoBase} — ${titulo}` : planoBase;
 }
 
+function rotuloCompraInicial(
+  empresa: EmpresaRow,
+  pagamento: PagamentoRow,
+  oferta: OfertaRow | undefined
+) {
+  const planoBase = primeiroPlano(empresa.planos)?.nome?.trim() || "Plano não informado";
+  const tituloBruto =
+    pagamento.offer_titulo?.trim() ||
+    oferta?.nome?.trim() ||
+    planoBase;
+  const titulo = tituloBruto.replace(/^plano\s+/i, "").trim() || planoBase;
+  const valor = valorPagamento(pagamento);
+
+  return valor > 0
+    ? `${titulo} — ${moeda.format(valor)}/mês`
+    : titulo;
+}
+
 export default async function GrowthAnalyticsPage({ searchParams }: GrowthPageProps) {
   const params = (await searchParams) ?? {};
   const periodo = resolverPeriodo(params);
@@ -325,6 +344,11 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
       plano: rotuloComposicaoPlano(
         empresa,
         assinatura,
+        primeiroPagamento,
+        encontrarOferta(empresa, primeiroPagamento)
+      ),
+      planoInicial: rotuloCompraInicial(
+        empresa,
         primeiroPagamento,
         encontrarOferta(empresa, primeiroPagamento)
       ),
@@ -402,6 +426,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
 
   const detalheClienteInicial = (cliente: ClienteGrowth): GrowthDetailRow => ({
     ...detalheCliente(cliente),
+    plano: cliente.planoInicial,
     valor: moeda.format(cliente.valorInicial),
   });
 
@@ -454,7 +479,7 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
   });
 
   const cards: GrowthCardData[] = [
-    { id: "novos", label: "Novos pagantes", value: numero.format(atuais.length), detail: `${crescimento >= 0 ? "+" : ""}${crescimento.toFixed(1)}% vs. período anterior`, icon: "users", modalTitle: "Novos pagantes", modalDescription: "Empresas pagantes cujo primeiro pagamento comercial ocorreu no período selecionado.", rows: atuais.map(detalheCliente) },
+    { id: "novos", label: "Novos pagantes", value: numero.format(atuais.length), detail: `${crescimento >= 0 ? "+" : ""}${crescimento.toFixed(1)}% vs. período anterior`, icon: "users", modalTitle: "Novos pagantes", modalDescription: "Empresas pagantes cujo primeiro pagamento comercial ocorreu no período selecionado.", rows: atuais.map(detalheClienteInicial) },
     { id: "renovacoes", label: "Renovações", value: numero.format(renovacoes.length), detail: "Pagamentos posteriores ao primeiro", icon: "refresh", modalTitle: "Renovações do período", modalDescription: "Pagamentos comerciais confirmados posteriores ao primeiro pagamento da empresa.", rows: renovacoes.map(detalhePagamento) },
     { id: "novo-mrr", label: "Novo MRR", value: moeda.format(novoMrr), detail: "Plano + adicionais recorrentes", icon: "money", modalTitle: "Novo MRR", modalDescription: "Valor recorrente mensal atual dos novos clientes do período, incluindo adicionais de números contratados.", rows: atuais.map(detalheCliente) },
     { id: "receita", label: "Receita do período", value: moeda.format(receitaPeriodo), detail: `${numero.format(pagamentosPeriodo.length)} pagamentos confirmados`, icon: "card", modalTitle: "Receita do período", modalDescription: "Todos os pagamentos comerciais confirmados dentro do filtro selecionado.", rows: pagamentosPeriodo.map(detalhePagamento) },

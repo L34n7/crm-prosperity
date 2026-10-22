@@ -323,8 +323,41 @@ async function ofertaProsperityPorPlanoValor(planoId: string, valorCentavos: num
   return fallback.data;
 }
 
+function baseAmountFromMetadata(value: unknown) {
+  const metadata = obj(value);
+  const directCandidates = [
+    metadata.plano_base_cents,
+    metadata.base_amount_cents,
+  ];
+
+  for (const candidate of directCandidates) {
+    const amount = Number(candidate || 0);
+    if (Number.isSafeInteger(amount) && amount > 0) return amount;
+  }
+
+  for (const nestedValue of Object.values(metadata)) {
+    const nested = obj(nestedValue);
+    const nestedCandidates = [
+      nested.plano_base_cents,
+      nested.base_amount_cents,
+    ];
+
+    for (const candidate of nestedCandidates) {
+      const amount = Number(candidate || 0);
+      if (Number.isSafeInteger(amount) && amount > 0) return amount;
+    }
+  }
+
+  return 0;
+}
+
 async function valorContratadoEmpresa(empresaId: string, planoId: string, metadata: unknown) {
   const meta = obj(metadata);
+  const baseExplicita = baseAmountFromMetadata(meta);
+  if (baseExplicita > 0) {
+    return baseExplicita;
+  }
+
   const valorContratado = Number(meta.valor_contratado_centavos || 0);
   if (Number.isSafeInteger(valorContratado) && valorContratado > 0) {
     return valorContratado;
@@ -362,13 +395,8 @@ async function valorContratadoEmpresa(empresaId: string, planoId: string, metada
     }
   }
 
-  const baseMetadata = Number(meta.base_amount_cents || 0);
-  if (Number.isSafeInteger(baseMetadata) && baseMetadata > 0) {
-    return baseMetadata;
-  }
-
   const { data, error } = await supabase.from("pagamentos")
-    .select("valor,offer_preco")
+    .select("valor,offer_preco,payload")
     .eq("empresa_id", empresaId)
     .in("status", ["paid", "approved", "completed"])
     .in("gateway", ["prosperity_pay", "atomo", "atomopay", "manual"])
@@ -377,7 +405,26 @@ async function valorContratadoEmpresa(empresaId: string, planoId: string, metada
     .limit(1)
     .maybeSingle();
   if (error) throw error;
+
+  const basePagamento = baseAmountFromMetadata(data?.payload);
+  if (basePagamento > 0) {
+    return basePagamento;
+  }
+
   const paid = Number(data?.offer_preco || data?.valor || 0);
+  const paymentPayload = obj(data?.payload);
+  const addonsCents = Number(paymentPayload.valor_numeros_adicionais_cents || 0);
+
+  if (
+    Number.isSafeInteger(paid) &&
+    paid > 0 &&
+    Number.isSafeInteger(addonsCents) &&
+    addonsCents > 0 &&
+    paid > addonsCents
+  ) {
+    return paid - addonsCents;
+  }
+
   if (Number.isSafeInteger(paid) && paid > 0) return paid;
 
   const { data: plano, error: planoError } = await supabase.from("planos")
