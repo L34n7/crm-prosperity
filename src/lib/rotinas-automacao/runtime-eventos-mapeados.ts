@@ -104,8 +104,26 @@ function pagamentoPendenteAindaValido(contexto:Record<string,unknown>){
 
   return true;
 }
+function assinaturaBloqueioAindaValida(
+  contexto:Record<string,unknown>,
+  meta:Record<string,unknown>,
+){
+  const referenciaOriginal=timestampValido(meta.referencia_em);
+  const bloqueioAtual=timestampValido(ler(contexto,"assinatura.bloqueio_em"));
+
+  // O evento relativo nasce para um ciclo específico da assinatura.
+  // Se o cliente pagar/renovar antes da execução, o bloqueio é movido
+  // para o próximo ciclo. Nesse caso, a execução antiga não pode cobrar.
+  if(referenciaOriginal===null||bloqueioAtual===null)return false;
+
+  // Tolera pequenas diferenças de serialização de timestamp sem aceitar
+  // mudança real de ciclo.
+  return Math.abs(bloqueioAtual-referenciaOriginal)<=60_000;
+}
+
 function estadoValido(evento:string,contexto:Record<string,unknown>,meta:Record<string,unknown>){
   if(evento==="prosperity.carrinho.abandonado")return ler(contexto,"carrinho.pago_atualmente")!==true;
+  if(evento==="prosperity.assinatura.bloqueio_proximo")return assinaturaBloqueioAindaValida(contexto,meta);
   if(
     ["prosperity.pagamento.criado","prosperity.pagamento.status_alterado"].includes(evento) &&
     String(meta.status_novo||"").toLowerCase()==="waiting_payment"
