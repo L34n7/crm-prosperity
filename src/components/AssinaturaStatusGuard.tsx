@@ -179,7 +179,7 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
   async function abrirCheckoutTrialBasico() {
     if (checkoutTrialLoading) return;
 
-    const novaAba = window.open("about:blank", "_blank");
+    const novaAba = window.open("/checkout-carregando", "_blank");
 
     if (!novaAba) {
       setCheckoutTrialErro(
@@ -213,7 +213,7 @@ export default function AssinaturaStatusGuard({ assinatura, isAdmin }: Props) {
         );
       }
 
-      novaAba.location.href = data.checkout_url;
+      novaAba.location.replace(data.checkout_url);
     } catch (error) {
       novaAba.close();
       setCheckoutTrialErro(
