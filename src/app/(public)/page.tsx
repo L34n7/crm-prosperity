@@ -50,7 +50,7 @@ export const metadata: Metadata = {
       "Atendimento, automações, contatos, oportunidades, agenda e disparos em uma plataforma empresarial conectada ao WhatsApp.",
     images: [
       {
-        url: "/opengraph-image",
+        url: "/opengraph-image?v=20261023",
         width: 1200,
         height: 630,
         alt: "CRM Prosperity — plataforma de atendimento e automação no WhatsApp",
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     title: "CRM Prosperity | Atendimento no WhatsApp com IA integrada",
     description:
       "Centralize o atendimento, automatize conversas e organize sua operação com IA integrada.",
-    images: ["/opengraph-image"],
+    images: ["/opengraph-image?v=20261023"],
   },
   robots: {
     index: true,
