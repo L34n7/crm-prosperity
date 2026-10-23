@@ -56,6 +56,11 @@ type Slot = {
   label?: string | null;
 };
 
+type ConsultaAgendaRecente = {
+  data: string | null;
+  slots: Slot[];
+};
+
 type DecisaoConfirmacao = "confirmar" | "recusar" | "indefinida";
 
 type Ctx = {
@@ -74,6 +79,7 @@ type Ctx = {
   confirmacaoPendente: ConfirmacaoAgendamento | null;
   decisaoConfirmacao: DecisaoConfirmacao;
   referenciaTemporal: boolean;
+  consultaAgendaRecente: ConsultaAgendaRecente;
 };
 
 function norm(valor: unknown) {
@@ -89,6 +95,58 @@ function pedidoRemarca(valor: string) {
   return /\b(remarcar|remarca|remarcacao|reagendar|reagenda|reagendamento|mudar (?:o )?horario|trocar (?:o )?(?:dia|horario))\b/.test(
     norm(valor)
   );
+}
+
+function pedidoNovoAgendamento(valor: string) {
+  const texto = norm(valor);
+
+  return (
+    /\bnao\s+(?:vai\s+ser|e|eh|quero)\s+(?:uma?\s+)?(?:remarcacao|reagendamento|remarcar|reagendar)\b/.test(texto) ||
+    /\bnao\s+quero\s+(?:remarcar|reagendar)\b/.test(texto) ||
+    /\b(?:ja\s+fizemos|ja\s+realizamos|ja\s+tivemos|ja\s+aconteceu|ja\s+concluimos)\b.{0,60}\b(?:reuniao|agendamento|apresentacao|demonstracao)\b/.test(texto) ||
+    /\b(?:novo|outro)\s+(?:agendamento|compromisso|atendimento|reuniao)\b/.test(texto)
+  );
+}
+
+function estadoAguardaEscolhaHorario(estado: Estado) {
+  const proximaAcao = norm(estado.proxima_acao);
+  return /\baguardar\b.{0,40}\b(?:escolha|preferencia|novo|outra?)\b.{0,40}\b(?:horario|hora)\b/.test(
+    proximaAcao
+  );
+}
+
+function mensagemEhHorarioIsolado(valor: string, estado: Estado) {
+  if (!estadoAguardaEscolhaHorario(estado)) return false;
+
+  const texto = norm(valor).replace(/[?!.,;]+$/g, "").trim();
+  return (
+    /^\d{1,2}$/.test(texto) ||
+    /^\d{1,2}:\d{2}$/.test(texto) ||
+    /^as\s+\d{1,2}$/.test(texto) ||
+    /^(?:as\s+)?\d{1,2}\s*(?:h|hr|hrs|hora|horas)(?:\s*\d{2})?$/.test(texto)
+  );
+}
+
+function minutosHora(valor: string) {
+  const horario = hora(valor);
+  if (!horario) return null;
+  const [h, m] = horario.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function horaNatural(valor: string) {
+  const horario = hora(valor);
+  if (!horario) return valor;
+  return horario.endsWith(":00")
+    ? `${Number(horario.slice(0, 2))}h`
+    : `${horario}`;
+}
+
+function juntarHorariosNaturais(slots: Slot[]) {
+  const horarios = slots.map((item) => horaNatural(item.hora));
+  if (horarios.length <= 1) return horarios[0] || "";
+  if (horarios.length === 2) return `${horarios[0]} ou ${horarios[1]}`;
+  return `${horarios.slice(0, -1).join(", ")} ou ${horarios.at(-1)}`;
 }
 
 function decisaoConfirmacao(valor: string): DecisaoConfirmacao {
@@ -176,6 +234,9 @@ function horaMensagem(valor: string) {
   if (match) return hora(`${match[1]}:${match[2] || "00"}`);
 
   match = texto.match(/(?:^|\s)(\d{1,2})\s*(?:hr|hrs|hora|horas)(?=$|\s|[?!.,;])/);
+  if (match) return hora(match[1]);
+
+  match = texto.match(/\bas\s+(\d{1,2})(?=$|\s|[?!.,;])/);
   if (match) return hora(match[1]);
 
   return /^\d{1,2}$/.test(texto) ? hora(texto) : null;
@@ -384,7 +445,9 @@ async function ativos(pendencia: Pendencia, agendaId: string) {
   return data || [];
 }
 
-async function slotsRecentes(pendencia: Pendencia) {
+async function ultimaConsultaAgendaRecente(
+  pendencia: Pendencia
+): Promise<ConsultaAgendaRecente> {
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await db
     .from("agente_ia_execucoes")
@@ -395,91 +458,216 @@ async function slotsRecentes(pendencia: Pendencia) {
     .in("status", ["concluido", "fallback"])
     .gte("finished_at", desde)
     .order("finished_at", { ascending: false })
-    .limit(6);
+    .limit(8);
   if (error) throw new Error(error.message);
 
   for (const execucao of data || []) {
-    const ferramentas = Array.isArray(execucao.ferramentas_json) ? execucao.ferramentas_json : [];
+    const ferramentas = Array.isArray(execucao.ferramentas_json)
+      ? execucao.ferramentas_json
+      : [];
+
     for (const ferramenta of [...ferramentas].reverse()) {
-      if (ferramenta?.nome !== "consultar_agenda" || ferramenta?.resultado?.ok !== true) continue;
+      if (
+        ferramenta?.nome !== "consultar_agenda" ||
+        ferramenta?.resultado?.ok !== true
+      ) {
+        continue;
+      }
 
-      const slots = Array.isArray(ferramenta.resultado?.slots) ? ferramenta.resultado.slots : [];
-      if (!slots.length) continue;
-
-      return slots
+      const slots = (Array.isArray(ferramenta.resultado?.slots)
+        ? ferramenta.resultado.slots
+        : [])
         .map((item: any) => ({
           data: String(item.data || ""),
           hora: hora(item.hora),
           label: item.label || null,
         }))
-        .filter((item: any) => /^\d{4}-\d{2}-\d{2}$/.test(item.data) && item.hora) as Slot[];
+        .filter(
+          (item: any) =>
+            /^\d{4}-\d{2}-\d{2}$/.test(item.data) && item.hora
+        ) as Slot[];
+
+      const dataResultado = String(ferramenta.resultado?.data || "").trim();
+      const data =
+        /^\d{4}-\d{2}-\d{2}$/.test(dataResultado)
+          ? dataResultado
+          : slots[0]?.data || null;
+
+      if (data) {
+        return { data, slots };
+      }
     }
   }
 
-  return [];
+  return { data: null, slots: [] };
+}
+
+function dataSolicitadaComContexto(params: {
+  pendencia: Pendencia;
+  estado: Estado;
+  timezone: string;
+  consultaRecente: ConsultaAgendaRecente;
+}) {
+  const interpretacao = interpretarDataHorarioAgenda(
+    params.pendencia.conteudo_agregado,
+    params.timezone
+  );
+  const horarioIsolado = mensagemEhHorarioIsolado(
+    params.pendencia.conteudo_agregado,
+    params.estado
+  );
+
+  if (horarioIsolado && params.consultaRecente.data) {
+    return {
+      data: params.consultaRecente.data,
+      interpretacao,
+      herdouData: true,
+    };
+  }
+
+  return {
+    data: interpretacao.data || null,
+    interpretacao,
+    herdouData: false,
+  };
 }
 
 async function slotEscolhido(
   pendencia: Pendencia,
   agenda: any,
   agendaId: string,
-  recentes: Slot[]
+  estado: Estado,
+  consultaRecente: ConsultaAgendaRecente
 ) {
   const timezone = agenda.timezone || "America/Sao_Paulo";
-  const interpretacao = interpretarDataHorarioAgenda(pendencia.conteudo_agregado, timezone);
+  const contexto = dataSolicitadaComContexto({
+    pendencia,
+    estado,
+    timezone,
+    consultaRecente,
+  });
   const indice = ordinal(pendencia.conteudo_agregado);
 
-  if (indice !== null && recentes[indice]) return recentes[indice];
+  if (indice !== null && consultaRecente.slots[indice]) {
+    return consultaRecente.slots[indice];
+  }
 
   const horario = horaMensagem(pendencia.conteudo_agregado);
   if (!horario) return null;
 
-  let candidatos = recentes.filter((item) => item.hora === horario);
-  if (interpretacao.data) candidatos = candidatos.filter((item) => item.data === interpretacao.data);
+  let candidatos = consultaRecente.slots.filter(
+    (item) => item.hora === horario
+  );
+  if (contexto.data) {
+    candidatos = candidatos.filter((item) => item.data === contexto.data);
+  }
   if (candidatos.length === 1) return candidatos[0];
-  if (!interpretacao.data) return null;
+  if (!contexto.data) return null;
 
   const resultado = await listarSlotsDisponiveis({
     supabase: db,
     empresaId: pendencia.empresa_id,
     agendaId,
-    data: interpretacao.data,
+    data: contexto.data,
     janelaDias: 1,
     limite: 50,
   });
 
   const slot = (resultado.slots || []).find(
     (item: any) =>
-      dataLocalDeIso(item.inicio_at, timezone) === interpretacao.data &&
+      dataLocalDeIso(item.inicio_at, timezone) === contexto.data &&
       String(item.hora_label) === horario
   );
 
   return slot
     ? {
-        data: interpretacao.data,
+        data: contexto.data,
         hora: horario,
         label: slot.label,
       }
     : null;
 }
 
-async function opcoes(pendencia: Pendencia, agenda: any, agendaId: string) {
+async function opcoes(
+  pendencia: Pendencia,
+  agenda: any,
+  agendaId: string,
+  estado: Estado,
+  consultaRecente: ConsultaAgendaRecente
+) {
   const timezone = agenda.timezone || "America/Sao_Paulo";
-  const interpretacao = interpretarDataHorarioAgenda(pendencia.conteudo_agregado, timezone);
-  if (!interpretacao.data) return { data: null, slots: [] as Slot[] };
+  const contexto = dataSolicitadaComContexto({
+    pendencia,
+    estado,
+    timezone,
+    consultaRecente,
+  });
+  const data = contexto.data;
+  const horarioSolicitado = horaMensagem(pendencia.conteudo_agregado);
+
+  if (!data) {
+    return {
+      data: null,
+      slots: [] as Slot[],
+      horarioSolicitado,
+      horarioIndisponivel: false,
+      herdouData: contexto.herdouData,
+    };
+  }
 
   const resultado = await listarSlotsDisponiveis({
     supabase: db,
     empresaId: pendencia.empresa_id,
     agendaId,
-    data: interpretacao.data,
+    data,
     janelaDias: 1,
-    limite: interpretacao.preferencia ? 50 : 12,
+    limite: horarioSolicitado ? 50 : contexto.interpretacao.preferencia ? 50 : 12,
   });
+
+  const todosSlots = (resultado.slots || []).map((item: any) => ({
+    data: dataLocalDeIso(item.inicio_at, timezone),
+    hora: String(item.hora_label),
+    label: item.label,
+  })) as Slot[];
+
+  if (horarioSolicitado) {
+    const exatoDisponivel = todosSlots.some(
+      (item) => item.hora === horarioSolicitado
+    );
+
+    if (!exatoDisponivel) {
+      const alvo = minutosHora(horarioSolicitado);
+      const proximos = alvo === null
+        ? todosSlots.slice(0, 2)
+        : [...todosSlots]
+            .sort((a, b) => {
+              const aMin = minutosHora(a.hora) ?? 10_000;
+              const bMin = minutosHora(b.hora) ?? 10_000;
+              const distanciaA = Math.abs(aMin - alvo);
+              const distanciaB = Math.abs(bMin - alvo);
+              if (distanciaA !== distanciaB) return distanciaA - distanciaB;
+              return aMin - bMin;
+            })
+            .slice(0, 2)
+            .sort(
+              (a, b) =>
+                (minutosHora(a.hora) ?? 10_000) -
+                (minutosHora(b.hora) ?? 10_000)
+            );
+
+      return {
+        data,
+        slots: proximos,
+        horarioSolicitado,
+        horarioIndisponivel: true,
+        herdouData: contexto.herdouData,
+      };
+    }
+  }
 
   const slots = filtrarSlotsPorPreferencia(
     resultado.slots || [],
-    interpretacao.preferencia,
+    contexto.interpretacao.preferencia,
     timezone
   )
     .slice(0, 3)
@@ -489,7 +677,13 @@ async function opcoes(pendencia: Pendencia, agenda: any, agendaId: string) {
       label: item.label,
     }));
 
-  return { data: interpretacao.data, slots };
+  return {
+    data,
+    slots,
+    horarioSolicitado,
+    horarioIndisponivel: false,
+    herdouData: contexto.herdouData,
+  };
 }
 
 function humano(conversa: any) {
@@ -854,15 +1048,25 @@ async function executarSlotSelecionado(ctx: Ctx, slotEscolhido: Slot) {
 }
 
 async function respostaParaNovaPreferencia(ctx: Ctx) {
-  const resultadoOpcoes = await opcoes(ctx.pendencia, ctx.agenda, ctx.agendaId);
+  const resultadoOpcoes = await opcoes(
+    ctx.pendencia,
+    ctx.agenda,
+    ctx.agendaId,
+    ctx.estado,
+    ctx.consultaAgendaRecente
+  );
   const base = limparConfirmacao(ctx.estado);
 
   if (resultadoOpcoes.slots.length) {
     const horarios = resultadoOpcoes.slots.map((item) => item.hora.replace(/^0/, "")).join(", ");
+    const respostaHorarioIndisponivel =
+      resultadoOpcoes.horarioIndisponivel && resultadoOpcoes.horarioSolicitado
+        ? `Às ${horaNatural(resultadoOpcoes.horarioSolicitado)} não está disponível nesse dia. Tenho ${juntarHorariosNaturais(resultadoOpcoes.slots)}. Algum desses horários funciona para você?`
+        : null;
     return {
-      resposta: ctx.remarcacao
+      resposta: respostaHorarioIndisponivel || (ctx.remarcacao
         ? `Sem problema. Para esse dia tenho ${horarios}. Qual horário fica melhor para você?`
-        : `Sem problema. Para esse dia tenho ${horarios}. Qual horário fica melhor para você?`,
+        : `Sem problema. Para esse dia tenho ${horarios}. Qual horário fica melhor para você?`),
       ferramenta: "consultar_agenda",
       resultado: { ok: true, slots: resultadoOpcoes.slots, data: resultadoOpcoes.data },
       estado: {
@@ -879,7 +1083,10 @@ async function respostaParaNovaPreferencia(ctx: Ctx) {
 
   if (resultadoOpcoes.data) {
     return {
-      resposta: "Não encontrei horário disponível nesse dia. Qual outro dia ou período fica melhor para você?",
+      resposta:
+        resultadoOpcoes.horarioSolicitado
+          ? `Às ${horaNatural(resultadoOpcoes.horarioSolicitado)} não está disponível nesse dia e não encontrei outro horário livre. Qual outro dia fica melhor para você?`
+          : "Não encontrei horário disponível nesse dia. Qual outro dia ou período fica melhor para você?",
       ferramenta: "consultar_agenda",
       resultado: { ok: true, slots: [], data: resultadoOpcoes.data },
       estado: {
@@ -1035,15 +1242,24 @@ async function executar(ctx: Ctx) {
         estado = revisao.estado;
       }
     } else {
-      const resultadoOpcoes = await opcoes(ctx.pendencia, ctx.agenda, ctx.agendaId);
+      const resultadoOpcoes = await opcoes(
+    ctx.pendencia,
+    ctx.agenda,
+    ctx.agendaId,
+    ctx.estado,
+    ctx.consultaAgendaRecente
+  );
 
       if (resultadoOpcoes.slots.length) {
         const horarios = resultadoOpcoes.slots
           .map((item) => item.hora.replace(/^0/, ""))
           .join(", ");
-        resposta = ctx.remarcacao
-          ? `Claro! Para esse dia tenho ${horarios}. Qual horário fica melhor para você?`
-          : `Tenho ${horarios} disponíveis. Qual horário fica melhor para você?`;
+        resposta =
+          resultadoOpcoes.horarioIndisponivel && resultadoOpcoes.horarioSolicitado
+            ? `Às ${horaNatural(resultadoOpcoes.horarioSolicitado)} não está disponível nesse dia. Tenho ${juntarHorariosNaturais(resultadoOpcoes.slots)}. Algum desses horários funciona para você?`
+            : ctx.remarcacao
+              ? `Claro! Para esse dia tenho ${horarios}. Qual horário fica melhor para você?`
+              : `Tenho ${horarios} disponíveis. Qual horário fica melhor para você?`;
         ferramenta = "consultar_agenda";
         resultado = {
           ok: true,
@@ -1060,7 +1276,10 @@ async function executar(ctx: Ctx) {
           proxima_acao: "aguardar escolha de horário",
         };
       } else if (resultadoOpcoes.data) {
-        resposta = "Não encontrei horário disponível nesse dia. Qual outro dia ou período fica melhor para você?";
+        resposta =
+          resultadoOpcoes.horarioSolicitado
+            ? `Às ${horaNatural(resultadoOpcoes.horarioSolicitado)} não está disponível nesse dia e não encontrei outro horário livre. Qual outro dia fica melhor para você?`
+            : "Não encontrei horário disponível nesse dia. Qual outro dia ou período fica melhor para você?";
         ferramenta = "consultar_agenda";
         resultado = { ok: true, slots: [], data: resultadoOpcoes.data };
         estado = {
@@ -1186,21 +1405,38 @@ export async function processarPoliticaAgendaPendencia(
     return { tratado: false };
   }
 
-  const estado = await estadoAtual(pendencia);
-  const confirmacaoPendente = confirmacaoDoEstado(estado, configuracao.agendaId);
-  const remarcacaoExplicita = pedidoRemarca(pendencia.conteudo_agregado);
+  const estadoPersistido = await estadoAtual(pendencia);
+  const novoAgendamentoExplicito = pedidoNovoAgendamento(
+    pendencia.conteudo_agregado
+  );
+  const estado: Estado = novoAgendamentoExplicito
+    ? {
+        ...limparConfirmacao(estadoPersistido),
+        estagio: "agendamento em andamento",
+        proxima_acao: null,
+      }
+    : estadoPersistido;
+  const confirmacaoPendente = novoAgendamentoExplicito
+    ? null
+    : confirmacaoDoEstado(estado, configuracao.agendaId);
+  const remarcacaoExplicita =
+    !novoAgendamentoExplicito && pedidoRemarca(pendencia.conteudo_agregado);
   const remarcacao =
-    remarcacaoExplicita || confirmacaoPendente?.remarcacao === true || estadoRemarca(estado);
+    !novoAgendamentoExplicito &&
+    (remarcacaoExplicita ||
+      confirmacaoPendente?.remarcacao === true ||
+      estadoRemarca(estado));
   if (!remarcacao && !configuracao.podeCriar) {
     return { tratado: false };
   }
   const emCurso = agendaEmCurso(estado);
-  const recentes = await slotsRecentes(pendencia);
+  const consultaAgendaRecente = await ultimaConsultaAgendaRecente(pendencia);
   const slot = await slotEscolhido(
     pendencia,
     configuracao.agenda,
     configuracao.agendaId,
-    recentes
+    estado,
+    consultaAgendaRecente
   );
   const interpretacao = interpretarDataHorarioAgenda(
     pendencia.conteudo_agregado,
@@ -1220,9 +1456,10 @@ export async function processarPoliticaAgendaPendencia(
 
   if (
     !confirmacaoDeveSerTratada &&
+    !novoAgendamentoExplicito &&
     !remarcacaoExplicita &&
     !(remarcacao && referenciaTemporal) &&
-    !(emCurso && slot)
+    !(emCurso && referenciaTemporal)
   ) {
     return { tratado: false };
   }
@@ -1293,6 +1530,7 @@ export async function processarPoliticaAgendaPendencia(
     confirmacaoPendente,
     decisaoConfirmacao: decisao,
     referenciaTemporal,
+    consultaAgendaRecente,
   };
 
   return {
