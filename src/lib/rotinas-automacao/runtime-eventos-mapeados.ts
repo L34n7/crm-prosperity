@@ -223,7 +223,7 @@ export async function processarEventoIntegracaoMapeadaPorId(
 
 function horarioValido(valor:unknown){
   const texto=String(valor||"").trim();
-  const match=/^(\\d{2}):(\\d{2})$/.exec(texto);
+  const match=/^(\d{2}):(\d{2})$/.exec(texto);
   if(!match)return null;
   const hora=Number(match[1]),minuto=Number(match[2]);
   if(hora<0||hora>23||minuto<0||minuto>59)return null;
