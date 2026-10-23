@@ -74,16 +74,43 @@ function dataPt(value?: string | null) {
   }
 }
 
-function destinoAgenda(canal: string, agendamento: any, responsavel: any) {
-  if (canal === "whatsapp") return agendamento?.telefone_cliente || "";
-  if (canal === "email") return agendamento?.email_cliente || responsavel?.email || "";
+function destinoAgenda(
+  canal: string,
+  tipo: string,
+  agendamento: any,
+  contato: any,
+  responsavel: any
+) {
+  if (canal === "whatsapp") return agendamento?.telefone_cliente || contato?.telefone || "";
+  if (canal === "email") {
+    if (tipo === "aviso_responsavel") return responsavel?.email || "";
+    return agendamento?.email_cliente || contato?.email || "";
+  }
   if (canal === "sistema") return responsavel?.nome || "Responsável da agenda";
-  return agendamento?.nome_cliente || "Contato do agendamento";
+  return agendamento?.nome_cliente || contato?.nome || "Contato do agendamento";
 }
 
-function destinoDetalhadoAgenda(canal: string, agendamento: any, responsavel: any, fluxo: any) {
-  const valor = destinoAgenda(canal, agendamento, responsavel) || "-";
-  if (canal === "email") return { tipo: "email", rotulo: "E-mail", valor };
+function destinoDetalhadoAgenda(
+  canal: string,
+  tipo: string,
+  agendamento: any,
+  contato: any,
+  responsavel: any,
+  fluxo: any
+) {
+  const destino = destinoAgenda(canal, tipo, agendamento, contato, responsavel);
+  if (canal === "email") {
+    return {
+      tipo: "email",
+      rotulo: "E-mail",
+      valor:
+        destino ||
+        (tipo === "aviso_responsavel"
+          ? "Responsável sem e-mail cadastrado"
+          : "Cliente sem e-mail cadastrado"),
+    };
+  }
+  const valor = destino || "-";
   if (canal === "sistema") return { tipo: "responsavel", rotulo: "Responsável", valor };
   if (canal === "fluxo") {
     return {
@@ -310,6 +337,13 @@ export async function GET(request: NextRequest) {
           .filter(Boolean)
       )
     );
+    const contatoIds = Array.from(
+      new Set(
+        execucoesAgenda
+          .map((item: any) => String(one(item.agenda_agendamentos)?.contato_id || ""))
+          .filter(Boolean)
+      )
+    );
     const flowIds = Array.from(
       new Set(
         execucoesAgenda
@@ -328,12 +362,15 @@ export async function GET(request: NextRequest) {
       ])
     );
 
-    const [templatesResult, responsaveisResult, flowsResult, mensagensResult] = await Promise.all([
+    const [templatesResult, responsaveisResult, contatosResult, flowsResult, mensagensResult] = await Promise.all([
       templateIds.length
         ? supabase.from("whatsapp_templates").select("id, nome, idioma, payload").eq("empresa_id", usuario.empresa_id).in("id", templateIds)
         : Promise.resolve({ data: [], error: null }),
       responsavelIds.length
         ? supabase.from("usuarios").select("id, nome, email").eq("empresa_id", usuario.empresa_id).in("id", responsavelIds)
+        : Promise.resolve({ data: [], error: null }),
+      contatoIds.length
+        ? supabase.from("contatos").select("id, nome, telefone, email").eq("empresa_id", usuario.empresa_id).in("id", contatoIds)
         : Promise.resolve({ data: [], error: null }),
       flowIds.length
         ? supabase.from("automacao_fluxos").select("id, nome").eq("empresa_id", usuario.empresa_id).in("id", flowIds)
@@ -345,11 +382,17 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const enriquecimentoError = templatesResult.error || responsaveisResult.error || flowsResult.error || mensagensResult.error;
+    const enriquecimentoError =
+      templatesResult.error ||
+      responsaveisResult.error ||
+      contatosResult.error ||
+      flowsResult.error ||
+      mensagensResult.error;
     if (enriquecimentoError) throw new Error(enriquecimentoError.message);
 
     const templates = new Map((templatesResult.data || []).map((item: any) => [String(item.id), item]));
     const responsaveis = new Map((responsaveisResult.data || []).map((item: any) => [String(item.id), item]));
+    const contatos = new Map((contatosResult.data || []).map((item: any) => [String(item.id), item]));
     const flows = new Map((flowsResult.data || []).map((item: any) => [String(item.id), item]));
     const mensagens = new Map((mensagensResult.data || []).map((item: any) => [String(item.mensagem_externa_id), item]));
 
@@ -407,6 +450,7 @@ export async function GET(request: NextRequest) {
       const individualPayload = item.payload_json || {};
       const template = templates.get(String(individualPayload.whatsapp_template_id || regra.whatsapp_template_id || ""));
       const responsavel = responsaveis.get(String(agendamento.responsavel_id || ""));
+      const contato = contatos.get(String(agendamento.contato_id || ""));
       const fluxo = flows.get(String(regra.fluxo_id || ""));
       const messageId = String(item.mensagem_externa_id || "").trim();
       const mensagem: any = messageId ? mensagens.get(messageId) : null;
@@ -414,8 +458,31 @@ export async function GET(request: NextRequest) {
       const envioStatus = item.status === "erro" || mensagem?.status_envio === "falha" ? "falha" : item.status === "concluido" ? "sucesso" : item.status === "processando" ? "processando" : null;
       const title = template?.nome || `${tipoLabel(item.tipo)} · ${canalLabel(item.canal)}`;
       const recipient = individualPayload.destinatario && typeof individualPayload.destinatario === "object" ? individualPayload.destinatario : null;
-      const destination = recipient ? (item.canal === "email" ? recipient.email : item.canal === "whatsapp" ? recipient.telefone : recipient.nome) : destinoAgenda(item.canal, agendamento, responsavel);
-      const destinationMeta = destinoDetalhadoAgenda(item.canal, agendamento, responsavel, fluxo);
+      const destination = recipient
+        ? item.canal === "email"
+          ? recipient.email
+          : item.canal === "whatsapp"
+            ? recipient.telefone
+            : recipient.nome
+        : destinoAgenda(item.canal, item.tipo, agendamento, contato, responsavel);
+      const destinationMeta = recipient
+        ? {
+            tipo: item.canal,
+            rotulo: canalLabel(item.canal),
+            valor:
+              destination ||
+              (item.canal === "email"
+                ? "Destinatário sem e-mail cadastrado"
+                : "-"),
+          }
+        : destinoDetalhadoAgenda(
+            item.canal,
+            item.tipo,
+            agendamento,
+            contato,
+            responsavel,
+            fluxo
+          );
       const content = conteudoAgenda(item.tipo, item.canal, agendamento, agenda);
 
       return {
