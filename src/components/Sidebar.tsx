@@ -139,6 +139,7 @@ const menuItems: MenuItem[] = [
     label: "E-mail Marketing",
     href: "/email-marketing",
     icon: Mail,
+    permissao: PERMISSAO_INTERNA_EMPRESAS,
   },
   {
     label: "Fluxos",
