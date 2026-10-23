@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   BarChart3,
   MessageSquare,
+  Mail,
   Send,
   CalendarClock,
   CalendarCheck,
@@ -133,6 +134,11 @@ const menuItems: MenuItem[] = [
     href: "/templates-whatsapp",
     icon: FileText,
     permissao: "whatsapp_templates.visualizar",
+  },
+  {
+    label: "E-mail Marketing",
+    href: "/email-marketing",
+    icon: Mail,
   },
   {
     label: "Fluxos",
@@ -360,10 +366,10 @@ export default function Sidebar({
       : []),
   ];
   const menuItemsComCadastro: MenuItem[] = [
-    ...menuItems.slice(0, 10),
+    ...menuItems.slice(0, 11),
     ...cadastroComercialMenu,
     ...modulosNichoMenu,
-    ...menuItems.slice(10),
+    ...menuItems.slice(11),
   ];
 
   const visibleMenuItems = menuItemsComCadastro.filter((item) => {
