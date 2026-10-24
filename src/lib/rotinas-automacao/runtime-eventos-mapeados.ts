@@ -104,12 +104,33 @@ function pagamentoPendenteAindaValido(contexto:Record<string,unknown>){
 
   return true;
 }
+function assinaturaVencimentoAindaValida(
+  contexto:Record<string,unknown>,
+  meta:Record<string,unknown>,
+){
+  const referenciaOriginal=timestampValido(meta.referencia_em);
+  const vencimentoAtual=timestampValido(ler(contexto,"assinatura.vencimento_em"));
+  const status=String(ler(contexto,"assinatura.status")||"").trim().toLowerCase();
+
+  // O aviso anterior ao vencimento só pertence a uma assinatura ainda ativa.
+  // Se o cliente renovou, a data muda; se já venceu/bloqueou, o aviso antigo
+  // não pode ser reaproveitado.
+  if(status&&status!=="ativa")return false;
+  if(referenciaOriginal===null||vencimentoAtual===null)return false;
+  return Math.abs(vencimentoAtual-referenciaOriginal)<=60_000;
+}
+
 function assinaturaBloqueioAindaValida(
   contexto:Record<string,unknown>,
   meta:Record<string,unknown>,
 ){
   const referenciaOriginal=timestampValido(meta.referencia_em);
   const bloqueioAtual=timestampValido(ler(contexto,"assinatura.bloqueio_em"));
+  const status=String(ler(contexto,"assinatura.status")||"").trim().toLowerCase();
+
+  // Depois de bloqueada, a assinatura não pode continuar originando cobranças
+  // ou avisos do ciclo anterior.
+  if(status==="bloqueada")return false;
 
   // O evento relativo nasce para um ciclo específico da assinatura.
   // Se o cliente pagar/renovar antes da execução, o bloqueio é movido
@@ -123,6 +144,7 @@ function assinaturaBloqueioAindaValida(
 
 function estadoValido(evento:string,contexto:Record<string,unknown>,meta:Record<string,unknown>){
   if(evento==="prosperity.carrinho.abandonado")return ler(contexto,"carrinho.pago_atualmente")!==true;
+  if(evento==="prosperity.assinatura.vencimento_proximo")return assinaturaVencimentoAindaValida(contexto,meta);
   if(evento==="prosperity.assinatura.bloqueio_proximo")return assinaturaBloqueioAindaValida(contexto,meta);
   if(
     ["prosperity.pagamento.criado","prosperity.pagamento.status_alterado"].includes(evento) &&
@@ -336,7 +358,7 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
 
   const empresasResult=await supabase
     .from("empresas")
-    .select("id,assinatura_vencimento_em,assinatura_bloqueio_em")
+    .select("id,assinatura_status,assinatura_vencimento_em,assinatura_bloqueio_em")
     .not("assinatura_vencimento_em","is",null)
     .order("assinatura_vencimento_em",{ascending:true})
     .limit(Math.max(1,Math.min(Number(limite)||500,2000)));
@@ -362,6 +384,16 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
     if(!integracoes.length)continue;
 
     for(const empresa of empresasResult.data||[]){
+      const assinaturaStatus=String(empresa.assinatura_status||"ativa").trim().toLowerCase();
+      if(
+        gatilho.event==="prosperity.assinatura.vencimento_proximo" &&
+        assinaturaStatus!=="ativa"
+      )continue;
+      if(
+        gatilho.event==="prosperity.assinatura.bloqueio_proximo" &&
+        assinaturaStatus==="bloqueada"
+      )continue;
+
       const referenciaBruta=empresa[campo as keyof typeof empresa];
       const referenciaMs=Date.parse(String(referenciaBruta||""));
       if(!Number.isFinite(referenciaMs)||referenciaMs<=agora)continue;
