@@ -41,6 +41,7 @@ const contexto = {
   modo: "criar_fluxo",
   instrucaoCompleta: "Criar fluxo completo",
   agendas: [],
+  midias: [],
 };
 
 function instrucaoSistema(payload: Record<string, unknown>) {
@@ -49,45 +50,68 @@ function instrucaoSistema(payload: Record<string, unknown>) {
   );
 }
 
-test("correcao estrutural preserva o rascunho integral anterior", () => {
-  const rascunho = '{"etapas":[{"ref":"inicio"}],"rotas":[]}';
-  const sistema = instrucaoSistema(
-    prepararPayloadAssistente({
-      body: payloadBaseAssistente(),
-      limite: 22000,
-      repetir: true,
-      fase: "estrutura",
-      problemas: ["O Menu Principal nao esta conectado."],
-      rascunhoAnterior: rascunho,
-      contexto,
-    })
+test("payload principal preserva o pedido e injeta o contrato atual", () => {
+  const payload = prepararPayloadAssistente({
+    body: payloadBaseAssistente(),
+    limite: 22000,
+    contexto,
+  });
+
+  const sistema = instrucaoSistema(payload);
+  assert.match(sistema, /CONTRATO DESTA EXECUCAO/i);
+  assert.match(sistema, /Planeje e revise internamente/i);
+
+  const entradaUsuario = JSON.parse(
+    String(
+      (payload.input as Array<{ role: string; content: string }>).find(
+        (item) => item.role === "user"
+      )?.content || "{}"
+    )
   );
 
-  assert.match(sistema, /fase de correcao estrutural/i);
-  assert.match(sistema, /Nao recomecar do zero/i);
-  assert.ok(sistema.includes(rascunho));
-  assert.match(sistema, /Menu Principal nao esta conectado/);
+  assert.equal(
+    entradaUsuario.secao_solicitacao_usuario.texto,
+    contexto.instrucaoCompleta
+  );
+  assert.deepEqual(
+    entradaUsuario.secao_recursos_disponiveis.agendas,
+    contexto.agendas
+  );
+  assert.deepEqual(
+    entradaUsuario.secao_recursos_disponiveis.midias,
+    contexto.midias
+  );
 });
 
-test("revisao final recebe o plano corrigido e somente as pendencias restantes", () => {
-  const rascunho =
-    '{"etapas":[{"ref":"inicio"},{"ref":"menu"}],"rotas":[{"origem":"inicio","destino":"menu"}]}';
-  const sistema = instrucaoSistema(
-    prepararPayloadAssistente({
-      body: payloadBaseAssistente(),
-      limite: 22000,
-      repetir: true,
-      fase: "revisao",
-      problemas: ['A opcao "Agendar" precisa ter uma rota.'],
-      rascunhoAnterior: rascunho,
-      contexto,
-    })
-  );
+test("payload principal expande o schema com campos operacionais de agenda", () => {
+  const payload = prepararPayloadAssistente({
+    body: payloadBaseAssistente(),
+    limite: 22000,
+    contexto,
+  });
 
-  assert.match(sistema, /fase de revisao final/i);
-  assert.match(sistema, /altere somente o necessario/i);
-  assert.ok(sistema.includes(rascunho));
-  assert.match(sistema, /opcao "Agendar" precisa ter uma rota/);
+  const schema = (
+    payload.text as {
+      format: {
+        schema: {
+          properties: {
+            etapas: {
+              items: {
+                properties: Record<string, { enum?: unknown[] }>;
+                required: string[];
+              };
+            };
+          };
+        };
+      };
+    }
+  ).format.schema;
+
+  const etapa = schema.properties.etapas.items;
+  assert.ok(etapa.properties.agenda_id);
+  assert.ok(etapa.properties.estrategia_transferencia);
+  assert.ok(etapa.required.includes("agenda_id"));
+  assert.ok(etapa.required.includes("estrategia_transferencia"));
 });
 
 test("problemas topologicos reparaveis nao provocam outra reescrita completa pela IA", () => {

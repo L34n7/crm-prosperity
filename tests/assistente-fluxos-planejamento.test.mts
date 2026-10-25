@@ -16,6 +16,7 @@ const contexto = {
   modo: "criar_fluxo",
   instrucaoCompleta: "Crie um fluxo para uma padaria vender paes e bolos.",
   agendas: [],
+  midias: [],
 };
 
 const body = {

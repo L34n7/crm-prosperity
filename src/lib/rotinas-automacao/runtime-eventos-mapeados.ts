@@ -386,11 +386,11 @@ async function enfileirarEventosRelativosAssinatura(limite=500){
     for(const empresa of empresasResult.data||[]){
       const assinaturaStatus=String(empresa.assinatura_status||"ativa").trim().toLowerCase();
       if(
-        gatilho.event==="prosperity.assinatura.vencimento_proximo" &&
+        gatilho.evento==="prosperity.assinatura.vencimento_proximo" &&
         assinaturaStatus!=="ativa"
       )continue;
       if(
-        gatilho.event==="prosperity.assinatura.bloqueio_proximo" &&
+        gatilho.evento==="prosperity.assinatura.bloqueio_proximo" &&
         assinaturaStatus==="bloqueada"
       )continue;
 
