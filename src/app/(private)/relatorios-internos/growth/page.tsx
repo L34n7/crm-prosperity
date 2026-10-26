@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import RelatoriosInternosTabs from "../RelatoriosInternosTabs";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import GrowthKpiCards, { type GrowthCardData, type GrowthDetailRow } from "./GrowthKpiCards";
+import GrowthPeriodFilter from "./GrowthPeriodFilter";
 import styles from "./growth.module.css";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -89,21 +90,28 @@ function inputData(valor: Date) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(valor);
 }
 
-function normalizarAtalho(valor: string): AtalhoPeriodo {
+function normalizarAtalho(valor: string, temDatasInformadas = false): AtalhoPeriodo {
   const validos: AtalhoPeriodo[] = ["7d", "15d", "mes_atual", "mes_passado", "30d", "3m", "personalizado"];
-  return validos.includes(valor as AtalhoPeriodo) ? (valor as AtalhoPeriodo) : "mes_atual";
+  if (validos.includes(valor as AtalhoPeriodo)) return valor as AtalhoPeriodo;
+  return temDatasInformadas ? "personalizado" : "mes_atual";
 }
 
 function resolverPeriodo(params: SearchParams) {
-  const atalho = normalizarAtalho(parametro(params, "atalho"));
+  const inicioTexto = parametro(params, "inicio");
+  const fimTexto = parametro(params, "fim");
+  const temDatasInformadas =
+    /^\d{4}-\d{2}-\d{2}$/.test(inicioTexto) ||
+    /^\d{4}-\d{2}-\d{2}$/.test(fimTexto);
+  const atalho = normalizarAtalho(
+    parametro(params, "atalho"),
+    temDatasInformadas,
+  );
   const agora = new Date();
   const { ano, mes, dia } = partesData(agora);
   let inicio: Date;
   let fim: Date;
 
   if (atalho === "personalizado") {
-    const inicioTexto = parametro(params, "inicio");
-    const fimTexto = parametro(params, "fim");
     inicio = /^\d{4}-\d{2}-\d{2}$/.test(inicioTexto) ? new Date(`${inicioTexto}T00:00:00-03:00`) : dataSaoPaulo(ano, mes, 1);
     const fimInformado = /^\d{4}-\d{2}-\d{2}$/.test(fimTexto) ? new Date(`${fimTexto}T23:59:59.999-03:00`) : agora;
     fim = inicio <= fimInformado ? fimInformado : agora;
@@ -514,12 +522,11 @@ export default async function GrowthAnalyticsPage({ searchParams }: GrowthPagePr
             <h2>Novos clientes e receita</h2>
             <p>{data.format(periodo.inicio)} até {data.format(periodo.fim)}</p>
           </div>
-          <form className={styles.filters} action="/relatorios-internos/growth">
-            <label className={styles.shortcutField}>Atalho<span><select name="atalho" defaultValue={periodo.atalho}><option value="7d">Últimos 7 dias</option><option value="15d">Últimos 15 dias</option><option value="mes_atual">Mês atual</option><option value="mes_passado">Mês passado</option><option value="30d">Últimos 30 dias</option><option value="3m">Últimos 3 meses</option><option value="personalizado">Período personalizado</option></select></span></label>
-            <label>Início<span><input type="date" name="inicio" defaultValue={periodo.inicioInput} /></span></label>
-            <label>Fim<span><input type="date" name="fim" defaultValue={periodo.fimInput} /></span></label>
-            <button type="submit">Aplicar período</button>
-          </form>
+          <GrowthPeriodFilter
+            atalho={periodo.atalho}
+            inicio={periodo.inicioInput}
+            fim={periodo.fimInput}
+          />
         </section>
 
         <GrowthKpiCards cards={cards} />
