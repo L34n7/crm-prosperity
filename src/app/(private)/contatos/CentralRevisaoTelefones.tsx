@@ -352,9 +352,35 @@ export default function CentralRevisaoTelefones({
         }
 
         if (previewData.resumo.ignorados > 0) {
-          const quantidade = previewData.resumo.ignorados;
+          const itensSelecionados = itens.filter((item) =>
+            selecionados.has(item.id)
+          );
+          const semDdd = itensSelecionados.filter(
+            (item) => item.tipo === "sem_ddd"
+          ).length;
+
+          if (
+            acao === "aplicar_sugestoes_seguras" &&
+            semDdd > 0
+          ) {
+            setErro(
+              `A correção automática não foi aplicada porque ${semDdd} contato(s) selecionado(s) estão sem DDD. O sistema não pode definir o DDD automaticamente com segurança. Em "Ação", selecione "Adicionar DDD aos selecionados", informe o DDD correto e clique em "Corrigir" novamente.`
+            );
+            return;
+          }
+
+          const motivos = Array.from(
+            new Set(
+              previewData.ignorados
+                .map((item) => item.motivo?.trim())
+                .filter(Boolean)
+            )
+          );
+
           setErro(
-            `Nenhum contato pode ser corrigido com a ação selecionada. ${quantidade} contato(s) precisam de outra ação de correção ou edição manual.`
+            motivos.length > 0
+              ? `Não foi possível aplicar a correção. ${motivos.join(" ")}`
+              : `Nenhum contato pode ser corrigido com a ação selecionada. ${previewData.resumo.ignorados} contato(s) precisam de outra ação de correção ou edição manual.`
           );
           return;
         }
