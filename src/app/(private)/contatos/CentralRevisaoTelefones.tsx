@@ -192,6 +192,7 @@ export default function CentralRevisaoTelefones({
 
   function alternarSelecionado(id: string) {
     setPreview(null);
+    setErro("");
     setSelecionados((atual) => {
       const proximo = new Set(atual);
       if (proximo.has(id)) proximo.delete(id);
@@ -335,7 +336,34 @@ export default function CentralRevisaoTelefones({
         return;
       }
 
-      setPreview(data as PreviewResposta);
+      const previewData = data as PreviewResposta;
+
+      if (previewData.resumo.corrigiveis === 0) {
+        setPreview(null);
+
+        if (previewData.resumo.conflitos > 0) {
+          const quantidade = previewData.resumo.conflitos;
+          setErro(
+            quantidade === 1
+              ? "Não foi possível corrigir o contato: o telefone corrigido já está cadastrado em outro contato."
+              : `Não foi possível corrigir os contatos: ${quantidade} telefone(s) corrigido(s) já estão cadastrados em outros contatos.`
+          );
+          return;
+        }
+
+        if (previewData.resumo.ignorados > 0) {
+          const quantidade = previewData.resumo.ignorados;
+          setErro(
+            `Nenhum contato pode ser corrigido com a ação selecionada. ${quantidade} contato(s) precisam de outra ação de correção ou edição manual.`
+          );
+          return;
+        }
+
+        setErro("Nenhum dos contatos selecionados possui uma correção que possa ser aplicada.");
+        return;
+      }
+
+      setPreview(previewData);
     } catch {
       setErro("Não foi possível gerar a prévia.");
     } finally {
@@ -440,7 +468,6 @@ export default function CentralRevisaoTelefones({
               </button>
             </header>
 
-            {erro && <div className={styles.error}>{erro}</div>}
             {mensagem && <div className={styles.success}>{mensagem}</div>}
 
             {carregando ? (
@@ -501,6 +528,7 @@ export default function CentralRevisaoTelefones({
                       onChange={(event) => {
                         setAcao(event.target.value as Acao);
                         setPreview(null);
+                        setErro("");
                       }}
                     >
                       <option value="aplicar_sugestoes_seguras">
@@ -529,6 +557,7 @@ export default function CentralRevisaoTelefones({
                         onChange={(event) => {
                           setDdd(event.target.value.replace(/\D/g, "").slice(0, 2));
                           setPreview(null);
+                          setErro("");
                         }}
                       />
                     </label>
@@ -705,11 +734,15 @@ export default function CentralRevisaoTelefones({
                     onClick={() => void solicitarPreview()}
                     disabled={gerandoPreview || selecionados.size === 0}
                   >
-                    {gerandoPreview
-                      ? "Preparando prévia..."
-                      : "Ver prévia da correção"}
+                    {gerandoPreview ? "Verificando..." : "Corrigir"}
                   </button>
                 </div>
+
+                {erro && (
+                  <div className={styles.error} role="alert" aria-live="assertive">
+                    {erro}
+                  </div>
+                )}
 
                 {preview && (
                   <section className={styles.previewPanel}>
