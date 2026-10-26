@@ -29,6 +29,14 @@ type PreviewCorrecao = {
 
 type PreviewResposta = {
   correcoes: PreviewCorrecao[];
+  reaproveitamentos: Array<{
+    id: string;
+    nome: string | null;
+    telefone_anterior: string;
+    telefone_sugerido: string;
+    contato_existente_id: string;
+    contato_existente_nome: string | null;
+  }>;
   conflitos: Array<{
     id: string;
     nome: string | null;
@@ -45,6 +53,7 @@ type PreviewResposta = {
   resumo: {
     selecionados: number;
     corrigiveis: number;
+    reaproveitados: number;
     conflitos: number;
     ignorados: number;
     permanecem_em_revisao: number;
@@ -327,6 +336,7 @@ export default function CentralRevisaoTelefones({
           contato_ids: Array.from(selecionados),
           acao,
           ddd,
+          lista_id: listaIdInicial || null,
         }),
       });
       const data = await response.json();
@@ -413,6 +423,7 @@ export default function CentralRevisaoTelefones({
           contato_ids: Array.from(selecionados),
           acao,
           ddd,
+          lista_id: listaIdInicial || null,
         }),
       });
       const data = await response.json();
@@ -776,10 +787,16 @@ export default function CentralRevisaoTelefones({
                       <div>
                         <span className={styles.eyebrow}>Confirmação</span>
                         <h3>
-                          {preview.resumo.corrigiveis} contato(s) serão alterados
+                          {preview.resumo.corrigiveis} contato(s) serão ajustados
                         </h3>
                       </div>
                       <div className={styles.previewStats}>
+                        {preview.resumo.reaproveitados > 0 && (
+                          <span>
+                            {preview.resumo.reaproveitados} existente(s) serão
+                            mantidos na lista
+                          </span>
+                        )}
                         {preview.resumo.conflitos > 0 && (
                           <span>{preview.resumo.conflitos} conflito(s)</span>
                         )}
@@ -806,10 +823,19 @@ export default function CentralRevisaoTelefones({
                       ))}
                     </div>
 
+                    {preview.resumo.reaproveitados > 0 && (
+                      <p className={styles.conflictNote}>
+                        {preview.resumo.reaproveitados} contato(s) já existem no
+                        CRM. O cadastro existente será vinculado também a esta
+                        lista e o registro duplicado desta lista será
+                        desvinculado, sem criar outro contato.
+                      </p>
+                    )}
+
                     {preview.resumo.conflitos > 0 && (
                       <p className={styles.conflictNote}>
-                        Contatos que resultariam em telefone já cadastrado serão
-                        ignorados automaticamente.
+                        Os conflitos restantes não podem ser resolvidos
+                        automaticamente e serão ignorados.
                       </p>
                     )}
 
@@ -823,7 +849,7 @@ export default function CentralRevisaoTelefones({
                     >
                       {aplicando
                         ? "Aplicando correções..."
-                        : `Confirmar ${preview.resumo.corrigiveis} correção(ões)`}
+                        : `Confirmar ${preview.resumo.corrigiveis} ajuste(s)`}
                     </button>
                   </section>
                 )}
