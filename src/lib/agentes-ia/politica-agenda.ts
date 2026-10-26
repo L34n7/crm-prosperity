@@ -115,9 +115,7 @@ function estadoAguardaEscolhaHorario(estado: Estado) {
   );
 }
 
-function mensagemEhHorarioIsolado(valor: string, estado: Estado) {
-  if (!estadoAguardaEscolhaHorario(estado)) return false;
-
+function mensagemEhHorarioIsolado(valor: string) {
   const texto = norm(valor).replace(/[?!.,;]+$/g, "").trim();
   return (
     /^\d{1,2}$/.test(texto) ||
@@ -513,8 +511,7 @@ function dataSolicitadaComContexto(params: {
     params.timezone
   );
   const horarioIsolado = mensagemEhHorarioIsolado(
-    params.pendencia.conteudo_agregado,
-    params.estado
+    params.pendencia.conteudo_agregado
   );
 
   if (horarioIsolado && params.consultaRecente.data) {

@@ -366,26 +366,6 @@ function interpretarDataNumerica(
     }
   }
 
-  const numeroSolto = texto.match(/^\s*(\d{1,2})\s*$/);
-
-  if (numeroSolto) {
-    const dia = Number(numeroSolto[1]);
-
-    if (dia >= 8 && dia <= 31) {
-      const dataBase =
-        dia < hojeLocal.day ? adicionarMeses(hojeLocal, 1) : hojeLocal;
-
-      return {
-        ...semData,
-        data: ymdKey({
-          year: dataBase.year,
-          month: dataBase.month,
-          day: dia,
-        }),
-      };
-    }
-  }
-
   return semData;
 }
 

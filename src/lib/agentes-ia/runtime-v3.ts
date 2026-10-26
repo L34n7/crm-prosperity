@@ -1207,6 +1207,7 @@ function mensagemMencionaDataAgenda(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   return (
     /\b(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
+    /\b[2-6](?:a|ª)\s*-?\s*feira\b/.test(texto) ||
     /\bdia\s+\d{1,2}\b/.test(texto) ||
     /\b\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\b/.test(texto) ||
     /\b\d{4}-\d{2}-\d{2}\b/.test(texto)
@@ -1224,6 +1225,12 @@ function extrairHorariosExplicitosAgenda(mensagem: string) {
     const hora = String(Number(match[1])).padStart(2, "0");
     const minuto = String(Number(match[2] ?? match[3] ?? 0)).padStart(2, "0");
     encontrados.add(`${hora}:${minuto}`);
+  }
+
+  const padraoComAs = /\b(?:as|às)\s+([01]?\d|2[0-3])\b/g;
+  while ((match = padraoComAs.exec(texto)) !== null) {
+    const hora = String(Number(match[1])).padStart(2, "0");
+    encontrados.add(`${hora}:00`);
   }
 
   return Array.from(encontrados);
@@ -1292,6 +1299,9 @@ function mensagemEscolheHorarioExplicitamente(mensagem: string) {
   if (extrairHorarioCurtoAgenda(mensagem)) return true;
 
   const horarios = extrairHorariosExplicitosAgenda(mensagem);
+  if (mensagemMencionaDataAgenda(mensagem) && horarios.length === 1) {
+    return true;
+  }
   if (
     horarios.length === 1 &&
     /^(?:(?:pode ser|poderia ser|seria|prefiro|quero|fica melhor|fechado|combinado)\s+)?(?:as\s+)?\d{1,2}(?:(?::\d{2})\s*(?:h|hr|hrs|hora|horas)?|\s*(?:h|hr|hrs|hora|horas))$/.test(
@@ -1360,6 +1370,11 @@ function estadoTemAgendaEmAndamento(estado: EstadoConversa) {
 
 function textoHorarioAgendaNormalizado(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem)
+    .replace(/\b2(?:a|ª)\s*-?\s*feira\b/g, "segunda-feira")
+    .replace(/\b3(?:a|ª)\s*-?\s*feira\b/g, "terca-feira")
+    .replace(/\b4(?:a|ª)\s*-?\s*feira\b/g, "quarta-feira")
+    .replace(/\b5(?:a|ª)\s*-?\s*feira\b/g, "quinta-feira")
+    .replace(/\b6(?:a|ª)\s*-?\s*feira\b/g, "sexta-feira")
     .replace(/[?!.,;:]+$/g, "")
     .trim();
   const match = texto.match(
@@ -1384,6 +1399,7 @@ function mensagemEhFragmentoContextualAgenda(mensagem: string) {
   if (/^(?:depois|apos|antes|ate|a partir)(?:\s+das?|\s+de|\s+as?)?\s+\d{1,2}(?::\d{2})?(?:\s*(?:h|hr|hrs|hora|horas))?[?!.,;:]?$/.test(texto)) return true;
   if (/^(?:(?:tem|pode ser|pode|as)\s+)?\d{1,2}(?::\d{2})?\s*(?:h|hr|hrs|hora|horas)[?!.,;:]?$/.test(texto)) return true;
   if (/^(?:(?:tem|pode ser|pode|as)\s+)?\d{1,2}:\d{2}[?!.,;:]?$/.test(texto)) return true;
+  if (/^\d{1,2}$/.test(texto)) return true;
   if (/^(?:mais cedo|mais tarde|nesse horario|esse horario|o primeiro|o segundo|o terceiro)$/.test(texto)) return true;
   return false;
 }
@@ -2769,6 +2785,64 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
   return { ok: false, error: "Ferramenta não suportada." };
 }
 
+async function ultimaDataAgendaConsultadaRecente(
+  ctx: ContextoExecucao,
+): Promise<string | null> {
+  const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("agente_ia_execucoes")
+    .select("ferramentas_json, finished_at")
+    .eq("empresa_id", ctx.pendencia.empresa_id)
+    .eq("agente_id", ctx.agente.id)
+    .eq("conversa_id", ctx.pendencia.conversa_id)
+    .in("status", ["concluido", "fallback"])
+    .gte("finished_at", desde)
+    .order("finished_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error("[AGENTE_IA] Falha ao recuperar última consulta de agenda:", error);
+    return null;
+  }
+
+  for (const execucao of data || []) {
+    const ferramentas = Array.isArray(execucao.ferramentas_json)
+      ? execucao.ferramentas_json
+      : [];
+
+    for (const ferramenta of [...ferramentas].reverse()) {
+      if (
+        ferramenta?.nome !== "consultar_agenda" ||
+        ferramenta?.resultado?.ok !== true
+      ) {
+        continue;
+      }
+
+      const slots = Array.isArray(ferramenta.resultado?.slots)
+        ? ferramenta.resultado.slots
+        : [];
+      const datasSlots: string[] = Array.from(
+        new Set<string>(
+          slots
+            .map((slot: any) => String(slot?.data || "").trim())
+            .filter((item: string) => /^\d{4}-\d{2}-\d{2}$/.test(item)),
+        ),
+      );
+
+      if (datasSlots.length === 1) return datasSlots[0];
+
+      const dataResultado = String(
+        ferramenta.resultado?.data || "",
+      ).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dataResultado)) {
+        return dataResultado;
+      }
+    }
+  }
+
+  return null;
+}
+
 function referenciasTemporaisDistintas(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   const refs = texto.match(/\b(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|\d{1,2}\/\d{1,2})\b/g) || [];
@@ -2783,6 +2857,12 @@ async function preExecutarConsultasObvias(
   const mensagem = ctx.pendencia.conteudo_agregado;
   const horarioEscolhidoNasOpcoes =
     resolverHorarioCurtoPelasOpcoesRecentes(mensagem, historico);
+  const horarioCurtoAtual =
+    horarioEscolhidoNasOpcoes || extrairHorarioCurtoAgenda(mensagem);
+  const dataAgendaRecente =
+    horarioCurtoAtual && !mensagemMencionaDataAgenda(mensagem)
+      ? await ultimaDataAgendaConsultadaRecente(ctx)
+      : null;
 
   const consultaConhecimento = consultaConhecimentoComContexto(
     mensagem,
@@ -2818,7 +2898,9 @@ async function preExecutarConsultasObvias(
       mensagemInterpretavel,
       timezone,
     );
-    const herdouContextoTemporal = mensagemContextual !== mensagem;
+    const dataInterpretada = interpretacao.data || dataAgendaRecente;
+    const herdouContextoTemporal =
+      mensagemContextual !== mensagem || Boolean(dataAgendaRecente);
     const horariosContextuais = extrairHorariosExplicitosAgenda(
       mensagemContextual,
     );
@@ -2831,20 +2913,20 @@ async function preExecutarConsultasObvias(
     if (
       !recusaTemporal &&
       temIntencaoAgenda &&
-      (interpretacao.data || interpretacao.preferencia) &&
+      (dataInterpretada || interpretacao.preferencia) &&
       referencias <= 1
     ) {
       try {
         const argumentos = {
-          ...(interpretacao.data ? { data: interpretacao.data } : {}),
-          ...(!interpretacao.data && interpretacao.preferencia
+          ...(dataInterpretada ? { data: dataInterpretada } : {}),
+          ...(!dataInterpretada && interpretacao.preferencia
             ? { __sem_data_explicita: true }
             : {}),
           ...(herdouContextoTemporal
             ? {
                 __contexto_temporal_herdado: true,
                 __hora_contextual:
-                  horarioEscolhidoNasOpcoes ||
+                  horarioCurtoAtual ||
                   (horariosContextuais.length === 1
                     ? horariosContextuais[0]
                     : null),
@@ -2860,7 +2942,7 @@ async function preExecutarConsultasObvias(
           if (
             Array.isArray(resultado.slots) &&
             resultado.slots.length === 0 &&
-            interpretacao.data
+            dataInterpretada
           ) {
             let encontrouAlternativaMesmoDia = false;
             const tinhaHorarioEspecifico =
@@ -2869,7 +2951,7 @@ async function preExecutarConsultasObvias(
 
             if (tinhaHorarioEspecifico) {
               const argumentosMesmoDia = {
-                data: interpretacao.data,
+                data: dataInterpretada,
                 __ignorar_horario_solicitado: true,
               };
               const resultadoMesmoDia: any = await executarFerramenta(
@@ -2894,7 +2976,7 @@ async function preExecutarConsultasObvias(
 
             if (!encontrouAlternativaMesmoDia) {
               const argumentosProximoDia = {
-                data: adicionarDiasData(interpretacao.data, 1),
+                data: adicionarDiasData(dataInterpretada, 1),
                 __fallback_proximo_disponivel: true,
                 __ignorar_horario_solicitado: true,
               };
@@ -3000,7 +3082,13 @@ async function remarcarAgendamentoContextualDeterministico(
 ) {
   if (!ctx.ferramentasAtivas.has("remarcar_agendamento")) return null;
   if (ctx.agendamentosAtivos.length !== 1) return null;
-  if (!mensagemConfirmaAgendamento(ctx.pendencia.conteudo_agregado)) {
+  if (!estadoIndicaReagendamento(ctx.estadoConversa)) return null;
+
+  const mensagemAtual = ctx.pendencia.conteudo_agregado;
+  if (
+    !mensagemConfirmaAgendamento(mensagemAtual) &&
+    !mensagemEscolheHorarioExplicitamente(mensagemAtual)
+  ) {
     return null;
   }
 
@@ -3010,14 +3098,15 @@ async function remarcarAgendamentoContextualDeterministico(
       (item) =>
         item.nome === "consultar_agenda" &&
         item.resultado?.ok === true &&
-        item.argumentos?.__contexto_temporal_herdado === true &&
         Array.isArray(item.resultado?.slots),
     );
   if (!consulta) return null;
 
-  const horaContextual = normalizarHoraLocal(
-    consulta.argumentos?.__hora_contextual,
-  );
+  const horariosExplicitos = extrairHorariosExplicitosAgenda(mensagemAtual);
+  const horaContextual =
+    normalizarHoraLocal(consulta.argumentos?.__hora_contextual) ||
+    extrairHorarioCurtoAgenda(mensagemAtual) ||
+    (horariosExplicitos.length === 1 ? horariosExplicitos[0] : null);
   if (!horaContextual) return null;
 
   const candidatos = (consulta.resultado.slots || []).filter(
@@ -3158,7 +3247,8 @@ function promessaOperacionalNaoExecutada(
 
   const afirmouNovoAgendamento =
     /\b(?:vou|irei)\s+(?:agendar|marcar|reservar)\b/.test(texto) ||
-    /\b(?:ficou|esta)\s+(?:agendad[oa]|marcad[oa]|reservad[oa]|confirmad[oa])\b/.test(texto);
+    /\b(?:ficou|esta)\s+(?:agendad[oa]|marcad[oa]|reservad[oa]|confirmad[oa])\b/.test(texto) ||
+    /\b(?:demonstracao|reuniao|agendamento|compromisso|atendimento)\b.{0,80}\bficou\s+para\b/.test(texto);
 
   if (
     afirmouNovoAgendamento &&
@@ -3176,7 +3266,7 @@ function promessaOperacionalNaoExecutada(
   }
 
   const afirmouRemarcacaoConcluida =
-    /\b(?:remarcad[oa]|reagendad[oa]|alterad[oa]|ajustad[oa])\b/.test(texto) ||
+    /\b(?:remarquei|reagendei|alterei|ajustei|remarcad[oa]|reagendad[oa]|alterad[oa]|ajustad[oa])\b/.test(texto) ||
     /\b(?:ficou|fica|ficara|agora esta)\s+(?:para|na|no|em)\b/.test(texto);
   const mencionaNovoHorario =
     /\b(?:hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/.test(texto) ||
