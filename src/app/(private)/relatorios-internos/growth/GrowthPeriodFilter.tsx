@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import styles from "./growth.module.css";
 
 type AtalhoPeriodo =
@@ -90,6 +90,14 @@ export default function GrowthPeriodFilter({
   const [atalho, setAtalho] = useState<AtalhoPeriodo>(initialShortcut);
   const [inicio, setInicio] = useState(initialStart);
   const [fim, setFim] = useState(initialEnd);
+  const [applying, setApplying] = useState(false);
+
+  useEffect(() => {
+    setAtalho(initialShortcut);
+    setInicio(initialStart);
+    setFim(initialEnd);
+    setApplying(false);
+  }, [initialShortcut, initialStart, initialEnd]);
 
   function handleShortcut(value: AtalhoPeriodo) {
     setAtalho(value);
@@ -109,8 +117,26 @@ export default function GrowthPeriodFilter({
     setAtalho("personalizado");
   }
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setApplying(true);
+
+    const params = new URLSearchParams({
+      atalho,
+      inicio,
+      fim,
+    });
+
+    window.location.assign(`/relatorios-internos/growth?${params.toString()}`);
+  }
+
   return (
-    <form className={styles.filters} action="/relatorios-internos/growth">
+    <form
+      className={styles.filters}
+      action="/relatorios-internos/growth"
+      method="get"
+      onSubmit={handleSubmit}
+    >
       <label className={styles.shortcutField}>
         Atalho
         <span>
@@ -156,7 +182,9 @@ export default function GrowthPeriodFilter({
         </span>
       </label>
 
-      <button type="submit">Aplicar período</button>
+      <button type="submit" disabled={applying}>
+        {applying ? "Aplicando..." : "Aplicar período"}
+      </button>
     </form>
   );
 }
