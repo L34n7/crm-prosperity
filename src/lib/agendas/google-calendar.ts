@@ -1152,6 +1152,22 @@ async function processarEventoGoogle(
 ) {
   const crmAgendamentoId =
     evento?.extendedProperties?.private?.crm_agendamento_id || null;
+  const crmAgendaId =
+    evento?.extendedProperties?.private?.crm_agenda_id || null;
+
+  // Duas agendas do CRM podem apontar para o mesmo Google Calendar (ex.: "primary").
+  // Cada canal recebe as mesmas alterações do Google, portanto um evento precisa ser
+  // processado apenas pela integração da agenda que o originou.
+  if (crmAgendaId && crmAgendaId !== integracao.agenda_id) {
+    console.warn("[GOOGLE_CALENDAR] Evento de outra agenda ignorado:", {
+      integracao_agenda_id: integracao.agenda_id,
+      evento_crm_agenda_id: crmAgendaId,
+      agendamento_id: crmAgendamentoId,
+      google_event_id: evento?.id || null,
+      status: evento?.status || null,
+    });
+    return { cancelado: null, conflito: null };
+  }
 
   if (crmAgendamentoId) {
     const vinculoCanonico = await buscarVinculoPorAgendamento(crmAgendamentoId);
@@ -1189,6 +1205,20 @@ async function processarEventoGoogle(
   }
 
   if (!vinculo) return { cancelado: null, conflito: null };
+
+  // Eventos cancelados do Google podem chegar sem extendedProperties.
+  // Nesse caso o próprio vínculo é a fonte de verdade para impedir que o
+  // webhook de outra agenda cancele o compromisso no CRM.
+  if (vinculo.agenda_id !== integracao.agenda_id) {
+    console.warn("[GOOGLE_CALENDAR] Vínculo de outra agenda ignorado:", {
+      integracao_agenda_id: integracao.agenda_id,
+      vinculo_agenda_id: vinculo.agenda_id,
+      agendamento_id: vinculo.agendamento_id,
+      google_event_id: evento?.id || vinculo.google_event_id || null,
+      status: evento?.status || null,
+    });
+    return { cancelado: null, conflito: null };
+  }
 
   const agendamento = await buscarAgendamento(
     integracao.empresa_id,
