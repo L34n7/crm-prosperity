@@ -152,9 +152,11 @@
 }
 
 .error {
+  margin-bottom: 20px;
   border: 1px solid var(--crm-danger-border);
   background: var(--crm-danger-bg);
   color: var(--crm-danger-text);
+  line-height: 1.45;
 }
 
 .success {
