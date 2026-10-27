@@ -171,10 +171,13 @@ async function buscarCampanhasFiltroHistorico(
   }
 
   const { data: errosCampanhas, error: errosCampanhasError } =
-    await supabaseAdmin.rpc("buscar_whatsapp_disparo_erros_campanhas", {
-      p_empresa_id: empresaId,
-      p_campanha_ids: idsComFalha,
-    });
+    await supabaseAdmin.rpc(
+      "buscar_whatsapp_disparo_erros_resumo_campanhas",
+      {
+        p_empresa_id: empresaId,
+        p_campanha_ids: idsComFalha,
+      }
+    );
 
   if (errosCampanhasError) {
     console.warn(
@@ -184,23 +187,41 @@ async function buscarCampanhasFiltroHistorico(
     return campanhas;
   }
 
-  const errosPorCampanha = new Map(
-    (Array.isArray(errosCampanhas) ? errosCampanhas : []).map((item: any) => [
-      String(item.campanha_id || ""),
-      {
-        erro_exemplo: item.erro || null,
-        erro_codigo_meta_exemplo: item.erro_codigo_meta || null,
-      },
-    ])
-  );
+  const errosPorCampanha = new Map<
+    string,
+    Array<{
+      erro: string | null;
+      erro_codigo_meta: number | null;
+      quantidade: number;
+    }>
+  >();
 
-  return campanhas.map((campanha) => ({
-    ...campanha,
-    ...(errosPorCampanha.get(String(campanha.id || "")) || {
-      erro_exemplo: null,
-      erro_codigo_meta_exemplo: null,
-    }),
-  }));
+  for (const item of Array.isArray(errosCampanhas) ? errosCampanhas : []) {
+    const campanhaId = String((item as any).campanha_id || "");
+    if (!campanhaId) continue;
+
+    const atual = errosPorCampanha.get(campanhaId) || [];
+    atual.push({
+      erro: (item as any).erro || null,
+      erro_codigo_meta: (item as any).erro_codigo_meta || null,
+      quantidade: Number((item as any).quantidade || 0),
+    });
+    errosPorCampanha.set(campanhaId, atual);
+  }
+
+  return campanhas.map((campanha) => {
+    const errosResumo =
+      errosPorCampanha.get(String(campanha.id || "")) || [];
+    const primeiroErro = errosResumo[0] || null;
+
+    return {
+      ...campanha,
+      erro_exemplo: primeiroErro?.erro || null,
+      erro_codigo_meta_exemplo:
+        primeiroErro?.erro_codigo_meta || null,
+      erros_resumo: errosResumo,
+    };
+  });
 }
 
 export async function GET(req: NextRequest) {

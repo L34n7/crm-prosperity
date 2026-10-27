@@ -32,6 +32,7 @@ export const QSTASH_DISPARO_CHAIN_PENDING = "chain_pending";
 const ERRO_META_SPAM_RATE_LIMIT = 131048;
 const LIMITE_CONSECUTIVO_SPAM_RATE_LIMIT = 5;
 const COOLDOWN_SPAM_RATE_LIMIT_SEGUNDOS = 2 * 60;
+const LIMITE_FALHAS_ESTRUTURAIS_CAMPANHA = 3;
 
 type DisparoCampanhaRow = {
   id: string;
@@ -101,6 +102,58 @@ function objeto(valor: unknown): Record<string, unknown> {
   return valor && typeof valor === "object" && !Array.isArray(valor)
     ? (valor as Record<string, unknown>)
     : {};
+}
+
+export function classificarErroEstruturalCampanhaDisparo(
+  erro?: string | null
+) {
+  const original = String(erro || "").trim();
+  const normalizado = original
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const regras: Array<{ chave: string; trechos: string[] }> = [
+    {
+      chave: "template_header_midia_ausente",
+      trechos: ["template com cabecalho", "sem midia sincronizada da meta"],
+    },
+    {
+      chave: "template_header_url_temporaria_meta",
+      trechos: ["url temporaria da meta", "sincronize o template novamente"],
+    },
+    {
+      chave: "template_integracao_incompativel",
+      trechos: ["template selecionado nao pertence", "integracao whatsapp atual"],
+    },
+    {
+      chave: "template_configuracao_whatsapp_antiga",
+      trechos: ["template pertence a uma configuracao anterior do whatsapp"],
+    },
+    {
+      chave: "template_integracao_nao_encontrado",
+      trechos: ["template ou integracao whatsapp nao encontrado"],
+    },
+    {
+      chave: "integracao_whatsapp_incompleta",
+      trechos: ["integracao do whatsapp incompleta"],
+    },
+    {
+      chave: "template_nao_aprovado",
+      trechos: ["template nao esta aprovado"],
+    },
+  ];
+
+  const regra = regras.find((item) =>
+    item.trechos.every((trecho) => normalizado.includes(trecho))
+  );
+
+  if (!regra) return null;
+
+  return {
+    chave: regra.chave,
+    erro: original || "Falha estrutural da campanha.",
+  };
 }
 
 function normalizarVariaveis(valor: unknown) {
@@ -809,6 +862,8 @@ export async function cancelarCampanhaDisparo(params: {
   automatico?: boolean;
   erroCodigoMeta?: number | null;
   ocorrenciasErroMeta?: number | null;
+  criterioCancelamento?: string | null;
+  erroEstruturalChave?: string | null;
 }) {
   const agora = new Date().toISOString();
   const motivo =
@@ -823,7 +878,12 @@ export async function cancelarCampanhaDisparo(params: {
         motivo_cancelamento: motivo,
         erro_codigo_meta: params.erroCodigoMeta || null,
         ocorrencias_erro_meta: params.ocorrenciasErroMeta || null,
-        criterio_cancelamento: "tres_falhas_meta_criticas",
+        erro_estrutural_chave: params.erroEstruturalChave || null,
+        criterio_cancelamento:
+          params.criterioCancelamento ||
+          (params.erroCodigoMeta
+            ? "tres_falhas_meta_criticas"
+            : "cancelamento_automatico"),
       }
     : {
         cancelamento_manual: true,
@@ -1320,6 +1380,33 @@ async function contarFalhasConsecutivasMetaCampanha(
   return consecutivas;
 }
 
+async function contarFalhasEstruturaisCampanha(
+  campanhaId: string,
+  chaveErroEstrutural: string
+) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_disparo_itens")
+    .select("erro")
+    .eq("campanha_id", campanhaId)
+    .eq("status", "falha")
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(30);
+
+  if (error) {
+    console.error(
+      "[WHATSAPP DISPARO FILA] Erro ao contar falhas estruturais:",
+      { campanhaId, chaveErroEstrutural, erro: error }
+    );
+    return null;
+  }
+
+  return (data || []).filter(
+    (item) =>
+      classificarErroEstruturalCampanhaDisparo(item.erro)?.chave ===
+      chaveErroEstrutural
+  ).length;
+}
+
 function segundosRestantesCooldown131048(campanha: DisparoCampanhaRow) {
   const metadata = objeto(campanha.metadata_json);
   const ate = String(metadata.rate_limit_131048_ate || "").trim();
@@ -1440,6 +1527,36 @@ async function avaliarCircuitBreakerCampanha(params: {
 }) {
   const erroCodigo = params.erroCodigoMeta || null;
   const mensagem = params.erroMensagem || "Campanha pausada automaticamente.";
+  const erroEstrutural =
+    classificarErroEstruturalCampanhaDisparo(params.erroMensagem);
+
+  if (erroEstrutural) {
+    const ocorrencias = await contarFalhasEstruturaisCampanha(
+      params.campanhaId,
+      erroEstrutural.chave
+    );
+
+    if (
+      ocorrencias === null ||
+      ocorrencias < LIMITE_FALHAS_ESTRUTURAIS_CAMPANHA
+    ) {
+      return;
+    }
+
+    await cancelarCampanhaDisparo({
+      campanhaId: params.campanhaId,
+      empresaId: params.empresaId,
+      usuarioId: null,
+      motivo:
+        `Campanha cancelada automaticamente após ${LIMITE_FALHAS_ESTRUTURAIS_CAMPANHA} falhas estruturais iguais. ` +
+        `Falha identificada: ${erroEstrutural.erro}`,
+      automatico: true,
+      ocorrenciasErroMeta: ocorrencias,
+      criterioCancelamento: "tres_falhas_estruturais_iguais",
+      erroEstruturalChave: erroEstrutural.chave,
+    });
+    return;
+  }
 
   if (erroCodigo === 133010) {
     const falhasConsecutivas = await contarFalhasConsecutivasMetaCampanha(
@@ -1578,6 +1695,28 @@ async function reagendarItemComErro(item: DisparoItemRow, erro: string) {
   const tentativas = Number(item.tentativas || 0);
   const maxTentativas = Number(item.max_tentativas || 3);
   const metadataAtual = objeto(item.metadata_json);
+  const erroEstrutural = classificarErroEstruturalCampanhaDisparo(erro);
+
+  if (erroEstrutural) {
+    await supabaseAdmin
+      .from("whatsapp_disparo_itens")
+      .update({
+        status: "falha",
+        erro,
+        locked_at: null,
+        processed_at: agora.toISOString(),
+        updated_at: agora.toISOString(),
+        metadata_json: {
+          ...metadataAtual,
+          falha_interna: true,
+          falha_estrutural: true,
+          erro_estrutural_chave: erroEstrutural.chave,
+        },
+      })
+      .eq("id", item.id);
+
+    return "falha";
+  }
 
   if (tentativas >= maxTentativas) {
     await supabaseAdmin
@@ -2063,6 +2202,15 @@ export async function processarItemDisparoPorId(itemId: string) {
     await recalcularCampanha(item.campanha_id);
     await sincronizarAgendamentosCampanha(item.campanha_id);
 
+    if (status === "falha") {
+      await avaliarCircuitBreakerCampanha({
+        campanhaId: item.campanha_id,
+        empresaId: item.empresa_id,
+        integracaoWhatsappId: item.integracao_whatsapp_id,
+        erroMensagem: erro,
+      });
+    }
+
     if (status === "reagendado") {
       const delaySegundos = backoffSegundos(Number(item.tentativas || 1));
       const republicado = await republicarItemDisparoQstash({
@@ -2147,7 +2295,15 @@ export async function processarFilaDisparosWhatsapp(params: {
 
       const status = await reagendarItemComErro(item, erro);
       if (status === "reagendado") reagendados += 1;
-      if (status === "falha") falhas += 1;
+      if (status === "falha") {
+        falhas += 1;
+        await avaliarCircuitBreakerCampanha({
+          campanhaId: item.campanha_id,
+          empresaId: item.empresa_id,
+          integracaoWhatsappId: item.integracao_whatsapp_id,
+          erroMensagem: erro,
+        });
+      }
 
       await recalcularCampanha(item.campanha_id);
       await sincronizarAgendamentosCampanha(item.campanha_id);

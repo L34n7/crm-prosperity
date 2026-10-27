@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -389,6 +390,11 @@ type CampanhaHistoricoFiltro = {
   erro?: string | null;
   erro_exemplo?: string | null;
   erro_codigo_meta_exemplo?: number | string | null;
+  erros_resumo?: Array<{
+    erro?: string | null;
+    erro_codigo_meta?: number | string | null;
+    quantidade?: number | null;
+  }>;
   metadata_json?: {
     agendamento_chave?: string | null;
     executar_em?: string | null;
@@ -1729,6 +1735,34 @@ function feedbackErroCampanhaHistorico(
     descricao,
     meta: descricaoMeta,
   };
+}
+
+function resumoErrosCampanhaHistorico(
+  campanha: CampanhaHistoricoFiltro
+) {
+  const erros = Array.isArray(campanha.erros_resumo)
+    ? campanha.erros_resumo
+    : [];
+
+  return erros
+    .map((item) => {
+      const quantidade = Math.max(0, Number(item.quantidade || 0));
+      if (!quantidade) return "";
+
+      const erro = String(item.erro || "").trim();
+      const codigoNumero = Number(item.erro_codigo_meta || 0);
+      const possuiCodigo =
+        Number.isFinite(codigoNumero) && codigoNumero > 0;
+      const descricaoMeta = possuiCodigo
+        ? descreverErroMetaWhatsApp(codigoNumero, erro || null)
+        : null;
+      const rotuloErro = possuiCodigo
+        ? `Erro ${codigoNumero} · ${erro || descricaoMeta?.nome || "Falha da Meta"}`
+        : erro || "Falha sem descrição";
+
+      return `${quantidade} ${quantidade === 1 ? "falha" : "falhas"}: ${rotuloErro}`;
+    })
+    .filter(Boolean);
 }
 
 function timestampRelatorio(valor?: string | null) {
@@ -8031,16 +8065,19 @@ export default function DisparosWhatsAppPage() {
                                   const status = String(
                                     item.status_final || "pendente"
                                   ).toLowerCase();
-                                  const erroFormatado = item.erro
-                                    ? formatarErroMetaWhatsApp(
-                                        item.erro_codigo_meta,
-                                        item.erro
-                                      )
+                                  const erroCompleto = item.erro
+                                    ? `${item.erro_codigo_meta ? `Erro ${item.erro_codigo_meta} · ` : ""}${item.erro}`
                                     : null;
+                                  const chaveLinha = `${item.numero || "sem-numero"}-${item.enviado_em || index}`;
 
                                   return (
+                                    <Fragment key={chaveLinha}>
                                     <tr
-                                      key={`${item.numero || "sem-numero"}-${item.enviado_em || index}`}
+                                      className={
+                                        erroCompleto
+                                          ? styles.campaignReportMainRowWithError
+                                          : undefined
+                                      }
                                     >
                                       <td className={styles.campaignReportPhone}>
                                         {item.numero || "-"}
@@ -8066,14 +8103,6 @@ export default function DisparosWhatsAppPage() {
                                         >
                                           {item.status_label || "Pendente"}
                                         </span>
-                                        {erroFormatado ? (
-                                          <span
-                                            className={styles.campaignReportError}
-                                            title={item.erro || erroFormatado}
-                                          >
-                                            {erroFormatado}
-                                          </span>
-                                        ) : null}
                                       </td>
                                       <td className={styles.campaignReportReply}>
                                         {item.primeira_resposta || "—"}
@@ -8088,6 +8117,16 @@ export default function DisparosWhatsAppPage() {
                                         {formatarDataHora(item.resposta_em) || "—"}
                                       </td>
                                     </tr>
+                                    {erroCompleto ? (
+                                      <tr className={styles.campaignReportErrorRow}>
+                                        <td colSpan={7}>
+                                          <div className={styles.campaignReportErrorLine}>
+                                            <strong>Falha:</strong> {erroCompleto}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ) : null}
+                                    </Fragment>
                                   );
                                 }
                               )}
@@ -8198,6 +8237,8 @@ export default function DisparosWhatsAppPage() {
                       const feedbackErro = comProblema
                         ? feedbackErroCampanhaHistorico(campanha)
                         : null;
+                      const errosResumo =
+                        resumoErrosCampanhaHistorico(campanha);
 
                       return (
                         <button
@@ -8390,6 +8431,13 @@ export default function DisparosWhatsAppPage() {
                                   ? ` ${falhas} falharam durante o processamento.`
                                   : ""}
                               </p>
+
+                              {errosResumo.length > 0 ? (
+                                <div className={styles.resultErrorBreakdown}>
+                                  <strong>Tipos de falha:</strong>
+                                  <p>{errosResumo.join("; ")}</p>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
 
