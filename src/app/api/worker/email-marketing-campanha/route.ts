@@ -491,10 +491,19 @@ export async function POST(request: Request) {
         basePublica +
         "/api/email-marketing/descadastrar?token=" +
         encodeURIComponent(destinatario.unsubscribe_token);
-      const htmlRenderizado = adicionarRodapeDescadastro(
+      const htmlBase = adicionarRodapeDescadastro(
         renderizarVariaveis(String(campanha.html || ""), variaveis, true),
         unsubscribeUrl
       );
+      const aberturaUrl =
+        basePublica +
+        "/api/email-marketing/rastrear/abertura?token=" +
+        encodeURIComponent(destinatario.unsubscribe_token);
+      const htmlRenderizado =
+        htmlBase +
+        '<img src="' +
+        aberturaUrl +
+        '" width="1" height="1" alt="" aria-hidden="true" style="display:block;width:1px;height:1px;border:0;margin:0;padding:0" />';
       const textoBase = renderizarVariaveis(
         String(campanha.texto || ""),
         variaveis,

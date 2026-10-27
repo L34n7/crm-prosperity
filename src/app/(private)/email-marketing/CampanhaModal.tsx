@@ -672,6 +672,7 @@ export default function CampanhaModal({
             className={styles.modalBody}
             onSubmit={(event) => event.preventDefault()}
           >
+            <div className={styles.wizardScrollArea}>
             {etapa === 1 ? (
               <div className={styles.wizardSection}>
                 <div className={styles.formGridTwo}>
@@ -1428,6 +1429,7 @@ export default function CampanhaModal({
             ) : null}
 
             {erro ? <div className={styles.feedbackError}>{erro}</div> : null}
+            </div>
 
             <div className={styles.wizardFooter}>
               <div>
