@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  FormEvent,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import {
+  AlertTriangle,
   CalendarClock,
   Check,
   ChevronLeft,
@@ -16,6 +16,8 @@ import {
   Search,
   Send,
   Settings2,
+  ShieldCheck,
+  Sparkles,
   Users,
   X,
 } from "lucide-react";
@@ -160,9 +162,11 @@ export default function CampanhaModal({
   const [fallbacks, setFallbacks] = useState<Record<string, string>>({});
   const [modalVariaveis, setModalVariaveis] = useState(false);
 
-  const [modoEnvio, setModoEnvio] = useState<"agora" | "agendar">("agora");
+  const [modoEnvio, setModoEnvio] = useState<"agora" | "agendar" | null>(null);
   const [agendadaPara, setAgendadaPara] = useState(datetimeLocalPadrao());
+  const [confirmacaoFinal, setConfirmacaoFinal] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState("");
   const [erro, setErro] = useState("");
 
   const templateSelecionado = useMemo(
@@ -479,28 +483,29 @@ export default function CampanhaModal({
   }
 
   function validarEtapaAtual() {
+    setAviso("");
     setErro("");
 
     if (etapa === 1) {
       if (!nome.trim() || !templateId || !remetenteId || !assunto.trim()) {
-        setErro("Preencha nome, remetente, template e assunto.");
+        setAviso("Preencha nome, remetente, template e assunto para continuar.");
         return false;
       }
     }
 
     if (etapa === 2) {
       if (audienciaTipo === "listas" && !listaIds.length) {
-        setErro("Selecione pelo menos uma lista.");
+        setAviso("Selecione pelo menos uma lista para continuar.");
         return false;
       }
 
       if (audienciaTipo === "contatos" && !contatosSelecionados.size) {
-        setErro("Selecione pelo menos um contato.");
+        setAviso("Selecione pelo menos um contato para continuar.");
         return false;
       }
 
       if (!analise || analise.elegiveis <= 0) {
-        setErro("A audiência selecionada não possui e-mails elegíveis.");
+        setAviso("A audiência selecionada não possui e-mails elegíveis.");
         return false;
       }
     }
@@ -510,20 +515,35 @@ export default function CampanhaModal({
 
   function avancar() {
     if (!validarEtapaAtual()) return;
+
+    if (etapa === 3) {
+      setModoEnvio(null);
+      setConfirmacaoFinal(false);
+    }
+
     setEtapa((atual) => Math.min(4, atual + 1));
   }
 
   function voltar() {
+    setAviso("");
     setErro("");
+    setConfirmacaoFinal(false);
     setEtapa((atual) => Math.max(1, atual - 1));
   }
 
-  async function criar(event: FormEvent) {
-    event.preventDefault();
+  async function criar() {
+    setAviso("");
     setErro("");
 
-    if (etapa < 4) {
-      avancar();
+    if (etapa !== 4) return;
+
+    if (!modoEnvio) {
+      setAviso("Escolha se deseja enviar agora ou agendar a campanha.");
+      return;
+    }
+
+    if (!confirmacaoFinal) {
+      setAviso("Confirme a revisão final antes de enviar ou agendar.");
       return;
     }
 
@@ -533,7 +553,7 @@ export default function CampanhaModal({
       const data = new Date(agendadaPara);
 
       if (!Number.isFinite(data.getTime()) || data.getTime() <= Date.now()) {
-        setErro("Escolha uma data futura para o agendamento.");
+        setAviso("Escolha uma data e hora futuras para o agendamento.");
         return;
       }
 
@@ -541,7 +561,7 @@ export default function CampanhaModal({
     }
 
     if (!analise || analise.elegiveis <= 0) {
-      setErro("A audiência precisa ser analisada antes do envio.");
+      setAviso("A audiência precisa ser analisada antes do envio.");
       return;
     }
 
@@ -648,7 +668,10 @@ export default function CampanhaModal({
             ))}
           </div>
 
-          <form className={styles.modalBody} onSubmit={criar}>
+          <form
+            className={styles.modalBody}
+            onSubmit={(event) => event.preventDefault()}
+          >
             {etapa === 1 ? (
               <div className={styles.wizardSection}>
                 <div className={styles.formGridTwo}>
@@ -1166,6 +1189,24 @@ export default function CampanhaModal({
 
             {etapa === 4 ? (
               <div className={styles.wizardSection}>
+                <div className={styles.reviewHero}>
+                  <div className={styles.reviewHeroIcon}>
+                    <Sparkles size={21} />
+                  </div>
+                  <div className={styles.reviewHeroContent}>
+                    <span>REVISÃO FINAL</span>
+                    <strong>Sua campanha está pronta para ser programada</strong>
+                    <small>
+                      Confira os dados abaixo e escolha como deseja publicar.
+                      Nada será enviado sem sua confirmação.
+                    </small>
+                  </div>
+                  <div className={styles.reviewHeroMetric}>
+                    <span>Destinatários finais</span>
+                    <strong>{formatarNumero(analise?.elegiveis || 0)}</strong>
+                  </div>
+                </div>
+
                 <div className={styles.reviewGrid}>
                   <section className={styles.reviewCard}>
                     <span>Campanha</span>
@@ -1237,64 +1278,152 @@ export default function CampanhaModal({
                   </div>
                 </div>
 
-                <div className={styles.formSection}>
+                <div className={styles.guidanceNote}>
+                  <AlertTriangle size={19} />
+                  <div>
+                    <strong>Escolha como deseja publicar a campanha</strong>
+                    <span>
+                      A campanha só será criada depois que você escolher uma
+                      opção e confirmar a revisão final.
+                    </span>
+                  </div>
+                </div>
+
+                <div className={styles.sendDecisionPanel}>
                   <div className={styles.formSectionHeader}>
                     <div>
-                      <strong>Quando enviar</strong>
-                      <span>Envie agora ou programe para uma data futura.</span>
+                      <strong>Quando enviar?</strong>
+                      <span>
+                        Escolha o envio imediato ou programe uma data e hora.
+                      </span>
                     </div>
                   </div>
 
-                  <div className={styles.choiceGridTwo}>
+                  <div className={styles.sendChoiceGrid}>
                     <button
                       type="button"
                       className={
                         modoEnvio === "agora"
-                          ? styles.choiceActive
-                          : styles.choiceButton
+                          ? styles.sendChoiceActive
+                          : styles.sendChoiceButton
                       }
-                      onClick={() => setModoEnvio("agora")}
+                      onClick={() => {
+                        setModoEnvio("agora");
+                        setConfirmacaoFinal(false);
+                        setAviso("");
+                      }}
                     >
-                      <Send size={18} />
-                      <strong>Enviar agora</strong>
-                      <small>Entrar na fila imediatamente</small>
+                      <span className={styles.sendChoiceIcon}>
+                        <Send size={20} />
+                      </span>
+                      <span>
+                        <strong>Enviar agora</strong>
+                        <small>
+                          A campanha entra na fila somente após a confirmação.
+                        </small>
+                      </span>
+                      {modoEnvio === "agora" ? (
+                        <Check size={18} className={styles.sendChoiceCheck} />
+                      ) : null}
                     </button>
 
                     <button
                       type="button"
                       className={
                         modoEnvio === "agendar"
-                          ? styles.choiceActive
-                          : styles.choiceButton
+                          ? styles.sendChoiceActive
+                          : styles.sendChoiceButton
                       }
-                      onClick={() => setModoEnvio("agendar")}
+                      onClick={() => {
+                        setModoEnvio("agendar");
+                        setConfirmacaoFinal(false);
+                        setAviso("");
+                      }}
                     >
-                      <CalendarClock size={18} />
-                      <strong>Agendar</strong>
-                      <small>Escolher data e hora</small>
+                      <span className={styles.sendChoiceIcon}>
+                        <CalendarClock size={20} />
+                      </span>
+                      <span>
+                        <strong>Agendar envio</strong>
+                        <small>
+                          Defina o dia e o horário antes de confirmar.
+                        </small>
+                      </span>
+                      {modoEnvio === "agendar" ? (
+                        <Check size={18} className={styles.sendChoiceCheck} />
+                      ) : null}
                     </button>
                   </div>
 
                   {modoEnvio === "agendar" ? (
-                    <label className={styles.field}>
-                      <span>Data e hora</span>
-                      <input
-                        type="datetime-local"
-                        value={agendadaPara}
-                        onChange={(event) =>
-                          setAgendadaPara(event.target.value)
-                        }
-                      />
-                    </label>
+                    <div className={styles.schedulePanel}>
+                      <label className={styles.field}>
+                        <span>Data e hora do envio</span>
+                        <input
+                          type="datetime-local"
+                          value={agendadaPara}
+                          onChange={(event) => {
+                            setAgendadaPara(event.target.value);
+                            setConfirmacaoFinal(false);
+                          }}
+                        />
+                        <small>
+                          O processamento começará a partir do horário
+                          selecionado.
+                        </small>
+                      </label>
+                    </div>
                   ) : null}
                 </div>
 
+                {modoEnvio ? (
+                  <label className={styles.finalConfirmation}>
+                    <input
+                      type="checkbox"
+                      checked={confirmacaoFinal}
+                      onChange={(event) =>
+                        setConfirmacaoFinal(event.target.checked)
+                      }
+                    />
+                    <span className={styles.finalConfirmationBox}>
+                      {confirmacaoFinal ? <Check size={14} /> : null}
+                    </span>
+                    <span className={styles.finalConfirmationText}>
+                      <strong>
+                        Confirmo que revisei a campanha e desejo{" "}
+                        {modoEnvio === "agora"
+                          ? "enviá-la agora"
+                          : "agendá-la na data selecionada"}
+                        .
+                      </strong>
+                      <small>
+                        Esta é a confirmação final. Nenhum envio acontece antes
+                        desta etapa.
+                      </small>
+                    </span>
+                    <ShieldCheck size={21} />
+                  </label>
+                ) : null}
+
                 <div className={styles.complianceNote}>
-                  O CRM removerá automaticamente endereços duplicados,
-                  descadastrados, bounces e reclamações antes do envio. Envie
-                  somente para contatos para os quais exista base legal ou
-                  autorização compatível com a comunicação.
+                  <AlertTriangle size={18} />
+                  <div>
+                    <strong>Boas práticas de envio</strong>
+                    <span>
+                      O CRM removerá automaticamente endereços duplicados,
+                      descadastrados, bounces e reclamações antes do envio.
+                      Envie somente para contatos com base legal ou autorização
+                      compatível com a comunicação.
+                    </span>
+                  </div>
                 </div>
+              </div>
+            ) : null}
+
+            {aviso ? (
+              <div className={styles.feedbackWarning}>
+                <AlertTriangle size={18} />
+                <span>{aviso}</span>
               </div>
             ) : null}
 
@@ -1340,16 +1469,28 @@ export default function CampanhaModal({
                   </button>
                 ) : (
                   <button
-                    type="submit"
+                    type="button"
                     className={styles.primaryButton}
-                    disabled={enviando || !analise?.elegiveis}
+                    onClick={() => void criar()}
+                    disabled={
+                      enviando ||
+                      !analise?.elegiveis ||
+                      !modoEnvio ||
+                      !confirmacaoFinal
+                    }
                   >
-                    <Send size={16} />
+                    {modoEnvio === "agendar" ? (
+                      <CalendarClock size={16} />
+                    ) : (
+                      <Send size={16} />
+                    )}
                     {enviando
                       ? "Preparando campanha..."
                       : modoEnvio === "agora"
-                        ? "Confirmar e enviar"
-                        : "Confirmar agendamento"}
+                        ? "Enviar campanha agora"
+                        : modoEnvio === "agendar"
+                          ? "Agendar campanha"
+                          : "Escolha como enviar"}
                   </button>
                 )}
               </div>
