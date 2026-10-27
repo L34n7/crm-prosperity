@@ -53,6 +53,7 @@ export async function GET() {
     )
     .eq("white_label_id", admin.white_label_id)
     .eq("white_label_tipo", "cliente")
+    .neq("status", "cancelada")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -62,9 +63,7 @@ export async function GET() {
     );
   }
 
-  const usadas = (data ?? []).filter(
-    (empresa) => empresa.status !== "cancelada"
-  ).length;
+  const usadas = (data ?? []).length;
 
   return NextResponse.json({
     ok: true,

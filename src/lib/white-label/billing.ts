@@ -46,6 +46,7 @@ export async function calcularResumoCobrancaWhiteLabel(whiteLabelId: string) {
         .select("id,nome_fantasia,status,limite_integracoes_whatsapp,limite_usuarios")
         .eq("white_label_id", whiteLabelId)
         .eq("white_label_tipo", "cliente")
+        .neq("status", "cancelada")
         .order("created_at", { ascending: true }),
     ]);
 

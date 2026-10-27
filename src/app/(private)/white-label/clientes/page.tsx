@@ -12,6 +12,7 @@ import {
   Power,
   RefreshCw,
   Smartphone,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -59,6 +60,8 @@ export default function WhiteLabelClientesPage() {
   const [salvando, setSalvando] = useState(false);
   const [acessandoId, setAcessandoId] = useState("");
   const [alterandoCliente, setAlterandoCliente] = useState("");
+  const [excluindoId, setExcluindoId] = useState("");
+  const [clienteParaExcluir, setClienteParaExcluir] = useState<Cliente | null>(null);
   const [ajustesPendentes, setAjustesPendentes] = useState<
     Record<string, AjustePendente>
   >({});
@@ -259,6 +262,44 @@ export default function WhiteLabelClientesPage() {
       );
     } finally {
       setAlterandoCliente("");
+    }
+  }
+
+  async function excluirCliente() {
+    if (!clienteParaExcluir || excluindoId) return;
+
+    const cliente = clienteParaExcluir;
+    setExcluindoId(cliente.id);
+    setErro("");
+    setSucesso("");
+    setWarning("");
+
+    try {
+      const response = await fetch(
+        "/api/white-label/clientes/" + cliente.id,
+        { method: "DELETE" }
+      );
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível excluir o cliente.");
+      }
+
+      setSucesso(
+        data.message ||
+          "Cliente excluído e licença liberada para um novo cadastro."
+      );
+      setWarning(data.warning || "");
+      setClienteParaExcluir(null);
+      await carregar();
+    } catch (error) {
+      setErro(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o cliente."
+      );
+    } finally {
+      setExcluindoId("");
     }
   }
 
@@ -641,6 +682,18 @@ export default function WhiteLabelClientesPage() {
                               ? "Abrindo..."
                               : "Acessar"}
                           </button>
+                          <button
+                            type="button"
+                            className={styles.deleteButton}
+                            onClick={() => setClienteParaExcluir(cliente)}
+                            disabled={
+                              excluindoId === cliente.id ||
+                              alterandoCliente.startsWith(cliente.id + ":")
+                            }
+                          >
+                            <Trash2 size={14} />
+                            Excluir
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -742,6 +795,73 @@ export default function WhiteLabelClientesPage() {
               </button>
             </div>
           </form>
+        </div>
+      ) : null}
+
+      {clienteParaExcluir ? (
+        <div
+          className={styles.overlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !excluindoId
+            ) {
+              setClienteParaExcluir(null);
+            }
+          }}
+        >
+          <section
+            className={`${styles.modal} ${styles.deleteModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Excluir cliente White Label"
+          >
+            <button
+              type="button"
+              className={styles.close}
+              onClick={() => setClienteParaExcluir(null)}
+              disabled={Boolean(excluindoId)}
+              aria-label="Fechar"
+            >
+              <X size={20} />
+            </button>
+
+            <span className={styles.deleteIcon} aria-hidden="true">
+              <Trash2 size={22} />
+            </span>
+            <span className={styles.eyebrow}>Liberar licença</span>
+            <h2>Excluir cliente?</h2>
+            <p>
+              O cliente <strong>{clienteParaExcluir.nome_fantasia}</strong> será
+              removido da sua lista e a licença ficará disponível imediatamente
+              para cadastrar outra empresa.
+            </p>
+            <p className={styles.deleteNote}>
+              O acesso será desativado. Os dados permanecem preservados
+              internamente para histórico e segurança.
+            </p>
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setClienteParaExcluir(null)}
+                disabled={Boolean(excluindoId)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={styles.dangerButton}
+                onClick={() => void excluirCliente()}
+                disabled={Boolean(excluindoId)}
+              >
+                <Trash2 size={15} />
+                {excluindoId ? "Excluindo..." : "Excluir e liberar licença"}
+              </button>
+            </div>
+          </section>
         </div>
       ) : null}
       </main>

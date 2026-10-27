@@ -419,3 +419,113 @@ export async function PATCH(
     { status: 400 },
   );
 }
+
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const acesso = await obterAdmin();
+
+  if (!acesso.ok) {
+    return NextResponse.json(
+      { ok: false, error: acesso.error },
+      { status: acesso.status },
+    );
+  }
+
+  const { id } = await context.params;
+  const { admin } = acesso;
+
+  const { data: empresa, error: empresaError } = await supabase
+    .from("empresas")
+    .select("id,nome_fantasia,status,white_label_id,white_label_tipo")
+    .eq("id", id)
+    .eq("white_label_id", admin.white_label_id)
+    .eq("white_label_tipo", "cliente")
+    .maybeSingle();
+
+  if (empresaError) {
+    return NextResponse.json(
+      { ok: false, error: empresaError.message },
+      { status: 500 },
+    );
+  }
+
+  if (!empresa) {
+    return NextResponse.json(
+      { ok: false, error: "Cliente White Label não encontrado." },
+      { status: 404 },
+    );
+  }
+
+  if (empresa.status === "cancelada") {
+    return NextResponse.json({
+      ok: true,
+      message: "Cliente já estava excluído.",
+    });
+  }
+
+  const agora = new Date().toISOString();
+
+  const { error: empresaUpdateError } = await supabase
+    .from("empresas")
+    .update({
+      status: "cancelada",
+      updated_at: agora,
+    })
+    .eq("id", empresa.id)
+    .eq("white_label_id", admin.white_label_id)
+    .eq("white_label_tipo", "cliente");
+
+  if (empresaUpdateError) {
+    return NextResponse.json(
+      { ok: false, error: empresaUpdateError.message },
+      { status: 500 },
+    );
+  }
+
+  const [{ error: usuariosError }, { error: sessoesError }] = await Promise.all([
+    supabase
+      .from("usuarios")
+      .update({
+        status: "inativo",
+        updated_at: agora,
+      })
+      .eq("empresa_id", empresa.id),
+    supabase
+      .from("usuario_sessoes")
+      .delete()
+      .eq("empresa_id", empresa.id),
+  ]);
+
+  if (usuariosError || sessoesError) {
+    console.error("[WHITE LABEL] Cliente cancelado com aviso ao revogar acessos:", {
+      empresaId: empresa.id,
+      usuariosError: usuariosError?.message || null,
+      sessoesError: sessoesError?.message || null,
+    });
+  }
+
+  let cobranca: Awaited<ReturnType<typeof sincronizarCobrancaWhiteLabel>> | null = null;
+  let warning: string | null = null;
+
+  try {
+    cobranca = await sincronizarCobrancaWhiteLabel(admin.white_label_id);
+    warning = cobranca.warning;
+  } catch (error) {
+    warning =
+      error instanceof Error
+        ? "Cliente excluído e licença liberada, mas a cobrança precisa ser reconciliada: " +
+          error.message
+        : "Cliente excluído e licença liberada, mas a cobrança precisa ser reconciliada.";
+  }
+
+  return NextResponse.json({
+    ok: true,
+    message:
+      "Cliente excluído. A licença foi liberada para cadastrar outro cliente.",
+    warning,
+    cobranca,
+  });
+}
