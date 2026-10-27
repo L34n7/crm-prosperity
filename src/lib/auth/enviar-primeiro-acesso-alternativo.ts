@@ -101,14 +101,12 @@ export async function enviarPrimeiroAcessoAlternativo(params: {
 
   const branding = await obterBrandingDaEmpresa(params.empresaId);
   const contextoEmail = montarEmailBranding(branding);
-  const redirectTo =
-    contextoEmail.siteUrl + "/auth/callback?next=/definir-senha";
+  let tipoLink: "invite" | "recovery" = "invite";
 
   let generated = await supabaseAdmin.auth.admin.generateLink({
     type: "invite",
     email,
     options: {
-      redirectTo,
       data: {
         nome: params.nome,
         empresa_id: params.empresaId,
@@ -129,10 +127,10 @@ export async function enviarPrimeiroAcessoAlternativo(params: {
       throw new Error(generated.error.message);
     }
 
+    tipoLink = "recovery";
     generated = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
       email,
-      options: { redirectTo },
     });
   }
 
@@ -140,10 +138,18 @@ export async function enviarPrimeiroAcessoAlternativo(params: {
     throw new Error(generated.error.message);
   }
 
-  const link = generated.data.properties?.action_link;
-  if (!link) {
-    throw new Error("Não foi possível gerar o link alternativo.");
+  const tokenHash = generated.data.properties?.hashed_token;
+  if (!tokenHash) {
+    throw new Error("Não foi possível gerar o token seguro do acesso alternativo.");
   }
+
+  const siteUrl = contextoEmail.siteUrl.replace(/\/+$/, "");
+  const link =
+    siteUrl +
+    "/definir-senha?token_hash=" +
+    encodeURIComponent(tokenHash) +
+    "&type=" +
+    encodeURIComponent(tipoLink);
 
   const resend = new Resend(resendApiKey);
   const envio = await resend.emails.send({

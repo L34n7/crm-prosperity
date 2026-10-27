@@ -38,6 +38,27 @@ export default function DefinirSenhaPage() {
   useEffect(() => {
     async function carregarUsuario() {
       try {
+        const params = new URLSearchParams(window.location.search);
+        const tokenHash = params.get("token_hash");
+        const tipo = params.get("type");
+
+        if (
+          tokenHash &&
+          (tipo === "invite" || tipo === "recovery")
+        ) {
+          const { error: erroVerificacao } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: tipo,
+          });
+
+          if (erroVerificacao) {
+            setErro("Seu link é inválido ou expirou. Solicite um novo acesso.");
+            return;
+          }
+
+          window.history.replaceState({}, "", "/definir-senha");
+        }
+
         const { data, error } = await supabase.auth.getUser();
 
         if (error || !data.user) {
