@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
   BarChart3,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   Mail,
   MailPlus,
   MousePointerClick,
+  RefreshCw,
   Search,
   Send,
   Settings2,
@@ -18,6 +19,28 @@ import Header from "@/components/Header";
 import styles from "./email-marketing.module.css";
 
 type AbaEmailMarketing = "campanhas" | "templates" | "remetentes";
+
+type ConfiguracaoEmailMarketing = {
+  provedor: string;
+  provedor_configurado: boolean;
+  api_key_configurada: boolean;
+  webhook_configurado: boolean;
+  dominio: string | null;
+  remetente_nome: string | null;
+  remetente_email: string | null;
+  status: string;
+  spf: "verificado" | "pendente";
+  dkim: "verificado" | "pendente";
+  dmarc: "recomendado";
+};
+
+type MetricasEmailMarketing = {
+  enviados: number;
+  entregues: number;
+  abertos: number;
+  cliques: number;
+  taxa_abertura: number | null;
+};
 
 const abas: Array<{
   id: AbaEmailMarketing;
@@ -45,11 +68,111 @@ const abas: Array<{
   },
 ];
 
+const metricasIniciais: MetricasEmailMarketing = {
+  enviados: 0,
+  entregues: 0,
+  abertos: 0,
+  cliques: 0,
+  taxa_abertura: null,
+};
+
 export default function EmailMarketingPage() {
   const [aba, setAba] = useState<AbaEmailMarketing>("campanhas");
   const [busca, setBusca] = useState("");
+  const [configuracao, setConfiguracao] =
+    useState<ConfiguracaoEmailMarketing | null>(null);
+  const [metricas, setMetricas] =
+    useState<MetricasEmailMarketing>(metricasIniciais);
+  const [carregandoConfiguracao, setCarregandoConfiguracao] = useState(true);
+  const [erroConfiguracao, setErroConfiguracao] = useState("");
+  const [emailTeste, setEmailTeste] = useState("");
+  const [enviandoTeste, setEnviandoTeste] = useState(false);
+  const [feedbackTeste, setFeedbackTeste] = useState<{
+    tipo: "sucesso" | "erro";
+    mensagem: string;
+  } | null>(null);
 
-  const provedorConfigurado = false;
+  const carregarConfiguracao = useCallback(async () => {
+    setCarregandoConfiguracao(true);
+    setErroConfiguracao("");
+
+    try {
+      const response = await fetch("/api/email-marketing/status", {
+        cache: "no-store",
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(
+          data?.error || "Não foi possível carregar a configuração de e-mail."
+        );
+      }
+
+      setConfiguracao(data.configuracao || null);
+      setMetricas(data.metricas || metricasIniciais);
+    } catch (error) {
+      setErroConfiguracao(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar a configuração de e-mail."
+      );
+    } finally {
+      setCarregandoConfiguracao(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void carregarConfiguracao();
+  }, [carregarConfiguracao]);
+
+  async function enviarTeste(event: FormEvent) {
+    event.preventDefault();
+    setFeedbackTeste(null);
+
+    const email = emailTeste.trim().toLowerCase();
+
+    if (!email) {
+      setFeedbackTeste({
+        tipo: "erro",
+        mensagem: "Informe o e-mail que receberá o teste.",
+      });
+      return;
+    }
+
+    setEnviandoTeste(true);
+
+    try {
+      const response = await fetch("/api/email-marketing/teste", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível enviar o teste.");
+      }
+
+      setFeedbackTeste({
+        tipo: "sucesso",
+        mensagem: data.message || "E-mail de teste enviado com sucesso.",
+      });
+      await carregarConfiguracao();
+    } catch (error) {
+      setFeedbackTeste({
+        tipo: "erro",
+        mensagem:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível enviar o teste.",
+      });
+    } finally {
+      setEnviandoTeste(false);
+    }
+  }
+
+  const provedorConfigurado = Boolean(configuracao?.provedor_configurado);
+  const remetenteVerificado = configuracao?.status === "verificado";
 
   return (
     <main className={styles.page}>
@@ -77,10 +200,10 @@ export default function EmailMarketingPage() {
             <button
               type="button"
               className={styles.primaryButton}
-              disabled={!provedorConfigurado}
+              disabled
               title={
                 provedorConfigurado
-                  ? "Criar nova campanha"
+                  ? "O provedor já está pronto. A criação de campanhas será habilitada na próxima etapa."
                   : "Configure o provedor de envio primeiro"
               }
             >
@@ -106,8 +229,12 @@ export default function EmailMarketingPage() {
             </span>
             <div>
               <span>Envios no mês</span>
-              <strong>0</strong>
-              <small>Nenhuma campanha enviada</small>
+              <strong>{metricas.enviados}</strong>
+              <small>
+                {metricas.enviados
+                  ? "Mensagens registradas no Resend"
+                  : "Nenhum envio registrado"}
+              </small>
             </div>
           </article>
 
@@ -117,8 +244,14 @@ export default function EmailMarketingPage() {
             </span>
             <div>
               <span>Entregues</span>
-              <strong>0</strong>
-              <small>0% dos envios</small>
+              <strong>{metricas.entregues}</strong>
+              <small>
+                {metricas.enviados
+                  ? `${Math.round(
+                      (metricas.entregues / Math.max(metricas.enviados, 1)) * 100
+                    )}% dos envios`
+                  : "Sem entregas registradas"}
+              </small>
             </div>
           </article>
 
@@ -128,8 +261,16 @@ export default function EmailMarketingPage() {
             </span>
             <div>
               <span>Taxa de abertura</span>
-              <strong>—</strong>
-              <small>Sem dados ainda</small>
+              <strong>
+                {metricas.taxa_abertura === null
+                  ? "—"
+                  : `${metricas.taxa_abertura}%`}
+              </strong>
+              <small>
+                {metricas.abertos
+                  ? `${metricas.abertos} abertura(s) registrada(s)`
+                  : "Sem dados ainda"}
+              </small>
             </div>
           </article>
 
@@ -139,8 +280,12 @@ export default function EmailMarketingPage() {
             </span>
             <div>
               <span>Cliques</span>
-              <strong>0</strong>
-              <small>Sem interações registradas</small>
+              <strong>{metricas.cliques}</strong>
+              <small>
+                {metricas.cliques
+                  ? "Interações registradas pelo webhook"
+                  : "Sem interações registradas"}
+              </small>
             </div>
           </article>
         </section>
@@ -184,8 +329,12 @@ export default function EmailMarketingPage() {
                 <button
                   type="button"
                   className={styles.primaryButton}
-                  disabled={!provedorConfigurado}
-                  title="Configure o provedor de envio primeiro"
+                  disabled
+                  title={
+                    provedorConfigurado
+                      ? "A criação de campanhas será implementada na próxima etapa."
+                      : "Configure o provedor de envio primeiro"
+                  }
                 >
                   <MailPlus size={17} />
                   Criar campanha
@@ -210,8 +359,9 @@ export default function EmailMarketingPage() {
                 </span>
                 <h3>Nenhuma campanha criada</h3>
                 <p>
-                  Configure o provedor de envio para começar a criar campanhas
-                  de e-mail com os contatos do CRM.
+                  {provedorConfigurado
+                    ? "O provedor já está conectado e validado. O próximo passo é habilitar a criação e o processamento das campanhas."
+                    : "Configure o provedor de envio para começar a criar campanhas de e-mail com os contatos do CRM."}
                 </p>
                 <button
                   type="button"
@@ -219,7 +369,7 @@ export default function EmailMarketingPage() {
                   onClick={() => setAba("remetentes")}
                 >
                   <Settings2 size={17} />
-                  Configurar provedor
+                  {provedorConfigurado ? "Ver configuração" : "Configurar provedor"}
                 </button>
               </div>
             </div>
@@ -239,8 +389,8 @@ export default function EmailMarketingPage() {
                 <button
                   type="button"
                   className={styles.primaryButton}
-                  disabled={!provedorConfigurado}
-                  title="Configure o provedor de envio primeiro"
+                  disabled
+                  title="A criação de templates será habilitada junto com as campanhas."
                 >
                   <FileText size={17} />
                   Novo template
@@ -268,13 +418,29 @@ export default function EmailMarketingPage() {
                     <p className={styles.sectionLabel}>PROVEDOR DE ENVIO</p>
                     <h2>Resend</h2>
                     <p>
-                      O provedor será responsável pelo envio, entregabilidade e
-                      eventos de e-mail.
+                      O provedor é responsável pelo envio e pelos eventos de
+                      entrega, abertura, clique, bounce e reclamação.
                     </p>
                   </div>
 
-                  <span className={styles.statusPending}>Não conectado</span>
+                  <span
+                    className={
+                      provedorConfigurado
+                        ? styles.statusReady
+                        : styles.statusPending
+                    }
+                  >
+                    {carregandoConfiguracao
+                      ? "Verificando..."
+                      : provedorConfigurado
+                        ? "Conectado"
+                        : "Não conectado"}
+                  </span>
                 </div>
+
+                {erroConfiguracao ? (
+                  <div className={styles.feedbackError}>{erroConfiguracao}</div>
+                ) : null}
 
                 <div className={styles.providerCard}>
                   <div className={styles.providerLogo}>
@@ -283,18 +449,77 @@ export default function EmailMarketingPage() {
 
                   <div className={styles.providerInfo}>
                     <strong>Resend</strong>
-                    <span>Integração preparada para a próxima etapa.</span>
+                    <span>
+                      {provedorConfigurado
+                        ? `${configuracao?.remetente_nome || "CRM Prosperity"} <${configuracao?.remetente_email || ""}>`
+                        : "Aguardando API Key e remetente verificado."}
+                    </span>
                   </div>
 
                   <button
                     type="button"
-                    className={styles.primaryButton}
-                    disabled
-                    title="A conexão com a API será implementada na próxima etapa"
+                    className={styles.secondaryButton}
+                    onClick={() => void carregarConfiguracao()}
+                    disabled={carregandoConfiguracao}
                   >
-                    Conectar Resend
+                    <RefreshCw size={16} />
+                    Atualizar
                   </button>
                 </div>
+
+                <form className={styles.testCard} onSubmit={enviarTeste}>
+                  <div className={styles.testCardHeader}>
+                    <div>
+                      <strong>Teste de envio</strong>
+                      <span>
+                        Envie uma mensagem real pelo domínio configurado para
+                        validar a integração ponta a ponta.
+                      </span>
+                    </div>
+                    <span
+                      className={
+                        configuracao?.webhook_configurado
+                          ? styles.statusReady
+                          : styles.statusPending
+                      }
+                    >
+                      Webhook{" "}
+                      {configuracao?.webhook_configurado ? "ativo" : "pendente"}
+                    </span>
+                  </div>
+
+                  <div className={styles.testForm}>
+                    <input
+                      type="email"
+                      value={emailTeste}
+                      onChange={(event) => setEmailTeste(event.target.value)}
+                      placeholder="seuemail@dominio.com"
+                      aria-label="E-mail para teste"
+                      disabled={!provedorConfigurado || enviandoTeste}
+                      required
+                    />
+                    <button
+                      type="submit"
+                      className={styles.primaryButton}
+                      disabled={!provedorConfigurado || enviandoTeste}
+                    >
+                      <Send size={16} />
+                      {enviandoTeste ? "Enviando..." : "Enviar teste"}
+                    </button>
+                  </div>
+
+                  {feedbackTeste ? (
+                    <div
+                      className={
+                        feedbackTeste.tipo === "sucesso"
+                          ? styles.feedbackSuccess
+                          : styles.feedbackError
+                      }
+                    >
+                      {feedbackTeste.mensagem}
+                    </div>
+                  ) : null}
+                </form>
               </section>
 
               <section className={styles.panel}>
@@ -303,8 +528,8 @@ export default function EmailMarketingPage() {
                     <p className={styles.sectionLabel}>DOMÍNIO DE ENVIO</p>
                     <h2>Autenticação do remetente</h2>
                     <p>
-                      Cada empresa deverá validar o próprio domínio antes de
-                      realizar campanhas.
+                      Configuração usada nos testes administrativos deste
+                      módulo.
                     </p>
                   </div>
                 </div>
@@ -316,9 +541,11 @@ export default function EmailMarketingPage() {
                     </span>
                     <div>
                       <strong>Domínio de envio</strong>
-                      <small>Aguardando configuração</small>
+                      <small>
+                        {configuracao?.dominio || "Aguardando configuração"}
+                      </small>
                     </div>
-                    <em>Pendente</em>
+                    <em>{remetenteVerificado ? "Verificado" : "Pendente"}</em>
                   </div>
 
                   <div className={styles.checkItem}>
@@ -329,7 +556,11 @@ export default function EmailMarketingPage() {
                       <strong>SPF</strong>
                       <small>Autorização do servidor de envio</small>
                     </div>
-                    <em>Pendente</em>
+                    <em>
+                      {configuracao?.spf === "verificado"
+                        ? "Verificado"
+                        : "Pendente"}
+                    </em>
                   </div>
 
                   <div className={styles.checkItem}>
@@ -340,7 +571,11 @@ export default function EmailMarketingPage() {
                       <strong>DKIM</strong>
                       <small>Assinatura e autenticidade das mensagens</small>
                     </div>
-                    <em>Pendente</em>
+                    <em>
+                      {configuracao?.dkim === "verificado"
+                        ? "Verificado"
+                        : "Pendente"}
+                    </em>
                   </div>
 
                   <div className={styles.checkItem}>
@@ -349,9 +584,12 @@ export default function EmailMarketingPage() {
                     </span>
                     <div>
                       <strong>DMARC</strong>
-                      <small>Política e proteção do domínio</small>
+                      <small>
+                        Recomendado para reforçar reputação e proteção do
+                        domínio
+                      </small>
                     </div>
-                    <em>Pendente</em>
+                    <em>Recomendado</em>
                   </div>
                 </div>
               </section>

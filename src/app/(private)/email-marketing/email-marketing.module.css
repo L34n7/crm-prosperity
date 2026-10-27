@@ -544,3 +544,113 @@
     justify-self: start;
   }
 }
+
+
+.statusReady {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.testCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 15px;
+  border: 1px solid var(--crm-border);
+  border-radius: 15px;
+  background: var(--crm-surface-soft);
+}
+
+.testCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.testCardHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.testCardHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.testCardHeader span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.testForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+}
+
+.testForm input {
+  min-width: 0;
+  min-height: 41px;
+  padding: 0 12px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 11px;
+  outline: none;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  font-size: 13px;
+}
+
+.testForm input:focus {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.testForm input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.feedbackSuccess,
+.feedbackError {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.feedbackSuccess {
+  border: 1px solid var(--crm-primary-border);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.feedbackError {
+  border: 1px solid var(--crm-border-strong);
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+}
+
+@media (max-width: 560px) {
+  .testCardHeader {
+    flex-direction: column;
+  }
+
+  .testForm {
+    grid-template-columns: 1fr;
+  }
+
+  .testForm .primaryButton {
+    width: 100%;
+  }
+}
