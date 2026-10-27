@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
@@ -16,6 +16,56 @@ const TRIAL_AVISO_LOGIN_STORAGE_KEY = "crm_trial_aviso_apos_login";
 const SUPORTE_WHATSAPP_URL = montarWaMeUrl(
   "Olá! Preciso de suporte com meu acesso ao CRM Prosperity."
 );
+
+type Rgb = { r: number; g: number; b: number };
+
+function normalizarHex(cor: string | null | undefined, fallback: string) {
+  const valor = String(cor || "").trim();
+
+  if (/^#[0-9a-f]{6}$/i.test(valor)) return valor.toUpperCase();
+
+  if (/^#[0-9a-f]{3}$/i.test(valor)) {
+    const [r, g, b] = valor.slice(1).split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+
+  return fallback;
+}
+
+function hexParaRgb(hex: string): Rgb {
+  const valor = normalizarHex(hex, "#059669").slice(1);
+
+  return {
+    r: Number.parseInt(valor.slice(0, 2), 16),
+    g: Number.parseInt(valor.slice(2, 4), 16),
+    b: Number.parseInt(valor.slice(4, 6), 16),
+  };
+}
+
+function rgbParaHex({ r, g, b }: Rgb) {
+  return (
+    "#" +
+    [r, g, b]
+      .map((valor) =>
+        Math.max(0, Math.min(255, Math.round(valor)))
+          .toString(16)
+          .padStart(2, "0")
+      )
+      .join("")
+  ).toUpperCase();
+}
+
+function misturarHex(corBase: string, corAlvo: string, proporcaoAlvo: number) {
+  const base = hexParaRgb(corBase);
+  const alvo = hexParaRgb(corAlvo);
+  const peso = Math.max(0, Math.min(1, proporcaoAlvo));
+
+  return rgbParaHex({
+    r: base.r * (1 - peso) + alvo.r * peso,
+    g: base.g * (1 - peso) + alvo.g * peso,
+    b: base.b * (1 - peso) + alvo.b * peso,
+  });
+}
 
 async function obterRotaAposLogin() {
   try {
@@ -75,6 +125,24 @@ export default function LoginClient({ branding }: LoginClientProps) {
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState("");
+
+  const loginTheme = useMemo(() => {
+    const corPrimaria = branding.is_white_label
+      ? normalizarHex(branding.cor_primaria, "#0F509A")
+      : "#059669";
+    const rgb = hexParaRgb(corPrimaria);
+
+    return {
+      "--login-primary": corPrimaria,
+      "--login-primary-rgb": `${rgb.r}, ${rgb.g}, ${rgb.b}`,
+      "--login-primary-strong": misturarHex(corPrimaria, "#07111F", 0.3),
+      "--login-primary-deep": misturarHex(corPrimaria, "#02070C", 0.58),
+      "--login-accent-light": misturarHex(corPrimaria, "#FFFFFF", 0.58),
+      "--login-bg-1": misturarHex(corPrimaria, "#02070C", 0.86),
+      "--login-bg-2": misturarHex(corPrimaria, "#041018", 0.76),
+      "--login-bg-3": misturarHex(corPrimaria, "#06111F", 0.8),
+    } as CSSProperties;
+  }, [branding.cor_primaria, branding.is_white_label]);
 
   useEffect(() => {
     async function checkUser() {
@@ -149,7 +217,7 @@ export default function LoginClient({ branding }: LoginClientProps) {
   }
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} style={loginTheme}>
       <div className={styles.backgroundGlowTop} />
       <div className={styles.backgroundGlowBottom} />
       <div className={styles.backgroundGrid} />

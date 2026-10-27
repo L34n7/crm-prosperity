@@ -7,9 +7,9 @@
   justify-content: center;
   padding: 28px 20px;
   background:
-    radial-gradient(circle at 10% 12%, var(--crm-ui-public-surface-rgb-16-185-129-0-01), transparent 29%),
-    radial-gradient(circle at 90% 86%, var(--crm-ui-public-surface-rgb-14-116-144-0-049), transparent 28%),
-    linear-gradient(135deg, var(--crm-ui-public-surface-hex-040b10) 0%, var(--crm-ui-public-surface-hex-07151a) 48%, var(--crm-ui-public-surface-hex-08131f) 100%);
+    radial-gradient(circle at 10% 12%, rgba(var(--login-primary-rgb), 0.13), transparent 31%),
+    radial-gradient(circle at 90% 86%, rgba(var(--login-primary-rgb), 0.08), transparent 30%),
+    linear-gradient(135deg, var(--login-bg-1) 0%, var(--login-bg-2) 48%, var(--login-bg-3) 100%);
 }
 
 .backgroundGlowTop,
@@ -25,13 +25,13 @@
 .backgroundGlowTop {
   top: -170px;
   left: -120px;
-  background: var(--crm-ui-public-surface-rgb-16-185-129-0-2);
+  background: rgba(var(--login-primary-rgb), 0.22);
 }
 
 .backgroundGlowBottom {
   right: -130px;
   bottom: -170px;
-  background: var(--crm-ui-public-surface-rgb-15-118-109-0-098);
+  background: rgba(var(--login-primary-rgb), 0.13);
 }
 
 .backgroundGrid {
@@ -56,7 +56,7 @@
   min-height: 650px;
   display: grid;
   grid-template-columns: 1.04fr 0.96fr;
-  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-18);
+  border: 1px solid rgba(var(--login-primary-rgb), 0.22);
   border-radius: 32px;
   overflow: hidden;
   background: var(--crm-ui-public-surface-rgb-255-255-255-0-04);
@@ -73,8 +73,9 @@
   justify-content: space-between;
   color: var(--crm-ui-public-content-hex-ffffff);
   background:
-    radial-gradient(circle at 8% 4%, var(--crm-ui-public-surface-rgb-52-211-153-0-2), transparent 35%),
-    linear-gradient(155deg, var(--crm-ui-public-surface-rgb-255-255-255-0-03), var(--crm-ui-public-surface-rgb-255-255-255-0-018));
+    radial-gradient(circle at 8% 4%, rgba(var(--login-primary-rgb), 0.24), transparent 36%),
+    radial-gradient(circle at 92% 92%, rgba(var(--login-primary-rgb), 0.12), transparent 34%),
+    linear-gradient(155deg, rgba(var(--login-primary-rgb), 0.08), rgba(255, 255, 255, 0.018));
 }
 
 .brandPanel::after {
@@ -84,11 +85,11 @@
   bottom: -125px;
   width: 270px;
   height: 270px;
-  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-12);
+  border: 1px solid rgba(var(--login-primary-rgb), 0.16);
   border-radius: 50%;
   box-shadow:
-    0 0 0 42px var(--crm-ui-public-shadow-rgb-52-211-153-0-025),
-    0 0 0 84px var(--crm-ui-public-shadow-rgb-52-211-153-0-018);
+    0 0 0 42px rgba(var(--login-primary-rgb), 0.04),
+    0 0 0 84px rgba(var(--login-primary-rgb), 0.025);
   pointer-events: none;
 }
 
@@ -141,7 +142,7 @@
 }
 
 .brandProduct {
-  color: var(--crm-ui-public-content-hex-c8a96b);
+  color: var(--login-accent-light);
   font-size: 11px;
   font-weight: 850;
   letter-spacing: 0.14em;
@@ -178,10 +179,10 @@
   width: fit-content;
   margin: 34px 0 0;
   padding: 5px 12px;
-  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-22);
+  border: 1px solid rgba(var(--login-primary-rgb), 0.32);
   border-radius: 999px;
-  background: var(--crm-ui-public-surface-rgb-16-185-129-0-09);
-  color: var(--crm-ui-public-content-hex-a7f3d0);
+  background: rgba(var(--login-primary-rgb), 0.14);
+  color: var(--login-accent-light);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.07em;
@@ -235,10 +236,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-26);
+  border: 1px solid rgba(var(--login-primary-rgb), 0.34);
   border-radius: 999px;
-  background: var(--crm-ui-public-surface-rgb-16-185-129-0-13);
-  color: var(--crm-ui-public-content-hex-86efac);
+  background: rgba(var(--login-primary-rgb), 0.17);
+  color: var(--login-accent-light);
 }
 
 .integrationFooter {
@@ -254,7 +255,7 @@
 
 .integrationLabel {
   flex: 0 0 auto;
-  color: var(--crm-ui-public-content-hex-d1fae5);
+  color: var(--login-accent-light);
   font-size: 13px;
   font-weight: 750;
   line-height: 1.35;
@@ -305,7 +306,7 @@
 
 .cardEyebrow {
   margin: 0;
-  color: var(--crm-ui-public-content-hex-047857);
+  color: var(--login-primary-strong);
   font-size: 12px;
   font-weight: 850;
   letter-spacing: 0.09em;
@@ -364,8 +365,8 @@
 }
 
 .input:focus {
-  border-color: var(--crm-ui-public-border-hex-10b981);
-  box-shadow: 0 0 0 4px var(--crm-ui-public-shadow-rgb-16-185-129-0-12);
+  border-color: var(--login-primary);
+  box-shadow: 0 0 0 4px rgba(var(--login-primary-rgb), 0.14);
 }
 
 .passwordWrapper {
@@ -406,7 +407,7 @@
 .eyeButton:focus-visible,
 .formLink:focus-visible,
 .submitButton:focus-visible {
-  outline: 3px solid var(--crm-ui-public-border-rgb-16-185-129-0-28);
+  outline: 3px solid rgba(var(--login-primary-rgb), 0.32);
   outline-offset: 3px;
 }
 
@@ -421,18 +422,18 @@
   gap: 10px;
   border: 0;
   border-radius: 15px;
-  background: linear-gradient(135deg, var(--crm-ui-public-surface-hex-065f46) 0%, var(--crm-ui-public-surface-hex-059669) 100%);
+  background: linear-gradient(135deg, var(--login-primary-deep) 0%, var(--login-primary) 100%);
   color: var(--crm-ui-public-content-hex-ffffff);
   font-size: 15px;
   font-weight: 850;
   cursor: pointer;
-  box-shadow: 0 14px 30px var(--crm-ui-public-shadow-rgb-5-150-105-0-24);
+  box-shadow: 0 14px 30px rgba(var(--login-primary-rgb), 0.26);
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .submitButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 34px var(--crm-ui-public-shadow-rgb-5-150-105-0-3);
+  box-shadow: 0 18px 34px rgba(var(--login-primary-rgb), 0.34);
 }
 
 .submitButton:disabled {
@@ -451,14 +452,14 @@
 }
 
 .formLink {
-  color: var(--crm-ui-public-content-hex-047857);
+  color: var(--login-primary-strong);
   font-size: 13px;
   font-weight: 750;
   text-decoration: none;
 }
 
 .formLink:hover {
-  color: var(--crm-ui-public-content-hex-065f46);
+  color: var(--login-primary-deep);
   text-decoration: underline;
 }
 
@@ -472,9 +473,9 @@
 }
 
 .messageSuccess {
-  border: 1px solid var(--crm-ui-public-border-hex-a7f3d0);
-  background: var(--crm-ui-public-surface-hex-ecfdf5);
-  color: var(--crm-ui-public-content-hex-047857);
+  border: 1px solid rgba(var(--login-primary-rgb), 0.24);
+  background: rgba(var(--login-primary-rgb), 0.09);
+  color: var(--login-primary-strong);
 }
 
 .messageError {
@@ -494,7 +495,7 @@
 }
 
 .cardFooter a {
-  color: var(--crm-ui-public-content-hex-047857);
+  color: var(--login-primary-strong);
   font-weight: 750;
   text-decoration: none;
 }
@@ -705,7 +706,7 @@
   justify-items: center;
   gap: 10px;
   padding: 30px 28px;
-  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-26);
+  border: 1px solid rgba(var(--login-primary-rgb), 0.3);
   border-radius: 22px;
   background: var(--crm-ui-public-surface-rgb-255-255-255-0-97);
   box-shadow: 0 24px 70px var(--crm-ui-public-shadow-rgb-0-0-0-0-34);
@@ -731,8 +732,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--crm-ui-public-surface-hex-ecfdf5);
-  color: var(--crm-ui-public-content-hex-047857);
+  background: rgba(var(--login-primary-rgb), 0.09);
+  color: var(--login-primary-strong);
 }
 
 .loginLoadingIcon svg,
