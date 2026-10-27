@@ -1,0 +1,372 @@
+.comboField {
+  position: relative;
+  min-width: 0;
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.comboControl {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+}
+
+.comboControl:focus-within {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.comboControl input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--crm-text-strong);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+}
+
+.comboList {
+  position: absolute;
+  z-index: 1400;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.comboOption,
+.comboOptionActive {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.comboOption {
+  color: var(--crm-text);
+  background: transparent;
+}
+
+.comboOptionActive {
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.comboOption span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.comboOption strong {
+  color: var(--crm-text-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.comboOption small,
+.comboDescription {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.comboOption em {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.comboDescription {
+  display: block;
+  margin-top: 5px;
+}
+
+.comboEmpty,
+.empty {
+  padding: 18px 10px;
+  color: var(--crm-text-muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+.modalOverlay {
+  position: fixed;
+  z-index: 1600;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 52%);
+  backdrop-filter: blur(3px);
+}
+
+.modalCard {
+  width: min(820px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 18px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.modalHeader p {
+  margin: 0 0 4px;
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 22px;
+}
+
+.modalHeader span {
+  display: block;
+  margin-top: 6px;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.modalHeader > button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+  cursor: pointer;
+}
+
+.modalBody {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 22px;
+}
+
+.modalSection {
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.modalSection h4 {
+  margin: 0 0 12px;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+}
+
+.formGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.formGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formGrid label > span {
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.formGrid input,
+.formGrid textarea {
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 9px;
+  outline: 0;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.variablePreview {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+  font-size: 12px;
+}
+
+.variablePreview strong {
+  color: var(--crm-primary-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.primaryButton,
+.modalFooter > button {
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--crm-primary-strong);
+  border-radius: 10px;
+  color: var(--crm-primary-contrast);
+  background: var(--crm-primary-strong);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.variablesList {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.variableItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+}
+
+.variableItem > div:first-child {
+  min-width: 0;
+}
+
+.variableItem strong {
+  color: var(--crm-primary-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.variableItem p,
+.variableItem small {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.variableItem > div:last-child {
+  display: flex;
+  gap: 6px;
+}
+
+.variableItem button {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  color: var(--crm-text);
+  background: var(--crm-surface-soft);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.deleteButton {
+  color: var(--crm-text-muted) !important;
+}
+
+.error,
+.success {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.error {
+  border: 1px solid var(--crm-border-strong);
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+}
+
+.success {
+  border: 1px solid var(--crm-primary-border);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--crm-border);
+}
+
+@media (max-width: 640px) {
+  .modalOverlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modalCard {
+    max-height: 94vh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .modalBody {
+    max-height: calc(94vh - 160px);
+  }
+
+  .variableItem {
+    flex-direction: column;
+  }
+}

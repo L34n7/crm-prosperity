@@ -5,25 +5,10 @@ const ATRIBUTOS_EVENTO =
 const JAVASCRIPT_URL =
   /\s+(href|src)\s*=\s*(["'])\s*javascript:[\s\S]*?\2/gi;
 
-export type VariaveisEmailMarketing = {
-  nome_contato?: string | null;
-  email?: string | null;
-  telefone?: string | null;
-  empresa?: string | null;
-  origem?: string | null;
-  campanha?: string | null;
-  interesse?: string | null;
-};
-
-export const VARIAVEIS_EMAIL_MARKETING = [
-  "nome_contato",
-  "email",
-  "telefone",
-  "empresa",
-  "origem",
-  "campanha",
-  "interesse",
-] as const;
+export type VariaveisEmailMarketing = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
 
 export function escaparHtml(valor: unknown) {
   return String(valor ?? "")
@@ -54,9 +39,16 @@ export function textoParaHtml(valor: unknown) {
     .split(/\n{2,}/)
     .map((paragrafo) => {
       const linhas = escaparHtml(paragrafo).replaceAll("\n", "<br />");
-      return "<p style=\"margin:0 0 16px;line-height:1.65\">" + linhas + "</p>";
+      return '<p style="margin:0 0 16px;line-height:1.65">' + linhas + "</p>";
     })
     .join("");
+}
+
+function normalizarChave(valor: unknown) {
+  return String(valor || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^variaveis\./, "");
 }
 
 export function renderizarVariaveis(
@@ -64,16 +56,38 @@ export function renderizarVariaveis(
   variaveis: VariaveisEmailMarketing,
   escapar = false
 ) {
-  let saida = String(valor || "");
+  const mapa = new Map<string, string>();
 
-  for (const chave of VARIAVEIS_EMAIL_MARKETING) {
-    const marcador = "{{" + chave + "}}";
-    const bruto = String(variaveis[chave] ?? "");
-    const substituto = escapar ? escaparHtml(bruto) : bruto;
-    saida = saida.split(marcador).join(substituto);
+  for (const [chave, bruto] of Object.entries(variaveis || {})) {
+    mapa.set(normalizarChave(chave), String(bruto ?? ""));
   }
 
-  return saida;
+  return String(valor || "").replace(
+    /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g,
+    (_marcador, chaveBruta: string) => {
+      const chave = normalizarChave(chaveBruta);
+      const bruto = mapa.get(chave) ?? "";
+      return escapar ? escaparHtml(bruto) : bruto;
+    }
+  );
+}
+
+export function aplicarFallbacksVariaveis(
+  variaveis: VariaveisEmailMarketing,
+  fallbacks: Record<string, unknown> | null | undefined
+) {
+  const resultado: VariaveisEmailMarketing = { ...variaveis };
+
+  for (const [chaveBruta, fallback] of Object.entries(fallbacks || {})) {
+    const chave = normalizarChave(chaveBruta);
+    const atual = String(resultado[chave] ?? "").trim();
+
+    if (!atual) {
+      resultado[chave] = String(fallback ?? "");
+    }
+  }
+
+  return resultado;
 }
 
 export function adicionarRodapeDescadastro(

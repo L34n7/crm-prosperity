@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
+import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -13,6 +14,9 @@ const VARIAVEIS_FIXAS = new Set([
   "whatsapp_nome",
   "nome_perfil_whatsapp",
   "perfil_whatsapp_nome",
+  "nome_captura",
+  "primeiro_nome_captura",
+  "empresa",
   "telefone",
   "numero",
   "numero_contato",
@@ -74,11 +78,16 @@ export async function GET() {
 
     const { usuario } = resultadoContexto;
 
-    const bloqueio = bloquearSemPermissao(
-      usuario,
-      "fluxos.visualizar",
-      "Você não tem permissão para visualizar variáveis de fluxos.",
+    const acessoInterno = usuario.permissoes.includes(
+      PERMISSAO_INTERNA_EMPRESAS
     );
+    const bloqueio = acessoInterno
+      ? null
+      : bloquearSemPermissao(
+          usuario,
+          "fluxos.visualizar",
+          "Você não tem permissão para visualizar variáveis.",
+        );
     if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {
@@ -149,11 +158,16 @@ export async function POST(req: NextRequest) {
     const { usuario } = resultadoContexto;
     const body = await req.json();
 
-    const bloqueio = bloquearSemPermissao(
-      usuario,
-      "fluxos.editar",
-      "Você não tem permissão para gerenciar variáveis de fluxos.",
+    const acessoInterno = usuario.permissoes.includes(
+      PERMISSAO_INTERNA_EMPRESAS
     );
+    const bloqueio = acessoInterno
+      ? null
+      : bloquearSemPermissao(
+          usuario,
+          "fluxos.editar",
+          "Você não tem permissão para gerenciar variáveis.",
+        );
     if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {
@@ -302,11 +316,16 @@ export async function DELETE(req: NextRequest) {
     const { usuario } = resultadoContexto;
     const body = await req.json();
 
-    const bloqueio = bloquearSemPermissao(
-      usuario,
-      "fluxos.editar",
-      "Você não tem permissão para gerenciar variáveis de fluxos.",
+    const acessoInterno = usuario.permissoes.includes(
+      PERMISSAO_INTERNA_EMPRESAS
     );
+    const bloqueio = acessoInterno
+      ? null
+      : bloquearSemPermissao(
+          usuario,
+          "fluxos.editar",
+          "Você não tem permissão para gerenciar variáveis.",
+        );
     if (bloqueio) return bloqueio;
 
     if (!usuario?.empresa_id) {

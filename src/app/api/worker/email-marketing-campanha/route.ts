@@ -7,6 +7,7 @@ import {
 } from "@/lib/email-marketing/campanhas";
 import {
   adicionarRodapeDescadastro,
+  aplicarFallbacksVariaveis,
   renderizarVariaveis,
   type VariaveisEmailMarketing,
 } from "@/lib/email-marketing/conteudo";
@@ -15,6 +16,8 @@ import {
   urlPublicaEmailMarketing,
 } from "@/lib/email-marketing/fila";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";
+import { extrairChavesVariaveis } from "@/lib/variaveis/catalogo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +39,12 @@ type DestinatarioRow = {
   tentativas: number;
   max_tentativas: number;
   next_attempt_at: string | null;
+  variaveis_json: Record<string, unknown> | null;
+};
+
+type ProtocoloContato = {
+  protocolo_atual: string;
+  ultimo_protocolo: string;
 };
 
 function dataRetry(tentativa: number) {
@@ -43,17 +52,106 @@ function dataRetry(tentativa: number) {
   return new Date(Date.now() + minutos * 60_000).toISOString();
 }
 
-async function carregarContato(contatoId: string | null, empresaId: string) {
-  if (!contatoId) return null;
-
-  const { data } = await supabaseAdmin
-    .from("contatos")
-    .select("id, nome, email, telefone, empresa, origem, campanha, interesse")
-    .eq("id", contatoId)
+async function carregarVariaveisPersonalizadas(empresaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("automacao_variaveis")
+    .select("chave, valor")
     .eq("empresa_id", empresaId)
-    .maybeSingle();
+    .is("execucao_id", null)
+    .is("contato_id", null)
+    .eq("metadata_json->>tipo", "global_empresa")
+    .eq("metadata_json->>ativo", "true");
 
-  return data || null;
+  if (error) {
+    console.warn(
+      "[EMAIL MARKETING] Variáveis personalizadas indisponíveis:",
+      error.message
+    );
+    return {};
+  }
+
+  return Object.fromEntries(
+    (data || [])
+      .map((item) => [
+        String(item.chave || "").trim().toLowerCase(),
+        String(item.valor || ""),
+      ])
+      .filter(([chave]) => Boolean(chave))
+  ) as Record<string, string>;
+}
+
+async function carregarProtocolos(
+  empresaId: string,
+  contatoIds: string[]
+): Promise<Record<string, ProtocoloContato>> {
+  const ids = Array.from(new Set(contatoIds.filter(Boolean)));
+  const resultado: Record<string, ProtocoloContato> = {};
+
+  ids.forEach((id) => {
+    resultado[id] = {
+      protocolo_atual: "",
+      ultimo_protocolo: "",
+    };
+  });
+
+  if (!ids.length) return resultado;
+
+  const { data: conversas, error: conversasError } = await supabaseAdmin
+    .from("conversas")
+    .select("id, contato_id")
+    .eq("empresa_id", empresaId)
+    .in("contato_id", ids);
+
+  if (conversasError || !conversas?.length) {
+    if (conversasError) {
+      console.warn(
+        "[EMAIL MARKETING] Protocolos indisponíveis:",
+        conversasError.message
+      );
+    }
+    return resultado;
+  }
+
+  const conversaParaContato = new Map<string, string>();
+  const conversaIds: string[] = [];
+
+  for (const conversa of conversas) {
+    if (!conversa.id || !conversa.contato_id) continue;
+    conversaIds.push(conversa.id);
+    conversaParaContato.set(conversa.id, conversa.contato_id);
+  }
+
+  if (!conversaIds.length) return resultado;
+
+  const { data: protocolos, error: protocolosError } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("conversa_id, protocolo, ativo, created_at")
+    .eq("empresa_id", empresaId)
+    .in("conversa_id", conversaIds)
+    .order("created_at", { ascending: false });
+
+  if (protocolosError) {
+    console.warn(
+      "[EMAIL MARKETING] Protocolos indisponíveis:",
+      protocolosError.message
+    );
+    return resultado;
+  }
+
+  for (const protocolo of protocolos || []) {
+    const contatoId = conversaParaContato.get(protocolo.conversa_id);
+    if (!contatoId || !resultado[contatoId]) continue;
+
+    if (protocolo.ativo === true && !resultado[contatoId].protocolo_atual) {
+      resultado[contatoId].protocolo_atual = protocolo.protocolo || "";
+    }
+
+    if (protocolo.ativo === false && !resultado[contatoId].ultimo_protocolo) {
+      resultado[contatoId].ultimo_protocolo = protocolo.protocolo || "";
+    }
+  }
+
+  return resultado;
 }
 
 async function agendarProximaExecucao(
@@ -154,7 +252,7 @@ export async function POST(request: Request) {
     const { data: campanha, error: campanhaError } = await supabaseAdmin
       .from("email_campanhas")
       .select(
-        "id, empresa_id, nome, assunto, html, texto, status, agendada_para, iniciada_em, remetente_id"
+        "id, empresa_id, nome, assunto, html, texto, status, agendada_para, iniciada_em, remetente_id, variaveis_config_json"
       )
       .eq("id", campanhaId)
       .maybeSingle();
@@ -234,7 +332,7 @@ export async function POST(request: Request) {
     const { data: lote, error: loteError } = await supabaseAdmin
       .from("email_campanha_destinatarios")
       .select(
-        "id, campanha_id, contato_id, email, nome, status, unsubscribe_token, tentativas, max_tentativas, next_attempt_at"
+        "id, campanha_id, contato_id, email, nome, status, unsubscribe_token, tentativas, max_tentativas, next_attempt_at, variaveis_json"
       )
       .eq("campanha_id", campanha.id)
       .eq("status", "pendente")
@@ -260,11 +358,16 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (proximo) {
-        const executarEm = proximo.next_attempt_at || new Date(Date.now() + 1000).toISOString();
+        const executarEm =
+          proximo.next_attempt_at ||
+          new Date(Date.now() + 1000).toISOString();
         const fila = await agendarProximaExecucao(
           campanha.id,
           executarEm,
-          "pendente-" + proximo.id + "-" + Math.floor(new Date(executarEm).getTime() / 1000)
+          "pendente-" +
+            proximo.id +
+            "-" +
+            Math.floor(new Date(executarEm).getTime() / 1000)
         );
 
         if (!fila.ok) {
@@ -281,7 +384,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, concluida: true });
     }
 
-    const suprimidos = await buscarEmailsSuprimidos(campanha.empresa_id);
+    const chavesUsadas = new Set(
+      extrairChavesVariaveis(
+        campanha.assunto,
+        campanha.html,
+        campanha.texto
+      )
+    );
+    const precisaProtocolos =
+      chavesUsadas.has("protocolo_atual") ||
+      chavesUsadas.has("ultimo_protocolo");
+    const precisaNomeCaptura =
+      chavesUsadas.has("nome_captura") ||
+      chavesUsadas.has("primeiro_nome_captura");
+
+    const contatoIds = destinatarios
+      .map((item) => item.contato_id || "")
+      .filter(Boolean);
+
+    const [suprimidos, personalizadas, protocolos] = await Promise.all([
+      buscarEmailsSuprimidos(campanha.empresa_id),
+      carregarVariaveisPersonalizadas(campanha.empresa_id),
+      precisaProtocolos
+        ? carregarProtocolos(campanha.empresa_id, contatoIds)
+        : Promise.resolve({} as Record<string, ProtocoloContato>),
+    ]);
+
+    const config =
+      campanha.variaveis_config_json &&
+      typeof campanha.variaveis_config_json === "object"
+        ? (campanha.variaveis_config_json as Record<string, unknown>)
+        : {};
+    const fallbacks =
+      config.fallbacks &&
+      typeof config.fallbacks === "object" &&
+      !Array.isArray(config.fallbacks)
+        ? (config.fallbacks as Record<string, unknown>)
+        : {};
+
     const resend = getEmailMarketingResend();
     const basePublica = urlPublicaEmailMarketing();
 
@@ -301,20 +441,51 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const contato = await carregarContato(
-        destinatario.contato_id,
-        campanha.empresa_id
-      );
+      const snapshot =
+        destinatario.variaveis_json &&
+        typeof destinatario.variaveis_json === "object"
+          ? destinatario.variaveis_json
+          : {};
 
-      const variaveis: VariaveisEmailMarketing = {
-        nome_contato: contato?.nome || destinatario.nome || "",
+      let variaveis: VariaveisEmailMarketing = {
+        ...personalizadas,
+        ...snapshot,
         email,
-        telefone: contato?.telefone || "",
-        empresa: contato?.empresa || empresa?.nome_fantasia || "",
-        origem: contato?.origem || "",
-        campanha: contato?.campanha || "",
-        interesse: contato?.interesse || "",
       };
+
+      if (!String(variaveis.empresa || "").trim()) {
+        variaveis.empresa = empresa?.nome_fantasia || "";
+      }
+
+      if (destinatario.contato_id && precisaProtocolos) {
+        const protocolo = protocolos[destinatario.contato_id];
+        variaveis.protocolo_atual = protocolo?.protocolo_atual || "";
+        variaveis.ultimo_protocolo = protocolo?.ultimo_protocolo || "";
+      }
+
+      if (destinatario.contato_id && precisaNomeCaptura) {
+        const nomes = await resolverNomeCapturaContato({
+          empresaId: campanha.empresa_id,
+          contatoId: destinatario.contato_id,
+          nomeWhatsapp: String(variaveis.nome_whatsapp || ""),
+          nomeFallback: String(
+            variaveis.nome_contato || destinatario.nome || ""
+          ),
+        });
+
+        variaveis.nome_captura = nomes.nome_captura;
+        variaveis.primeiro_nome_captura = nomes.primeiro_nome_captura;
+      }
+
+      for (const [chave, valor] of Object.entries(personalizadas)) {
+        variaveis[chave] = renderizarVariaveis(
+          valor,
+          variaveis,
+          false
+        );
+      }
+
+      variaveis = aplicarFallbacksVariaveis(variaveis, fallbacks);
 
       const unsubscribeUrl =
         basePublica +
@@ -353,13 +524,13 @@ export async function POST(request: Request) {
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             "X-CRM-Campanha-ID": campanha.id,
           },
-          tags: [
-            { name: "crm_campanha", value: campanha.id },
-          ],
+          tags: [{ name: "crm_campanha", value: campanha.id }],
         });
 
         if (error || !data?.id) {
-          throw new Error(error?.message || "Resend não retornou o ID do envio.");
+          throw new Error(
+            error?.message || "Resend não retornou o ID do envio."
+          );
         }
 
         await supabaseAdmin
@@ -410,7 +581,10 @@ export async function POST(request: Request) {
       const fila = await agendarProximaExecucao(
         campanha.id,
         executarEm,
-        "continuar-" + proximo.id + "-" + Math.floor(new Date(executarEm).getTime() / 1000)
+        "continuar-" +
+          proximo.id +
+          "-" +
+          Math.floor(new Date(executarEm).getTime() / 1000)
       );
 
       if (!fila.ok) {

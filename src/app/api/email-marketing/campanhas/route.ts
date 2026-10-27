@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
 import { validarAcessoEmailMarketing } from "@/lib/email-marketing/admin";
-import {
-  buscarEmailsSuprimidos,
-  recalcularMetricasCampanhaEmail,
-  resolverAudienciaEmail,
-} from "@/lib/email-marketing/campanhas";
+import { recalcularMetricasCampanhaEmail } from "@/lib/email-marketing/campanhas";
 import { publicarCampanhaEmailQstash } from "@/lib/email-marketing/fila";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
 
-type TipoAudiencia = "todos" | "lista" | "contatos";
+type TipoAudiencia = "todos" | "listas" | "contatos";
 
 function normalizarTipoAudiencia(valor: unknown): TipoAudiencia {
-  if (valor === "lista" || valor === "contatos") return valor;
+  if (valor === "listas" || valor === "contatos") return valor;
   return "todos";
 }
 
@@ -22,6 +18,44 @@ function dataAgendamento(valor: unknown) {
 
   const data = new Date(String(valor));
   return Number.isFinite(data.getTime()) ? data : null;
+}
+
+function idsUuid(valor: unknown, limite: number) {
+  if (!Array.isArray(valor)) return [];
+
+  return Array.from(
+    new Set(
+      valor
+        .map((item) => String(item || "").trim())
+        .filter((item) =>
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            item
+          )
+        )
+    )
+  ).slice(0, limite);
+}
+
+function normalizarFallbacks(valor: unknown) {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) {
+    return {};
+  }
+
+  const resultado: Record<string, string> = {};
+
+  for (const [chave, bruto] of Object.entries(valor as Record<string, unknown>)) {
+    const normalizada = String(chave || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, "")
+      .slice(0, 120);
+
+    if (!normalizada) continue;
+
+    resultado[normalizada] = String(bruto ?? "").slice(0, 2000);
+  }
+
+  return resultado;
 }
 
 export async function GET() {
@@ -46,7 +80,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("email_campanhas")
     .select(
-      "id, nome, assunto, status, audiencia_json, agendada_para, iniciada_em, finalizada_em, total_destinatarios, total_enviados, total_entregues, total_abertos, total_cliques, total_bounces, total_reclamacoes, total_descadastros, erro, created_at, updated_at, email_remetentes(nome,email), email_templates(nome)"
+      "id, nome, assunto, status, audiencia_json, audiencia_resumo_json, agendada_para, iniciada_em, finalizada_em, total_destinatarios, total_enviados, total_entregues, total_abertos, total_cliques, total_bounces, total_reclamacoes, total_descadastros, erro, created_at, updated_at, email_remetentes(nome,email), email_templates(nome)"
     )
     .eq("empresa_id", empresaId)
     .order("created_at", { ascending: false })
@@ -87,10 +121,7 @@ export async function POST(request: Request) {
 
   if (body?.confirmar_envio !== true) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "Confirme a criação e o envio da campanha.",
-      },
+      { ok: false, error: "Confirme a criação e o envio da campanha." },
       { status: 400 }
     );
   }
@@ -100,10 +131,9 @@ export async function POST(request: Request) {
   const templateId = String(body?.template_id || "").trim();
   const remetenteId = String(body?.remetente_id || "").trim();
   const tipoAudiencia = normalizarTipoAudiencia(body?.audiencia_tipo);
-  const listaId = String(body?.lista_id || "").trim() || null;
-  const contatoIds = Array.isArray(body?.contato_ids)
-    ? body.contato_ids.map((id) => String(id || "").trim()).filter(Boolean)
-    : [];
+  const listaIds = idsUuid(body?.lista_ids, 100);
+  const contatoIds = idsUuid(body?.contato_ids, 5000);
+  const fallbacks = normalizarFallbacks(body?.variaveis_fallbacks);
   const agendadaPara = dataAgendamento(body?.agendada_para);
 
   if (!nome || !templateId || !remetenteId || !agendadaPara) {
@@ -123,9 +153,24 @@ export async function POST(request: Request) {
     );
   }
 
+  if (tipoAudiencia === "listas" && !listaIds.length) {
+    return NextResponse.json(
+      { ok: false, error: "Selecione pelo menos uma lista." },
+      { status: 400 }
+    );
+  }
+
+  if (tipoAudiencia === "contatos" && !contatoIds.length) {
+    return NextResponse.json(
+      { ok: false, error: "Selecione pelo menos um contato." },
+      { status: 400 }
+    );
+  }
+
   const [
     { data: template, error: templateError },
     { data: remetente, error: remetenteError },
+    { data: analise, error: analiseError },
   ] = await Promise.all([
     supabaseAdmin
       .from("email_templates")
@@ -139,16 +184,23 @@ export async function POST(request: Request) {
       .eq("id", remetenteId)
       .eq("status", "verificado")
       .maybeSingle(),
+    supabaseAdmin.rpc("email_marketing_analisar_audiencia", {
+      p_empresa_id: empresaId,
+      p_lista_ids: tipoAudiencia === "listas" ? listaIds : [],
+      p_incluir_todos: tipoAudiencia === "todos",
+      p_contato_ids: tipoAudiencia === "contatos" ? contatoIds : [],
+    }),
   ]);
 
-  if (templateError || remetenteError) {
+  if (templateError || remetenteError || analiseError) {
     return NextResponse.json(
       {
         ok: false,
         error:
           templateError?.message ||
           remetenteError?.message ||
-          "Não foi possível validar campanha.",
+          analiseError?.message ||
+          "Não foi possível validar a campanha.",
       },
       { status: 500 }
     );
@@ -187,65 +239,19 @@ export async function POST(request: Request) {
     );
   }
 
-  let audiencia;
+  const resumo =
+    analise && typeof analise === "object"
+      ? (analise as Record<string, unknown>)
+      : {};
+  const totalElegiveis = Number(resumo.elegiveis || 0);
 
-  try {
-    audiencia = await resolverAudienciaEmail({
-      empresaId,
-      tipo: tipoAudiencia,
-      listaId,
-      contatoIds,
-    });
-  } catch (error) {
+  if (totalElegiveis <= 0) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível resolver a audiência.",
-      },
-      { status: 400 }
-    );
-  }
-
-  if (!audiencia.contatos.length) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "A audiência selecionada não possui contatos com e-mail válido.",
-      },
-      { status: 400 }
-    );
-  }
-
-  let suprimidos: Set<string>;
-
-  try {
-    suprimidos = await buscarEmailsSuprimidos(empresaId);
-  } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível validar a lista de supressão.",
-      },
-      { status: 500 }
-    );
-  }
-
-  const totalAtivos = audiencia.contatos.filter(
-    (contato) => !suprimidos.has(contato.email)
-  ).length;
-
-  if (totalAtivos === 0) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "Todos os contatos selecionados estão suprimidos e não podem receber e-mails.",
+          "A audiência selecionada não possui destinatários elegíveis com e-mail válido.",
+        analise: resumo,
       },
       { status: 409 }
     );
@@ -271,10 +277,12 @@ export async function POST(request: Request) {
       status: "agendada",
       audiencia_json: {
         tipo: tipoAudiencia,
-        descricao: audiencia.descricao,
-        lista_id: listaId,
-        contato_ids:
-          tipoAudiencia === "contatos" ? contatoIds.slice(0, 5000) : [],
+        lista_ids: tipoAudiencia === "listas" ? listaIds : [],
+        contato_ids: tipoAudiencia === "contatos" ? contatoIds : [],
+      },
+      audiencia_resumo_json: resumo,
+      variaveis_config_json: {
+        fallbacks,
       },
       agendada_para: alvo.toISOString(),
       criado_por_usuario_id: acesso.usuario.id,
@@ -292,43 +300,61 @@ export async function POST(request: Request) {
     );
   }
 
-  const agoraIso = agora.toISOString();
-  const destinatarios = audiencia.contatos.map((contato) => {
-    const suprimido = suprimidos.has(contato.email);
-
-    return {
-      campanha_id: campanha.id,
-      contato_id: contato.id,
-      email: contato.email,
-      nome: contato.nome,
-      status: suprimido ? "suprimido" : "pendente",
-      suprimido_em: suprimido ? agoraIso : null,
-    };
-  });
-
-  for (let inicio = 0; inicio < destinatarios.length; inicio += 500) {
-    const lote = destinatarios.slice(inicio, inicio + 500);
-    const { error } = await supabaseAdmin
-      .from("email_campanha_destinatarios")
-      .insert(lote);
-
-    if (error) {
-      await supabaseAdmin
-        .from("email_campanhas")
-        .delete()
-        .eq("id", campanha.id);
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Não foi possível preparar os destinatários: " + error.message,
-        },
-        { status: 500 }
-      );
+  const { data: preparacao, error: preparacaoError } = await supabaseAdmin.rpc(
+    "email_marketing_preparar_destinatarios",
+    {
+      p_campanha_id: campanha.id,
+      p_empresa_id: empresaId,
+      p_lista_ids: tipoAudiencia === "listas" ? listaIds : [],
+      p_incluir_todos: tipoAudiencia === "todos",
+      p_contato_ids: tipoAudiencia === "contatos" ? contatoIds : [],
     }
+  );
+
+  if (preparacaoError) {
+    await supabaseAdmin
+      .from("email_campanhas")
+      .delete()
+      .eq("id", campanha.id);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Não foi possível preparar os destinatários: " +
+          preparacaoError.message,
+      },
+      { status: 500 }
+    );
   }
 
   await recalcularMetricasCampanhaEmail(campanha.id);
+
+  const preparado =
+    preparacao && typeof preparacao === "object"
+      ? (preparacao as Record<string, unknown>)
+      : {};
+  const totalProgramados = Number(preparado.total_programados || 0);
+
+  if (totalProgramados <= 0) {
+    await supabaseAdmin
+      .from("email_campanhas")
+      .update({
+        status: "falha",
+        erro: "Todos os destinatários foram removidos por supressão.",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", campanha.id);
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Todos os destinatários selecionados estão suprimidos.",
+        campanha_id: campanha.id,
+      },
+      { status: 409 }
+    );
+  }
 
   const fila = await publicarCampanhaEmailQstash({
     campanhaId: campanha.id,
@@ -372,9 +398,10 @@ export async function POST(request: Request) {
     {
       ok: true,
       campanha_id: campanha.id,
-      total_destinatarios: destinatarios.length,
-      total_suprimidos: destinatarios.length - totalAtivos,
-      total_programados: totalAtivos,
+      total_destinatarios: Number(preparado.total_destinatarios || 0),
+      total_suprimidos: Number(preparado.total_suprimidos || 0),
+      total_programados: totalProgramados,
+      analise: resumo,
       agendada_para: alvo.toISOString(),
       message:
         alvo.getTime() > Date.now() + 60_000
