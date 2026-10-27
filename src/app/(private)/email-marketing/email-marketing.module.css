@@ -1300,7 +1300,8 @@
 }
 
 .contactResult,
-.contactResultSelected {
+.contactResultSelected,
+.contactResultBlocked {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1323,21 +1324,54 @@
   background: var(--crm-primary-soft);
 }
 
+.contactResultBlocked {
+  border: 1px solid var(--crm-warning-border);
+  color: var(--crm-warning-text);
+  background: var(--crm-warning-bg);
+  cursor: not-allowed;
+}
+
+.contactBlockedBadge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-direction: row !important;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 999px;
+  color: var(--crm-warning-text);
+  background: var(--crm-surface);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.contactBlockedHint {
+  margin: -2px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .contactResult > span,
-.contactResultSelected > span {
+.contactResultSelected > span,
+.contactResultBlocked > span:first-child {
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
 .contactResult strong,
-.contactResultSelected strong {
+.contactResultSelected strong,
+.contactResultBlocked strong {
   color: var(--crm-text-strong);
   font-size: 11px;
 }
 
 .contactResult small,
-.contactResultSelected small {
+.contactResultSelected small,
+.contactResultBlocked small {
   margin-top: 2px;
   overflow: hidden;
   color: var(--crm-text-muted);
@@ -1552,12 +1586,14 @@
 }
 
 .modalCard .contactResult strong,
-.modalCard .contactResultSelected strong {
+.modalCard .contactResultSelected strong,
+.modalCard .contactResultBlocked strong {
   font-size: 14px;
 }
 
 .modalCard .contactResult small,
 .modalCard .contactResultSelected small,
+.modalCard .contactResultBlocked small,
 .modalCard .inlineMuted {
   font-size: 12px;
 }

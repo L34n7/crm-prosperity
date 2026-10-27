@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CalendarClock,
   Check,
+  Ban,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -70,6 +71,7 @@ type ContatoBusca = {
   status_lead?: string | null;
   classificacao?: string | null;
   whatsapp_profile_name?: string | null;
+  supressao_motivo?: string | null;
 };
 
 type AnaliseAudiencia = {
@@ -354,7 +356,20 @@ export default function CampanhaModal({
         const data = await response.json();
 
         if (response.ok && data?.ok) {
-          setContatos(data.contatos || []);
+          const encontrados: ContatoBusca[] = data.contatos || [];
+          setContatos(encontrados);
+          const bloqueados = new Set(
+            encontrados
+              .filter((item) => Boolean(item.supressao_motivo))
+              .map((item) => item.id)
+          );
+          if (bloqueados.size) {
+            setContatosSelecionados((atuais) => {
+              const novo = new Map(atuais);
+              for (const id of bloqueados) novo.delete(id);
+              return novo.size === atuais.size ? atuais : novo;
+            });
+          }
           setTotalPaginasContatos(
             Math.max(1, Number(data.paginacao?.total_paginas || 1))
           );
@@ -469,6 +484,7 @@ export default function CampanhaModal({
   }
 
   function alternarContato(contato: ContatoBusca) {
+    if (contato.supressao_motivo) return;
     setContatosSelecionados((atual) => {
       const novo = new Map(atual);
 
@@ -902,6 +918,10 @@ export default function CampanhaModal({
                         />
                       </label>
 
+                      <p className={styles.contactBlockedHint}>
+                         Descadastrados e bloqueados não podem ser selecionados.
+                       </p>
+
                       <div className={styles.contactResults}>
                         {carregandoContatos ? (
                           <div className={styles.inlineMuted}>
@@ -912,15 +932,30 @@ export default function CampanhaModal({
                             const selecionado = contatosSelecionados.has(
                               contato.id
                             );
+                            const motivo = String(
+                              contato.supressao_motivo || ""
+                            ).toLowerCase();
+                            const bloqueado = Boolean(motivo);
+                            const descadastrado = motivo === "descadastro";
 
                             return (
                               <button
                                 key={contato.id}
                                 type="button"
+                                disabled={bloqueado}
+                                title={
+                                  bloqueado
+                                    ? descadastrado
+                                      ? "Este contato optou por não receber e-mails."
+                                      : "Endereço bloqueado para campanhas de e-mail."
+                                    : undefined
+                                }
                                 className={
-                                  selecionado
-                                    ? styles.contactResultSelected
-                                    : styles.contactResult
+                                  bloqueado
+                                    ? styles.contactResultBlocked
+                                    : selecionado
+                                      ? styles.contactResultSelected
+                                      : styles.contactResult
                                 }
                                 onClick={() => alternarContato(contato)}
                               >
@@ -928,7 +963,14 @@ export default function CampanhaModal({
                                   <strong>{contato.nome || "Sem nome"}</strong>
                                   <small>{contato.email}</small>
                                 </span>
-                                {selecionado ? <Check size={17} /> : null}
+                                {bloqueado ? (
+                                  <span className={styles.contactBlockedBadge}>
+                                    <Ban size={13} />
+                                    {descadastrado ? "Descadastrado" : "Bloqueado"}
+                                  </span>
+                                ) : selecionado ? (
+                                  <Check size={17} />
+                                ) : null}
                               </button>
                             );
                           })

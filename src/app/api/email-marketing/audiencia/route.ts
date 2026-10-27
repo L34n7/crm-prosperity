@@ -109,6 +109,39 @@ export async function GET(request: Request) {
   }
 
   const totalBusca = Number(contatosResult.count || 0);
+  const contatos = contatosResult.data || [];
+  const emailsPagina = Array.from(
+    new Set(
+      contatos
+        .map((contato) => String(contato.email || "").trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+
+  // Consulte apenas os e-mails da página, incluindo supressões globais.
+  const supressoesResult = emailsPagina.length
+    ? await supabaseAdmin
+        .from("email_suppressions")
+        .select("email, motivo")
+        .or("empresa_id.is.null,empresa_id.eq." + empresaId)
+        .in("email", emailsPagina)
+    : { data: [], error: null };
+
+  if (supressoesResult.error) {
+    return NextResponse.json(
+      { ok: false, error: "Não foi possível verificar os bloqueios de e-mail." },
+      { status: 500 }
+    );
+  }
+
+  const motivosPorEmail = new Map<string, string>();
+  for (const supressao of supressoesResult.data || []) {
+    const email = String(supressao.email || "").trim().toLowerCase();
+    const motivo = String(supressao.motivo || "bloqueado").toLowerCase();
+    if (!motivosPorEmail.has(email) || motivo === "descadastro") {
+      motivosPorEmail.set(email, motivo);
+    }
+  }
 
   return NextResponse.json({
     ok: true,
@@ -120,7 +153,12 @@ export async function GET(request: Request) {
       total_emails: Number(lista.total_emails || 0),
       created_at: lista.created_at || null,
     })),
-    contatos: contatosResult.data || [],
+    contatos: contatos.map((contato) => ({
+      ...contato,
+      supressao_motivo:
+        motivosPorEmail.get(String(contato.email || "").trim().toLowerCase()) ||
+        null,
+    })),
     paginacao: {
       pagina,
       limite,
