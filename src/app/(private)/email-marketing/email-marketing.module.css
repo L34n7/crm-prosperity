@@ -1441,3 +1441,102 @@
     width: 100%;
   }
 }
+
+
+/* Tipografia dos modais alinhada ao padrão visual do CRM */
+.modalCard .sectionLabel {
+  font-size: 12px;
+}
+
+.modalHeader h2 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.modalHeader > div > p:last-child {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.modalCard .field > span {
+  font-size: 13px;
+}
+
+.modalCard .field > small {
+  font-size: 12px;
+}
+
+.modalCard .field input,
+.modalCard .field select,
+.modalCard .field textarea {
+  font-size: 14px;
+}
+
+.modalCard .variablesBox strong,
+.modalCard .formSectionHeader strong,
+.modalCard .compactPreview strong {
+  font-size: 14px;
+}
+
+.modalCard .variablesBox small,
+.modalCard .formSectionHeader span,
+.modalCard .compactPreview span {
+  font-size: 12px;
+}
+
+.modalCard .variableChips button {
+  font-size: 12px;
+}
+
+.modalCard .previewPanel > span {
+  font-size: 13px;
+}
+
+.modalCard .choiceButton strong,
+.modalCard .choiceActive strong {
+  font-size: 14px;
+}
+
+.modalCard .choiceButton small,
+.modalCard .choiceActive small {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.modalCard .audienceEstimate {
+  font-size: 12px !important;
+}
+
+.modalCard .selectedContacts button {
+  font-size: 12px;
+}
+
+.modalCard .contactResult strong,
+.modalCard .contactResultSelected strong {
+  font-size: 14px;
+}
+
+.modalCard .contactResult small,
+.modalCard .contactResultSelected small,
+.modalCard .inlineMuted {
+  font-size: 12px;
+}
+
+.modalCard .campaignSummary span {
+  font-size: 11px;
+}
+
+.modalCard .campaignSummary strong {
+  font-size: 14px;
+}
+
+.modalCard .complianceNote {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.modalCard .primaryButton,
+.modalCard .secondaryButton,
+.modalCard .dangerButton {
+  font-size: 14px;
+}
