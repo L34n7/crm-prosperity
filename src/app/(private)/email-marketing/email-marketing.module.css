@@ -654,3 +654,790 @@
     width: 100%;
   }
 }
+
+
+.toolbar {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tableWrap {
+  margin-top: 18px;
+  overflow-x: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+}
+
+.dataTable {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+  background: var(--crm-surface);
+}
+
+.dataTable th,
+.dataTable td {
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--crm-border);
+  text-align: left;
+  vertical-align: middle;
+  font-size: 12px;
+}
+
+.dataTable th {
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-soft);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dataTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dataTable td > strong,
+.dataTable td > small {
+  display: block;
+}
+
+.dataTable td > strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.dataTable td > small {
+  max-width: 240px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.statusSuccess,
+.statusProcessing,
+.statusError {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.statusSuccess {
+  border: 1px solid var(--crm-primary-border);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.statusProcessing {
+  border: 1px solid var(--crm-border-strong);
+  color: var(--crm-text-strong);
+  background: var(--crm-surface-soft);
+}
+
+.statusError {
+  border: 1px solid var(--crm-border-strong);
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+}
+
+.errorText {
+  color: var(--crm-text-strong) !important;
+  white-space: normal !important;
+}
+
+.templateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.templateCard {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.templateCardIcon {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.templateCardBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.templateCardBody strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.templateCardBody span,
+.templateCardBody small {
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.templateCardBody span {
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.templateCardBody small {
+  margin-top: 5px;
+  font-size: 10px;
+}
+
+.iconButton {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  color: var(--crm-text-strong);
+  background: var(--crm-surface-soft);
+}
+
+.senderList {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.senderRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface-soft);
+}
+
+.senderRow > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.senderRow strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.senderRow span,
+.senderRow small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.senderRow small {
+  margin-top: 3px;
+}
+
+.senderForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface-soft);
+}
+
+.senderForm > small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.inlineActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modalOverlay {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 52%);
+  backdrop-filter: blur(3px);
+}
+
+.modalCard {
+  width: min(1080px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 20px;
+  background: var(--crm-surface);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.templateModal {
+  width: min(1120px, 100%);
+}
+
+.campaignModal {
+  width: min(920px, 100%);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.modalHeader h2 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 20px;
+}
+
+.modalHeader > div > p:last-child {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.modalBody {
+  max-height: calc(100vh - 155px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px 22px;
+}
+
+.formGridTwo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field > span {
+  color: var(--crm-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.field > small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  outline: none;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.field input,
+.field select {
+  min-height: 42px;
+  padding: 0 11px;
+}
+
+.field textarea {
+  padding: 12px;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.variablesBox {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+}
+
+.variablesBox > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.variablesBox strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.variablesBox small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.variableChips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.variableChips button {
+  padding: 5px 8px;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  color: var(--crm-primary-text);
+  background: var(--crm-surface);
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.editorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.85fr);
+  gap: 12px;
+}
+
+.htmlEditor {
+  min-height: 380px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  line-height: 1.55;
+}
+
+.previewPanel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.previewPanel > span {
+  color: var(--crm-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.previewPanel iframe {
+  width: 100%;
+  min-height: 380px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.modalFooterActions {
+  display: flex;
+  gap: 8px;
+}
+
+.dangerButton {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  color: var(--crm-text-strong);
+  background: var(--crm-surface);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dangerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.compactPreview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.compactPreview > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.compactPreview strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.compactPreview span {
+  margin-top: 2px;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.formSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.formSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.formSectionHeader > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.formSectionHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.formSectionHeader span {
+  margin-top: 2px;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+}
+
+.audienceEstimate {
+  margin: 0 !important;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--crm-primary-text) !important;
+  background: var(--crm-primary-soft);
+  font-size: 10px !important;
+  font-weight: 900;
+}
+
+.choiceGrid,
+.choiceGridTwo {
+  display: grid;
+  gap: 8px;
+}
+
+.choiceGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.choiceGridTwo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.choiceButton,
+.choiceActive {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.choiceButton {
+  border: 1px solid var(--crm-border);
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+}
+
+.choiceActive {
+  border: 1px solid var(--crm-primary-strong);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.choiceButton strong,
+.choiceActive strong {
+  margin-top: 3px;
+  color: var(--crm-text-strong);
+  font-size: 11px;
+}
+
+.choiceButton small,
+.choiceActive small {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.contactPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.selectedContacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.selectedContacts button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.contactResults {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.contactResult,
+.contactResultSelected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.contactResult {
+  border: 1px solid var(--crm-border);
+  color: var(--crm-text);
+  background: var(--crm-surface);
+}
+
+.contactResultSelected {
+  border: 1px solid var(--crm-primary-strong);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.contactResult > span,
+.contactResultSelected > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.contactResult strong,
+.contactResultSelected strong {
+  color: var(--crm-text-strong);
+  font-size: 11px;
+}
+
+.contactResult small,
+.contactResultSelected small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--crm-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+}
+
+.inlineMuted {
+  padding: 18px 10px;
+  color: var(--crm-text-muted);
+  text-align: center;
+  font-size: 11px;
+}
+
+.campaignSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.campaignSummary > div {
+  display: flex;
+  flex-direction: column;
+  padding: 11px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface-soft);
+}
+
+.campaignSummary span {
+  color: var(--crm-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.campaignSummary strong {
+  margin-top: 3px;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.complianceNote {
+  padding: 10px 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-soft);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .templateGrid,
+  .editorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .choiceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .previewPanel iframe {
+    min-height: 320px;
+  }
+}
+
+@media (max-width: 640px) {
+  .modalOverlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modalCard {
+    max-height: 94vh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .modalBody {
+    max-height: calc(94vh - 104px);
+    padding: 16px;
+  }
+
+  .modalHeader {
+    padding: 16px;
+  }
+
+  .formGridTwo,
+  .choiceGridTwo,
+  .campaignSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .variablesBox,
+  .modalFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .variableChips {
+    justify-content: flex-start;
+  }
+
+  .modalFooterActions,
+  .modalFooterActions .primaryButton,
+  .modalFooterActions .secondaryButton {
+    width: 100%;
+  }
+
+  .senderRow {
+    grid-template-columns: 1fr;
+  }
+
+  .inlineActions {
+    flex-direction: column-reverse;
+  }
+
+  .inlineActions .primaryButton,
+  .inlineActions .secondaryButton {
+    width: 100%;
+  }
+}

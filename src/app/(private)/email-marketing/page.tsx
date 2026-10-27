@@ -1,6 +1,12 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   BarChart3,
   CheckCircle2,
@@ -9,6 +15,7 @@ import {
   Mail,
   MailPlus,
   MousePointerClick,
+  Pencil,
   RefreshCw,
   Search,
   Send,
@@ -16,6 +23,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Header from "@/components/Header";
+import CampanhaModal, {
+  type EmailListaAudiencia,
+  type EmailRemetenteItem,
+} from "./CampanhaModal";
+import TemplateModal, { type EmailTemplateItem } from "./TemplateModal";
 import styles from "./email-marketing.module.css";
 
 type AbaEmailMarketing = "campanhas" | "templates" | "remetentes";
@@ -40,6 +52,36 @@ type MetricasEmailMarketing = {
   abertos: number;
   cliques: number;
   taxa_abertura: number | null;
+};
+
+type CampanhaItem = {
+  id: string;
+  nome: string;
+  assunto: string;
+  status: string;
+  audiencia_json: Record<string, unknown> | null;
+  agendada_para: string | null;
+  iniciada_em: string | null;
+  finalizada_em: string | null;
+  total_destinatarios: number;
+  total_enviados: number;
+  total_entregues: number;
+  total_abertos: number;
+  total_cliques: number;
+  total_bounces: number;
+  total_reclamacoes: number;
+  total_descadastros: number;
+  erro: string | null;
+  created_at: string;
+  updated_at: string;
+  email_remetentes:
+    | { nome?: string; email?: string }
+    | Array<{ nome?: string; email?: string }>
+    | null;
+  email_templates:
+    | { nome?: string }
+    | Array<{ nome?: string }>
+    | null;
 };
 
 const abas: Array<{
@@ -76,6 +118,45 @@ const metricasIniciais: MetricasEmailMarketing = {
   taxa_abertura: null,
 };
 
+function relacaoUnica<T>(valor: T | T[] | null | undefined): T | null {
+  return Array.isArray(valor) ? valor[0] || null : valor || null;
+}
+
+function dataHora(valor: string | null) {
+  if (!valor) return "—";
+
+  const data = new Date(valor);
+
+  if (!Number.isFinite(data.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(data);
+}
+
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    rascunho: "Rascunho",
+    agendada: "Agendada",
+    processando: "Enviando",
+    enviada: "Enviada",
+    pausada: "Pausada",
+    cancelada: "Cancelada",
+    falha: "Falha",
+  };
+
+  return labels[status] || status;
+}
+
+function statusClass(status: string) {
+  if (status === "enviada") return styles.statusSuccess;
+  if (status === "processando") return styles.statusProcessing;
+  if (status === "falha" || status === "cancelada") return styles.statusError;
+  return styles.statusPending;
+}
+
 export default function EmailMarketingPage() {
   const [aba, setAba] = useState<AbaEmailMarketing>("campanhas");
   const [busca, setBusca] = useState("");
@@ -83,47 +164,142 @@ export default function EmailMarketingPage() {
     useState<ConfiguracaoEmailMarketing | null>(null);
   const [metricas, setMetricas] =
     useState<MetricasEmailMarketing>(metricasIniciais);
-  const [carregandoConfiguracao, setCarregandoConfiguracao] = useState(true);
+  const [templates, setTemplates] = useState<EmailTemplateItem[]>([]);
+  const [remetentes, setRemetentes] = useState<EmailRemetenteItem[]>([]);
+  const [campanhas, setCampanhas] = useState<CampanhaItem[]>([]);
+  const [listas, setListas] = useState<EmailListaAudiencia[]>([]);
+  const [totalContatosComEmail, setTotalContatosComEmail] = useState(0);
+  const [carregando, setCarregando] = useState(true);
   const [erroConfiguracao, setErroConfiguracao] = useState("");
+  const [templateModal, setTemplateModal] = useState(false);
+  const [templateEditando, setTemplateEditando] =
+    useState<EmailTemplateItem | null>(null);
+  const [campanhaModal, setCampanhaModal] = useState(false);
   const [emailTeste, setEmailTeste] = useState("");
   const [enviandoTeste, setEnviandoTeste] = useState(false);
   const [feedbackTeste, setFeedbackTeste] = useState<{
     tipo: "sucesso" | "erro";
     mensagem: string;
   } | null>(null);
+  const [remetenteEditando, setRemetenteEditando] =
+    useState<EmailRemetenteItem | null>(null);
+  const [remetenteNome, setRemetenteNome] = useState("");
+  const [remetenteEmail, setRemetenteEmail] = useState("");
+  const [salvandoRemetente, setSalvandoRemetente] = useState(false);
+  const [feedbackRemetente, setFeedbackRemetente] = useState("");
 
-  const carregarConfiguracao = useCallback(async () => {
-    setCarregandoConfiguracao(true);
+  const carregarDados = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCarregando(true);
     setErroConfiguracao("");
 
     try {
-      const response = await fetch("/api/email-marketing/status", {
-        cache: "no-store",
-      });
-      const data = await response.json();
+      const [statusRes, templatesRes, remetentesRes, campanhasRes, audienciaRes] =
+        await Promise.all([
+          fetch("/api/email-marketing/status", { cache: "no-store" }),
+          fetch("/api/email-marketing/templates", { cache: "no-store" }),
+          fetch("/api/email-marketing/remetentes", { cache: "no-store" }),
+          fetch("/api/email-marketing/campanhas", { cache: "no-store" }),
+          fetch("/api/email-marketing/audiencia?limite=1", {
+            cache: "no-store",
+          }),
+        ]);
 
-      if (!response.ok || !data?.ok) {
+      const [statusData, templatesData, remetentesData, campanhasData, audienciaData] =
+        await Promise.all([
+          statusRes.json(),
+          templatesRes.json(),
+          remetentesRes.json(),
+          campanhasRes.json(),
+          audienciaRes.json(),
+        ]);
+
+      const respostas = [
+        [statusRes, statusData],
+        [templatesRes, templatesData],
+        [remetentesRes, remetentesData],
+        [campanhasRes, campanhasData],
+        [audienciaRes, audienciaData],
+      ] as const;
+
+      const falha = respostas.find(
+        ([response, data]) => !response.ok || !data?.ok
+      );
+
+      if (falha) {
         throw new Error(
-          data?.error || "Não foi possível carregar a configuração de e-mail."
+          falha[1]?.error || "Não foi possível carregar o E-mail Marketing."
         );
       }
 
-      setConfiguracao(data.configuracao || null);
-      setMetricas(data.metricas || metricasIniciais);
+      setConfiguracao(statusData.configuracao || null);
+      setMetricas(statusData.metricas || metricasIniciais);
+      setTemplates(templatesData.templates || []);
+      setRemetentes(remetentesData.remetentes || []);
+      setCampanhas(campanhasData.campanhas || []);
+      setListas(audienciaData.listas || []);
+      setTotalContatosComEmail(
+        Number(audienciaData.total_contatos_com_email || 0)
+      );
     } catch (error) {
       setErroConfiguracao(
         error instanceof Error
           ? error.message
-          : "Não foi possível carregar a configuração de e-mail."
+          : "Não foi possível carregar o E-mail Marketing."
       );
     } finally {
-      setCarregandoConfiguracao(false);
+      if (!silencioso) setCarregando(false);
     }
   }, []);
 
   useEffect(() => {
-    void carregarConfiguracao();
-  }, [carregarConfiguracao]);
+    void carregarDados();
+  }, [carregarDados]);
+
+  const campanhaEmAndamento = campanhas.some((item) =>
+    ["agendada", "processando"].includes(item.status)
+  );
+
+  useEffect(() => {
+    if (!campanhaEmAndamento) return;
+
+    const interval = window.setInterval(() => {
+      void carregarDados(true);
+    }, 8000);
+
+    return () => window.clearInterval(interval);
+  }, [campanhaEmAndamento, carregarDados]);
+
+  const provedorConfigurado = Boolean(configuracao?.provedor_configurado);
+  const remetenteVerificado = configuracao?.status === "verificado";
+
+  const campanhasFiltradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    if (!termo) return campanhas;
+
+    return campanhas.filter(
+      (item) =>
+        item.nome.toLowerCase().includes(termo) ||
+        item.assunto.toLowerCase().includes(termo) ||
+        statusLabel(item.status).toLowerCase().includes(termo)
+    );
+  }, [busca, campanhas]);
+
+  function abrirNovaCampanha() {
+    if (!provedorConfigurado) {
+      setAba("remetentes");
+      return;
+    }
+
+    if (!templates.length) {
+      setAba("templates");
+      setTemplateEditando(null);
+      setTemplateModal(true);
+      return;
+    }
+
+    setCampanhaModal(true);
+  }
 
   async function enviarTeste(event: FormEvent) {
     event.preventDefault();
@@ -157,7 +333,7 @@ export default function EmailMarketingPage() {
         tipo: "sucesso",
         mensagem: data.message || "E-mail de teste enviado com sucesso.",
       });
-      await carregarConfiguracao();
+      await carregarDados(true);
     } catch (error) {
       setFeedbackTeste({
         tipo: "erro",
@@ -171,8 +347,50 @@ export default function EmailMarketingPage() {
     }
   }
 
-  const provedorConfigurado = Boolean(configuracao?.provedor_configurado);
-  const remetenteVerificado = configuracao?.status === "verificado";
+  function editarRemetente(item: EmailRemetenteItem) {
+    setRemetenteEditando(item);
+    setRemetenteNome(item.nome);
+    setRemetenteEmail(item.email);
+    setFeedbackRemetente("");
+  }
+
+  async function salvarRemetente(event: FormEvent) {
+    event.preventDefault();
+
+    if (!remetenteEditando) return;
+
+    setSalvandoRemetente(true);
+    setFeedbackRemetente("");
+
+    try {
+      const response = await fetch("/api/email-marketing/remetentes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: remetenteEditando.id,
+          nome: remetenteNome.trim(),
+          email: remetenteEmail.trim(),
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível salvar o remetente.");
+      }
+
+      setFeedbackRemetente("Remetente atualizado com sucesso.");
+      setRemetenteEditando(null);
+      await carregarDados(true);
+    } catch (error) {
+      setFeedbackRemetente(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o remetente."
+      );
+    } finally {
+      setSalvandoRemetente(false);
+    }
+  }
 
   return (
     <main className={styles.page}>
@@ -191,8 +409,8 @@ export default function EmailMarketingPage() {
             <p className={styles.eyebrow}>NOVO CANAL</p>
             <h1>Campanhas de e-mail integradas ao seu CRM</h1>
             <p>
-              Use os contatos já cadastrados, prepare campanhas e acompanhe
-              entregas, aberturas, cliques e descadastros em um só lugar.
+              Use contatos e listas já cadastrados, envie agora ou agende e
+              acompanhe entrega, abertura, cliques e descadastros.
             </p>
           </div>
 
@@ -200,12 +418,8 @@ export default function EmailMarketingPage() {
             <button
               type="button"
               className={styles.primaryButton}
-              disabled
-              title={
-                provedorConfigurado
-                  ? "O provedor já está pronto. A criação de campanhas será habilitada na próxima etapa."
-                  : "Configure o provedor de envio primeiro"
-              }
+              onClick={abrirNovaCampanha}
+              disabled={carregando}
             >
               <MailPlus size={18} />
               Nova campanha
@@ -222,6 +436,10 @@ export default function EmailMarketingPage() {
           </div>
         </section>
 
+        {erroConfiguracao ? (
+          <div className={styles.feedbackError}>{erroConfiguracao}</div>
+        ) : null}
+
         <section className={styles.metricsGrid}>
           <article className={styles.metricCard}>
             <span className={styles.metricIcon}>
@@ -230,11 +448,7 @@ export default function EmailMarketingPage() {
             <div>
               <span>Envios no mês</span>
               <strong>{metricas.enviados}</strong>
-              <small>
-                {metricas.enviados
-                  ? "Mensagens registradas no Resend"
-                  : "Nenhum envio registrado"}
-              </small>
+              <small>Mensagens aceitas pelo provedor</small>
             </div>
           </article>
 
@@ -247,9 +461,9 @@ export default function EmailMarketingPage() {
               <strong>{metricas.entregues}</strong>
               <small>
                 {metricas.enviados
-                  ? `${Math.round(
+                  ? Math.round(
                       (metricas.entregues / Math.max(metricas.enviados, 1)) * 100
-                    )}% dos envios`
+                    ) + "% dos envios"
                   : "Sem entregas registradas"}
               </small>
             </div>
@@ -264,11 +478,11 @@ export default function EmailMarketingPage() {
               <strong>
                 {metricas.taxa_abertura === null
                   ? "—"
-                  : `${metricas.taxa_abertura}%`}
+                  : metricas.taxa_abertura + "%"}
               </strong>
               <small>
                 {metricas.abertos
-                  ? `${metricas.abertos} abertura(s) registrada(s)`
+                  ? metricas.abertos + " abertura(s)"
                   : "Sem dados ainda"}
               </small>
             </div>
@@ -281,11 +495,7 @@ export default function EmailMarketingPage() {
             <div>
               <span>Cliques</span>
               <strong>{metricas.cliques}</strong>
-              <small>
-                {metricas.cliques
-                  ? "Interações registradas pelo webhook"
-                  : "Sem interações registradas"}
-              </small>
+              <small>Interações registradas pelo webhook</small>
             </div>
           </article>
         </section>
@@ -322,19 +532,16 @@ export default function EmailMarketingPage() {
                   <p className={styles.sectionLabel}>CAMPANHAS</p>
                   <h2>Campanhas de e-mail</h2>
                   <p>
-                    Envie para listas e segmentos usando os contatos do CRM.
+                    Envie para todos os contatos com e-mail, listas ou contatos
+                    selecionados.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   className={styles.primaryButton}
-                  disabled
-                  title={
-                    provedorConfigurado
-                      ? "A criação de campanhas será implementada na próxima etapa."
-                      : "Configure o provedor de envio primeiro"
-                  }
+                  onClick={abrirNovaCampanha}
+                  disabled={carregando}
                 >
                   <MailPlus size={17} />
                   Criar campanha
@@ -351,27 +558,87 @@ export default function EmailMarketingPage() {
                     aria-label="Buscar campanha"
                   />
                 </label>
-              </div>
 
-              <div className={styles.emptyState}>
-                <span className={styles.emptyIcon}>
-                  <Send size={27} />
-                </span>
-                <h3>Nenhuma campanha criada</h3>
-                <p>
-                  {provedorConfigurado
-                    ? "O provedor já está conectado e validado. O próximo passo é habilitar a criação e o processamento das campanhas."
-                    : "Configure o provedor de envio para começar a criar campanhas de e-mail com os contatos do CRM."}
-                </p>
                 <button
                   type="button"
                   className={styles.secondaryButton}
-                  onClick={() => setAba("remetentes")}
+                  onClick={() => void carregarDados()}
+                  disabled={carregando}
                 >
-                  <Settings2 size={17} />
-                  {provedorConfigurado ? "Ver configuração" : "Configurar provedor"}
+                  <RefreshCw size={16} />
+                  Atualizar
                 </button>
               </div>
+
+              {campanhasFiltradas.length ? (
+                <div className={styles.tableWrap}>
+                  <table className={styles.dataTable}>
+                    <thead>
+                      <tr>
+                        <th>Campanha</th>
+                        <th>Status</th>
+                        <th>Destinatários</th>
+                        <th>Enviados</th>
+                        <th>Entregues</th>
+                        <th>Abertos</th>
+                        <th>Cliques</th>
+                        <th>Envio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campanhasFiltradas.map((campanha) => (
+                        <tr key={campanha.id}>
+                          <td>
+                            <strong>{campanha.nome}</strong>
+                            <small>{campanha.assunto}</small>
+                          </td>
+                          <td>
+                            <span className={statusClass(campanha.status)}>
+                              {statusLabel(campanha.status)}
+                            </span>
+                            {campanha.erro ? (
+                              <small className={styles.errorText}>
+                                {campanha.erro}
+                              </small>
+                            ) : null}
+                          </td>
+                          <td>{campanha.total_destinatarios}</td>
+                          <td>{campanha.total_enviados}</td>
+                          <td>{campanha.total_entregues}</td>
+                          <td>{campanha.total_abertos}</td>
+                          <td>{campanha.total_cliques}</td>
+                          <td>
+                            <strong>{dataHora(campanha.agendada_para)}</strong>
+                            <small>
+                              {relacaoUnica(campanha.email_remetentes)?.email ||
+                                ""}
+                            </small>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={styles.emptyState}>
+                  <span className={styles.emptyIcon}>
+                    <Send size={27} />
+                  </span>
+                  <h3>Nenhuma campanha criada</h3>
+                  <p>
+                    Crie um template e depois escolha os contatos que receberão
+                    sua primeira campanha.
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={abrirNovaCampanha}
+                  >
+                    <MailPlus size={17} />
+                    Criar primeira campanha
+                  </button>
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -382,31 +649,75 @@ export default function EmailMarketingPage() {
                   <p className={styles.sectionLabel}>TEMPLATES</p>
                   <h2>Modelos de e-mail</h2>
                   <p>
-                    Crie modelos reutilizáveis para campanhas e automações.
+                    Crie conteúdo reutilizável com variáveis dos contatos do
+                    CRM.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   className={styles.primaryButton}
-                  disabled
-                  title="A criação de templates será habilitada junto com as campanhas."
+                  onClick={() => {
+                    setTemplateEditando(null);
+                    setTemplateModal(true);
+                  }}
                 >
                   <FileText size={17} />
                   Novo template
                 </button>
               </div>
 
-              <div className={styles.emptyState}>
-                <span className={styles.emptyIcon}>
-                  <FileText size={27} />
-                </span>
-                <h3>Nenhum template criado</h3>
-                <p>
-                  Os templates poderão usar variáveis do CRM, como nome,
-                  e-mail, campanha, origem e outros dados do contato.
-                </p>
-              </div>
+              {templates.length ? (
+                <div className={styles.templateGrid}>
+                  {templates.map((template) => (
+                    <article className={styles.templateCard} key={template.id}>
+                      <div className={styles.templateCardIcon}>
+                        <FileText size={19} />
+                      </div>
+                      <div className={styles.templateCardBody}>
+                        <strong>{template.nome}</strong>
+                        <span>{template.assunto}</span>
+                        <small>
+                          Atualizado em {dataHora(template.updated_at)}
+                        </small>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.iconButton}
+                        onClick={() => {
+                          setTemplateEditando(template);
+                          setTemplateModal(true);
+                        }}
+                        aria-label={"Editar " + template.nome}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.emptyState}>
+                  <span className={styles.emptyIcon}>
+                    <FileText size={27} />
+                  </span>
+                  <h3>Nenhum template criado</h3>
+                  <p>
+                    Comece criando o conteúdo que será usado na sua primeira
+                    campanha.
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={() => {
+                      setTemplateEditando(null);
+                      setTemplateModal(true);
+                    }}
+                  >
+                    <FileText size={17} />
+                    Criar template
+                  </button>
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -418,8 +729,8 @@ export default function EmailMarketingPage() {
                     <p className={styles.sectionLabel}>PROVEDOR DE ENVIO</p>
                     <h2>Resend</h2>
                     <p>
-                      O provedor é responsável pelo envio e pelos eventos de
-                      entrega, abertura, clique, bounce e reclamação.
+                      A integração está vinculada ao domínio verificado usado
+                      durante os testes administrativos.
                     </p>
                   </div>
 
@@ -430,17 +741,13 @@ export default function EmailMarketingPage() {
                         : styles.statusPending
                     }
                   >
-                    {carregandoConfiguracao
+                    {carregando
                       ? "Verificando..."
                       : provedorConfigurado
                         ? "Conectado"
                         : "Não conectado"}
                   </span>
                 </div>
-
-                {erroConfiguracao ? (
-                  <div className={styles.feedbackError}>{erroConfiguracao}</div>
-                ) : null}
 
                 <div className={styles.providerCard}>
                   <div className={styles.providerLogo}>
@@ -451,29 +758,119 @@ export default function EmailMarketingPage() {
                     <strong>Resend</strong>
                     <span>
                       {provedorConfigurado
-                        ? `${configuracao?.remetente_nome || "CRM Prosperity"} <${configuracao?.remetente_email || ""}>`
-                        : "Aguardando API Key e remetente verificado."}
+                        ? (configuracao?.remetente_nome || "CRM Prosperity") +
+                          " <" +
+                          (configuracao?.remetente_email || "") +
+                          ">"
+                        : "Aguardando configuração."}
                     </span>
                   </div>
 
                   <button
                     type="button"
                     className={styles.secondaryButton}
-                    onClick={() => void carregarConfiguracao()}
-                    disabled={carregandoConfiguracao}
+                    onClick={() => void carregarDados()}
+                    disabled={carregando}
                   >
                     <RefreshCw size={16} />
                     Atualizar
                   </button>
                 </div>
 
+                <div className={styles.senderList}>
+                  {remetentes.map((item) => (
+                    <div className={styles.senderRow} key={item.id}>
+                      <div>
+                        <strong>{item.nome}</strong>
+                        <span>{item.email}</span>
+                        <small>{item.dominio}</small>
+                      </div>
+                      <span
+                        className={
+                          item.status === "verificado"
+                            ? styles.statusReady
+                            : styles.statusPending
+                        }
+                      >
+                        {item.status === "verificado"
+                          ? "Verificado"
+                          : "Pendente"}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => editarRemetente(item)}
+                      >
+                        <Pencil size={15} />
+                        Editar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {remetenteEditando ? (
+                  <form className={styles.senderForm} onSubmit={salvarRemetente}>
+                    <div className={styles.formGridTwo}>
+                      <label className={styles.field}>
+                        <span>Nome exibido</span>
+                        <input
+                          value={remetenteNome}
+                          onChange={(event) =>
+                            setRemetenteNome(event.target.value)
+                          }
+                          placeholder="CRM Prosperity"
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        <span>E-mail remetente</span>
+                        <input
+                          type="email"
+                          value={remetenteEmail}
+                          onChange={(event) =>
+                            setRemetenteEmail(event.target.value)
+                          }
+                          placeholder="marketing@email.crmprosperity.com"
+                        />
+                      </label>
+                    </div>
+                    <small>
+                      O endereço precisa permanecer dentro do domínio verificado
+                      {remetenteEditando.dominio
+                        ? " " + remetenteEditando.dominio + "."
+                        : "."}
+                    </small>
+                    <div className={styles.inlineActions}>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => setRemetenteEditando(null)}
+                        disabled={salvandoRemetente}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className={styles.primaryButton}
+                        disabled={salvandoRemetente}
+                      >
+                        {salvandoRemetente ? "Salvando..." : "Salvar remetente"}
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
+
+                {feedbackRemetente ? (
+                  <div className={styles.feedbackSuccess}>
+                    {feedbackRemetente}
+                  </div>
+                ) : null}
+
                 <form className={styles.testCard} onSubmit={enviarTeste}>
                   <div className={styles.testCardHeader}>
                     <div>
                       <strong>Teste de envio</strong>
                       <span>
-                        Envie uma mensagem real pelo domínio configurado para
-                        validar a integração ponta a ponta.
+                        Envie uma mensagem real pelo domínio configurado.
                       </span>
                     </div>
                     <span
@@ -528,8 +925,8 @@ export default function EmailMarketingPage() {
                     <p className={styles.sectionLabel}>DOMÍNIO DE ENVIO</p>
                     <h2>Autenticação do remetente</h2>
                     <p>
-                      Configuração usada nos testes administrativos deste
-                      módulo.
+                      O domínio atual já está validado. Novos domínios serão
+                      habilitados quando o módulo for liberado para clientes.
                     </p>
                   </div>
                 </div>
@@ -585,8 +982,7 @@ export default function EmailMarketingPage() {
                     <div>
                       <strong>DMARC</strong>
                       <small>
-                        Recomendado para reforçar reputação e proteção do
-                        domínio
+                        Recomendado para reforçar reputação e proteção.
                       </small>
                     </div>
                     <em>Recomendado</em>
@@ -597,6 +993,28 @@ export default function EmailMarketingPage() {
           ) : null}
         </section>
       </div>
+
+      {templateModal ? (
+        <TemplateModal
+          template={templateEditando}
+          onClose={() => {
+            setTemplateModal(false);
+            setTemplateEditando(null);
+          }}
+          onSaved={() => carregarDados(true)}
+        />
+      ) : null}
+
+      {campanhaModal ? (
+        <CampanhaModal
+          templates={templates}
+          remetentes={remetentes}
+          listas={listas}
+          totalContatosComEmail={totalContatosComEmail}
+          onClose={() => setCampanhaModal(false)}
+          onCreated={() => carregarDados(true)}
+        />
+      ) : null}
     </main>
   );
 }

@@ -4,6 +4,7 @@ import {
   getEmailMarketingWebhookSecret,
 } from "@/lib/email-marketing/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { recalcularMetricasCampanhaEmail } from "@/lib/email-marketing/campanhas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -58,7 +59,7 @@ function deveAtualizarStatus(statusAtual: string, tipo: string) {
 
 async function registrarSupressao(params: {
   email: string;
-  motivo: "bounce" | "reclamacao";
+  motivo: "bounce" | "reclamacao" | "manual";
   providerMessageId: string;
   empresaId: string | null;
   payload: ResendWebhookEvent;
@@ -262,14 +263,25 @@ export async function POST(request: Request) {
           "[EMAIL MARKETING] Falha ao atualizar destinatário:",
           atualizarError
         );
+      } else if (destinatario.campanha_id) {
+        await recalcularMetricasCampanhaEmail(destinatario.campanha_id);
       }
     }
   }
 
-  if (tipo === "email.bounced" || tipo === "email.complained") {
+  if (
+    tipo === "email.bounced" ||
+    tipo === "email.complained" ||
+    tipo === "email.suppressed"
+  ) {
     await registrarSupressao({
       email: destinatarioEmail || destinatario?.email || "",
-      motivo: tipo === "email.complained" ? "reclamacao" : "bounce",
+      motivo:
+        tipo === "email.complained"
+          ? "reclamacao"
+          : tipo === "email.suppressed"
+            ? "manual"
+            : "bounce",
       providerMessageId,
       empresaId,
       payload: evento,
