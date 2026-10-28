@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
-import { getEmailMarketingResend } from "@/lib/email-marketing/admin";
+import {
+  buscarIntegracaoEmailMarketing,
+  getEmailMarketingResend,
+} from "@/lib/email-marketing/admin";
 import {
   buscarEmailsSuprimidos,
   recalcularMetricasCampanhaEmail,
@@ -313,10 +316,14 @@ export async function POST(request: Request) {
           .maybeSingle(),
       ]);
 
+    const integracaoEmail = await buscarIntegracaoEmailMarketing(campanha.empresa_id);
+    const contaIndividual = Boolean(integracaoEmail?.api_key_criptografada);
     if (
       remetenteError || !remetente || remetente.status !== "verificado" ||
       (remetente.empresa_id !== campanha.empresa_id &&
-        !(campanha.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" && !remetente.empresa_id))
+        !(campanha.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
+          !remetente.empresa_id && !contaIndividual)) ||
+      (contaIndividual && remetente.dominio !== integracaoEmail?.dominio)
     ) {
       throw new Error(
         remetenteError?.message || "Remetente da campanha não está verificado."

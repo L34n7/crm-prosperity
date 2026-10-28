@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { validarAcessoEmailMarketing } from "@/lib/email-marketing/admin";
+import {
+  buscarIntegracaoEmailMarketing,
+  validarAcessoEmailMarketing,
+} from "@/lib/email-marketing/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -29,6 +32,11 @@ export async function GET() {
     );
   }
 
+  const integracao = await buscarIntegracaoEmailMarketing(acesso.usuario.empresa_id);
+  const permitirLegado =
+    acesso.usuario.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
+    !integracao?.api_key_criptografada;
+
   const { data, error } = await supabaseAdmin
     .from("email_remetentes")
     .select(
@@ -37,7 +45,7 @@ export async function GET() {
     .or(
       "empresa_id.eq." +
         acesso.usuario.empresa_id +
-        (acesso.usuario.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376"
+        (permitirLegado
           ? ",and(empresa_id.is.null,escopo.eq.sistema)" : "")
     )
     .order("is_default", { ascending: false })
@@ -105,10 +113,15 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const integracao = await buscarIntegracaoEmailMarketing(acesso.usuario.empresa_id);
+  const permitirLegado =
+    acesso.usuario.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
+    !integracao?.api_key_criptografada;
   const permitido =
-    remetente.empresa_id === acesso.usuario.empresa_id ||
-    (acesso.usuario.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
-      remetente.empresa_id === null && remetente.escopo === "sistema");
+    (remetente.empresa_id === acesso.usuario.empresa_id &&
+      (!integracao?.api_key_criptografada ||
+        remetente.dominio === integracao.dominio)) ||
+    (permitirLegado && remetente.empresa_id === null && remetente.escopo === "sistema");
 
   if (!permitido) {
     return NextResponse.json(

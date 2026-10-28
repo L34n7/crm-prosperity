@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { validarAcessoEmailMarketing } from "@/lib/email-marketing/admin";
+import {
+  buscarIntegracaoEmailMarketing,
+  validarAcessoEmailMarketing,
+} from "@/lib/email-marketing/admin";
 import { recalcularMetricasCampanhaEmail } from "@/lib/email-marketing/campanhas";
 import { publicarCampanhaEmailQstash } from "@/lib/email-marketing/fila";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -218,10 +221,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const integracaoEmail = await buscarIntegracaoEmailMarketing(empresaId);
+  const usaContaIndividual = Boolean(integracaoEmail?.api_key_criptografada);
   const remetenteAcessivel =
     remetente &&
-    (remetente.empresa_id === empresaId ||
-      (empresaId === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
+    ((remetente.empresa_id === empresaId &&
+      (!usaContaIndividual || remetente.dominio === integracaoEmail?.dominio)) ||
+      (!usaContaIndividual &&
+        empresaId === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
         remetente.empresa_id === null && remetente.escopo === "sistema"));
 
   if (!remetenteAcessivel) {
