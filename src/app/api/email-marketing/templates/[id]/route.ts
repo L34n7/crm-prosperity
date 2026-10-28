@@ -28,7 +28,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  const acesso = await validarAcessoEmailMarketing();
+  const acesso = await validarAcessoEmailMarketing("email_marketing.templates");
 
   if (!acesso.ok) {
     return NextResponse.json(
@@ -105,7 +105,7 @@ export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  const acesso = await validarAcessoEmailMarketing();
+  const acesso = await validarAcessoEmailMarketing("email_marketing.templates");
 
   if (!acesso.ok) {
     return NextResponse.json(

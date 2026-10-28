@@ -303,7 +303,7 @@ export async function POST(request: Request) {
       await Promise.all([
         supabaseAdmin
           .from("email_remetentes")
-          .select("id, nome, email, dominio, status")
+          .select("id, empresa_id, nome, email, dominio, status")
           .eq("id", campanha.remetente_id)
           .maybeSingle(),
         supabaseAdmin
@@ -313,7 +313,11 @@ export async function POST(request: Request) {
           .maybeSingle(),
       ]);
 
-    if (remetenteError || !remetente || remetente.status !== "verificado") {
+    if (
+      remetenteError || !remetente || remetente.status !== "verificado" ||
+      (remetente.empresa_id !== campanha.empresa_id &&
+        !(campanha.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" && !remetente.empresa_id))
+    ) {
       throw new Error(
         remetenteError?.message || "Remetente da campanha não está verificado."
       );
@@ -423,7 +427,7 @@ export async function POST(request: Request) {
         ? (config.fallbacks as Record<string, unknown>)
         : {};
 
-    const resend = getEmailMarketingResend();
+    const resend = await getEmailMarketingResend(campanha.empresa_id);
     const basePublica = urlPublicaEmailMarketing();
 
     for (const destinatario of destinatarios) {

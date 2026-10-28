@@ -249,8 +249,16 @@ export async function GET() {
     const mapConfigUsuario = new Map(
       (configuracoesUsuario || []).map((item) => [item.usuario_id, item])
     );
+    const { data: integracaoEmail } = await supabaseAdmin
+      .from("email_marketing_integracoes")
+      .select("habilitado")
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
+    const emailMarketingAtivo = integracaoEmail?.habilitado === true;
     const catalogoPermissoesVisiveis = (catalogoPermissoes || []).filter(
-      (permissao) => !isPermissaoOcultaNaTela(permissao.codigo)
+      (permissao) =>
+        !isPermissaoOcultaNaTela(permissao.codigo) &&
+        (emailMarketingAtivo || !permissao.codigo.startsWith("email_marketing."))
     );
 
     const usuariosFormatados = usuariosRows.map((item) => ({

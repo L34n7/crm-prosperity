@@ -44,17 +44,20 @@ export async function GET() {
     );
   }
 
-  const [{ data: remetente, error: remetenteError }, { data: eventos, error: eventosError }] =
+  const empresaId = acesso.usuario.empresa_id!;
+  const [{ data: remetentes, error: remetenteError }, { data: eventos, error: eventosError }] =
     await Promise.all([
       supabaseAdmin
         .from("email_remetentes")
-        .select("id, nome, email, dominio, provider, status, is_default")
-        .eq("escopo", "sistema")
-        .eq("is_default", true)
-        .maybeSingle(),
+        .select("id, empresa_id, nome, email, dominio, provider, status, is_default")
+        .or("empresa_id.eq." + empresaId +
+          (empresaId === "4fc69d8c-52e3-4756-aaa1-d86db217c376"
+            ? ",and(empresa_id.is.null,escopo.eq.sistema)" : ""))
+        .eq("is_default", true),
       supabaseAdmin
         .from("email_eventos")
         .select("tipo, provider_message_id")
+        .eq("empresa_id", empresaId)
         .gte("created_at", inicioMesSaoPaulo())
         .in("tipo", [
           "email.sent",
@@ -78,8 +81,12 @@ export async function GET() {
   }
 
   const listaEventos = eventos ?? [];
-  const apiKeyConfigurada = emailMarketingResendConfigurado();
-  const webhookConfigurado = emailMarketingWebhookConfigurado();
+  const remetente = (remetentes || []).find((item) => item.empresa_id === empresaId) ||
+    remetentes?.[0] || null;
+  const [apiKeyConfigurada, webhookConfigurado] = await Promise.all([
+    emailMarketingResendConfigurado(empresaId),
+    emailMarketingWebhookConfigurado(empresaId),
+  ]);
   const remetenteVerificado = remetente?.status === "verificado";
   const enviados = contarMensagensUnicas(listaEventos, "email.sent");
   const entregues = contarMensagensUnicas(listaEventos, "email.delivered");

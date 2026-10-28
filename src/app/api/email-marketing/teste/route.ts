@@ -21,7 +21,7 @@ function escaparHtml(valor: string) {
 }
 
 export async function POST(request: Request) {
-  const acesso = await validarAcessoEmailMarketing();
+  const acesso = await validarAcessoEmailMarketing("email_marketing.remetentes");
 
   if (!acesso.ok) {
     return NextResponse.json(
@@ -45,8 +45,12 @@ export async function POST(request: Request) {
       supabaseAdmin
         .from("email_remetentes")
         .select("id, nome, email, dominio, provider, status")
-        .eq("escopo", "sistema")
+        .or("empresa_id.eq." + acesso.usuario.empresa_id +
+          (acesso.usuario.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376"
+            ? ",and(empresa_id.is.null,escopo.eq.sistema)" : ""))
         .eq("is_default", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle(),
       supabaseAdmin
         .from("email_suppressions")
@@ -119,7 +123,7 @@ export async function POST(request: Request) {
   `;
 
   try {
-    const resend = getEmailMarketingResend();
+    const resend = await getEmailMarketingResend(acesso.usuario.empresa_id!);
     const { data, error } = await resend.emails.send({
       from: `${remetente.nome} <${remetente.email}>`,
       to: [destinatario],

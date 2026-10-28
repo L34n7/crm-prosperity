@@ -37,7 +37,8 @@ export async function GET() {
     .or(
       "empresa_id.eq." +
         acesso.usuario.empresa_id +
-        ",and(empresa_id.is.null,escopo.eq.sistema)"
+        (acesso.usuario.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376"
+          ? ",and(empresa_id.is.null,escopo.eq.sistema)" : "")
     )
     .order("is_default", { ascending: false })
     .order("created_at", { ascending: true });
@@ -56,7 +57,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const acesso = await validarAcessoEmailMarketing();
+  const acesso = await validarAcessoEmailMarketing("email_marketing.remetentes");
 
   if (!acesso.ok) {
     return NextResponse.json(
@@ -106,7 +107,8 @@ export async function PATCH(request: Request) {
 
   const permitido =
     remetente.empresa_id === acesso.usuario.empresa_id ||
-    (remetente.empresa_id === null && remetente.escopo === "sistema");
+    (acesso.usuario.empresa_id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
+      remetente.empresa_id === null && remetente.escopo === "sistema");
 
   if (!permitido) {
     return NextResponse.json(

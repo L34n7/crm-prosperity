@@ -97,7 +97,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const acesso = await validarAcessoEmailMarketing();
+  const acesso = await validarAcessoEmailMarketing("email_marketing.campanhas");
 
   if (!acesso.ok) {
     return NextResponse.json(
@@ -221,7 +221,8 @@ export async function POST(request: Request) {
   const remetenteAcessivel =
     remetente &&
     (remetente.empresa_id === empresaId ||
-      (remetente.empresa_id === null && remetente.escopo === "sistema"));
+      (empresaId === "4fc69d8c-52e3-4756-aaa1-d86db217c376" &&
+        remetente.empresa_id === null && remetente.escopo === "sistema"));
 
   if (!remetenteAcessivel) {
     return NextResponse.json(

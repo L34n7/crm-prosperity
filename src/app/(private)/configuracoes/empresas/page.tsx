@@ -307,6 +307,68 @@ export default function EmpresasPage() {
   const [editLogoUrl, setEditLogoUrl] = useState("");
   const [editObservacoes, setEditObservacoes] = useState("");
   const [editStatus, setEditStatus] = useState<StatusEmpresa>("ativa");
+  const [emailMarketingConfig, setEmailMarketingConfig] = useState({
+    habilitado: false,
+    dominio: "",
+    remetente_nome: "",
+    remetente_email: "",
+    api_key_configurada: false,
+    webhook_configurado: false,
+    webhook_url: "",
+  });
+  const [emailMarketingApiKey, setEmailMarketingApiKey] = useState("");
+  const [emailMarketingWebhookSecret, setEmailMarketingWebhookSecret] = useState("");
+  const [carregandoEmailMarketing, setCarregandoEmailMarketing] = useState(false);
+  const [salvandoEmailMarketing, setSalvandoEmailMarketing] = useState(false);
+
+  async function carregarEmailMarketingEmpresa(empresaId: string) {
+    setCarregandoEmailMarketing(true);
+    setEmailMarketingApiKey("");
+    setEmailMarketingWebhookSecret("");
+    setEmailMarketingConfig({
+      habilitado: false, dominio: "", remetente_nome: "", remetente_email: "",
+      api_key_configurada: false, webhook_configurado: false, webhook_url: "",
+    });
+    try {
+      const response = await fetch(`/api/empresas/${empresaId}/email-marketing`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Erro ao consultar configuração.");
+      setEmailMarketingConfig(data.configuracao);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao carregar E-mail Marketing.");
+    } finally {
+      setCarregandoEmailMarketing(false);
+    }
+  }
+
+  async function salvarEmailMarketingEmpresa() {
+    if (!editandoId) return;
+    setSalvandoEmailMarketing(true);
+    setErro("");
+    setMensagem("");
+    try {
+      const response = await fetch(`/api/empresas/${editandoId}/email-marketing`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          habilitado: emailMarketingConfig.habilitado,
+          dominio: emailMarketingConfig.dominio,
+          remetente_nome: emailMarketingConfig.remetente_nome,
+          remetente_email: emailMarketingConfig.remetente_email,
+          api_key: emailMarketingApiKey,
+          webhook_secret: emailMarketingWebhookSecret,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Erro ao salvar.");
+      setMensagem(data.message || "Configuração de E-mail Marketing salva.");
+      await carregarEmailMarketingEmpresa(editandoId);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Não foi possível salvar E-mail Marketing.");
+    } finally {
+      setSalvandoEmailMarketing(false);
+    }
+  }
 
   async function carregarEmpresas() {
     setErro("");
@@ -363,6 +425,7 @@ export default function EmpresasPage() {
     setEditLogoUrl(empresa.logo_url || "");
     setEditObservacoes(empresa.observacoes || "");
     setEditStatus(empresa.status);
+    void carregarEmailMarketingEmpresa(empresa.id);
     setMensagem("");
     setErro("");
   }
@@ -383,6 +446,8 @@ export default function EmpresasPage() {
 
   function cancelarEdicao() {
     setEditandoId(null);
+    setEmailMarketingApiKey("");
+    setEmailMarketingWebhookSecret("");
   }
 
   async function salvarEdicao() {
@@ -1492,6 +1557,74 @@ export default function EmpresasPage() {
                                   setEditObservacoes(e.target.value)
                                 }
                               />
+                            </div>
+
+                            <div className={styles.emailMarketingCard}>
+                              <div className={styles.emailMarketingHeading}>
+                                <div>
+                                  <strong>E-mail Marketing</strong>
+                                  <p>Habilite o módulo para esta empresa e configure uma conta Resend exclusiva. As credenciais são criptografadas e não aparecem novamente após salvar.</p>
+                                </div>
+                                <label className={styles.emailMarketingToggle}>
+                                  <input
+                                    type="checkbox"
+                                    checked={emailMarketingConfig.habilitado}
+                                    disabled={carregandoEmailMarketing || salvandoEmailMarketing}
+                                    onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, habilitado: e.target.checked }))}
+                                  />
+                                  {emailMarketingConfig.habilitado ? "Habilitado" : "Desabilitado"}
+                                </label>
+                              </div>
+                              {carregandoEmailMarketing ? (
+                                <p className={styles.fieldHelp}>Carregando configuração de E-mail Marketing...</p>
+                              ) : (
+                                <>
+                                  <div className={styles.emailMarketingFields}>
+                                    <label className={styles.field}>
+                                      <span className={styles.label}>Domínio verificado no Resend</span>
+                                      <input className={styles.input} placeholder="marketing.seudominio.com"
+                                        value={emailMarketingConfig.dominio}
+                                        onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, dominio: e.target.value }))}/>
+                                    </label>
+                                    <label className={styles.field}>
+                                      <span className={styles.label}>Nome do remetente</span>
+                                      <input className={styles.input} placeholder="Minha Empresa"
+                                        value={emailMarketingConfig.remetente_nome}
+                                        onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, remetente_nome: e.target.value }))}/>
+                                    </label>
+                                    <label className={styles.field}>
+                                      <span className={styles.label}>E-mail remetente</span>
+                                      <input className={styles.input} type="email" placeholder="marketing@seudominio.com"
+                                        value={emailMarketingConfig.remetente_email}
+                                        onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, remetente_email: e.target.value }))}/>
+                                    </label>
+                                    <label className={styles.field}>
+                                      <span className={styles.label}>Resend API Key {emailMarketingConfig.api_key_configurada ? "✓ Configurada" : "· Não configurada"}</span>
+                                      <input className={styles.input} type="password" autoComplete="new-password"
+                                        placeholder={emailMarketingConfig.api_key_configurada ? "Deixe em branco para manter a chave atual" : "re_..."}
+                                        value={emailMarketingApiKey}
+                                        onChange={(e) => setEmailMarketingApiKey(e.target.value)}/>
+                                    </label>
+                                    <label className={styles.field}>
+                                      <span className={styles.label}>Webhook Signing Secret {emailMarketingConfig.webhook_configurado ? "✓ Configurado" : "· Não configurado"}</span>
+                                      <input className={styles.input} type="password" autoComplete="new-password"
+                                        placeholder={emailMarketingConfig.webhook_configurado ? "Deixe em branco para manter o segredo atual" : "whsec_..."}
+                                        value={emailMarketingWebhookSecret}
+                                        onChange={(e) => setEmailMarketingWebhookSecret(e.target.value)}/>
+                                    </label>
+                                  </div>
+                                  <div className={styles.emailMarketingWebhook}>
+                                    <span className={styles.label}>URL do webhook exclusivo desta empresa</span>
+                                    <code>{emailMarketingConfig.webhook_url || "Carregando..."}</code>
+                                    <span className={styles.fieldHelp}>Cadastre esta URL na conta Resend da empresa. As permissões do módulo ficam disponíveis em Configurações → Permissões após habilitar.</span>
+                                  </div>
+                                  <button type="button" className={styles.primaryButton}
+                                    disabled={salvandoEmailMarketing}
+                                    onClick={() => void salvarEmailMarketingEmpresa()}>
+                                    {salvandoEmailMarketing ? "Salvando integração..." : "Salvar E-mail Marketing"}
+                                  </button>
+                                </>
+                              )}
                             </div>
 
                             <div className={styles.editActions}>

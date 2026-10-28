@@ -59,7 +59,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const acesso = await validarAcessoEmailMarketing();
+  const acesso = await validarAcessoEmailMarketing("email_marketing.templates");
 
   if (!acesso.ok) {
     return NextResponse.json(

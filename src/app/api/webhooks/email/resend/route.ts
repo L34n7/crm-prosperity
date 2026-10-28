@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
 import {
-  getEmailMarketingResend,
   getEmailMarketingWebhookSecret,
+  EMAIL_MARKETING_EMPRESA_LEGADA,
 } from "@/lib/email-marketing/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recalcularMetricasCampanhaEmail } from "@/lib/email-marketing/campanhas";
@@ -127,12 +128,19 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.text();
+  const empresaWebhook = new URL(request.url).searchParams.get("empresa_id") ||
+    EMAIL_MARKETING_EMPRESA_LEGADA;
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(empresaWebhook)) {
+    return NextResponse.json({ ok: false, error: "Integração inválida." }, { status: 400 });
+  }
 
   let evento: ResendWebhookEvent;
 
   try {
-    const resend = getEmailMarketingResend();
-    const webhookSecret = getEmailMarketingWebhookSecret();
+    // Verifica o segredo individual sem precisar enviar a API Key.
+    // Eventos tardios continuam aceitos quando o módulo é desabilitado.
+    const resend = new Resend("re_webhook_verification_only");
+    const webhookSecret = await getEmailMarketingWebhookSecret(empresaWebhook);
 
     const eventoVerificado = await Promise.resolve(
       resend.webhooks.verify({
@@ -188,6 +196,12 @@ export async function POST(request: Request) {
 
     empresaId = campanha?.empresa_id || null;
   }
+
+  // Não permita associação de mensagens de uma conta a outro tenant.
+  if (empresaId && empresaId !== empresaWebhook) {
+    return NextResponse.json({ ok: false, error: "Evento de outra empresa." }, { status: 403 });
+  }
+  if (!empresaId) empresaId = empresaWebhook;
 
   const { error: eventoError } = await supabaseAdmin
     .from("email_eventos")

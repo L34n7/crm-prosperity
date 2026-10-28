@@ -451,6 +451,19 @@ export async function getUsuarioContexto(
       perfis: perfisRaw,
     });
 
+    // O Administrador não recebe acesso a módulos que não foram
+    // contratados/liberados para a empresa.
+    if (usuarioBase.empresa_id && permissoes.some((p) => p.startsWith("email_marketing."))) {
+      const { data: integracaoEmail } = await getSupabaseAdmin()
+        .from("email_marketing_integracoes")
+        .select("habilitado")
+        .eq("empresa_id", usuarioBase.empresa_id)
+        .maybeSingle();
+      if (integracaoEmail?.habilitado !== true) {
+        permissoes = permissoes.filter((p) => !p.startsWith("email_marketing."));
+      }
+    }
+
     if (assinatura?.white_label_client) {
       permissoes = permissoes.filter(
         (codigo) => codigo !== "assinaturas.plano.visualizar"

@@ -2489,3 +2489,35 @@
     width: 100%;
   }
 }
+
+.emailMarketingCard {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 18px;
+  background: var(--crm-surface-soft);
+}
+.emailMarketingHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 20px;
+}
+.emailMarketingHeading strong { font-size: 17px; color: var(--crm-text-strong); }
+.emailMarketingHeading p { margin: 7px 0 0; font-size: 13px; line-height: 1.55; color: var(--crm-text-muted); }
+.emailMarketingToggle { display: flex; align-items: center; gap: 9px; flex-shrink: 0; font-size: 13px; font-weight: 800; color: var(--crm-text-strong); }
+.emailMarketingToggle input { width: 18px; height: 18px; accent-color: var(--crm-primary-strong); }
+.emailMarketingFields { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+.emailMarketingWebhook { display: flex; flex-direction: column; gap: 7px; }
+.emailMarketingWebhook code {
+  display: block; padding: 12px 14px; max-width: 100%;
+  overflow-wrap: anywhere; border-radius: 12px; border: 1px solid var(--crm-border);
+  background: var(--crm-surface); color: var(--crm-text-strong);
+}
+@media (max-width: 700px) {
+  .emailMarketingHeading { flex-direction: column; }
+  .emailMarketingFields { grid-template-columns: 1fr; }
+}

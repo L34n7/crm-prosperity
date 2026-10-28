@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
+import { emailMarketingHabilitado } from "@/lib/email-marketing/admin";
 
 export default async function EmailMarketingLayout({
   children,
@@ -17,9 +17,10 @@ export default async function EmailMarketingLayout({
     redirect("/painel");
   }
 
-  const podeAcessarEmailMarketing = resultado.usuario.permissoes.includes(
-    PERMISSAO_INTERNA_EMPRESAS
-  );
+  const podeAcessarEmailMarketing =
+    Boolean(resultado.usuario.empresa_id) &&
+    resultado.usuario.permissoes.includes("email_marketing.visualizar") &&
+    await emailMarketingHabilitado(resultado.usuario.empresa_id!);
 
   if (!podeAcessarEmailMarketing) {
     redirect("/painel");
