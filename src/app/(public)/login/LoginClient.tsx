@@ -127,9 +127,10 @@ export default function LoginClient({ branding }: LoginClientProps) {
   const [mensagem, setMensagem] = useState("");
 
   const loginTheme = useMemo(() => {
-    const corPrimaria = branding.is_white_label
-      ? normalizarHex(branding.cor_primaria, "#0F509A")
-      : "#059669";
+    // O CRM principal sempre usa seu CSS original; o tema dinâmico é exclusivo do White Label.
+    if (!branding.is_white_label) return undefined;
+
+    const corPrimaria = normalizarHex(branding.cor_primaria, "#0F509A");
     const rgb = hexParaRgb(corPrimaria);
 
     return {
@@ -217,7 +218,14 @@ export default function LoginClient({ branding }: LoginClientProps) {
   }
 
   return (
-    <main className={styles.page} style={loginTheme}>
+    <main
+      className={
+        branding.is_white_label
+          ? `${styles.page} ${styles.whiteLabelPage}`
+          : styles.page
+      }
+      style={loginTheme}
+    >
       <div className={styles.backgroundGlowTop} />
       <div className={styles.backgroundGlowBottom} />
       <div className={styles.backgroundGrid} />
