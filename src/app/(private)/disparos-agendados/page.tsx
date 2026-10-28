@@ -204,6 +204,8 @@ type GrupoDisparos = {
   erros: number;
   proximaExecucaoEm: string | null;
   ultimaReferenciaEm: string;
+  criadoEm: string | null;
+  criadoPorNome: string | null;
   canais: Record<CanalDisparo, number>;
   itens: DisparoAgendado[];
 };
@@ -335,6 +337,15 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
       )
     );
     const ultimaReferencia = new Date(Math.max(...referencias, 0)).toISOString();
+    const primeiroCriadoEmMs = Math.min(
+      ...itens.map((item) => millisData(item.created_at)).filter((valor) => valor > 0)
+    );
+    const criadoEm = Number.isFinite(primeiroCriadoEmMs)
+      ? new Date(primeiroCriadoEmMs).toISOString()
+      : null;
+    const criadoPorNome = itens
+      .map((item) => String(item.payload_json?.usuario_criador_nome || "").trim())
+      .find(Boolean) || null;
 
     const canais: Record<CanalDisparo, number> = {
       whatsapp: 0,
@@ -374,6 +385,8 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
       erros,
       proximaExecucaoEm: proximaExecucao?.executar_em || null,
       ultimaReferenciaEm: ultimaReferencia,
+      criadoEm,
+      criadoPorNome,
       canais,
       itens,
     };
@@ -3569,6 +3582,19 @@ function DisparosAgendadosPageContent() {
                     {grupoManualModal.total === 1 ? "contato" : "contatos"} ·{" "}
                     {formatarData(grupoManualModal.itens[0]?.executar_em)}
                   </p>
+                  <div className={styles.manualCampaignOrigin}>
+                    <span>
+                      <strong>Criado em:</strong>{" "}
+                      {grupoManualModal.criadoEm
+                        ? formatarData(grupoManualModal.criadoEm)
+                        : "Não informado"}
+                    </span>
+                    <span>
+                      <strong>Criado por:</strong>{" "}
+                      {grupoManualModal.criadoPorNome ||
+                        (carregandoGrupoManual ? "Carregando..." : "Não identificado")}
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"

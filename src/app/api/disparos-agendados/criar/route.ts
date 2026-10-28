@@ -638,6 +638,7 @@ export async function POST(request: NextRequest) {
         timezone_empresa: timezoneEmpresa,
         executar_em_local: executarEmLocal || null,
         usuario_id: usuario.id,
+        usuario_criador_nome: usuario.nome || null,
         nome_campanha: nomeCampanha || null,
         total_contatos_frios: classificacaoLista.totalFrios,
         total_contatos_opt_in: classificacaoLista.totalOptIn,

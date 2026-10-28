@@ -244,10 +244,52 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // O agendamento já registra o ID do criador no payload.
+      // Resolve o nome somente dentro da empresa autenticada, inclusive
+      // para campanhas antigas que ainda não possuem o nome salvo.
+      const idsCriadores = Array.from(
+        new Set(
+          (itensGrupo || [])
+            .map((item: any) => String(item.payload_json?.usuario_id || "").trim())
+            .filter((id: string) =>
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+            )
+        )
+      );
+
+      const { data: usuariosCriadores, error: usuariosCriadoresError } = idsCriadores.length
+        ? await supabase
+            .from("usuarios")
+            .select("id, nome")
+            .eq("empresa_id", usuario.empresa_id)
+            .in("id", idsCriadores)
+        : { data: [], error: null };
+
+      if (usuariosCriadoresError) {
+        console.warn(
+          "[DISPAROS AGENDADOS] Não foi possível consultar os criadores:",
+          usuariosCriadoresError.message
+        );
+      }
+
+      const nomeCriadorPorId = new Map(
+        (usuariosCriadores || []).map((item: any) => [String(item.id), String(item.nome || "")])
+      );
+      const disparosComCriador = (itensGrupo || []).map((item: any) => ({
+        ...item,
+        payload_json: {
+          ...(item.payload_json || {}),
+          usuario_criador_nome:
+            nomeCriadorPorId.get(String(item.payload_json?.usuario_id || "")) ||
+            String(item.payload_json?.usuario_criador_nome || "").trim() ||
+            null,
+        },
+      }));
+
       return NextResponse.json({
         ok: true,
         timezone_empresa: timezoneEmpresa,
-        disparos: itensGrupo || [],
+        disparos: disparosComCriador,
       });
     }
 

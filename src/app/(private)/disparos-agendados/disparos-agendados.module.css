@@ -2528,3 +2528,33 @@
     grid-column: 3;
   }
 }
+
+/* Dados de origem do disparo no cabeçalho do modal de campanha. */
+.manualCampaignOrigin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 20px;
+  row-gap: 4px;
+  margin-top: 8px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.manualCampaignOrigin span {
+  overflow-wrap: anywhere;
+}
+
+.manualCampaignOrigin strong {
+  color: var(--crm-text);
+  font-weight: 800;
+}
+
+@media (max-width: 600px) {
+  .manualCampaignOrigin {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}
