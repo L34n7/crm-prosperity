@@ -143,6 +143,8 @@ const getGrupoFromCodigo = (codigo: string) => {
       return "Tokens de IA";
     case "auditoria":
       return "Auditoria";
+    case "email_marketing":
+      return "E-mail Marketing";
     default:
       return "Outros";
   }

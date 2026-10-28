@@ -37,6 +37,8 @@ function getGrupoFromCodigo(codigo: string) {
       return "Perfis";
     case "relatorios":
       return "Relatórios";
+    case "email_marketing":
+      return "E-mail Marketing";
     case "sistema":
       return "Sistema";
     default:
@@ -111,6 +113,13 @@ export async function GET(
         .eq("perfil_empresa_id", id),
     ]);
 
+    const { data: integracaoEmail } = await supabaseAdmin
+      .from("email_marketing_integracoes")
+      .select("habilitado")
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
+    const emailMarketingAtivo = integracaoEmail?.habilitado === true;
+
     const marcadas = new Set(
       ((perfilPermissoes || []) as PerfilPermissaoRow[]).map(
         (item) => item.permissao_codigo
@@ -118,7 +127,10 @@ export async function GET(
     );
 
     const lista = ((permissoes || []) as PermissaoCatalogoRow[])
-      .filter((item) => !isPermissaoOcultaNaTela(item.codigo))
+      .filter((item) =>
+        !isPermissaoOcultaNaTela(item.codigo) &&
+        (emailMarketingAtivo || !item.codigo.startsWith("email_marketing."))
+      )
       .map((item) => ({
         codigo: item.codigo,
         descricao: item.descricao,
@@ -230,10 +242,19 @@ export async function PUT(
       );
     }
 
+    const { data: integracaoEmail } = await supabaseAdmin
+      .from("email_marketing_integracoes")
+      .select("habilitado")
+      .eq("empresa_id", usuario.empresa_id)
+      .maybeSingle();
+    const emailMarketingAtivo = integracaoEmail?.habilitado === true;
     const codigosValidos = new Set(
       ((catalogoPermissoes || []) as PermissaoCatalogoRow[]).map(
         (item) => item.codigo
-      ).filter((codigo) => !isPermissaoOcultaNaTela(codigo))
+      ).filter((codigo) =>
+        !isPermissaoOcultaNaTela(codigo) &&
+        (emailMarketingAtivo || !codigo.startsWith("email_marketing."))
+      )
     );
 
     const perfilEhAdministrador =

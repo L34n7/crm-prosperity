@@ -128,8 +128,8 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.text();
-  const empresaWebhook = new URL(request.url).searchParams.get("empresa_id") ||
-    EMAIL_MARKETING_EMPRESA_LEGADA;
+  const empresaIdInformada = new URL(request.url).searchParams.get("empresa_id");
+  const empresaWebhook = empresaIdInformada || EMAIL_MARKETING_EMPRESA_LEGADA;
   if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(empresaWebhook)) {
     return NextResponse.json({ ok: false, error: "Integração inválida." }, { status: 400 });
   }
@@ -140,7 +140,11 @@ export async function POST(request: Request) {
     // Verifica o segredo individual sem precisar enviar a API Key.
     // Eventos tardios continuam aceitos quando o módulo é desabilitado.
     const resend = new Resend("re_webhook_verification_only");
-    const webhookSecret = await getEmailMarketingWebhookSecret(empresaWebhook);
+    const webhookSecret =
+      !empresaIdInformada && empresaWebhook === EMAIL_MARKETING_EMPRESA_LEGADA
+        ? process.env.RESEND_EMAIL_MARKETING_WEBHOOK_SECRET?.trim() ||
+          await getEmailMarketingWebhookSecret(empresaWebhook)
+        : await getEmailMarketingWebhookSecret(empresaWebhook);
 
     const eventoVerificado = await Promise.resolve(
       resend.webhooks.verify({
