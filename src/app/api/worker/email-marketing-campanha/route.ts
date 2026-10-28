@@ -18,6 +18,7 @@ import {
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolverNomeCapturaContato } from "@/lib/automacoes/variaveis-fixas-contato";
 import { extrairChavesVariaveis } from "@/lib/variaveis/catalogo";
+import { reescreverLinksRastreados } from "@/lib/email-marketing/rastreamento";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -491,9 +492,15 @@ export async function POST(request: Request) {
         basePublica +
         "/api/email-marketing/descadastrar?token=" +
         encodeURIComponent(destinatario.unsubscribe_token);
-      const htmlBase = adicionarRodapeDescadastro(
-        renderizarVariaveis(String(campanha.html || ""), variaveis, true),
-        unsubscribeUrl
+      const htmlBase = reescreverLinksRastreados(
+        adicionarRodapeDescadastro(
+          renderizarVariaveis(String(campanha.html || ""), variaveis, true),
+          unsubscribeUrl
+        ),
+        {
+          basePublica,
+          token: destinatario.unsubscribe_token,
+        }
       );
       const aberturaUrl =
         basePublica +

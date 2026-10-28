@@ -474,7 +474,7 @@ export default function EmailMarketingPage() {
               <BarChart3 size={20} />
             </span>
             <div>
-              <span>Taxa de abertura</span>
+              <span>Taxa de abertura estimada</span>
               <strong>
                 {metricas.taxa_abertura === null
                   ? "—"
@@ -495,7 +495,7 @@ export default function EmailMarketingPage() {
             <div>
               <span>Cliques</span>
               <strong>{metricas.cliques}</strong>
-              <small>Interações registradas pelo webhook</small>
+              <small>Cliques em links rastreados (exceto descadastro)</small>
             </div>
           </article>
         </section>
@@ -580,7 +580,7 @@ export default function EmailMarketingPage() {
                         <th>Destinatários</th>
                         <th>Enviados</th>
                         <th>Entregues</th>
-                        <th>Abertos</th>
+                        <th title="Estimativa: serviços de e-mail podem carregar imagens automaticamente.">Abertos (estim.)</th>
                         <th>Cliques</th>
                         <th>Envio</th>
                       </tr>

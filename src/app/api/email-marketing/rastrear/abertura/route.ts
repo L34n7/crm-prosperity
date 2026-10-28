@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     const { data: destinatario, error } = await supabaseAdmin
       .from("email_campanha_destinatarios")
       .select(
-        "id, campanha_id, email, status, aberto_em, provider_message_id"
+        "id, campanha_id, email, status, aberto_em, enviado_em, provider_message_id"
       )
       .eq("unsubscribe_token", token)
       .maybeSingle();
@@ -48,6 +48,30 @@ export async function GET(request: Request) {
     }
 
     const agora = new Date().toISOString();
+    const instanteEnvio = Date.parse(String(destinatario.enviado_em || ""));
+    const intervaloDesdeEnvio = Date.now() - instanteEnvio;
+    const proposito = [
+      request.headers.get("purpose"),
+      request.headers.get("sec-purpose"),
+      request.headers.get("x-purpose"),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const userAgent = (request.headers.get("user-agent") || "").toLowerCase();
+    // Gate conservador: leitores e ferramentas de segurança carregam imagens
+    // antes que o destinatário abra a mensagem. Não trate essa prévia como leitura.
+    const carregamentoAntecipado =
+      (Number.isFinite(intervaloDesdeEnvio) &&
+        intervaloDesdeEnvio >= 0 &&
+        intervaloDesdeEnvio < 20_000) ||
+      /prefetch|prerender|preview/.test(proposito) ||
+      /(?:bot|crawler|scanner|linkpreview|safelinks|proofpoint|barracuda)/.test(userAgent);
+
+    if (carregamentoAntecipado) {
+      return respostaPixel();
+    }
+
     const statusAtual = String(destinatario.status || "");
     const novoStatus = ["enviado", "entregue"].includes(statusAtual)
       ? "aberto"

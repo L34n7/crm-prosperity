@@ -172,7 +172,7 @@ export async function POST(request: Request) {
   const { data: destinatario } = providerMessageId
     ? await supabaseAdmin
         .from("email_campanha_destinatarios")
-        .select("id, campanha_id, email, status")
+        .select("id, campanha_id, email, status, entregue_em, aberto_em, clicado_em")
         .eq("provider_message_id", providerMessageId)
         .maybeSingle()
     : { data: null };
@@ -218,7 +218,11 @@ export async function POST(request: Request) {
     );
   }
 
-  if (destinatario && deveAtualizarStatus(destinatario.status, tipo)) {
+  if (
+    destinatario &&
+    (deveAtualizarStatus(destinatario.status, tipo) ||
+      (tipo === "email.delivered" && !destinatario.entregue_em))
+  ) {
     const agora = ocorridoEm;
     const atualizacao: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -228,8 +232,14 @@ export async function POST(request: Request) {
       atualizacao.status = "enviado";
       atualizacao.enviado_em = agora;
     } else if (tipo === "email.delivered") {
-      atualizacao.status = "entregue";
-      atualizacao.entregue_em = agora;
+      // O webhook pode chegar depois de uma abertura ou clique. Não regrida
+      // o status, mas registre a entrega confirmada independentemente da ordem.
+      if (deveAtualizarStatus(destinatario.status, tipo)) {
+        atualizacao.status = "entregue";
+      }
+      if (!destinatario.entregue_em) {
+        atualizacao.entregue_em = agora;
+      }
     } else if (tipo === "email.opened") {
       atualizacao.status = "aberto";
       atualizacao.aberto_em = agora;
