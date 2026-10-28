@@ -1,9 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import styles from "./login.module.css";
 import Link from "next/link";
 import { ArrowRight, Check, Eye, EyeOff, LoaderCircle } from "lucide-react";
@@ -67,49 +66,98 @@ function misturarHex(corBase: string, corAlvo: string, proporcaoAlvo: number) {
   });
 }
 
-async function obterRotaAposLogin() {
-  try {
-    const whiteLabelResponse = await fetch("/api/white-label/clientes", {
-      method: "GET",
-      cache: "no-store",
-    });
+type DestinoLogin = {
+  ok: boolean;
+  destino?: string;
+  ambiente_configurado?: boolean | null;
+  error?: string;
+};
 
-    if (whiteLabelResponse.ok) {
-      return "/white-label/clientes";
+const LOGIN_REDIRECT_STORAGE_KEY = "crm_login_redirecionamento_pendente";
+
+function redirecionamentoAutomaticoRecente(usuarioId: string) {
+  try {
+    const valor = window.sessionStorage.getItem(LOGIN_REDIRECT_STORAGE_KEY);
+    if (!valor) return false;
+    const marcador = JSON.parse(valor) as { usuarioId?: string; em?: number };
+    return (
+      marcador.usuarioId === usuarioId &&
+      Date.now() - Number(marcador.em || 0) < 15_000
+    );
+  } catch {
+    return false;
+  }
+}
+
+function confirmarNavegacaoLogin(
+  usuarioId: string,
+  destino: string,
+  ambienteConfigurado: boolean | null | undefined
+) {
+  window.sessionStorage.setItem(
+    LOGIN_REDIRECT_STORAGE_KEY,
+    JSON.stringify({ usuarioId, em: Date.now() })
+  );
+
+  if (ambienteConfigurado === true) {
+    window.sessionStorage.setItem(AMBIENTE_CONFIGURADO_STORAGE_KEY, "true");
+  } else if (ambienteConfigurado === false) {
+    window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
+  }
+
+  if (destino === "/configurar-ambiente") {
+    window.sessionStorage.setItem("crm_ambiente_redirect_apos_login", "true");
+  }
+
+  // Navegação completa: os cookies de autenticação e o contexto do servidor
+  // são lidos juntos, evitando alternância entre login e loading no App Router.
+  window.location.replace(destino);
+}
+
+async function obterDestinoAposConfirmarSessao(repetir = false) {
+  const esperas = repetir ? [0, 150, 300, 500, 750, 1000] : [0];
+  let ultimaMensagem = "Não foi possível confirmar sua sessão.";
+
+  for (const espera of esperas) {
+    if (espera) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, espera));
     }
 
-    const response = await fetch("/api/integracoes-whatsapp/status", {
-      method: "GET",
-      cache: "no-store",
-    });
+    try {
+      const response = await fetch("/api/auth/destino-login", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const data = (await response.json()) as DestinoLogin;
 
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      if (response.status === 403 || response.status === 404) {
-        return "/conta-incompleta";
+      if (response.ok && data.ok && data.destino?.startsWith("/")) {
+        return data;
       }
 
-      return "/painel";
+      ultimaMensagem = data.error || "Não foi possível confirmar sua sessão.";
+
+      // Falhas definitivas de usuário bloqueado/sem cadastro não devem
+      // entrar em um ciclo de autenticação.
+      if (response.status === 403 || response.status === 404) {
+        throw new Error(ultimaMensagem);
+      }
+    } catch (error) {
+      ultimaMensagem =
+        error instanceof Error ? error.message : ultimaMensagem;
+
+      if (
+        error instanceof Error &&
+        (error.message.includes("bloqueado") ||
+          error.message.includes("inativo") ||
+          error.message.includes("nao encontrado"))
+      ) {
+        throw error;
+      }
     }
-
-    const ambienteConfigurado = data.configurado === true;
-
-    if (ambienteConfigurado) {
-      window.sessionStorage.setItem(AMBIENTE_CONFIGURADO_STORAGE_KEY, "true");
-    } else {
-      window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
-    }
-
-    if (!ambienteConfigurado) {
-      return "/configurar-ambiente";
-    }
-
-    return "/painel";
-  } catch (error) {
-    console.warn("[LOGIN] Erro ao verificar ambiente:", error);
-    return "/painel";
   }
+
+  throw new Error(ultimaMensagem);
 }
 
 type LoginClientProps = {
@@ -118,7 +166,8 @@ type LoginClientProps = {
 
 export default function LoginClient({ branding }: LoginClientProps) {
   const [supabase] = useState(() => createClient());
-  const router = useRouter();
+  const navegandoRef = useRef(false);
+  const loginManualRef = useRef(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -146,28 +195,49 @@ export default function LoginClient({ branding }: LoginClientProps) {
   }, [branding.cor_primaria, branding.is_white_label]);
 
   useEffect(() => {
-    async function checkUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    let ativo = true;
 
-      if (user) {
-        setLoading(true);
-        const rota = await obterRotaAposLogin();
+    async function verificarSessaoExistente() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-        if (rota === "/configurar-ambiente") {
-          window.sessionStorage.setItem(
-            "crm_ambiente_redirect_apos_login",
-            "true"
-          );
+        if (!ativo || loginManualRef.current || !user || navegandoRef.current) {
+          return;
         }
 
-        router.replace(rota);
+        // Se o destino devolveu o usuário ao login, não repete o
+        // redirecionamento automaticamente várias vezes.
+        if (redirecionamentoAutomaticoRecente(user.id)) {
+          return;
+        }
+
+        const destino = await obterDestinoAposConfirmarSessao();
+
+        if (!ativo || loginManualRef.current || navegandoRef.current) {
+          return;
+        }
+
+        navegandoRef.current = true;
+        setLoading(true);
+        confirmarNavegacaoLogin(
+          user.id,
+          destino.destino!,
+          destino.ambiente_configurado
+        );
+      } catch {
+        // A página de login continua acessível quando a sessão está ausente
+        // ou ainda não foi confirmada pelo servidor.
       }
     }
 
-    checkUser();
-  }, [router, supabase]);
+    void verificarSessaoExistente();
+
+    return () => {
+      ativo = false;
+    };
+  }, [supabase]);
 
   function traduzirErroLogin(message: string) {
     const mapa: Record<string, string> = {
@@ -180,41 +250,60 @@ export default function LoginClient({ branding }: LoginClientProps) {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+
+    if (loading || navegandoRef.current) return;
+
+    loginManualRef.current = true;
+    window.sessionStorage.removeItem(LOGIN_REDIRECT_STORAGE_KEY);
     setLoading(true);
     setMensagem("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setMensagem(traduzirErroLogin(error.message));
-      setLoading(false);
-      return;
-    }
-
-    window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
-    window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
-    window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
-    window.sessionStorage.setItem(TRIAL_AVISO_LOGIN_STORAGE_KEY, "true");
     try {
-      getClientSessionId();
-      void enviarEventoSessao("login").catch(() => {
-        // O registro de sessao nao deve bloquear o login.
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-    } catch {
-      // O registro de sessao nao deve bloquear o login.
+
+      if (error) {
+        throw new Error(traduzirErroLogin(error.message));
+      }
+
+      if (!data.user) {
+        throw new Error("Não foi possível confirmar o usuário autenticado.");
+      }
+
+      // Verifica que o backend recebeu o cookie atualizado ANTES de navegar.
+      // Repetições curtas ocorrem dentro do loading, sem piscar a tela.
+      const destino = await obterDestinoAposConfirmarSessao(true);
+
+      window.sessionStorage.removeItem("crm_ambiente_redirect_apos_login");
+      window.sessionStorage.removeItem("crm_ambiente_redirect_inicial");
+      window.sessionStorage.removeItem(AMBIENTE_CONFIGURADO_STORAGE_KEY);
+      window.sessionStorage.setItem(TRIAL_AVISO_LOGIN_STORAGE_KEY, "true");
+
+      try {
+        getClientSessionId();
+        void enviarEventoSessao("login").catch(() => {
+          // O registro de sessão não deve bloquear o login.
+        });
+      } catch {
+        // O registro de sessão não deve bloquear o login.
+      }
+
+      navegandoRef.current = true;
+      confirmarNavegacaoLogin(
+        data.user.id,
+        destino.destino!,
+        destino.ambiente_configurado
+      );
+    } catch (error) {
+      setMensagem(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível concluir o login. Tente novamente."
+      );
+      setLoading(false);
     }
-
-    const rota = await obterRotaAposLogin();
-
-    if (rota === "/configurar-ambiente") {
-      window.sessionStorage.setItem("crm_ambiente_redirect_apos_login", "true");
-    }
-
-    setMensagem("Login realizado com sucesso.");
-    router.replace(rota);
   }
 
   return (
