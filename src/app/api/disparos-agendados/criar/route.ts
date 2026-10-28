@@ -446,14 +446,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const contatosIds = contatosValidos
-      .map((contato: any) => contato.id)
-      .filter((id: string | null): id is string => Boolean(id));
+    const contatosIds = Array.from(
+      new Set(
+        contatosValidos
+          .map((contato: any) => contato.id)
+          .filter((id: string | null): id is string => Boolean(id))
+      )
+    );
 
     const conversaPorContatoId = new Map<string, string>();
     const ultimaEntradaPorContatoId = new Map<string, string>();
 
-    if (contatosIds.length > 0) {
+    // Uma consulta com centenas de UUIDs em .in() gera uma URL grande demais
+    // para o gateway PostgREST. Busque em lotes para agendamentos em massa.
+    const TAMANHO_LOTE_CONTATOS_CONVERSAS = 80;
+
+    for (
+      let indice = 0;
+      indice < contatosIds.length;
+      indice += TAMANHO_LOTE_CONTATOS_CONVERSAS
+    ) {
+      const loteIds = contatosIds.slice(
+        indice,
+        indice + TAMANHO_LOTE_CONTATOS_CONVERSAS
+      );
       const { data: conversasDosContatos, error: conversasError } =
         await supabase
           .from("conversas")
@@ -462,17 +478,20 @@ export async function POST(request: NextRequest) {
           )
           .eq("empresa_id", usuario.empresa_id)
           .eq("integracao_whatsapp_id", integracaoWhatsappId)
-          .in("contato_id", contatosIds)
+          .in("contato_id", loteIds)
           .order("last_message_at", {
             ascending: false,
             nullsFirst: false,
           });
 
       if (conversasError) {
-        console.error(
-          "[CRIAR_DISPARO_AGENDADO] Erro ao localizar conversas:",
-          conversasError
-        );
+        console.error("[CRIAR_DISPARO_AGENDADO] Erro ao localizar conversas:", {
+          lote: Math.floor(indice / TAMANHO_LOTE_CONTATOS_CONVERSAS) + 1,
+          tamanho_lote: loteIds.length,
+          codigo: conversasError.code,
+          mensagem: conversasError.message,
+          detalhes: conversasError.details,
+        });
 
         return NextResponse.json(
           {
