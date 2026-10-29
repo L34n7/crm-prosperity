@@ -49,7 +49,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (String(body?.confirmacao || "").trim() !== empresa.nome_fantasia.trim())
       return NextResponse.json({ ok: false, error: "Confirme o nome da empresa para restaurar." }, { status: 400 });
     const resultado = await restaurarEmpresaAdministrativamente(id);
-    return NextResponse.json({ ok: true, message: "Empresa restaurada. Reconecte WhatsApp e revise automações antes de reativar envios.", resultado });
+    return NextResponse.json({ ok: true, message: "Empresa restaurada com acesso liberado para login, porém bloqueada por pendência financeira. A regularização/renovação é necessária; depois, revise WhatsApp e automações.", resultado });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Erro ao restaurar empresa." }, { status: 400 });
   }
