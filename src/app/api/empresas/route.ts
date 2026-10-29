@@ -59,6 +59,7 @@ export async function GET() {
       limite_integracoes_whatsapp,
       limite_usuarios,
       assinatura_status,
+      restauracao_pendente_pagamento_em,
       assinatura_inicio_em,
       assinatura_vencimento_em,
       assinatura_bloqueio_em,
@@ -135,9 +136,42 @@ export async function GET() {
     planos:null,
     empresa_tokens_ia:null,
   }));
+  // Clientes White Label herdam o status financeiro da empresa gestora,
+  // exceto se estão aguardando a primeira renovação após restauração.
+  const clientesWhiteLabel=(data || []).filter(e =>
+    e.white_label_tipo==="cliente" && !!e.white_label_id);
+  let empresasAtuais=data ?? [];
+  if(clientesWhiteLabel.length){
+    const ids=[...new Set(clientesWhiteLabel.map(e=>String(e.white_label_id)))];
+    const {data:gestoras,error:erroGestoras}=await supabaseAdmin.from("white_labels")
+      .select("id,empresa_gestora_id").in("id",ids);
+    if(erroGestoras){
+      return NextResponse.json({ok:false,error:"Falha ao consultar cobrança White Label."},{status:500});
+    }
+    const gestoraIds=[...new Set((gestoras || [])
+      .map(x=>String(x.empresa_gestora_id||"")).filter(Boolean))];
+    const {data:empresasGestoras,error:erroEmpresasGestoras}=gestoraIds.length
+      ? await supabaseAdmin.from("empresas")
+        .select("id,assinatura_status,restauracao_pendente_pagamento_em").in("id",gestoraIds)
+      : {data:[],error:null};
+    if(erroEmpresasGestoras){
+      return NextResponse.json({ok:false,error:"Falha ao consultar situação da gestora."},{status:500});
+    }
+    const responsaveis=new Map((gestoras||[]).map(w=>[w.id,w.empresa_gestora_id]));
+    const statusGestora=new Map((empresasGestoras||[]).map(e=>[
+      e.id,e.restauracao_pendente_pagamento_em ? "bloqueada" : e.assinatura_status
+    ]));
+    empresasAtuais=(data||[]).map(e=>{
+      if(e.white_label_tipo!=="cliente" || !e.white_label_id) return e;
+      const status=statusGestora.get(responsaveis.get(e.white_label_id)||"");
+      return {...e,assinatura_status:
+        e.restauracao_pendente_pagamento_em
+          ? "bloqueada" : (status || e.assinatura_status)};
+    });
+  }
   return NextResponse.json({
     ok: true,
-    empresas:[...(data ?? []),...excluidas],
+    empresas:[...empresasAtuais,...excluidas],
   });
 }
 
