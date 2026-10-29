@@ -661,14 +661,10 @@ export default function CampanhaModal({
           ].join(" ")}
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <div className={styles.modalHeader}>
-            <div>
-              <p className={styles.sectionLabel}>NOVA CAMPANHA</p>
+          <div className={[styles.modalHeader, styles.wizardCompactModalHeader].join(" ")}>
+            <div className={styles.wizardCompactTitle}>
+              <span>NOVA CAMPANHA</span>
               <h2>Criar campanha de e-mail</h2>
-              <p>
-                Configure o conteúdo, escolha o público e revise a
-                personalização antes de enviar.
-              </p>
             </div>
             <button
               type="button"
@@ -682,36 +678,17 @@ export default function CampanhaModal({
 
           <div className={styles.wizardWorkspace}>
             <aside className={styles.wizardPreviewSidebar} aria-label="Pré-visualização do e-mail">
-              <div className={styles.wizardPreviewTop}>
-                <div className={styles.wizardPreviewHeading}>
-                  <span className={styles.wizardPreviewEyebrow}>PRÉVIA DO E-MAIL</span>
-                  <strong>{templateSelecionado?.nome || "Selecione um template"}</strong>
-                </div>
-                <span className={styles.wizardPreviewStatus}>
-                  {amostraRealDisponivel ? "Contato real" : "Exemplo"}
+              <div className={styles.wizardPreviewCompactTop}>
+                <strong>Prévia do e-mail</strong>
+                <span>
+                  {amostraRealDisponivel
+                    ? `Para: ${String(analise?.amostra?.nome || analise?.amostra?.email || "Contato")}`
+                    : "Contato de exemplo"}
                 </span>
               </div>
-              <div className={styles.wizardPreviewDetails}>
-                <div>
-                  <span>Remetente</span>
-                  <strong>
-                    {remetenteSelecionado
-                      ? `${remetenteSelecionado.nome} <${remetenteSelecionado.email}>`
-                      : "Selecione um remetente"}
-                  </strong>
-                </div>
-                <div>
-                  <span>Assunto</span>
-                  <strong>{assuntoPreview || "Defina o assunto do e-mail"}</strong>
-                </div>
-                <div className={styles.wizardPreviewContact}>
-                  <span>Visualizando para</span>
-                  <strong>
-                    {amostraRealDisponivel
-                      ? String(analise?.amostra?.nome || analise?.amostra?.email || "Contato")
-                      : "Cliente de exemplo"}
-                  </strong>
-                </div>
+              <div className={styles.wizardPreviewCompactSubject}>
+                <span>Assunto</span>
+                <strong>{assuntoPreview || "Defina o assunto do e-mail"}</strong>
               </div>
               <div className={styles.wizardPreviewDocument}>
                 {templateSelecionado?.html ? (
@@ -723,17 +700,11 @@ export default function CampanhaModal({
                 ) : (
                   <div className={styles.wizardPreviewEmpty}>
                     <FileText size={26} />
-                    <strong>Nenhum template selecionado</strong>
-                    <span>Selecione um template para visualizar todo o conteúdo aqui.</span>
+                    <strong>Selecione um template</strong>
+                    <span>O conteúdo do e-mail aparecerá aqui.</span>
                   </div>
                 )}
               </div>
-              <p className={styles.wizardPreviewHint}>
-                Role dentro da prévia para visualizar o e-mail completo.
-                {amostraRealDisponivel
-                  ? " Os dados exibidos pertencem a um destinatário elegível."
-                  : " Os dados são ilustrativos até a seleção do público."}
-              </p>
             </aside>
 
             <div className={styles.wizardMainColumn}>
@@ -833,10 +804,7 @@ export default function CampanhaModal({
                 <div className={styles.formSectionHeader}>
                   <div>
                     <strong>Quem receberá a campanha?</strong>
-                    <span>
-                      Listas grandes são processadas no servidor; o navegador
-                      não precisa carregar todos os contatos.
-                    </span>
+                    <span>Escolha uma opção de público abaixo.</span>
                   </div>
                   <span className={styles.audienceEstimate}>
                     {analisando
@@ -845,51 +813,42 @@ export default function CampanhaModal({
                   </span>
                 </div>
 
-                <div className={styles.choiceGrid}>
+                <div className={styles.audienceModeSelector} role="group" aria-label="Tipo de público">
                   <button
                     type="button"
-                    className={
-                      audienciaTipo === "todos"
-                        ? styles.choiceActive
-                        : styles.choiceButton
-                    }
+                    aria-pressed={audienciaTipo === "todos"}
+                    className={audienciaTipo === "todos" ? styles.audienceModeActive : styles.audienceModeOption}
                     onClick={() => setAudienciaTipo("todos")}
                   >
-                    <Users size={18} />
-                    <strong>Todos com e-mail</strong>
-                    <small>
-                      {formatarNumero(totalContatosComEmail)} cadastrados
-                    </small>
+                    <Users size={18} aria-hidden="true" />
+                    <span>
+                      <strong>Todos</strong>
+                      <small>{formatarNumero(totalContatosComEmail)} com e-mail</small>
+                    </span>
                   </button>
-
                   <button
                     type="button"
-                    className={
-                      audienciaTipo === "listas"
-                        ? styles.choiceActive
-                        : styles.choiceButton
-                    }
+                    aria-pressed={audienciaTipo === "listas"}
+                    className={audienciaTipo === "listas" ? styles.audienceModeActive : styles.audienceModeOption}
                     onClick={() => setAudienciaTipo("listas")}
                   >
-                    <FileText size={18} />
-                    <strong>Uma ou mais listas</strong>
-                    <small>
-                      Une listas e remove e-mails repetidos automaticamente
-                    </small>
+                    <FileText size={18} aria-hidden="true" />
+                    <span>
+                      <strong>Listas</strong>
+                      <small>Uma ou mais listas</small>
+                    </span>
                   </button>
-
                   <button
                     type="button"
-                    className={
-                      audienciaTipo === "contatos"
-                        ? styles.choiceActive
-                        : styles.choiceButton
-                    }
+                    aria-pressed={audienciaTipo === "contatos"}
+                    className={audienciaTipo === "contatos" ? styles.audienceModeActive : styles.audienceModeOption}
                     onClick={() => setAudienciaTipo("contatos")}
                   >
-                    <Mail size={18} />
-                    <strong>Contatos específicos</strong>
-                    <small>Seleção manual com busca e paginação</small>
+                    <Mail size={18} aria-hidden="true" />
+                    <span>
+                      <strong>Contatos</strong>
+                      <small>Seleção manual</small>
+                    </span>
                   </button>
                 </div>
 
@@ -960,7 +919,12 @@ export default function CampanhaModal({
                 ) : null}
 
                 {audienciaTipo === "contatos" ? (
-                  <div className={styles.contactDualPicker}>
+                  <section className={styles.audienceContactSection}>
+                    <div className={styles.audienceContactSectionHeader}>
+                      <strong>Selecione os contatos</strong>
+                      <span>Clique em um contato para adicionar ou remover.</span>
+                    </div>
+                    <div className={styles.contactDualPicker}>
                     <div className={styles.contactPickerColumn}>
                       <div className={styles.contactPickerColumnHeader}>
                         <strong>Disponíveis</strong>
@@ -1073,9 +1037,14 @@ export default function CampanhaModal({
                     <div className={styles.contactPickerColumn}>
                       <div className={styles.contactPickerColumnHeader}>
                         <strong>Selecionados</strong>
-                        <span>
-                          {formatarNumero(contatosSelecionados.size)}
-                        </span>
+                        <div className={styles.audienceSelectedActions}>
+                          <span>{formatarNumero(contatosSelecionados.size)}</span>
+                          {contatosSelecionados.size ? (
+                            <button type="button" onClick={() => setContatosSelecionados(new Map())}>
+                              Limpar
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className={styles.selectedContactsList}>
@@ -1114,19 +1083,10 @@ export default function CampanhaModal({
                         ) : null}
                       </div>
 
-                      {contatosSelecionados.size ? (
-                        <button
-                          type="button"
-                          className={styles.secondaryButton}
-                          onClick={() =>
-                            setContatosSelecionados(new Map())
-                          }
-                        >
-                          Remover todos
-                        </button>
-                      ) : null}
+
                     </div>
-                  </div>
+                    </div>
+                  </section>
                 ) : null}
 
                 {erroAnalise ? (
