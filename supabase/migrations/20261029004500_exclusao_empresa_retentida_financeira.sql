@@ -3,7 +3,8 @@ alter table public.empresa_encerramento_financeiro
   add column if not exists backup_path text,
   add column if not exists arquivos_midias jsonb not null default '[]'::jsonb,
   add column if not exists limpeza_status text not null default 'pendente',
-  add column if not exists limpeza_erro text;
+  add column if not exists limpeza_erro text,
+  add column if not exists auth_user_ids uuid[] not null default '{}'::uuid[];
 
 create or replace function public.excluir_empresa_com_retentcao_admin(p_empresa_id uuid)
 returns jsonb language plpgsql security invoker
@@ -32,7 +33,7 @@ begin
 
   insert into public.empresa_encerramento_financeiro (
     cliente_id,empresa_nome,white_label_id,cancelada_em,assinatura_status,
-    pagamentos,backup_path,arquivos_midias,limpeza_status
+    pagamentos,backup_path,arquivos_midias,limpeza_status,auth_user_ids
   ) values (
     v_empresa.id,v_empresa.nome_fantasia,v_empresa.white_label_id,
     v_empresa.cancelada_em,v_empresa.assinatura_status,
@@ -45,7 +46,9 @@ begin
     v_empresa.encerramento_backup_path,
     coalesce((select jsonb_agg(m.storage_path) from public.midias m
       where m.empresa_id=v_empresa.id and m.storage_path is not null),'[]'::jsonb),
-    'pendente'
+    'pendente',
+    coalesce((select array_agg(distinct u.auth_user_id) from public.usuarios u
+      where u.empresa_id=v_empresa.id and u.auth_user_id is not null),array[]::uuid[])
   )
   on conflict (cliente_id) do nothing;
   v_resultado := public.excluir_empresa_definitivamente_admin(p_empresa_id);
