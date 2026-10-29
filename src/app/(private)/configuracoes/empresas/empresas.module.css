@@ -2715,3 +2715,135 @@
   .companyEditFooter > span { display: none; }
   .companyEditFooterActions { display: grid; grid-template-columns: 1fr 1.5fr; }
 }
+
+/* Credenciais: validação visual segura e salvamento independente. */
+.secretSavedIcon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--crm-success-text);
+  background: var(--crm-success-bg);
+  pointer-events: none;
+}
+
+.emailMarketingCredential .secretField input[readonly] {
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
+  letter-spacing: .03em;
+  cursor: default;
+}
+
+.secretFieldActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.secretFieldActions > span {
+  flex: 1 1 180px;
+}
+
+.secretFieldActions button {
+  flex: 0 0 auto;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.secretFieldActions button:hover {
+  border-color: var(--crm-primary-strong);
+}
+
+.secretFieldActions button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+.emailMarketingSaveRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--crm-border);
+}
+
+.emailMarketingSaveRow > span {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 7px;
+  flex: 1 1 260px;
+  color: var(--crm-text-muted);
+  line-height: 1.5;
+  font-size: 12px;
+}
+
+.emailMarketingSaveRow > span svg {
+  flex-shrink: 0;
+  color: var(--crm-primary-text);
+}
+
+.emailMarketingSaveRow .primaryButton {
+  min-height: 41px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding-inline: 16px;
+}
+
+.emailMarketingFeedbackError,
+.emailMarketingFeedbackSuccess {
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.emailMarketingFeedbackError {
+  color: var(--crm-danger-text);
+  background: var(--crm-danger-bg);
+  border-color: var(--crm-danger-border);
+}
+
+.emailMarketingFeedbackSuccess {
+  color: var(--crm-success-text);
+  background: var(--crm-success-bg);
+  border-color: var(--crm-success-border);
+}
+
+@media (max-width: 700px) {
+  .emailMarketingSaveRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .emailMarketingSaveRow > span,
+  .emailMarketingSaveRow .primaryButton {
+    width: 100%;
+  }
+
+  .emailMarketingSaveRow > span {
+    flex-basis: auto;
+  }
+}
