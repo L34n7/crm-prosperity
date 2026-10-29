@@ -72,6 +72,16 @@ export async function GET(request: Request) {
         ? new Date(atual.cancelamento_auto_nao_antes_em).getTime():0;
       if(!bloqueioAtualMs || Math.max(bloqueioAtualMs+30*DIA_MS,restAtualMs,transAtualMs)>Date.now())
         continue;
+      const {count:pagamentosRecentes,error:pagamentosErro}=await supabase.from("pagamentos")
+        .select("id",{head:true,count:"exact"})
+        .eq("empresa_id",empresa.id).eq("status","paid")
+        .gte("paid_at",new Date(bloqueioAtualMs).toISOString());
+      if(pagamentosErro)throw new Error("Não foi possível verificar pagamentos recentes: "+pagamentosErro.message);
+      if((pagamentosRecentes||0)>0){
+        eventos.push({tipo:"cancelamento_ignorado_pagamento",empresa_id:empresa.id,ok:true,
+          detalhe:"Há pagamento posterior ao bloqueio; conciliação financeira necessária."});
+        continue;
+      }
       const resultado=await encerrarEmpresaAdministrativamente(empresa.id,null,"inadimplencia");
       eventos.push({tipo:"cancelamento_automatico",empresa_id:empresa.id,ok:true,
         detalhe:resultado.email_cancelamento_enviado?"E-mail enviado":"E-mail em fila para nova tentativa"});
