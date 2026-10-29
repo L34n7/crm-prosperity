@@ -155,12 +155,13 @@ export async function buscarAssinaturaEmpresa(
   const { data: vinculoWhiteLabel, error: vinculoWhiteLabelError } =
     await supabaseAdmin
       .from("empresas")
-      .select("status,white_label_id,white_label_tipo")
+      .select("status,white_label_id,white_label_tipo,restauracao_pendente_pagamento_em")
       .eq("id", empresaId)
       .maybeSingle<{
         status: string | null;
         white_label_id: string | null;
         white_label_tipo: "gestora" | "cliente" | null;
+        restauracao_pendente_pagamento_em: string | null;
       }>();
 
   if (vinculoWhiteLabelError) {
@@ -216,9 +217,25 @@ export async function buscarAssinaturaEmpresa(
       : empresaCliente?.planos || null;
     const clienteAtivo =
       String(vinculoWhiteLabel.status || "").trim().toLowerCase() === "ativa";
+    const pendencia = vinculoWhiteLabel.restauracao_pendente_pagamento_em;
+    const renovacaoGestora = assinaturaGestora?.renovada_em
+      ? new Date(assinaturaGestora.renovada_em).getTime() : 0;
+    const renovacaoAposRestauracao = Boolean(pendencia) &&
+      renovacaoGestora >= new Date(pendencia!).getTime() &&
+      assinaturaGestora?.status === "ativa";
+    if (pendencia && renovacaoAposRestauracao) {
+      const {error:baixaError} = await supabaseAdmin.from("empresas")
+        .update({restauracao_pendente_pagamento_em:null})
+        .eq("id",empresaId)
+        .eq("restauracao_pendente_pagamento_em",pendencia);
+      if(baixaError) {
+        console.error("[ASSINATURA WL] Falha ao baixar pendência de restauração:",baixaError.message);
+      }
+    }
+    const aguardandoPagamento = Boolean(pendencia) && !renovacaoAposRestauracao;
 
     return {
-      status: clienteAtivo
+      status: clienteAtivo && !aguardandoPagamento
         ? assinaturaGestora?.status ?? "ativa"
         : "bloqueada",
       inicio_em: assinaturaGestora?.inicio_em ?? null,
