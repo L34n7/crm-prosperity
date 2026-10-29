@@ -36,12 +36,26 @@ export async function enviarAvisoCancelamentoPendente(empresaId:string) {
   if(!reservado)return {enviado:false,ignorado:true};
 
   try{
+    // Notificação contratual somente ao e-mail principal e aos administradores,
+    // não a todos os operadores que já tiveram acesso ao CRM.
     const {data:usuarios,error:usuariosErro}=await supabase.from("usuarios")
-      .select("email").eq("empresa_id",empresaId);
+      .select("id,email").eq("empresa_id",empresaId);
     if(usuariosErro)throw new Error(usuariosErro.message);
+    const ids=(usuarios||[]).map(u=>u.id);
+    let admins=new Set<string>();
+    if(ids.length){
+      const {data:perfis,error:perfisErro}=await supabase.from("usuarios_perfis")
+        .select("usuario_id,perfis_empresa(nome,ativo,empresa_id)").in("usuario_id",ids);
+      if(perfisErro)throw new Error(perfisErro.message);
+      admins=new Set((perfis||[]).filter(v=>{
+        const perfil=Array.isArray(v.perfis_empresa)?v.perfis_empresa[0]:v.perfis_empresa;
+        return String(perfil?.nome||"").toLowerCase()==="administrador" &&
+          perfil?.ativo!==false && perfil?.empresa_id===empresaId;
+      }).map(v=>v.usuario_id));
+    }
     const destinatarios=Array.from(new Set([
       String(empresa.email||""),
-      ...(usuarios||[]).map(u=>String(u.email||"")),
+      ...(usuarios||[]).filter(u=>admins.has(u.id)).map(u=>String(u.email||"")),
     ].map(e=>e.trim().toLowerCase()).filter(e=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e))));
     if(!destinatarios.length)throw new Error("Empresa sem destinatários válidos.");
 
