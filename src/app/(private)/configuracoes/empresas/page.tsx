@@ -1051,9 +1051,10 @@ export default function EmpresasPage() {
         setEditandoId(null);
       }
 
-      const avisos = Array.isArray(data.avisos)
-        ? data.avisos.filter(Boolean)
-        : [];
+      const avisos = [
+        ...(Array.isArray(data.avisos) ? data.avisos.filter(Boolean) : []),
+        ...(data.resultado?.warning ? [data.resultado.warning] : []),
+      ];
 
       setMensagem(
         avisos.length > 0
@@ -1734,7 +1735,7 @@ export default function EmpresasPage() {
                                     </button>
                                     <button type="button" className={styles.offboardingRestore}
                                       onClick={() => void restaurarClienteCancelado(empresa)}
-                                      disabled={Boolean(operandoEncerramentoId) || !empresa.exclusao_prevista_em ||
+                                      disabled={Boolean(operandoEncerramentoId) || empresa.encerramento_backup_estado === "processando" || !empresa.exclusao_prevista_em ||
                                         new Date(empresa.exclusao_prevista_em).getTime() <= Date.now()}>
                                       <RotateCcw size={16} /> Restaurar
                                     </button>
