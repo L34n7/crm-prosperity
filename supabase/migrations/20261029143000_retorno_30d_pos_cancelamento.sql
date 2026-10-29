@@ -1,0 +1,1 @@
+-- Migração do segundo aviso de cancelamento.
