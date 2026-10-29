@@ -32,7 +32,7 @@ export async function POST(_request: Request, context: {params: Promise<{id:stri
     const {id} = await context.params;
     await autorizar(id);
     const result = await gerarBackupEncerramento(id);
-    return NextResponse.json({ok:true,...result});
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Falha ao gerar backup."}, {status:400});
   }
