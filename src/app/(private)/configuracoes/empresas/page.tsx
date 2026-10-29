@@ -308,6 +308,8 @@ export default function EmpresasPage() {
   const [excluindoEmpresa, setExcluindoEmpresa] = useState(false);
   const [erroExclusao, setErroExclusao] = useState("");
   const [operandoEncerramentoId, setOperandoEncerramentoId] = useState<string | null>(null);
+  const [arquivosBackup, setArquivosBackup] = useState<Record<string, Array<{nome:string;bytes:number;sha256:string;url:string}>>>({});
+  const [progressoBackup, setProgressoBackup] = useState<Record<string,number>>({});
 
   const [editNomeFantasia, setEditNomeFantasia] = useState("");
   const [editRazaoSocial, setEditRazaoSocial] = useState("");
@@ -919,26 +921,35 @@ export default function EmpresasPage() {
   }
 
   async function baixarBackupEmpresa(empresa: Empresa) {
-    if (operandoEncerramentoId) return;
+    if(operandoEncerramentoId)return;
     setOperandoEncerramentoId(empresa.id);
-    setErro("");
-    setMensagem("");
+    setErro("");setMensagem("");
     try {
-      if (empresa.encerramento_backup_estado !== "pronto") {
-        const preparar = await fetch(`/api/empresas/${empresa.id}/backup`, { method: "POST" });
-        const resposta = await preparar.json();
-        if (!preparar.ok || !resposta.ok) throw new Error(resposta.error || "Não foi possível preparar o backup.");
+      if(empresa.encerramento_backup_estado!=="pronto"){
+        // O processamento avança somente enquanto o administrador mantém esta ação em andamento.
+        let terminou=false;
+        for(let tentativa=0;tentativa<500;tentativa++){
+          const response=await fetch(`/api/empresas/${empresa.id}/backup`,{method:"POST"});
+          const json=await response.json();
+          if(!response.ok || !json.ok)throw new Error(json.error||"Falha ao preparar backup.");
+          setProgressoBackup((anterior)=>({...anterior,[empresa.id]:Number(json.partes||0)}));
+          if(json.concluido){terminou=true;break;}
+        }
+        if(!terminou)throw new Error("O backup possui muitas partes. Clique novamente para continuar.");
       }
-      const resposta = await fetch(`/api/empresas/${empresa.id}/backup`, { cache: "no-store" });
-      const download = await resposta.json();
-      if (!resposta.ok || !download.ok || !download.url) throw new Error(download.error || "Backup indisponível.");
+      const resposta=await fetch(`/api/empresas/${empresa.id}/backup`,{cache:"no-store"});
+      const download=await resposta.json();
+      if(!resposta.ok || !download.ok || !Array.isArray(download.partes))
+        throw new Error(download.error||"Backup indisponível.");
+      setArquivosBackup((anterior)=>({...anterior,[empresa.id]:download.partes}));
+      setMensagem(download.partes.length===1
+        ? "Backup pronto. Clique em Baixar arquivo."
+        : `Backup dividido em ${download.partes.length} arquivos. Baixe todas as partes.`);
       await carregarEmpresas();
-      window.location.assign(download.url);
-      setMensagem("Backup preparado. O download foi iniciado.");
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao baixar backup.");
+    }catch(error){
+      setErro(error instanceof Error?error.message:"Erro ao baixar backup.");
       await carregarEmpresas();
-    } finally {
+    }finally{
       setOperandoEncerramentoId(null);
     }
   }
@@ -1717,21 +1728,25 @@ export default function EmpresasPage() {
                                     <strong>Gestão de dados e encerramento</strong>
                                     <p>
                                       {empresa.encerramento_backup_estado === "pronto"
-                                        ? `Backup disponível desde ${formatarDataLead(empresa.encerramento_backup_gerado_em || null)}.`
+                                        ? "Backup solicitado e gerado. Os arquivos ficam disponíveis até a data de exclusão."
                                         : empresa.encerramento_backup_estado === "erro"
-                                          ? empresa.encerramento_backup_erro || "Falha ao preparar backup. Tente novamente."
-                                          : "O backup será preparado automaticamente. Você também pode solicitar a geração."}
+                                          ? empresa.encerramento_backup_erro || "A geração não foi concluída; clique para retomar."
+                                          : "O backup NÃO é automático. Solicite-o aqui dentro de 90 dias do cancelamento. Após esse prazo, os dados operacionais são excluídos mesmo sem solicitação."}
+                                      {operandoEncerramentoId === empresa.id && (
+                                        <span> Partes preparadas: {progressoBackup[empresa.id] || 0}.</span>
+                                      )}
                                     </p>
                                   </div>
                                   <div className={styles.offboardingActions}>
                                     <button type="button" className={styles.offboardingDownload}
                                       onClick={() => void baixarBackupEmpresa(empresa)}
-                                      disabled={Boolean(operandoEncerramentoId) || empresa.encerramento_backup_estado === "processando" || !empresa.cancelada_em}
+                                      disabled={Boolean(operandoEncerramentoId) || !empresa.cancelada_em || !empresa.exclusao_prevista_em ||
+                                        new Date(empresa.exclusao_prevista_em).getTime() <= Date.now()}
                                       title={!empresa.cancelada_em ? "Cancelamento anterior sem registro de retenção. Requer regularização administrativa." : undefined}>
                                       <Download size={16} />
                                       {operandoEncerramentoId === empresa.id
-                                        ? "Preparando..."
-                                        : empresa.encerramento_backup_estado === "pronto" ? "Baixar backup" : "Gerar backup"}
+                                        ? "Preparando partes..."
+                                        : empresa.encerramento_backup_estado === "pronto" ? "Ver downloads" : "Solicitar backup"}
                                     </button>
                                     <button type="button" className={styles.offboardingRestore}
                                       onClick={() => void restaurarClienteCancelado(empresa)}
@@ -1742,16 +1757,33 @@ export default function EmpresasPage() {
                                     {podeAcessarTemporariamente && (
                                       <button type="button" className={styles.offboardingDelete}
                                         disabled={Boolean(operandoEncerramentoId) ||
-                                          empresa.encerramento_backup_estado !== "pronto" ||
+                                          empresa.encerramento_backup_estado === "processando" ||
                                           !empresa.exclusao_prevista_em ||
                                           new Date(empresa.exclusao_prevista_em).getTime() > Date.now()}
-                                        title="Disponível após os 90 dias e com backup gerado."
+                                        title="Disponível após 90 dias, mesmo que nenhum backup tenha sido solicitado."
                                         onClick={() => abrirExclusaoEmpresa(empresa)}>
                                         <Trash2 size={16} /> Excluir definitivamente
                                       </button>
                                     )}
                                   </div>
                                 </div>
+                                {arquivosBackup[empresa.id]?.length > 0 && (
+                                  <div className={styles.offboardingFileList}>
+                                    <strong><Download size={15} /> Arquivos disponíveis para download</strong>
+                                    <p>Baixe todas as partes antes de {empresa.exclusao_prevista_em
+                                      ? formatarDataLead(empresa.exclusao_prevista_em) : "o fim da retenção"}. Links temporários expiram em 5 minutos.</p>
+                                    <div className={styles.offboardingFiles}>
+                                      {arquivosBackup[empresa.id].map((arquivo) => (
+                                        <a key={arquivo.nome} href={arquivo.url}
+                                          target="_blank" rel="noopener noreferrer"
+                                          className={styles.offboardingFileLink}>
+                                          <Download size={14} />
+                                          {arquivo.nome} ({(arquivo.bytes / 1024 / 1024).toFixed(1)} MB)
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </section>
                             )}
                           </div>
@@ -2704,8 +2736,8 @@ export default function EmpresasPage() {
               <strong>{empresaExclusaoModal.status === "cancelada" ? "Exclusão irreversível" : "Encerramento com retenção de 90 dias"}</strong>
               <p>
                 {empresaExclusaoModal.status === "cancelada"
-                  ? "O prazo de retenção e o backup devem estar concluídos. Os dados operacionais serão excluídos e o registro financeiro mínimo será preservado."
-                  : "Todos os acessos, integrações e automações serão bloqueados. O histórico será preservado por 90 dias e disponibilizado para backup ou restauração."}
+                  ? "Após 90 dias os dados operacionais são excluídos, mesmo sem backup solicitado. Registros financeiros legalmente necessários são preservados."
+                  : "Os acessos e automações serão bloqueados. Os dados ficarão disponíveis para solicitar backup por até 90 dias. A geração NÃO é automática. Sem solicitação dentro do prazo, os dados operacionais serão excluídos."}
               </p>
             </div>
 
