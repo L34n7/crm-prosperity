@@ -287,19 +287,40 @@ export default function CampanhaModal({
     return mapa;
   }, [analise, fallbacks, valoresPersonalizados]);
 
+  const amostraRealDisponivel = Boolean(
+    String(analise?.amostra?.email || "").trim()
+  );
+  const variaveisPreview = useMemo<VariaveisEmailMarketing>(
+    () =>
+      amostraRealDisponivel
+        ? variaveisAmostra
+        : {
+            ...variaveisAmostra,
+            nome: "Cliente",
+            nome_contato: "Cliente",
+            contato_nome: "Cliente",
+            nome_whatsapp: "Cliente",
+            nome_captura: "Cliente",
+            primeiro_nome_captura: "Cliente",
+            email: "cliente@exemplo.com",
+            email_contato: "cliente@exemplo.com",
+          },
+    [amostraRealDisponivel, variaveisAmostra]
+  );
+
   const assuntoPreview = useMemo(
-    () => renderizarVariaveis(assunto, variaveisAmostra, false),
-    [assunto, variaveisAmostra]
+    () => renderizarVariaveis(assunto, variaveisPreview, false),
+    [assunto, variaveisPreview]
   );
 
   const htmlPreview = useMemo(
     () =>
       renderizarVariaveis(
         String(templateSelecionado?.html || ""),
-        variaveisAmostra,
+        variaveisPreview,
         true
       ),
-    [templateSelecionado, variaveisAmostra]
+    [templateSelecionado, variaveisPreview]
   );
 
   useEffect(() => {
@@ -659,8 +680,65 @@ export default function CampanhaModal({
             </button>
           </div>
 
-          <div className={styles.wizardSteps}>
-            {ETAPAS.map((item) => (
+          <div className={styles.wizardWorkspace}>
+            <aside className={styles.wizardPreviewSidebar} aria-label="Pré-visualização do e-mail">
+              <div className={styles.wizardPreviewTop}>
+                <div className={styles.wizardPreviewHeading}>
+                  <span className={styles.wizardPreviewEyebrow}>PRÉVIA DO E-MAIL</span>
+                  <strong>{templateSelecionado?.nome || "Selecione um template"}</strong>
+                </div>
+                <span className={styles.wizardPreviewStatus}>
+                  {amostraRealDisponivel ? "Contato real" : "Exemplo"}
+                </span>
+              </div>
+              <div className={styles.wizardPreviewDetails}>
+                <div>
+                  <span>Remetente</span>
+                  <strong>
+                    {remetenteSelecionado
+                      ? `${remetenteSelecionado.nome} <${remetenteSelecionado.email}>`
+                      : "Selecione um remetente"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Assunto</span>
+                  <strong>{assuntoPreview || "Defina o assunto do e-mail"}</strong>
+                </div>
+                <div className={styles.wizardPreviewContact}>
+                  <span>Visualizando para</span>
+                  <strong>
+                    {amostraRealDisponivel
+                      ? String(analise?.amostra?.nome || analise?.amostra?.email || "Contato")
+                      : "Cliente de exemplo"}
+                  </strong>
+                </div>
+              </div>
+              <div className={styles.wizardPreviewDocument}>
+                {templateSelecionado?.html ? (
+                  <iframe
+                    title="Prévia completa do e-mail"
+                    sandbox=""
+                    srcDoc={htmlPreview}
+                  />
+                ) : (
+                  <div className={styles.wizardPreviewEmpty}>
+                    <FileText size={26} />
+                    <strong>Nenhum template selecionado</strong>
+                    <span>Selecione um template para visualizar todo o conteúdo aqui.</span>
+                  </div>
+                )}
+              </div>
+              <p className={styles.wizardPreviewHint}>
+                Role dentro da prévia para visualizar o e-mail completo.
+                {amostraRealDisponivel
+                  ? " Os dados exibidos pertencem a um destinatário elegível."
+                  : " Os dados são ilustrativos até a seleção do público."}
+              </p>
+            </aside>
+
+            <div className={styles.wizardMainColumn}>
+              <div className={styles.wizardSteps}>
+                {ETAPAS.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -680,9 +758,9 @@ export default function CampanhaModal({
                   <strong>{item.titulo}</strong>
                   <small>{item.subtitulo}</small>
                 </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
 
           <form
             className={styles.modalBody}
@@ -747,24 +825,6 @@ export default function CampanhaModal({
                   </label>
                 </div>
 
-                {templateSelecionado ? (
-                  <div className={styles.templateInlinePreview}>
-                    <div>
-                      <FileText size={18} />
-                      <span>
-                        <strong>{templateSelecionado.nome}</strong>
-                        <small>{templateSelecionado.assunto}</small>
-                      </span>
-                    </div>
-                    <div className={styles.templateMiniFrame}>
-                      <iframe
-                        title="Prévia compacta do template"
-                        sandbox=""
-                        srcDoc={templateSelecionado.html}
-                      />
-                    </div>
-                  </div>
-                ) : null}
               </div>
             ) : null}
 
@@ -1200,32 +1260,6 @@ export default function CampanhaModal({
                     )}
                   </div>
 
-                  <div className={styles.campaignPreviewPanel}>
-                    <div className={styles.campaignPreviewHeader}>
-                      <div>
-                        <span>Prévia com contato real</span>
-                        <strong>
-                          {String(analise?.amostra?.nome || "") ||
-                            String(analise?.amostra?.email || "") ||
-                            "Nenhuma amostra disponível"}
-                        </strong>
-                      </div>
-                      <small>
-                        A prévia usa um destinatário elegível da audiência.
-                      </small>
-                    </div>
-
-                    <div className={styles.previewSubject}>
-                      <span>Assunto</span>
-                      <strong>{assuntoPreview || "Sem assunto"}</strong>
-                    </div>
-
-                    <iframe
-                      title="Prévia personalizada da campanha"
-                      sandbox=""
-                      srcDoc={htmlPreview}
-                    />
-                  </div>
                 </div>
               </div>
             ) : null}
@@ -1540,6 +1574,8 @@ export default function CampanhaModal({
               </div>
             </div>
           </form>
+            </div>
+          </div>
         </div>
       </div>
 

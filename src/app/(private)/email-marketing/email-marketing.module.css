@@ -2701,3 +2701,436 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Wizard de campanhas: prévia em altura total e formulários independentes */
+.campaignWizardModal {
+  width: min(1480px, calc(100vw - 40px));
+  height: min(920px, calc(100dvh - 36px));
+  max-height: calc(100dvh - 36px);
+}
+
+.wizardWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wizardPreviewSidebar {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-right: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+
+.wizardPreviewTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.wizardPreviewHeading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wizardPreviewEyebrow {
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .055em;
+}
+
+.wizardPreviewHeading strong {
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.wizardPreviewStatus {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wizardPreviewDetails {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+  gap: 8px 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+}
+
+.wizardPreviewDetails > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wizardPreviewDetails > div:nth-child(2) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.wizardPreviewDetails > div:nth-child(3) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.wizardPreviewDetails span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wizardPreviewDetails strong {
+  overflow-wrap: anywhere;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wizardPreviewDocument {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgb(15 23 42 / 6%);
+}
+
+.wizardPreviewDocument iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  background: #fff;
+  /* Rolagem do HTML acontece dentro do próprio documento do iframe. */
+  overflow: auto;
+}
+
+.wizardPreviewEmpty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 30px;
+  color: #607080;
+  text-align: center;
+}
+
+.wizardPreviewEmpty strong {
+  color: #233143;
+  font-size: 16px;
+}
+
+.wizardPreviewEmpty span {
+  max-width: 300px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.wizardPreviewHint {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wizardMainColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.campaignWizardModal .wizardSteps {
+  gap: 5px;
+  padding: 9px 12px 0;
+  flex: 0 0 auto;
+}
+
+.campaignWizardModal .wizardStep,
+.campaignWizardModal .wizardStepActive,
+.campaignWizardModal .wizardStepDone {
+  gap: 8px;
+  padding: 13px 5px 15px;
+}
+
+.campaignWizardModal .wizardStep > span,
+.campaignWizardModal .wizardStepActive > span,
+.campaignWizardModal .wizardStepDone > span {
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+
+.campaignWizardModal .wizardSteps strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.campaignWizardModal .wizardSteps small {
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.campaignWizardModal .modalBody {
+  min-height: 0;
+}
+
+.campaignWizardModal .wizardScrollArea {
+  padding: 20px 22px;
+  overscroll-behavior: contain;
+}
+
+.campaignWizardModal .wizardFooter {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 15px 20px;
+  position: static;
+}
+
+.campaignWizardModal .formGridTwo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.campaignWizardModal .personalizationGrid {
+  display: block;
+}
+
+.campaignWizardModal .variablesConfigPanel {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  gap: 12px;
+}
+
+.campaignWizardModal .field > span,
+.campaignWizardModal .searchBox input,
+.campaignWizardModal .personalizationHeader strong,
+.campaignWizardModal .formSectionHeader strong {
+  font-size: 14px;
+}
+
+.campaignWizardModal .field input,
+.campaignWizardModal .field select,
+.campaignWizardModal .field textarea,
+.campaignWizardModal .secondaryButton,
+.campaignWizardModal .primaryButton {
+  font-size: 14px;
+}
+
+.campaignWizardModal .field > small,
+.campaignWizardModal .formSectionHeader span,
+.campaignWizardModal .personalizationHeader span,
+.campaignWizardModal .infoNote,
+.campaignWizardModal .warningNote,
+.campaignWizardModal .complianceNote,
+.campaignWizardModal .guidanceNote span,
+.campaignWizardModal .inlineMuted {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.campaignWizardModal .variableConfigCard {
+  gap: 12px;
+  padding: 16px;
+}
+
+.campaignWizardModal .variableConfigHeader strong,
+.campaignWizardModal .variableSampleValue strong,
+.campaignWizardModal .reviewCard > strong,
+.campaignWizardModal .contactPickerColumnHeader strong {
+  font-size: 14px;
+}
+
+.campaignWizardModal .variableConfigHeader span,
+.campaignWizardModal .variableSampleValue span,
+.campaignWizardModal .variableConfigHeader em,
+.campaignWizardModal .reviewCard > span,
+.campaignWizardModal .reviewCard > small,
+.campaignWizardModal .audienceAnalysisGrid span,
+.campaignWizardModal .multiListCard small,
+.campaignWizardModal .multiListCardSelected small,
+.campaignWizardModal .contactResult small,
+.campaignWizardModal .contactResultSelected small,
+.campaignWizardModal .contactResultBlocked small {
+  font-size: 12px;
+}
+
+.campaignWizardModal .choiceButton strong,
+.campaignWizardModal .choiceActive strong,
+.campaignWizardModal .multiListCard strong,
+.campaignWizardModal .multiListCardSelected strong,
+.campaignWizardModal .contactResult strong,
+.campaignWizardModal .contactResultSelected strong,
+.campaignWizardModal .contactResultBlocked strong,
+.campaignWizardModal .sendChoiceButton strong,
+.campaignWizardModal .sendChoiceActive strong {
+  font-size: 14px;
+}
+
+.campaignWizardModal .choiceButton small,
+.campaignWizardModal .choiceActive small,
+.campaignWizardModal .sendChoiceButton small,
+.campaignWizardModal .sendChoiceActive small,
+.campaignWizardModal .finalConfirmationText small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.campaignWizardModal .choiceGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.campaignWizardModal .audienceAnalysisGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.campaignWizardModal .reviewGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .campaignWizardModal {
+    width: calc(100vw - 28px);
+  }
+
+  .wizardWorkspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  }
+
+  .wizardPreviewSidebar {
+    padding: 12px;
+  }
+
+  .campaignWizardModal .wizardSteps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .campaignWizardModal .wizardStep,
+  .campaignWizardModal .wizardStepActive,
+  .campaignWizardModal .wizardStepDone {
+    padding: 8px 5px;
+  }
+
+  .campaignWizardModal .formGridTwo {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .campaignWizardModal {
+    height: min(960px, calc(100dvh - 20px));
+    max-height: calc(100dvh - 20px);
+  }
+
+  .wizardWorkspace {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .wizardPreviewSidebar {
+    flex: 0 0 auto;
+    min-height: 330px;
+    height: min(480px, 52dvh);
+    border-right: 0;
+    border-bottom: 1px solid var(--crm-border);
+  }
+
+  .wizardMainColumn {
+    flex: 0 0 auto;
+    min-height: 520px;
+    overflow: visible;
+  }
+
+  .campaignWizardModal .modalBody {
+    flex: 1 1 auto;
+    min-height: 450px;
+  }
+
+  .campaignWizardModal .wizardSteps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .campaignWizardModal .formGridTwo {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .campaignWizardModal {
+    width: 100%;
+    height: 96dvh;
+    max-height: 96dvh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .wizardPreviewSidebar {
+    min-height: 310px;
+    height: 43dvh;
+  }
+
+  .wizardPreviewDetails {
+    grid-template-columns: 1fr;
+  }
+
+  .wizardPreviewDetails > div:nth-child(2),
+  .wizardPreviewDetails > div:nth-child(3) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .campaignWizardModal .wizardSteps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-inline: 10px;
+  }
+
+  .campaignWizardModal .formGridTwo,
+  .campaignWizardModal .choiceGrid,
+  .campaignWizardModal .audienceAnalysisGrid,
+  .campaignWizardModal .reviewGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .campaignWizardModal .wizardScrollArea {
+    padding: 16px;
+  }
+
+  .campaignWizardModal .wizardFooter {
+    padding: 12px 16px;
+  }
+}
