@@ -3,7 +3,7 @@ export default function TermosDeServico() {
     <main style={{ maxWidth: 960, margin: "0 auto", padding: "40px 24px 72px", lineHeight: 1.7 }}>
       <h1>Termos de Uso e Contrato de Licença SaaS - CRM Prosperity</h1>
 
-      <p><strong>Última atualização:</strong> 17/09/2026</p>
+      <p><strong>Última atualização:</strong> 29/10/2026</p>
 
       <h2>Identificação do fornecedor</h2>
       <p>
@@ -270,6 +270,31 @@ export default function TermosDeServico() {
         terceiros e deixar de estar acessíveis após sua expiração. O CRM Prosperity não
         garante armazenamento permanente de conteúdo fornecido temporariamente por tais
         provedores.
+      </p>
+
+      <h3>18.1. Disponibilização de dados após o cancelamento (90 dias)</h3>
+      <p>
+        Após o encerramento administrativo da empresa contratante, o CRM Prosperity
+        manterá os dados operacionais disponíveis para solicitação de exportação
+        por até <strong>90 (noventa) dias corridos</strong>, contados da data do
+        cancelamento. A solicitação deve ser feita dentro desse prazo pelos
+        canais administrativos autorizados. <strong>Não há geração automática
+        de arquivo de backup no cancelamento.</strong>
+      </p>
+      <p>
+        Uma vez solicitada, a exportação poderá ser disponibilizada em um ou mais
+        arquivos ZIP, conforme o volume de dados, cabendo ao Cliente baixar e
+        guardar todas as partes disponibilizadas antes de terminar o prazo de 90 dias.
+        O armazenamento temporário de um ZIP no sistema não altera nem prorroga
+        o prazo de retenção, e links de download poderão expirar e precisar de renovação.
+      </p>
+      <p>
+        Se não houver solicitação e retirada dos arquivos durante esse prazo, os
+        dados operacionais poderão ser excluídos definitivamente após o 90º dia,
+        sem possibilidade de recuperação pela Plataforma, ressalvados registros
+        que devam ser preservados por obrigação legal, regulatória, determinação
+        de autoridade ou exercício regular de direitos. O Cliente é responsável
+        por solicitar e guardar cópias dos dados que deseje conservar.
       </p>
 
       <h2>19. Proteção de dados pessoais</h2>
