@@ -66,8 +66,30 @@ export async function restaurarEmpresaAdministrativamente(empresaId: string) {
     if ((count ?? 0) >= Number(wl.licencas_contratadas || 0))
       throw new Error("O White Label não possui licença livre para restaurar este cliente.");
   }
+  // Ao restaurar, a próxima eventual rescisão deve iniciar um backup novo.
+  const {data:arquivosAnteriores} = await supabase.from("empresas")
+    .select("encerramento_backup_path,encerramento_backup_partes")
+    .eq("id",empresaId).single();
   const { data, error } = await supabase.rpc("restaurar_empresa_admin", {p_empresa_id: empresaId});
   if (error) throw new Error(error.message);
+  const {error:limpezaErro} = await supabase.from("empresas").update({
+    encerramento_backup_cursor:null,encerramento_backup_partes:[],
+    encerramento_backup_path:null,encerramento_backup_gerado_em:null,
+    encerramento_backup_tentado_em:null,
+  }).eq("id",empresaId);
+  if(limpezaErro)throw new Error("Empresa restaurada, mas não foi possível liberar metadados do backup antigo: "+limpezaErro.message);
+  const paths = Array.isArray(arquivosAnteriores?.encerramento_backup_partes)
+    ? arquivosAnteriores.encerramento_backup_partes
+      .filter((x): x is {path:string} => x && typeof x.path==="string")
+      .map(x=>x.path)
+    : [];
+  if(arquivosAnteriores?.encerramento_backup_path)
+    paths.push(arquivosAnteriores.encerramento_backup_path);
+  if(paths.length) {
+    const {error:storageErro}=await supabase.storage.from("empresa-encerramentos")
+      .remove([...new Set(paths)]);
+    if(storageErro)console.error("[ENCERRAMENTO] Limpeza de ZIP antigo na restauração:",storageErro);
+  }
   const warning = await sincronizarCobrancaSeWhiteLabel(empresa);
   return { ...(data as Record<string, unknown>), warning };
 }
