@@ -45,6 +45,15 @@ export async function limparStorageEmpresaExcluida(empresaId: string) {
 }
 
 export async function excluirEmpresaAposRetencao(empresaId: string) {
+  const {data:empresa,error:consultaErro} = await supabase.from("empresas")
+    .select("encerramento_backup_path,encerramento_backup_estado")
+    .eq("id",empresaId).single();
+  if(consultaErro || empresa?.encerramento_backup_estado !== "pronto" || !empresa.encerramento_backup_path)
+    throw new Error("Backup de encerramento não registrado.");
+  const {data:objeto,error:objetoErro} = await supabase.storage.from(BACKUP_BUCKET)
+    .info(empresa.encerramento_backup_path);
+  if(objetoErro || !objeto)
+    throw new Error("O arquivo ZIP não está disponível no Storage. Exclusão definitiva bloqueada.");
   const {data,error} = await supabase.rpc("excluir_empresa_com_retentcao_admin",{p_empresa_id:empresaId});
   if(error) throw new Error(error.message);
   const limpeza = await limparStorageEmpresaExcluida(empresaId);
