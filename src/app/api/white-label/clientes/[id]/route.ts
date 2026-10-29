@@ -79,6 +79,12 @@ export async function PATCH(
     );
   }
 
+  if (empresa.status === "cancelada") {
+    return NextResponse.json({
+      ok: false, error: "Cliente cancelado não pode ser reativado por este atalho. Solicite restauração administrativa.",
+    }, { status: 409 });
+  }
+
   if (acao === "status") {
     const ativo = body?.ativo === true;
 
