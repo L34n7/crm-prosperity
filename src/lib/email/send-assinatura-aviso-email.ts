@@ -10,7 +10,8 @@ export type TipoAvisoAssinatura =
   | "vencida"
   | "bloqueada"
   | "reativacao_20d"
-  | "cancelamento";
+  | "cancelamento"
+  | "reativacao_apos_cancelamento";
 
 function escaparHtml(valor: string) {
   return String(valor || "")
@@ -120,6 +121,21 @@ export async function sendAssinaturaAvisoEmail(params: {
         "Se precisar de ajuda para regularizar seu plano, nossa equipe está à disposição.",
       ],
     },
+    reativacao_apos_cancelamento: {
+      etiqueta: "Uma última oportunidade de retorno",
+      titulo: "Sentimos sua falta",
+      cor: "#0f766e",
+      texto: "Sua conta no CRM foi cancelada há cerca de 30 dias, mas seus dados ainda estão preservados por tempo limitado. Gostaríamos muito de ter sua empresa de volta.",
+      acao: "",
+      pontos: [
+        `Sua empresa foi cancelada em ${cancelada || "data registrada no sistema"}.`,
+        `Seus dados operacionais serão excluídos definitivamente em ${exclusao || "aproximadamente 30 dias"} caso a conta não seja restaurada.`,
+        "Antes desse prazo, você pode solicitar à nossa equipe a restauração da empresa e regularizar sua assinatura para voltar a utilizar o CRM.",
+        "A restauração não libera os recursos automaticamente: eles permanecem bloqueados por pendência financeira até a renovação do plano.",
+        "Se preferir não voltar agora, solicite e baixe o backup antes da data indicada. O backup não é gerado automaticamente.",
+        "Obrigado por ter feito parte do CRM Prosperity. Estamos à disposição para ajudar você a retornar.",
+      ],
+    },
     cancelamento: {
       etiqueta: "Encerramento da conta",
       titulo: "Sua conta foi cancelada",
@@ -147,7 +163,7 @@ export async function sendAssinaturaAvisoEmail(params: {
   const pontosTexto = conteudo.pontos.map((ponto) => `• ${ponto}`).join("\n");
   const emailBranding = await obterEmailBrandingEmpresa(params.empresaId);
   const logoUrl = emailBranding.logoUrl;
-  const cta = params.tipo!=="cancelamento" && params.checkoutUrl
+  const cta = !["cancelamento","reativacao_apos_cancelamento"].includes(params.tipo) && params.checkoutUrl
     ? `<a href="${escaparHtml(params.checkoutUrl)}" style="display:inline-block;background:${conteudo.cor};color:#fff;text-decoration:none;padding:15px 24px;border-radius:10px;font-size:15px;font-weight:700;">${conteudo.acao}</a>`
     : "";
 
