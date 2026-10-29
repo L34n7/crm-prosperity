@@ -148,12 +148,17 @@ export async function gerarBackupEncerramento(empresaId: string) {
     throw new Error("Uma etapa do backup já está sendo processada.");
   const permitido = empresa.encerramento_backup_estado==="processando"
     ? ["processando"] : ["pendente","erro"];
-  const {data:travado,error:travamentoErro}=await db.from("empresas")
+  let reserva = db.from("empresas")
     .update({encerramento_backup_estado:"processando",encerramento_backup_erro:null,
       encerramento_backup_tentado_em:new Date().toISOString()})
     .eq("id",empresaId).eq("status","cancelada")
     .gt("exclusao_prevista_em",new Date().toISOString())
-    .in("encerramento_backup_estado",permitido).select("id").maybeSingle();
+    .in("encerramento_backup_estado",permitido);
+  if(empresa.encerramento_backup_estado==="processando") {
+    reserva=reserva.lt("encerramento_backup_tentado_em",
+      new Date(Date.now()-6*60*1000).toISOString());
+  }
+  const {data:travado,error:travamentoErro}=await reserva.select("id").maybeSingle();
   if(travamentoErro || !travado) throw new Error("A exportação não pôde ser reservada; tente novamente.");
 
   const cursor=obterCursor(empresa.encerramento_backup_cursor);
