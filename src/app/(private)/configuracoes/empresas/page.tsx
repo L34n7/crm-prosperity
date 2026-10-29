@@ -266,8 +266,6 @@ export default function EmpresasPage() {
   const [mostrarWebhookSecret, setMostrarWebhookSecret] = useState(false);
   const [alterandoApiKey, setAlterandoApiKey] = useState(false);
   const [alterandoWebhookSecret, setAlterandoWebhookSecret] = useState(false);
-  const [sucessoEmailMarketing, setSucessoEmailMarketing] = useState("");
-  const [erroEmailMarketing, setErroEmailMarketing] = useState("");
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [reenviandoAcessoId, setReenviandoAcessoId] = useState<string | null>(null);
   const [acessandoEmpresaId, setAcessandoEmpresaId] = useState<string | null>(null);
@@ -330,9 +328,10 @@ export default function EmpresasPage() {
   const [emailMarketingApiKey, setEmailMarketingApiKey] = useState("");
   const [emailMarketingWebhookSecret, setEmailMarketingWebhookSecret] = useState("");
   const [carregandoEmailMarketing, setCarregandoEmailMarketing] = useState(false);
-  const [salvandoEmailMarketing, setSalvandoEmailMarketing] = useState(false);
+  const [emailMarketingCarregado, setEmailMarketingCarregado] = useState(false);
 
   async function carregarEmailMarketingEmpresa(empresaId: string): Promise<boolean> {
+    setEmailMarketingCarregado(false);
     setCarregandoEmailMarketing(true);
     try {
       const response = await fetch(`/api/empresas/${empresaId}/email-marketing`, { cache: "no-store" });
@@ -341,6 +340,7 @@ export default function EmpresasPage() {
         throw new Error(data.error || "Erro ao consultar configuração.");
       }
       setEmailMarketingConfig(data.configuracao);
+      setEmailMarketingCarregado(true);
       setEmailMarketingApiKey("");
       setEmailMarketingWebhookSecret("");
       setMostrarApiKey(false);
@@ -349,6 +349,7 @@ export default function EmpresasPage() {
       setAlterandoWebhookSecret(false);
       return true;
     } catch (error) {
+      setEmailMarketingCarregado(false);
       setErroEdicao(error instanceof Error ? error.message : "Erro ao carregar E-mail Marketing.");
       return false;
     } finally {
@@ -397,8 +398,7 @@ export default function EmpresasPage() {
     setMostrarWebhookSecret(false);
     setAlterandoApiKey(false);
     setAlterandoWebhookSecret(false);
-    setSucessoEmailMarketing("");
-    setErroEmailMarketing("");
+    setEmailMarketingCarregado(false);
     setEmailMarketingApiKey("");
     setEmailMarketingWebhookSecret("");
     setEmailMarketingConfig({
@@ -444,10 +444,8 @@ export default function EmpresasPage() {
   }
 
   function cancelarEdicao() {
-    if (salvandoEdicao || salvandoEmailMarketing) return;
+    if (salvandoEdicao) return;
     setEditandoId(null);
-    setSucessoEmailMarketing("");
-    setErroEmailMarketing("");
     setAlterandoApiKey(false);
     setAlterandoWebhookSecret(false);
     setErroEdicao("");
@@ -476,28 +474,8 @@ export default function EmpresasPage() {
     }
   }
 
-  async function salvarEmailMarketing() {
-    if (!editandoId || salvandoEmailMarketing || salvandoEdicao || carregandoEmailMarketing) return;
-    setSalvandoEmailMarketing(true);
-    setErroEmailMarketing("");
-    setSucessoEmailMarketing("");
-    try {
-      await persistirEmailMarketing(editandoId);
-      // Limpa os campos somente depois da confirmação, recuperando a máscara do servidor.
-      const recarregado = await carregarEmailMarketingEmpresa(editandoId);
-      setSucessoEmailMarketing(recarregado
-        ? "E-mail Marketing salvo com sucesso. As credenciais aparecem parcialmente para conferência."
-        : "E-mail Marketing salvo. Não foi possível atualizar a conferência das chaves; reabra a edição para verificar."
-      );
-    } catch (error) {
-      setErroEmailMarketing(error instanceof Error ? error.message : "Não foi possível salvar o E-mail Marketing.");
-    } finally {
-      setSalvandoEmailMarketing(false);
-    }
-  }
-
   async function salvarEdicao() {
-    if (!editandoId || salvandoEdicao || salvandoEmailMarketing || carregandoEmailMarketing) return;
+    if (!editandoId || salvandoEdicao || carregandoEmailMarketing || !emailMarketingCarregado) return;
     setErroEdicao("");
     setMensagem("");
     setSalvandoEdicao(true);
@@ -1644,7 +1622,7 @@ export default function EmpresasPage() {
               <div className={styles.companyEditHeaderTop}>
                 <span className={styles.companyEditEyebrow}>ADMINISTRAÇÃO DE EMPRESAS</span>
                 <button type="button" className={styles.companyEditClose}
-                  onClick={cancelarEdicao} disabled={salvandoEdicao || salvandoEmailMarketing} aria-label="Fechar edição">
+                  onClick={cancelarEdicao} disabled={salvandoEdicao} aria-label="Fechar edição">
                   <X size={20} />
                 </button>
               </div>
@@ -1872,14 +1850,13 @@ export default function EmpresasPage() {
                                 <span className={styles.companyEditIcon}><Mail size={20} /></span>
                                 <div className={styles.emailMarketingIntro}>
                                   <strong>E-mail Marketing</strong>
-                                  <p>Configure o remetente e as credenciais. Salve esta integração sem precisar fechar o modal.</p>
+                                  <p>Configure o remetente e as credenciais. Clique em Salvar para aplicar todas as alterações.</p>
                                 </div>
                                 <label className={styles.emailMarketingToggle}>
                                   <input type="checkbox"
                                     checked={emailMarketingConfig.habilitado}
-                                    disabled={carregandoEmailMarketing || salvandoEdicao || salvandoEmailMarketing}
+                                    disabled={carregandoEmailMarketing || salvandoEdicao}
                                     onChange={(event) => {
-                                      setSucessoEmailMarketing("");
                                       setEmailMarketingConfig((atual) => ({ ...atual, habilitado: event.target.checked }));
                                     }} />
                                   <span className={styles.emailMarketingSwitch} aria-hidden="true"/>
@@ -1893,19 +1870,19 @@ export default function EmpresasPage() {
                                   <div className={styles.emailMarketingFields}>
                                     <label className={styles.field}>
                                       <span className={styles.label}>Domínio verificado no Resend</span>
-                                      <input className={styles.input} disabled={salvandoEdicao || salvandoEmailMarketing} placeholder="marketing.seudominio.com"
+                                      <input className={styles.input} disabled={salvandoEdicao} placeholder="marketing.seudominio.com"
                                         value={emailMarketingConfig.dominio}
                                         onChange={(event) => setEmailMarketingConfig((atual) => ({ ...atual, dominio: event.target.value }))}/>
                                     </label>
                                     <label className={styles.field}>
                                       <span className={styles.label}>Nome do remetente</span>
-                                      <input className={styles.input} disabled={salvandoEdicao || salvandoEmailMarketing} placeholder="Minha Empresa"
+                                      <input className={styles.input} disabled={salvandoEdicao} placeholder="Minha Empresa"
                                         value={emailMarketingConfig.remetente_nome}
                                         onChange={(event) => setEmailMarketingConfig((atual) => ({ ...atual, remetente_nome: event.target.value }))}/>
                                     </label>
                                     <label className={styles.field}>
                                       <span className={styles.label}>E-mail remetente</span>
-                                      <input className={styles.input} disabled={salvandoEdicao || salvandoEmailMarketing} type="email" placeholder="marketing@seudominio.com"
+                                      <input className={styles.input} disabled={salvandoEdicao} type="email" placeholder="marketing@seudominio.com"
                                         value={emailMarketingConfig.remetente_email}
                                         onChange={(event) => setEmailMarketingConfig((atual) => ({ ...atual, remetente_email: event.target.value }))}/>
                                     </label>
@@ -1925,15 +1902,14 @@ export default function EmpresasPage() {
                                           autoComplete="new-password"
                                           aria-label="Resend API Key"
                                           readOnly={emailMarketingConfig.api_key_configurada && !alterandoApiKey}
-                                          disabled={salvandoEmailMarketing || salvandoEdicao}
+                                          disabled={salvandoEdicao}
                                           placeholder={emailMarketingConfig.api_key_configurada ? "Chave já configurada" : "re_..."}
                                           value={emailMarketingConfig.api_key_configurada && !alterandoApiKey
                                             ? emailMarketingConfig.api_key_mascarada || "••••••••••"
                                             : emailMarketingApiKey}
                                           onChange={(event) => {
                                             setEmailMarketingApiKey(event.target.value);
-                                            setSucessoEmailMarketing("");
-                                          }}
+                                                }}
                                         />
                                         {(!emailMarketingConfig.api_key_configurada || alterandoApiKey) ? (
                                           <button type="button" className={styles.secretReveal}
@@ -1949,7 +1925,7 @@ export default function EmpresasPage() {
                                       {emailMarketingConfig.api_key_configurada ? (
                                         <div className={styles.secretFieldActions}>
                                           <span>Chave salva · somente um trecho fica visível por segurança.</span>
-                                          <button type="button" disabled={salvandoEmailMarketing || salvandoEdicao}
+                                          <button type="button" disabled={salvandoEdicao}
                                             onClick={() => {
                                               if (alterandoApiKey) {
                                                 setEmailMarketingApiKey("");
@@ -1976,15 +1952,14 @@ export default function EmpresasPage() {
                                           autoComplete="new-password"
                                           aria-label="Webhook Signing Secret"
                                           readOnly={emailMarketingConfig.webhook_configurado && !alterandoWebhookSecret}
-                                          disabled={salvandoEmailMarketing || salvandoEdicao}
+                                          disabled={salvandoEdicao}
                                           placeholder={emailMarketingConfig.webhook_configurado ? "Segredo já configurado" : "whsec_..."}
                                           value={emailMarketingConfig.webhook_configurado && !alterandoWebhookSecret
                                             ? emailMarketingConfig.webhook_mascarado || "••••••••••"
                                             : emailMarketingWebhookSecret}
                                           onChange={(event) => {
                                             setEmailMarketingWebhookSecret(event.target.value);
-                                            setSucessoEmailMarketing("");
-                                          }}
+                                                }}
                                         />
                                         {(!emailMarketingConfig.webhook_configurado || alterandoWebhookSecret) ? (
                                           <button type="button" className={styles.secretReveal}
@@ -2000,7 +1975,7 @@ export default function EmpresasPage() {
                                       {emailMarketingConfig.webhook_configurado ? (
                                         <div className={styles.secretFieldActions}>
                                           <span>Segredo salvo · somente um trecho fica visível por segurança.</span>
-                                          <button type="button" disabled={salvandoEmailMarketing || salvandoEdicao}
+                                          <button type="button" disabled={salvandoEdicao}
                                             onClick={() => {
                                               if (alterandoWebhookSecret) {
                                                 setEmailMarketingWebhookSecret("");
@@ -2026,34 +2001,20 @@ export default function EmpresasPage() {
                                   <span>O módulo está desabilitado. Ative o interruptor para configurar as credenciais e liberar as permissões.</span>
                                 </div>
                               )}
-                              {erroEmailMarketing ? (
-                                <div className={styles.emailMarketingFeedbackError} role="alert">{erroEmailMarketing}</div>
-                              ) : null}
-                              {sucessoEmailMarketing ? (
-                                <div className={styles.emailMarketingFeedbackSuccess} role="status">{sucessoEmailMarketing}</div>
-                              ) : null}
-                              <div className={styles.emailMarketingSaveRow}>
-                                <span><ShieldCheck size={15}/> Este botão salva somente o E-mail Marketing. Os dados da empresa continuam independentes.</span>
-                                <button type="button" className={styles.primaryButton}
-                                  disabled={carregandoEmailMarketing || salvandoEdicao || salvandoEmailMarketing}
-                                  onClick={() => void salvarEmailMarketing()}>
-                                  <Save size={16}/> {salvandoEmailMarketing ? "Salvando E-mail Marketing..." : "Salvar E-mail Marketing"}
-                                </button>
-                              </div>
                             </div>
                           </div>
 
               {erroEdicao && <div className={styles.companyEditError} role="alert">{erroEdicao}</div>}
             </div>
             <footer className={styles.companyEditFooter}>
-              <span><ShieldCheck size={16} /> Salvar alterações aplica também o E-mail Marketing ainda não salvo.</span>
+              <span><ShieldCheck size={16} /> Salva a empresa e o E-mail Marketing em uma única ação.</span>
               <div className={styles.companyEditFooterActions}>
                 <button type="button" className={styles.secondaryButton}
-                  disabled={salvandoEdicao || salvandoEmailMarketing} onClick={cancelarEdicao}>Cancelar</button>
+                  disabled={salvandoEdicao} onClick={cancelarEdicao}>Cancelar</button>
                 <button type="button" className={styles.primaryButton}
-                  disabled={salvandoEdicao || salvandoEmailMarketing || carregandoEmailMarketing}
+                  disabled={salvandoEdicao || carregandoEmailMarketing || !emailMarketingCarregado}
                   onClick={() => void salvarEdicao()}>
-                  <Save size={16} /> {salvandoEdicao ? "Salvando..." : "Salvar alterações"}
+                  <Save size={16} /> {salvandoEdicao ? "Salvando..." : "Salvar"}
                 </button>
               </div>
             </footer>

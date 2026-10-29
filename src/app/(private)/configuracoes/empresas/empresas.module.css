@@ -2847,3 +2847,90 @@
     flex-basis: auto;
   }
 }
+
+/* Tipografia alinhada ao padrão de leitura dos modais do CRM. */
+.companyEditModal {
+  font-size: 14px;
+}
+
+.companyEditEyebrow,
+.companyEditSectionTitle span {
+  font-size: 12px;
+}
+
+.companyEditIdentity h2 {
+  font-size: 25px;
+}
+
+.companyEditIdentity p {
+  font-size: 14px;
+}
+
+.companyEditMeta {
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.companyEditMeta span {
+  padding: 7px 12px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.companyEditSectionTitle p,
+.companyEditModal .emailMarketingHeading p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.companyEditSectionTitle h3 {
+  font-size: 20px;
+}
+
+.companyEditModal .label,
+.companyEditModal .emailMarketingToggle,
+.companyEditModal .emailMarketingDisabled {
+  font-size: 14px;
+}
+
+.companyEditModal .fieldHelp,
+.companyEditModal .eyebrow {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.companyEditModal .emailMarketingCredentialHeading strong {
+  font-size: 14px;
+}
+
+.companyEditModal .keyConfigured,
+.companyEditModal .keyMissing {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.companyEditModal .emailMarketingCredential .secretField .input,
+.companyEditModal .emailMarketingWebhook code {
+  font-size: 14px;
+}
+
+.companyEditModal .secretFieldActions,
+.companyEditModal .secretFieldActions button,
+.companyEditModal .companyEditFooter > span {
+  font-size: 13px;
+}
+
+.companyEditModal .companyEditFooterActions button {
+  font-size: 14px;
+}
+
+@media (max-width: 700px) {
+  .companyEditIdentity h2 {
+    font-size: 20px;
+  }
+
+  .companyEditMeta span {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+}
