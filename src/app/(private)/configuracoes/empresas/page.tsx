@@ -212,6 +212,18 @@ function formatarDataAssinatura(valor: string | null | undefined) {
   }).format(data);
 }
 
+function formatarSomenteDataAssinatura(valor: string | null | undefined) {
+  if (!valor) return "Não informado";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "Não informado";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  }).format(data);
+}
+
 function valorInputParaCentavos(valor: string) {
   const limpo = valor.trim().replace(/[^\d,.-]/g, "");
   if (!limpo) return null;
@@ -1528,6 +1540,26 @@ export default function EmpresasPage() {
 
                     {expandido && empresa.status !== "excluida" && (
                       <div className={styles.itemExpanded}>
+                        <div className={styles.subscriptionDatesBar} aria-label="Datas da assinatura">
+                          <div className={styles.subscriptionDateCard}>
+                            <div className={styles.subscriptionDateIcon}>
+                              <CalendarClock size={18} aria-hidden="true"/>
+                            </div>
+                            <div className={styles.subscriptionDateText}>
+                              <span>Data de início do plano</span>
+                              <strong>{formatarSomenteDataAssinatura(empresa.assinatura_inicio_em)}</strong>
+                            </div>
+                          </div>
+                          <div className={styles.subscriptionDateCard}>
+                            <div className={styles.subscriptionDateIcon}>
+                              <CalendarClock size={18} aria-hidden="true"/>
+                            </div>
+                            <div className={styles.subscriptionDateText}>
+                              <span>Data de vencimento do plano</span>
+                              <strong>{formatarSomenteDataAssinatura(empresa.assinatura_vencimento_em)}</strong>
+                            </div>
+                          </div>
+                        </div>
                         <div className={styles.detailsGrid}>
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Razão social</span>
