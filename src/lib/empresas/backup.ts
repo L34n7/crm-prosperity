@@ -129,7 +129,8 @@ export async function gerarBackupEncerramento(empresaId: string) {
   if (empresa.encerramento_backup_estado === "pronto" && empresa.encerramento_backup_path)
     return { ok: true, path: empresa.encerramento_backup_path, existente: true };
   const { data: bloqueio, error: bloqueioError } = await supabase.from("empresas")
-    .update({ encerramento_backup_estado: "processando", encerramento_backup_erro: null })
+    .update({ encerramento_backup_estado: "processando", encerramento_backup_erro: null,
+      encerramento_backup_tentado_em: new Date().toISOString() })
     .eq("id", empresaId).in("encerramento_backup_estado", ["pendente","erro"])
     .select("id").maybeSingle();
   if (bloqueioError) throw new Error(bloqueioError.message);
@@ -190,13 +191,18 @@ export async function gerarBackupEncerramento(empresaId: string) {
       .upload(path, new Uint8Array(zip), { contentType: "application/zip", upsert: false });
     if (uploadError) throw new Error("Falha ao armazenar o backup: " + uploadError.message);
     const sha256 = createHash("sha256").update(zip).digest("hex");
-    const {error:updateError} = await supabase.from("empresas").update({
+    const {data:gravado,error:updateError} = await supabase.from("empresas").update({
       encerramento_backup_path: path,
       encerramento_backup_estado: "pronto",
       encerramento_backup_gerado_em: new Date().toISOString(),
       encerramento_backup_erro: null,
-    }).eq("id",empresaId).eq("status","cancelada");
-    if (updateError) throw new Error("Backup armazenado, mas não foi registrado: " + updateError.message);
+    }).eq("id",empresaId).eq("status","cancelada")
+      .eq("encerramento_backup_estado","processando")
+      .select("id").maybeSingle();
+    if (updateError || !gravado) {
+      await supabase.storage.from(BACKUP_BUCKET).remove([path]);
+      throw new Error("Backup não pôde ser vinculado ao encerramento ativo: " + (updateError?.message || "Estado alterado."));
+    }
     return {ok:true,path,sha256,arquivos:arquivos.length,bytes:zip.length};
   } catch (error) {
     await supabase.from("empresas").update({
