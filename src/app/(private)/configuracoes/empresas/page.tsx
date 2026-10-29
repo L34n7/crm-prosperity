@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Eye, EyeOff, Mail, Save, ShieldCheck, X } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
@@ -259,6 +260,10 @@ export default function EmpresasPage() {
   const [erro, setErro] = useState("");
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [erroEdicao, setErroEdicao] = useState("");
+  const [mostrarApiKey, setMostrarApiKey] = useState(false);
+  const [mostrarWebhookSecret, setMostrarWebhookSecret] = useState(false);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [reenviandoAcessoId, setReenviandoAcessoId] = useState<string | null>(null);
   const [acessandoEmpresaId, setAcessandoEmpresaId] = useState<string | null>(null);
@@ -315,6 +320,8 @@ export default function EmpresasPage() {
     api_key_configurada: false,
     webhook_configurado: false,
     webhook_url: "",
+    api_key_mascarada: null as string | null,
+    webhook_mascarado: null as string | null,
   });
   const [emailMarketingApiKey, setEmailMarketingApiKey] = useState("");
   const [emailMarketingWebhookSecret, setEmailMarketingWebhookSecret] = useState("");
@@ -328,6 +335,7 @@ export default function EmpresasPage() {
     setEmailMarketingConfig({
       habilitado: false, dominio: "", remetente_nome: "", remetente_email: "",
       api_key_configurada: false, webhook_configurado: false, webhook_url: "",
+      api_key_mascarada: null, webhook_mascarado: null,
     });
     try {
       const response = await fetch(`/api/empresas/${empresaId}/email-marketing`, { cache: "no-store" });
@@ -335,38 +343,9 @@ export default function EmpresasPage() {
       if (!response.ok || !data.ok) throw new Error(data.error || "Erro ao consultar configuração.");
       setEmailMarketingConfig(data.configuracao);
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao carregar E-mail Marketing.");
+      setErroEdicao(error instanceof Error ? error.message : "Erro ao carregar E-mail Marketing.");
     } finally {
       setCarregandoEmailMarketing(false);
-    }
-  }
-
-  async function salvarEmailMarketingEmpresa() {
-    if (!editandoId) return;
-    setSalvandoEmailMarketing(true);
-    setErro("");
-    setMensagem("");
-    try {
-      const response = await fetch(`/api/empresas/${editandoId}/email-marketing`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          habilitado: emailMarketingConfig.habilitado,
-          dominio: emailMarketingConfig.dominio,
-          remetente_nome: emailMarketingConfig.remetente_nome,
-          remetente_email: emailMarketingConfig.remetente_email,
-          api_key: emailMarketingApiKey,
-          webhook_secret: emailMarketingWebhookSecret,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "Erro ao salvar.");
-      setMensagem(data.message || "Configuração de E-mail Marketing salva.");
-      await carregarEmailMarketingEmpresa(editandoId);
-    } catch (error) {
-      setErro(error instanceof Error ? error.message : "Não foi possível salvar E-mail Marketing.");
-    } finally {
-      setSalvandoEmailMarketing(false);
     }
   }
 
@@ -406,7 +385,9 @@ export default function EmpresasPage() {
     const limiteUsuariosPlano = empresa.planos?.limite_usuarios ?? 2;
 
     setEditandoId(empresa.id);
-    setExpandidoId(empresa.id);
+    setErroEdicao("");
+    setMostrarApiKey(false);
+    setMostrarWebhookSecret(false);
     setEditNomeFantasia(empresa.nome_fantasia);
     setEditRazaoSocial(empresa.razao_social || "");
     setEditDocumento(empresa.documento || "");
@@ -445,50 +426,71 @@ export default function EmpresasPage() {
   }
 
   function cancelarEdicao() {
+    if (salvandoEdicao) return;
     setEditandoId(null);
+    setErroEdicao("");
     setEmailMarketingApiKey("");
     setEmailMarketingWebhookSecret("");
+    setMostrarApiKey(false);
+    setMostrarWebhookSecret(false);
   }
 
   async function salvarEdicao() {
-    if (!editandoId) return;
-
+    if (!editandoId || salvandoEdicao || carregandoEmailMarketing) return;
+    setErroEdicao("");
     setMensagem("");
-    setErro("");
+    setSalvandoEdicao(true);
+    try {
+      const response = await fetch(`/api/empresas/${editandoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome_fantasia: editNomeFantasia, razao_social: editRazaoSocial,
+          documento: editDocumento, email: editEmail, telefone: editTelefone,
+          nome_responsavel: editNomeResponsavel, plano_id: editPlanoId,
+          limite_integracoes_whatsapp: Number(editLimiteWhatsapp),
+          limite_usuarios: Number(editLimiteUsuarios), nicho_id: editNichoId,
+          timezone: editTimezone, logo_url: editLogoUrl,
+          observacoes: editObservacoes, status: editStatus,
+        }),
+      });
+      const resultadoEmpresa = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErroEdicao(resultadoEmpresa.error || "Não foi possível salvar a empresa.");
+        return;
+      }
 
-    const res = await fetch(`/api/empresas/${editandoId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        nome_fantasia: editNomeFantasia,
-        razao_social: editRazaoSocial,
-        documento: editDocumento,
-        email: editEmail,
-        telefone: editTelefone,
-        nome_responsavel: editNomeResponsavel,
-        plano_id: editPlanoId,
-        limite_integracoes_whatsapp: Number(editLimiteWhatsapp),
-        limite_usuarios: Number(editLimiteUsuarios),
-        nicho_id: editNichoId,
-        timezone: editTimezone,
-        logo_url: editLogoUrl,
-        observacoes: editObservacoes,
-        status: editStatus,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setErro(data.error || "Erro ao atualizar empresa");
-      return;
+      const responseMarketing = await fetch(`/api/empresas/${editandoId}/email-marketing`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          habilitado: emailMarketingConfig.habilitado,
+          dominio: emailMarketingConfig.dominio,
+          remetente_nome: emailMarketingConfig.remetente_nome,
+          remetente_email: emailMarketingConfig.remetente_email,
+          api_key: emailMarketingApiKey,
+          webhook_secret: emailMarketingWebhookSecret,
+        }),
+      });
+      const resultadoMarketing = await responseMarketing.json().catch(() => ({}));
+      if (!responseMarketing.ok || !resultadoMarketing.ok) {
+        setErroEdicao(
+          "Os dados da empresa foram salvos, mas o E-mail Marketing não: " +
+          (resultadoMarketing.error || "Verifique a configuração informada.")
+        );
+        await carregarEmpresas();
+        return;
+      }
+      setEmailMarketingApiKey("");
+      setEmailMarketingWebhookSecret("");
+      setMensagem("Empresa e E-mail Marketing salvos com sucesso.");
+      setEditandoId(null);
+      await carregarEmpresas();
+    } catch {
+      setErroEdicao("Erro de comunicação ao salvar. Confira os dados e tente novamente.");
+    } finally {
+      setSalvandoEdicao(false);
     }
-
-    setMensagem(data.message || "Empresa atualizada com sucesso.");
-    setEditandoId(null);
-    carregarEmpresas();
   }
 
   function toggleExpandir(empresaId: string) {
@@ -1078,6 +1080,15 @@ export default function EmpresasPage() {
     });
   }, [busca, empresas, filtroNicho, filtroPlano, filtroStatus]);
 
+  const empresaEditando = empresas.find((empresa) => empresa.id === editandoId) || null;
+
+  useEffect(() => {
+    if (!editandoId) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = original; };
+  }, [editandoId]);
+
   const filtrosAtivos =
     Boolean(busca.trim()) ||
     filtroStatus !== "todos" ||
@@ -1359,9 +1370,244 @@ export default function EmpresasPage() {
                       </div>
                     </div>
 
-                    {(expandido || editando) && (
+                    {expandido && (
                       <div className={styles.itemExpanded}>
-                        {editando ? (
+                        <div className={styles.detailsGrid}>
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Razão social</span>
+                              <span className={styles.infoValue}>
+                                {empresa.razao_social || "—"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Documento</span>
+                              <span className={styles.infoValue}>
+                                {empresa.documento || "—"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Telefone</span>
+                              <span className={styles.infoValue}>
+                                {empresa.telefone || "—"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Plano</span>
+                              <span className={styles.infoValue}>
+                                {empresa.planos?.nome ?? "—"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Números WhatsApp
+                              </span>
+                              <span className={styles.infoValue}>
+                                {limiteWhatsappEfetivo}
+                                {empresa.limite_integracoes_whatsapp !== null
+                                  ? " (liberação comercial)"
+                                  : " (plano)"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>
+                                Usuários liberados
+                              </span>
+                              <span className={styles.infoValue}>
+                                {limiteUsuariosEfetivo}
+                                {empresa.limite_usuarios !== null
+                                  ? " (liberação comercial)"
+                                  : " (plano)"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Timezone</span>
+                              <span className={styles.infoValue}>
+                                {empresa.timezone || "—"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Logo URL</span>
+                              <span className={styles.infoValue}>
+                                {empresa.logo_url || "—"}
+                              </span>
+                            </div>
+
+                            <div className={styles.infoBlockFull}>
+                              <span className={styles.infoLabel}>Observações</span>
+                              <span className={styles.infoValue}>
+                                {empresa.observacoes || "Sem observações"}
+                              </span>
+                            </div>
+
+                            {podeEditarEmpresas && (
+                              <div className={styles.tokensManagementBlock}>
+                                <div className={styles.tokensManagementHeader}>
+                                  <div>
+                                    <span className={styles.infoLabel}>
+                                      Tokens de IA
+                                    </span>
+                                    <strong className={styles.tokensManagementTitle}>
+                                      Gerenciar saldo da empresa
+                                    </strong>
+                                    <p className={styles.tokensManagementDescription}>
+                                      Restaure a franquia mensal ou conceda saldo
+                                      avulso sem alterar plano, vencimento ou pagamento.
+                                    </p>
+                                  </div>
+
+                                  <span className={styles.tokensTotalBadge}>
+                                    {formatarTokens(totalTokensDisponiveis)} disponíveis
+                                  </span>
+                                </div>
+
+                                <div className={styles.tokensStatsGrid}>
+                                  <div>
+                                    <span>Franquia</span>
+                                    <strong>
+                                      {formatarTokens(
+                                        saldoTokensEmpresa?.limite_mensal
+                                      )}
+                                    </strong>
+                                  </div>
+                                  <div>
+                                    <span>Mensal restante</span>
+                                    <strong>
+                                      {formatarTokens(
+                                        saldoTokensEmpresa?.saldo_mensal_restante
+                                      )}
+                                    </strong>
+                                  </div>
+                                  <div>
+                                    <span>Saldo avulso</span>
+                                    <strong>
+                                      {formatarTokens(
+                                        saldoTokensEmpresa?.saldo_avulso_restante
+                                      )}
+                                    </strong>
+                                  </div>
+                                </div>
+
+                                <div className={styles.tokensManagementActions}>
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() =>
+                                      abrirAjusteTokens(
+                                        empresa,
+                                        "restaurar_mensal"
+                                      )
+                                    }
+                                  >
+                                    Restaurar tokens mensais
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={styles.primaryButton}
+                                    onClick={() =>
+                                      abrirAjusteTokens(
+                                        empresa,
+                                        "adicionar_avulso"
+                                      )
+                                    }
+                                  >
+                                    Adicionar tokens extras
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {podeEditarEmpresas && (
+                              <div className={styles.accessBlock}>
+                                <div>
+                                  <span className={styles.infoLabel}>
+                                    Acesso e e-mail
+                                  </span>
+                                  <span className={styles.infoValue}>
+                                    Corrija o e-mail de acesso de forma sincronizada
+                                    ou envie o modelo alternativo do Supabase Auth
+                                    como contingência.
+                                  </span>
+                                </div>
+
+                                <div className={styles.accessActions}>
+                                  {podeAcessarTemporariamente && (
+                                    <button
+                                      type="button"
+                                      className={styles.primaryButton}
+                                      onClick={() =>
+                                        abrirCorrecaoEmailAcesso(empresa)
+                                      }
+                                    >
+                                      Corrigir e-mail de acesso
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    className={styles.secondaryButton}
+                                    onClick={() =>
+                                      reenviarPrimeiroAcessoAlternativo(empresa)
+                                    }
+                                    disabled={reenviandoAcessoId === empresa.id}
+                                  >
+                                    {reenviandoAcessoId === empresa.id
+                                      ? "Enviando..."
+                                      : "Reenviar primeiro acesso alternativo"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {editandoId && empresaEditando && (
+        <div className={styles.companyEditOverlay} role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) cancelarEdicao(); }}>
+          <section className={styles.companyEditModal} role="dialog" aria-modal="true"
+            aria-labelledby="company-edit-title">
+            <header className={styles.companyEditHeader}>
+              <div className={styles.companyEditHeaderTop}>
+                <span className={styles.companyEditEyebrow}>ADMINISTRAÇÃO DE EMPRESAS</span>
+                <button type="button" className={styles.companyEditClose}
+                  onClick={cancelarEdicao} disabled={salvandoEdicao} aria-label="Fechar edição">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className={styles.companyEditIdentity}>
+                <div className={styles.companyEditAvatar}>{getIniciais(empresaEditando.nome_fantasia)}</div>
+                <div>
+                  <h2 id="company-edit-title">{empresaEditando.nome_fantasia}</h2>
+                  <p>{empresaEditando.email}</p>
+                  <div className={styles.companyEditMeta}>
+                    <span>{empresaEditando.planos?.nome || "Sem plano"}</span>
+                    <span>{empresaEditando.nichos?.nome || "Sem segmento"}</span>
+                    <span>{getStatusLabel(empresaEditando.status)}</span>
+                  </div>
+                </div>
+              </div>
+            </header>
+            <div className={styles.companyEditScroll}>
+              <div className={styles.companyEditSectionTitle}>
+                <span>01 / DADOS DA EMPRESA</span>
+                <h3>Informações e recursos</h3>
+                <p>Atualize os dados administrativos e o acesso aos módulos.</p>
+              </div>
                           <div className={styles.editGrid}>
                             <div className={styles.field}>
                               <label className={styles.label}>Nome fantasia</label>
@@ -1561,292 +1807,132 @@ export default function EmpresasPage() {
 
                             <div className={styles.emailMarketingCard}>
                               <div className={styles.emailMarketingHeading}>
-                                <div>
+                                <span className={styles.companyEditIcon}><Mail size={20} /></span>
+                                <div className={styles.emailMarketingIntro}>
                                   <strong>E-mail Marketing</strong>
-                                  <p>Habilite o módulo para esta empresa e configure uma conta Resend exclusiva. As credenciais são criptografadas e não aparecem novamente após salvar.</p>
+                                  <p>Ative o módulo e configure as credenciais individuais da empresa. Os dados serão salvos junto com a edição da empresa.</p>
                                 </div>
                                 <label className={styles.emailMarketingToggle}>
-                                  <input
-                                    type="checkbox"
+                                  <input type="checkbox"
                                     checked={emailMarketingConfig.habilitado}
-                                    disabled={carregandoEmailMarketing || salvandoEmailMarketing}
-                                    onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, habilitado: e.target.checked }))}
-                                  />
-                                  {emailMarketingConfig.habilitado ? "Habilitado" : "Desabilitado"}
+                                    disabled={carregandoEmailMarketing || salvandoEdicao}
+                                    onChange={(event) => setEmailMarketingConfig((atual) => ({ ...atual, habilitado: event.target.checked }))} />
+                                  <span className={styles.emailMarketingSwitch} aria-hidden="true"/>
+                                  <span>{emailMarketingConfig.habilitado ? "Habilitado" : "Desabilitado"}</span>
                                 </label>
                               </div>
                               {carregandoEmailMarketing ? (
-                                <p className={styles.fieldHelp}>Carregando configuração de E-mail Marketing...</p>
-                              ) : (
+                                <p className={styles.fieldHelp}>Carregando E-mail Marketing...</p>
+                              ) : emailMarketingConfig.habilitado ? (
                                 <>
                                   <div className={styles.emailMarketingFields}>
                                     <label className={styles.field}>
                                       <span className={styles.label}>Domínio verificado no Resend</span>
                                       <input className={styles.input} placeholder="marketing.seudominio.com"
                                         value={emailMarketingConfig.dominio}
-                                        onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, dominio: e.target.value }))}/>
+                                        onChange={(event) => setEmailMarketingConfig((atual) => ({ ...atual, dominio: event.target.value }))}/>
                                     </label>
                                     <label className={styles.field}>
                                       <span className={styles.label}>Nome do remetente</span>
                                       <input className={styles.input} placeholder="Minha Empresa"
                                         value={emailMarketingConfig.remetente_nome}
-                                        onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, remetente_nome: e.target.value }))}/>
+                                        onChange={(event) => setEmailMarketingConfig((atual) => ({ ...atual, remetente_nome: event.target.value }))}/>
                                     </label>
                                     <label className={styles.field}>
                                       <span className={styles.label}>E-mail remetente</span>
                                       <input className={styles.input} type="email" placeholder="marketing@seudominio.com"
                                         value={emailMarketingConfig.remetente_email}
-                                        onChange={(e) => setEmailMarketingConfig((prev) => ({ ...prev, remetente_email: e.target.value }))}/>
+                                        onChange={(event) => setEmailMarketingConfig((atual) => ({ ...atual, remetente_email: event.target.value }))}/>
                                     </label>
-                                    <label className={styles.field}>
-                                      <span className={styles.label}>Resend API Key {emailMarketingConfig.api_key_configurada ? "✓ Configurada" : "· Não configurada"}</span>
-                                      <input className={styles.input} type="password" autoComplete="new-password"
-                                        placeholder={emailMarketingConfig.api_key_configurada ? "Deixe em branco para manter a chave atual" : "re_..."}
-                                        value={emailMarketingApiKey}
-                                        onChange={(e) => setEmailMarketingApiKey(e.target.value)}/>
-                                    </label>
-                                    <label className={styles.field}>
-                                      <span className={styles.label}>Webhook Signing Secret {emailMarketingConfig.webhook_configurado ? "✓ Configurado" : "· Não configurado"}</span>
-                                      <input className={styles.input} type="password" autoComplete="new-password"
-                                        placeholder={emailMarketingConfig.webhook_configurado ? "Deixe em branco para manter o segredo atual" : "whsec_..."}
-                                        value={emailMarketingWebhookSecret}
-                                        onChange={(e) => setEmailMarketingWebhookSecret(e.target.value)}/>
-                                    </label>
+                                  </div>
+                                  <div className={styles.emailMarketingCredentials}>
+                                    <div className={styles.emailMarketingCredential}>
+                                      <div className={styles.emailMarketingCredentialHeading}>
+                                        <strong>Resend API Key</strong>
+                                        <span className={emailMarketingConfig.api_key_configurada ? styles.keyConfigured : styles.keyMissing}>
+                                          {emailMarketingConfig.api_key_configurada ? "Configurada" : "Não configurada"}
+                                        </span>
+                                      </div>
+                                      {emailMarketingConfig.api_key_mascarada && (
+                                        <span className={styles.keyMaskedValue}>
+                                          Chave salva: <code>{emailMarketingConfig.api_key_mascarada}</code>
+                                        </span>
+                                      )}
+                                      <div className={styles.secretField}>
+                                        <input className={styles.input}
+                                          type={mostrarApiKey ? "text" : "password"} autoComplete="new-password"
+                                          aria-label="Resend API Key"
+                                          placeholder={emailMarketingConfig.api_key_configurada ? "Nova chave (opcional)" : "re_..."}
+                                          value={emailMarketingApiKey}
+                                          onChange={(event) => setEmailMarketingApiKey(event.target.value)}/>
+                                        <button type="button" className={styles.secretReveal}
+                                          aria-label={mostrarApiKey ? "Ocultar API Key" : "Mostrar API Key"}
+                                          onClick={() => setMostrarApiKey((valor) => !valor)}>
+                                          {mostrarApiKey ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                        </button>
+                                      </div>
+                                      <span className={styles.fieldHelp}>Deixe vazio para manter a chave atual.</span>
+                                    </div>
+                                    <div className={styles.emailMarketingCredential}>
+                                      <div className={styles.emailMarketingCredentialHeading}>
+                                        <strong>Webhook Signing Secret</strong>
+                                        <span className={emailMarketingConfig.webhook_configurado ? styles.keyConfigured : styles.keyMissing}>
+                                          {emailMarketingConfig.webhook_configurado ? "Configurado" : "Não configurado"}
+                                        </span>
+                                      </div>
+                                      {emailMarketingConfig.webhook_mascarado && (
+                                        <span className={styles.keyMaskedValue}>
+                                          Segredo salvo: <code>{emailMarketingConfig.webhook_mascarado}</code>
+                                        </span>
+                                      )}
+                                      <div className={styles.secretField}>
+                                        <input className={styles.input}
+                                          type={mostrarWebhookSecret ? "text" : "password"} autoComplete="new-password"
+                                          aria-label="Webhook Signing Secret"
+                                          placeholder={emailMarketingConfig.webhook_configurado ? "Novo segredo (opcional)" : "whsec_..."}
+                                          value={emailMarketingWebhookSecret}
+                                          onChange={(event) => setEmailMarketingWebhookSecret(event.target.value)}/>
+                                        <button type="button" className={styles.secretReveal}
+                                          aria-label={mostrarWebhookSecret ? "Ocultar Signing Secret" : "Mostrar Signing Secret"}
+                                          onClick={() => setMostrarWebhookSecret((valor) => !valor)}>
+                                          {mostrarWebhookSecret ? <EyeOff size={18}/> : <Eye size={18}/>}
+                                        </button>
+                                      </div>
+                                      <span className={styles.fieldHelp}>Deixe vazio para manter o segredo atual.</span>
+                                    </div>
                                   </div>
                                   <div className={styles.emailMarketingWebhook}>
-                                    <span className={styles.label}>URL do webhook exclusivo desta empresa</span>
-                                    <code>{emailMarketingConfig.webhook_url || "Carregando..."}</code>
-                                    <span className={styles.fieldHelp}>Cadastre esta URL na conta Resend da empresa. As permissões do módulo ficam disponíveis em Configurações → Permissões após habilitar.</span>
+                                    <span className={styles.label}>Webhook exclusivo da empresa</span>
+                                    <code>{emailMarketingConfig.webhook_url}</code>
+                                    <span className={styles.fieldHelp}>Cadastre esta URL na conta Resend. Após salvar, as credenciais são exibidas apenas parcialmente.</span>
                                   </div>
-                                  <button type="button" className={styles.primaryButton}
-                                    disabled={salvandoEmailMarketing}
-                                    onClick={() => void salvarEmailMarketingEmpresa()}>
-                                    {salvandoEmailMarketing ? "Salvando integração..." : "Salvar E-mail Marketing"}
-                                  </button>
                                 </>
+                              ) : (
+                                <div className={styles.emailMarketingDisabled}>
+                                  <ShieldCheck size={18}/>
+                                  <span>O módulo está desabilitado. Ative o interruptor para configurar as credenciais e liberar as permissões.</span>
+                                </div>
                               )}
                             </div>
-
-                            <div className={styles.editActions}>
-                              <button
-                                onClick={salvarEdicao}
-                                className={styles.primaryButton}
-                              >
-                                Salvar
-                              </button>
-                              <button
-                                onClick={cancelarEdicao}
-                                className={styles.secondaryButton}
-                              >
-                                Cancelar
-                              </button>
-                            </div>
                           </div>
-                        ) : (
-                          <div className={styles.detailsGrid}>
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Razão social</span>
-                              <span className={styles.infoValue}>
-                                {empresa.razao_social || "—"}
-                              </span>
-                            </div>
 
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Documento</span>
-                              <span className={styles.infoValue}>
-                                {empresa.documento || "—"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Telefone</span>
-                              <span className={styles.infoValue}>
-                                {empresa.telefone || "—"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Plano</span>
-                              <span className={styles.infoValue}>
-                                {empresa.planos?.nome ?? "—"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>
-                                Números WhatsApp
-                              </span>
-                              <span className={styles.infoValue}>
-                                {limiteWhatsappEfetivo}
-                                {empresa.limite_integracoes_whatsapp !== null
-                                  ? " (liberação comercial)"
-                                  : " (plano)"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>
-                                Usuários liberados
-                              </span>
-                              <span className={styles.infoValue}>
-                                {limiteUsuariosEfetivo}
-                                {empresa.limite_usuarios !== null
-                                  ? " (liberação comercial)"
-                                  : " (plano)"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Timezone</span>
-                              <span className={styles.infoValue}>
-                                {empresa.timezone || "—"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlock}>
-                              <span className={styles.infoLabel}>Logo URL</span>
-                              <span className={styles.infoValue}>
-                                {empresa.logo_url || "—"}
-                              </span>
-                            </div>
-
-                            <div className={styles.infoBlockFull}>
-                              <span className={styles.infoLabel}>Observações</span>
-                              <span className={styles.infoValue}>
-                                {empresa.observacoes || "Sem observações"}
-                              </span>
-                            </div>
-
-                            {podeEditarEmpresas && (
-                              <div className={styles.tokensManagementBlock}>
-                                <div className={styles.tokensManagementHeader}>
-                                  <div>
-                                    <span className={styles.infoLabel}>
-                                      Tokens de IA
-                                    </span>
-                                    <strong className={styles.tokensManagementTitle}>
-                                      Gerenciar saldo da empresa
-                                    </strong>
-                                    <p className={styles.tokensManagementDescription}>
-                                      Restaure a franquia mensal ou conceda saldo
-                                      avulso sem alterar plano, vencimento ou pagamento.
-                                    </p>
-                                  </div>
-
-                                  <span className={styles.tokensTotalBadge}>
-                                    {formatarTokens(totalTokensDisponiveis)} disponíveis
-                                  </span>
-                                </div>
-
-                                <div className={styles.tokensStatsGrid}>
-                                  <div>
-                                    <span>Franquia</span>
-                                    <strong>
-                                      {formatarTokens(
-                                        saldoTokensEmpresa?.limite_mensal
-                                      )}
-                                    </strong>
-                                  </div>
-                                  <div>
-                                    <span>Mensal restante</span>
-                                    <strong>
-                                      {formatarTokens(
-                                        saldoTokensEmpresa?.saldo_mensal_restante
-                                      )}
-                                    </strong>
-                                  </div>
-                                  <div>
-                                    <span>Saldo avulso</span>
-                                    <strong>
-                                      {formatarTokens(
-                                        saldoTokensEmpresa?.saldo_avulso_restante
-                                      )}
-                                    </strong>
-                                  </div>
-                                </div>
-
-                                <div className={styles.tokensManagementActions}>
-                                  <button
-                                    type="button"
-                                    className={styles.secondaryButton}
-                                    onClick={() =>
-                                      abrirAjusteTokens(
-                                        empresa,
-                                        "restaurar_mensal"
-                                      )
-                                    }
-                                  >
-                                    Restaurar tokens mensais
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className={styles.primaryButton}
-                                    onClick={() =>
-                                      abrirAjusteTokens(
-                                        empresa,
-                                        "adicionar_avulso"
-                                      )
-                                    }
-                                  >
-                                    Adicionar tokens extras
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {podeEditarEmpresas && (
-                              <div className={styles.accessBlock}>
-                                <div>
-                                  <span className={styles.infoLabel}>
-                                    Acesso e e-mail
-                                  </span>
-                                  <span className={styles.infoValue}>
-                                    Corrija o e-mail de acesso de forma sincronizada
-                                    ou envie o modelo alternativo do Supabase Auth
-                                    como contingência.
-                                  </span>
-                                </div>
-
-                                <div className={styles.accessActions}>
-                                  {podeAcessarTemporariamente && (
-                                    <button
-                                      type="button"
-                                      className={styles.primaryButton}
-                                      onClick={() =>
-                                        abrirCorrecaoEmailAcesso(empresa)
-                                      }
-                                    >
-                                      Corrigir e-mail de acesso
-                                    </button>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    className={styles.secondaryButton}
-                                    onClick={() =>
-                                      reenviarPrimeiroAcessoAlternativo(empresa)
-                                    }
-                                    disabled={reenviandoAcessoId === empresa.id}
-                                  >
-                                    {reenviandoAcessoId === empresa.id
-                                      ? "Enviando..."
-                                      : "Reenviar primeiro acesso alternativo"}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
+              {erroEdicao && <div className={styles.companyEditError} role="alert">{erroEdicao}</div>}
             </div>
-          )}
-        </section>
-      </div>
+            <footer className={styles.companyEditFooter}>
+              <span><ShieldCheck size={16} /> Um único salvamento para empresa e integração</span>
+              <div className={styles.companyEditFooterActions}>
+                <button type="button" className={styles.secondaryButton}
+                  disabled={salvandoEdicao} onClick={cancelarEdicao}>Cancelar</button>
+                <button type="button" className={styles.primaryButton}
+                  disabled={salvandoEdicao || carregandoEmailMarketing}
+                  onClick={() => void salvarEdicao()}>
+                  <Save size={16} /> {salvandoEdicao ? "Salvando..." : "Salvar alterações"}
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      )}
 
       <button
         type="button"

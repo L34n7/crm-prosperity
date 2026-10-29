@@ -2521,3 +2521,197 @@
   .emailMarketingHeading { flex-direction: column; }
   .emailMarketingFields { grid-template-columns: 1fr; }
 }
+
+/* Edição premium da empresa: cabeçalho e ações sempre visíveis */
+.companyEditOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(4 17 26 / 68%);
+  backdrop-filter: blur(8px);
+}
+.companyEditModal {
+  display: flex;
+  flex-direction: column;
+  width: min(1020px, 100%);
+  max-height: min(94dvh, 940px);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  background: var(--crm-surface);
+  box-shadow: 0 32px 90px rgb(0 12 25 / 28%), 0 12px 26px rgb(0 12 25 / 10%);
+}
+.companyEditHeader {
+  flex: 0 0 auto;
+  padding: 22px 28px 23px;
+  border-bottom: 1px solid var(--crm-border);
+  background: linear-gradient(120deg, var(--crm-primary-soft), var(--crm-surface) 73%);
+}
+.companyEditHeaderTop {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.companyEditEyebrow { color: var(--crm-primary-text); font-size: 10px; font-weight: 900; letter-spacing: .12em; }
+.companyEditClose {
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px; background: var(--crm-surface);
+  color: var(--crm-text); cursor: pointer;
+}
+.companyEditClose:disabled { opacity: .55; cursor: not-allowed; }
+.companyEditIdentity { display: flex; gap: 15px; align-items: center; margin-top: 10px; }
+.companyEditAvatar {
+  display: grid; place-items: center;
+  width: 56px; height: 56px; flex: 0 0 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--crm-primary-strong), var(--crm-primary-strong-hover));
+  color: var(--crm-text-inverse);
+  font-size: 18px; font-weight: 900;
+  box-shadow: 0 8px 20px rgb(0 36 45 / 15%);
+}
+.companyEditIdentity > div:last-child { min-width: 0; }
+.companyEditIdentity h2 {
+  margin: 0; font-size: 23px; font-weight: 900; line-height: 1.2;
+  color: var(--crm-text-strong);
+}
+.companyEditIdentity p { margin: 5px 0 0; font-size: 12px; color: var(--crm-text-muted); overflow-wrap: anywhere; }
+.companyEditMeta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.companyEditMeta span {
+  padding: 5px 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  color: var(--crm-text); background: var(--crm-surface);
+  font-size: 10px; font-weight: 800;
+}
+.companyEditScroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 28px 30px;
+  scrollbar-gutter: stable;
+}
+.companyEditSectionTitle { margin-bottom: 20px; }
+.companyEditSectionTitle span { color: var(--crm-primary-text); font-size: 10px; font-weight: 900; letter-spacing: .09em; }
+.companyEditSectionTitle h3 { margin: 6px 0 0; color: var(--crm-text-strong); font-size: 19px; font-weight: 900; }
+.companyEditSectionTitle p { margin: 5px 0 0; color: var(--crm-text-muted); font-size: 12px; }
+.companyEditModal .editGrid { gap: 16px; }
+.companyEditModal .emailMarketingCard {
+  margin-top: 12px;
+  padding: 21px;
+  gap: 17px;
+  background: linear-gradient(150deg, var(--crm-surface-soft), var(--crm-surface));
+}
+.companyEditIcon {
+  display: grid; place-items: center;
+  width: 43px; height: 43px; flex: 0 0 43px;
+  border-radius: 12px;
+  border: 1px solid var(--crm-primary-border);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+.emailMarketingIntro { min-width: 0; flex: 1; }
+.companyEditModal .emailMarketingHeading { gap: 13px; align-items: center; }
+.companyEditModal .emailMarketingHeading p { max-width: 580px; font-size: 12px; }
+.companyEditModal .emailMarketingToggle {
+  flex: 0 0 auto;
+  position: relative; display: inline-flex;
+  align-items: center; gap: 9px;
+  cursor: pointer;
+}
+.companyEditModal .emailMarketingToggle input {
+  position: absolute; opacity: 0; width: 1px; height: 1px;
+}
+.emailMarketingSwitch {
+  display: inline-block;
+  position: relative;
+  width: 46px; height: 26px; flex: 0 0 46px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 99px;
+  background: var(--crm-border-strong);
+  transition: background .2s, border-color .2s;
+}
+.emailMarketingSwitch::before {
+  content: "";
+  position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 99px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 17%);
+  transition: transform .2s;
+}
+.emailMarketingToggle input:checked + .emailMarketingSwitch {
+  background: var(--crm-primary-strong);
+  border-color: var(--crm-primary-strong);
+}
+.emailMarketingToggle input:checked + .emailMarketingSwitch::before { transform: translateX(20px); }
+.emailMarketingToggle input:focus-visible + .emailMarketingSwitch { outline: 3px solid var(--crm-primary-border); outline-offset: 3px; }
+.emailMarketingDisabled {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 14px;
+  border: 1px solid var(--crm-border); border-radius: 13px;
+  color: var(--crm-text-muted); background: var(--crm-surface);
+  font-size: 12px; line-height: 1.45;
+}
+.emailMarketingCredentials { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.emailMarketingCredential {
+  display: flex; flex-direction: column; gap: 9px; min-width: 0;
+  padding: 15px; border: 1px solid var(--crm-border);
+  border-radius: 14px; background: var(--crm-surface);
+}
+.emailMarketingCredentialHeading { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.emailMarketingCredentialHeading strong { color: var(--crm-text-strong); font-size: 12px; }
+.keyConfigured, .keyMissing {
+  display: inline-flex; align-items: center;
+  padding: 4px 8px; border-radius: 99px;
+  font-size: 10px; font-weight: 850;
+}
+.keyConfigured { color: var(--crm-success-text); background: var(--crm-success-bg); border: 1px solid var(--crm-success-border); }
+.keyMissing { color: var(--crm-warning-text); background: var(--crm-warning-bg); border: 1px solid var(--crm-warning-border); }
+.keyMaskedValue { font-size: 11px; color: var(--crm-text-muted); }
+.keyMaskedValue code { margin-left: 4px; font-family: ui-monospace,monospace; font-weight: 850; color: var(--crm-text-strong); }
+.secretField { position: relative; display: flex; min-width: 0; }
+.secretField .input { min-width: 0; padding-right: 49px; font: 12px ui-monospace, monospace; }
+.secretReveal {
+  position: absolute; top: 50%; right: 5px; transform: translateY(-50%);
+  display: grid; place-items: center; width: 35px; height: 35px;
+  border: 0; border-radius: 10px;
+  color: var(--crm-text); background: var(--crm-surface-soft);
+  cursor: pointer;
+}
+.secretReveal:hover { background: var(--crm-primary-soft); color: var(--crm-primary-text); }
+.companyEditError {
+  margin-top: 17px; padding: 13px 15px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 12px; color: var(--crm-danger-text);
+  background: var(--crm-danger-bg); font-size: 12px; font-weight: 800;
+  line-height: 1.45;
+}
+.companyEditFooter {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  flex: 0 0 auto;
+  padding: 15px 28px;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  box-shadow: 0 -8px 22px rgb(0 0 0 / 5%);
+}
+.companyEditFooter > span { display: inline-flex; align-items: center; gap: 7px; color: var(--crm-text-muted); font-size: 11px; }
+.companyEditFooterActions { display: flex; align-items: center; gap: 10px; }
+.companyEditFooterActions .primaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+@media (max-width: 700px) {
+  .companyEditOverlay { padding: 8px; align-items: flex-end; }
+  .companyEditModal { max-height: 98dvh; border-radius: 20px; }
+  .companyEditHeader { padding: 15px 16px; }
+  .companyEditIdentity h2 { font-size: 18px; }
+  .companyEditAvatar { width: 45px; height: 45px; flex-basis: 45px; }
+  .companyEditScroll { padding: 17px 16px; scrollbar-gutter: auto; }
+  .companyEditModal .editGrid, .companyEditModal .emailMarketingFields, .emailMarketingCredentials { grid-template-columns: 1fr; }
+  .companyEditModal .emailMarketingCard { padding: 16px; }
+  .companyEditModal .emailMarketingHeading { flex-wrap: wrap; align-items: flex-start; }
+  .companyEditModal .emailMarketingToggle { margin-left: auto; }
+  .companyEditFooter { padding: 12px 16px; flex-direction: column; align-items: stretch; }
+  .companyEditFooter > span { display: none; }
+  .companyEditFooterActions { display: grid; grid-template-columns: 1fr 1.5fr; }
+}

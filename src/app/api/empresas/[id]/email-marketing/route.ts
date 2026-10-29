@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { encryptText } from "@/lib/security/crypto";
+import { decryptText, encryptText } from "@/lib/security/crypto";
 import { buscarIntegracaoEmailMarketing } from "@/lib/email-marketing/admin";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+function credencialMascarada(
+  cifrada: string | null | undefined,
+  variavelLegada: string | undefined,
+  prefixo: string
+) {
+  try {
+    const valor = cifrada ? decryptText(cifrada) : (variavelLegada?.trim() || null);
+    return valor ? prefixo + "••••••••" + valor.slice(-5) : null;
+  } catch {
+    return null;
+  }
+}
 
 async function autorizar() {
   const resultado = await getUsuarioContexto({ ignorarAcessoTemporario: true });
@@ -36,6 +49,18 @@ export async function GET(
       remetente_email: config?.remetente_email || "",
       api_key_configurada: Boolean(config?.api_key_criptografada || (id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" && process.env.RESEND_EMAIL_MARKETING_API_KEY)),
       webhook_configurado: Boolean(config?.webhook_secret_criptografado || (id === "4fc69d8c-52e3-4756-aaa1-d86db217c376" && process.env.RESEND_EMAIL_MARKETING_WEBHOOK_SECRET)),
+      api_key_mascarada: credencialMascarada(
+        config?.api_key_criptografada,
+        id === "4fc69d8c-52e3-4756-aaa1-d86db217c376"
+          ? process.env.RESEND_EMAIL_MARKETING_API_KEY : undefined,
+        "re_"
+      ),
+      webhook_mascarado: credencialMascarada(
+        config?.webhook_secret_criptografado,
+        id === "4fc69d8c-52e3-4756-aaa1-d86db217c376"
+          ? process.env.RESEND_EMAIL_MARKETING_WEBHOOK_SECRET : undefined,
+        "whsec_"
+      ),
       webhook_url: `https://crmprosperity.com/api/webhooks/email/resend?empresa_id=${encodeURIComponent(id)}`,
     },
   });
