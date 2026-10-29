@@ -3,57 +3,62 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { can } from "@/lib/permissoes/can";
 import { PERMISSAO_INTERNA_EMPRESAS } from "@/lib/permissoes/internas";
-import { BACKUP_BUCKET, gerarBackupEncerramento } from "@/lib/empresas/backup";
+import { BACKUP_BUCKET, gerarBackupEncerramento, type ParteBackup } from "@/lib/empresas/backup";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-async function autorizar(empresaId: string) {
-  const acesso = await getUsuarioContexto({
-    ignorarAcessoTemporario: true, sincronizarAssinatura: false,
-  });
-  if (!acesso.ok) throw new Error("Acesso não autorizado.");
-  const [interno, editar] = await Promise.all([
-    can(acesso.usuario.id, PERMISSAO_INTERNA_EMPRESAS),
-    can(acesso.usuario.id, "empresas.editar"),
+async function autorizar(empresaId:string) {
+  const acesso=await getUsuarioContexto({ignorarAcessoTemporario:true,sincronizarAssinatura:false});
+  if(!acesso.ok)throw new Error("Acesso não autorizado.");
+  const [interno,editar]=await Promise.all([
+    can(acesso.usuario.id,PERMISSAO_INTERNA_EMPRESAS),
+    can(acesso.usuario.id,"empresas.editar"),
   ]);
-  if (!interno || !editar) throw new Error("Sem permissão para exportar dados encerrados.");
-  const supabase = getSupabaseAdmin();
-  const {data: empresa,error} = await supabase.from("empresas")
-    .select("id,nome_fantasia,status,encerramento_backup_path,encerramento_backup_estado")
+  if(!interno || !editar)throw new Error("Sem permissão para exportar dados encerrados.");
+  const {data:empresa,error}=await getSupabaseAdmin().from("empresas")
+    .select("id,status,exclusao_prevista_em,encerramento_backup_estado,encerramento_backup_path,encerramento_backup_partes")
     .eq("id",empresaId).maybeSingle();
-  if (error || !empresa) throw new Error("Empresa não encontrada.");
-  if (empresa.status !== "cancelada") throw new Error("Empresa não está cancelada.");
+  if(error || !empresa)throw new Error("Empresa não encontrada.");
+  if(empresa.status!=="cancelada" || !empresa.exclusao_prevista_em ||
+    new Date(empresa.exclusao_prevista_em).getTime()<=Date.now())
+    throw new Error("O prazo de 90 dias para solicitar backup terminou.");
   return empresa;
 }
 
-export async function POST(_request: Request, context: {params: Promise<{id:string}>}) {
-  try {
-    const {id} = await context.params;
+export async function POST(_request:Request,context:{params:Promise<{id:string}>}) {
+  try{
+    const {id}=await context.params;
     await autorizar(id);
-    const result = await gerarBackupEncerramento(id);
-    return NextResponse.json(result);
-  } catch (error) {
-    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Falha ao gerar backup."}, {status:400});
+    const resultado=await gerarBackupEncerramento(id);
+    return NextResponse.json(resultado,{headers:{"Cache-Control":"private, no-store"}});
+  }catch(error){
+    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Falha ao gerar backup."},{status:409});
   }
 }
-
-export async function GET(_request: Request, context: {params: Promise<{id:string}>}) {
-  try {
-    const {id} = await context.params;
-    const empresa = await autorizar(id);
-    if (empresa.encerramento_backup_estado !== "pronto" || !empresa.encerramento_backup_path)
-      return NextResponse.json({ok:false,error:"Backup não está pronto."},{status:409});
-    const supabase = getSupabaseAdmin();
-    const {data,error} = await supabase.storage.from(BACKUP_BUCKET)
-      .createSignedUrl(empresa.encerramento_backup_path,120, {
-        download: "backup-" + id + ".zip",
-      });
-    if (error || !data?.signedUrl) throw new Error(error?.message || "Arquivo indisponível.");
-    return NextResponse.json({ok:true,url:data.signedUrl}, {
-      headers: {"Cache-Control":"private, no-store"},
-    });
-  } catch (error) {
-    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Falha ao obter backup."},{status:403});
+export async function GET(_request:Request,context:{params:Promise<{id:string}>}) {
+  try{
+    const {id}=await context.params;
+    const empresa=await autorizar(id);
+    if(empresa.encerramento_backup_estado!=="pronto")
+      return NextResponse.json({ok:false,error:"O backup ainda não foi concluído."},{status:409});
+    const parts=(Array.isArray(empresa.encerramento_backup_partes)
+      ? empresa.encerramento_backup_partes.filter((p):p is ParteBackup =>
+          p && typeof p.path==="string" && typeof p.nome==="string")
+      : []);
+    const arquivos=parts.length?parts:
+      empresa.encerramento_backup_path
+        ? [{nome:"backup-"+id+".zip",path:empresa.encerramento_backup_path,bytes:0,sha256:""}]
+        : [];
+    if(!arquivos.length)throw new Error("Nenhuma parte de backup foi encontrada.");
+    const urls=await Promise.all(arquivos.map(async (item)=>{
+      const {data,error}=await getSupabaseAdmin().storage.from(BACKUP_BUCKET)
+        .createSignedUrl(item.path,300,{download:item.nome});
+      if(error || !data?.signedUrl)throw new Error("Parte indisponível: "+item.nome);
+      return {nome:item.nome,bytes:item.bytes,sha256:item.sha256,url:data.signedUrl};
+    }));
+    return NextResponse.json({ok:true,partes:urls},{headers:{"Cache-Control":"private, no-store"}});
+  }catch(error){
+    return NextResponse.json({ok:false,error:error instanceof Error?error.message:"Não foi possível baixar o backup."},{status:403});
   }
 }
