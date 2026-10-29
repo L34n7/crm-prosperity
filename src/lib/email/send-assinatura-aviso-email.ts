@@ -57,17 +57,6 @@ export async function sendAssinaturaAvisoEmail(params: {
   const bloqueioData = new Date(vencimentoData.getTime() + 7 * 24 * 60 * 60 * 1000);
   const vencimento = formatarData(params.vencimentoEm);
   const bloqueio = formatarData(bloqueioData.toISOString());
-  const pausaRecebimentoData = new Date(
-    bloqueioData.getTime() + 30 * 24 * 60 * 60 * 1000
-  );
-  const suspensaoIntegracaoData = new Date(
-    bloqueioData.getTime() + 60 * 24 * 60 * 60 * 1000
-  );
-  const pausaRecebimento = formatarData(pausaRecebimentoData.toISOString());
-  const suspensaoIntegracao = formatarData(
-    suspensaoIntegracaoData.toISOString()
-  );
-
   const cancelada = params.canceladaEm ? formatarData(params.canceladaEm) : null;
   const exclusao = params.exclusaoPrevistaEm ? formatarData(params.exclusaoPrevistaEm) : null;
 
