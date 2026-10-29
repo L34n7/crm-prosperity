@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Eye, RotateCcw, Settings2, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Code2, Eye, Plus, RotateCcw, Search, Settings2, Trash2, X } from "lucide-react";
 import { TEMPLATES_PADRAO_EMAIL } from "@/lib/email-marketing/templates-padrao";
+import { formatarHtmlParaEdicao } from "@/lib/email-marketing/formatar-html";
 import VariavelCombobox from "@/components/variaveis/VariavelCombobox";
 import GerenciarVariaveisModal, {
   type VariavelPersonalizadaCompartilhada,
@@ -53,7 +54,9 @@ export default function TemplateModal({
   const assuntoRef = useRef<HTMLInputElement | null>(null);
   const [nome, setNome] = useState(template?.nome || "");
   const [assunto, setAssunto] = useState(template?.assunto || "");
-  const [html, setHtml] = useState(template?.html || TEMPLATE_INICIAL);
+  const [html, setHtml] = useState(() =>
+    formatarHtmlParaEdicao(template?.html || TEMPLATE_INICIAL)
+  );
   const [modeloPreview, setModeloPreview] = useState("personalizado");
   const [htmlAnterior, setHtmlAnterior] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -65,6 +68,9 @@ export default function TemplateModal({
   >([]);
   const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
   const [modalVariaveis, setModalVariaveis] = useState(false);
+  const [mostrarMaisVariaveis, setMostrarMaisVariaveis] = useState(false);
+  const [buscaVariavel, setBuscaVariavel] = useState("");
+  const [destinoVariavel, setDestinoVariavel] = useState<"html" | "assunto">("html");
 
   const modeloSelecionado = useMemo(() => {
     if (modeloPreview === "personalizado") return null;
@@ -86,17 +92,16 @@ export default function TemplateModal({
 
   function aplicarModelo() {
     if (!modeloSelecionado) return;
-    if (
-      html !== modeloSelecionado.html &&
-      html.trim() &&
-      !window.confirm(
-        "Usar o HTML deste modelo no editor? O seu HTML atual poderá ser restaurado antes de salvar."
-      )
-    ) return;
+    // Uma escolha no select só altera a prévia. Este botão aplica sem
+    // confirmação, mantendo a versão anterior disponível para desfazer.
     setHtmlAnterior(html);
-    setHtml(modeloSelecionado.html);
-    // Mantém assuntos existentes; sugere o assunto do modelo apenas em novos templates vazios.
+    setHtml(formatarHtmlParaEdicao(modeloSelecionado.html));
     if (!assunto.trim()) setAssunto(modeloSelecionado.assunto);
+    setModeloPreview("personalizado");
+  }
+
+  function organizarHtml() {
+    setHtml((atual) => formatarHtmlParaEdicao(atual));
     setModeloPreview("personalizado");
   }
 
@@ -151,6 +156,14 @@ export default function TemplateModal({
       ativo = false;
     };
   }, []);
+
+  const variaveisParaInserir = useMemo(
+    () => opcoesVariaveis.filter((opcao) => (
+      (opcao.chave + " " + opcao.descricao).toLocaleLowerCase("pt-BR")
+        .includes(buscaVariavel.trim().toLocaleLowerCase("pt-BR"))
+    )),
+    [opcoesVariaveis, buscaVariavel]
+  );
 
   function inserirNoConteudo(chave = variavelSelecionada) {
     setModeloPreview("personalizado");
@@ -331,32 +344,86 @@ export default function TemplateModal({
                       <Settings2 size={15} /> Gerenciar variáveis
                     </button>
                   </div>
-                  <VariavelCombobox
-                    label="Inserir variável"
-                    value={variavelSelecionada}
-                    onChange={setVariavelSelecionada}
-                    opcoes={opcoesVariaveis}
-                    carregando={carregandoVariaveis}
-                  />
-                  <div className={styles.templatePremiumVariableButtons}>
-                    <button type="button" className={styles.secondaryButton} onClick={() => inserirNoAssunto()}>
-                      Inserir no assunto
-                    </button>
-                    <button type="button" className={styles.secondaryButton} onClick={() => inserirNoConteudo()}>
-                      Inserir no conteúdo
-                    </button>
+                  <div className={styles.templateVariableCompactRow}>
+                    <div className={styles.templateVariableSelect}>
+                      <VariavelCombobox
+                        label="Variável"
+                        value={variavelSelecionada}
+                        onChange={setVariavelSelecionada}
+                        opcoes={opcoesVariaveis}
+                        carregando={carregandoVariaveis}
+                      />
+                    </div>
+                    <div className={styles.templatePremiumVariableButtons}>
+                      <button type="button" className={styles.secondaryButton}
+                        title="Inserir variável no assunto" onClick={() => inserirNoAssunto()}>
+                        <Plus size={14} /> Assunto
+                      </button>
+                      <button type="button" className={styles.secondaryButton}
+                        title="Inserir variável no HTML" onClick={() => inserirNoConteudo()}>
+                        <Plus size={14} /> HTML
+                      </button>
+                    </div>
                   </div>
+                  <button type="button"
+                    className={styles.templateMoreVariablesToggle}
+                    aria-expanded={mostrarMaisVariaveis}
+                    onClick={() => setMostrarMaisVariaveis((atual) => !atual)}>
+                    <Plus size={15}/> Adicionar mais variáveis
+                    <ChevronDown size={15} className={mostrarMaisVariaveis ? styles.templateChevronOpen : ""}/>
+                  </button>
+                  {mostrarMaisVariaveis ? (
+                    <div className={styles.templateMoreVariablesPanel}>
+                      <div className={styles.templateMoreVariablesControls}>
+                        <label className={styles.templateVariableSearch}>
+                          <Search size={15}/>
+                          <input aria-label="Buscar variáveis" value={buscaVariavel}
+                            onChange={(event) => setBuscaVariavel(event.target.value)}
+                            placeholder="Buscar variável..." />
+                        </label>
+                        <div className={styles.templateVariableDestination} role="group" aria-label="Onde inserir variável">
+                          <button type="button" aria-pressed={destinoVariavel === "html"}
+                            className={destinoVariavel === "html" ? styles.templateVariableDestinationActive : ""}
+                            onClick={() => setDestinoVariavel("html")}>No HTML</button>
+                          <button type="button" aria-pressed={destinoVariavel === "assunto"}
+                            className={destinoVariavel === "assunto" ? styles.templateVariableDestinationActive : ""}
+                            onClick={() => setDestinoVariavel("assunto")}>No assunto</button>
+                        </div>
+                      </div>
+                      <div className={styles.templateVariableChips}>
+                        {variaveisParaInserir.map((opcao) => (
+                          <button key={opcao.chave} type="button"
+                            title={opcao.descricao} onClick={() => {
+                              setVariavelSelecionada(opcao.chave);
+                              if (destinoVariavel === "html") inserirNoConteudo(opcao.chave);
+                              else inserirNoAssunto(opcao.chave);
+                            }}>
+                            <Plus size={12}/> {"{{" + opcao.chave + "}}"}
+                          </button>
+                        ))}
+                        {variaveisParaInserir.length === 0 ? (
+                          <p>Não há variáveis correspondentes. Crie uma em Gerenciar variáveis.</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className={styles.templatePremiumHtmlSection}>
                   <div className={styles.templatePremiumHtmlHead}>
                     <strong>Conteúdo HTML personalizado</strong>
-                    {htmlAnterior !== null ? (
+                    <div className={styles.templateHtmlActions}>
                       <button type="button" className={styles.templatePremiumTextButton}
-                        onClick={restaurarHtml} title="Recuperar HTML anterior à aplicação do modelo">
-                        <RotateCcw size={15} /> Desfazer aplicação
+                        onClick={organizarHtml} title="Organizar linhas e indentação do HTML">
+                        <Code2 size={15} /> Organizar HTML
                       </button>
-                    ) : null}
+                      {htmlAnterior !== null ? (
+                        <button type="button" className={styles.templatePremiumTextButton}
+                          onClick={restaurarHtml} title="Recuperar HTML anterior à aplicação do modelo">
+                          <RotateCcw size={15} /> Desfazer aplicação
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <textarea
                     ref={textareaRef}
@@ -372,30 +439,24 @@ export default function TemplateModal({
                     required
                   />
                   <small>
-                    O HTML digitado não muda ao visualizar outros modelos. Scripts e atributos inseguros são removidos ao salvar.
+                    HTML organizado em linhas e blocos. Visualizar outro modelo não altera seu código; scripts e atributos inseguros são removidos ao salvar.
                   </small>
                 </div>
               </section>
 
               <section className={styles.templateLivePreview} aria-label="Prévia do template">
-                <div className={styles.templateLivePreviewTop}>
-                  <div>
-                    <span>PRÉVIA DO TEMPLATE</span>
-                    <strong>Visualize antes de aplicar</strong>
-                  </div>
-                  <span className={styles.templatePreviewLiveBadge}>
-                    <Eye size={15} /> Prévia
-                  </span>
+                <div className={styles.templatePreviewCompactHeader}>
+                  <strong><Eye size={16}/> Prévia do template</strong>
+                  <span>Modelos de referência</span>
                 </div>
 
-                <div className={styles.templatePresetControl}>
-                  <label htmlFor="modelo-template-email">Modelo para visualizar</label>
-                  <select
-                    id="modelo-template-email"
+                <div className={styles.templatePresetCompactBar}>
+                  <label htmlFor="modelo-template-email">Modelo:</label>
+                  <select id="modelo-template-email"
                     value={modeloPreview}
                     onChange={(event) => setModeloPreview(event.target.value)}
                     disabled={salvando}
-                  >
+                    title={modeloSelecionado?.nome || "Personalizado atual"}>
                     <option value="personalizado">Personalizado atual</option>
                     <optgroup label="5 modelos padrão">
                       {TEMPLATES_PADRAO_EMAIL.map((modelo) => (
@@ -411,20 +472,12 @@ export default function TemplateModal({
                     ) : null}
                   </select>
                   {modeloSelecionado ? (
-                    <div className={styles.templatePresetBanner}>
-                      <span>
-                        <strong>{modeloSelecionado.nome}</strong>
-                        <small>{"descricao" in modeloSelecionado ? modeloSelecionado.descricao : "Template salvo na sua empresa"}</small>
-                      </span>
-                      <button type="button" className={styles.primaryButton}
-                        onClick={aplicarModelo} disabled={salvando}>
-                        <Check size={15} /> Usar este HTML
-                      </button>
-                    </div>
+                    <button type="button" className={styles.templateApplyCompactButton}
+                      onClick={aplicarModelo} disabled={salvando} title="Copiar este modelo para o editor. Você poderá desfazer.">
+                      <Check size={15}/> Usar este HTML
+                    </button>
                   ) : (
-                    <p className={styles.templatePresetHint}>
-                      Prévia sincronizada com seu HTML. Escolher outro modelo não altera o texto que você está editando.
-                    </p>
+                    <span className={styles.templatePreviewSynced}>Seu HTML</span>
                   )}
                 </div>
 

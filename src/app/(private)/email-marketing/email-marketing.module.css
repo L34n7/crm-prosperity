@@ -4386,3 +4386,307 @@
     width: auto;
   }
 }
+
+
+/* Editor HTML: ações compactas e acesso rápido à biblioteca de variáveis. */
+.templateVariableCompactRow {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.templateVariableSelect {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.templatePremiumModal .templatePremiumVariableButtons {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.templatePremiumModal .templatePremiumVariableButtons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.templateMoreVariablesToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px dashed var(--crm-primary-border);
+  border-radius: 9px;
+  color: var(--crm-primary-text);
+  background: var(--crm-surface);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.templateMoreVariablesToggle svg:last-child {
+  margin-left: auto;
+  transition: transform .2s ease;
+}
+
+.templateChevronOpen {
+  transform: rotate(180deg);
+}
+
+.templateMoreVariablesToggle:hover {
+  background: var(--crm-primary-soft);
+}
+
+.templateMoreVariablesPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--crm-surface);
+}
+
+.templateMoreVariablesControls {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.templateVariableSearch {
+  display: flex;
+  min-width: 160px;
+  flex: 1 1 190px;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--crm-text-muted);
+  background: var(--crm-surface);
+}
+
+.templateVariableSearch input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--crm-text-strong);
+  font-size: 12px;
+}
+
+.templateVariableDestination {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--crm-surface-soft);
+}
+
+.templateVariableDestination button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 7px 9px;
+  color: var(--crm-text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.templateVariableDestination button.templateVariableDestinationActive {
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  box-shadow: 0 1px 5px rgb(15 23 42 / 8%);
+}
+
+.templateVariableChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  overflow-y: auto;
+  max-height: 140px;
+  padding: 2px;
+}
+
+.templateVariableChips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--crm-border);
+  border-radius: 8px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-strong);
+  padding: 7px 9px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.templateVariableChips button:hover {
+  border-color: var(--crm-primary-border);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+
+.templateVariableChips p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--crm-text-muted);
+}
+
+.templateHtmlActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.templatePremiumModal .templatePremiumHtmlSection .htmlEditor {
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+/* Modelo discreto para maximizar a altura da prévia do HTML. */
+.templatePremiumModal .templateLivePreview {
+  gap: 8px;
+  padding: 12px;
+}
+
+.templatePreviewCompactHeader {
+  display: flex;
+  min-height: 21px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.templatePreviewCompactHeader strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.templatePreviewCompactHeader strong svg {
+  color: var(--crm-primary-text);
+}
+
+.templatePreviewCompactHeader > span {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.templatePresetCompactBar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+}
+
+.templatePresetCompactBar > label {
+  flex: 0 0 auto;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.templatePresetCompactBar > select {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 8px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  outline: none;
+}
+
+.templatePresetCompactBar > select:focus {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.templateApplyCompactButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--crm-primary-strong);
+  border-radius: 8px;
+  color: #fff;
+  background: var(--crm-primary-strong);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.templateApplyCompactButton:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.templatePreviewSynced {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--crm-primary-text);
+}
+
+@media (max-width: 1100px) {
+  .templateVariableCompactRow {
+    flex-wrap: wrap;
+  }
+
+  .templatePremiumModal .templatePremiumVariableButtons {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .templatePresetCompactBar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .templatePresetCompactBar select {
+    flex-basis: 70%;
+  }
+
+  .templatePreviewCompactHeader > span {
+    display: none;
+  }
+}
