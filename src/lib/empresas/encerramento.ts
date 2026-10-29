@@ -44,7 +44,9 @@ export async function encerrarEmpresaAdministrativamente(empresaId: string, usua
   // O worker/inbound pode manter cache do número por até 15 segundos.
   // A invalidacão local é somada ao filtro de empresas ativas no lookup.
   invalidarCacheIntegracaoWhatsapp();
-  const warning = await sincronizarCobrancaSeWhiteLabel(empresa);
+  const warning = empresa.white_label_tipo === "cliente"
+    ? await sincronizarCobrancaSeWhiteLabel(empresa)
+    : "Confira o encerramento da cobrança recorrente no gateway (Prosperity Pay/Mercado Pago). O bloqueio operacional não cancela sozinho uma assinatura externa.";
   return { ...(data as Record<string, unknown>), warning };
 }
 
