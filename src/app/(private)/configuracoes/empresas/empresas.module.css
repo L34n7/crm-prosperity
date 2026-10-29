@@ -3202,3 +3202,21 @@
   .offboardingFiles {flex-direction:column;align-items:stretch}
   .offboardingFileLink {justify-content:center}
 }
+
+
+/* Ações disponíveis no encerramento devem indicar clique. */
+.offboardingActions button:not(:disabled) { cursor: pointer; }
+.offboardingEarlyConfirm {
+  display:flex;gap:11px;align-items:flex-start;margin:16px 0 0;
+  padding:14px 15px;border-radius:13px;
+  border:1px solid color-mix(in srgb,var(--crm-danger-text) 36%,var(--crm-border));
+  background:var(--crm-danger-bg);
+  color:var(--crm-text-strong);font-size:12px;line-height:1.6;
+  cursor:pointer;
+}
+.offboardingEarlyConfirm input {
+  flex:0 0 17px;width:17px;height:17px;margin:2px 0 0;
+  accent-color:var(--crm-danger-text);cursor:pointer;
+}
+.offboardingEarlyConfirm strong{font-weight:800}
+.offboardingEarlyConfirm input:disabled{cursor:not-allowed}
