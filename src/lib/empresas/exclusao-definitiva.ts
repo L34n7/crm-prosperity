@@ -7,6 +7,7 @@ type RetencaoFinanceira = {
   cliente_id: string;
   arquivos_midias: unknown;
   backup_path: string | null;
+  auth_user_ids: string[] | null;
 };
 
 function lerCaminhos(valor: unknown): string[] {
@@ -17,7 +18,7 @@ function lerCaminhos(valor: unknown): string[] {
 
 export async function limparStorageEmpresaExcluida(empresaId: string) {
   const {data, error} = await supabase.from("empresa_encerramento_financeiro")
-    .select("cliente_id,arquivos_midias,backup_path").eq("cliente_id",empresaId)
+    .select("cliente_id,arquivos_midias,backup_path,auth_user_ids").eq("cliente_id",empresaId)
     .single<RetencaoFinanceira>();
   if (error || !data) throw new Error("Arquivo financeiro de encerramento não encontrado.");
   try {
@@ -30,8 +31,22 @@ export async function limparStorageEmpresaExcluida(empresaId: string) {
       const {error:e} = await supabase.storage.from(BACKUP_BUCKET).remove([data.backup_path]);
       if(e) throw new Error("Falha na remoção do backup expirado: "+e.message);
     }
+    const authIds = [...new Set(lerCaminhos(data.auth_user_ids))];
+    for (let inicio=0; inicio<authIds.length; inicio+=100) {
+      const ids = authIds.slice(inicio,inicio+100);
+      const {data:usuariosRestantes,error:restantesErro} = await supabase.from("usuarios")
+        .select("auth_user_id").in("auth_user_id", ids);
+      if (restantesErro) throw new Error("Não foi possível conferir contas Auth compartilhadas: "+restantesErro.message);
+      const aindaVinculados = new Set((usuariosRestantes || []).map(x=>String(x.auth_user_id || "")));
+      for (const authId of ids) {
+        if (aindaVinculados.has(authId)) continue;
+        const {error:authErro} = await supabase.auth.admin.deleteUser(authId);
+        if (authErro && !/not found|not exist|404/i.test(authErro.message))
+          throw new Error("Falha ao remover usuário Auth: "+authErro.message);
+      }
+    }
     const {error:marcarErro} = await supabase.from("empresa_encerramento_financeiro")
-      .update({limpeza_status:"concluida",limpeza_erro:null})
+      .update({limpeza_status:"concluida",limpeza_erro:null,auth_user_ids:[]})
       .eq("cliente_id",empresaId);
     if(marcarErro) throw new Error(marcarErro.message);
     return {ok:true,midias:paths.length};
