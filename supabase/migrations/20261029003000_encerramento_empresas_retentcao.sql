@@ -24,7 +24,7 @@ create index if not exists empresas_encerramento_pendente_idx
 
 -- Histórico mínimo que não depende da FK da empresa, para futura reconciliação financeira.
 create table if not exists public.empresa_encerramento_financeiro (
-  empresa_id uuid primary key,
+  cliente_id uuid primary key,
   empresa_nome text not null,
   white_label_id uuid,
   cancelada_em timestamptz,
