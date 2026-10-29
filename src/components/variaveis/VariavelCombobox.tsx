@@ -119,6 +119,7 @@ export default function VariavelCombobox({
           id={inputId}
           type="text"
           role="combobox"
+          aria-label={label || "Selecionar variável"}
           aria-expanded={aberto}
           aria-controls={listboxId}
           autoComplete="off"

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Code2, Plus, RotateCcw, Search, Settings2, Trash2, X } from "lucide-react";
+import { Check, Code2, Plus, RotateCcw, Settings2, Trash2, X } from "lucide-react";
 import { TEMPLATES_PADRAO_EMAIL } from "@/lib/email-marketing/templates-padrao";
 import { formatarHtmlParaEdicao } from "@/lib/email-marketing/formatar-html";
 import VariavelCombobox from "@/components/variaveis/VariavelCombobox";
@@ -68,9 +68,6 @@ export default function TemplateModal({
   >([]);
   const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
   const [modalVariaveis, setModalVariaveis] = useState(false);
-  const [mostrarMaisVariaveis, setMostrarMaisVariaveis] = useState(false);
-  const [buscaVariavel, setBuscaVariavel] = useState("");
-  const [destinoVariavel, setDestinoVariavel] = useState<"html" | "assunto">("html");
 
   const modeloSelecionado = useMemo(() => {
     if (modeloPreview === "personalizado") return null;
@@ -155,14 +152,6 @@ export default function TemplateModal({
       ativo = false;
     };
   }, []);
-
-  const variaveisParaInserir = useMemo(
-    () => opcoesVariaveis.filter((opcao) => (
-      (opcao.chave + " " + opcao.descricao).toLocaleLowerCase("pt-BR")
-        .includes(buscaVariavel.trim().toLocaleLowerCase("pt-BR"))
-    )),
-    [opcoesVariaveis, buscaVariavel]
-  );
 
   function inserirNoConteudo(chave = variavelSelecionada) {
     setModeloPreview("personalizado");
@@ -343,7 +332,6 @@ export default function TemplateModal({
                       <Settings2 size={15} /> Gerenciar variáveis
                     </button>
                   </div>
-                  <span className={styles.templateVariableRowLabel}>Variável</span>
                   <div className={styles.templateVariableCompactRow}>
                     <div className={styles.templateVariableSelect}>
                       <VariavelCombobox
@@ -364,48 +352,6 @@ export default function TemplateModal({
                       </button>
                     </div>
                   </div>
-                  <button type="button"
-                    className={styles.templateMoreVariablesToggle}
-                    aria-expanded={mostrarMaisVariaveis}
-                    onClick={() => setMostrarMaisVariaveis((atual) => !atual)}>
-                    <Plus size={15}/> Adicionar mais variáveis
-                    <ChevronDown size={15} className={mostrarMaisVariaveis ? styles.templateChevronOpen : ""}/>
-                  </button>
-                  {mostrarMaisVariaveis ? (
-                    <div className={styles.templateMoreVariablesPanel}>
-                      <div className={styles.templateMoreVariablesControls}>
-                        <label className={styles.templateVariableSearch}>
-                          <Search size={15}/>
-                          <input aria-label="Buscar variáveis" value={buscaVariavel}
-                            onChange={(event) => setBuscaVariavel(event.target.value)}
-                            placeholder="Buscar variável..." />
-                        </label>
-                        <div className={styles.templateVariableDestination} role="group" aria-label="Onde inserir variável">
-                          <button type="button" aria-pressed={destinoVariavel === "html"}
-                            className={destinoVariavel === "html" ? styles.templateVariableDestinationActive : ""}
-                            onClick={() => setDestinoVariavel("html")}>No HTML</button>
-                          <button type="button" aria-pressed={destinoVariavel === "assunto"}
-                            className={destinoVariavel === "assunto" ? styles.templateVariableDestinationActive : ""}
-                            onClick={() => setDestinoVariavel("assunto")}>No assunto</button>
-                        </div>
-                      </div>
-                      <div className={styles.templateVariableChips}>
-                        {variaveisParaInserir.map((opcao) => (
-                          <button key={opcao.chave} type="button"
-                            title={opcao.descricao} onClick={() => {
-                              setVariavelSelecionada(opcao.chave);
-                              if (destinoVariavel === "html") inserirNoConteudo(opcao.chave);
-                              else inserirNoAssunto(opcao.chave);
-                            }}>
-                            <Plus size={12}/> {"{{" + opcao.chave + "}}"}
-                          </button>
-                        ))}
-                        {variaveisParaInserir.length === 0 ? (
-                          <p>Não há variáveis correspondentes. Crie uma em Gerenciar variáveis.</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
 
                 <div className={styles.templatePremiumHtmlSection}>
