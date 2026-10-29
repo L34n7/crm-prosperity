@@ -4,7 +4,7 @@ import { BACKUP_BUCKET } from "@/lib/empresas/backup";
 const supabase = getSupabaseAdmin();
 
 type RetencaoFinanceira = {
-  empresa_id: string;
+  cliente_id: string;
   arquivos_midias: unknown;
   backup_path: string | null;
 };
@@ -17,7 +17,7 @@ function lerCaminhos(valor: unknown): string[] {
 
 export async function limparStorageEmpresaExcluida(empresaId: string) {
   const {data, error} = await supabase.from("empresa_encerramento_financeiro")
-    .select("empresa_id,arquivos_midias,backup_path").eq("empresa_id",empresaId)
+    .select("cliente_id,arquivos_midias,backup_path").eq("cliente_id",empresaId)
     .single<RetencaoFinanceira>();
   if (error || !data) throw new Error("Arquivo financeiro de encerramento não encontrado.");
   try {
@@ -32,14 +32,14 @@ export async function limparStorageEmpresaExcluida(empresaId: string) {
     }
     const {error:marcarErro} = await supabase.from("empresa_encerramento_financeiro")
       .update({limpeza_status:"concluida",limpeza_erro:null})
-      .eq("empresa_id",empresaId);
+      .eq("cliente_id",empresaId);
     if(marcarErro) throw new Error(marcarErro.message);
     return {ok:true,midias:paths.length};
   } catch(error) {
     const mensagem = error instanceof Error ? error.message : String(error);
     await supabase.from("empresa_encerramento_financeiro")
       .update({limpeza_status:"pendente",limpeza_erro:mensagem.slice(0,500)})
-      .eq("empresa_id",empresaId);
+      .eq("cliente_id",empresaId);
     return {ok:false,erro:mensagem};
   }
 }
