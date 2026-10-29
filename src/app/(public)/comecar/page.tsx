@@ -476,9 +476,10 @@ export default function ComecarPage() {
                 pelos canais, conteúdo e finalidade das mensagens enviadas pela
                 minha empresa e pelo cumprimento da legislação e das políticas dos
                 provedores utilizados.
-                {" "}Estou ciente de que, em caso de cancelamento, meus dados
-                operacionais ficarão disponíveis para solicitar backup por até
-                <strong> 90 dias</strong>, sem geração automática; após esse prazo
+                {" "}Estou ciente de que, após 30 dias de bloqueio por inadimplência,
+                a empresa poderá ser cancelada automaticamente. A partir do cancelamento,
+                manual ou automático, meus dados operacionais ficarão disponíveis para solicitar
+                backup por até <strong> 60 dias</strong>, sem geração automática; depois
                 poderão ser excluídos definitivamente, ressalvadas obrigações legais.
               </span>
             </label>
