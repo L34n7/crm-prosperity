@@ -48,7 +48,14 @@ export async function encerrarEmpresaAdministrativamente(empresaId: string, usua
   const {error:origemErro}=await supabase.from("empresas").update({encerramento_origem:origem})
     .eq("id",empresaId).eq("status","cancelada");
   if(origemErro)console.error("[ENCERRAMENTO] Falha ao registrar origem",empresaId,origemErro);
-  const aviso=await enviarAvisoCancelamentoPendente(empresaId);
+  let aviso: { enviado:boolean; ignorado:boolean; erro?:string };
+  try{
+    aviso=await enviarAvisoCancelamentoPendente(empresaId);
+  }catch(error){
+    const detalhe=error instanceof Error?error.message:String(error);
+    console.error("[ENCERRAMENTO] E-mail será retentado pelo cron:",empresaId,detalhe);
+    aviso={enviado:false,ignorado:false,erro:detalhe};
+  }
   const warning = empresa.white_label_tipo === "cliente"
     ? await sincronizarCobrancaSeWhiteLabel(empresa)
     : "Confira o encerramento da cobrança recorrente no gateway (Prosperity Pay/Mercado Pago). O bloqueio operacional não cancela sozinho uma assinatura externa.";
