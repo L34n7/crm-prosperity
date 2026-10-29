@@ -304,6 +304,7 @@ export default function EmpresasPage() {
   const [empresaExclusaoModal, setEmpresaExclusaoModal] = useState<Empresa | null>(null);
   const [impactoExclusao, setImpactoExclusao] = useState<ImpactoExclusaoEmpresa | null>(null);
   const [confirmacaoExclusao, setConfirmacaoExclusao] = useState("");
+  const [confirmouBackupBaixado, setConfirmouBackupBaixado] = useState(false);
   const [carregandoExclusao, setCarregandoExclusao] = useState(false);
   const [excluindoEmpresa, setExcluindoEmpresa] = useState(false);
   const [erroExclusao, setErroExclusao] = useState("");
@@ -532,8 +533,26 @@ export default function EmpresasPage() {
     }
   }
 
+  async function atualizarLinksBackup(empresaId: string) {
+    try {
+      const resposta=await fetch(`/api/empresas/${empresaId}/backup`,{cache:"no-store"});
+      const download=await resposta.json();
+      if(!resposta.ok || !download.ok || !Array.isArray(download.partes))
+        throw new Error(download.error||"Não foi possível abrir os arquivos do backup.");
+      setArquivosBackup((atual)=>({...atual,[empresaId]:download.partes}));
+    } catch(error) {
+      setArquivosBackup((atual)=>({...atual,[empresaId]:[]}));
+      setErro(error instanceof Error?error.message:"Falha ao recuperar o backup.");
+    }
+  }
+
   function toggleExpandir(empresaId: string) {
-    setExpandidoId((atual) => (atual === empresaId ? null : empresaId));
+    const abrindo=expandidoId!==empresaId;
+    setExpandidoId(abrindo?empresaId:null);
+    const empresa=empresas.find((item)=>item.id===empresaId);
+    if(abrindo && empresa?.status==="cancelada" && empresa.encerramento_backup_estado==="pronto"){
+      void atualizarLinksBackup(empresaId);
+    }
   }
 
   async function reenviarPrimeiroAcessoAlternativo(empresa: Empresa) {
@@ -980,6 +999,7 @@ export default function EmpresasPage() {
     setEmpresaExclusaoModal(empresa);
     setImpactoExclusao(null);
     setConfirmacaoExclusao("");
+    setConfirmouBackupBaixado(false);
     setErroExclusao("");
     setCarregandoExclusao(true);
 
@@ -1017,7 +1037,11 @@ export default function EmpresasPage() {
     if (
       !empresaExclusaoModal ||
       excluindoEmpresa ||
-      confirmacaoExclusao.trim() !== empresaExclusaoModal.nome_fantasia.trim()
+      confirmacaoExclusao.trim() !== empresaExclusaoModal.nome_fantasia.trim() ||
+      (empresaExclusaoModal.status === "cancelada" &&
+        Boolean(empresaExclusaoModal.exclusao_prevista_em) &&
+        new Date(empresaExclusaoModal.exclusao_prevista_em!).getTime() > Date.now() &&
+        !confirmouBackupBaixado)
     ) {
       return;
     }
@@ -1036,6 +1060,7 @@ export default function EmpresasPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             confirmacao: confirmacaoExclusao.trim(),
+            confirmacao_backup_baixado: confirmouBackupBaixado,
           }),
         }
       );
@@ -1559,7 +1584,7 @@ export default function EmpresasPage() {
                               </span>
                             </div>
 
-                            {podeEditarEmpresas && (
+                            {podeEditarEmpresas && empresa.status !== "cancelada" && (
                               <div className={styles.tokensManagementBlock}>
                                 <div className={styles.tokensManagementHeader}>
                                   <div>
@@ -1710,7 +1735,7 @@ export default function EmpresasPage() {
                                       <CalendarClock size={15} /> Exclusão definitiva
                                     </span>
                                     <strong>{empresa.exclusao_prevista_em ? formatarDataLead(empresa.exclusao_prevista_em) : "Ainda não agendada"}</strong>
-                                    <small>O expurgo só acontece com backup pronto e após 90 dias.</small>
+                                    <small>Expurgo automático após 90 dias, ou antes mediante confirmação de backup baixado.</small>
                                   </div>
                                   <div className={styles.offboardingDataItem}>
                                     <span className={styles.offboardingDataLabel}>Origem da empresa</span>
@@ -1759,8 +1784,9 @@ export default function EmpresasPage() {
                                         disabled={Boolean(operandoEncerramentoId) ||
                                           empresa.encerramento_backup_estado === "processando" ||
                                           !empresa.exclusao_prevista_em ||
-                                          new Date(empresa.exclusao_prevista_em).getTime() > Date.now()}
-                                        title="Disponível após 90 dias, mesmo que nenhum backup tenha sido solicitado."
+                                          (new Date(empresa.exclusao_prevista_em).getTime() > Date.now() &&
+                                            empresa.encerramento_backup_estado !== "pronto")}
+                                        title="Antes dos 90 dias, exige backup pronto e confirmação de download de todas as partes."
                                         onClick={() => abrirExclusaoEmpresa(empresa)}>
                                         <Trash2 size={16} /> Excluir definitivamente
                                       </button>
@@ -2736,7 +2762,7 @@ export default function EmpresasPage() {
               <strong>{empresaExclusaoModal.status === "cancelada" ? "Exclusão irreversível" : "Encerramento com retenção de 90 dias"}</strong>
               <p>
                 {empresaExclusaoModal.status === "cancelada"
-                  ? "Após 90 dias os dados operacionais são excluídos, mesmo sem backup solicitado. Registros financeiros legalmente necessários são preservados."
+                  ? "Esta operação é irreversível. Após 90 dias, o sistema pode excluir os dados automaticamente. Antes desse prazo, a exclusão exige backup concluído e confirmação de que todos os arquivos foram baixados."
                   : "Os acessos e automações serão bloqueados. Os dados ficarão disponíveis para solicitar backup por até 90 dias. A geração NÃO é automática. Sem solicitação dentro do prazo, os dados operacionais serão excluídos."}
               </p>
             </div>
@@ -2810,6 +2836,17 @@ export default function EmpresasPage() {
                   />
                 </div>
 
+                {empresaExclusaoModal.status === "cancelada" &&
+                  Boolean(empresaExclusaoModal.exclusao_prevista_em) &&
+                  new Date(empresaExclusaoModal.exclusao_prevista_em!).getTime() > Date.now() && (
+                    <label className={styles.offboardingEarlyConfirm}>
+                      <input type="checkbox" checked={confirmouBackupBaixado}
+                        onChange={(e)=>setConfirmouBackupBaixado(e.target.checked)}
+                        disabled={excluindoEmpresa}/>
+                      <span>Confirmo que <strong>baixei e conferi todas as partes do backup</strong> desta empresa e autorizo a exclusão definitiva antes dos 90 dias.</span>
+                    </label>
+                  )}
+
                 <div className={styles.deleteCompanyActions}>
                   <button
                     type="button"
@@ -2826,7 +2863,11 @@ export default function EmpresasPage() {
                     disabled={
                       excluindoEmpresa ||
                       confirmacaoExclusao.trim() !==
-                        empresaExclusaoModal.nome_fantasia.trim()
+                        empresaExclusaoModal.nome_fantasia.trim() ||
+                      (empresaExclusaoModal.status === "cancelada" &&
+                        Boolean(empresaExclusaoModal.exclusao_prevista_em) &&
+                        new Date(empresaExclusaoModal.exclusao_prevista_em!).getTime()>Date.now() &&
+                        !confirmouBackupBaixado)
                     }
                   >
                     {excluindoEmpresa
