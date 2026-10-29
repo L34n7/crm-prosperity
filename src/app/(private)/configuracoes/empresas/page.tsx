@@ -29,7 +29,7 @@ type Nicho = {
   nome: string;
 };
 
-type StatusEmpresa = "ativa" | "inativa" | "suspensa" | "cancelada";
+type StatusEmpresa = "ativa" | "inativa" | "suspensa" | "cancelada" | "excluida";
 
 type SaldoTokensEmpresa = {
   limite_mensal: number | null;
@@ -79,7 +79,10 @@ type Empresa = {
   status: StatusEmpresa;
   white_label_id?: string | null;
   white_label_tipo?: string | null;
+  created_at?: string | null;
   cancelada_em?: string | null;
+  excluida_em?: string | null;
+  encerramento_backup_solicitado_em?: string | null;
   exclusao_prevista_em?: string | null;
   encerramento_backup_estado?: "pendente" | "processando" | "pronto" | "erro" | null;
   encerramento_backup_path?: string | null;
@@ -121,6 +124,8 @@ function getStatusLabel(status: StatusEmpresa) {
       return "Suspensa";
     case "cancelada":
       return "Cancelado";
+    case "excluida":
+      return "Excluído";
     default:
       return status;
   }
@@ -136,6 +141,8 @@ function getStatusClass(status: StatusEmpresa) {
       return styles.statusSuspensa;
     case "cancelada":
       return styles.statusCancelada;
+    case "excluida":
+      return styles.statusExcluida;
     default:
       return styles.statusPadrao;
   }
@@ -1301,6 +1308,7 @@ export default function EmpresasPage() {
                 <option value="inativa">Inativas</option>
                 <option value="suspensa">Suspensas</option>
                 <option value="cancelada">Canceladas</option>
+                <option value="excluida">Excluídas</option>
               </select>
             </div>
 
@@ -1404,7 +1412,7 @@ export default function EmpresasPage() {
                   <article
                     key={empresa.id}
                     data-company-id={empresa.id}
-                    className={`${styles.itemCard} ${empresa.status === "cancelada" ? styles.itemCardCancelled : ""}`}
+                    className={`${styles.itemCard} ${empresa.status === "cancelada" ? styles.itemCardCancelled : ""} ${empresa.status === "excluida" ? styles.itemCardDeleted : ""}`}
                   >
                     <div className={styles.itemSummary}>
                       <div className={styles.itemLeft}>
@@ -1426,9 +1434,9 @@ export default function EmpresasPage() {
                             </span>
                           </div>
 
-                          <p className={styles.itemSubline}>{empresa.email}</p>
+                          {empresa.status !== "excluida" && <p className={styles.itemSubline}>{empresa.email}</p>}
 
-                          <div className={styles.summaryMeta}>
+                          {empresa.status !== "excluida" && <div className={styles.summaryMeta}>
                             <span className={styles.metaItem}>
                               <strong>Plano:</strong> {empresa.planos?.nome ?? "—"}
                             </span>
@@ -1443,12 +1451,18 @@ export default function EmpresasPage() {
                             <span className={styles.metaItem}>
                               <strong>Timezone:</strong> {empresa.timezone || "—"}
                             </span>
-                          </div>
+                          </div>}
+                          {empresa.status === "excluida" && (
+                            <div className={styles.summaryMeta}>
+                              <span className={styles.metaItem}>Registro histórico · somente consulta</span>
+                              <span className={styles.metaItem}>Excluída em {formatarDataAssinatura(empresa.excluida_em)}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       <div className={styles.itemRight}>
-                        {!editando && podeAcessarTemporariamente && empresa.status !== "cancelada" && (
+                        {!editando && podeAcessarTemporariamente && empresa.status !== "cancelada" && empresa.status !== "excluida" && (
                           <div className={styles.itemPrimaryActions}>
                             <button
                               type="button"
@@ -1484,7 +1498,7 @@ export default function EmpresasPage() {
                               {expandido ? "Recolher" : "Expandir"}
                             </button>
 
-                            {empresa.status !== "cancelada" && (
+                            {empresa.status !== "cancelada" && empresa.status !== "excluida" && (
                               <button
                                 type="button"
                                 onClick={() => iniciarEdicao(empresa)}
@@ -1494,7 +1508,7 @@ export default function EmpresasPage() {
                               </button>
                             )}
 
-                            {podeAcessarTemporariamente && empresa.status !== "cancelada" && (
+                            {podeAcessarTemporariamente && empresa.status !== "cancelada" && empresa.status !== "excluida" && (
                               <button
                                 type="button"
                                 onClick={() => abrirExclusaoEmpresa(empresa)}
@@ -1508,7 +1522,7 @@ export default function EmpresasPage() {
                       </div>
                     </div>
 
-                    {expandido && (
+                    {expandido && empresa.status !== "excluida" && (
                       <div className={styles.itemExpanded}>
                         <div className={styles.detailsGrid}>
                             <div className={styles.infoBlock}>
@@ -1731,6 +1745,11 @@ export default function EmpresasPage() {
                                     <small>Data do encerramento administrativo.</small>
                                   </div>
                                   <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}><CalendarClock size={15}/> Início no CRM</span>
+                                    <strong>{formatarDataAssinatura(empresa.created_at)}</strong>
+                                    <small>Data do cadastro da empresa.</small>
+                                  </div>
+                                  <div className={styles.offboardingDataItem}>
                                     <span className={styles.offboardingDataLabel}>
                                       <CalendarClock size={15} /> Exclusão definitiva
                                     </span>
@@ -1745,6 +1764,13 @@ export default function EmpresasPage() {
                                         : "Cliente CRM"}
                                     </strong>
                                     <small>Visível no painel administrativo Prosperity.</small>
+                                  </div>
+                                  <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}><CalendarClock size={15}/> Backup solicitado em</span>
+                                    <strong>{empresa.encerramento_backup_solicitado_em
+                                      ? formatarDataAssinatura(empresa.encerramento_backup_solicitado_em)
+                                      : "Não solicitado"}</strong>
+                                    <small>A geração ocorre somente após solicitação.</small>
                                   </div>
                                 </div>
 
@@ -1813,6 +1839,27 @@ export default function EmpresasPage() {
                               </section>
                             )}
                           </div>
+                      </div>
+                    )}
+                    {expandido && empresa.status === "excluida" && (
+                      <div className={styles.itemExpanded}>
+                        <section className={styles.deletedHistoryCard} aria-label="Histórico da empresa excluída">
+                          <div className={styles.deletedHistoryHeader}>
+                            <span className={styles.deletedHistoryIcon}><Archive size={19}/></span>
+                            <div>
+                              <strong>Histórico de encerramento</strong>
+                              <p>Dados operacionais excluídos definitivamente. Registro mantido somente para consulta administrativa.</p>
+                            </div>
+                          </div>
+                          <div className={styles.deletedHistoryGrid}>
+                            <div><span>Início no CRM</span><strong>{formatarDataAssinatura(empresa.created_at)}</strong></div>
+                            <div><span>Cancelamento</span><strong>{formatarDataAssinatura(empresa.cancelada_em)}</strong></div>
+                            <div><span>Exclusão definitiva</span><strong>{formatarDataAssinatura(empresa.excluida_em)}</strong></div>
+                            <div><span>Solicitação do backup</span><strong>{empresa.encerramento_backup_solicitado_em
+                              ? formatarDataAssinatura(empresa.encerramento_backup_solicitado_em)
+                              : "Não registrada"}</strong></div>
+                          </div>
+                        </section>
                       </div>
                     )}
                   </article>
