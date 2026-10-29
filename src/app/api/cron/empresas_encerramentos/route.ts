@@ -13,10 +13,18 @@ export async function GET(request: Request) {
   const supabase = getSupabaseAdmin();
   const eventos: Array<{tipo:string;empresa_id:string;ok:boolean;detalhe?:string}> = [];
 
-  // Processa só uma empresa por execução para limitar memória e duração.
+  // Recupera trabalhos abandonados por timeout após uma hora; nunca apaga dados.
+  const timeoutLimite = new Date(Date.now() - 60*60*1000).toISOString();
+  await supabase.from("empresas").update({
+    encerramento_backup_estado: "erro",
+    encerramento_backup_erro: "Tempo de execução excedido. Nova tentativa será programada.",
+  }).eq("status","cancelada").eq("encerramento_backup_estado","processando")
+    .lt("encerramento_backup_tentado_em",timeoutLimite);
+
+  // Prioriza novos cancelamentos para que um backup grande que falhou não paralise outros.
   const {data:pendentes,error:erroPendentes} = await supabase.from("empresas")
     .select("id")
-    .eq("status","cancelada").in("encerramento_backup_estado",["pendente","erro"])
+    .eq("status","cancelada").eq("encerramento_backup_estado","pendente")
     .not("exclusao_prevista_em","is",null)
     .order("cancelada_em",{ascending:true}).limit(1);
   if(erroPendentes) throw new Error(erroPendentes.message);
@@ -26,6 +34,21 @@ export async function GET(request: Request) {
       eventos.push({tipo:"backup",empresa_id:empresa.id,ok:true});
     } catch(error) {
       eventos.push({tipo:"backup",empresa_id:empresa.id,ok:false,
+        detalhe:error instanceof Error?error.message:String(error)});
+    }
+  }
+
+  const retryLimite = new Date(Date.now()-24*60*60*1000).toISOString();
+  const {data:retries} = await supabase.from("empresas")
+    .select("id").eq("status","cancelada").eq("encerramento_backup_estado","erro")
+    .lt("encerramento_backup_tentado_em",retryLimite)
+    .order("encerramento_backup_tentado_em",{ascending:true}).limit(1);
+  for (const empresa of retries || []) {
+    try {
+      await gerarBackupEncerramento(empresa.id);
+      eventos.push({tipo:"backup_retry",empresa_id:empresa.id,ok:true});
+    } catch(error) {
+      eventos.push({tipo:"backup_retry",empresa_id:empresa.id,ok:false,
         detalhe:error instanceof Error?error.message:String(error)});
     }
   }
