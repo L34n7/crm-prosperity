@@ -17,7 +17,7 @@ async function autorizar(empresaId:string) {
   ]);
   if(!interno || !editar)throw new Error("Sem permissão para exportar dados encerrados.");
   const {data:empresa,error}=await getSupabaseAdmin().from("empresas")
-    .select("id,nome_fantasia,status,exclusao_prevista_em,encerramento_backup_estado,encerramento_backup_path,encerramento_backup_partes")
+    .select("id,nome_fantasia,status,exclusao_prevista_em,encerramento_backup_estado,encerramento_backup_path,encerramento_backup_partes,encerramento_backup_solicitado_em,encerramento_backup_gerado_em")
     .eq("id",empresaId).maybeSingle();
   if(error || !empresa)throw new Error("Empresa não encontrada.");
   if(empresa.status!=="cancelada" || !empresa.exclusao_prevista_em ||
@@ -30,6 +30,12 @@ export async function POST(_request:Request,context:{params:Promise<{id:string}>
   try{
     const {id}=await context.params;
     await autorizar(id);
+    const supabase = getSupabaseAdmin();
+    const {error:registroErro}=await supabase.from("empresas")
+      .update({encerramento_backup_solicitado_em:new Date().toISOString()})
+      .eq("id",id).eq("status","cancelada")
+      .is("encerramento_backup_solicitado_em",null);
+    if(registroErro)throw new Error("Não foi possível registrar a solicitação: "+registroErro.message);
     const resultado=await gerarBackupEncerramento(id);
     return NextResponse.json(resultado,{headers:{"Cache-Control":"private, no-store"}});
   }catch(error){
@@ -54,12 +60,14 @@ export async function GET(_request:Request,context:{params:Promise<{id:string}>}
     const slugEmpresa=empresa.nome_fantasia.normalize("NFD")
       .replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"-")
       .replace(/^-+|-+$/g,"").slice(0,64).toLowerCase() || "empresa";
+    const dataNome=(empresa.encerramento_backup_solicitado_em ||
+      empresa.encerramento_backup_gerado_em || new Date().toISOString()).slice(0,10);
+    const baseNome="backup-"+slugEmpresa+"-"+dataNome+"-"+id.slice(0,8);
     const urls=await Promise.all(arquivos.map(async (item,index)=>{
-      // Inclui o nome até em ZIPs preparados antes desta atualização (ex.: tea).
-      const nome=item.nome.includes(slugEmpresa)
-        ? item.nome
-        : "backup-"+slugEmpresa+"-"+id.slice(0,8)+"-parte-"+
-          String(index+1).padStart(3,"0")+".zip";
+      // O nome do download não altera o ZIP armazenado e funciona para backups antigos.
+      const nome=arquivos.length===1
+        ? baseNome+".zip"
+        : baseNome+"-parte-"+String(index+1).padStart(3,"0")+".zip";
       const {data,error}=await getSupabaseAdmin().storage.from(BACKUP_BUCKET)
         .createSignedUrl(item.path,300,{download:nome});
       if(error || !data?.signedUrl)throw new Error("Parte indisponível: "+nome);
