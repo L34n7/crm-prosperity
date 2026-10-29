@@ -41,6 +41,8 @@ export async function GET() {
       telefone,
       nome_responsavel,
       status,
+      white_label_id,
+      white_label_tipo,
       timezone,
       logo_url,
       observacoes,
