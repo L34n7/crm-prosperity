@@ -719,27 +719,34 @@ export default function EmailMarketingPage() {
                 <div className={styles.templateGrid}>
                   {templates.map((template) => (
                     <article className={styles.templateCard} key={template.id}>
-                      <div className={styles.templateCardIcon}>
-                        <FileText size={19} />
+                      <div className={styles.templateCardPreview} aria-label={"Miniatura do template " + template.nome}>
+                        <iframe
+                          title={"Prévia do template " + template.nome}
+                          sandbox=""
+                          loading="lazy"
+                          tabIndex={-1}
+                          srcDoc={template.html}
+                        />
                       </div>
-                      <div className={styles.templateCardBody}>
-                        <strong>{template.nome}</strong>
-                        <span>{template.assunto}</span>
-                        <small>
-                          Atualizado em {dataHora(template.updated_at)}
-                        </small>
+                      <div className={styles.templateCardDetails}>
+                        <div className={styles.templateCardIcon}><FileText size={19} /></div>
+                        <div className={styles.templateCardBody}>
+                          <strong>{template.nome}</strong>
+                          <span>{template.assunto}</span>
+                          <small>Atualizado em {dataHora(template.updated_at)}</small>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.iconButton}
+                          onClick={() => {
+                            setTemplateEditando(template);
+                            setTemplateModal(true);
+                          }}
+                          aria-label={"Editar " + template.nome}
+                        >
+                          <Pencil size={16} />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className={styles.iconButton}
-                        onClick={() => {
-                          setTemplateEditando(template);
-                          setTemplateModal(true);
-                        }}
-                        aria-label={"Editar " + template.nome}
-                      >
-                        <Pencil size={16} />
-                      </button>
                     </article>
                   ))}
                 </div>
@@ -1045,6 +1052,7 @@ export default function EmailMarketingPage() {
       {templateModal ? (
         <TemplateModal
           template={templateEditando}
+          templates={templates}
           onClose={() => {
             setTemplateModal(false);
             setTemplateEditando(null);

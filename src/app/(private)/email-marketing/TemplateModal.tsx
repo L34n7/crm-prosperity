@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Settings2, Trash2, X } from "lucide-react";
+import { Check, Eye, RotateCcw, Settings2, Trash2, X } from "lucide-react";
+import { TEMPLATES_PADRAO_EMAIL } from "@/lib/email-marketing/templates-padrao";
 import VariavelCombobox from "@/components/variaveis/VariavelCombobox";
 import GerenciarVariaveisModal, {
   type VariavelPersonalizadaCompartilhada,
@@ -37,12 +38,14 @@ const TEMPLATE_INICIAL =
 
 type Props = {
   template?: EmailTemplateItem | null;
+  templates?: EmailTemplateItem[];
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 };
 
 export default function TemplateModal({
   template,
+  templates = [],
   onClose,
   onSaved,
 }: Props) {
@@ -51,6 +54,8 @@ export default function TemplateModal({
   const [nome, setNome] = useState(template?.nome || "");
   const [assunto, setAssunto] = useState(template?.assunto || "");
   const [html, setHtml] = useState(template?.html || TEMPLATE_INICIAL);
+  const [modeloPreview, setModeloPreview] = useState("personalizado");
+  const [htmlAnterior, setHtmlAnterior] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [variavelSelecionada, setVariavelSelecionada] =
@@ -60,6 +65,47 @@ export default function TemplateModal({
   >([]);
   const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
   const [modalVariaveis, setModalVariaveis] = useState(false);
+
+  const modeloSelecionado = useMemo(() => {
+    if (modeloPreview === "personalizado") return null;
+    if (modeloPreview.startsWith("padrao:")) {
+      return TEMPLATES_PADRAO_EMAIL.find(
+        (item) => item.id === modeloPreview.slice("padrao:".length)
+      ) || null;
+    }
+    if (modeloPreview.startsWith("salvo:")) {
+      return templates.find(
+        (item) => item.id === modeloPreview.slice("salvo:".length)
+      ) || null;
+    }
+    return null;
+  }, [modeloPreview, templates]);
+
+  const htmlNaPrevia = modeloSelecionado?.html ?? html;
+  const assuntoNaPrevia = modeloSelecionado?.assunto ?? assunto;
+
+  function aplicarModelo() {
+    if (!modeloSelecionado) return;
+    if (
+      html !== modeloSelecionado.html &&
+      html.trim() &&
+      !window.confirm(
+        "Usar o HTML deste modelo no editor? O seu HTML atual poderá ser restaurado antes de salvar."
+      )
+    ) return;
+    setHtmlAnterior(html);
+    setHtml(modeloSelecionado.html);
+    // Mantém assuntos existentes; sugere o assunto do modelo apenas em novos templates vazios.
+    if (!assunto.trim()) setAssunto(modeloSelecionado.assunto);
+    setModeloPreview("personalizado");
+  }
+
+  function restaurarHtml() {
+    if (htmlAnterior === null) return;
+    setHtml(htmlAnterior);
+    setHtmlAnterior(null);
+    setModeloPreview("personalizado");
+  }
 
   const opcoesVariaveis = useMemo<VariavelCatalogo[]>(() => {
     const personalizadas = variaveisPersonalizadas.map((item) => ({
@@ -107,6 +153,8 @@ export default function TemplateModal({
   }, []);
 
   function inserirNoConteudo(chave = variavelSelecionada) {
+    setModeloPreview("personalizado");
+    setHtmlAnterior(null);
     const marcador = "{{" + chave + "}}";
     const textarea = textareaRef.current;
 
@@ -130,6 +178,7 @@ export default function TemplateModal({
   }
 
   function inserirNoAssunto(chave = variavelSelecionada) {
+    setModeloPreview("personalizado");
     const marcador = "{{" + chave + "}}";
     const input = assuntoRef.current;
     const inicio = input?.selectionStart ?? assunto.length;
@@ -222,149 +271,191 @@ export default function TemplateModal({
     }
   }
 
+
   return (
     <>
-      <div className={styles.modalOverlay} onMouseDown={onClose}>
+      <div className={styles.modalOverlay} onMouseDown={salvando ? undefined : onClose}>
         <div
-          className={[styles.modalCard, styles.templateModal].join(" ")}
+          className={[styles.modalCard, styles.templateModal, styles.templatePremiumModal].join(" ")}
+          role="dialog"
+          aria-modal="true"
+          aria-label={template ? "Editar template de e-mail" : "Criar template de e-mail"}
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <div className={styles.modalHeader}>
-            <div>
-              <p className={styles.sectionLabel}>TEMPLATE DE E-MAIL</p>
-              <h2>{template ? "Editar template" : "Novo template"}</h2>
-              <p>
-                Use as mesmas variáveis disponíveis em Disparos e Fluxos. O
-                link de descadastro será incluído automaticamente no envio.
-              </p>
+          <div className={[styles.modalHeader, styles.templatePremiumHeader].join(" ")}>
+            <div className={styles.templatePremiumHeading}>
+              <span>TEMPLATE DE E-MAIL</span>
+              <h2>{template ? "Editar template" : "Criar template"}</h2>
             </div>
-
-            <button
-              type="button"
-              className={styles.iconButton}
-              onClick={onClose}
-              aria-label="Fechar"
-            >
+            <button type="button" className={styles.iconButton} onClick={onClose}
+              aria-label="Fechar" disabled={salvando}>
               <X size={18} />
             </button>
           </div>
 
-          <form onSubmit={salvar} className={styles.modalBody}>
-            <div className={styles.formGridTwo}>
-              <label className={styles.field}>
-                <span>Nome do template</span>
-                <input
-                  value={nome}
-                  onChange={(event) => setNome(event.target.value)}
-                  placeholder="Ex.: Convite para evento"
-                  maxLength={160}
-                />
-              </label>
+          <form onSubmit={salvar} className={styles.templatePremiumForm}>
+            <div className={styles.templateEditorLayout}>
+              <section className={styles.templateEditorColumn} aria-label="Dados e HTML do template">
+                <div className={styles.templateEditorFields}>
+                  <label className={styles.field}>
+                    <span>Nome do template</span>
+                    <input
+                      value={nome}
+                      onChange={(event) => setNome(event.target.value)}
+                      placeholder="Ex.: Convite para evento"
+                      maxLength={160}
+                      required
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    <span>Assunto padrão</span>
+                    <input
+                      ref={assuntoRef}
+                      value={assunto}
+                      onChange={(event) => {
+                        setAssunto(event.target.value);
+                        setModeloPreview("personalizado");
+                      }}
+                      placeholder="Ex.: {{nome_contato}}, tenho um convite"
+                      maxLength={250}
+                      required
+                    />
+                  </label>
+                </div>
 
-              <label className={styles.field}>
-                <span>Assunto padrão</span>
-                <input
-                  ref={assuntoRef}
-                  value={assunto}
-                  onChange={(event) => setAssunto(event.target.value)}
-                  placeholder="Ex.: {{nome_contato}}, tenho um convite"
-                  maxLength={250}
-                />
-              </label>
+                <div className={styles.templatePremiumVariableToolbar}>
+                  <div className={styles.templatePremiumVariableHead}>
+                    <strong>Variáveis do CRM</strong>
+                    <button type="button" className={styles.templatePremiumTextButton}
+                      onClick={() => setModalVariaveis(true)}>
+                      <Settings2 size={15} /> Gerenciar variáveis
+                    </button>
+                  </div>
+                  <VariavelCombobox
+                    label="Inserir variável"
+                    value={variavelSelecionada}
+                    onChange={setVariavelSelecionada}
+                    opcoes={opcoesVariaveis}
+                    carregando={carregandoVariaveis}
+                  />
+                  <div className={styles.templatePremiumVariableButtons}>
+                    <button type="button" className={styles.secondaryButton} onClick={() => inserirNoAssunto()}>
+                      Inserir no assunto
+                    </button>
+                    <button type="button" className={styles.secondaryButton} onClick={() => inserirNoConteudo()}>
+                      Inserir no conteúdo
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.templatePremiumHtmlSection}>
+                  <div className={styles.templatePremiumHtmlHead}>
+                    <strong>Conteúdo HTML personalizado</strong>
+                    {htmlAnterior !== null ? (
+                      <button type="button" className={styles.templatePremiumTextButton}
+                        onClick={restaurarHtml} title="Recuperar HTML anterior à aplicação do modelo">
+                        <RotateCcw size={15} /> Desfazer aplicação
+                      </button>
+                    ) : null}
+                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    className={styles.htmlEditor}
+                    value={html}
+                    onChange={(event) => {
+                      setHtml(event.target.value);
+                      setHtmlAnterior(null);
+                      setModeloPreview("personalizado");
+                    }}
+                    spellCheck={false}
+                    aria-label="Conteúdo HTML personalizado"
+                    required
+                  />
+                  <small>
+                    O HTML digitado não muda ao visualizar outros modelos. Scripts e atributos inseguros são removidos ao salvar.
+                  </small>
+                </div>
+              </section>
+
+              <section className={styles.templateLivePreview} aria-label="Prévia do template">
+                <div className={styles.templateLivePreviewTop}>
+                  <div>
+                    <span>PRÉVIA DO TEMPLATE</span>
+                    <strong>Visualize antes de aplicar</strong>
+                  </div>
+                  <span className={styles.templatePreviewLiveBadge}>
+                    <Eye size={15} /> Prévia
+                  </span>
+                </div>
+
+                <div className={styles.templatePresetControl}>
+                  <label htmlFor="modelo-template-email">Modelo para visualizar</label>
+                  <select
+                    id="modelo-template-email"
+                    value={modeloPreview}
+                    onChange={(event) => setModeloPreview(event.target.value)}
+                    disabled={salvando}
+                  >
+                    <option value="personalizado">Personalizado atual</option>
+                    <optgroup label="5 modelos padrão">
+                      {TEMPLATES_PADRAO_EMAIL.map((modelo) => (
+                        <option key={modelo.id} value={"padrao:" + modelo.id}>{modelo.nome}</option>
+                      ))}
+                    </optgroup>
+                    {templates.length > 0 ? (
+                      <optgroup label="Templates já criados">
+                        {templates.map((item) => (
+                          <option key={item.id} value={"salvo:" + item.id}>{item.nome}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                  {modeloSelecionado ? (
+                    <div className={styles.templatePresetBanner}>
+                      <span>
+                        <strong>{modeloSelecionado.nome}</strong>
+                        <small>{"descricao" in modeloSelecionado ? modeloSelecionado.descricao : "Template salvo na sua empresa"}</small>
+                      </span>
+                      <button type="button" className={styles.primaryButton}
+                        onClick={aplicarModelo} disabled={salvando}>
+                        <Check size={15} /> Usar este HTML
+                      </button>
+                    </div>
+                  ) : (
+                    <p className={styles.templatePresetHint}>
+                      Prévia sincronizada com seu HTML. Escolher outro modelo não altera o texto que você está editando.
+                    </p>
+                  )}
+                </div>
+
+                <div className={styles.templateLivePreviewSubject} title={assuntoNaPrevia}>
+                  <span>Assunto:</span>
+                  <strong>{assuntoNaPrevia || "Defina o assunto do e-mail"}</strong>
+                </div>
+                <div className={styles.templateLivePreviewFrame}>
+                  <iframe title="Prévia do HTML selecionado" sandbox="" srcDoc={htmlNaPrevia} />
+                </div>
+                <div className={styles.templateLivePreviewCaption}>
+                  A prévia possui rolagem própria para e-mails longos.
+                </div>
+              </section>
             </div>
 
-            <div className={styles.variableToolbar}>
-              <div className={styles.variableToolbarSelect}>
-                <VariavelCombobox
-                  label="Inserir variável"
-                  value={variavelSelecionada}
-                  onChange={setVariavelSelecionada}
-                  opcoes={opcoesVariaveis}
-                  carregando={carregandoVariaveis}
-                />
-              </div>
+            {erro ? <div className={styles.templatePremiumError} role="alert">{erro}</div> : null}
 
-              <div className={styles.variableToolbarActions}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => inserirNoAssunto()}
-                >
-                  Inserir no assunto
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => inserirNoConteudo()}
-                >
-                  Inserir no conteúdo
-                </button>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={() => setModalVariaveis(true)}
-                >
-                  <Settings2 size={16} />
-                  Gerenciar variáveis
-                </button>
-              </div>
-            </div>
-
-            <div className={styles.editorGrid}>
-              <label className={styles.field}>
-                <span>Conteúdo HTML</span>
-                <textarea
-                  ref={textareaRef}
-                  className={styles.htmlEditor}
-                  value={html}
-                  onChange={(event) => setHtml(event.target.value)}
-                  spellCheck={false}
-                />
-                <small>
-                  Scripts, formulários e atributos inseguros são removidos ao
-                  salvar.
-                </small>
-              </label>
-
-              <div className={styles.previewPanel}>
-                <span>Prévia</span>
-                <iframe title="Prévia do template" sandbox="" srcDoc={html} />
-              </div>
-            </div>
-
-            {erro ? <div className={styles.feedbackError}>{erro}</div> : null}
-
-            <div className={styles.modalFooter}>
+            <div className={styles.templatePremiumFooter}>
               {template ? (
-                <button
-                  type="button"
-                  className={styles.dangerButton}
-                  onClick={arquivar}
-                  disabled={salvando}
-                >
-                  <Trash2 size={16} />
-                  Arquivar
+                <button type="button" className={styles.dangerButton} onClick={arquivar} disabled={salvando}>
+                  <Trash2 size={16} /> Arquivar
                 </button>
-              ) : (
-                <span />
-              )}
+              ) : <span />}
 
               <div className={styles.modalFooterActions}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  onClick={onClose}
-                  disabled={salvando}
-                >
+                <button type="button" className={styles.secondaryButton} onClick={onClose} disabled={salvando}>
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  className={styles.primaryButton}
-                  disabled={salvando}
-                >
-                  <Check size={16} />
-                  {salvando ? "Salvando..." : "Salvar template"}
+                <button type="submit" className={styles.primaryButton} disabled={salvando}>
+                  <Check size={16} /> {salvando ? "Salvando..." : "Salvar template"}
                 </button>
               </div>
             </div>

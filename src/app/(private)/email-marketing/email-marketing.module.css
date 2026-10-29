@@ -3855,3 +3855,534 @@
   }
   .campaignSkeletonDetail { display: none !important; }
 }
+
+/* E-mail Marketing: miniaturas reais dos templates, sem controles no iframe. */
+.templateGrid {
+  align-items: stretch;
+}
+
+.templateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--crm-surface);
+  border-radius: 16px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.templateCard:hover {
+  border-color: var(--crm-primary-border);
+  box-shadow: var(--crm-shadow-xs);
+}
+
+.templateCardPreview {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 208px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--crm-border);
+  background: #f1f5f9;
+  isolation: isolate;
+}
+
+.templateCardPreview iframe {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: block;
+  width: 150%;
+  height: 850px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  transform: scale(.666667);
+  transform-origin: top left;
+  pointer-events: none;
+  background: #fff;
+}
+
+.templateCardDetails {
+  display: flex;
+  flex: 1 0 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+
+.templateCardDetails .templateCardBody {
+  flex: 1;
+}
+
+.templateCardDetails .templateCardBody strong {
+  font-size: 14px;
+}
+
+.templateCardDetails .templateCardBody span {
+  font-size: 13px;
+}
+
+.templateCardDetails .templateCardBody small {
+  font-size: 12px;
+}
+
+/* Editor premium: campos à esquerda, HTML completo à direita. */
+.templatePremiumModal {
+  width: min(1480px, calc(100vw - 40px));
+  height: min(930px, calc(100dvh - 36px));
+  max-height: calc(100dvh - 36px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 23px;
+  box-shadow: 0 30px 85px rgb(15 23 42 / 23%), 0 8px 22px rgb(15 23 42 / 9%);
+}
+
+.templatePremiumModal .templatePremiumHeader {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 74px;
+  padding: 12px 22px;
+  background: radial-gradient(circle at 0% 0%, var(--crm-primary-soft), transparent 33%), var(--crm-surface);
+}
+
+.templatePremiumHeading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+
+.templatePremiumHeading > span {
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .075em;
+}
+
+.templatePremiumModal .templatePremiumHeading h2 {
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 800;
+  margin: 0;
+}
+
+.templatePremiumForm {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.templateEditorLayout {
+  display: grid;
+  grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.templateEditorColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  min-height: 0;
+  min-width: 0;
+  padding: 19px 20px 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.templateEditorFields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.templatePremiumModal .field > span {
+  font-size: 14px;
+}
+
+.templatePremiumModal .field input,
+.templatePremiumModal .field select {
+  min-height: 43px;
+  font-size: 14px;
+}
+
+.templatePremiumVariableToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 15px;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface-soft);
+}
+
+.templatePremiumVariableHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.templatePremiumVariableHead strong,
+.templatePremiumHtmlHead strong {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.templatePremiumTextButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.templatePremiumTextButton:hover {
+  text-decoration: underline;
+}
+
+.templatePremiumVariableButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.templatePremiumVariableButtons button {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.templatePremiumHtmlSection {
+  display: flex;
+  flex: 1 0 auto;
+  min-height: 320px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.templatePremiumHtmlHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.templatePremiumModal .templatePremiumHtmlSection .htmlEditor {
+  flex: 1 1 auto;
+  width: 100%;
+  height: min(380px, 42dvh);
+  min-height: 260px;
+  resize: vertical;
+  padding: 14px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.templatePremiumHtmlSection > small {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.templateLivePreview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px;
+  border-left: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+
+.templateLivePreviewTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.templateLivePreviewTop > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.templateLivePreviewTop > div > span {
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.templateLivePreviewTop strong {
+  color: var(--crm-text-strong);
+  font-size: 16px;
+}
+
+.templatePreviewLiveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.templatePresetControl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 13px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+}
+
+.templatePresetControl > label {
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.templatePresetControl select {
+  width: 100%;
+  min-height: 43px;
+  padding: 0 11px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 9px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  outline: none;
+}
+
+.templatePresetControl select:focus {
+  border-color: var(--crm-primary-strong);
+  box-shadow: var(--crm-focus-ring);
+}
+
+.templatePresetHint {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.templatePresetBanner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.templatePresetBanner > span {
+  display: flex;
+  flex: 1 1 170px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.templatePresetBanner > span > strong {
+  overflow: hidden;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.templatePresetBanner small {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.templatePresetBanner button {
+  min-height: 37px;
+  font-size: 13px;
+}
+
+.templateLivePreviewSubject {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--crm-border);
+  border-radius: 9px;
+  padding: 10px 12px;
+  background: var(--crm-surface);
+}
+
+.templateLivePreviewSubject span {
+  flex: 0 0 auto;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.templateLivePreviewSubject strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+
+.templateLivePreviewFrame {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(15 23 42 / 6%);
+}
+
+.templateLivePreviewFrame iframe {
+  display: block;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: #fff;
+  overflow: auto;
+}
+
+.templateLivePreviewCaption {
+  flex: 0 0 auto;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.templatePremiumError {
+  flex: 0 0 auto;
+  padding: 12px 18px;
+  border-top: 1px solid var(--crm-danger-border);
+  color: var(--crm-danger-text);
+  background: var(--crm-danger-bg);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.templatePremiumFooter {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 20px;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+
+@media (max-width: 1020px) {
+  .templatePremiumModal {
+    width: calc(100vw - 24px);
+  }
+
+  .templateEditorLayout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 780px) {
+  .templatePremiumModal {
+    height: min(960px, calc(100dvh - 18px));
+    max-height: calc(100dvh - 18px);
+  }
+
+  .templateEditorLayout {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .templateEditorColumn {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .templatePremiumHtmlSection {
+    min-height: 320px;
+  }
+
+  .templateLivePreview {
+    flex: 0 0 auto;
+    height: 550px;
+    min-height: 450px;
+    border-left: 0;
+    border-top: 1px solid var(--crm-border);
+  }
+}
+
+@media (max-width: 640px) {
+  .templatePremiumModal {
+    width: 100%;
+    height: 96dvh;
+    max-height: 96dvh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .templatePremiumModal .templatePremiumHeader {
+    min-height: 64px;
+    padding: 9px 16px;
+  }
+
+  .templatePremiumModal .templatePremiumHeading h2 {
+    font-size: 20px;
+  }
+
+  .templateEditorColumn, .templateLivePreview {
+    padding: 15px;
+  }
+
+  .templatePremiumFooter {
+    padding: 12px 14px;
+    flex-wrap: wrap;
+  }
+
+  .templatePremiumFooter .modalFooterActions {
+    display: flex;
+    width: auto;
+  }
+
+  .templatePremiumFooter .modalFooterActions .primaryButton,
+  .templatePremiumFooter .modalFooterActions .secondaryButton {
+    width: auto;
+  }
+}
