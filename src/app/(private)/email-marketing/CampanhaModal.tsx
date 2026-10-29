@@ -116,6 +116,12 @@ function formatarNumero(valor: number) {
   return new Intl.NumberFormat("pt-BR").format(Math.max(0, valor || 0));
 }
 
+function abreviarPreview(valor: string, maximo: number) {
+  const caracteres = Array.from(valor.trim());
+  if (caracteres.length <= maximo) return valor.trim();
+  return caracteres.slice(0, Math.max(1, maximo - 3)).join("") + "...";
+}
+
 export default function CampanhaModal({
   templates,
   remetentes,
@@ -686,9 +692,17 @@ export default function CampanhaModal({
                     : "Contato de exemplo"}
                 </span>
               </div>
-              <div className={styles.wizardPreviewCompactSubject}>
-                <span>Assunto</span>
-                <strong>{assuntoPreview || "Defina o assunto do e-mail"}</strong>
+              <div className={styles.wizardPreviewMetadata}>
+                <div className={styles.wizardPreviewMetadataItem} title={remetenteSelecionado?.email || "Selecione um remetente"}>
+                  <span>Remetente:</span>
+                  <strong>
+                    {abreviarPreview(remetenteSelecionado?.email || "Selecione um remetente", 31)}
+                  </strong>
+                </div>
+                <div className={styles.wizardPreviewMetadataItem} title={assuntoPreview || "Defina o assunto do e-mail"}>
+                  <span>Assunto:</span>
+                  <strong>{abreviarPreview(assuntoPreview || "Defina o assunto do e-mail", 29)}</strong>
+                </div>
               </div>
               <div className={styles.wizardPreviewDocument}>
                 {templateSelecionado?.html ? (
@@ -931,20 +945,19 @@ export default function CampanhaModal({
                         <span>{formatarNumero(totalBuscaContatos)}</span>
                       </div>
 
-                      <label className={styles.searchBox}>
-                        <Search size={17} />
-                        <input
-                          value={buscaContato}
-                          onChange={(event) =>
-                            setBuscaContato(event.target.value)
-                          }
-                          placeholder="Buscar nome, e-mail ou telefone"
-                        />
-                      </label>
-
-                      <p className={styles.contactBlockedHint}>
-                         Descadastrados e bloqueados não podem ser selecionados.
-                       </p>
+                      <div className={styles.contactPickerToolbar}>
+                        <label className={styles.searchBox}>
+                          <Search size={17} />
+                          <input
+                            value={buscaContato}
+                            onChange={(event) => setBuscaContato(event.target.value)}
+                            placeholder="Buscar nome, e-mail ou telefone"
+                          />
+                        </label>
+                        <p className={styles.contactBlockedHint}>
+                          Descadastrados e bloqueados não podem ser selecionados.
+                        </p>
+                      </div>
 
                       <div className={styles.contactResults}>
                         {carregandoContatos ? (
@@ -1055,15 +1068,14 @@ export default function CampanhaModal({
                               <button
                                 key={contato.id}
                                 type="button"
+                                title="Clique para retirar este contato da seleção"
                                 onClick={() => alternarContato(contato)}
                               >
                                 <span>
-                                  <strong>
-                                    {contato.nome || "Sem nome"}
-                                  </strong>
+                                  <strong>{contato.nome || "Sem nome"}</strong>
                                   <small>{contato.email}</small>
                                 </span>
-                                <X size={15} />
+                                <Check size={16} aria-hidden="true" />
                               </button>
                             ))
                         ) : (
