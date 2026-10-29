@@ -22,7 +22,7 @@ async function autorizar(empresaId:string) {
   if(error || !empresa)throw new Error("Empresa não encontrada.");
   if(empresa.status!=="cancelada" || !empresa.exclusao_prevista_em ||
     new Date(empresa.exclusao_prevista_em).getTime()<=Date.now())
-    throw new Error("O prazo de 90 dias para solicitar backup terminou.");
+    throw new Error("O prazo de retenção para solicitar backup terminou.");
   return empresa;
 }
 
