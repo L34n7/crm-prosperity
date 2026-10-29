@@ -44,6 +44,7 @@ export async function GET() {
       white_label_id,
       white_label_tipo,
       cancelada_em,
+      encerramento_backup_solicitado_em,
       exclusao_prevista_em,
       encerramento_backup_estado,
       encerramento_backup_path,
@@ -99,9 +100,44 @@ export async function GET() {
     );
   }
 
+  // Apenas um resumo administrativo: dados operacionais e credenciais já foram eliminados.
+  const {data:historico,error:erroHistorico}=await supabaseAdmin
+    .from("empresa_encerramento_financeiro")
+    .select("cliente_id,empresa_nome,white_label_id,white_label_tipo,inicio_em,cancelada_em,backup_solicitado_em,excluida_em")
+    .order("excluida_em",{ascending:false});
+  if(erroHistorico){
+    return NextResponse.json({ok:false,error:"Erro ao consultar histórico de exclusão: "+erroHistorico.message},{status:500});
+  }
+  const excluidas=(historico || []).map((item)=>({
+    id:item.cliente_id,
+    nome_fantasia:item.empresa_nome,
+    razao_social:null,
+    documento:null,
+    email:"",
+    telefone:null,
+    nome_responsavel:null,
+    status:"excluida" as const,
+    white_label_id:item.white_label_id,
+    white_label_tipo:item.white_label_tipo,
+    cancelada_em:item.cancelada_em,
+    encerramento_backup_solicitado_em:item.backup_solicitado_em,
+    excluida_em:item.excluida_em,
+    created_at:item.inicio_em,
+    timezone:"",
+    logo_url:null,
+    observacoes:null,
+    plano_id:"",
+    limite_integracoes_whatsapp:null,
+    limite_usuarios:null,
+    assinatura_status:null,
+    nicho_id:"",
+    nichos:null,
+    planos:null,
+    empresa_tokens_ia:null,
+  }));
   return NextResponse.json({
     ok: true,
-    empresas: data ?? [],
+    empresas:[...(data ?? []),...excluidas],
   });
 }
 
