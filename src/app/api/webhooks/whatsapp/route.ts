@@ -1,3 +1,4 @@
+import { filtrarWebhookEmpresasEncerradas } from "@/lib/whatsapp/filtrar-webhook-encerrado";
 import { MODO_CONTINGENCIA_SUPABASE_ATIVO, respostaContingenciaSupabase } from "@/lib/operacional/contingencia-supabase";
 import { after, NextRequest, NextResponse } from "next/server";
 import {
@@ -133,6 +134,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    rawBody = await filtrarWebhookEmpresasEncerradas(rawBody);
 
     const mensagensAntesDoFiltro = extractIncomingMessages(rawBody);
 
