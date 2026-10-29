@@ -35,7 +35,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (empresa.status === "cancelada")
       return NextResponse.json({ ok: true, message: "Empresa já está cancelada." });
     const resultado = await encerrarEmpresaAdministrativamente(id, usuario.id);
-    return NextResponse.json({ ok: true, message: "Empresa encerrada. Dados preservados por até 90 dias; backup pendente de geração.", resultado });
+    return NextResponse.json({ ok: true, message: "Empresa encerrada. Dados preservados por até 60 dias; backup pendente de geração.", resultado });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Erro ao encerrar empresa." }, { status: 400 });
   }

@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { enviarAvisoCancelamentoPendente } from "@/lib/empresas/aviso-cancelamento";
 import { sincronizarCobrancaWhiteLabel } from "@/lib/white-label/billing";
 import { invalidarCacheIntegracaoWhatsapp } from "@/lib/whatsapp/find-integration";
 
@@ -34,7 +35,7 @@ async function sincronizarCobrancaSeWhiteLabel(empresa: EmpresaEncerramento) {
   }
 }
 
-export async function encerrarEmpresaAdministrativamente(empresaId: string, usuarioId: string | null) {
+export async function encerrarEmpresaAdministrativamente(empresaId: string, usuarioId: string | null, origem: "manual" | "inadimplencia" = "manual") {
   const empresa = await consultarEmpresa(empresaId);
   const { data, error } = await supabase.rpc("encerrar_empresa_admin", {
     p_empresa_id: empresaId,
@@ -44,10 +45,24 @@ export async function encerrarEmpresaAdministrativamente(empresaId: string, usua
   // O worker/inbound pode manter cache do número por até 15 segundos.
   // A invalidacão local é somada ao filtro de empresas ativas no lookup.
   invalidarCacheIntegracaoWhatsapp();
+  const {error:origemErro}=await supabase.from("empresas").update({encerramento_origem:origem})
+    .eq("id",empresaId).eq("status","cancelada");
+  if(origemErro)console.error("[ENCERRAMENTO] Falha ao registrar origem",empresaId,origemErro);
+  let aviso: { enviado:boolean; ignorado:boolean; erro?:string };
+  try{
+    aviso=await enviarAvisoCancelamentoPendente(empresaId);
+  }catch(error){
+    const detalhe=error instanceof Error?error.message:String(error);
+    console.error("[ENCERRAMENTO] E-mail será retentado pelo cron:",empresaId,detalhe);
+    aviso={enviado:false,ignorado:false,erro:detalhe};
+  }
   const warning = empresa.white_label_tipo === "cliente"
     ? await sincronizarCobrancaSeWhiteLabel(empresa)
     : "Confira o encerramento da cobrança recorrente no gateway (Prosperity Pay/Mercado Pago). O bloqueio operacional não cancela sozinho uma assinatura externa.";
-  return { ...(data as Record<string, unknown>), warning };
+  const avisoWarning=aviso.erro
+    ? "O e-mail de cancelamento ainda não foi enviado. O sistema tentará novamente: "+aviso.erro
+    : null;
+  return { ...(data as Record<string, unknown>), warning: [warning,avisoWarning].filter(Boolean).join(" ") || null, email_cancelamento_enviado:aviso.enviado };
 }
 
 export async function restaurarEmpresaAdministrativamente(empresaId: string) {

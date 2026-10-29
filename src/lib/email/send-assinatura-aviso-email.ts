@@ -10,7 +10,7 @@ export type TipoAvisoAssinatura =
   | "vencida"
   | "bloqueada"
   | "reativacao_20d"
-  | "suspensao_50d";
+  | "cancelamento";
 
 function escaparHtml(valor: string) {
   return String(valor || "")
@@ -35,6 +35,8 @@ export async function sendAssinaturaAvisoEmail(params: {
   vencimentoEm: string;
   tipo: TipoAvisoAssinatura;
   checkoutUrl?: string | null;
+  canceladaEm?: string | null;
+  exclusaoPrevistaEm?: string | null;
 }) {
   if (!resend) {
     console.warn("[ASSINATURA_AVISO] RESEND_API_KEY não configurada.");
@@ -55,16 +57,8 @@ export async function sendAssinaturaAvisoEmail(params: {
   const bloqueioData = new Date(vencimentoData.getTime() + 7 * 24 * 60 * 60 * 1000);
   const vencimento = formatarData(params.vencimentoEm);
   const bloqueio = formatarData(bloqueioData.toISOString());
-  const pausaRecebimentoData = new Date(
-    bloqueioData.getTime() + 30 * 24 * 60 * 60 * 1000
-  );
-  const suspensaoIntegracaoData = new Date(
-    bloqueioData.getTime() + 60 * 24 * 60 * 60 * 1000
-  );
-  const pausaRecebimento = formatarData(pausaRecebimentoData.toISOString());
-  const suspensaoIntegracao = formatarData(
-    suspensaoIntegracaoData.toISOString()
-  );
+  const cancelada = params.canceladaEm ? formatarData(params.canceladaEm) : null;
+  const exclusao = params.exclusaoPrevistaEm ? formatarData(params.exclusaoPrevistaEm) : null;
 
   const conteudo = {
     pre_vencimento: {
@@ -108,6 +102,7 @@ export async function sendAssinaturaAvisoEmail(params: {
         "As automações foram pausadas e não é possível realizar disparos.",
         "Todos os módulos foram bloqueados, exceto a página de Conversas, que permite apenas responder conversas que já estiverem abertas.",
         "Os avisos de inadimplência continuarão sendo exibidos enquanto houver pendência.",
+        "Se o bloqueio durar 30 dias, a conta será cancelada e os dados ficarão disponíveis por mais 60 dias para solicitar backup.",
         "Assim que o pagamento for confirmado, a assinatura será reativada, os tokens serão renovados e o funcionamento do sistema voltará ao normal.",
       ],
     },
@@ -115,28 +110,29 @@ export async function sendAssinaturaAvisoEmail(params: {
       etiqueta: "Queremos você de volta",
       titulo: "Sentimos sua falta",
       cor: "#0f766e",
-      texto: "Sua estrutura continua preservada no sistema e você pode retomar o atendimento sem começar tudo novamente.",
-      acao: "Reativar minha conta",
+      texto: "Sua estrutura ainda está preservada no CRM e você pode regularizar o plano antes do cancelamento.",
+      acao: "Regularizar e voltar",
       pontos: [
-        `Sua conta está bloqueada desde ${bloqueio}.`,
-        "Ao reativar, você volta a ter acesso às automações, IA, atendimento organizado, disparos e demais recursos do seu plano.",
-        "Se a conta permanecer bloqueada por 30 dias, novas mensagens do WhatsApp deixarão de ser processadas e armazenadas pelo CRM.",
-        "Os dados e tokens avulsos já existentes continuam preservados durante o bloqueio.",
-        "Assim que o pagamento for confirmado, a assinatura volta a ficar ativa automaticamente.",
+        `Sua assinatura está bloqueada desde ${bloqueio}.`,
+        "Você tem até completar 30 dias de bloqueio para regularizar sua mensalidade antes do cancelamento automático.",
+        "Após o cancelamento, os acessos e as integrações são interrompidos; os dados poderão ser solicitados para backup por mais 60 dias.",
+        "O backup não é criado automaticamente. A solicitação deve ser feita à equipe administrativa dentro do prazo.",
+        "Se precisar de ajuda para regularizar seu plano, nossa equipe está à disposição.",
       ],
     },
-    suspensao_50d: {
-      etiqueta: "Aviso de suspensão",
-      titulo: "Sua integração será suspensa em 10 dias",
-      cor: "#b42318",
-      texto: "Sua conta permanece bloqueada e está próxima da suspensão automática da integração do WhatsApp por inadimplência prolongada.",
-      acao: "Reativar antes da suspensão",
+    cancelamento: {
+      etiqueta: "Encerramento da conta",
+      titulo: "Sua conta foi cancelada",
+      cor: "#ab5346",
+      texto: "A empresa foi cancelada e o acesso operacional ao CRM foi encerrado. Agradecemos pela confiança durante o período de uso.",
+      acao: "",
       pontos: [
-        `O recebimento de novas mensagens no CRM está pausado desde ${pausaRecebimento}.`,
-        `Se a pendência continuar, a integração será suspensa em ${suspensaoIntegracao}.`,
-        "A suspensão não remove o número, WABA, credenciais ou configuração da Meta; ela apenas interrompe o uso da integração pelo CRM.",
-        "Ao regularizar a assinatura, uma integração suspensa por inadimplência é reativada automaticamente.",
-        "Se precisar de ajuda para retornar, nossa equipe está à disposição.",
+        `Data do cancelamento: ${cancelada || "registrada no sistema"}.`,
+        `Prazo final para solicitar e baixar o backup: ${exclusao || "60 dias após o cancelamento"}.`,
+        "O backup não é gerado automaticamente. Entre em contato com a equipe administrativa do CRM Prosperity para solicitar a exportação dos dados dentro do prazo.",
+        "Caso a exportação tenha várias partes, baixe e guarde todos os arquivos ZIP.",
+        "Após o prazo, os dados operacionais poderão ser excluídos definitivamente e não poderão ser restaurados pelo CRM. Registros legalmente exigidos poderão ser preservados.",
+        "Se desejar retornar antes do fim da retenção, procure nossa equipe para avaliar a restauração e a regularização financeira.",
       ],
     },
   }[params.tipo];
@@ -151,7 +147,7 @@ export async function sendAssinaturaAvisoEmail(params: {
   const pontosTexto = conteudo.pontos.map((ponto) => `• ${ponto}`).join("\n");
   const emailBranding = await obterEmailBrandingEmpresa(params.empresaId);
   const logoUrl = emailBranding.logoUrl;
-  const cta = params.checkoutUrl
+  const cta = params.tipo!=="cancelamento" && params.checkoutUrl
     ? `<a href="${escaparHtml(params.checkoutUrl)}" style="display:inline-block;background:${conteudo.cor};color:#fff;text-decoration:none;padding:15px 24px;border-radius:10px;font-size:15px;font-weight:700;">${conteudo.acao}</a>`
     : "";
 

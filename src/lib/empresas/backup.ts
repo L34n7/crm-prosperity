@@ -139,7 +139,7 @@ export async function gerarBackupEncerramento(empresaId: string) {
   if(error || !empresa)throw new Error("Empresa não encontrada.");
   if(empresa.status!=="cancelada" || !empresa.exclusao_prevista_em ||
     new Date(empresa.exclusao_prevista_em).getTime()<=Date.now())
-    throw new Error("O prazo de 90 dias para solicitar o backup terminou.");
+    throw new Error("O prazo de retenção para solicitar o backup terminou.");
   const anteriores=partesNormalizadas(empresa.encerramento_backup_partes);
   if(empresa.encerramento_backup_estado==="pronto")
     return {ok:true,concluido:true,partes:anteriores.length};

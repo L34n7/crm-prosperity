@@ -272,11 +272,20 @@ export default function TermosDeServico() {
         provedores.
       </p>
 
-      <h3>18.1. Disponibilização de dados após o cancelamento (90 dias)</h3>
+      <h3>18.1. Bloqueio, cancelamento e disponibilização dos dados</h3>
       <p>
-        Após o encerramento administrativo da empresa contratante, o CRM Prosperity
-        manterá os dados operacionais disponíveis para solicitação de exportação
-        por até <strong>90 (noventa) dias corridos</strong>, contados da data do
+        Após o vencimento, o plano poderá ser bloqueado ao final de 7 dias de inadimplência.
+        Se a pendência permanecer por 30 dias após o bloqueio, a empresa poderá ser
+        <strong> cancelada automaticamente</strong>. Cancelamentos manuais têm o mesmo
+        prazo de 60 dias para solicitar a exportação. Dessa forma, no fluxo automático,
+        existe uma janela aproximada de 90 dias entre o bloqueio e o fim da retenção.
+        Empresas já canceladas antes da vigência desta atualização preservam o prazo
+        de exclusão previamente registrado.
+      </p>
+      <p>
+        Após o cancelamento da empresa contratante, manual ou automático,
+        o CRM Prosperity manterá os dados operacionais disponíveis para solicitação de exportação
+        por até <strong>60 (sessenta) dias corridos</strong>, contados da data do
         cancelamento. A solicitação deve ser feita dentro desse prazo pelos
         canais administrativos autorizados. <strong>Não há geração automática
         de arquivo de backup no cancelamento.</strong>
@@ -284,13 +293,13 @@ export default function TermosDeServico() {
       <p>
         Uma vez solicitada, a exportação poderá ser disponibilizada em um ou mais
         arquivos ZIP, conforme o volume de dados, cabendo ao Cliente baixar e
-        guardar todas as partes disponibilizadas antes de terminar o prazo de 90 dias.
+        guardar todas as partes disponibilizadas antes de terminar o prazo de 60 dias.
         O armazenamento temporário de um ZIP no sistema não altera nem prorroga
         o prazo de retenção, e links de download poderão expirar e precisar de renovação.
       </p>
       <p>
         Se não houver solicitação e retirada dos arquivos durante esse prazo, os
-        dados operacionais poderão ser excluídos definitivamente após o 90º dia,
+        dados operacionais poderão ser excluídos definitivamente após o 60º dia,
         sem possibilidade de recuperação pela Plataforma, ressalvados registros
         que devam ser preservados por obrigação legal, regulatória, determinação
         de autoridade ou exercício regular de direitos. O Cliente é responsável

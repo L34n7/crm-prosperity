@@ -1758,7 +1758,7 @@ export default function EmpresasPage() {
                                       <CalendarClock size={15} /> Exclusão definitiva
                                     </span>
                                     <strong>{empresa.exclusao_prevista_em ? formatarDataLead(empresa.exclusao_prevista_em) : "Ainda não agendada"}</strong>
-                                    <small>Expurgo automático após 90 dias, ou antes mediante confirmação de backup baixado.</small>
+                                    <small>Exclusão na data indicada, ou antecipada com backup já baixado.</small>
                                   </div>
                                   <div className={styles.offboardingDataItem}>
                                     <span className={styles.offboardingDataLabel}>Origem da empresa</span>
@@ -1786,7 +1786,7 @@ export default function EmpresasPage() {
                                         ? "Backup solicitado e gerado. Os arquivos ficam disponíveis até a data de exclusão."
                                         : empresa.encerramento_backup_estado === "erro"
                                           ? empresa.encerramento_backup_erro || "A geração não foi concluída; clique para retomar."
-                                          : "O backup NÃO é automático. Solicite-o aqui dentro de 90 dias do cancelamento. Após esse prazo, os dados operacionais são excluídos mesmo sem solicitação."}
+                                          : "O backup NÃO é automático. Solicite-o antes da data de exclusão definitiva indicada neste card. Após esse prazo, os dados operacionais são excluídos mesmo sem solicitação."}
                                       {operandoEncerramentoId === empresa.id && (
                                         <span> Partes preparadas: {progressoBackup[empresa.id] || 0}.</span>
                                       )}
@@ -1816,7 +1816,7 @@ export default function EmpresasPage() {
                                           !empresa.exclusao_prevista_em ||
                                           (new Date(empresa.exclusao_prevista_em).getTime() > Date.now() &&
                                             empresa.encerramento_backup_estado !== "pronto")}
-                                        title="Antes dos 90 dias, exige backup pronto e confirmação de download de todas as partes."
+                                        title="Antes da data de exclusão, exige backup pronto e confirmação de download de todas as partes."
                                         onClick={() => abrirExclusaoEmpresa(empresa)}>
                                         <Trash2 size={16} /> Excluir definitivamente
                                       </button>
@@ -2810,11 +2810,11 @@ export default function EmpresasPage() {
             </p>
 
             <div className={styles.deleteCompanyWarning}>
-              <strong>{empresaExclusaoModal.status === "cancelada" ? "Exclusão irreversível" : "Encerramento com retenção de 90 dias"}</strong>
+              <strong>{empresaExclusaoModal.status === "cancelada" ? "Exclusão irreversível" : "Encerramento com retenção de 60 dias"}</strong>
               <p>
                 {empresaExclusaoModal.status === "cancelada"
-                  ? "Esta operação é irreversível. Após 90 dias, o sistema pode excluir os dados automaticamente. Antes desse prazo, a exclusão exige backup concluído e confirmação de que todos os arquivos foram baixados."
-                  : "Os acessos e automações serão bloqueados. Os dados ficarão disponíveis para solicitar backup por até 90 dias. A geração NÃO é automática. Sem solicitação dentro do prazo, os dados operacionais serão excluídos."}
+                  ? "Esta operação é irreversível. Após o prazo indicado neste card, os dados operacionais serão excluídos. A exclusão antecipada exige backup concluído e confirmação de download de todos os arquivos."
+                  : "Os acessos e automações serão bloqueados. Os dados ficarão disponíveis para solicitar backup por até 60 dias após o cancelamento. A geração NÃO é automática. Sem solicitação dentro do prazo, os dados operacionais serão excluídos."}
               </p>
             </div>
 
@@ -2894,7 +2894,7 @@ export default function EmpresasPage() {
                       <input type="checkbox" checked={confirmouBackupBaixado}
                         onChange={(e)=>setConfirmouBackupBaixado(e.target.checked)}
                         disabled={excluindoEmpresa}/>
-                      <span>Confirmo que <strong>baixei e conferi todas as partes do backup</strong> desta empresa e autorizo a exclusão definitiva antes dos 90 dias.</span>
+                      <span>Confirmo que <strong>baixei e conferi todas as partes do backup</strong> desta empresa e autorizo a exclusão definitiva antes do prazo de retenção.</span>
                     </label>
                   )}
 
