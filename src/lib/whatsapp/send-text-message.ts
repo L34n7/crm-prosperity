@@ -1,3 +1,5 @@
+import { exigirEmpresaWhatsappOperacional } from "@/lib/whatsapp/empresa-operacional";
+
 type SendWhatsAppTextMessageParams = {
   phoneNumberId: string;
   accessToken: string;
@@ -106,6 +108,8 @@ export async function sendWhatsAppTextMessage({
       error: null,
     };
   }
+
+  await exigirEmpresaWhatsappOperacional(phoneNumberId);
 
   const response = await fetch(
     `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,

@@ -1,3 +1,5 @@
+import { exigirEmpresaWhatsappOperacional } from "@/lib/whatsapp/empresa-operacional";
+
 type QuickReplyTemplateButton = {
   index: number;
   payload: string;
@@ -126,6 +128,8 @@ export async function sendWhatsAppTemplateMessage({
       transient: false,
     };
   }
+
+  await exigirEmpresaWhatsappOperacional(phoneNumberId);
 
   const response = await fetch(
     `https://graph.facebook.com/v23.0/${encodeURIComponent(phoneId)}/messages`,

@@ -1,3 +1,5 @@
+import { exigirEmpresaWhatsappOperacional } from "@/lib/whatsapp/empresa-operacional";
+
 export type BotaoRespostaWhatsApp = {
   id: string;
   titulo: string;
@@ -87,6 +89,8 @@ export async function sendWhatsAppInteractiveButtonsMessage({
       error: null,
     };
   }
+
+  await exigirEmpresaWhatsappOperacional(phoneNumberId);
 
   const response = await fetch(
     `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,

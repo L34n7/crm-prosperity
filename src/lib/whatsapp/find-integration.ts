@@ -105,7 +105,8 @@ export async function findWhatsAppIntegrationByPhoneNumberId(
 
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("*")
+    .select("*, empresas!inner(status)")
+    .eq("empresas.status", "ativa")
     .eq("phone_number_id", phoneNumberId)
     .limit(1)
     .maybeSingle();
@@ -138,7 +139,8 @@ export async function findWhatsAppIntegrationByWabaId(
 
   const { data, error } = await supabaseAdmin
     .from("integracoes_whatsapp")
-    .select("*")
+    .select("*, empresas!inner(status)")
+    .eq("empresas.status", "ativa")
     .eq("waba_id", wabaId)
     .limit(1)
     .maybeSingle();

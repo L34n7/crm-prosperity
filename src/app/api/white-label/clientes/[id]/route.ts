@@ -9,6 +9,8 @@ import {
   sincronizarCobrancaWhiteLabel,
 } from "@/lib/white-label/billing";
 
+import { encerrarEmpresaAdministrativamente } from "@/lib/empresas/encerramento";
+
 const supabase = getSupabaseAdmin();
 
 async function obterAdmin() {
@@ -75,6 +77,12 @@ export async function PATCH(
       { ok: false, error: "Cliente White Label não encontrado." },
       { status: 404 },
     );
+  }
+
+  if (empresa.status === "cancelada") {
+    return NextResponse.json({
+      ok: false, error: "Cliente cancelado não pode ser reativado por este atalho. Solicite restauração administrativa.",
+    }, { status: 409 });
   }
 
   if (acao === "status") {
@@ -466,66 +474,18 @@ export async function DELETE(
     });
   }
 
-  const agora = new Date().toISOString();
-
-  const { error: empresaUpdateError } = await supabase
-    .from("empresas")
-    .update({
-      status: "cancelada",
-      updated_at: agora,
-    })
-    .eq("id", empresa.id)
-    .eq("white_label_id", admin.white_label_id)
-    .eq("white_label_tipo", "cliente");
-
-  if (empresaUpdateError) {
-    return NextResponse.json(
-      { ok: false, error: empresaUpdateError.message },
-      { status: 500 },
-    );
-  }
-
-  const [{ error: usuariosError }, { error: sessoesError }] = await Promise.all([
-    supabase
-      .from("usuarios")
-      .update({
-        status: "inativo",
-        updated_at: agora,
-      })
-      .eq("empresa_id", empresa.id),
-    supabase
-      .from("usuario_sessoes")
-      .delete()
-      .eq("empresa_id", empresa.id),
-  ]);
-
-  if (usuariosError || sessoesError) {
-    console.error("[WHITE LABEL] Cliente cancelado com aviso ao revogar acessos:", {
-      empresaId: empresa.id,
-      usuariosError: usuariosError?.message || null,
-      sessoesError: sessoesError?.message || null,
-    });
-  }
-
-  let cobranca: Awaited<ReturnType<typeof sincronizarCobrancaWhiteLabel>> | null = null;
-  let warning: string | null = null;
-
   try {
-    cobranca = await sincronizarCobrancaWhiteLabel(admin.white_label_id);
-    warning = cobranca.warning;
+    const resultado = await encerrarEmpresaAdministrativamente(empresa.id, null);
+    return NextResponse.json({
+      ok: true,
+      message: "Cliente encerrado. Licença liberada; histórico preservado por 90 dias.",
+      resultado,
+      warning: resultado.warning || null,
+    });
   } catch (error) {
-    warning =
-      error instanceof Error
-        ? "Cliente excluído e licença liberada, mas a cobrança precisa ser reconciliada: " +
-          error.message
-        : "Cliente excluído e licença liberada, mas a cobrança precisa ser reconciliada.";
+    return NextResponse.json({
+      ok: false,
+      error: error instanceof Error ? error.message : "Falha ao encerrar cliente.",
+    }, { status: 500 });
   }
-
-  return NextResponse.json({
-    ok: true,
-    message:
-      "Cliente excluído. A licença foi liberada para cadastrar outro cliente.",
-    warning,
-    cobranca,
-  });
 }

@@ -161,6 +161,13 @@ export async function PUT(
     );
   }
 
+  if (empresaAtual.status !== status && (empresaAtual.status === "cancelada" || status === "cancelada")) {
+    return NextResponse.json({
+      ok: false,
+      error: "Use o fluxo Encerrar empresa ou Restaurar para alterar o status de cancelamento.",
+    }, { status: 409 });
+  }
+
   if (
     empresaAtual.status !== status &&
     !can(usuario.permissoes, "empresas.alterar_status")

@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/rotinas_integracoes_eventos",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/empresas_encerramentos",
+      "schedule": "15 * * * *"
     }
   ]
 }

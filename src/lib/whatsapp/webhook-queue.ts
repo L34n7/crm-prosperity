@@ -1,3 +1,4 @@
+import { filtrarWebhookEmpresasEncerradas } from "@/lib/whatsapp/filtrar-webhook-encerrado";
 import { createHash } from "node:crypto";
 import {
   extractIncomingMessages,
@@ -329,9 +330,10 @@ export async function processarWebhookWhatsappPorId(eventoId: string) {
   }
 
   try {
-    const resultado = await processWhatsAppWebhookBody(
+    const bodyFiltrado = await filtrarWebhookEmpresasEncerradas(
       eventoTravado.body_json as WhatsAppWebhookBody
     );
+    const resultado = await processWhatsAppWebhookBody(bodyFiltrado);
     const bodyCompactado = compactarBodyProcessado(
       eventoTravado
     );

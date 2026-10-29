@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, Mail, Save, ShieldCheck, X } from "lucide-react";
+import { Archive, CalendarClock, Download, Eye, EyeOff, Mail, RotateCcw, Save, ShieldCheck, Trash2, X } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
@@ -77,6 +77,14 @@ type Empresa = {
   telefone: string | null;
   nome_responsavel: string | null;
   status: StatusEmpresa;
+  white_label_id?: string | null;
+  white_label_tipo?: string | null;
+  cancelada_em?: string | null;
+  exclusao_prevista_em?: string | null;
+  encerramento_backup_estado?: "pendente" | "processando" | "pronto" | "erro" | null;
+  encerramento_backup_path?: string | null;
+  encerramento_backup_gerado_em?: string | null;
+  encerramento_backup_erro?: string | null;
   timezone: string;
   logo_url: string | null;
   observacoes: string | null;
@@ -112,7 +120,7 @@ function getStatusLabel(status: StatusEmpresa) {
     case "suspensa":
       return "Suspensa";
     case "cancelada":
-      return "Cancelada";
+      return "Cancelado";
     default:
       return status;
   }
@@ -299,6 +307,7 @@ export default function EmpresasPage() {
   const [carregandoExclusao, setCarregandoExclusao] = useState(false);
   const [excluindoEmpresa, setExcluindoEmpresa] = useState(false);
   const [erroExclusao, setErroExclusao] = useState("");
+  const [operandoEncerramentoId, setOperandoEncerramentoId] = useState<string | null>(null);
 
   const [editNomeFantasia, setEditNomeFantasia] = useState("");
   const [editRazaoSocial, setEditRazaoSocial] = useState("");
@@ -909,6 +918,53 @@ export default function EmpresasPage() {
     void carregarLeads(novaPagina);
   }
 
+  async function baixarBackupEmpresa(empresa: Empresa) {
+    if (operandoEncerramentoId) return;
+    setOperandoEncerramentoId(empresa.id);
+    setErro("");
+    setMensagem("");
+    try {
+      if (empresa.encerramento_backup_estado !== "pronto") {
+        const preparar = await fetch(`/api/empresas/${empresa.id}/backup`, { method: "POST" });
+        const resposta = await preparar.json();
+        if (!preparar.ok || !resposta.ok) throw new Error(resposta.error || "Não foi possível preparar o backup.");
+      }
+      const resposta = await fetch(`/api/empresas/${empresa.id}/backup`, { cache: "no-store" });
+      const download = await resposta.json();
+      if (!resposta.ok || !download.ok || !download.url) throw new Error(download.error || "Backup indisponível.");
+      await carregarEmpresas();
+      window.location.assign(download.url);
+      setMensagem("Backup preparado. O download foi iniciado.");
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao baixar backup.");
+      await carregarEmpresas();
+    } finally {
+      setOperandoEncerramentoId(null);
+    }
+  }
+
+  async function restaurarClienteCancelado(empresa: Empresa) {
+    if (operandoEncerramentoId) return;
+    if (!window.confirm(`Restaurar ${empresa.nome_fantasia}? Os usuários originais poderão acessar o CRM novamente. WhatsApp e automações precisarão ser reconfigurados.`)) return;
+    setOperandoEncerramentoId(empresa.id);
+    setErro("");
+    try {
+      const resposta = await fetch(`/api/empresas/${empresa.id}/encerramento`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({confirmacao: empresa.nome_fantasia}),
+      });
+      const resultado = await resposta.json();
+      if (!resposta.ok || !resultado.ok) throw new Error(resultado.error || "Não foi possível restaurar.");
+      setMensagem(resultado.message || "Empresa restaurada.");
+      await carregarEmpresas();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao restaurar cliente.");
+    } finally {
+      setOperandoEncerramentoId(null);
+    }
+  }
+
   async function abrirExclusaoEmpresa(empresa: Empresa) {
     setEmpresaExclusaoModal(empresa);
     setImpactoExclusao(null);
@@ -961,10 +1017,11 @@ export default function EmpresasPage() {
     setErro("");
 
     try {
+      const encerramentoInicial = empresaExclusaoModal.status !== "cancelada";
       const response = await fetch(
-        `/api/empresas/${empresaExclusaoModal.id}/exclusao-definitiva`,
+        `/api/empresas/${empresaExclusaoModal.id}/${encerramentoInicial ? "encerramento" : "exclusao-definitiva"}`,
         {
-          method: "DELETE",
+          method: encerramentoInicial ? "POST" : "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             confirmacao: confirmacaoExclusao.trim(),
@@ -978,9 +1035,13 @@ export default function EmpresasPage() {
         return;
       }
 
-      setEmpresas((atuais) =>
-        atuais.filter((empresa) => empresa.id !== empresaExclusaoModal.id)
-      );
+      if (encerramentoInicial) {
+        await carregarEmpresas();
+      } else {
+        setEmpresas((atuais) =>
+          atuais.filter((empresa) => empresa.id !== empresaExclusaoModal.id)
+        );
+      }
 
       if (expandidoId === empresaExclusaoModal.id) {
         setExpandidoId(null);
@@ -990,9 +1051,10 @@ export default function EmpresasPage() {
         setEditandoId(null);
       }
 
-      const avisos = Array.isArray(data.avisos)
-        ? data.avisos.filter(Boolean)
-        : [];
+      const avisos = [
+        ...(Array.isArray(data.avisos) ? data.avisos.filter(Boolean) : []),
+        ...(data.resultado?.warning ? [data.resultado.warning] : []),
+      ];
 
       setMensagem(
         avisos.length > 0
@@ -1306,7 +1368,7 @@ export default function EmpresasPage() {
                   <article
                     key={empresa.id}
                     data-company-id={empresa.id}
-                    className={styles.itemCard}
+                    className={`${styles.itemCard} ${empresa.status === "cancelada" ? styles.itemCardCancelled : ""}`}
                   >
                     <div className={styles.itemSummary}>
                       <div className={styles.itemLeft}>
@@ -1350,7 +1412,7 @@ export default function EmpresasPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        {!editando && podeAcessarTemporariamente && (
+                        {!editando && podeAcessarTemporariamente && empresa.status !== "cancelada" && (
                           <div className={styles.itemPrimaryActions}>
                             <button
                               type="button"
@@ -1386,20 +1448,23 @@ export default function EmpresasPage() {
                               {expandido ? "Recolher" : "Expandir"}
                             </button>
 
-                            <button
-                              onClick={() => iniciarEdicao(empresa)}
-                              className={styles.secondaryButton}
-                            >
-                              Editar
-                            </button>
+                            {empresa.status !== "cancelada" && (
+                              <button
+                                type="button"
+                                onClick={() => iniciarEdicao(empresa)}
+                                className={styles.secondaryButton}
+                              >
+                                Editar
+                              </button>
+                            )}
 
-                            {podeAcessarTemporariamente && (
+                            {podeAcessarTemporariamente && empresa.status !== "cancelada" && (
                               <button
                                 type="button"
                                 onClick={() => abrirExclusaoEmpresa(empresa)}
                                 className={styles.dangerOutlineButton}
                               >
-                                Excluir
+                                Encerrar
                               </button>
                             )}
                           </div>
@@ -1601,6 +1666,93 @@ export default function EmpresasPage() {
                                   </button>
                                 </div>
                               </div>
+                            )}
+
+                            {empresa.status === "cancelada" && (
+                              <section className={styles.offboardingCard} aria-label="Encerramento da empresa">
+                                <div className={styles.offboardingHeader}>
+                                  <span className={styles.offboardingIcon} aria-hidden="true">
+                                    <Archive size={21} strokeWidth={1.8} />
+                                  </span>
+                                  <div className={styles.offboardingIntro}>
+                                    <span className={styles.offboardingEyebrow}>HISTÓRICO E ENCERRAMENTO</span>
+                                    <h4>Empresa cancelada</h4>
+                                    <p>
+                                      Este registro permanece no CRM para consulta administrativa.
+                                      Os acessos e envios foram interrompidos. O histórico fica disponível durante
+                                      o período de retenção para exportação ou restauração.
+                                    </p>
+                                  </div>
+                                  <span className={styles.offboardingState}>Encerrada</span>
+                                </div>
+
+                                <div className={styles.offboardingDataGrid}>
+                                  <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}>
+                                      <CalendarClock size={15} /> Cancelado em
+                                    </span>
+                                    <strong>{empresa.cancelada_em ? formatarDataLead(empresa.cancelada_em) : "Data não registrada"}</strong>
+                                    <small>Data do encerramento administrativo.</small>
+                                  </div>
+                                  <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}>
+                                      <CalendarClock size={15} /> Exclusão definitiva
+                                    </span>
+                                    <strong>{empresa.exclusao_prevista_em ? formatarDataLead(empresa.exclusao_prevista_em) : "Ainda não agendada"}</strong>
+                                    <small>O expurgo só acontece com backup pronto e após 90 dias.</small>
+                                  </div>
+                                  <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}>Origem da empresa</span>
+                                    <strong>
+                                      {empresa.white_label_id && empresa.white_label_tipo === "cliente"
+                                        ? "Cliente White Label"
+                                        : "Cliente CRM"}
+                                    </strong>
+                                    <small>Visível no painel administrativo Prosperity.</small>
+                                  </div>
+                                </div>
+
+                                <div className={styles.offboardingFooter}>
+                                  <div className={styles.offboardingFooterCopy}>
+                                    <strong>Gestão de dados e encerramento</strong>
+                                    <p>
+                                      {empresa.encerramento_backup_estado === "pronto"
+                                        ? `Backup disponível desde ${formatarDataLead(empresa.encerramento_backup_gerado_em || null)}.`
+                                        : empresa.encerramento_backup_estado === "erro"
+                                          ? empresa.encerramento_backup_erro || "Falha ao preparar backup. Tente novamente."
+                                          : "O backup será preparado automaticamente. Você também pode solicitar a geração."}
+                                    </p>
+                                  </div>
+                                  <div className={styles.offboardingActions}>
+                                    <button type="button" className={styles.offboardingDownload}
+                                      onClick={() => void baixarBackupEmpresa(empresa)}
+                                      disabled={Boolean(operandoEncerramentoId) || empresa.encerramento_backup_estado === "processando" || !empresa.cancelada_em}
+                                      title={!empresa.cancelada_em ? "Cancelamento anterior sem registro de retenção. Requer regularização administrativa." : undefined}>
+                                      <Download size={16} />
+                                      {operandoEncerramentoId === empresa.id
+                                        ? "Preparando..."
+                                        : empresa.encerramento_backup_estado === "pronto" ? "Baixar backup" : "Gerar backup"}
+                                    </button>
+                                    <button type="button" className={styles.offboardingRestore}
+                                      onClick={() => void restaurarClienteCancelado(empresa)}
+                                      disabled={Boolean(operandoEncerramentoId) || empresa.encerramento_backup_estado === "processando" || !empresa.exclusao_prevista_em ||
+                                        new Date(empresa.exclusao_prevista_em).getTime() <= Date.now()}>
+                                      <RotateCcw size={16} /> Restaurar
+                                    </button>
+                                    {podeAcessarTemporariamente && (
+                                      <button type="button" className={styles.offboardingDelete}
+                                        disabled={Boolean(operandoEncerramentoId) ||
+                                          empresa.encerramento_backup_estado !== "pronto" ||
+                                          !empresa.exclusao_prevista_em ||
+                                          new Date(empresa.exclusao_prevista_em).getTime() > Date.now()}
+                                        title="Disponível após os 90 dias e com backup gerado."
+                                        onClick={() => abrirExclusaoEmpresa(empresa)}>
+                                        <Trash2 size={16} /> Excluir definitivamente
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </section>
                             )}
                           </div>
                       </div>
@@ -2539,19 +2691,21 @@ export default function EmpresasPage() {
             </button>
 
             <span className={styles.deleteCompanyEyebrow}>
-              Exclusão definitiva
+              {empresaExclusaoModal.status === "cancelada" ? "EXCLUSÃO DEFINITIVA" : "ENCERRAMENTO DE CONTRATO"}
             </span>
-            <h2 id="delete-company-title">Excluir empresa</h2>
+            <h2 id="delete-company-title">
+              {empresaExclusaoModal.status === "cancelada" ? "Excluir definitivamente" : "Encerrar empresa"}
+            </h2>
             <p className={styles.deleteCompanyName}>
               {empresaExclusaoModal.nome_fantasia}
             </p>
 
             <div className={styles.deleteCompanyWarning}>
-              <strong>Esta ação é irreversível.</strong>
+              <strong>{empresaExclusaoModal.status === "cancelada" ? "Exclusão irreversível" : "Encerramento com retenção de 90 dias"}</strong>
               <p>
-                Todos os dados operacionais vinculados a esta empresa serão
-                removidos, incluindo usuários, contatos, conversas, automações,
-                integrações, leads, pagamentos de teste e histórico de tokens.
+                {empresaExclusaoModal.status === "cancelada"
+                  ? "O prazo de retenção e o backup devem estar concluídos. Os dados operacionais serão excluídos e o registro financeiro mínimo será preservado."
+                  : "Todos os acessos, integrações e automações serão bloqueados. O histórico será preservado por 90 dias e disponibilizado para backup ou restauração."}
               </p>
             </div>
 
@@ -2644,8 +2798,8 @@ export default function EmpresasPage() {
                     }
                   >
                     {excluindoEmpresa
-                      ? "Excluindo definitivamente..."
-                      : "Excluir definitivamente"}
+                      ? empresaExclusaoModal.status === "cancelada" ? "Excluindo..." : "Encerrando..."
+                      : empresaExclusaoModal.status === "cancelada" ? "Excluir definitivamente" : "Encerrar empresa"}
                   </button>
                 </div>
               </>

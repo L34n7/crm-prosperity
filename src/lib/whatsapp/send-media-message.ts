@@ -1,3 +1,5 @@
+import { exigirEmpresaWhatsappOperacional } from "@/lib/whatsapp/empresa-operacional";
+
 type MediaMessageType = "imagem" | "audio" | "video" | "documento";
 
 export type SendWhatsAppMediaMessageParams = {
@@ -103,6 +105,8 @@ export async function sendWhatsAppMediaMessage({
       error: null,
     };
   }
+
+  await exigirEmpresaWhatsappOperacional(phoneNumberId);
 
   const response = await fetch(
     `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
