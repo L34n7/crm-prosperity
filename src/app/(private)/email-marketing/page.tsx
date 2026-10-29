@@ -526,7 +526,7 @@ export default function EmailMarketingPage() {
           </div>
 
           {aba === "campanhas" ? (
-            <div className={styles.panel}>
+            <div className={styles.panel} aria-busy={carregando && campanhas.length === 0}>
               <div className={styles.sectionHeader}>
                 <div>
                   <p className={styles.sectionLabel}>CAMPANHAS</p>
@@ -570,7 +570,26 @@ export default function EmailMarketingPage() {
                 </button>
               </div>
 
-              {campanhasFiltradas.length ? (
+              {carregando && campanhas.length === 0 ? (
+                <div className={styles.campaignLoading} role="status" aria-live="polite">
+                  <div className={styles.campaignLoadingHeading}>
+                    <RefreshCw size={21} className={styles.campaignLoadingSpinner} aria-hidden="true" />
+                    <div>
+                      <strong>Carregando campanhas...</strong>
+                      <p>Consultando suas campanhas e os resultados dos envios.</p>
+                    </div>
+                  </div>
+                  <div className={styles.campaignSkeletonList} aria-hidden="true">
+                    {[0, 1, 2].map((indice) => (
+                      <div className={styles.campaignSkeletonRow} key={indice}>
+                        <span className={styles.campaignSkeletonName} />
+                        <span className={styles.campaignSkeletonStatus} />
+                        <span className={styles.campaignSkeletonDetail} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : campanhasFiltradas.length ? (
                 <div className={styles.tableWrap}>
                   <table className={styles.dataTable}>
                     <thead>
@@ -618,6 +637,35 @@ export default function EmailMarketingPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              ) : erroConfiguracao ? (
+                <div className={styles.campaignLoadFailure} role="alert">
+                  <strong>Não foi possível carregar as campanhas.</strong>
+                  <p>Suas campanhas não foram excluídas. Verifique a conexão e tente novamente.</p>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => void carregarDados()}
+                    disabled={carregando}
+                  >
+                    <RefreshCw size={16} />
+                    Tentar novamente
+                  </button>
+                </div>
+              ) : campanhas.length > 0 ? (
+                <div className={styles.emptyState}>
+                  <span className={styles.emptyIcon}>
+                    <Search size={27} />
+                  </span>
+                  <h3>Nenhuma campanha encontrada</h3>
+                  <p>Não há campanhas correspondentes à busca. Os demais registros continuam disponíveis.</p>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => setBusca("")}
+                  >
+                    Limpar busca
+                  </button>
                 </div>
               ) : (
                 <div className={styles.emptyState}>

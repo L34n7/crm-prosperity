@@ -3728,3 +3728,130 @@
     border-top: 1px solid var(--crm-border);
   }
 }
+
+
+/* Carregamento de campanhas: distingue consulta inicial de lista realmente vazia. */
+.campaignLoading {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-height: 295px;
+  margin-top: 18px;
+  padding: 24px;
+  border: 1px solid var(--crm-border);
+  border-radius: 15px;
+  background: var(--crm-surface);
+}
+
+.campaignLoadingHeading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.campaignLoadingSpinner {
+  flex: 0 0 auto;
+  color: var(--crm-primary-text);
+  animation: campaignLoadingRotate 1.2s linear infinite;
+}
+
+.campaignLoadingHeading strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.campaignLoadingHeading p {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.campaignSkeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.campaignSkeletonRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(80px, .8fr) minmax(100px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+}
+
+.campaignSkeletonRow span {
+  display: block;
+  height: 14px;
+  border-radius: 5px;
+  background: var(--crm-surface-soft);
+  animation: campaignLoadingPulse 1.4s ease-in-out infinite;
+}
+
+.campaignSkeletonName {
+  width: 65%;
+}
+
+.campaignSkeletonStatus {
+  width: 75%;
+}
+
+.campaignSkeletonDetail {
+  width: 85%;
+}
+
+.campaignLoadFailure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid var(--crm-border);
+  border-radius: 14px;
+  background: var(--crm-surface-soft);
+}
+
+.campaignLoadFailure strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+}
+
+.campaignLoadFailure p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@keyframes campaignLoadingRotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes campaignLoadingPulse {
+  0%, 100% { opacity: .5; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .campaignLoadingSpinner,
+  .campaignSkeletonRow span {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .campaignLoading {
+    padding: 16px;
+    min-height: 260px;
+  }
+  .campaignSkeletonRow {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  .campaignSkeletonDetail { display: none !important; }
+}
