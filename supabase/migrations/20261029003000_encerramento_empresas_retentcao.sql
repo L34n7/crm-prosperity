@@ -8,7 +8,8 @@ alter table public.empresas
   add column if not exists encerramento_backup_estado text,
   add column if not exists encerramento_backup_path text,
   add column if not exists encerramento_backup_gerado_em timestamptz,
-  add column if not exists encerramento_backup_erro text;
+  add column if not exists encerramento_backup_erro text,
+  add column if not exists encerramento_backup_tentado_em timestamptz;
 
 alter table public.empresas
   drop constraint if exists empresas_encerramento_backup_estado_check;
@@ -74,6 +75,7 @@ begin
     encerramento_backup_estado = 'pendente',
     encerramento_backup_path = null, encerramento_backup_gerado_em = null,
     encerramento_backup_erro = null,
+    encerramento_backup_tentado_em = null,
     updated_at = v_agora
   where id = p_empresa_id;
 
