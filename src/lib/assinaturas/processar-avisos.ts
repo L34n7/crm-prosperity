@@ -69,13 +69,10 @@ function avisoElegivel(params: {
   const diasDesdeBloqueio =
     (params.agora.getTime() - params.bloqueio.getTime()) / DIA_MS;
 
-  // Contas que já passaram de 60 dias não recebem um aviso retroativo
-  // dizendo que a suspensão ocorrerá "em 10 dias".
-  if (diasDesdeBloqueio >= 60) return null;
-
-  if (diasDesdeBloqueio >= 50) return "suspensao_50d";
+  // A empresa passa a cancelada após 30 dias de bloqueio.
+  // Evita qualquer aviso financeiro depois desse prazo.
+  if (diasDesdeBloqueio >= 30) return null;
   if (diasDesdeBloqueio >= 20) return "reativacao_20d";
-
   return "bloqueada";
 }
 
@@ -83,7 +80,7 @@ function limiteEnviosPorTipo(tipo: TipoAvisoAssinatura) {
   if (
     tipo === "pre_vencimento" ||
     tipo === "reativacao_20d" ||
-    tipo === "suspensao_50d"
+    tipo === "cancelamento"
   ) {
     return 1;
   }
@@ -140,6 +137,7 @@ export async function processarAvisosAssinatura(agora = new Date()) {
     .select(
       "id,email,nome_fantasia,razao_social,assinatura_vencimento_em,assinatura_bloqueio_em,white_label_id,white_label_tipo,planos(slug)"
     )
+    .eq("status","ativa")
     .not("assinatura_vencimento_em", "is", null)
     .order("assinatura_vencimento_em", { ascending: true })
     .limit(1000);
