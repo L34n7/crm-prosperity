@@ -3,7 +3,7 @@ import { validarChamadaCron } from "@/lib/cron/auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { encerrarEmpresaAdministrativamente } from "@/lib/empresas/encerramento";
-import { enviarAvisoCancelamentoPendente } from "@/lib/empresas/aviso-cancelamento";
+import { enviarAvisoCancelamentoPendente, enviarAvisoReativacaoCanceladaPendente } from "@/lib/empresas/aviso-cancelamento";
 import { excluirEmpresaAposRetencao, limparStorageEmpresaExcluida } from "@/lib/empresas/exclusao-definitiva";
 
 export const runtime = "nodejs";
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   if(erroElegiveis)throw new Error(erroElegiveis.message);
   let processadas=0;
   for(const empresa of elegiveis||[]) {
-    if(processadas>=3)break;
+    if(processadas>=10)break;
     if(empresa.white_label_tipo==="cliente")continue;
     const bloqueioMs=new Date(empresa.assinatura_bloqueio_em||0).getTime();
     const restauracaoMs=empresa.restauracao_pendente_pagamento_em
@@ -113,6 +113,38 @@ export async function GET(request: Request) {
         ok:!resultado.erro,detalhe:resultado.erro||undefined});
     }catch(error){
       eventos.push({tipo:"email_cancelamento",empresa_id:empresa.id,ok:false,
+        detalhe:error instanceof Error?error.message:String(error)});
+    }
+  }
+
+  // Recontato enviado 30 dias após o primeiro e-mail de cancelamento,
+  // apenas se a empresa continua cancelada e o prazo de backup ainda não acabou.
+  // Também recupera tentativas interrompidas sem duplicar e-mails confirmados.
+  const retornoElegivelEm=new Date(Date.now()-30*DIA_MS).toISOString();
+  const retornoTravadoEm=new Date(Date.now()-20*60*1000).toISOString();
+  const {data:retornosPendentes,error:retornosErro}=await supabase.from("empresas")
+    .select("id").eq("status","cancelada")
+    .eq("encerramento_email_estado","enviado")
+    .eq("encerramento_retorno_email_estado","pendente")
+    .lte("encerramento_email_enviado_em",retornoElegivelEm)
+    .gt("exclusao_prevista_em",new Date().toISOString())
+    .order("encerramento_email_enviado_em",{ascending:true}).limit(7);
+  if(retornosErro)throw new Error(retornosErro.message);
+  const {data:retornosTravados,error:retornosTravadosErro}=await supabase.from("empresas")
+    .select("id").eq("status","cancelada")
+    .eq("encerramento_email_estado","enviado")
+    .eq("encerramento_retorno_email_estado","processando")
+    .lte("encerramento_email_enviado_em",retornoElegivelEm)
+    .lt("encerramento_retorno_email_tentado_em",retornoTravadoEm)
+    .gt("exclusao_prevista_em",new Date().toISOString()).limit(3);
+  if(retornosTravadosErro)throw new Error(retornosTravadosErro.message);
+  for(const e of [...(retornosPendentes||[]),...(retornosTravados||[])]){
+    try{
+      const resultado=await enviarAvisoReativacaoCanceladaPendente(e.id);
+      eventos.push({tipo:"email_recuperacao_pos_cancelamento",empresa_id:e.id,
+        ok:!resultado.erro,detalhe:resultado.enviado?"E-mail enviado":resultado.erro});
+    }catch(error){
+      eventos.push({tipo:"email_recuperacao_pos_cancelamento",empresa_id:e.id,ok:false,
         detalhe:error instanceof Error?error.message:String(error)});
     }
   }
