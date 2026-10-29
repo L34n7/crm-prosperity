@@ -114,6 +114,9 @@ begin
   select * into v_empresa from public.empresas where id=p_empresa_id for update;
   if not found then raise exception 'Empresa não encontrada.'; end if;
   if v_empresa.status <> 'cancelada' then raise exception 'Somente empresas canceladas podem ser restauradas.'; end if;
+  if v_empresa.encerramento_backup_estado = 'processando' then
+    raise exception 'Aguarde o término da preparação do backup para restaurar.';
+  end if;
   if v_empresa.exclusao_prevista_em is null or v_empresa.exclusao_prevista_em <= now() then
     raise exception 'O prazo de restauração não está disponível ou expirou.';
   end if;
