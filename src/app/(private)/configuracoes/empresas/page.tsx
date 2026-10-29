@@ -30,6 +30,7 @@ type Nicho = {
 };
 
 type StatusEmpresa = "ativa" | "inativa" | "suspensa" | "cancelada" | "excluida";
+type FiltroStatusEmpresa = "todos" | "ativa" | "vencida" | "bloqueada" | "cancelada" | "excluida";
 
 type SaldoTokensEmpresa = {
   limite_mensal: number | null;
@@ -95,6 +96,7 @@ type Empresa = {
   limite_integracoes_whatsapp: number | null;
   limite_usuarios: number | null;
   assinatura_status?: string | null;
+  restauracao_pendente_pagamento_em?: string | null;
   assinatura_inicio_em?: string | null;
   assinatura_vencimento_em?: string | null;
   assinatura_bloqueio_em?: string | null;
@@ -114,37 +116,39 @@ type Empresa = {
   } | null;
 };
 
-function getStatusLabel(status: StatusEmpresa) {
+function getStatusVisual(empresa: Empresa): StatusEmpresa | "vencida" | "bloqueada" {
+  if (empresa.status === "cancelada" || empresa.status === "excluida")
+    return empresa.status;
+  if (empresa.status !== "ativa") return empresa.status;
+  if (empresa.restauracao_pendente_pagamento_em || empresa.assinatura_status === "bloqueada")
+    return "bloqueada";
+  if (empresa.assinatura_status === "vencida") return "vencida";
+  return "ativa";
+}
+
+function getStatusLabel(status: StatusEmpresa | "vencida" | "bloqueada") {
   switch (status) {
-    case "ativa":
-      return "Ativa";
-    case "inativa":
-      return "Inativa";
-    case "suspensa":
-      return "Suspensa";
-    case "cancelada":
-      return "Cancelado";
-    case "excluida":
-      return "Excluído";
-    default:
-      return status;
+    case "ativa": return "Ativa";
+    case "vencida": return "Vencido";
+    case "bloqueada": return "Bloqueado";
+    case "inativa": return "Inativa";
+    case "suspensa": return "Suspensa";
+    case "cancelada": return "Cancelado";
+    case "excluida": return "Excluído";
+    default: return status;
   }
 }
 
-function getStatusClass(status: StatusEmpresa) {
+function getStatusClass(status: StatusEmpresa | "vencida" | "bloqueada") {
   switch (status) {
-    case "ativa":
-      return styles.statusAtiva;
-    case "inativa":
-      return styles.statusInativa;
-    case "suspensa":
-      return styles.statusSuspensa;
-    case "cancelada":
-      return styles.statusCancelada;
-    case "excluida":
-      return styles.statusExcluida;
-    default:
-      return styles.statusPadrao;
+    case "ativa": return styles.statusAtiva;
+    case "vencida": return styles.statusVencida;
+    case "bloqueada": return styles.statusBloqueada;
+    case "inativa": return styles.statusInativa;
+    case "suspensa": return styles.statusSuspensa;
+    case "cancelada": return styles.statusCancelada;
+    case "excluida": return styles.statusExcluida;
+    default: return styles.statusPadrao;
   }
 }
 
@@ -267,7 +271,7 @@ export default function EmpresasPage() {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [nichos, setNichos] = useState<Nicho[]>([]);
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<StatusEmpresa | "todos">("todos");
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatusEmpresa>("todos");
   const [filtroPlano, setFiltroPlano] = useState("todos");
   const [filtroNicho, setFiltroNicho] = useState("todos");
 
@@ -982,7 +986,7 @@ export default function EmpresasPage() {
 
   async function restaurarClienteCancelado(empresa: Empresa) {
     if (operandoEncerramentoId) return;
-    if (!window.confirm(`Restaurar ${empresa.nome_fantasia}? Os usuários originais poderão acessar o CRM novamente. WhatsApp e automações precisarão ser reconfigurados.`)) return;
+    if (!window.confirm(`Restaurar ${empresa.nome_fantasia}? Os usuários voltarão a acessar o CRM, mas o plano permanecerá BLOQUEADO por pendência financeira até uma nova renovação. WhatsApp e automações precisarão ser reconfigurados.`)) return;
     setOperandoEncerramentoId(empresa.id);
     setErro("");
     try {
@@ -993,7 +997,7 @@ export default function EmpresasPage() {
       });
       const resultado = await resposta.json();
       if (!resposta.ok || !resultado.ok) throw new Error(resultado.error || "Não foi possível restaurar.");
-      setMensagem(resultado.message || "Empresa restaurada.");
+      setMensagem(resultado.message || "Empresa restaurada com bloqueio financeiro.");
       await carregarEmpresas();
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao restaurar cliente.");
@@ -1198,7 +1202,7 @@ export default function EmpresasPage() {
           );
 
       const correspondeStatus =
-        filtroStatus === "todos" || empresa.status === filtroStatus;
+        filtroStatus === "todos" || getStatusVisual(empresa) === filtroStatus;
       const correspondePlano =
         filtroPlano === "todos" || empresa.plano_id === filtroPlano;
       const correspondeNicho =
@@ -1299,14 +1303,14 @@ export default function EmpresasPage() {
                 value={filtroStatus}
                 onChange={(event) =>
                   setFiltroStatus(
-                    event.target.value as StatusEmpresa | "todos"
+                    event.target.value as FiltroStatusEmpresa
                   )
                 }
               >
                 <option value="todos">Todos</option>
                 <option value="ativa">Ativas</option>
-                <option value="inativa">Inativas</option>
-                <option value="suspensa">Suspensas</option>
+                <option value="vencida">Vencidos</option>
+                <option value="bloqueada">Bloqueados</option>
                 <option value="cancelada">Canceladas</option>
                 <option value="excluida">Excluídas</option>
               </select>
@@ -1427,10 +1431,10 @@ export default function EmpresasPage() {
                             </h3>
                             <span
                               className={`${styles.statusBadge} ${getStatusClass(
-                                empresa.status
+                                getStatusVisual(empresa)
                               )}`}
                             >
-                              {getStatusLabel(empresa.status)}
+                              {getStatusLabel(getStatusVisual(empresa))}
                             </span>
                           </div>
 
