@@ -476,6 +476,10 @@ export default function ComecarPage() {
                 pelos canais, conteúdo e finalidade das mensagens enviadas pela
                 minha empresa e pelo cumprimento da legislação e das políticas dos
                 provedores utilizados.
+                {" "}Estou ciente de que, em caso de cancelamento, meus dados
+                operacionais ficarão disponíveis para solicitar backup por até
+                <strong> 90 dias</strong>, sem geração automática; após esse prazo
+                poderão ser excluídos definitivamente, ressalvadas obrigações legais.
               </span>
             </label>
 
