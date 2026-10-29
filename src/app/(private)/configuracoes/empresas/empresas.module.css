@@ -330,6 +330,63 @@
   padding: 20px;
 }
 
+.subscriptionDatesBar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.subscriptionDateCard {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 17px 19px;
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface);
+  min-width: 0;
+}
+
+.subscriptionDateIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--crm-surface-subtle);
+  color: var(--crm-text-muted);
+}
+
+.subscriptionDateText {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.subscriptionDateText span {
+  color: var(--crm-text-soft);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.subscriptionDateText strong {
+  color: var(--crm-text-strong);
+  font-weight: 800;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 620px) {
+  .subscriptionDatesBar { grid-template-columns: 1fr; }
+  .subscriptionDateCard { padding: 14px; }
+}
+
+
 .infoBlock,
 .infoBlockFull {
   border: 1px solid var(--crm-border);
