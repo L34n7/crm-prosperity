@@ -65,10 +65,35 @@ export async function limparStorageEmpresaExcluida(empresaId: string) {
   }
 }
 
-export async function excluirEmpresaAposRetencao(empresaId: string) {
-  // A existência de backup não é pré-requisito de expurgo.
-  const {data,error} = await supabase.rpc("excluir_empresa_com_retentcao_admin",{p_empresa_id:empresaId});
-  if(error) throw new Error(error.message);
-  const limpeza = await limparStorageEmpresaExcluida(empresaId);
+export async function excluirEmpresaAposRetencao(
+  empresaId: string,
+  options?: { antecipada?: boolean }
+) {
+  if(options?.antecipada) {
+    // Todas as partes devem existir antes da exclusão irreversível.
+    const {data:empresa,error:consultaErro}=await supabase.from("empresas")
+      .select("status,exclusao_prevista_em,encerramento_backup_estado,encerramento_backup_path,encerramento_backup_partes")
+      .eq("id",empresaId).single();
+    if(consultaErro || !empresa || empresa.status!=="cancelada" ||
+       empresa.encerramento_backup_estado!=="pronto")
+      throw new Error("A exclusão antecipada exige um backup concluído da empresa cancelada.");
+    const partes=Array.isArray(empresa.encerramento_backup_partes)
+      ? empresa.encerramento_backup_partes.filter((v): v is {path:string} =>
+          v && typeof v.path==="string" && v.path.length>0).map(v=>v.path)
+      : [];
+    if(!partes.length && empresa.encerramento_backup_path)
+      partes.push(empresa.encerramento_backup_path);
+    if(!partes.length)throw new Error("Não foi encontrado backup para a exclusão antecipada.");
+    for(const path of partes){
+      const {data,error}=await supabase.storage.from(BACKUP_BUCKET).info(path);
+      if(error || !data)throw new Error("A parte do backup não está disponível no Storage: "+path);
+    }
+  }
+  const rpc=options?.antecipada
+    ? "excluir_empresa_antecipada_admin"
+    : "excluir_empresa_com_retentcao_admin";
+  const {data,error}=await supabase.rpc(rpc,{p_empresa_id:empresaId});
+  if(error)throw new Error(error.message);
+  const limpeza=await limparStorageEmpresaExcluida(empresaId);
   return {resultado:data,limpeza};
 }
