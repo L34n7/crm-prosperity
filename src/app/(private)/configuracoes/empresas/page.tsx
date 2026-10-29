@@ -1081,6 +1081,15 @@ export default function EmpresasPage() {
   }, [busca, empresas, filtroNicho, filtroPlano, filtroStatus]);
 
   const empresaEditando = empresas.find((empresa) => empresa.id === editandoId) || null;
+  const planoEmpresaEditando = planos.find((plano) => plano.id === editPlanoId);
+  const limiteWhatsappPlano = Math.max(
+    1, planoEmpresaEditando?.limite_integracoes_whatsapp ??
+      empresaEditando?.planos?.limite_integracoes_whatsapp ?? 1
+  );
+  const limiteUsuariosPlano = Math.max(
+    1, planoEmpresaEditando?.limite_usuarios ??
+      empresaEditando?.planos?.limite_usuarios ?? 2
+  );
 
   useEffect(() => {
     if (!editandoId) return;
