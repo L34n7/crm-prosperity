@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Code2, Eye, Plus, RotateCcw, Search, Settings2, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Code2, Plus, RotateCcw, Search, Settings2, Trash2, X } from "lucide-react";
 import { TEMPLATES_PADRAO_EMAIL } from "@/lib/email-marketing/templates-padrao";
 import { formatarHtmlParaEdicao } from "@/lib/email-marketing/formatar-html";
 import VariavelCombobox from "@/components/variaveis/VariavelCombobox";
@@ -88,7 +88,6 @@ export default function TemplateModal({
   }, [modeloPreview, templates]);
 
   const htmlNaPrevia = modeloSelecionado?.html ?? html;
-  const assuntoNaPrevia = modeloSelecionado?.assunto ?? assunto;
 
   function aplicarModelo() {
     if (!modeloSelecionado) return;
@@ -344,10 +343,10 @@ export default function TemplateModal({
                       <Settings2 size={15} /> Gerenciar variáveis
                     </button>
                   </div>
+                  <span className={styles.templateVariableRowLabel}>Variável</span>
                   <div className={styles.templateVariableCompactRow}>
                     <div className={styles.templateVariableSelect}>
                       <VariavelCombobox
-                        label="Variável"
                         value={variavelSelecionada}
                         onChange={setVariavelSelecionada}
                         opcoes={opcoesVariaveis}
@@ -445,13 +444,8 @@ export default function TemplateModal({
               </section>
 
               <section className={styles.templateLivePreview} aria-label="Prévia do template">
-                <div className={styles.templatePreviewCompactHeader}>
-                  <strong><Eye size={16}/> Prévia do template</strong>
-                  <span>Modelos de referência</span>
-                </div>
-
                 <div className={styles.templatePresetCompactBar}>
-                  <label htmlFor="modelo-template-email">Modelo:</label>
+                  <label htmlFor="modelo-template-email">Modelo</label>
                   <select id="modelo-template-email"
                     value={modeloPreview}
                     onChange={(event) => setModeloPreview(event.target.value)}
@@ -481,15 +475,8 @@ export default function TemplateModal({
                   )}
                 </div>
 
-                <div className={styles.templateLivePreviewSubject} title={assuntoNaPrevia}>
-                  <span>Assunto:</span>
-                  <strong>{assuntoNaPrevia || "Defina o assunto do e-mail"}</strong>
-                </div>
                 <div className={styles.templateLivePreviewFrame}>
                   <iframe title="Prévia do HTML selecionado" sandbox="" srcDoc={htmlNaPrevia} />
-                </div>
-                <div className={styles.templateLivePreviewCaption}>
-                  A prévia possui rolagem própria para e-mails longos.
                 </div>
               </section>
             </div>

@@ -4690,3 +4690,102 @@
     display: none;
   }
 }
+
+
+/* Ajustes finos do editor de templates: modal menor e mais área útil na prévia. */
+.templatePremiumModal {
+  height: min(825px, calc(100dvh - 96px));
+  max-height: calc(100dvh - 96px);
+}
+
+.templatePremiumModal .templateLivePreview {
+  gap: 8px;
+}
+
+.templatePremiumModal .templatePresetCompactBar {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.templatePremiumModal .templateLivePreviewFrame {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Botões posicionados no mesmo nível do campo, não da descrição da variável. */
+.templatePremiumModal .templateVariableRowLabel {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.templatePremiumModal .templateVariableCompactRow {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 9px;
+  min-width: 0;
+}
+
+.templatePremiumModal .templateVariableSelect {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.templatePremiumModal .templatePremiumVariableButtons {
+  display: inline-flex;
+  align-self: flex-start;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding-top: 0;
+  margin: 0;
+}
+
+.templatePremiumModal .templatePremiumVariableButtons button {
+  min-height: 40px;
+  height: 40px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .templatePremiumModal .templateVariableCompactRow {
+    flex-wrap: nowrap;
+  }
+
+  .templatePremiumModal .templatePremiumVariableButtons {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 780px) {
+  .templatePremiumModal {
+    height: min(810px, calc(100dvh - 60px));
+    max-height: calc(100dvh - 60px);
+  }
+}
+
+@media (max-width: 640px) {
+  .templatePremiumModal {
+    height: calc(100dvh - 48px);
+    max-height: calc(100dvh - 48px);
+    border-radius: 18px;
+  }
+
+  .templatePremiumModal .templateVariableCompactRow {
+    gap: 6px;
+  }
+
+  .templatePremiumModal .templatePremiumVariableButtons {
+    gap: 4px;
+  }
+
+  .templatePremiumModal .templatePremiumVariableButtons button {
+    padding-inline: 7px;
+    font-size: 11px;
+  }
+}
