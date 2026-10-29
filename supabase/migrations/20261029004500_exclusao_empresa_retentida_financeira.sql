@@ -31,7 +31,7 @@ begin
   end if;
 
   insert into public.empresa_encerramento_financeiro (
-    empresa_id,empresa_nome,white_label_id,cancelada_em,assinatura_status,
+    cliente_id,empresa_nome,white_label_id,cancelada_em,assinatura_status,
     pagamentos,backup_path,arquivos_midias,limpeza_status
   ) values (
     v_empresa.id,v_empresa.nome_fantasia,v_empresa.white_label_id,
@@ -47,7 +47,7 @@ begin
       where m.empresa_id=v_empresa.id and m.storage_path is not null),'[]'::jsonb),
     'pendente'
   )
-  on conflict (empresa_id) do nothing;
+  on conflict (cliente_id) do nothing;
   v_resultado := public.excluir_empresa_definitivamente_admin(p_empresa_id);
   return jsonb_build_object('ok',true,'empresa_id',p_empresa_id,
     'exclusao',v_resultado,'financeiro_preservado',true);
