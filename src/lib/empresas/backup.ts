@@ -10,7 +10,7 @@ const PAGINA = 100;
 const MAX_TEMPO_MS = 23_000;
 
 export type ParteBackup = { nome: string; path: string; bytes: number; sha256: string };
-type Cursor = { etapa: number; offset: number; mediaByte: number };
+type Cursor = { etapa: number; offset: number; mediaByte: number; mediaFragmento: number };
 type Entrada = { nome: string; conteudo: Buffer };
 type Definicao = { tabela: string; colunas: string; formato?: "jsonl" | "csv"; ordem?: string; relacao?: boolean };
 const TABELAS: Definicao[] = [
@@ -99,18 +99,18 @@ function zip(arquivos: Entrada[]): Buffer {
   return Buffer.concat([...locais,cd,fim]);
 }
 
-function cursorInicial(): Cursor { return {etapa:0,offset:0,mediaByte:0}; }
+function cursorInicial(): Cursor { return {etapa:0,offset:0,mediaByte:0,mediaFragmento:0}; }
 function obterCursor(v: unknown): Cursor {
   if(!v || typeof v !== "object") return cursorInicial();
   const c=v as Partial<Cursor>;
-  return {etapa:Number(c.etapa||0),offset:Number(c.offset||0),mediaByte:Number(c.mediaByte||0)};
+  return {etapa:Number(c.etapa||0),offset:Number(c.offset||0),mediaByte:Number(c.mediaByte||0),mediaFragmento:Number(c.mediaFragmento||0)};
 }
 function partesNormalizadas(v: unknown): ParteBackup[] {
   if(!Array.isArray(v)) return [];
   return v.filter((x): x is ParteBackup =>
     x && typeof x.path==="string" && typeof x.nome==="string" && typeof x.bytes==="number");
 }
-function avancarEtapa(cursor: Cursor) {cursor.etapa++;cursor.offset=0;cursor.mediaByte=0;}
+function avancarEtapa(cursor: Cursor) {cursor.etapa++;cursor.offset=0;cursor.mediaByte=0;cursor.mediaFragmento=0;}
 
 async function buscarConteudoMidia(path: string, offset: number, tamanho: number, total: number) {
   if(offset===0 && tamanho===total) {
@@ -196,12 +196,12 @@ export async function gerarBackupEncerramento(empresaId: string) {
       }else{
         const midia=pagina[0];
         const caminho=String(midia.storage_path||"").trim();
-        if(!caminho) {cursor.offset++;cursor.mediaByte=0;continue;}
+        if(!caminho) {cursor.offset++;cursor.mediaByte=0;cursor.mediaFragmento=0;continue;}
         const {data:info,error:infoErro}=await db.storage.from("midias").info(caminho);
         if(infoErro || !info) throw new Error("Mídia "+String(midia.id)+" indisponível: "+(infoErro?.message||"Não encontrada"));
         const tamanhoTotal=Number(info.size ?? 0);
         if(!Number.isSafeInteger(tamanhoTotal) || tamanhoTotal<0)throw new Error("Tamanho inválido para mídia "+caminho);
-        if(cursor.mediaByte>=tamanhoTotal && tamanhoTotal>0){cursor.offset++;cursor.mediaByte=0;continue;}
+        if(cursor.mediaByte>=tamanhoTotal && tamanhoTotal>0){cursor.offset++;cursor.mediaByte=0;cursor.mediaFragmento=0;continue;}
         const disponivel=ALVO_DADOS_BYTES-bytes;
         if(disponivel<1024*1024)break;
         const tamanhoLer=tamanhoTotal===0?0:Math.min(tamanhoTotal-cursor.mediaByte,disponivel);
@@ -210,13 +210,14 @@ export async function gerarBackupEncerramento(empresaId: string) {
         if(tamanhoLer>0){
           const conteudo=await buscarConteudoMidia(caminho,cursor.mediaByte,tamanhoLer,tamanhoTotal);
           const nomeArquivo=tamanhoLer===tamanhoTotal?prefixo:
-            prefixo+".fragmento-"+String(Math.floor(cursor.mediaByte/ALVO_DADOS_BYTES)+1).padStart(4,"0");
+            prefixo+".fragmento-"+String(cursor.mediaFragmento+1).padStart(4,"0");
           inserir(nomeArquivo,conteudo);
         }else{
           inserir(prefixo,Buffer.alloc(0));
         }
         cursor.mediaByte+=tamanhoLer;
-        if(cursor.mediaByte>=tamanhoTotal){cursor.offset++;cursor.mediaByte=0;}
+        cursor.mediaFragmento++;
+        if(cursor.mediaByte>=tamanhoTotal){cursor.offset++;cursor.mediaByte=0;cursor.mediaFragmento=0;}
         if(bytes>ALVO_DADOS_BYTES-1024*1024)break;
       }
     }
