@@ -201,7 +201,7 @@ export async function gerarBackupEncerramento(empresaId: string) {
       "Atenciosamente,",
       "Equipe CRM Prosperity",
       ""
-    ].join("\\n"),"utf8"));
+    ].join("\n"),"utf8"));
     while(cursor.etapa<TABELAS.length && bytes<ALVO_DADOS_BYTES-1024*1024 &&
       Date.now()-inicio<MAX_TEMPO_MS) {
       const def=TABELAS[cursor.etapa];
