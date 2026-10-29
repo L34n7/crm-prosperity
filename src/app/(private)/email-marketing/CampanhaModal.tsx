@@ -116,12 +116,6 @@ function formatarNumero(valor: number) {
   return new Intl.NumberFormat("pt-BR").format(Math.max(0, valor || 0));
 }
 
-function abreviarPreview(valor: string, maximo: number) {
-  const caracteres = Array.from(valor.trim());
-  if (caracteres.length <= maximo) return valor.trim();
-  return caracteres.slice(0, Math.max(1, maximo - 3)).join("") + "...";
-}
-
 export default function CampanhaModal({
   templates,
   remetentes,
@@ -688,20 +682,20 @@ export default function CampanhaModal({
                 <strong>Prévia do e-mail</strong>
                 <span>
                   {amostraRealDisponivel
-                    ? `Para: ${String(analise?.amostra?.nome || analise?.amostra?.email || "Contato")}`
-                    : "Contato de exemplo"}
+                    ? `Exemplo 1 dos contatos: ${String(analise?.amostra?.nome || analise?.amostra?.email || "Contato")}`
+                    : "Exemplo 1 dos contatos: Cliente de exemplo"}
                 </span>
               </div>
               <div className={styles.wizardPreviewMetadata}>
                 <div className={styles.wizardPreviewMetadataItem} title={remetenteSelecionado?.email || "Selecione um remetente"}>
                   <span>Remetente:</span>
                   <strong>
-                    {abreviarPreview(remetenteSelecionado?.email || "Selecione um remetente", 31)}
+                    {remetenteSelecionado?.email || "Selecione um remetente"}
                   </strong>
                 </div>
                 <div className={styles.wizardPreviewMetadataItem} title={assuntoPreview || "Defina o assunto do e-mail"}>
                   <span>Assunto:</span>
-                  <strong>{abreviarPreview(assuntoPreview || "Defina o assunto do e-mail", 29)}</strong>
+                  <strong>{assuntoPreview || "Defina o assunto do e-mail"}</strong>
                 </div>
               </div>
               <div className={styles.wizardPreviewDocument}>
