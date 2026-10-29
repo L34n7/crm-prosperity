@@ -229,7 +229,11 @@ export async function gerarBackupEncerramento(empresaId: string) {
     const concluido=cursor.etapa>=TABELAS.length;
     const conteudo=zip(arquivos);
     if(conteudo.length>LIMITE_PARTE_BYTES)throw new Error("O ZIP ultrapassou 75 MB.");
-    const nome="backup-"+empresaId+"-parte-"+String(anteriores.length+1).padStart(3,"0")+".zip";
+    const nomeEmpresa=empresa.nome_fantasia.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"-")
+      .replace(/^-+|-+$/g,"").slice(0,64).toLowerCase() || "empresa";
+    const nome="backup-"+nomeEmpresa+"-"+empresaId.slice(0,8)+"-parte-"+
+      String(anteriores.length+1).padStart(3,"0")+".zip";
     pathEnviado=empresaId+"/"+Date.now()+"-"+nome;
     const {error:uploadErro}=await db.storage.from(BACKUP_BUCKET)
       .upload(pathEnviado,new Uint8Array(conteudo),{contentType:"application/zip",upsert:false});
