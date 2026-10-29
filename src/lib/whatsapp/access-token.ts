@@ -1,6 +1,7 @@
 import { decryptText, encryptText } from "@/lib/security/crypto";
 
 type IntegrationWithToken = {
+  status?: string | null;
   config_json?: Record<string, unknown> | null;
   token_ref?: string | null;
 };
@@ -25,6 +26,7 @@ export function getWhatsAppAccessToken(
   integration: IntegrationWithToken,
   options: { allowGlobalFallback?: boolean } = {}
 ) {
+  if (integration.status === "desconectada") return "";
   const config = objectValue(integration.config_json);
   const encryptedToken = stringValue(config.access_token_encrypted);
 
