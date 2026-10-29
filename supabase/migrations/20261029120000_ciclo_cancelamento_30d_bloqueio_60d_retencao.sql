@@ -1,6 +1,6 @@
 -- Novos cancelamentos: 30 dias após bloqueio financeiro + 60 dias de retenção.
 -- Empresas já canceladas preservam a data de exclusão previamente registrada.
--- Empresas já bloqueadas ganham 30 dias de transição antes do cancelamento automático.
+-- Empresas já bloqueadas há 30 dias ou mais ganham 30 dias de transição.
 alter table public.empresas
   add column if not exists cancelamento_auto_nao_antes_em timestamptz,
   add column if not exists encerramento_email_estado text not null default 'pendente',
@@ -24,6 +24,7 @@ where status='cancelada' and encerramento_email_estado='pendente'
 update public.empresas
   set cancelamento_auto_nao_antes_em=now()+interval '30 days'
 where status='ativa' and assinatura_status='bloqueada'
+  and assinatura_bloqueio_em <= now()-interval '30 days'
   and cancelamento_auto_nao_antes_em is null;
 
 CREATE OR REPLACE FUNCTION public.encerrar_empresa_admin(p_empresa_id uuid, p_usuario_id uuid DEFAULT NULL::uuid)
