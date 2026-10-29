@@ -1869,37 +1869,11 @@ async function enviarMensagemAgente(params: {
   return envio;
 }
 
-// Restrições opcionais por agente: impedem que uma URL proibida escape
-// mesmo quando o modelo ignora as instruções de sua configuração.
-function aplicarRestricoesSaidaAgente(agente: AgenteRow, mensagens: string[]): string[] {
-  const valor = agente.metadata_json?.restricoes_saida;
-  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return mensagens;
-  const config = valor as Record<string, unknown>;
-  const trechos = Array.isArray(config.trechos_proibidos)
-    ? config.trechos_proibidos.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-        .map((item) => item.trim().toLowerCase())
-    : [];
-  if (!trechos.length) return mensagens;
-
-  const substituicao = typeof config.resposta_substituta === "string" && config.resposta_substituta.trim()
-    ? config.resposta_substituta.trim()
-    : "A equipe dará continuidade ao seu atendimento por aqui.";
-  const apresentacao = typeof config.apresentacao_preservar === "string"
-    ? config.apresentacao_preservar.trim()
-    : "";
-
-  return mensagens.map((mensagem) => {
-    if (!trechos.some((trecho) => mensagem.toLowerCase().includes(trecho))) return mensagem;
-    const preservarApresentacao = apresentacao && mensagem.includes(apresentacao);
-    return [preservarApresentacao ? apresentacao : "", substituicao].filter(Boolean).join("\n\n");
-  });
-}
-
 async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[]) {
   if (!ctx.pendencia.numero_destino) {
     return { supersedido: false, mensagensEnviadas: 0 };
   }
-  const limpas = aplicarRestricoesSaidaAgente(ctx.agente, mensagens).map((m) => m.trim()).filter(Boolean).slice(0, MAX_MENSAGENS_SAIDA);
+  const limpas = mensagens.map((m) => m.trim()).filter(Boolean).slice(0, MAX_MENSAGENS_SAIDA);
   let mensagensEnviadas = 0;
   for (let indice = 0; indice < limpas.length; indice++) {
     if (indice > 0) {
@@ -3880,9 +3854,6 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         ctx.agendaAutorizada.timezone || "America/Sao_Paulo",
       );
     }
-
-    // Alinha o registro da execução ao conteúdo que será realmente enviado.
-    saidaFinal.mensagens = aplicarRestricoesSaidaAgente(agente, saidaFinal.mensagens);
 
     if (tokensTotal > 0) {
       await registrarUsoTokensIa({
