@@ -3300,3 +3300,16 @@
   .deletedHistoryCard {padding:17px;}
   .deletedHistoryGrid {grid-template-columns:1fr;}
 }
+
+
+/* Estado financeiro é diferente do estado contratual da empresa. */
+.statusVencida {
+  background: color-mix(in srgb, #d8a03c 14%, var(--crm-surface));
+  border: 1px solid color-mix(in srgb, #d8a03c 46%, var(--crm-border));
+  color: #ac741b;
+}
+.statusBloqueada {
+  background: color-mix(in srgb, #dc6262 13%, var(--crm-surface));
+  border: 1px solid color-mix(in srgb, #dc6262 44%, var(--crm-border));
+  color: #c04b4b;
+}
