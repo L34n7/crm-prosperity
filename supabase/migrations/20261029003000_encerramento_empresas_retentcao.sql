@@ -85,6 +85,9 @@ begin
     webhook_verificado=false, updated_at=v_agora,
     coex_status=case when modo_integracao='coexistence' then 'desconectado' else coex_status end
   where empresa_id=p_empresa_id;
+  -- A integração com Resend deve ser desligada sem apagar o histórico de e-mails.
+  update public.email_marketing_integracoes set habilitado=false,updated_at=v_agora
+  where empresa_id=p_empresa_id;
   update public.automacao_fluxos set status='pausado',updated_at=v_agora where empresa_id=p_empresa_id and status='ativo';
   update public.agenda_automacao_regras set ativo=false,updated_at=v_agora where empresa_id=p_empresa_id and ativo;
   update public.rotina_automacao_gatilhos set ativo=false,updated_at=v_agora where empresa_id=p_empresa_id and ativo;
