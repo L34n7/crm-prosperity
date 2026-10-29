@@ -7,6 +7,7 @@ type RetencaoFinanceira = {
   cliente_id: string;
   arquivos_midias: unknown;
   backup_path: string | null;
+  backup_paths: unknown;
   auth_user_ids: string[] | null;
 };
 
@@ -18,7 +19,7 @@ function lerCaminhos(valor: unknown): string[] {
 
 export async function limparStorageEmpresaExcluida(empresaId: string) {
   const {data, error} = await supabase.from("empresa_encerramento_financeiro")
-    .select("cliente_id,arquivos_midias,backup_path,auth_user_ids").eq("cliente_id",empresaId)
+    .select("cliente_id,arquivos_midias,backup_path,backup_paths,auth_user_ids").eq("cliente_id",empresaId)
     .single<RetencaoFinanceira>();
   if (error || !data) throw new Error("Arquivo financeiro de encerramento não encontrado.");
   try {
@@ -27,9 +28,14 @@ export async function limparStorageEmpresaExcluida(empresaId: string) {
       const {error:e} = await supabase.storage.from("midias").remove(paths.slice(i,i+100));
       if(e) throw new Error("Falha na limpeza das mídias: "+e.message);
     }
-    if (data.backup_path) {
-      const {error:e} = await supabase.storage.from(BACKUP_BUCKET).remove([data.backup_path]);
-      if(e) throw new Error("Falha na remoção do backup expirado: "+e.message);
+    const partes = Array.isArray(data.backup_paths)
+      ? data.backup_paths.filter((p): p is {path:string} =>
+        !!p && typeof p === "object" && typeof p.path === "string").map(p=>p.path)
+      : [];
+    const backups = [...new Set([...(data.backup_path ? [data.backup_path] : []),...partes])];
+    for (let i=0;i<backups.length;i+=100) {
+      const {error:e} = await supabase.storage.from(BACKUP_BUCKET).remove(backups.slice(i,i+100));
+      if(e) throw new Error("Falha na remoção dos backups expirados: "+e.message);
     }
     const authIds = [...new Set(lerCaminhos(data.auth_user_ids))];
     for (let inicio=0; inicio<authIds.length; inicio+=100) {
@@ -60,15 +66,7 @@ export async function limparStorageEmpresaExcluida(empresaId: string) {
 }
 
 export async function excluirEmpresaAposRetencao(empresaId: string) {
-  const {data:empresa,error:consultaErro} = await supabase.from("empresas")
-    .select("encerramento_backup_path,encerramento_backup_estado")
-    .eq("id",empresaId).single();
-  if(consultaErro || empresa?.encerramento_backup_estado !== "pronto" || !empresa.encerramento_backup_path)
-    throw new Error("Backup de encerramento não registrado.");
-  const {data:objeto,error:objetoErro} = await supabase.storage.from(BACKUP_BUCKET)
-    .info(empresa.encerramento_backup_path);
-  if(objetoErro || !objeto)
-    throw new Error("O arquivo ZIP não está disponível no Storage. Exclusão definitiva bloqueada.");
+  // A existência de backup não é pré-requisito de expurgo.
   const {data,error} = await supabase.rpc("excluir_empresa_com_retentcao_admin",{p_empresa_id:empresaId});
   if(error) throw new Error(error.message);
   const limpeza = await limparStorageEmpresaExcluida(empresaId);
