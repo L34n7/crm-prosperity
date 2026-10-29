@@ -134,7 +134,7 @@ async function buscarConteudoMidia(path: string, offset: number, tamanho: number
 /** Cada chamada produz no máximo um ZIP. Somente uma ação autenticada inicia ou avança o backup. */
 export async function gerarBackupEncerramento(empresaId: string) {
   const {data:empresa,error}=await db.from("empresas")
-    .select("id,nome_fantasia,status,exclusao_prevista_em,encerramento_backup_estado,encerramento_backup_tentado_em,encerramento_backup_cursor,encerramento_backup_partes")
+    .select("id,nome_fantasia,created_at,cancelada_em,encerramento_backup_solicitado_em,status,exclusao_prevista_em,encerramento_backup_estado,encerramento_backup_tentado_em,encerramento_backup_cursor,encerramento_backup_partes")
     .eq("id",empresaId).single();
   if(error || !empresa)throw new Error("Empresa não encontrada.");
   if(empresa.status!=="cancelada" || !empresa.exclusao_prevista_em ||
@@ -171,11 +171,37 @@ export async function gerarBackupEncerramento(empresaId: string) {
   };
   let pathEnviado: string|null=null;
   try {
-    inserir("LEIA-ME.txt",Buffer.from(
-      "BACKUP SOB DEMANDA - CRM Prosperity\nEmpresa: "+empresa.nome_fantasia+
-      "\nParte: "+String(anteriores.length+1)+"\nTodos os arquivos ZIP desta exportação são necessários.\n"+
-      "Dados CSV e JSONL podem ser importados. Mídias *.fragmento-NNN devem ser remontadas na ordem numérica"+
-      " para recuperar o arquivo original.\nNão são incluídas senhas e credenciais.\n","utf8"));
+    const dataPt = (valor: string | null | undefined) => {
+      if(!valor) return "Não registrada";
+      const d = new Date(valor);
+      return Number.isNaN(d.getTime()) ? "Não registrada" :
+        new Intl.DateTimeFormat("pt-BR", {timeZone:"America/Sao_Paulo",dateStyle:"short"}).format(d);
+    };
+    inserir("LEIA-ME.txt",Buffer.from([
+      "CRM PROSPERITY | BACKUP DE ENCERRAMENTO",
+      "",
+      "Empresa: " + empresa.nome_fantasia,
+      "Data de início no CRM (cadastro): " + dataPt(empresa.created_at),
+      "Data do cancelamento: " + dataPt(empresa.cancelada_em),
+      "Data da solicitação do backup: " + dataPt(empresa.encerramento_backup_solicitado_em),
+      "Data da geração deste arquivo: " + dataPt(new Date().toISOString()),
+      "",
+      "SOBRE OS ARQUIVOS",
+      "Este backup foi gerado mediante solicitação administrativa.",
+      "Se a exportação resultar em vários arquivos ZIP, baixe e guarde todos.",
+      "Dados CSV e JSONL podem ser importados. Mídias *.fragmento-NNN devem",
+      "ser remontadas em ordem numérica para recuperar o arquivo original.",
+      "O backup não inclui senhas, tokens nem credenciais.",
+      "",
+      "AGRADECIMENTO",
+      "Agradecemos por ter confiado no CRM Prosperity durante sua jornada.",
+      "Foi um prazer fazer parte da operação da sua empresa. Desejamos",
+      "sucesso nos seus próximos projetos e estaremos à disposição no futuro.",
+      "",
+      "Atenciosamente,",
+      "Equipe CRM Prosperity",
+      ""
+    ].join("\n"),"utf8"));
     while(cursor.etapa<TABELAS.length && bytes<ALVO_DADOS_BYTES-1024*1024 &&
       Date.now()-inicio<MAX_TEMPO_MS) {
       const def=TABELAS[cursor.etapa];
@@ -232,8 +258,11 @@ export async function gerarBackupEncerramento(empresaId: string) {
     const nomeEmpresa=empresa.nome_fantasia.normalize("NFD")
       .replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"-")
       .replace(/^-+|-+$/g,"").slice(0,64).toLowerCase() || "empresa";
-    const nome="backup-"+nomeEmpresa+"-"+empresaId.slice(0,8)+"-parte-"+
-      String(anteriores.length+1).padStart(3,"0")+".zip";
+    const dataArquivo = (empresa.encerramento_backup_solicitado_em || new Date().toISOString()).slice(0,10);
+    const baseNome = "backup-"+nomeEmpresa+"-"+dataArquivo+"-"+empresaId.slice(0,8);
+    const nome = (concluido && anteriores.length===0)
+      ? baseNome+".zip"
+      : baseNome+"-parte-"+String(anteriores.length+1).padStart(3,"0")+".zip";
     pathEnviado=empresaId+"/"+Date.now()+"-"+nome;
     const {error:uploadErro}=await db.storage.from(BACKUP_BUCKET)
       .upload(pathEnviado,new Uint8Array(conteudo),{contentType:"application/zip",upsert:false});

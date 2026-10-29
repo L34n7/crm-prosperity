@@ -75,7 +75,7 @@ export async function restaurarEmpresaAdministrativamente(empresaId: string) {
   const {error:limpezaErro} = await supabase.from("empresas").update({
     encerramento_backup_cursor:null,encerramento_backup_partes:[],
     encerramento_backup_path:null,encerramento_backup_gerado_em:null,
-    encerramento_backup_tentado_em:null,
+    encerramento_backup_tentado_em:null,encerramento_backup_solicitado_em:null,
   }).eq("id",empresaId);
   if(limpezaErro)throw new Error("Empresa restaurada, mas não foi possível liberar metadados do backup antigo: "+limpezaErro.message);
   const paths = Array.isArray(arquivosAnteriores?.encerramento_backup_partes)

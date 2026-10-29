@@ -3220,3 +3220,83 @@
 }
 .offboardingEarlyConfirm strong{font-weight:800}
 .offboardingEarlyConfirm input:disabled{cursor:not-allowed}
+
+
+/* Empresas excluídas: cartão informativo sem tratamento operacional. */
+.statusExcluida {
+  background: color-mix(in srgb, #7c8795 14%, var(--crm-surface));
+  color: var(--crm-text-muted);
+  border: 1px solid color-mix(in srgb, #7c8795 40%, var(--crm-border));
+}
+.itemCardDeleted {
+  border-color: color-mix(in srgb, #7c8795 32%, var(--crm-border));
+  background: color-mix(in srgb, #7c8795 3%, var(--crm-surface));
+}
+.deletedHistoryCard {
+  padding: 23px 25px 25px;
+  border: 1px solid color-mix(in srgb, #7c8795 30%, var(--crm-border));
+  border-radius: 20px;
+  background: linear-gradient(125deg,
+    color-mix(in srgb, #7c8795 10%, var(--crm-surface)),
+    color-mix(in srgb, #7c8795 3%, var(--crm-surface)));
+}
+.deletedHistoryHeader {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 19px;
+}
+.deletedHistoryIcon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  color: var(--crm-text-muted);
+  background: color-mix(in srgb, #7c8795 16%, var(--crm-surface));
+}
+.deletedHistoryHeader strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--crm-text-strong);
+}
+.deletedHistoryHeader p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--crm-text-muted);
+}
+.deletedHistoryGrid {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 12px;
+}
+.deletedHistoryGrid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  background: color-mix(in srgb,var(--crm-surface) 88%,transparent);
+  border: 1px solid var(--crm-border);
+}
+.deletedHistoryGrid span {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--crm-text-muted);
+}
+.deletedHistoryGrid strong {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--crm-text-strong);
+}
+@media(max-width:960px) {
+  .deletedHistoryGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:600px) {
+  .deletedHistoryCard {padding:17px;}
+  .deletedHistoryGrid {grid-template-columns:1fr;}
+}
