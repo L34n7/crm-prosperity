@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, Mail, Save, ShieldCheck, X } from "lucide-react";
+import { Archive, CalendarClock, Download, Eye, EyeOff, Mail, RotateCcw, Save, ShieldCheck, Trash2, X } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
@@ -77,6 +77,8 @@ type Empresa = {
   telefone: string | null;
   nome_responsavel: string | null;
   status: StatusEmpresa;
+  white_label_id?: string | null;
+  white_label_tipo?: string | null;
   timezone: string;
   logo_url: string | null;
   observacoes: string | null;
@@ -112,7 +114,7 @@ function getStatusLabel(status: StatusEmpresa) {
     case "suspensa":
       return "Suspensa";
     case "cancelada":
-      return "Cancelada";
+      return "Cancelado";
     default:
       return status;
   }
@@ -1306,7 +1308,7 @@ export default function EmpresasPage() {
                   <article
                     key={empresa.id}
                     data-company-id={empresa.id}
-                    className={styles.itemCard}
+                    className={`${styles.itemCard} ${empresa.status === "cancelada" ? styles.itemCardCancelled : ""}`}
                   >
                     <div className={styles.itemSummary}>
                       <div className={styles.itemLeft}>
@@ -1350,7 +1352,7 @@ export default function EmpresasPage() {
                       </div>
 
                       <div className={styles.itemRight}>
-                        {!editando && podeAcessarTemporariamente && (
+                        {!editando && podeAcessarTemporariamente && empresa.status !== "cancelada" && (
                           <div className={styles.itemPrimaryActions}>
                             <button
                               type="button"
@@ -1386,14 +1388,17 @@ export default function EmpresasPage() {
                               {expandido ? "Recolher" : "Expandir"}
                             </button>
 
-                            <button
-                              onClick={() => iniciarEdicao(empresa)}
-                              className={styles.secondaryButton}
-                            >
-                              Editar
-                            </button>
+                            {empresa.status !== "cancelada" && (
+                              <button
+                                type="button"
+                                onClick={() => iniciarEdicao(empresa)}
+                                className={styles.secondaryButton}
+                              >
+                                Editar
+                              </button>
+                            )}
 
-                            {podeAcessarTemporariamente && (
+                            {podeAcessarTemporariamente && empresa.status !== "cancelada" && (
                               <button
                                 type="button"
                                 onClick={() => abrirExclusaoEmpresa(empresa)}
@@ -1601,6 +1606,74 @@ export default function EmpresasPage() {
                                   </button>
                                 </div>
                               </div>
+                            )}
+
+                            {empresa.status === "cancelada" && (
+                              <section className={styles.offboardingCard} aria-label="Encerramento da empresa">
+                                <div className={styles.offboardingHeader}>
+                                  <span className={styles.offboardingIcon} aria-hidden="true">
+                                    <Archive size={21} strokeWidth={1.8} />
+                                  </span>
+                                  <div className={styles.offboardingIntro}>
+                                    <span className={styles.offboardingEyebrow}>HISTÓRICO E ENCERRAMENTO</span>
+                                    <h4>Empresa cancelada</h4>
+                                    <p>
+                                      Este registro permanece no CRM para consulta administrativa.
+                                      A exportação e a retenção automática ainda estão em preparação.
+                                    </p>
+                                  </div>
+                                  <span className={styles.offboardingState}>Encerrada</span>
+                                </div>
+
+                                <div className={styles.offboardingDataGrid}>
+                                  <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}>
+                                      <CalendarClock size={15} /> Cancelado em
+                                    </span>
+                                    <strong>Data não registrada</strong>
+                                    <small>A data exata ainda não é armazenada separadamente.</small>
+                                  </div>
+                                  <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}>
+                                      <CalendarClock size={15} /> Exclusão definitiva
+                                    </span>
+                                    <strong>Ainda não agendada</strong>
+                                    <small>Retenção planejada de 90 dias, ainda sem execução automática.</small>
+                                  </div>
+                                  <div className={styles.offboardingDataItem}>
+                                    <span className={styles.offboardingDataLabel}>Origem da empresa</span>
+                                    <strong>
+                                      {empresa.white_label_id && empresa.white_label_tipo === "cliente"
+                                        ? "Cliente White Label"
+                                        : "Cliente CRM"}
+                                    </strong>
+                                    <small>Visível no painel administrativo Prosperity.</small>
+                                  </div>
+                                </div>
+
+                                <div className={styles.offboardingFooter}>
+                                  <div className={styles.offboardingFooterCopy}>
+                                    <strong>Gestão de dados e encerramento</strong>
+                                    <p>Backup e restauração serão habilitados quando o processo de retenção estiver implementado.</p>
+                                  </div>
+                                  <div className={styles.offboardingActions}>
+                                    <button type="button" className={styles.offboardingDownload} disabled
+                                      title="A exportação completa dos dados ainda não está disponível no CRM.">
+                                      <Download size={16} /> Baixar backup
+                                    </button>
+                                    <button type="button" className={styles.offboardingRestore} disabled
+                                      title="A restauração segura de clientes ainda não está disponível.">
+                                      <RotateCcw size={16} /> Restaurar
+                                    </button>
+                                    {podeAcessarTemporariamente && (
+                                      <button type="button" className={styles.offboardingDelete}
+                                        onClick={() => abrirExclusaoEmpresa(empresa)}>
+                                        <Trash2 size={16} /> Excluir definitivamente
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </section>
                             )}
                           </div>
                       </div>
