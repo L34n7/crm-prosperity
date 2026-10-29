@@ -195,10 +195,21 @@ export async function DELETE(
     const body = await request.json().catch(() => ({}));
     if (String(body?.confirmacao || "").trim() !== empresa.nome_fantasia.trim())
       return NextResponse.json({ok:false,error:"Digite o nome exato da empresa para confirmar."},{status:400});
-    const resultado = await excluirEmpresaAposRetencao(id);
+    const antecipada = empresa.status === "cancelada" &&
+      (await supabaseAdmin.from("empresas").select("exclusao_prevista_em")
+        .eq("id",id).single()).data?.exclusao_prevista_em;
+    const prazoFuturo = antecipada &&
+      new Date(String(antecipada)).getTime()>Date.now();
+    if(prazoFuturo && body?.confirmacao_backup_baixado !== true) {
+      return NextResponse.json({
+        ok:false,
+        error:"Confirme que baixou e conferiu todas as partes do backup antes da exclusão antecipada."
+      },{status:400});
+    }
+    const resultado = await excluirEmpresaAposRetencao(id,{antecipada:Boolean(prazoFuturo)});
     return NextResponse.json({
       ok:true,
-      message:`Empresa "${empresa.nome_fantasia}" excluída definitivamente após retenção.`,
+      message:`Empresa "${empresa.nome_fantasia}" excluída definitivamente.`,
       resultado:resultado.resultado,
       limpeza:resultado.limpeza,
       avisos: resultado.limpeza.ok ? [] : [resultado.limpeza.erro],
