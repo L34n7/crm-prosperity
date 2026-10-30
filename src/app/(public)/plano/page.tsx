@@ -209,7 +209,7 @@ export default function PlanoPage() {
       nome: "Programa Básico",
       slug: "basico",
       descricao:
-        "Aprenda a organizar contatos, criar disparos e iniciar automações de atendimento, aplicando os conhecimentos no CRM Prosperity.",
+        "Ideal para quem quer começar com atendimento automatizado, organização profissional e IA integrada desde o primeiro dia.",
       precoOriginal: "R$ 197/mês",
       preco: "R$ 137/mês",
       observacaoPreco: "🔥 Oferta de entrada: economize R$ 60 todos os meses.",
@@ -232,7 +232,7 @@ export default function PlanoPage() {
       nome: "Programa Essencial IA+",
       slug: "essencial",
       descricao:
-        "Aprofunde seus conhecimentos em automações, inteligência artificial e atendimento, com mais capacidade para aplicar tudo no CRM Prosperity.",
+        "Para equipes que precisam de mais potência, mais automação e mais inteligência artificial para escalar vendas e atendimento.",
       precoOriginal: "R$ 367/mês",
       preco: "R$ 267/mês",
       observacaoPreco: "🔥 Melhor custo-benefício: economize R$ 100 por mês.",
@@ -298,16 +298,15 @@ export default function PlanoPage() {
             <span><strong>Prosperity</strong> CRM</span>
           </Link>
 
-          <div className={styles.kicker}>Programas Prosperity</div>
+          <div className={styles.kicker}>Planos CRM Prosperity</div>
 
           <h1 className={styles.title}>
-            Escolha seu programa para aprender e colocar em prática
+            Escolha o plano ideal para o momento da sua operação
           </h1>
 
           <p className={styles.subtitle}>
-            Aprenda com conteúdos predominantemente gravados, orientações flexíveis
-            e acesso ao CRM Prosperity. Escolha a modalidade com os recursos
-            mais adequados ao que você deseja desenvolver.
+            Básico e Essencial possuem os mesmos recursos principais. A diferença
+            está nos usuários, tokens de IA e números de WhatsApp inclusos.
           </p>
         </div>
 
