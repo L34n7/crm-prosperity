@@ -431,7 +431,7 @@
   background: linear-gradient(
     135deg,
     var(--crm-ui-public-surface-rgb-16-185-129-0-09),
-    var(--crm-ui-public-surface-rgb-255-255-255-0-04)
+    var(--crm-ui-public-surface-rgb-255-255-255-0-08)
   );
   box-shadow: 0 16px 38px var(--crm-ui-public-shadow-rgb-0-0-0-0-18);
   backdrop-filter: blur(14px);
