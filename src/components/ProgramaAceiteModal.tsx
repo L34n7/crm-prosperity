@@ -68,13 +68,13 @@ export default function ProgramaAceiteModal({ initialOpen, versao }: Props) {
 
   return (
     <div
-      className={styles.overlay}
+      className={`${styles.overlay} ${styles.programaOverlay}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="programa-aceite-titulo"
     >
-      <div className={styles.modal}>
-        <div className={styles.hero}>
+      <div className={`${styles.modal} ${styles.programaModal}`}>
+        <div className={`${styles.hero} ${styles.programaHero}`}>
           <div className={styles.heroIcon} aria-hidden="true">
             <BookOpenCheck size={28} strokeWidth={1.9} />
           </div>
@@ -97,37 +97,37 @@ export default function ProgramaAceiteModal({ initialOpen, versao }: Props) {
           </div>
         </div>
 
-        <div className={styles.grid}>
-          <article className={styles.infoCard}>
+        <div className={`${styles.grid} ${styles.programaGrid}`}>
+          <article className={`${styles.infoCard} ${styles.programaCard}`}>
             <div className={styles.infoIcon}>
               <GraduationCap size={22} aria-hidden="true" />
             </div>
             <div>
               <strong>Aprendizado flexível</strong>
               <p>
-                Conteúdos predominantemente gravados e orientações conforme
-                a necessidade do aluno e a disponibilidade de atendimento,
+                Conteúdos gravados e orientações flexíveis, conforme a
+                necessidade do aluno e a disponibilidade de atendimento,
                 sem calendário fixo de aulas ao vivo.
               </p>
             </div>
           </article>
 
-          <article className={styles.infoCard}>
+          <article className={`${styles.infoCard} ${styles.programaCard}`}>
             <div className={styles.infoIcon}>
               <MonitorPlay size={22} aria-hidden="true" />
             </div>
             <div>
               <strong>Aplicação no CRM Prosperity</strong>
               <p>
-                O uso operacional da ferramenta e dos recursos incluídos
-                segue a modalidade, os limites e o período contratado.
-                Adicionais podem ter condições próprias.
+                Utilize os recursos do CRM conforme a modalidade,
+                os limites e o período contratado. Adicionais
+                podem ter condições próprias.
               </p>
             </div>
           </article>
         </div>
 
-        <div className={styles.note}>
+        <div className={`${styles.note} ${styles.programaNote}`}>
           <ShieldCheck size={20} aria-hidden="true" />
           <p>
             Esta atualização não altera retroativamente o histórico das
@@ -136,14 +136,7 @@ export default function ProgramaAceiteModal({ initialOpen, versao }: Props) {
           </p>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            padding: "0 32px 20px",
-          }}
-        >
+        <div className={styles.programaLinks}>
           {[
             { href: "/termos-de-servico", nome: "Termos dos Programas e Uso do CRM" },
             { href: "/politica-de-privacidade", nome: "Política de Privacidade" },
@@ -172,7 +165,7 @@ export default function ProgramaAceiteModal({ initialOpen, versao }: Props) {
           ))}
         </div>
 
-        <div className={styles.footer}>
+        <div className={`${styles.footer} ${styles.programaFooter}`}>
           <label className={styles.checkboxRow}>
             <input
               type="checkbox"
