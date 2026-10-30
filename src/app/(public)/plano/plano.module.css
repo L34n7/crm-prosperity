@@ -288,7 +288,7 @@
 }
 
 .featureList {
-  margin: 18px 0 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -388,6 +388,127 @@
   opacity: 0.85;
 }
 
+.learningIncluded {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px solid var(--crm-ui-public-border-rgb-16-185-129-0-24);
+  border-radius: 14px;
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-09);
+  color: var(--crm-ui-public-content-hex-065f46);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.learningIncluded svg {
+  flex-shrink: 0;
+}
+
+.learningIncluded strong {
+  font-weight: 800;
+}
+
+.featureHeading {
+  position: relative;
+  z-index: 4;
+  margin: 18px 0 0;
+  color: var(--crm-ui-public-content-hex-475569);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.learningPanel {
+  margin-top: 24px;
+  padding: 28px 30px 30px;
+  border-radius: 24px;
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-2);
+  background: linear-gradient(
+    135deg,
+    var(--crm-ui-public-surface-rgb-16-185-129-0-09),
+    var(--crm-ui-public-surface-rgb-255-255-255-0-04)
+  );
+  box-shadow: 0 16px 38px var(--crm-ui-public-shadow-rgb-0-0-0-0-18);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.learningPanelHeader {
+  max-width: 730px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.learningEyebrow {
+  color: var(--crm-ui-public-content-hex-a7f3d0);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.learningPanelTitle {
+  margin: 8px 0 0;
+  color: var(--crm-ui-public-content-hex-ffffff);
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.learningPanelDescription {
+  margin: 10px 0 0;
+  color: var(--crm-ui-public-content-hex-cbd5e1);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.learningDetails {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.learningDetail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 19px;
+  border-radius: 18px;
+  border: 1px solid var(--crm-ui-public-border-rgb-255-255-255-0-12);
+  background: var(--crm-ui-public-surface-rgb-255-255-255-0-08);
+}
+
+.learningDetailIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--crm-ui-public-border-rgb-52-211-153-0-2);
+  border-radius: 12px;
+  color: var(--crm-ui-public-content-hex-a7f3d0);
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-14);
+}
+
+.learningDetail strong {
+  color: var(--crm-ui-public-content-hex-ffffff);
+  font-size: 15px;
+}
+
+.learningDetail > span:last-child {
+  color: var(--crm-ui-public-content-hex-cbd5e1);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .footerInfo {
   margin: 18px auto 0;
   max-width: 880px;
@@ -452,6 +573,12 @@
     margin: 0 auto;
   }
 
+  .learningPanel {
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
   .title {
     font-size: 36px;
   }
@@ -477,6 +604,25 @@
 
   .cardTitle {
     font-size: 26px;
+  }
+
+  .learningPanel {
+    padding: 24px 18px;
+    border-radius: 20px;
+  }
+
+  .learningPanelTitle {
+    font-size: 24px;
+  }
+
+  .learningDetails {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .learningDetail {
+    padding: 16px;
   }
 
   .price {
