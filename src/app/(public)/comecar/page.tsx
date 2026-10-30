@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./comecar.module.css";
+import { TEXTO_ACEITE_LGPD } from "@/lib/lgpd/termos";
 import {
   SEGMENTOS_EMPRESA,
   type SegmentoCodigo,
@@ -450,38 +451,31 @@ export default function ComecarPage() {
                 className={styles.checkbox}
               />
               <span>
-                Declaro que li e aceito os{" "}
-                <Link
-                  href="/termos-de-servico"
-                  onClick={(event) => abrirDocumentoLegal(event, "termos")}
-                >
-                  Termos de Serviço
-                </Link>
-                , a{" "}
-                <Link
-                  href="/politica-de-privacidade"
-                  onClick={(event) => abrirDocumentoLegal(event, "privacidade")}
-                >
-                  Política de Privacidade
-                </Link>{" "}
-                e a{" "}
-                <Link
-                  href="/politica-de-mensageria"
-                  onClick={(event) => abrirDocumentoLegal(event, "mensageria")}
-                >
-                  Política de Mensageria e Uso Aceitável
-                </Link>
-                . Estou ciente de que as modalidades de programa incluem conteúdos
-                predominantemente gravados, orientações flexíveis conforme a
-                disponibilidade e acesso aos recursos do CRM Prosperity durante
-                o período contratado. Os recursos e adicionais disponibilizados
-                dependem da oferta escolhida e podem ter preços próprios.
-                Declaro também que sou responsável pela origem das bases de
-                contatos, autorizações e opt-ins exigidos pelos canais e pela
-                legalidade das mensagens enviadas. Após 30 dias de bloqueio por
-                inadimplência, a empresa poderá ser cancelada; após o cancelamento,
-                terei até <strong>60 dias</strong> para solicitar e baixar os
-                dados operacionais, sem backup automático, ressalvadas obrigações legais.
+                {TEXTO_ACEITE_LGPD}
+                <span style={{ display: "block", marginTop: 8 }}>
+                  Consulte os documentos:{" "}
+                  <Link
+                    href="/termos-de-servico"
+                    onClick={(event) => abrirDocumentoLegal(event, "termos")}
+                  >
+                    Termos dos Programas e Uso do CRM
+                  </Link>
+                  ,{" "}
+                  <Link
+                    href="/politica-de-privacidade"
+                    onClick={(event) => abrirDocumentoLegal(event, "privacidade")}
+                  >
+                    Política de Privacidade
+                  </Link>
+                  {" "}e{" "}
+                  <Link
+                    href="/politica-de-mensageria"
+                    onClick={(event) => abrirDocumentoLegal(event, "mensageria")}
+                  >
+                    Política de Mensageria e Uso Aceitável
+                  </Link>
+                  .
+                </span>
               </span>
             </label>
 
