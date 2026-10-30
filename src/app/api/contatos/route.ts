@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import { normalizarEmailContato, emailContatoValido, possuiIdentificadorContato } from "@/lib/contatos/identificadores";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -798,9 +799,9 @@ export async function POST(request: Request) {
   const telefoneOriginal = body?.telefone?.trim();
   const telefone = telefoneOriginal
     ? normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal)
-    : "";
-    
-  const email = body?.email?.trim()?.toLowerCase() || null;
+    : null;
+
+  const email = normalizarEmailContato(body?.email);
   const campoContato = String(body?.campo_contato || "").trim() || null;
   const interesse = String(body?.interesse || "").trim() || null;
   const rastreamentoCampanhaId =
@@ -827,9 +828,23 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!telefone) {
+  if (!possuiIdentificadorContato(telefone, email)) {
     return NextResponse.json(
-      { ok: false, error: "Telefone é obrigatório" },
+      { ok: false, error: "Informe pelo menos um telefone ou e-mail para criar o contato." },
+      { status: 400 }
+    );
+  }
+
+  if (email && !emailContatoValido(email)) {
+    return NextResponse.json(
+      { ok: false, error: "Informe um endereço de e-mail válido." },
+      { status: 400 }
+    );
+  }
+
+  if (telefoneOriginal && !telefone) {
+    return NextResponse.json(
+      { ok: false, error: "Telefone inválido. Corrija o número ou deixe-o vazio." },
       { status: 400 }
     );
   }
@@ -847,18 +862,35 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: contatoExistente } = await supabaseAdmin
-    .from("contatos")
-    .select("id")
-    .eq("empresa_id", empresa_id)
-    .eq("telefone", telefone)
-    .maybeSingle();
+  if (telefone) {
+    const { data: contatoExistente } = await supabaseAdmin
+      .from("contatos")
+      .select("id")
+      .eq("empresa_id", empresa_id)
+      .eq("telefone", telefone)
+      .maybeSingle();
 
-  if (contatoExistente) {
-    return NextResponse.json(
-      { ok: false, error: "Já existe um contato com esse telefone nesta empresa" },
-      { status: 409 }
-    );
+    if (contatoExistente) {
+      return NextResponse.json(
+        { ok: false, error: "Já existe um contato com esse telefone nesta empresa" },
+        { status: 409 }
+      );
+    }
+  } else if (email) {
+    const { data: contatoExistente } = await supabaseAdmin
+      .from("contatos")
+      .select("id")
+      .eq("empresa_id", empresa_id)
+      .eq("email", email)
+      .limit(1)
+      .maybeSingle();
+
+    if (contatoExistente) {
+      return NextResponse.json(
+        { ok: false, error: "Já existe um contato com esse e-mail nesta empresa." },
+        { status: 409 }
+      );
+    }
   }
 
   let campanhaRastreamento = null;
@@ -933,7 +965,7 @@ export async function POST(request: Request) {
     entidade: "contato",
     entidade_id: data.id,
     acao: "contato_criado",
-    descricao: `Contato ${nome || telefone} criado`,
+    descricao: `Contato ${nome || telefone || email} criado`,
     usuario_id: usuario.id,
     usuario_nome: usuario.nome,
     usuario_email: usuario.email,

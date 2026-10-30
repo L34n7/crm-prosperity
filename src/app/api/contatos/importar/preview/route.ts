@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import { normalizarEmailContato, emailContatoValido } from "@/lib/contatos/identificadores";
 import {
   normalizarClassificacaoLead,
   statusLeadLegadoDaClassificacao,
@@ -400,18 +401,21 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!encontrouAlgumaColunaDeTelefone) {
+    const encontrouColunaEmail = headers.some((header) =>
+      ["email", "e-mail", "email address", "e-mail address", "email 2 address", "e-mail 2 address", "email 3 address", "e-mail 3 address"].includes(normalizeHeaderName(header))
+    );
+    if (!encontrouAlgumaColunaDeTelefone && !encontrouColunaEmail) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            'Não encontrei uma coluna de telefone no arquivo. Aceito, por exemplo: "telefone", "Número", "Mobile Phone", "Primary Phone" ou "Phone 1 - Value".',
+          error: 'O arquivo precisa ter uma coluna "telefone" ou "email". Para E-mail Marketing, é possível importar apenas nome e e-mail.',
         },
         { status: 400 }
       );
     }
 
     const telefonesArquivo = new Set<string>();
+    const emailsSemTelefoneArquivo = new Set<string>();
 
     const candidatos: LinhaPreview[] = [];
     const validos: LinhaPreview[] = [];
@@ -430,7 +434,7 @@ export async function POST(request: Request) {
       const nome = montarNomePorPartes(headers, row) || null;
       const telefoneOriginal = obterTelefoneDaLinha(headers, row);
       const telefoneNormalizado = normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal);
-      const email = obterEmailDaLinha(headers, row) || null;
+      const email = normalizarEmailContato(obterEmailDaLinha(headers, row));
       const campoContato = obterCampoContatoDaLinha(headers, row) || null;
       const observacoes = obterObservacoesDaLinha(headers, row) || null;
 
@@ -463,38 +467,42 @@ export async function POST(request: Request) {
         campo_contato: campoContato,
         status_lead: statusLead,
         observacoes,
-        telefone_revisar: telefonePrecisaRevisao(telefoneNormalizado),
+        telefone_revisar: Boolean(telefoneNormalizado) && telefonePrecisaRevisao(telefoneNormalizado),
       };
 
-      if (!telefoneOriginal.trim()) {
-        invalidos.push({
-          ...base,
-          motivo: "Telefone não informado",
-        });
+      if (email && !emailContatoValido(email)) {
+        invalidos.push({ ...base, motivo: "E-mail inválido" });
         return;
       }
 
-      if (!telefoneImportacaoValido(telefoneNormalizado)) {
-        invalidos.push({
-          ...base,
-          motivo: "Telefone inválido",
-        });
+      if (!telefoneOriginal.trim() && !email) {
+        invalidos.push({ ...base, motivo: "Informe telefone ou e-mail" });
         return;
       }
 
-      if (telefonesArquivo.has(telefoneNormalizado)) {
-        duplicadosArquivo.push({
-          ...base,
-          motivo: "Telefone duplicado dentro do arquivo",
-        });
+      if (telefoneOriginal.trim() && !telefoneImportacaoValido(telefoneNormalizado)) {
+        invalidos.push({ ...base, motivo: "Telefone inválido" });
         return;
       }
 
-      telefonesArquivo.add(telefoneNormalizado);
+      if (telefoneNormalizado) {
+        if (telefonesArquivo.has(telefoneNormalizado)) {
+          duplicadosArquivo.push({ ...base, motivo: "Telefone duplicado dentro do arquivo" });
+          return;
+        }
+        telefonesArquivo.add(telefoneNormalizado);
+      } else if (email) {
+        if (emailsSemTelefoneArquivo.has(email)) {
+          duplicadosArquivo.push({ ...base, motivo: "E-mail duplicado dentro do arquivo" });
+          return;
+        }
+        emailsSemTelefoneArquivo.add(email);
+      }
       candidatos.push(base);
     });
 
     const telefonesBanco = new Set<string>();
+    const emailsBanco = new Set<string>();
 
     if (telefonesArquivo.size > 0) {
       const { data: contatosExistentes, error: contatosError } =
@@ -519,8 +527,33 @@ export async function POST(request: Request) {
       }
     }
 
+    // Busca duplicados por e-mail somente para linhas sem telefone.
+    // Usa RPC para não transferir todos os contatos da empresa ao navegador.
+    if (emailsSemTelefoneArquivo.size > 0) {
+      const emails = Array.from(emailsSemTelefoneArquivo);
+      for (let inicio = 0; inicio < emails.length; inicio += 500) {
+        const { data: existentes, error: erroEmails } = await supabaseAdmin.rpc(
+          "buscar_emails_contatos_existentes", {
+            p_empresa_id: usuario.empresa_id,
+            p_emails: emails.slice(inicio, inicio + 500),
+          }
+        );
+        if (erroEmails) {
+          return NextResponse.json({ ok: false, error: erroEmails.message }, { status: 500 });
+        }
+        for (const item of existentes || []) {
+          const email = normalizarEmailContato(item?.email_normalizado);
+          if (email) emailsBanco.add(email);
+        }
+      }
+    }
+
     for (const base of candidatos) {
-      if (telefonesBanco.has(base.telefone_normalizado)) {
+      if (!base.telefone_normalizado && base.email && emailsBanco.has(base.email)) {
+        duplicadosBanco.push({ ...base, motivo: "E-mail já cadastrado no CRM" });
+        continue;
+      }
+      if (base.telefone_normalizado && telefonesBanco.has(base.telefone_normalizado)) {
         duplicadosBanco.push({
           ...base,
           motivo: "Telefone já cadastrado no sistema",
@@ -528,7 +561,7 @@ export async function POST(request: Request) {
         continue;
       }
 
-      if (telefonePrecisaRevisao(base.telefone_normalizado)) {
+      if (base.telefone_normalizado && telefonePrecisaRevisao(base.telefone_normalizado)) {
         alertas.push({
           ...base,
           alerta: true,
@@ -596,6 +629,7 @@ export async function POST(request: Request) {
       nome: item.nome,
       telefone_original: item.telefone_original,
       telefone_normalizado: item.telefone_normalizado,
+      email: item.email,
       campo_contato: item.campo_contato,
       status_lead: item.status_lead,
       motivo: item.motivo,

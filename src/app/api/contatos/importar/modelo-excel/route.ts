@@ -15,20 +15,29 @@ export async function GET() {
       "observacoes",
     ];
 
-    // Linha de exemplo (opcional, ajuda MUITO o usuário)
-    const exemplo = [
+    // Telefone OU e-mail é suficiente: exemplos dos dois canais.
+    const exemploWhatsapp = [
       "João Silva",
       "31999999999",
       "programador",
-      "joao@email.com",
+      "",
       "WhatsApp",
       "Campanha Abril",
       "qualificado",
       "Cliente interessado",
     ];
+    const exemploEmail = [
+      "Maria Oliveira",
+      "",
+      "interessada em imóvel",
+      "maria@email.com",
+      "E-mail Marketing",
+      "Campanha Outubro",
+      "novo",
+      "Contato sem número de telefone",
+    ];
 
-    // Criar worksheet
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, exemplo]);
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, exemploWhatsapp, exemploEmail]);
 
     // Criar workbook
     const workbook = XLSX.utils.book_new();

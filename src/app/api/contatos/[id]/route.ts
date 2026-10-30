@@ -5,6 +5,7 @@ import {
   type UsuarioContexto,
 } from "@/lib/auth/get-usuario-contexto";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import { normalizarEmailContato, emailContatoValido, possuiIdentificadorContato } from "@/lib/contatos/identificadores";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -153,41 +154,74 @@ if (body?.nome !== undefined) {
   payload.nome = body.nome?.trim() || null;
 }
 
-// telefone
+// Telefone e e-mail podem ser opcionais individualmente, nunca ambos vazios.
+const telefoneOriginal = body?.telefone !== undefined
+  ? String(body.telefone || "").trim()
+  : String(contatoAtual.telefone || "").trim();
+const telefoneFinal = telefoneOriginal
+  ? normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal)
+  : null;
+const emailFinal = body?.email !== undefined
+  ? normalizarEmailContato(body.email)
+  : normalizarEmailContato(contatoAtual.email);
+
+if (!possuiIdentificadorContato(telefoneFinal, emailFinal)) {
+  return NextResponse.json(
+    { ok: false, error: "Mantenha pelo menos um telefone ou e-mail no contato." },
+    { status: 400 }
+  );
+}
+if (emailFinal && !emailContatoValido(emailFinal)) {
+  return NextResponse.json(
+    { ok: false, error: "Informe um endereço de e-mail válido." },
+    { status: 400 }
+  );
+}
+if (telefoneOriginal && !telefoneFinal) {
+  return NextResponse.json(
+    { ok: false, error: "Telefone inválido." },
+    { status: 400 }
+  );
+}
 if (body?.telefone !== undefined) {
-  const telefoneOriginal = body.telefone?.trim();
-  const telefone = telefoneOriginal
-    ? normalizarTelefoneBrasilParaWhatsApp(telefoneOriginal)
-    : "";
+  if (telefoneFinal) {
+    const { data: contatoComMesmoTelefone } = await supabaseAdmin
+      .from("contatos")
+      .select("id")
+      .eq("empresa_id", contatoAtual.empresa_id)
+      .eq("telefone", telefoneFinal)
+      .neq("id", id)
+      .maybeSingle();
 
-  if (!telefone) {
-    return NextResponse.json(
-      { ok: false, error: "Telefone é obrigatório" },
-      { status: 400 }
-    );
+    if (contatoComMesmoTelefone) {
+      return NextResponse.json(
+        { ok: false, error: "Já existe outro contato com esse telefone nesta empresa." },
+        { status: 409 }
+      );
+    }
   }
-
-  const { data: contatoComMesmoTelefone } = await supabaseAdmin
+  payload.telefone = telefoneFinal;
+}
+if (!telefoneFinal && emailFinal &&
+    (body?.telefone !== undefined || body?.email !== undefined)) {
+  const { data: contatoComMesmoEmail } = await supabaseAdmin
     .from("contatos")
     .select("id")
     .eq("empresa_id", contatoAtual.empresa_id)
-    .eq("telefone", telefone)
+    .eq("email", emailFinal)
     .neq("id", id)
+    .limit(1)
     .maybeSingle();
 
-  if (contatoComMesmoTelefone) {
+  if (contatoComMesmoEmail) {
     return NextResponse.json(
-      { ok: false, error: "Já existe outro contato com esse telefone nesta empresa" },
+      { ok: false, error: "Já existe outro contato com esse e-mail nesta empresa." },
       { status: 409 }
     );
   }
-
-  payload.telefone = telefone;
 }
-
-// email
 if (body?.email !== undefined) {
-  payload.email = body.email?.trim()?.toLowerCase() || null;
+  payload.email = emailFinal;
 }
 
 // campo individual do contato

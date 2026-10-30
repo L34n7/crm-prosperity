@@ -21,7 +21,7 @@ type Contato = {
   empresa_id: string;
   nome: string | null;
   whatsapp_profile_name: string | null;
-  telefone: string;
+  telefone: string | null;
   email: string | null;
   origem: string | null;
   campanha: string | null;
@@ -108,6 +108,7 @@ type ItemPreviewImportacao = {
   nome?: string;
   telefone_normalizado?: string;
   telefone_original?: string;
+  email?: string | null;
   campo_contato?: string | null;
   status_lead?: string;
   motivo?: string;
@@ -556,8 +557,12 @@ export default function ContatosPage() {
     setMensagem("");
     setErro("");
 
-    if (!telefone.trim()) {
-      setErro("Digite o telefone do contato.");
+    if (!telefone.trim() && !email.trim()) {
+      setErroModal("Informe pelo menos o telefone ou o e-mail do contato.");
+      return;
+    }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setErroModal("Informe um endereço de e-mail válido.");
       return;
     }
 
@@ -967,8 +972,12 @@ export default function ContatosPage() {
     setMensagem("");
     setErro("");
 
-    if (!editTelefone.trim()) {
-      setErro("Digite o telefone do contato.");
+    if (!editTelefone.trim() && !editEmail.trim()) {
+      setErro("Informe pelo menos o telefone ou o e-mail do contato.");
+      return;
+    }
+    if (editEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editEmail.trim())) {
+      setErro("Informe um endereço de e-mail válido.");
       return;
     }
 
@@ -2100,7 +2109,7 @@ export default function ContatosPage() {
                                 alternarContatoSelecionado(contato.id)
                               }
                               aria-label={`Selecionar ${
-                                contato.nome || contato.telefone
+                                contato.nome || contato.telefone || contato.email
                               }`}
                             />
                           </div>
@@ -2141,7 +2150,7 @@ export default function ContatosPage() {
                           </div>
 
                           <span className={styles.sheetCell}>
-                            {contato.telefone}
+                            {contato.telefone || "Sem telefone"}
                           </span>
 
                           <span
@@ -2829,7 +2838,7 @@ export default function ContatosPage() {
                 <p className={styles.eyebrow}>Cadastro</p>
                 <h2 className={styles.modalTitle}>Novo contato</h2>
                 <p className={styles.cardDescription}>
-                  Preencha os dados principais do contato.
+                  Informe pelo menos um telefone ou e-mail. Contatos sem telefone podem receber campanhas de E-mail Marketing.
                 </p>
               </div>
 
@@ -2857,7 +2866,7 @@ export default function ContatosPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Telefone *</label>
+                <label className={styles.label}>Telefone (opcional)</label>
                 <input
                   className={styles.input}
                   value={telefone}
@@ -2870,8 +2879,9 @@ export default function ContatosPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Email</label>
+                <label className={styles.label}>E-mail (opcional)</label>
                 <input
+                  type="email"
                   className={styles.input}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -3251,7 +3261,8 @@ export default function ContatosPage() {
                                   <p className={styles.itemSubline}>
                                     {item.telefone_normalizado ||
                                       item.telefone_original ||
-                                      "Sem telefone"}
+                                      item.email ||
+                                      "Sem telefone ou e-mail"}
                                   </p>
 
                                   <div className={styles.summaryMeta}>

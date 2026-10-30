@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/get-usuario-contexto";
 import { bloquearSemPermissao } from "@/lib/permissoes/servidor";
 import { normalizarTelefoneBrasilParaWhatsApp } from "@/lib/contatos/normalizar-telefone";
+import { normalizarEmailContato, emailContatoValido } from "@/lib/contatos/identificadores";
 import {
   getRequestAuditMetadata,
   registrarLogAuditoriaSeguro,
@@ -43,7 +44,7 @@ type ResultadoLote = {
 
 type RegistroImportacao = {
   nome: string | null;
-  telefone: string;
+  telefone: string | null;
   email: string | null;
   origem: string | null;
   campanha: string | null;
@@ -285,6 +286,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
   }
 
   const telefonesLote = new Set<string>();
+  const emailsSemTelefoneLote = new Set<string>();
   const registros: RegistroImportacao[] = [];
   const ignorados: Array<{ telefone: string; motivo: string }> = [];
 
@@ -292,35 +294,42 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     const telefone = normalizarTelefoneBrasilParaWhatsApp(
       contato.telefone_normalizado || contato.telefone_original || ""
     );
+    const email = normalizarEmailContato(contato.email);
+    const identificador = telefone || email || "";
 
-    if (!telefoneImportacaoValido(telefone)) {
-      ignorados.push({
-        telefone,
-        motivo: "Telefone inválido",
-      });
+    if (!telefone && !email) {
+      ignorados.push({ telefone: identificador, motivo: "Informe telefone ou e-mail" });
       continue;
     }
-
-    if (telefonesLote.has(telefone)) {
-      ignorados.push({
-        telefone,
-        motivo: "Telefone duplicado no lote",
-      });
+    if (telefone && !telefoneImportacaoValido(telefone)) {
+      ignorados.push({ telefone: identificador, motivo: "Telefone inválido" });
       continue;
     }
-
-    telefonesLote.add(telefone);
+    if (email && !emailContatoValido(email)) {
+      ignorados.push({ telefone: identificador, motivo: "E-mail inválido" });
+      continue;
+    }
+    if (telefone && telefonesLote.has(telefone)) {
+      ignorados.push({ telefone: identificador, motivo: "Telefone duplicado no lote" });
+      continue;
+    }
+    if (!telefone && email && emailsSemTelefoneLote.has(email)) {
+      ignorados.push({ telefone: identificador, motivo: "E-mail duplicado no lote" });
+      continue;
+    }
+    if (telefone) telefonesLote.add(telefone);
+    else if (email) emailsSemTelefoneLote.add(email);
 
     registros.push({
       nome: contato.nome?.trim() || null,
-      telefone,
-      email: contato.email?.trim()?.toLowerCase() || null,
+      telefone: telefone || null,
+      email,
       origem: contato.origem?.trim() || null,
       campanha: contato.campanha?.trim() || null,
       campo_contato: contato.campo_contato?.trim() || null,
       observacoes: contato.observacoes?.trim() || null,
-      telefone_revisar:
-        Boolean(contato.telefone_revisar) || telefone.length < 10,
+      telefone_revisar: Boolean(telefone) &&
+        (Boolean(contato.telefone_revisar) || telefone.length < 10),
     });
   }
 
@@ -339,36 +348,40 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     .map((registro) => String(registro.telefone || "").trim())
     .filter(Boolean);
 
-  const { data: contatosExistentes, error: contatosExistentesError } =
-    await supabaseAdmin.rpc("buscar_telefones_contatos_existentes", {
-      p_empresa_id: usuario.empresa_id,
-      p_telefones: telefonesRegistros,
-    });
-
-  if (contatosExistentesError) {
-    return NextResponse.json(
-      { ok: false, error: contatosExistentesError.message },
-      { status: 500 }
+  const telefonesExistentes = new Set<string>();
+  if (telefonesRegistros.length) {
+    const { data, error } = await supabaseAdmin.rpc(
+      "buscar_telefones_contatos_existentes",
+      { p_empresa_id: usuario.empresa_id, p_telefones: telefonesRegistros }
     );
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    for (const item of data || []) {
+      if (item?.telefone_normalizado) telefonesExistentes.add(String(item.telefone_normalizado));
+    }
   }
-
-  const contatosExistentesNormalizados = Array.isArray(contatosExistentes)
-    ? (contatosExistentes as Array<{
-        telefone_normalizado?: string | null;
-      }>)
-    : [];
-
-  const telefonesExistentes = new Set(
-    contatosExistentesNormalizados
-      .map((item) => String(item.telefone_normalizado || "").trim())
-      .filter(Boolean)
-  );
+  const emailsExistentes = new Set<string>();
+  const emailsSemTelefone = Array.from(emailsSemTelefoneLote);
+  for (let inicio = 0; inicio < emailsSemTelefone.length; inicio += 500) {
+    const { data, error } = await supabaseAdmin.rpc(
+      "buscar_emails_contatos_existentes", {
+        p_empresa_id: usuario.empresa_id,
+        p_emails: emailsSemTelefone.slice(inicio, inicio + 500),
+      }
+    );
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    for (const item of data || []) {
+      const email = normalizarEmailContato(item?.email_normalizado);
+      if (email) emailsExistentes.add(email);
+    }
+  }
 
   const registrosParaProcessar = permitirContatosExistentes
     ? registros
     : registros.filter(
         (registro) =>
-          !telefonesExistentes.has(String(registro.telefone || "").trim())
+          registro.telefone
+            ? !telefonesExistentes.has(registro.telefone)
+            : !emailsExistentes.has(String(registro.email || ""))
       );
 
   if (!registrosParaProcessar.length) {
