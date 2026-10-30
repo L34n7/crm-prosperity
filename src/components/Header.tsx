@@ -74,6 +74,7 @@ type PlanoRenovacao =
       preco: string;
       observacao: string;
       recursos: string[];
+      formacao: string[];
     }
   | {
       tipo: "cotacao";
@@ -83,6 +84,7 @@ type PlanoRenovacao =
       preco: string;
       observacao: string;
       recursos: string[];
+      formacao: string[];
     };
 
 type PlanoCheckout = Extract<PlanoRenovacao, { tipo: "checkout" }>;
@@ -194,50 +196,68 @@ const PLANOS_RENOVACAO: PlanoRenovacao[] = [
   {
     tipo: "checkout",
     slug: "basico",
-    nome: "Básico",
-    badge: "Comum",
+    nome: "Programa Básico",
+    badge: "Entrada inteligente",
     descricao:
-      "Para começar com atendimento automatizado, organização profissional e IA integrada.",
+      "Ideal para quem quer começar com atendimento automatizado, organização profissional e IA integrada desde o primeiro dia.",
     precoOriginal: "R$ 197/mês",
     preco: "R$ 137/mês",
     observacao: "2 usuários · 100 mil tokens de IA · 1 número",
+    formacao: [
+      "Videoaulas introdutórias sobre disparos e automações no WhatsApp",
+      "Orientações práticas para começar a configurar e utilizar o CRM",
+    ],
     recursos: [
       "API Oficial do WhatsApp inclusa",
       "Atendimento automatizado com IA",
       "Respostas inteligentes em tempo real",
       "Disparo de mensagens em massa",
       "Fila de atendimento dinâmica",
+      "Organização completa do chat",
       "Relatórios operacionais",
+      "Painel simples e intuitivo",
     ],
   },
   {
     tipo: "checkout",
     slug: "essencial",
-    nome: "Essencial IA PRO",
+    nome: "Programa Essencial IA+",
     badge: "Mais indicado",
     descricao:
-      "Para equipes que precisam de mais automação, IA e volume para escalar vendas e atendimento.",
+      "Para equipes que precisam de mais potência, mais automação e mais inteligência artificial para escalar vendas e atendimento.",
     precoOriginal: "R$ 367/mês",
     preco: "R$ 267/mês",
     observacao: "6 usuários · 400 mil tokens de IA · 2 números",
+    formacao: [
+      "Todos os conteúdos educacionais do Programa Básico",
+      "Videoaulas extras sobre automações avançadas e inteligência artificial",
+      "Aula complementar gravada com aplicações e exemplos avançados",
+      "Orientação especializada para dúvidas e configurações, conforme disponibilidade",
+    ],
     recursos: [
       "2 números na API Oficial do WhatsApp",
-      "Atendimento automatizado avançado",
+      "Atendimento automatizado avançado com IA",
       "IA treinável para responder clientes",
+      "Respostas automáticas humanizadas",
       "Disparo inteligente de mensagens",
       "Segmentação avançada de contatos",
-      "Distribuição automática na fila",
+      "Fila dinâmica e distribuição automática",
       "Relatórios completos de performance",
+      "Integrações e automações avançadas",
     ],
   },
   {
     tipo: "cotacao",
-    nome: "Profissional Enterprise",
-    badge: "Cotação",
+    nome: "Programa Profissional Enterprise",
+    badge: "Escala personalizada",
     descricao:
-      "Estrutura para operações maiores que precisam de performance, escala e automações sob medida.",
+      "Orientações e estrutura sob medida para quem deseja avançar no uso de automações e recursos do CRM Prosperity.",
     preco: "Sob cotação",
     observacao: "Usuários, tokens e números ajustados ao seu volume.",
+    formacao: [
+      "Conteúdos de aprofundamento conforme a necessidade apresentada",
+      "Orientações especializadas conforme condições definidas na proposta",
+    ],
     recursos: [
       "Usuários sob medida",
       "Tokens de IA sob medida",
@@ -1137,7 +1157,7 @@ export default function Header({
 
   function abrirCotacaoPlano() {
     const mensagem =
-      "Olá! Quero fazer uma cotação do plano Profissional Enterprise do CRM Prosperity.";
+      "Olá! Quero conhecer o Programa Profissional Enterprise do CRM Prosperity.";
 
     const url = montarWhatsappUrl(mensagem);
 
@@ -2142,7 +2162,7 @@ export default function Header({
                       <article
                         key={plano.nome}
                         className={`${styles.planRenewalCard} ${
-                          plano.nome === "Essencial IA PRO"
+                          plano.tipo === "checkout" && plano.slug === "essencial"
                             ? styles.planRenewalCardFeatured
                             : ""
                         }`}
@@ -2166,11 +2186,28 @@ export default function Header({
                           <small>{plano.observacao}</small>
                         </div>
 
-                        <ul className={styles.planRenewalFeatures}>
-                          {plano.recursos.map((recurso) => (
-                            <li key={recurso}>{recurso}</li>
-                          ))}
-                        </ul>
+                        <div className={styles.planEducationIncluded}>
+                          <span aria-hidden="true">✦</span>
+                          <strong>Treinamento prático</strong> com acesso ao CRM Prosperity
+                        </div>
+
+                        <section className={styles.planEducationSection} aria-label={`Conteúdos e orientação de ${plano.nome}`}>
+                          <h4 className={styles.planCardSectionTitle}>Conteúdos e orientação</h4>
+                          <ul className={styles.planRenewalFeatures}>
+                            {plano.formacao.map((conteudo) => (
+                              <li key={conteudo}>{conteudo}</li>
+                            ))}
+                          </ul>
+                        </section>
+
+                        <section className={styles.planResourcesSection} aria-label={`Recursos do CRM disponíveis em ${plano.nome}`}>
+                          <h4 className={styles.planCardSectionTitle}>Recursos disponíveis no CRM</h4>
+                          <ul className={styles.planRenewalFeatures}>
+                            {plano.recursos.map((recurso) => (
+                              <li key={recurso}>{recurso}</li>
+                            ))}
+                          </ul>
+                        </section>
 
                         <button
                           type="button"
