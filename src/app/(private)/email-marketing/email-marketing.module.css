@@ -4808,152 +4808,61 @@
 }
 
 
-/* Campanhas: cards de leitura ampliada e modal de destinatários */
-.campaignCardsGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 18px;
+/* Campanhas: tabela original com linhas interativas */
+.campaignTable {
+  min-width: 1120px;
 }
 
-.campaignOverviewCard {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 19px;
-  border: 1px solid var(--crm-border);
-  border-radius: 17px;
-  background: linear-gradient(150deg, var(--crm-surface), var(--crm-surface-soft));
-  box-shadow: var(--crm-shadow-xs);
-  color: var(--crm-text);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+.campaignTable th,
+.campaignTable td {
+  padding: 13px 14px;
 }
 
-.campaignOverviewCard:hover,
-.campaignOverviewCard:focus-visible {
-  transform: translateY(-2px);
-  border-color: var(--crm-primary-border);
-  box-shadow: var(--crm-shadow-sm);
-  outline: none;
-}
-
-.campaignOverviewHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.campaignOverviewHeader > div {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.campaignOverviewTitle {
-  color: var(--crm-text-strong);
-  font-size: 15px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.campaignOverviewSubject {
-  color: var(--crm-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.campaignOverviewHeader > span {
-  flex: 0 0 auto;
-}
-
-.campaignOverviewMetrics {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.campaignOverviewMetrics > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 7px;
-  min-width: 0;
-  border: 1px solid var(--crm-border);
-  border-radius: 10px;
-  background: var(--crm-surface);
-}
-
-.campaignOverviewMetrics small {
-  color: var(--crm-text-muted);
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.campaignOverviewMetrics strong {
-  color: var(--crm-text-strong);
-  font-size: 19px;
-  font-weight: 850;
-}
-
-.campaignOverviewFooter {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--crm-border);
-}
-
-.campaignOverviewFooter > div {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.campaignOverviewFooter > div > span:first-child {
-  font-size: 12px;
-  color: var(--crm-text-muted);
-}
-
-.campaignOverviewFooter > div > span:first-child strong {
-  color: var(--crm-text-strong);
-  font-weight: 750;
-}
-
-.campaignOverviewSender {
-  display: block;
-  max-width: 100%;
-  color: var(--crm-text);
+.campaignTable td {
   font-size: 13px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
+}
+
+.campaignTable td > strong {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.campaignTable td > small {
+  max-width: 320px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
-.campaignOverviewError {
-  color: var(--crm-danger-text);
-  font-size: 11px;
-  overflow-wrap: anywhere;
+.campaignTable th:last-child,
+.campaignTable td:last-child {
+  min-width: 270px;
 }
 
-.campaignOverviewAction {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--crm-primary-text);
-  font-size: 12px;
-  font-weight: 850;
-  white-space: nowrap;
+.campaignTable .campaignTableSender {
+  display: block;
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--crm-text-muted);
+}
+
+.campaignClickableRow {
+  cursor: pointer;
+  transition: background-color .15s ease, box-shadow .15s ease;
+}
+
+.campaignClickableRow:hover {
+  background: var(--crm-primary-soft);
+}
+
+.campaignClickableRow:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: -2px;
+  background: var(--crm-primary-soft);
 }
 
 .campaignDetailOverlay {
@@ -5332,22 +5241,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1180px) {
-  .campaignCardsGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 700px) {
-  .campaignOverviewMetrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .campaignOverviewFooter {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .campaignDetailOverlay {
     padding: 0;
     align-items: flex-end;
@@ -5405,5 +5299,84 @@
 
   .campaignDetailPageActions {
     justify-content: space-between;
+  }
+}
+
+
+/* Tipografia do relatório: mesmos tamanhos de texto usados nos demais modais do CRM */
+.campaignDetailHeading p {
+  font-size: 14px;
+}
+
+.campaignDetailHeading small {
+  font-size: 12.5px;
+}
+
+.campaignDetailMetrics span {
+  font-size: 12.5px;
+}
+
+.campaignDetailFilter,
+.campaignDetailFilter select,
+.campaignDetailReload,
+.campaignDetailPageActions button,
+.campaignDetailLoading button {
+  font-size: 13px;
+}
+
+.campaignDetailToolbar .searchBox input {
+  font-size: 13px;
+}
+
+.campaignDetailTable th,
+.campaignDateOrder {
+  font-size: 12px;
+}
+
+.campaignDetailTable td {
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.campaignDetailTable td > small {
+  font-size: 12px;
+}
+
+.campaignDetailEmail {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.campaignRecipientStatus,
+.campaignRecipientError,
+.campaignDeliveredBadge,
+.campaignOpenedBadge,
+.campaignClickedBadge,
+.campaignNoEvents {
+  font-size: 12px;
+  padding: 6px 9px;
+}
+
+.campaignDetailDate {
+  font-size: 13px !important;
+}
+
+.campaignDetailLoading,
+.campaignDetailPagination,
+.campaignDetailPageActions span {
+  font-size: 13px;
+}
+
+.campaignDetailPagination small {
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .campaignDetailHeading h2 {
+    font-size: 19px;
+  }
+
+  .campaignDetailMetrics span {
+    font-size: 12px;
   }
 }
