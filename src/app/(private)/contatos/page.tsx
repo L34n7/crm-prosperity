@@ -3010,8 +3010,8 @@ export default function ContatosPage() {
                 <p className={styles.eyebrow}>Importação</p>
                 <h2 className={styles.modalTitle}>Importar contatos</h2>
                 <p className={styles.cardDescription}>
-                  Cada importação fica salva como uma lista e pode ser usada depois como filtro de contatos.
-                  A coluna "campo_contato" é salva por lista, permitindo que o mesmo contato tenha valores diferentes em listas diferentes. Se vier vazia, o valor efetivo anterior é preservado.
+                  Importe contatos com telefone, e-mail ou ambos. Para E-mail Marketing, basta uma coluna de e-mail válido (o nome é opcional).
+                  Cada importação é salva como lista. O "campo_contato" é mantido por lista e, se estiver vazio, preserva o valor anterior.
                 </p>
               </div>
 
@@ -3034,7 +3034,7 @@ export default function ContatosPage() {
 
             <div className={`${styles.formGrid} ${styles.importFormGrid}`}>
               <div className={`${styles.field} ${styles.importFileField}`}>
-                <label className={styles.label}>Arquivo CSV ou Excel</label>
+                <label className={styles.label}>Arquivo CSV ou Excel (telefone ou e-mail)</label>
                 <input
                   type="file"
                   accept=".csv,.xls,.xlsx"
