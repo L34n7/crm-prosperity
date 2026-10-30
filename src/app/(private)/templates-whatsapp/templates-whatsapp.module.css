@@ -1443,3 +1443,453 @@
 .creatorFieldset:disabled {
   opacity: 0.72;
 }
+
+
+/* Editor de templates em modal premium, com prévia persistente à esquerda */
+.templateHeaderActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+  min-width: 195px;
+}
+
+.templateCreateButton {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid var(--crm-primary-strong);
+  border-radius: 13px;
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.templateCreateButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px var(--crm-ui-private-shadow-rgb-15-23-42-0-16);
+}
+
+.templateCreateButton:disabled {
+  opacity: .54;
+  cursor: not-allowed;
+}
+
+.creatorModalOverlay {
+  position: fixed;
+  z-index: 1400;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(11 20 33 / 64%);
+  backdrop-filter: blur(6px);
+}
+
+.creatorModal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1240px, 100%);
+  max-height: min(92dvh, 940px);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 24px;
+  background: var(--crm-surface);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 25%);
+  color: var(--crm-text);
+}
+
+.creatorModalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 20px;
+  padding: 20px 25px;
+  border-bottom: 1px solid var(--crm-border);
+  background:
+    radial-gradient(circle at 12% 0%, var(--crm-primary-soft), transparent 44%),
+    var(--crm-surface);
+}
+
+.creatorModalHeader h2 {
+  margin: 0 0 5px;
+  color: var(--crm-text-strong);
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 850;
+}
+
+.creatorModalHeader > div > span {
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.creatorCloseButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 37px;
+  height: 37px;
+  padding: 0;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.creatorCloseButton:hover:not(:disabled) {
+  background: var(--crm-surface-soft);
+}
+
+.creatorCloseButton:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.creatorModalBody {
+  display: grid;
+  grid-template-columns: minmax(285px, 365px) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.creatorModalPreview {
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  padding: 20px;
+  overscroll-behavior: contain;
+}
+
+.creatorPreviewInner {
+  position: sticky;
+  top: 0;
+}
+
+.creatorModalPreview .whatsappPreviewCard {
+  margin-bottom: 0;
+  box-shadow: var(--crm-shadow-xs);
+}
+
+.creatorModalForm,
+.creatorModal .creatorFieldset {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.creatorWizardSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  flex-shrink: 0;
+  padding: 16px 19px;
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+
+.creatorWizardStep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color .18s ease, background .18s ease;
+}
+
+.creatorWizardStep > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 25px;
+  height: 25px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 8px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.creatorWizardStep strong {
+  font-size: 11.5px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.creatorWizardStepCurrent {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+}
+
+.creatorWizardStepCurrent > span,
+.creatorWizardStepCompleted > span {
+  border-color: var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse);
+}
+
+.creatorWizardStep:disabled {
+  cursor: default;
+  opacity: .63;
+}
+
+.creatorWizardStepCurrent:disabled {
+  opacity: 1;
+}
+
+.creatorWizardScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 23px 24px 28px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.creatorStepHeading > span {
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .09em;
+}
+
+.creatorStepHeading h3 {
+  margin: 5px 0;
+  color: var(--crm-text-strong);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.creatorStepHeading p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.creatorStepFields {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 14px;
+}
+
+.creatorModalFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 14px 24px 17px;
+  border-top: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  box-shadow: 0 -6px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
+}
+
+.creatorModalFooter .errorAlert {
+  margin: 0;
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+.creatorFooterActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.creatorModal .creatorFooterActions .secondaryButton,
+.creatorModal .creatorFooterActions .primaryButton {
+  flex: 0 0 auto;
+  min-width: 130px;
+  width: auto;
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.creatorSendingOverlay {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(5px);
+  color: var(--crm-text-strong);
+  text-align: center;
+}
+
+.creatorSendingOverlay strong {
+  font-size: 20px;
+}
+
+.creatorSendingOverlay p {
+  max-width: 300px;
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+}
+
+.creatorSendingSpinner {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: 4px solid var(--crm-primary-border);
+  border-top-color: var(--crm-primary-strong);
+  animation: creatorSpinner 800ms linear infinite;
+}
+
+@keyframes creatorSpinner {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .creatorModal {
+    max-height: 94dvh;
+  }
+
+  .creatorModalBody {
+    grid-template-columns: minmax(235px, 290px) minmax(0, 1fr);
+  }
+
+  .creatorModalPreview {
+    padding: 12px;
+  }
+
+  .creatorWizardSteps {
+    gap: 6px;
+    padding: 12px;
+  }
+
+  .creatorWizardStep {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .creatorWizardScroll {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 680px) {
+  .creatorModalOverlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .creatorModal {
+    width: 100%;
+    height: 96dvh;
+    max-height: 96dvh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .creatorModalHeader {
+    padding: 13px 16px;
+  }
+
+  .creatorModalHeader h2 {
+    font-size: 19px;
+  }
+
+  .creatorModalHeader > div > span {
+    font-size: 12px;
+  }
+
+  .creatorModalBody {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .creatorModalPreview {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    max-height: 190px;
+    overflow-y: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--crm-border);
+  }
+
+  .creatorModalPreview .whatsappPreviewCard {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .creatorModalPreview .whatsappPreviewArea {
+    padding: 8px;
+  }
+
+  .creatorModalForm {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .creatorWizardSteps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 9px;
+  }
+
+  .creatorWizardStep {
+    padding: 7px 6px;
+    gap: 4px;
+  }
+
+  .creatorWizardStep strong {
+    font-size: 10px;
+  }
+
+  .creatorWizardScroll {
+    padding: 14px;
+  }
+
+  .creatorStepHeading h3 {
+    font-size: 17px;
+  }
+
+  .creatorModalFooter {
+    padding: 11px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .templateHeaderActions,
+  .templateCreateButton {
+    width: 100%;
+  }
+}
