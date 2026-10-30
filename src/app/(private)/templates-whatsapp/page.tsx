@@ -387,6 +387,8 @@ export default function TemplatesWhatsAppPage() {
   const [loadingIntegracoes, setLoadingIntegracoes] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [modalCriacaoAberto, setModalCriacaoAberto] = useState(false);
+  const [etapaCriacao, setEtapaCriacao] = useState<1 | 2 | 3>(1);
   const [sincronizando, setSincronizando] = useState(false);
 
   const [mensagem, setMensagem] = useState("");
@@ -447,6 +449,61 @@ export default function TemplatesWhatsAppPage() {
       URL.revokeObjectURL(objectUrl);
     };
   }, [headerImage]);
+
+  useEffect(() => {
+    if (!modalCriacaoAberto) return;
+    const overflowOriginal = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const fecharComEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !submitting) {
+        setModalCriacaoAberto(false);
+        setErro("");
+      }
+    };
+    document.addEventListener("keydown", fecharComEsc);
+    return () => {
+      document.body.style.overflow = overflowOriginal;
+      document.removeEventListener("keydown", fecharComEsc);
+    };
+  }, [modalCriacaoAberto, submitting]);
+
+  function abrirCriacaoTemplate() {
+    setErro("");
+    setMensagem("");
+    setEtapaCriacao(1);
+    setModalCriacaoAberto(true);
+  }
+
+  function avancarEtapaCriacao() {
+    setErro("");
+    if (etapaCriacao === 1) {
+      if (headerImageEnabled && !headerImage) {
+        setErro("Selecione a imagem do template ou desative a opção de imagem.");
+        return;
+      }
+      if (headerText.trim().length > 60) {
+        setErro("O cabeçalho deve ter no máximo 60 caracteres.");
+        return;
+      }
+      setEtapaCriacao(2);
+      return;
+    }
+    if (etapaCriacao === 2) {
+      if (!bodyText.trim()) {
+        setErro("Informe o conteúdo do corpo do template.");
+        return;
+      }
+      if (totalVariaveisBody > 6 || quantidadeVariaveisBody > 6) {
+        setErro("Use no máximo seis variáveis no corpo.");
+        return;
+      }
+      if (bodyExamples.slice(0, totalVariaveisBody).some((exemplo) => !exemplo.trim())) {
+        setErro("Preencha todos os exemplos das variáveis antes de avançar.");
+        return;
+      }
+      setEtapaCriacao(3);
+    }
+  }
 
   async function carregarIntegracoes() {
     try {
@@ -1004,6 +1061,8 @@ export default function TemplatesWhatsAppPage() {
       nextTemplateButtonIdRef.current = 1;
 
       await carregarTemplates(filtroIntegracao);
+      setModalCriacaoAberto(false);
+      setEtapaCriacao(1);
     } catch (error: any) {
       setErro(error?.message || "Erro ao criar template.");
     } finally {
@@ -1063,650 +1122,14 @@ export default function TemplatesWhatsAppPage() {
       />
 
       <div className={styles.pageContent}>
+        {mensagem ? (
+          <FeedbackToast
+            success={mensagem}
+            onSuccessDismiss={() => setMensagem("")}
+          />
+        ) : null}
+
         <div className={styles.layout}>
-          <div className={styles.formCard}>
-            <div className={styles.cardHeader}>
-              <p className={styles.eyebrow}>Criação de template</p>
-              <h2 className={styles.cardTitle}>Novo template</h2>
-              <p className={styles.cardSubtitle}>
-                Monte o template, revise a prévia e envie para validação da Meta.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className={styles.form}>
-              <fieldset
-                disabled={!podeCriarTemplate}
-                className={styles.creatorFieldset}
-              >
-              <div className={styles.creatorGrid}>
-                  <div className={styles.formFields}>
-                      <div className={styles.field}>
-                        <label className={styles.label}>Integração WhatsApp</label>
-                        <select
-                          value={integracaoId}
-                          onChange={(e) => {
-                            setIntegracaoId(e.target.value);
-                            if (e.target.value) {
-                              setErroSincronizacao("");
-                            }
-                          }}
-                          className={styles.input}
-                          disabled={selectIntegracaoBloqueado}
-                          required
-                        >
-                          <option value="">
-                            {loadingIntegracoes ? "Carregando..." : "Selecione uma integração"}
-                          </option>
-
-                          {integracoes.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.nome_conexao}
-                              {item.numero ? ` ${item.numero}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <p className={styles.help}>
-                          Selecione o número do WhatsApp que será usado para enviar este template nos disparos.
-                        </p>
-                      </div>
-
-                      <div className={styles.topGrid}>
-                        <div className={styles.field}>
-                          <label className={styles.label}>Nome do template</label>
-                          <input
-                            value={name}
-                            onChange={(e) =>
-                              setName(e.target.value.replace(/\s+/g, "_"))
-                            }
-                            className={styles.input}
-                            placeholder="Ex.: notificacao_atendimento_iniciado"
-                            required
-                          />
-                          <p className={styles.help}>
-                            Espaços são convertidos automaticamente em <strong>_</strong>.
-                          </p>
-                        </div>
-                        
-                        <div className={styles.field}>
-                          <label className={styles.label}>Categoria</label>
-                          <select
-                            value={category}
-                            onChange={(e) => setCategory(e.target.value as "UTILITY" | "MARKETING")}
-                            className={styles.input}
-                          >
-                            <option value="UTILITY">UTILIDADE</option>
-                            <option value="MARKETING">MARKETING</option>
-                          </select>
-                          <p className={styles.help}>
-                            UTILIDADE para comunicações operacionais. MARKETING para campanhas e promoções. A Meta pode reclassificar o modelo durante a análise.
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className={styles.mediaSection}>
-                        <div className={styles.mediaToggleCard}>
-                          <div className={styles.mediaToggleCopy}>
-                            <span className={styles.mediaEyebrow}>Mídia do template</span>
-                            <strong className={styles.mediaToggleTitle}>Adicionar imagem</strong>
-                            <span className={styles.mediaToggleSubtitle}>
-                              Ative para enviar uma imagem junto ao template.
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={headerImageEnabled}
-                            className={`${styles.premiumSwitch} ${
-                              headerImageEnabled ? styles.premiumSwitchActive : ""
-                            }`}
-                            onClick={() => {
-                              setHeaderImageEnabled((ativo) => {
-                                const proximo = !ativo;
-                                if (!proximo) {
-                                  setHeaderImage(null);
-                                }
-                                return proximo;
-                              });
-                              setErro("");
-                            }}
-                          >
-                            <span className={styles.premiumSwitchThumb} />
-                          </button>
-                        </div>
-
-                        <p className={styles.mediaClassificationInfo}>
-                          Templates com imagem costumam ser aprovados como <strong>Marketing</strong> na maioria dos casos. A categoria final depende do conteúdo e da análise da Meta.
-                        </p>
-
-                        {headerImageEnabled ? (
-                          <div className={styles.imageUploadBox}>
-                            <div className={styles.imageUploadHeading}>
-                              <div>
-                                <strong className={styles.imageUploadTitle}>
-                                  Imagem do template
-                                </strong>
-                                <p className={styles.help}>
-                                  JPG/JPEG ou PNG, até 5 MB.
-                                </p>
-                              </div>
-                              {headerImage ? (
-                                <span className={styles.imageReadyBadge}>Pronta</span>
-                              ) : null}
-                            </div>
-
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png"
-                              className={styles.fileInput}
-                              onChange={(e) => {
-                                setErro("");
-                                const file = e.target.files?.[0] || null;
-
-                                if (!file) {
-                                  setHeaderImage(null);
-                                  return;
-                                }
-
-                                if (!MIME_IMAGENS_TEMPLATE.has(file.type)) {
-                                  setHeaderImage(null);
-                                  e.currentTarget.value = "";
-                                  setErro("A Meta aceita imagem em JPG/JPEG ou PNG.");
-                                  return;
-                                }
-
-                                if (file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
-                                  setHeaderImage(null);
-                                  e.currentTarget.value = "";
-                                  setErro("A imagem do template deve ter no máximo 5 MB.");
-                                  return;
-                                }
-
-                                setHeaderImage(file);
-                              }}
-                            />
-
-                            {headerImageEnabled && headerImagePreview ? (
-                              <img
-                                src={headerImagePreview}
-                                alt="Prévia da imagem do template"
-                                className={styles.imageUploadPreview}
-                              />
-                            ) : (
-                              <div className={styles.imageUploadEmpty}>
-                                Nenhuma imagem selecionada.
-                              </div>
-                            )}
-
-                            {headerImage ? (
-                              <span className={styles.imageFileName}>
-                                {headerImage.name}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className={styles.contentSectionCard}>
-                        <div className={styles.contentSectionHeader}>
-                          <div>
-                            <strong>Cabeçalho</strong>
-                            <p>Opcional. Uma linha curta de destaque para o template.</p>
-                          </div>
-                          <span className={styles.contentSectionBadge}>Opcional</span>
-                        </div>
-
-                        <div className={styles.field}>
-                          <input
-                            value={headerText}
-                            onChange={(e) => setHeaderText(e.target.value)}
-                            className={styles.input}
-                            placeholder="Adicione uma pequena linha de texto ao cabeçalho"
-                            maxLength={60}
-                          />
-                          <p className={styles.help}>
-                            Máximo de 60 caracteres. Quando houver imagem, o CRM mantém este texto como título visual logo abaixo da mídia.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className={styles.contentSectionCard}>
-                        <div className={styles.contentSectionHeader}>
-                          <div>
-                            <strong>Corpo</strong>
-                            <p>Conteúdo principal exibido na mensagem do WhatsApp.</p>
-                          </div>
-
-                          <button
-                            type="button"
-                            className={styles.variableAddButton}
-                            onClick={adicionarVariavelBody}
-                            disabled={quantidadeVariaveisBody >= 6}
-                            title={
-                              quantidadeVariaveisBody >= 6
-                                ? "Limite de 6 variáveis atingido"
-                                : "Adicionar a próxima variável ao corpo"
-                            }
-                          >
-                            + Variável
-                            <span>{quantidadeVariaveisBody}/6</span>
-                          </button>
-                        </div>
-
-                        <div className={styles.field}>
-                        <textarea
-                          ref={bodyTextareaRef}
-                          value={bodyText}
-                          onChange={(e) => setBodyText(e.target.value)}
-                          rows={7}
-                          className={styles.textarea}
-                          placeholder="Digite o conteúdo principal do template"
-                          required
-                        />
-                        <p className={styles.help}>
-                          Use variáveis em sequência de {"{{1}}"} até {"{{6}}"}. O botão + Variável insere a próxima variável na posição do cursor.
-                        </p>
-                        </div>
-                      </div>
-
-                      {totalVariaveisBody > 0 ? (
-                        <div className={styles.variableExamplesCard}>
-                          <div className={styles.variableExamplesHeader}>
-                            <div>
-                              <strong>Exemplos das variáveis</strong>
-                              <p>
-                                A Meta usa estes exemplos na análise do template.
-                              </p>
-                            </div>
-                            <span>{Math.min(totalVariaveisBody, 6)} campo(s)</span>
-                          </div>
-
-                          <div className={styles.variableExamplesGrid}>
-                            {Array.from(
-                              { length: Math.min(totalVariaveisBody, 6) },
-                              (_, index) => (
-                                <div className={styles.field} key={index}>
-                                  <label className={styles.label}>
-                                    Exemplo da variável {index + 1}
-                                  </label>
-                                  <input
-                                    value={bodyExamples[index] || ""}
-                                    onChange={(e) =>
-                                      atualizarExemploBody(index, e.target.value)
-                                    }
-                                    className={styles.input}
-                                    placeholder={
-                                      index === 0
-                                        ? "Ex.: João"
-                                        : index === 1
-                                        ? "Ex.: ABC-123456"
-                                        : `Exemplo para {{${index + 1}}}`
-                                    }
-                                  />
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className={`${styles.field} ${styles.lockedField}`}>
-                        <div className={styles.fieldLabelRow}>
-                          <label className={styles.label}>Rodapé</label>
-                          <span className={styles.lockedBadge}>Bloqueado</span>
-                        </div>
-                        <input
-                          value={footerText}
-                          className={styles.input}
-                          disabled
-                          aria-label="Rodapé bloqueado"
-                        />
-                        <p className={styles.help}>
-                          Definido automaticamente pelo sistema para garantir o opt-out dos disparos.
-                        </p>
-                      </div>
-
-                      <div className={`${styles.contentSectionCard} ${styles.responsesField}`}>
-                        <div className={styles.contentSectionHeader}>
-                          <div>
-                            <strong>
-                              Botões de respostas{" "}
-                              <span className={styles.secondaryLabel}>
-                                (Texto ou Redirect)
-                              </span>
-                            </strong>
-                            <p>
-                              Adicione até 3 botões. Texto envia uma resposta rápida;
-                              Redirect abre um site ou página externa; links diretos para WhatsApp não são permitidos pela Meta.
-                            </p>
-                          </div>
-                          <span className={styles.contentSectionBadge}>
-                            {templateButtonsDraft.length}/3
-                          </span>
-                        </div>
-
-                        {templateButtonsDraft.length > 0 ? (
-                          <div className={styles.templateButtonBuilderList}>
-                            {templateButtonsDraft.map((button, index) => (
-                              <div
-                                key={button.id}
-                                className={styles.templateButtonBuilderItem}
-                              >
-                                <div className={styles.templateButtonBuilderHeader}>
-                                  <div>
-                                    <strong>Botão {index + 1}</strong>
-                                    <span
-                                      className={`${styles.badge} ${styles.badgeGray}`}
-                                    >
-                                      {button.type === "URL" ? "Redirect" : "Texto"}
-                                    </span>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    className={styles.templateButtonRemove}
-                                    onClick={() => removerBotao(button.id)}
-                                  >
-                                    Remover
-                                  </button>
-                                </div>
-
-                                {button.type === "QUICK_REPLY" ? (
-                                  <div className={styles.field}>
-                                    <label className={styles.label}>
-                                      Texto da resposta
-                                    </label>
-                                    <input
-                                      value={button.text}
-                                      onChange={(e) =>
-                                        atualizarBotao(
-                                          button.id,
-                                          "text",
-                                          e.target.value
-                                        )
-                                      }
-                                      className={styles.input}
-                                      placeholder="Ex.: Quero saber mais"
-                                      maxLength={25}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className={styles.topGrid}>
-                                    <div className={styles.field}>
-                                      <label className={styles.label}>
-                                        Texto do botão
-                                      </label>
-                                      <input
-                                        value={button.text}
-                                        onChange={(e) =>
-                                          atualizarBotao(
-                                            button.id,
-                                            "text",
-                                            e.target.value
-                                          )
-                                        }
-                                        className={styles.input}
-                                        placeholder="Ex.: Acessar site"
-                                        maxLength={25}
-                                      />
-                                    </div>
-
-                                    <div className={styles.field}>
-                                      <label className={styles.label}>
-                                        URL de destino
-                                      </label>
-                                      <input
-                                        value={button.url}
-                                        onChange={(e) =>
-                                          atualizarBotao(
-                                            button.id,
-                                            "url",
-                                            e.target.value
-                                          )
-                                        }
-                                        className={styles.input}
-                                        placeholder="https://seusite.com.br"
-                                        inputMode="url"
-                                      />
-                                      {linkTemplateAbreWhatsappDiretamente(
-                                        button.url
-                                      ) ? (
-                                        <p className={styles.help}>
-                                          Link direto para WhatsApp não é aceito
-                                          pela Meta. Para o cliente responder no
-                                          WhatsApp, use um botão Texto — resposta
-                                          rápida.
-                                        </p>
-                                      ) : (
-                                        <p className={styles.help}>
-                                          Use um site ou página externa. Links
-                                          wa.me e api.whatsapp.com não são
-                                          permitidos neste tipo de botão.
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className={styles.templateButtonEmpty}>
-                            Nenhum botão adicionado.
-                          </div>
-                        )}
-
-                        <div className={styles.templateButtonAddArea}>
-                          {adicionandoTipoBotao &&
-                          templateButtonsDraft.length < 3 ? (
-                            <select
-                              className={styles.input}
-                              defaultValue=""
-                              onChange={(e) => {
-                                const tipo = e.target.value as
-                                  | "QUICK_REPLY"
-                                  | "URL";
-                                if (tipo) adicionarBotao(tipo);
-                              }}
-                            >
-                              <option value="" disabled>
-                                Selecione o tipo do botão
-                              </option>
-                              <option value="QUICK_REPLY">
-                                Texto — resposta rápida
-                              </option>
-                              <option
-                                value="URL"
-                                disabled={totalRedirectButtons >= 2}
-                              >
-                                Redirect — abrir link
-                              </option>
-                            </select>
-                          ) : null}
-
-                          <button
-                            type="button"
-                            className={styles.variableAddButton}
-                            onClick={iniciarAdicaoBotao}
-                            disabled={
-                              templateButtonsDraft.length >= 3 ||
-                              adicionandoTipoBotao
-                            }
-                          >
-                            + Adicionar botão
-                            <span>{templateButtonsDraft.length}/3</span>
-                          </button>
-                        </div>
-
-                        <p className={styles.help}>
-                          O sistema organiza Texto e Redirect em grupos compatíveis
-                          com a Meta antes de enviar o template para aprovação.
-                        </p>
-                      </div>
-                    </div>
-
-                    <aside className={styles.previewSidebar}>
-                      <div className={styles.whatsappPreviewCard}>
-                        <div className={styles.previewTopLine}>
-                          <strong>Prévia WhatsApp</strong>
-                        </div>
-
-                        <div className={styles.whatsappPreviewArea}>
-                          <div className={styles.whatsappBubble}>
-                            {headerImagePreview ? (
-                              <img
-                                src={headerImagePreview}
-                                alt="Imagem do template"
-                                className={styles.whatsappPreviewImage}
-                              />
-                            ) : null}
-
-                            {headerText.trim() ? (
-                              <strong className={styles.whatsappPreviewTitle}>
-                                {headerText.trim()}
-                              </strong>
-                            ) : null}
-
-                            <p className={styles.whatsappPreviewText}>
-                              {bodyTextPreview || "Digite o corpo do template para visualizar a mensagem do WhatsApp."}
-                            </p>
-
-                            <div className={styles.whatsappPreviewMeta}>
-                              <span className={styles.whatsappPreviewFooter}>
-                                {footerText.trim() || "Equipe de atendimento"}
-                              </span>
-
-                              <span className={styles.whatsappPreviewTime}>
-                                {new Date().toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-                            </div>
-
-                            {templateButtonsPreview.map((button, index) => (
-                              <div
-                                key={`${button.id}-preview-${index}`}
-                                className={styles.whatsappPreviewButton}
-                              >
-                                {button.type === "URL" ? "↗" : "↩"}{" "}
-                                {button.text.trim()}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className={styles.previewCard}>
-                        <div className={styles.previewHeader}>
-                          <div>
-                            <h3 className={styles.previewTitle}>Estrutura do template</h3>
-                            <p className={styles.previewSubtitle}>
-                              Revise o conteúdo antes de enviar para aprovação.
-                            </p>
-                          </div>
-                          <span className={`${styles.badge} ${styles.badgeBlue}`}>
-                            Variáveis detectadas: {totalVariaveisBody}
-                          </span>
-                        </div>
-
-                        <div className={styles.previewGrid}>
-                          <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Imagem</span>
-                            <p className={styles.previewText}>
-                              {headerImageEnabled
-                                ? headerImage?.name || "Ativada, aguardando imagem"
-                                : "Desativada"}
-                            </p>
-                          </div>
-
-                          <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Cabeçalho</span>
-                            <p className={styles.previewText}>
-                              {headerText.trim() || "Não informado"}
-                            </p>
-                          </div>
-
-                          <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Corpo</span>
-                            <p className={styles.previewText}>{bodyText.trim() || "Não informado"}</p>
-                          </div>
-
-                          <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Rodapé</span>
-                            <p className={styles.previewText}>{footerText.trim() || "Não informado"}</p>
-                          </div>
-
-                          <div className={styles.previewBlock}>
-                            <span className={styles.previewLabel}>Botões</span>
-
-                            {templateButtonsPreview.length > 0 ? (
-                              <div className={styles.templateButtonsPreviewList}>
-                                {templateButtonsPreview.map((button, index) => (
-                                  <div
-                                    key={`${button.id}-structure-${index}`}
-                                    className={styles.templateButtonsPreviewItem}
-                                  >
-                                    <strong>
-                                      {button.type === "URL"
-                                        ? "Redirect"
-                                        : "Texto"}
-                                    </strong>
-                                    <span>{button.text.trim()}</span>
-                                    {button.type === "URL" &&
-                                    button.url.trim() ? (
-                                      <small>{button.url.trim()}</small>
-                                    ) : null}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className={styles.previewText}>
-                                Nenhum botão adicionado.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </aside>
-                </div>
-
-                <div className={styles.submitBar}>
-                  <div className={styles.submitInfo}>
-                    <span>
-                      <strong>Integração:</strong>{" "}
-                      {integracaoSelecionada?.nome_conexao || "Não selecionada"}
-                    </span>
-                    <span>
-                      <strong>Categoria:</strong> {formatarCategoriaMeta(category)}
-                    </span>
-                    <span>
-                      <strong>Idioma:</strong> Português (Brasil)
-                    </span>
-                  </div>
-
-                  {(mensagem || erro) && (
-                    <>
-                      {mensagem ? (
-                        <FeedbackToast
-                          success={mensagem}
-                          onSuccessDismiss={() => setMensagem("")}
-                        />
-                      ) : null}
-                      {erro ? <div className={styles.errorAlert}>{erro}</div> : null}
-                    </>
-                  )}
-                    
-                  <div className={styles.actions}>
-                    <button type="submit" disabled={submitting} className={styles.primaryButton}>
-                      {submitting ? "Enviando..." : "Criar template"}
-                    </button>
-                  </div>
-                </div>
-              </fieldset>
-            </form>
-          </div>
-
           <div className={styles.resultsCard}>
               <div className={styles.cardHeader}>
                 <div className={styles.cardHeaderContent}>
@@ -1718,6 +1141,15 @@ export default function TemplatesWhatsAppPage() {
                     </p>
                   </div>
 
+                  <div className={styles.templateHeaderActions}>
+                    <button
+                      type="button"
+                      className={styles.templateCreateButton}
+                      onClick={abrirCriacaoTemplate}
+                      disabled={!podeCriarTemplate || submitting}
+                    >
+                      Criar template
+                    </button>
                   <a
                     href="https://business.facebook.com/latest/whatsapp_manager/message_templates"
                     target="_blank"
@@ -1726,6 +1158,7 @@ export default function TemplatesWhatsAppPage() {
                   >
                     Ver templates na Meta
                   </a>
+                  </div>
                 </div>
               </div>
 
@@ -2088,6 +1521,649 @@ export default function TemplatesWhatsAppPage() {
             )}
         </div>
       </div>
+
+      {modalCriacaoAberto ? (
+        <div
+          className={styles.creatorModalOverlay}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !submitting) {
+              setModalCriacaoAberto(false);
+              setErro("");
+            }
+          }}
+        >
+          <section
+            className={styles.creatorModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="criacao-template-titulo"
+          >
+            <header className={styles.creatorModalHeader}>
+              <div>
+                <p className={styles.eyebrow}>WHATSAPP BUSINESS • MODELO DE MENSAGEM</p>
+                <h2 id="criacao-template-titulo">Criar template</h2>
+                <span>Configure sua mensagem e envie para aprovação da Meta.</span>
+              </div>
+              <button
+                type="button"
+                className={styles.creatorCloseButton}
+                aria-label="Fechar criação de template"
+                disabled={submitting}
+                onClick={() => {
+                  setModalCriacaoAberto(false);
+                  setErro("");
+                }}
+              >✕</button>
+            </header>
+
+            <div className={styles.creatorModalBody}>
+              <aside className={styles.creatorModalPreview}>
+                <div className={styles.creatorPreviewInner}>
+                      <div className={styles.whatsappPreviewCard}>
+                        <div className={styles.previewTopLine}>
+                          <strong>Prévia WhatsApp</strong>
+                        </div>
+
+                        <div className={styles.whatsappPreviewArea}>
+                          <div className={styles.whatsappBubble}>
+                            {headerImagePreview ? (
+                              <img
+                                src={headerImagePreview}
+                                alt="Imagem do template"
+                                className={styles.whatsappPreviewImage}
+                              />
+                            ) : null}
+
+                            {headerText.trim() ? (
+                              <strong className={styles.whatsappPreviewTitle}>
+                                {headerText.trim()}
+                              </strong>
+                            ) : null}
+
+                            <p className={styles.whatsappPreviewText}>
+                              {bodyTextPreview || "Digite o corpo do template para visualizar a mensagem do WhatsApp."}
+                            </p>
+
+                            <div className={styles.whatsappPreviewMeta}>
+                              <span className={styles.whatsappPreviewFooter}>
+                                {footerText.trim() || "Equipe de atendimento"}
+                              </span>
+
+                              <span className={styles.whatsappPreviewTime}>
+                                {new Date().toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+
+                            {templateButtonsPreview.map((button, index) => (
+                              <div
+                                key={`${button.id}-preview-${index}`}
+                                className={styles.whatsappPreviewButton}
+                              >
+                                {button.type === "URL" ? "↗" : "↩"}{" "}
+                                {button.text.trim()}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                </div>
+              </aside>
+
+              <form className={styles.creatorModalForm} onSubmit={handleSubmit}>
+                <fieldset disabled={!podeCriarTemplate || submitting} className={styles.creatorFieldset}>
+                  <nav className={styles.creatorWizardSteps} aria-label="Etapas de criação">
+                    {[
+                      { numero: 1, titulo: "Imagem e cabeçalho" },
+                      { numero: 2, titulo: "Conteúdo e botões" },
+                      { numero: 3, titulo: "Integração e categoria" },
+                    ].map((item) => (
+                      <button
+                        key={item.numero}
+                        type="button"
+                        disabled={submitting || item.numero > etapaCriacao}
+                        className={`${styles.creatorWizardStep} ${
+                          etapaCriacao === item.numero ? styles.creatorWizardStepCurrent : ""
+                        } ${
+                          etapaCriacao > item.numero ? styles.creatorWizardStepCompleted : ""
+                        }`}
+                        onClick={() => {
+                          setEtapaCriacao(item.numero as 1 | 2 | 3);
+                          setErro("");
+                        }}
+                        aria-current={etapaCriacao === item.numero ? "step" : undefined}
+                      >
+                        <span>{item.numero}</span>
+                        <strong>{item.titulo}</strong>
+                      </button>
+                    ))}
+                  </nav>
+
+                  <div className={styles.creatorWizardScroll} key={etapaCriacao}>
+                    <div className={styles.creatorStepHeading}>
+                      <span>ETAPA {etapaCriacao} DE 3</span>
+                      <h3>{etapaCriacao === 1 ? "Imagem e cabeçalho" : etapaCriacao === 2 ? "Corpo, rodapé e botões" : "Integração, nome e categoria"}</h3>
+                      <p>{etapaCriacao === 1 ? "Defina a mídia e o destaque inicial da mensagem." : etapaCriacao === 2 ? "Configure o texto e as opções de interação." : "Escolha a conta WhatsApp e identifique o template."}</p>
+                    </div>
+                    <div className={styles.creatorStepFields}>
+                      {etapaCriacao === 1 ? (
+                        <>
+<div className={styles.mediaSection}>
+                        <div className={styles.mediaToggleCard}>
+                          <div className={styles.mediaToggleCopy}>
+                            <span className={styles.mediaEyebrow}>Mídia do template</span>
+                            <strong className={styles.mediaToggleTitle}>Adicionar imagem</strong>
+                            <span className={styles.mediaToggleSubtitle}>
+                              Ative para enviar uma imagem junto ao template.
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={headerImageEnabled}
+                            className={`${styles.premiumSwitch} ${
+                              headerImageEnabled ? styles.premiumSwitchActive : ""
+                            }`}
+                            onClick={() => {
+                              setHeaderImageEnabled((ativo) => {
+                                const proximo = !ativo;
+                                if (!proximo) {
+                                  setHeaderImage(null);
+                                }
+                                return proximo;
+                              });
+                              setErro("");
+                            }}
+                          >
+                            <span className={styles.premiumSwitchThumb} />
+                          </button>
+                        </div>
+
+                        <p className={styles.mediaClassificationInfo}>
+                          Templates com imagem costumam ser aprovados como <strong>Marketing</strong> na maioria dos casos. A categoria final depende do conteúdo e da análise da Meta.
+                        </p>
+
+                        {headerImageEnabled ? (
+                          <div className={styles.imageUploadBox}>
+                            <div className={styles.imageUploadHeading}>
+                              <div>
+                                <strong className={styles.imageUploadTitle}>
+                                  Imagem do template
+                                </strong>
+                                <p className={styles.help}>
+                                  JPG/JPEG ou PNG, até 5 MB.
+                                </p>
+                              </div>
+                              {headerImage ? (
+                                <span className={styles.imageReadyBadge}>Pronta</span>
+                              ) : null}
+                            </div>
+
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png"
+                              className={styles.fileInput}
+                              onChange={(e) => {
+                                setErro("");
+                                const file = e.target.files?.[0] || null;
+
+                                if (!file) {
+                                  setHeaderImage(null);
+                                  return;
+                                }
+
+                                if (!MIME_IMAGENS_TEMPLATE.has(file.type)) {
+                                  setHeaderImage(null);
+                                  e.currentTarget.value = "";
+                                  setErro("A Meta aceita imagem em JPG/JPEG ou PNG.");
+                                  return;
+                                }
+
+                                if (file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
+                                  setHeaderImage(null);
+                                  e.currentTarget.value = "";
+                                  setErro("A imagem do template deve ter no máximo 5 MB.");
+                                  return;
+                                }
+
+                                setHeaderImage(file);
+                              }}
+                            />
+
+                            {headerImageEnabled && headerImagePreview ? (
+                              <img
+                                src={headerImagePreview}
+                                alt="Prévia da imagem do template"
+                                className={styles.imageUploadPreview}
+                              />
+                            ) : (
+                              <div className={styles.imageUploadEmpty}>
+                                Nenhuma imagem selecionada.
+                              </div>
+                            )}
+
+                            {headerImage ? (
+                              <span className={styles.imageFileName}>
+                                {headerImage.name}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+<div className={styles.contentSectionCard}>
+                        <div className={styles.contentSectionHeader}>
+                          <div>
+                            <strong>Cabeçalho</strong>
+                            <p>Opcional. Uma linha curta de destaque para o template.</p>
+                          </div>
+                          <span className={styles.contentSectionBadge}>Opcional</span>
+                        </div>
+
+                        <div className={styles.field}>
+                          <input
+                            value={headerText}
+                            onChange={(e) => setHeaderText(e.target.value)}
+                            className={styles.input}
+                            placeholder="Adicione uma pequena linha de texto ao cabeçalho"
+                            maxLength={60}
+                          />
+                          <p className={styles.help}>
+                            Máximo de 60 caracteres. Quando houver imagem, o CRM mantém este texto como título visual logo abaixo da mídia.
+                          </p>
+                        </div>
+                      </div>
+                        </>
+                      ) : null}
+                      {etapaCriacao === 2 ? (
+                        <>
+<div className={styles.contentSectionCard}>
+                        <div className={styles.contentSectionHeader}>
+                          <div>
+                            <strong>Corpo</strong>
+                            <p>Conteúdo principal exibido na mensagem do WhatsApp.</p>
+                          </div>
+
+                          <button
+                            type="button"
+                            className={styles.variableAddButton}
+                            onClick={adicionarVariavelBody}
+                            disabled={quantidadeVariaveisBody >= 6}
+                            title={
+                              quantidadeVariaveisBody >= 6
+                                ? "Limite de 6 variáveis atingido"
+                                : "Adicionar a próxima variável ao corpo"
+                            }
+                          >
+                            + Variável
+                            <span>{quantidadeVariaveisBody}/6</span>
+                          </button>
+                        </div>
+
+                        <div className={styles.field}>
+                        <textarea
+                          ref={bodyTextareaRef}
+                          value={bodyText}
+                          onChange={(e) => setBodyText(e.target.value)}
+                          rows={7}
+                          className={styles.textarea}
+                          placeholder="Digite o conteúdo principal do template"
+                          required
+                        />
+                        <p className={styles.help}>
+                          Use variáveis em sequência de {"{{1}}"} até {"{{6}}"}. O botão + Variável insere a próxima variável na posição do cursor.
+                        </p>
+                        </div>
+                      </div>
+
+                      {totalVariaveisBody > 0 ? (
+                        <div className={styles.variableExamplesCard}>
+                          <div className={styles.variableExamplesHeader}>
+                            <div>
+                              <strong>Exemplos das variáveis</strong>
+                              <p>
+                                A Meta usa estes exemplos na análise do template.
+                              </p>
+                            </div>
+                            <span>{Math.min(totalVariaveisBody, 6)} campo(s)</span>
+                          </div>
+
+                          <div className={styles.variableExamplesGrid}>
+                            {Array.from(
+                              { length: Math.min(totalVariaveisBody, 6) },
+                              (_, index) => (
+                                <div className={styles.field} key={index}>
+                                  <label className={styles.label}>
+                                    Exemplo da variável {index + 1}
+                                  </label>
+                                  <input
+                                    value={bodyExamples[index] || ""}
+                                    onChange={(e) =>
+                                      atualizarExemploBody(index, e.target.value)
+                                    }
+                                    className={styles.input}
+                                    placeholder={
+                                      index === 0
+                                        ? "Ex.: João"
+                                        : index === 1
+                                        ? "Ex.: ABC-123456"
+                                        : `Exemplo para {{${index + 1}}}`
+                                    }
+                                  />
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className={`${styles.field} ${styles.lockedField}`}>
+                        <div className={styles.fieldLabelRow}>
+                          <label className={styles.label}>Rodapé</label>
+                          <span className={styles.lockedBadge}>Bloqueado</span>
+                        </div>
+                        <input
+                          value={footerText}
+                          className={styles.input}
+                          disabled
+                          aria-label="Rodapé bloqueado"
+                        />
+                        <p className={styles.help}>
+                          Definido automaticamente pelo sistema para garantir o opt-out dos disparos.
+                        </p>
+                      </div>
+
+                      <div className={`${styles.contentSectionCard} ${styles.responsesField}`}>
+                        <div className={styles.contentSectionHeader}>
+                          <div>
+                            <strong>
+                              Botões de respostas{" "}
+                              <span className={styles.secondaryLabel}>
+                                (Texto ou Redirect)
+                              </span>
+                            </strong>
+                            <p>
+                              Adicione até 3 botões. Texto envia uma resposta rápida;
+                              Redirect abre um site ou página externa; links diretos para WhatsApp não são permitidos pela Meta.
+                            </p>
+                          </div>
+                          <span className={styles.contentSectionBadge}>
+                            {templateButtonsDraft.length}/3
+                          </span>
+                        </div>
+
+                        {templateButtonsDraft.length > 0 ? (
+                          <div className={styles.templateButtonBuilderList}>
+                            {templateButtonsDraft.map((button, index) => (
+                              <div
+                                key={button.id}
+                                className={styles.templateButtonBuilderItem}
+                              >
+                                <div className={styles.templateButtonBuilderHeader}>
+                                  <div>
+                                    <strong>Botão {index + 1}</strong>
+                                    <span
+                                      className={`${styles.badge} ${styles.badgeGray}`}
+                                    >
+                                      {button.type === "URL" ? "Redirect" : "Texto"}
+                                    </span>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    className={styles.templateButtonRemove}
+                                    onClick={() => removerBotao(button.id)}
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+
+                                {button.type === "QUICK_REPLY" ? (
+                                  <div className={styles.field}>
+                                    <label className={styles.label}>
+                                      Texto da resposta
+                                    </label>
+                                    <input
+                                      value={button.text}
+                                      onChange={(e) =>
+                                        atualizarBotao(
+                                          button.id,
+                                          "text",
+                                          e.target.value
+                                        )
+                                      }
+                                      className={styles.input}
+                                      placeholder="Ex.: Quero saber mais"
+                                      maxLength={25}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className={styles.topGrid}>
+                                    <div className={styles.field}>
+                                      <label className={styles.label}>
+                                        Texto do botão
+                                      </label>
+                                      <input
+                                        value={button.text}
+                                        onChange={(e) =>
+                                          atualizarBotao(
+                                            button.id,
+                                            "text",
+                                            e.target.value
+                                          )
+                                        }
+                                        className={styles.input}
+                                        placeholder="Ex.: Acessar site"
+                                        maxLength={25}
+                                      />
+                                    </div>
+
+                                    <div className={styles.field}>
+                                      <label className={styles.label}>
+                                        URL de destino
+                                      </label>
+                                      <input
+                                        value={button.url}
+                                        onChange={(e) =>
+                                          atualizarBotao(
+                                            button.id,
+                                            "url",
+                                            e.target.value
+                                          )
+                                        }
+                                        className={styles.input}
+                                        placeholder="https://seusite.com.br"
+                                        inputMode="url"
+                                      />
+                                      {linkTemplateAbreWhatsappDiretamente(
+                                        button.url
+                                      ) ? (
+                                        <p className={styles.help}>
+                                          Link direto para WhatsApp não é aceito
+                                          pela Meta. Para o cliente responder no
+                                          WhatsApp, use um botão Texto — resposta
+                                          rápida.
+                                        </p>
+                                      ) : (
+                                        <p className={styles.help}>
+                                          Use um site ou página externa. Links
+                                          wa.me e api.whatsapp.com não são
+                                          permitidos neste tipo de botão.
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={styles.templateButtonEmpty}>
+                            Nenhum botão adicionado.
+                          </div>
+                        )}
+
+                        <div className={styles.templateButtonAddArea}>
+                          {adicionandoTipoBotao &&
+                          templateButtonsDraft.length < 3 ? (
+                            <select
+                              className={styles.input}
+                              defaultValue=""
+                              onChange={(e) => {
+                                const tipo = e.target.value as
+                                  | "QUICK_REPLY"
+                                  | "URL";
+                                if (tipo) adicionarBotao(tipo);
+                              }}
+                            >
+                              <option value="" disabled>
+                                Selecione o tipo do botão
+                              </option>
+                              <option value="QUICK_REPLY">
+                                Texto — resposta rápida
+                              </option>
+                              <option
+                                value="URL"
+                                disabled={totalRedirectButtons >= 2}
+                              >
+                                Redirect — abrir link
+                              </option>
+                            </select>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            className={styles.variableAddButton}
+                            onClick={iniciarAdicaoBotao}
+                            disabled={
+                              templateButtonsDraft.length >= 3 ||
+                              adicionandoTipoBotao
+                            }
+                          >
+                            + Adicionar botão
+                            <span>{templateButtonsDraft.length}/3</span>
+                          </button>
+                        </div>
+
+                        <p className={styles.help}>
+                          O sistema organiza Texto e Redirect em grupos compatíveis
+                          com a Meta antes de enviar o template para aprovação.
+                        </p>
+                      </div>
+                        </>
+                      ) : null}
+                      {etapaCriacao === 3 ? (
+                        <>
+<div className={styles.field}>
+                        <label className={styles.label}>Integração WhatsApp</label>
+                        <select
+                          value={integracaoId}
+                          onChange={(e) => {
+                            setIntegracaoId(e.target.value);
+                            if (e.target.value) {
+                              setErroSincronizacao("");
+                            }
+                          }}
+                          className={styles.input}
+                          disabled={selectIntegracaoBloqueado}
+                          required
+                        >
+                          <option value="">
+                            {loadingIntegracoes ? "Carregando..." : "Selecione uma integração"}
+                          </option>
+
+                          {integracoes.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.nome_conexao}
+                              {item.numero ? ` ${item.numero}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <p className={styles.help}>
+                          Selecione o número do WhatsApp que será usado para enviar este template nos disparos.
+                        </p>
+                      </div>
+<div className={styles.topGrid}>
+                        <div className={styles.field}>
+                          <label className={styles.label}>Nome do template</label>
+                          <input
+                            value={name}
+                            onChange={(e) =>
+                              setName(e.target.value.replace(/\s+/g, "_"))
+                            }
+                            className={styles.input}
+                            placeholder="Ex.: notificacao_atendimento_iniciado"
+                            required
+                          />
+                          <p className={styles.help}>
+                            Espaços são convertidos automaticamente em <strong>_</strong>.
+                          </p>
+                        </div>
+                        
+                        <div className={styles.field}>
+                          <label className={styles.label}>Categoria</label>
+                          <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value as "UTILITY" | "MARKETING")}
+                            className={styles.input}
+                          >
+                            <option value="UTILITY">UTILIDADE</option>
+                            <option value="MARKETING">MARKETING</option>
+                          </select>
+                          <p className={styles.help}>
+                            UTILIDADE para comunicações operacionais. MARKETING para campanhas e promoções. A Meta pode reclassificar o modelo durante a análise.
+                          </p>
+                        </div>
+                      </div>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <footer className={styles.creatorModalFooter}>
+                    {erro ? <div className={styles.errorAlert} role="alert">{erro}</div> : null}
+                    <div className={styles.creatorFooterActions}>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        disabled={submitting}
+                        onClick={() => {
+                          if (etapaCriacao === 1) {
+                            setModalCriacaoAberto(false);
+                            setErro("");
+                          } else {
+                            setEtapaCriacao((etapaCriacao - 1) as 1 | 2 | 3);
+                            setErro("");
+                          }
+                        }}
+                      >{etapaCriacao === 1 ? "Cancelar" : "Voltar"}</button>
+                      {etapaCriacao === 3 ? (
+                        <button type="submit" disabled={submitting} className={styles.primaryButton}>
+                          {submitting ? "Enviando template..." : "Criar template"}
+                        </button>
+                      ) : (
+                        <button type="button" className={styles.primaryButton} onClick={avancarEtapaCriacao}>
+                          Continuar
+                        </button>
+                      )}
+                    </div>
+                  </footer>
+                </fieldset>
+              </form>
+            </div>
+
+            {submitting ? (
+              <div className={styles.creatorSendingOverlay} role="status" aria-live="polite">
+                <span className={styles.creatorSendingSpinner} />
+                <strong>Enviando template</strong>
+                <p>Enviando à Meta para análise e salvando o registro.</p>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }
