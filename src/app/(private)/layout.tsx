@@ -5,9 +5,9 @@ import AmbienteObrigatorioGuard from "@/components/AmbienteObrigatorioGuard";
 import MobileEmpresaMenuLink from "@/components/MobileEmpresaMenuLink";
 import AgendaMenuLabel from "@/components/AgendaMenuLabel";
 import AcessoTemporarioEmpresaBanner from "@/components/AcessoTemporarioEmpresaBanner";
-import MetaWhatsAppPricingNotice from "@/components/MetaWhatsAppPricingNotice";
+import ProgramaAceiteModal from "@/components/ProgramaAceiteModal";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
-import { usuarioConfirmouAvisoMetaWhatsapp } from "@/lib/avisos/meta-whatsapp-cobranca";
+import { empresaPrecisaConfirmarPrograma, VERSAO_ACEITE_PROGRAMA } from "@/lib/contratos/programa-aceite";
 import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import type { NichoCodigo } from "@/lib/nichos/config";
@@ -34,7 +34,7 @@ export default async function PrivateLayout({
   let assinatura: AssinaturaEmpresa | null = null;
   let isAdmin = false;
   let nichoCodigo: NichoCodigo = "comercio";
-  let exibirAvisoMetaWhatsapp = false;
+  let exibirAceitePrograma = false;
   let podeAcessarWhatsappWebLocal = false;
 
   const resultado = await getUsuarioContexto();
@@ -64,16 +64,23 @@ export default async function PrivateLayout({
   assinatura = resultado.usuario.assinatura;
   isAdmin = resultado.usuario.is_admin;
 
-  if (isAdmin && resultado.usuario.empresa_id && !acessoTemporario) {
+  if (
+    isAdmin &&
+    resultado.usuario.empresa_id &&
+    !acessoTemporario &&
+    branding.id === BRANDING_PROSPERITY.id
+  ) {
     try {
-      exibirAvisoMetaWhatsapp = !(await usuarioConfirmouAvisoMetaWhatsapp(
-        resultado.usuario.id
-      ));
+      exibirAceitePrograma = await empresaPrecisaConfirmarPrograma(
+        resultado.usuario.empresa_id
+      );
     } catch (error) {
       console.error(
-        "[AVISO_META_WHATSAPP] Erro ao verificar confirmacao do usuario:",
+        "[ACEITE_PROGRAMA] Erro ao consultar confirmação contratual:",
         error
       );
+      // Em caso de falha temporária, apresentar o modal sem supor aceite.
+      exibirAceitePrograma = true;
     }
   }
 
@@ -111,7 +118,10 @@ export default async function PrivateLayout({
       {acessoTemporario && (
         <AcessoTemporarioEmpresaBanner acesso={acessoTemporario} />
       )}
-      <MetaWhatsAppPricingNotice initialOpen={exibirAvisoMetaWhatsapp} />
+      <ProgramaAceiteModal
+        initialOpen={exibirAceitePrograma}
+        versao={VERSAO_ACEITE_PROGRAMA}
+      />
       {children}
       <AmbienteObrigatorioGuard />
       <MobileEmpresaMenuLink isAdmin={isAdmin} />
