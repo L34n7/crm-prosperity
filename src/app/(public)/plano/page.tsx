@@ -20,6 +20,7 @@ type Plano = {
   preco: string;
   observacaoPreco?: string;
   recursos: string[];
+  formacao: string[];
   tipo: "checkout" | "cotacao";
   badge?: string;
 };
@@ -215,6 +216,10 @@ export default function PlanoPage() {
       observacaoPreco: "🔥 Oferta de entrada: economize R$ 60 todos os meses.",
       tipo: "checkout",
       badge: "Entrada inteligente",
+      formacao: [
+        "Videoaulas introdutórias sobre disparos e automações no WhatsApp",
+        "Orientações práticas para começar a configurar e utilizar o CRM",
+      ],
       recursos: [
         "2 usuários inclusos",
         "100 mil de tokens de IA",
@@ -238,6 +243,12 @@ export default function PlanoPage() {
       observacaoPreco: "🔥 Melhor custo-benefício: economize R$ 100 por mês.",
       tipo: "checkout",
       badge: "Mais indicado",
+      formacao: [
+        "Todos os conteúdos educacionais do Programa Básico",
+        "Videoaulas extras sobre automações avançadas e inteligência artificial",
+        "Aula complementar gravada com aplicações e exemplos avançados",
+        "Orientação especializada para dúvidas e configurações, conforme disponibilidade",
+      ],
       recursos: [
         "6 usuários inclusos",
         "400 mil de tokens de IA",
@@ -263,6 +274,10 @@ export default function PlanoPage() {
         "Fale com nosso time para conhecer as condições e a orientação disponíveis.",
       tipo: "cotacao",
       badge: "Escala personalizada",
+      formacao: [
+        "Conteúdos de aprofundamento conforme a necessidade apresentada",
+        "Orientações especializadas conforme condições definidas na proposta",
+      ],
       recursos: [
         "Usuários sob medida",
         "Tokens de IA sob medida",
@@ -363,6 +378,18 @@ export default function PlanoPage() {
                     <strong>Treinamento prático</strong> com acesso ao CRM Prosperity
                   </span>
                 </div>
+
+                <section className={styles.educationSection} aria-label={`Conteúdos e orientação - ${plano.nome}`}>
+                  <h3 className={styles.featureHeading}>Conteúdos e orientação</h3>
+                  <ul className={styles.educationList}>
+                    {plano.formacao.map((conteudo) => (
+                      <li key={conteudo} className={styles.educationItem}>
+                        <span className={styles.educationIcon} aria-hidden="true">✓</span>
+                        <span>{conteudo}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
 
                 <h3 className={styles.featureHeading}>Recursos disponíveis no CRM</h3>
 
