@@ -144,7 +144,7 @@ export default function PaymentGatewayModal({
 
         <p className={styles.subtitle}>
           <strong>
-            {plano.renovarPlanoAtual ? "Renovação" : "Plano"} {plano.nome}
+            {plano.renovarPlanoAtual ? "Renovação do" : "Contratação do"}{" "}{plano.nome}
           </strong>
         </p>
 
