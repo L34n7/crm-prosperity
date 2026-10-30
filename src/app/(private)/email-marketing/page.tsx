@@ -10,6 +10,7 @@ import {
 import {
   BarChart3,
   CheckCircle2,
+  ChevronRight,
   FileText,
   Globe2,
   Mail,
@@ -28,6 +29,7 @@ import CampanhaModal, {
   type EmailRemetenteItem,
 } from "./CampanhaModal";
 import TemplateModal, { type EmailTemplateItem } from "./TemplateModal";
+import CampanhaDetalhesModal from "./CampanhaDetalhesModal";
 import styles from "./email-marketing.module.css";
 
 type AbaEmailMarketing = "campanhas" | "templates" | "remetentes";
@@ -175,6 +177,7 @@ export default function EmailMarketingPage() {
   const [templateEditando, setTemplateEditando] =
     useState<EmailTemplateItem | null>(null);
   const [campanhaModal, setCampanhaModal] = useState(false);
+  const [campanhaDetalhes, setCampanhaDetalhes] = useState<CampanhaItem | null>(null);
   const [emailTeste, setEmailTeste] = useState("");
   const [enviandoTeste, setEnviandoTeste] = useState(false);
   const [feedbackTeste, setFeedbackTeste] = useState<{
@@ -590,53 +593,52 @@ export default function EmailMarketingPage() {
                   </div>
                 </div>
               ) : campanhasFiltradas.length ? (
-                <div className={styles.tableWrap}>
-                  <table className={styles.dataTable}>
-                    <thead>
-                      <tr>
-                        <th>Campanha</th>
-                        <th>Status</th>
-                        <th>Destinatários</th>
-                        <th>Enviados</th>
-                        <th>Entregues</th>
-                        <th title="Estimativa: serviços de e-mail podem carregar imagens automaticamente.">Abertos (estim.)</th>
-                        <th>Cliques</th>
-                        <th>Envio</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {campanhasFiltradas.map((campanha) => (
-                        <tr key={campanha.id}>
-                          <td>
-                            <strong>{campanha.nome}</strong>
-                            <small>{campanha.assunto}</small>
-                          </td>
-                          <td>
-                            <span className={statusClass(campanha.status)}>
-                              {statusLabel(campanha.status)}
-                            </span>
-                            {campanha.erro ? (
-                              <small className={styles.errorText}>
-                                {campanha.erro}
-                              </small>
-                            ) : null}
-                          </td>
-                          <td>{campanha.total_destinatarios}</td>
-                          <td>{campanha.total_enviados}</td>
-                          <td>{campanha.total_entregues}</td>
-                          <td>{campanha.total_abertos}</td>
-                          <td>{campanha.total_cliques}</td>
-                          <td>
-                            <strong>{dataHora(campanha.agendada_para)}</strong>
-                            <small>
-                              {relacaoUnica(campanha.email_remetentes)?.email ||
-                                ""}
-                            </small>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className={styles.campaignCardsGrid}>
+                  {campanhasFiltradas.map((campanha) => (
+                    <button
+                      type="button"
+                      key={campanha.id}
+                      className={styles.campaignOverviewCard}
+                      onClick={() => setCampanhaDetalhes(campanha)}
+                      title={`Ver destinatários e resultados de ${campanha.nome}`}
+                    >
+                      <div className={styles.campaignOverviewHeader}>
+                        <div>
+                          <strong className={styles.campaignOverviewTitle}>{campanha.nome}</strong>
+                          <span className={styles.campaignOverviewSubject}>{campanha.assunto}</span>
+                        </div>
+                        <span className={statusClass(campanha.status)}>
+                          {statusLabel(campanha.status)}
+                        </span>
+                      </div>
+
+                      <div className={styles.campaignOverviewMetrics}>
+                        <div><small>Destinatários</small><strong>{campanha.total_destinatarios}</strong></div>
+                        <div><small>Enviados</small><strong>{campanha.total_enviados}</strong></div>
+                        <div><small>Entregues</small><strong>{campanha.total_entregues}</strong></div>
+                        <div><small>Abertos (estim.)</small><strong>{campanha.total_abertos}</strong></div>
+                        <div><small>Cliques</small><strong>{campanha.total_cliques}</strong></div>
+                      </div>
+
+                      <div className={styles.campaignOverviewFooter}>
+                        <div>
+                          <span>Envio: <strong>{dataHora(campanha.agendada_para)}</strong></span>
+                          <span
+                            className={styles.campaignOverviewSender}
+                            title={relacaoUnica(campanha.email_remetentes)?.email || ""}
+                          >
+                            {relacaoUnica(campanha.email_remetentes)?.email || "Sem remetente"}
+                          </span>
+                          {campanha.erro ? (
+                            <span className={styles.campaignOverviewError}>{campanha.erro}</span>
+                          ) : null}
+                        </div>
+                        <span className={styles.campaignOverviewAction}>
+                          Ver detalhes <ChevronRight size={15} aria-hidden="true" />
+                        </span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               ) : erroConfiguracao ? (
                 <div className={styles.campaignLoadFailure} role="alert">
@@ -1058,6 +1060,13 @@ export default function EmailMarketingPage() {
             setTemplateEditando(null);
           }}
           onSaved={() => carregarDados(true)}
+        />
+      ) : null}
+
+      {campanhaDetalhes ? (
+        <CampanhaDetalhesModal
+          campanha={campanhaDetalhes}
+          onClose={() => setCampanhaDetalhes(null)}
         />
       ) : null}
 
