@@ -337,7 +337,7 @@ export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
                           : null}
                       </div>
                     </td>
-                    <td className={styles.campaignDetailDate}>{formatarData(item.enviado_em || item.created_at)}</td>
+                    <td className={styles.campaignDetailDate}>{formatarData(item.enviado_em)}</td>
                     <td className={styles.campaignDetailDate}>{formatarData(item.aberto_em)}</td>
                     <td className={styles.campaignDetailDate}>{formatarData(item.clicado_em)}</td>
                   </tr>
