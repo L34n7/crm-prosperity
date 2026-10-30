@@ -412,6 +412,52 @@
   font-weight: 800;
 }
 
+.educationSection {
+  position: relative;
+  z-index: 4;
+  margin-top: 15px;
+  padding: 1px 0 15px;
+  border-bottom: 1px solid var(--crm-ui-public-border-hex-e2e8f0);
+}
+
+.educationSection .featureHeading {
+  margin-top: 0;
+}
+
+.educationList {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.educationItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--crm-ui-public-content-hex-0f172a);
+}
+
+.educationIcon {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1px;
+  border-radius: 7px;
+  border: 1px solid var(--crm-ui-public-border-rgb-16-185-129-0-24);
+  color: var(--crm-ui-public-content-hex-059669);
+  background: var(--crm-ui-public-surface-rgb-16-185-129-0-09);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .featureHeading {
   position: relative;
   z-index: 4;
