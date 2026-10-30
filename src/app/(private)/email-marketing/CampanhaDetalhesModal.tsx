@@ -163,6 +163,7 @@ export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
     async function carregar() {
       setCarregando(true);
       setErro("");
+      setResposta(null);
       try {
         const response = await fetch(
           `/api/email-marketing/campanhas/${encodeURIComponent(campanha.id)}/destinatarios?${params.toString()}`,
