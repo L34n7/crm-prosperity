@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import styles from "./MetaWhatsAppPricingNotice.module.css";
+import { TEXTO_CONFIRMACAO_PROGRAMA } from "@/lib/lgpd/termos";
 
 type Props = {
   initialOpen: boolean;
@@ -183,10 +184,7 @@ export default function ProgramaAceiteModal({ initialOpen, versao }: Props) {
               <CheckCircle2 size={16} />
             </span>
             <span>
-              Li e concordo com os documentos atualizados. Compreendo que
-              os programas incluem conteúdos educacionais e orientações flexíveis
-              e que o acesso ao CRM está sujeito à modalidade contratada.
-              Esta confirmação não altera retroativamente contratações anteriores.
+              {TEXTO_CONFIRMACAO_PROGRAMA}
             </span>
           </label>
 
