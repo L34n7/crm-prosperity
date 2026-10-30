@@ -4806,3 +4806,604 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+/* Campanhas: cards de leitura ampliada e modal de destinatários */
+.campaignCardsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.campaignOverviewCard {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 19px;
+  border: 1px solid var(--crm-border);
+  border-radius: 17px;
+  background: linear-gradient(150deg, var(--crm-surface), var(--crm-surface-soft));
+  box-shadow: var(--crm-shadow-xs);
+  color: var(--crm-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.campaignOverviewCard:hover,
+.campaignOverviewCard:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--crm-primary-border);
+  box-shadow: var(--crm-shadow-sm);
+  outline: none;
+}
+
+.campaignOverviewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.campaignOverviewHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.campaignOverviewTitle {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.campaignOverviewSubject {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.campaignOverviewHeader > span {
+  flex: 0 0 auto;
+}
+
+.campaignOverviewMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.campaignOverviewMetrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 7px;
+  min-width: 0;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+}
+
+.campaignOverviewMetrics small {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.campaignOverviewMetrics strong {
+  color: var(--crm-text-strong);
+  font-size: 19px;
+  font-weight: 850;
+}
+
+.campaignOverviewFooter {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--crm-border);
+}
+
+.campaignOverviewFooter > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.campaignOverviewFooter > div > span:first-child {
+  font-size: 12px;
+  color: var(--crm-text-muted);
+}
+
+.campaignOverviewFooter > div > span:first-child strong {
+  color: var(--crm-text-strong);
+  font-weight: 750;
+}
+
+.campaignOverviewSender {
+  display: block;
+  max-width: 100%;
+  color: var(--crm-text);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.campaignOverviewError {
+  color: var(--crm-danger-text);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.campaignOverviewAction {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.campaignDetailOverlay {
+  position: fixed;
+  z-index: 1450;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: rgb(15 23 42 / 64%);
+  backdrop-filter: blur(5px);
+}
+
+.campaignDetailModal {
+  display: flex;
+  flex-direction: column;
+  width: min(1390px, 100%);
+  max-height: calc(100dvh - 44px);
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--crm-border);
+  border-radius: 22px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  box-shadow: var(--crm-shadow-lg);
+}
+
+.campaignDetailHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+  gap: 16px;
+  padding: 22px 25px 19px;
+  border-bottom: 1px solid var(--crm-border);
+  background: linear-gradient(110deg, var(--crm-primary-soft), var(--crm-surface) 55%);
+}
+
+.campaignDetailHeading {
+  min-width: 0;
+}
+
+.campaignDetailHeading h2 {
+  margin: 0;
+  color: var(--crm-text-strong);
+  font-size: 22px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.campaignDetailHeading p {
+  margin: 6px 0 4px;
+  color: var(--crm-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.campaignDetailHeading small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.campaignDetailClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--crm-border);
+  border-radius: 10px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  cursor: pointer;
+}
+
+.campaignDetailClose:hover {
+  border-color: var(--crm-primary-border);
+}
+
+.campaignDetailScrollable {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 22px;
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.campaignDetailMetrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.campaignDetailMetrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  background: var(--crm-surface-soft);
+}
+
+.campaignDetailMetrics span {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.campaignDetailMetrics strong {
+  color: var(--crm-text-strong);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.campaignDetailToolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.campaignDetailToolbar .searchBox {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.campaignDetailFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  color: var(--crm-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.campaignDetailFilter select {
+  border: 0;
+  outline: 0;
+  color: var(--crm-text);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.campaignDetailReload,
+.campaignDetailPageActions button,
+.campaignDetailLoading button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--crm-border-strong);
+  border-radius: 10px;
+  color: var(--crm-text);
+  background: var(--crm-surface);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.campaignDetailReload:disabled,
+.campaignDetailPageActions button:disabled {
+  opacity: .46;
+  cursor: not-allowed;
+}
+
+.campaignDetailTableWrap {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  min-height: 110px;
+}
+
+.campaignDetailTable {
+  width: 100%;
+  min-width: 1070px;
+  border-collapse: collapse;
+  background: var(--crm-surface);
+}
+
+.campaignDetailTable th,
+.campaignDetailTable td {
+  padding: 13px 12px;
+  border-bottom: 1px solid var(--crm-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.campaignDetailTable th {
+  color: var(--crm-text-muted);
+  background: var(--crm-surface-soft);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.campaignDetailTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.campaignDetailTable td {
+  font-size: 12px;
+}
+
+.campaignDetailTable td > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+
+.campaignDetailEmail {
+  display: block;
+  font-size: 12.5px;
+  color: var(--crm-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.campaignRecipientStatus,
+.campaignRecipientError,
+.campaignDeliveredBadge,
+.campaignOpenedBadge,
+.campaignClickedBadge,
+.campaignNoEvents {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.campaignRecipientStatus {
+  color: var(--crm-text);
+  background: var(--crm-surface-soft);
+}
+
+.campaignRecipientError {
+  color: var(--crm-danger-text);
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+
+.campaignRecipientReason {
+  color: var(--crm-danger-text) !important;
+  max-width: 180px;
+  overflow-wrap: anywhere;
+}
+
+.campaignEventBadges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 250px;
+}
+
+.campaignDeliveredBadge {
+  color: var(--crm-success-text);
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+}
+
+.campaignOpenedBadge {
+  color: var(--crm-primary-text);
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.campaignClickedBadge {
+  color: var(--crm-primary-text);
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+
+.campaignNoEvents {
+  color: var(--crm-text-muted);
+  font-weight: 650;
+}
+
+.campaignDateOrder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  padding: 0;
+  color: var(--crm-text-strong);
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 900;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.campaignDateOrder:hover {
+  color: var(--crm-primary-text);
+}
+
+.campaignDetailDate {
+  white-space: nowrap;
+  color: var(--crm-text);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px !important;
+}
+
+.campaignDetailEmpty {
+  padding: 28px !important;
+  text-align: center !important;
+  color: var(--crm-text-muted);
+}
+
+.campaignDetailLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 66px;
+  padding: 14px;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+}
+
+.campaignDetailPagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+  color: var(--crm-text);
+  font-size: 12px;
+}
+
+.campaignDetailPagination > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.campaignDetailPagination small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.campaignDetailPageActions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.campaignDetailPageActions span {
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .campaignCardsGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .campaignOverviewMetrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .campaignOverviewFooter {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .campaignDetailOverlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .campaignDetailModal {
+    width: 100%;
+    height: 94dvh;
+    max-height: 94dvh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .campaignDetailHeader {
+    padding: 15px 16px;
+  }
+
+  .campaignDetailHeading h2 {
+    font-size: 18px;
+  }
+
+  .campaignDetailScrollable {
+    padding: 14px;
+    gap: 13px;
+  }
+
+  .campaignDetailMetrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .campaignDetailMetrics > div {
+    padding: 11px;
+  }
+
+  .campaignDetailMetrics strong {
+    font-size: 18px;
+  }
+
+  .campaignDetailToolbar {
+    align-items: stretch;
+  }
+
+  .campaignDetailToolbar .searchBox {
+    flex-basis: 100%;
+  }
+
+  .campaignDetailFilter {
+    flex: 1;
+  }
+
+  .campaignDetailPagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .campaignDetailPageActions {
+    justify-content: space-between;
+  }
+}
