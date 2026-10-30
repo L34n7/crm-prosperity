@@ -174,7 +174,7 @@ export default function ComecarPage() {
 
     if (!aceiteContrato) {
       setErro(
-        "Para continuar, confirme que leu e aceitou os Termos de Serviço, a Política de Privacidade e a Política de Mensageria e Uso Aceitável."
+        "Para continuar, confirme que leu e aceitou os Termos dos Programas e Uso do CRM, a Política de Privacidade e a Política de Mensageria e Uso Aceitável."
       );
       return;
     }
@@ -322,7 +322,7 @@ export default function ComecarPage() {
           <div className={styles.cardHeader}>
             <h2 className={styles.title}>Criar acesso</h2>
             <p className={styles.subtitle}>
-              Preencha seus dados para iniciar seu cadastro no CRM Prosperity.
+              Preencha seus dados para iniciar sua jornada de aprendizagem e acessar os recursos do CRM Prosperity conforme a modalidade escolhida.
             </p>
           </div>
 
@@ -471,16 +471,17 @@ export default function ComecarPage() {
                 >
                   Política de Mensageria e Uso Aceitável
                 </Link>
-                . Declaro também que sou responsável, na medida da minha atuação,
-                pela origem das bases de contatos, autorizações, opt-ins exigidos
-                pelos canais, conteúdo e finalidade das mensagens enviadas pela
-                minha empresa e pelo cumprimento da legislação e das políticas dos
-                provedores utilizados.
-                {" "}Estou ciente de que, após 30 dias de bloqueio por inadimplência,
-                a empresa poderá ser cancelada automaticamente. A partir do cancelamento,
-                manual ou automático, meus dados operacionais ficarão disponíveis para solicitar
-                backup por até <strong> 60 dias</strong>, sem geração automática; depois
-                poderão ser excluídos definitivamente, ressalvadas obrigações legais.
+                . Estou ciente de que as modalidades de programa incluem conteúdos
+                predominantemente gravados, orientações flexíveis conforme a
+                disponibilidade e acesso aos recursos do CRM Prosperity durante
+                o período contratado. Os recursos e adicionais disponibilizados
+                dependem da oferta escolhida e podem ter preços próprios.
+                Declaro também que sou responsável pela origem das bases de
+                contatos, autorizações e opt-ins exigidos pelos canais e pela
+                legalidade das mensagens enviadas. Após 30 dias de bloqueio por
+                inadimplência, a empresa poderá ser cancelada; após o cancelamento,
+                terei até <strong>60 dias</strong> para solicitar e baixar os
+                dados operacionais, sem backup automático, ressalvadas obrigações legais.
               </span>
             </label>
 
