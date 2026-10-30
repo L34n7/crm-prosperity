@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { BookOpen, CalendarClock, MonitorPlay, GraduationCap } from "lucide-react";
 import { montarWaMeUrl } from "@/lib/contatos/sistema";
 import PaymentProviderModal, {
   type PaymentGateway,
@@ -188,7 +189,7 @@ export default function PlanoPage() {
   function abrirCheckoutCotacao() {
     window.open(
       montarWaMeUrl(
-        "Olá! Gostaria de fazer uma cotação do plano Profissional Enterprise."
+        "Olá! Gostaria de conhecer o Programa Profissional Enterprise."
       ),
       "_blank",
       "noopener,noreferrer"
@@ -205,10 +206,10 @@ export default function PlanoPage() {
 
   const planos: Plano[] = [
     {
-      nome: "Básico",
+      nome: "Programa Básico",
       slug: "basico",
       descricao:
-        "Ideal para quem quer começar com atendimento automatizado, organização profissional e IA integrada desde o primeiro dia.",
+        "Aprenda a organizar contatos, criar disparos e iniciar automações de atendimento, aplicando os conhecimentos no CRM Prosperity.",
       precoOriginal: "R$ 197/mês",
       preco: "R$ 137/mês",
       observacaoPreco: "🔥 Oferta de entrada: economize R$ 60 todos os meses.",
@@ -228,10 +229,10 @@ export default function PlanoPage() {
       ],
     },
     {
-      nome: "Essencial IA +",
+      nome: "Programa Essencial IA+",
       slug: "essencial",
       descricao:
-        "Para equipes que precisam de mais potência, mais automação e mais inteligência artificial para escalar vendas e atendimento.",
+        "Aprofunde seus conhecimentos em automações, inteligência artificial e atendimento, com mais capacidade para aplicar tudo no CRM Prosperity.",
       precoOriginal: "R$ 367/mês",
       preco: "R$ 267/mês",
       observacaoPreco: "🔥 Melhor custo-benefício: economize R$ 100 por mês.",
@@ -254,12 +255,12 @@ export default function PlanoPage() {
       ],
     },
     {
-      nome: "Profissional Enterprise",
+      nome: "Programa Profissional Enterprise",
       descricao:
-        "Estrutura criada para operações maiores que precisam de performance, escala e automações sob medida.",
+        "Orientações e estrutura sob medida para quem deseja avançar no uso de automações e recursos do CRM Prosperity.",
       preco: "Sob cotação",
       observacaoPreco:
-        "Fale com nosso time e monte o plano ideal para sua operação.",
+        "Fale com nosso time para conhecer as condições e a orientação disponíveis.",
       tipo: "cotacao",
       badge: "Escala personalizada",
       recursos: [
@@ -297,15 +298,16 @@ export default function PlanoPage() {
             <span><strong>Prosperity</strong> CRM</span>
           </Link>
 
-          <div className={styles.kicker}>Planos CRM Prosperity</div>
+          <div className={styles.kicker}>Programas Prosperity</div>
 
           <h1 className={styles.title}>
-            Escolha o plano ideal para o momento da sua operação
+            Escolha seu programa para aprender e colocar em prática
           </h1>
 
           <p className={styles.subtitle}>
-            Básico e Essencial possuem os mesmos recursos principais. A diferença
-            está nos usuários, tokens de IA e números de WhatsApp inclusos.
+            Aprenda com conteúdos predominantemente gravados, orientações flexíveis
+            e acesso ao CRM Prosperity. Escolha a modalidade com os recursos
+            mais adequados ao que você deseja desenvolver.
           </p>
         </div>
 
@@ -356,6 +358,15 @@ export default function PlanoPage() {
                   ) : null}
                 </div>
 
+                <div className={styles.learningIncluded}>
+                  <GraduationCap size={18} aria-hidden="true" />
+                  <span>
+                    <strong>Treinamento prático</strong> com acesso ao CRM Prosperity
+                  </span>
+                </div>
+
+                <h3 className={styles.featureHeading}>Recursos disponíveis no CRM</h3>
+
                 <ul className={styles.featureList}>
                   {recursosVisiveis.map((recurso) => (
                     <li key={recurso} className={styles.featureItem}>
@@ -388,7 +399,7 @@ export default function PlanoPage() {
                       }
                       disabled={loadingCheckout !== null}
                     >
-                      {loadingCheckout ? "Carregando..." : "Ir para pagamento"}
+                      {loadingCheckout ? "Carregando..." : "Começar agora"}
                     </button>
                   ) : (
                     <button
@@ -405,6 +416,43 @@ export default function PlanoPage() {
           })}
         </div>
 
+        <section className={styles.learningPanel} aria-labelledby="aprendizado-flexivel">
+          <div className={styles.learningPanelHeader}>
+            <span className={styles.learningEyebrow}>Sua jornada de aprendizado</span>
+            <h2 id="aprendizado-flexivel" className={styles.learningPanelTitle}>
+              Aprenda no seu ritmo
+            </h2>
+            <p className={styles.learningPanelDescription}>
+              Conteúdos gravados, prática e orientações conforme sua necessidade e
+              a disponibilidade de atendimento, sem calendário fixo de aulas.
+            </p>
+          </div>
+
+          <div className={styles.learningDetails}>
+            <div className={styles.learningDetail}>
+              <span className={styles.learningDetailIcon}>
+                <MonitorPlay size={21} aria-hidden="true" />
+              </span>
+              <strong>Conteúdos gravados</strong>
+              <span>Revise as explicações e acompanhe os temas no seu tempo.</span>
+            </div>
+            <div className={styles.learningDetail}>
+              <span className={styles.learningDetailIcon}>
+                <CalendarClock size={21} aria-hidden="true" />
+              </span>
+              <strong>Orientação flexível</strong>
+              <span>Esclarecimentos e apoio conforme sua necessidade e disponibilidade.</span>
+            </div>
+            <div className={styles.learningDetail}>
+              <span className={styles.learningDetailIcon}>
+                <BookOpen size={21} aria-hidden="true" />
+              </span>
+              <strong>Aplicação prática</strong>
+              <span>Use o CRM Prosperity para aplicar os conhecimentos adquiridos.</span>
+            </div>
+          </div>
+        </section>
+
         <div className={styles.footerInfo}>
           <button
             className={styles.secondaryButton}
@@ -415,10 +463,11 @@ export default function PlanoPage() {
           </button>
 
           <p className={styles.footerText}>
-            Os planos <strong>Básico</strong> e <strong>Essencial IA PRO</strong> incluem os 
-            principais recursos. A diferença está na quantidade de <strong>usuários</strong>, 
-            <strong>tokens de IA</strong>, <strong>números de WhatsApp inclusos</strong> e volume de operação. Para demandas maiores, confira 
-            a condição do <strong>Profissional Enterprise</strong> em Fazer cotação.
+            Os programas incluem <strong>conteúdos educacionais, orientações flexíveis</strong> e
+            acesso aos recursos do <strong>CRM Prosperity</strong> durante o período contratado.
+            As modalidades diferem em <strong>usuários, tokens de IA, números de WhatsApp</strong> e
+            capacidade de utilização. Para necessidades maiores, conheça o
+            <strong> Programa Profissional Enterprise</strong> por meio de uma cotação.
           </p>
         </div>
       </section>
