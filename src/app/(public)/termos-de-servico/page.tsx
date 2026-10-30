@@ -1,9 +1,9 @@
 export default function TermosDeServico() {
   return (
     <main style={{ maxWidth: 960, margin: "0 auto", padding: "40px 24px 72px", lineHeight: 1.7 }}>
-      <h1>Termos de Uso e Contrato de Licença SaaS - CRM Prosperity</h1>
+      <h1>Termos dos Programas de Aprendizagem e Uso do CRM Prosperity</h1>
 
-      <p><strong>Última atualização:</strong> 29/10/2026</p>
+      <p><strong>Última atualização:</strong> 30/10/2026</p>
 
       <h2>Identificação do fornecedor</h2>
       <p>
@@ -19,11 +19,13 @@ export default function TermosDeServico() {
       </p>
 
       <p>
-        Estes Termos regulam o acesso e o uso do CRM Prosperity. Ao criar uma conta,
-        contratar um plano, aceitar uma oferta, efetuar pagamento ou utilizar a
-        Plataforma, o Cliente declara que leu, compreendeu e concordou com estes
-        Termos, com a Política de Privacidade, com a Política de Mensageria e Uso
-        Aceitável e com as condições específicas da contratação.
+        Estes Termos regulam a contratação dos programas de aprendizagem oferecidos
+        pela Prosperity, quando integrantes da oferta, e as condições de acesso e
+        utilização do ambiente CRM Prosperity. A modalidade escolhida, os recursos
+        incluídos, o período de acesso, os valores e as condições de pagamento são
+        apresentados na oferta e no checkout. Ao contratar, o Cliente aceita estes
+        Termos, a Política de Privacidade, a Política de Mensageria e Uso Aceitável e
+        as condições específicas exibidas antes da confirmação da compra.
       </p>
       <p>
         A pessoa que aceitar estes Termos em nome de empresa ou organização declara
@@ -33,7 +35,8 @@ export default function TermosDeServico() {
 
       <h2>1. Definições</h2>
       <ul>
-        <li><strong>Plataforma:</strong> software CRM Prosperity disponibilizado como serviço pela internet;</li>
+        <li><strong>Programa:</strong> modalidade de aprendizagem prática em informática, com conteúdos e orientações na extensão prevista na oferta;</li>
+        <li><strong>Plataforma:</strong> ambiente tecnológico CRM Prosperity, disponibilizado pela internet para utilização dos recursos contratados e aplicação prática dos conhecimentos;</li>
         <li><strong>Cliente:</strong> pessoa física ou jurídica titular da contratação;</li>
         <li><strong>Usuário:</strong> pessoa autorizada pelo Cliente a acessar a Plataforma;</li>
         <li><strong>Contato:</strong> pessoa cujos dados sejam inseridos, importados ou tratados pelo Cliente;</li>
@@ -43,17 +46,38 @@ export default function TermosDeServico() {
         <li><strong>Tokens:</strong> unidades internas utilizadas para medir o consumo de recursos de inteligência artificial.</li>
       </ul>
 
-      <h2>2. Objeto e natureza do serviço</h2>
+      <h2>2. Programas de aprendizagem e acesso à ferramenta</h2>
       <p>
-        O CRM Prosperity oferece recursos de atendimento, gestão de contatos,
-        conversas, usuários, setores, automações, fluxos, campanhas, agendamentos,
-        calendários, inteligência artificial, relatórios, integrações e outros
-        módulos disponibilizados conforme o plano contratado.
+        As modalidades identificadas como programas educacionais oferecem orientação
+        prática sobre informática aplicada a comunicação, automações e atendimento
+        digital. O aprendizado é organizado principalmente por conteúdos gravados,
+        materiais e explicações práticas. Orientações complementares podem ocorrer
+        de forma flexível, de acordo com a necessidade do aluno e a disponibilidade
+        de atendimento, <strong>sem calendário fixo de aulas ao vivo</strong>, salvo
+        quando houver previsão expressa na oferta.
       </p>
       <p>
-        A contratação concede licença limitada, revogável, temporária, não exclusiva
-        e intransferível de uso da Plataforma. Não há venda ou cessão do código-fonte,
-        arquitetura, marca ou propriedade intelectual do CRM Prosperity.
+        Conforme a modalidade efetivamente contratada, o programa também contempla
+        acesso ao ambiente CRM Prosperity para aplicação dos conhecimentos e uso dos
+        recursos informados na oferta. A Plataforma possui funcionalidades operacionais
+        de atendimento, gestão de contatos, campanhas, automações, inteligência
+        artificial, relatórios, agendamentos e integrações. O acesso a esses recursos
+        integra as condições econômicas da contratação, não sendo declarado gratuito
+        quando compuser o valor pago.
+      </p>
+      <p>
+        A utilização da Plataforma concede autorização limitada, temporária, não
+        exclusiva e intransferível durante o período contratado; não há cessão de
+        código-fonte, arquitetura, marca ou propriedade intelectual. Serviços
+        adicionais, ampliação de usuários, números de WhatsApp e pacotes de recursos
+        podem ter condições e preços próprios, expressamente informados antes da compra.
+        Não se presume que tais serviços adicionais constituam treinamento.
+      </p>
+      <p>
+        A existência de conteúdo educacional não elimina a natureza tecnológica
+        dos serviços de uso do software efetivamente disponibilizados. A descrição
+        comercial, a execução prática, o checkout e os documentos fiscais devem
+        refletir os serviços de fato contratados e prestados.
       </p>
 
       <h2>3. Aceite eletrônico e valor probatório</h2>
@@ -84,11 +108,14 @@ export default function TermosDeServico() {
         não possam ser afastados por lei.
       </p>
 
-      <h2>5. Planos, limites e evolução da Plataforma</h2>
+      <h2>5. Modalidades, limites e evolução dos recursos</h2>
       <p>
-        Cada plano pode possuir limites próprios de usuários, contatos, integrações,
-        armazenamento, tokens, automações, campanhas, recursos e suporte. Prevalecem
-        os limites informados na oferta, checkout, painel ou instrumento comercial.
+        Cada modalidade pode possuir conteúdos educacionais e limites próprios de
+        usuários, contatos, integrações, armazenamento, tokens, automações,
+        campanhas, recursos e suporte. A descrição da modalidade, o período
+        contratado e os limites informados na oferta e no checkout integram a
+        contratação. O acesso educacional e o acesso operacional à Plataforma
+        não devem ser confundidos com propriedade do software.
       </p>
       <p>
         A Plataforma poderá criar, modificar, substituir, reorganizar ou descontinuar
@@ -98,12 +125,15 @@ export default function TermosDeServico() {
         aplicáveis.
       </p>
 
-      <h2>6. Valores, cobrança, renovação e inadimplência</h2>
+      <h2>6. Valores, período de acesso, renovação e inadimplência</h2>
       <p>
         Valores, periodicidade, vencimento, forma de pagamento, renovação e condições
-        promocionais constarão da oferta contratada. A inadimplência poderá acarretar
-        restrição ou suspensão de recursos, automações, campanhas, integrações,
-        inteligência artificial ou acesso, sem prejuízo da cobrança de valores devidos.
+        promocionais constarão da oferta contratada. Quando a modalidade for
+        mensal, o pagamento corresponde ao período contratado, com os conteúdos,
+        orientações e recursos de CRM expressamente incluídos nessa modalidade.
+        A inadimplência poderá acarretar restrição ou suspensão de recursos,
+        automações, campanhas, integrações, inteligência artificial ou acesso,
+        sem prejuízo da cobrança de valores devidos.
       </p>
       <p>
         Reajustes poderão ocorrer nos limites permitidos pela legislação e serão
@@ -424,12 +454,17 @@ export default function TermosDeServico() {
         aplicável, observando a legislação de proteção de dados e o escopo necessário.
       </p>
 
-      <h2>31. Alterações destes Termos</h2>
+      <h2>31. Alterações destes Termos e contratações anteriores</h2>
       <p>
         Estes Termos poderão ser atualizados para refletir mudanças legais,
         regulatórias, técnicas, comerciais ou operacionais. Alterações materiais serão
-        comunicadas por meio razoável. Quando necessário, poderá ser solicitado novo
-        aceite eletrônico.
+        comunicadas por meio razoável e, quando necessário, dependerão de novo aceite
+        eletrônico. O aceite desta versão não altera retroativamente a natureza,
+        o objeto ou o histórico de compras anteriores; aplicam-se os direitos
+        adquiridos e as condições efetivamente acordadas em cada contratação.
+        Caso o Cliente não concorde com alteração material, poderá contatar o
+        atendimento para esclarecer as condições e tratar o encerramento, sem
+        prejuízo dos direitos previstos na legislação aplicável.
       </p>
 
       <h2>32. Legislação e foro</h2>
