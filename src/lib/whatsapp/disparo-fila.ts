@@ -2381,7 +2381,14 @@ export async function atualizarItemDisparoPeloWebhook({
   }
 
   if (reconciliarCampanha) {
-    await reconciliarCampanhaDisparo(String(item.campanha_id));
+    // Os webhooks da Meta chegam em rajadas. Uma reconciliação QStash
+    // por janela/campanha evita repetir UPDATEs e disputar locks no Postgres.
+    const campanhaId = String(item.campanha_id);
+    const fila = await agendarReconciliacaoCampanhaDisparo(campanhaId);
+    if (!fila.ok) {
+      // Contingência: mantém o processamento mesmo sem QStash disponível.
+      await reconciliarCampanhaDisparo(campanhaId);
+    }
   }
 
   if (falhou) {
