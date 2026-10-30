@@ -162,7 +162,7 @@ function obterCampoContatoDaLinha(headers: string[], row: string[]) {
   ]);
 }
 
-function parseCsvLine(line: string) {
+function parseCsvLine(line: string, delimiter = ",") {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -181,7 +181,7 @@ function parseCsvLine(line: string) {
       continue;
     }
 
-    if (char === "," && !inQuotes) {
+    if (char === delimiter && !inQuotes) {
       result.push(current.trim());
       current = "";
       continue;
@@ -205,8 +205,17 @@ function parseCsv(text: string) {
     return { headers: [], rows: [] as string[][] };
   }
 
-  const headers = parseCsvLine(lines[0]);
-  const rows = lines.slice(1).map(parseCsvLine);
+  // Excel em pt-BR costuma exportar CSV separado por ponto e vírgula.
+  // Detecte o separador no cabeçalho, respeitando campos entre aspas.
+  const alternativas = [",", ";", "\\t"];
+  const separador = alternativas
+    .map((item) => ({
+      item: item === "\\t" ? "\t" : item,
+      total: parseCsvLine(lines[0], item === "\\t" ? "\t" : item).length,
+    }))
+    .sort((a, b) => b.total - a.total)[0]?.item ?? ",";
+  const headers = parseCsvLine(lines[0], separador);
+  const rows = lines.slice(1).map((line) => parseCsvLine(line, separador));
 
   return { headers, rows };
 }
