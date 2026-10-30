@@ -10,7 +10,6 @@ import {
 import {
   BarChart3,
   CheckCircle2,
-  ChevronRight,
   FileText,
   Globe2,
   Mail,
@@ -593,52 +592,64 @@ export default function EmailMarketingPage() {
                   </div>
                 </div>
               ) : campanhasFiltradas.length ? (
-                <div className={styles.campaignCardsGrid}>
-                  {campanhasFiltradas.map((campanha) => (
-                    <button
-                      type="button"
-                      key={campanha.id}
-                      className={styles.campaignOverviewCard}
-                      onClick={() => setCampanhaDetalhes(campanha)}
-                      title={`Ver destinatários e resultados de ${campanha.nome}`}
-                    >
-                      <div className={styles.campaignOverviewHeader}>
-                        <div>
-                          <strong className={styles.campaignOverviewTitle}>{campanha.nome}</strong>
-                          <span className={styles.campaignOverviewSubject}>{campanha.assunto}</span>
-                        </div>
-                        <span className={statusClass(campanha.status)}>
-                          {statusLabel(campanha.status)}
-                        </span>
-                      </div>
-
-                      <div className={styles.campaignOverviewMetrics}>
-                        <div><small>Destinatários</small><strong>{campanha.total_destinatarios}</strong></div>
-                        <div><small>Enviados</small><strong>{campanha.total_enviados}</strong></div>
-                        <div><small>Entregues</small><strong>{campanha.total_entregues}</strong></div>
-                        <div><small>Abertos (estim.)</small><strong>{campanha.total_abertos}</strong></div>
-                        <div><small>Cliques</small><strong>{campanha.total_cliques}</strong></div>
-                      </div>
-
-                      <div className={styles.campaignOverviewFooter}>
-                        <div>
-                          <span>Envio: <strong>{dataHora(campanha.agendada_para)}</strong></span>
-                          <span
-                            className={styles.campaignOverviewSender}
-                            title={relacaoUnica(campanha.email_remetentes)?.email || ""}
-                          >
-                            {relacaoUnica(campanha.email_remetentes)?.email || "Sem remetente"}
-                          </span>
-                          {campanha.erro ? (
-                            <span className={styles.campaignOverviewError}>{campanha.erro}</span>
-                          ) : null}
-                        </div>
-                        <span className={styles.campaignOverviewAction}>
-                          Ver detalhes <ChevronRight size={15} aria-hidden="true" />
-                        </span>
-                      </div>
-                    </button>
-                  ))}
+                <div className={styles.tableWrap}>
+                  <table className={`${styles.dataTable} ${styles.campaignTable}`}>
+                    <thead>
+                      <tr>
+                        <th>Campanha</th>
+                        <th>Status</th>
+                        <th>Destinatários</th>
+                        <th>Enviados</th>
+                        <th>Entregues</th>
+                        <th title="Estimativa: serviços de e-mail podem carregar imagens automaticamente.">Abertos (estim.)</th>
+                        <th>Cliques</th>
+                        <th>Envio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campanhasFiltradas.map((campanha) => (
+                        <tr
+                          key={campanha.id}
+                          className={styles.campaignClickableRow}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`Ver detalhes da campanha ${campanha.nome}`}
+                          title={`Ver detalhes da campanha ${campanha.nome}`}
+                          onClick={() => setCampanhaDetalhes(campanha)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setCampanhaDetalhes(campanha);
+                            }
+                          }}
+                        >
+                          <td>
+                            <strong>{campanha.nome}</strong>
+                            <small>{campanha.assunto}</small>
+                          </td>
+                          <td>
+                            <span className={statusClass(campanha.status)}>
+                              {statusLabel(campanha.status)}
+                            </span>
+                            {campanha.erro ? (
+                              <small className={styles.errorText}>{campanha.erro}</small>
+                            ) : null}
+                          </td>
+                          <td>{campanha.total_destinatarios}</td>
+                          <td>{campanha.total_enviados}</td>
+                          <td>{campanha.total_entregues}</td>
+                          <td>{campanha.total_abertos}</td>
+                          <td>{campanha.total_cliques}</td>
+                          <td>
+                            <strong>{dataHora(campanha.agendada_para)}</strong>
+                            <small className={styles.campaignTableSender}>
+                              {relacaoUnica(campanha.email_remetentes)?.email || ""}
+                            </small>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : erroConfiguracao ? (
                 <div className={styles.campaignLoadFailure} role="alert">
