@@ -8717,7 +8717,10 @@ export default function DisparosWhatsAppPage() {
                             <div className={styles.campaignIssuesPanel}>
                               <div className={styles.campaignIssuesHeader}>
                                 <div>
-                                  <strong>{tituloProblema}</strong>
+                                  <div className={styles.campaignIssuesTitle}>
+                                    <Info size={17} aria-hidden="true" />
+                                    <strong>{tituloProblema}</strong>
+                                  </div>
                                   <p>
                                     {falhas > 0
                                       ? `${falhas} ${falhas === 1 ? "falha identificada" : "falhas identificadas"} em ${falhasPorTipo.length} ${falhasPorTipo.length === 1 ? "tipo" : "tipos"}.`

@@ -6038,10 +6038,31 @@
   gap: 13px;
   margin-top: 12px;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 58%, var(--crm-border) 42%);
+  border: 1px solid var(--crm-border);
   border-radius: 15px;
-  background: color-mix(in srgb, var(--crm-surface) 82%, var(--crm-warning-bg) 18%);
+  background: color-mix(in srgb, var(--crm-surface) 82%, transparent);
   text-align: left;
+}
+.campaignHistoryCard.resultError .campaignIssuesPanel {
+  border-color: var(--crm-danger-border);
+}
+.campaignHistoryCard.resultProcessing .campaignIssuesPanel {
+  border-color: var(--crm-warning-border);
+}
+.campaignIssuesTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.campaignIssuesTitle svg {
+  flex: 0 0 auto;
+  color: var(--crm-text-muted);
+}
+.campaignHistoryCard.resultError .campaignIssuesTitle svg {
+  color: var(--crm-danger-text);
+}
+.campaignHistoryCard.resultProcessing .campaignIssuesTitle svg {
+  color: var(--crm-warning-text);
 }
 .campaignIssuesHeader {
   display: flex;
