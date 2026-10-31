@@ -6222,10 +6222,15 @@ export default function DisparosWhatsAppPage() {
               <section className={styles.disparoWizardModal} role="dialog" aria-modal="true"
                 aria-labelledby="disparo-wizard-titulo">
                 <header className={styles.disparoWizardHeader}>
-                  <div>
+                  <div className={styles.disparoWizardHeaderIntro}>
                     <p className={styles.eyebrow}>WHATSAPP BUSINESS • DISPARO EM MASSA</p>
                     <h2 id="disparo-wizard-titulo">Enviar disparos</h2>
                     <span>Configure a mensagem, selecione os destinatários e confirme o envio.</span>
+                  </div>
+                  <div className={`${styles.disparoWizardHeading} ${styles.disparoWizardHeaderStep}`}>
+                    <span>ETAPA {etapaDisparo} DE 3</span>
+                    <h3>{etapaDisparo === 1 ? "Mensagem e variáveis" : etapaDisparo === 2 ? "Destinatários e capacidade" : agendarDisparo ? "Confirmar agendamento" : "Confirmar disparo de mensagens"}</h3>
+                    <p>{etapaDisparo === 1 ? "Selecione o número WhatsApp, configure o template, as variáveis e o agendamento." : etapaDisparo === 2 ? "Filtre contatos, resolva duplicidades e confira a capacidade da Meta." : "Revise as informações e a estimativa de cobrança antes de continuar."}</p>
                   </div>
                   <button type="button" className={styles.disparoWizardClose}
                     aria-label="Fechar envio de disparos" disabled={disparando}
@@ -6237,11 +6242,6 @@ export default function DisparosWhatsAppPage() {
                   <div className={styles.emptyState}>Você não tem permissão para realizar disparos.</div>
                 ) : (
                   <form onSubmit={(event) => event.preventDefault()} className={styles.disparoWizardForm}>
-                    <div className={[
-                      styles.disparoWizardWorkspace,
-                      etapaDisparo === 1 ? styles.disparoWizardWorkspaceWithPreview : "",
-                    ].filter(Boolean).join(" ")}>
-                    <div className={styles.disparoWizardMain}>
                     <nav className={styles.disparoWizardSteps} aria-label="Etapas do disparo">
                       {[
                         { numero: 1, titulo: "Mensagem e variáveis" },
@@ -6261,12 +6261,12 @@ export default function DisparosWhatsAppPage() {
                         </button>
                       ))}
                     </nav>
+                    <div className={[
+                      styles.disparoWizardWorkspace,
+                      etapaDisparo === 1 ? styles.disparoWizardWorkspaceWithPreview : "",
+                    ].filter(Boolean).join(" ")}>
+                    <div className={styles.disparoWizardMain}>
                     <div className={styles.disparoWizardScroll} key={etapaDisparo}>
-                      <div className={styles.disparoWizardHeading}>
-                        <span>ETAPA {etapaDisparo} DE 3</span>
-                        <h3>{etapaDisparo === 1 ? "Mensagem e variáveis" : etapaDisparo === 2 ? "Destinatários e capacidade" : agendarDisparo ? "Confirmar agendamento" : "Confirmar disparo de mensagens"}</h3>
-                        <p>{etapaDisparo === 1 ? "Selecione o número WhatsApp, configure o template, as variáveis e o agendamento." : etapaDisparo === 2 ? "Filtre contatos, resolva duplicidades e confira a capacidade da Meta." : "Revise as informações e a estimativa de cobrança antes de continuar."}</p>
-                      </div>
                       {etapaDisparo === 1 ? (
                         <div className={styles.disparoWizardStage}>
                     <div className={styles.setupColumn}>

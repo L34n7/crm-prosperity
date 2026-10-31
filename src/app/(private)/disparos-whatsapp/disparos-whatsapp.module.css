@@ -5124,7 +5124,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(1240px, 100%);
+  width: min(1340px, 100%);
   max-height: min(92dvh, 940px);
   min-height: 0;
   overflow: hidden;
@@ -5135,14 +5135,29 @@
   color: var(--crm-text);
 }
 .disparoWizardHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1fr) 37px;
+  align-items: center;
   flex-shrink: 0;
   gap: 20px;
-  padding: 20px 25px;
+  padding: 19px 25px;
   border-bottom: 1px solid var(--crm-border);
   background: radial-gradient(circle at 12% 0%, var(--crm-primary-soft), transparent 44%), var(--crm-surface);
+}
+.disparoWizardHeaderIntro { min-width: 0; }
+.disparoWizardHeaderStep {
+  min-width: 0;
+  text-align: right;
+  border-right: 1px solid var(--crm-border);
+  padding-right: 20px;
+}
+.disparoWizardHeaderStep h3 {
+  margin-top: 4px;
+  font-size: 18px;
+}
+.disparoWizardHeaderStep p {
+  max-width: 530px;
+  margin-left: auto;
 }
 .disparoWizardHeader h2 {
   margin: 0 0 5px;
@@ -5151,7 +5166,7 @@
   line-height: 1.15;
   font-weight: 850;
 }
-.disparoWizardHeader > div > span { color: var(--crm-text-muted); font-size: 13px; line-height: 1.5; }
+.disparoWizardHeaderIntro > span { color: var(--crm-text-muted); font-size: 13px; line-height: 1.5; }
 .disparoWizardClose {
   flex: 0 0 auto;
   width: 37px;
@@ -5185,7 +5200,7 @@
 }
 .disparoWizardWorkspaceWithPreview {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(295px, 355px);
+  grid-template-columns: minmax(0, 1fr) minmax(365px, 40%);
 }
 
 .disparoWizardMain {
@@ -5323,11 +5338,17 @@
 .disparoWizardActions { display: flex; justify-content: flex-end; gap: 12px; }
 .disparoWizardFooter .errorAlert { margin: 0; }
 
+@media (max-width: 1050px) {
+  .disparoWizardHeader { grid-template-columns: minmax(200px, 0.75fr) minmax(0, 1fr) 37px; gap: 14px; padding: 15px 18px; }
+  .disparoWizardHeaderStep { padding-right: 12px; }
+  .disparoWizardHeaderStep h3 { font-size: 16px; }
+  .disparoWizardHeaderStep p { font-size: 12px; }
+}
 @media (max-width: 900px) {
   .disparoWizardOverlay { padding: 12px; }
   .disparoWizardModal { max-height: 94dvh; }
   .disparoWizardWorkspaceWithPreview {
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 32%);
+    grid-template-columns: minmax(0, 1fr) minmax(310px, 38%);
   }
   .disparoWizardPreviewColumn { padding: 12px; }
   .disparoWizardScroll { padding: 16px; }
@@ -5335,6 +5356,21 @@
   .disparoWizardStep { flex-direction: column; align-items: flex-start; }
 }
 @media (max-width: 700px) {
+  .disparoWizardHeader {
+    grid-template-columns: minmax(0, 1fr) 37px;
+    gap: 10px;
+  }
+  .disparoWizardHeaderStep {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: left;
+    padding-right: 0;
+    border-right: 0;
+    border-top: 1px solid var(--crm-border);
+    padding-top: 10px;
+  }
+  .disparoWizardHeaderStep p { margin-left: 0; }
+  .disparoWizardClose { grid-column: 2; grid-row: 1; }
   .disparoWizardWorkspaceWithPreview { display: flex; flex-direction: column; }
   .disparoWizardWorkspaceWithPreview .disparoWizardMain {
     flex: 1 1 auto;
@@ -5369,3 +5405,67 @@
 /* Eleva o contexto da tela enquanto o assistente modal está aberto. */
 .layoutWizardOpen { z-index: 1400; }
 
+
+/* Agendamento em destaque no assistente de disparos, sem afetar os demais módulos. */
+.disparoWizardSchedule .scheduleToggleCard {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--crm-primary) 46%, var(--crm-border));
+  background:
+    radial-gradient(circle at 0% 0%, var(--crm-primary-soft) 0%, transparent 75%),
+    linear-gradient(110deg,
+      color-mix(in srgb, var(--crm-primary-soft) 70%, var(--crm-surface) 30%),
+      var(--crm-surface) 95%);
+  border-radius: 17px;
+  padding: 17px 18px 17px 22px;
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
+  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+.disparoWizardSchedule .scheduleToggleCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--crm-primary-strong);
+  pointer-events: none;
+}
+
+.disparoWizardSchedule .scheduleToggleCardActive {
+  border-color: var(--crm-primary);
+  background: linear-gradient(115deg,
+    color-mix(in srgb, var(--crm-primary-soft) 90%, var(--crm-surface) 10%),
+    color-mix(in srgb, var(--crm-primary-soft) 35%, var(--crm-surface) 65%));
+  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-08), inset 0 0 0 1px var(--crm-primary-border);
+}
+
+.disparoWizardSchedule .scheduleToggleText strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.disparoWizardSchedule .scheduleToggleControl {
+  width: 46px;
+  height: 27px;
+  border-color: color-mix(in srgb, var(--crm-primary-strong) 55%, var(--crm-border));
+  background: color-mix(in srgb, var(--crm-primary-soft) 58%, var(--crm-surface-muted) 42%);
+}
+
+.disparoWizardSchedule .scheduleToggleControl::after {
+  width: 19px;
+  height: 19px;
+}
+
+.disparoWizardSchedule .scheduleToggleInput:checked + .scheduleToggleControl {
+  background: var(--crm-primary-strong);
+  border-color: var(--crm-primary-strong);
+}
+
+.disparoWizardSchedule .scheduleToggleInput:checked + .scheduleToggleControl::after {
+  transform: translateX(19px);
+}
+
+.disparoWizardSchedule .scheduleToggleInput:focus-visible + .scheduleToggleControl {
+  outline: 3px solid var(--crm-primary-border);
+}
