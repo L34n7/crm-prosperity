@@ -5341,13 +5341,22 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
   gap: 12px;
   padding: 14px 24px 17px;
   border-top: 1px solid var(--crm-border);
   background: var(--crm-surface);
   box-shadow: 0 -6px 18px var(--crm-ui-private-shadow-rgb-15-23-42-0-04);
 }
-.disparoWizardActions { display: flex; justify-content: flex-end; gap: 12px; }
+.disparoWizardActions {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
 .disparoWizardFooter .errorAlert { margin: 0; }
 
 @media (max-width: 1050px) {
@@ -5490,27 +5499,36 @@
 }
 .historyPaymentButton {
   min-height: 44px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid var(--crm-primary-border);
+  padding: 8px 14px;
+  border: 1px solid var(--crm-ui-private-border-hex-d5ffeb);
   border-radius: 14px;
-  background: var(--crm-primary-soft);
-  color: var(--crm-primary-text);
+  background: linear-gradient(
+    80deg,
+    var(--crm-ui-private-surface-hex-f4fff8) 0%,
+    var(--crm-ui-private-surface-hex-c8ffdd) 100%
+  );
+  color: var(--crm-text-strong);
   font: inherit;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color .18s ease, background .18s ease;
+  transition: border-color .2s ease, background .2s ease, transform .2s ease;
 }
 .historyPaymentButton:hover,
 .historyPaymentButton:focus-visible {
-  border-color: var(--crm-primary-strong);
-  background: var(--crm-primary-soft-hover);
+  background: linear-gradient(
+    80deg,
+    var(--crm-ui-private-surface-hex-c8ffe3) 0%,
+    var(--crm-ui-private-surface-hex-c8ffdb) 100%
+  );
+  border-color: var(--crm-ui-private-border-hex-d8f5ff);
+  transform: translateY(-1px);
 }
 .historyHeaderPrimaryActions .historySendButton {
   white-space: nowrap;
@@ -5541,4 +5559,58 @@
     width: 100%;
   }
   .historyPaymentButton { width: 100%; white-space: normal; }
+}
+
+/* Etapa 2: leve destaque visual nos filtros, sem competir com os contatos. */
+.disparoWizardStage .contactsFilterCard {
+  border-color: color-mix(in srgb, var(--crm-primary-border) 62%, var(--crm-border) 38%);
+  background:
+    radial-gradient(circle at 0% 0%, var(--crm-primary-soft) 0%, transparent 60%),
+    linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--crm-primary-soft) 34%, var(--crm-surface) 66%),
+      var(--crm-surface) 92%
+    );
+}
+
+/* Evita expor os cards de fundo durante a consolidação assíncrona da campanha. */
+.conclusionPendingPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: min(420px, calc(100vw - 40px));
+  padding: 36px 28px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 22px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  box-shadow: var(--crm-shadow-lg);
+  text-align: center;
+}
+.conclusionPendingPanel strong {
+  font-size: 16px;
+  font-weight: 850;
+}
+.conclusionPendingPanel p {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.conclusionPendingSpinner {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--crm-primary-border);
+  border-top-color: var(--crm-primary-strong);
+  border-radius: 50%;
+  animation: conclusionPendingSpin .8s linear infinite;
+}
+@keyframes conclusionPendingSpin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conclusionPendingSpinner { animation: none; }
 }

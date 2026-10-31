@@ -14,7 +14,6 @@ import {
   Check,
   ChevronDown,
   CircleStop,
-  CreditCard,
   FileSpreadsheet,
   FileText,
   Info,
@@ -2364,6 +2363,7 @@ export default function DisparosWhatsAppPage() {
     CampanhaDisparoAndamento[]
   >([]);
   const [modalCampanhaAberto, setModalCampanhaAberto] = useState(false);
+  const [carregandoConclusaoDisparo, setCarregandoConclusaoDisparo] = useState(false);
   const [campanhasResultadoConclusao, setCampanhasResultadoConclusao] =
     useState<CampanhaDisparoAndamento[]>([]);
   const [campanhaResultadoConclusaoId, setCampanhaResultadoConclusaoId] =
@@ -2550,10 +2550,11 @@ export default function DisparosWhatsAppPage() {
     return supabaseRealtimeRef.current;
   }
 
-  const carregarResultadosConclusao = useCallback(async () => {
+  const carregarResultadosConclusao = useCallback(async (mostrarTransicao = false) => {
     if (carregandoResultadosConclusaoRef.current) return;
 
     carregandoResultadosConclusaoRef.current = true;
+    if (mostrarTransicao) setCarregandoConclusaoDisparo(true);
 
     try {
       const response = await fetch(
@@ -2602,6 +2603,7 @@ export default function DisparosWhatsAppPage() {
       setModalResultadoConclusaoAberto(true);
     } finally {
       carregandoResultadosConclusaoRef.current = false;
+      if (mostrarTransicao) setCarregandoConclusaoDisparo(false);
     }
   }, []);
 
@@ -3389,7 +3391,9 @@ export default function DisparosWhatsAppPage() {
       }
 
       try {
-        setLoadingHistorico(true);
+        // Revalidacoes silenciosas preservam os cards visiveis:
+        // nao substituimos a lista por "Carregando campanhas...".
+        if (!opcoes.silencioso) setLoadingHistorico(true);
 
         const params = new URLSearchParams({
           limit: String(ITENS_HISTORICO_POR_PAGINA),
@@ -3990,7 +3994,7 @@ export default function DisparosWhatsAppPage() {
 
           if (!campanhaAtiva) {
             invalidarHistoricoCacheEmpresa(empresaId);
-            void carregarResultadosConclusao();
+            void carregarResultadosConclusao(true);
 
             // Revalida os contatos após o término para incorporar imediatamente
             // cooldowns/bloqueios registrados durante a campanha.
@@ -7866,7 +7870,6 @@ export default function DisparosWhatsAppPage() {
               rel="noopener noreferrer"
               title="Abrir a Central de Cobrança da Meta para cadastrar uma forma de pagamento"
             >
-              <CreditCard size={17} aria-hidden="true" />
               Cadastrar forma de pagamento
             </a>
             <button type="button" className={styles.historySendButton}
@@ -8684,6 +8687,16 @@ export default function DisparosWhatsAppPage() {
                 de envio. Esse processo pode levar alguns instantes.
               </p>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {carregandoConclusaoDisparo && !modalResultadoConclusaoAberto ? (
+        <div className={styles.campaignProgressOverlay} role="presentation">
+          <div className={styles.conclusionPendingPanel} role="status" aria-live="polite">
+            <span className={styles.conclusionPendingSpinner} aria-hidden="true" />
+            <strong>Consolidando resultado do disparo</strong>
+            <p>Consultando os totais finais da campanha antes de apresentar o relatório.</p>
           </div>
         </div>
       ) : null}
