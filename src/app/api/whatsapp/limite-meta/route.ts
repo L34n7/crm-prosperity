@@ -83,6 +83,44 @@ export async function GET(req: NextRequest) {
     integracao,
   });
 
+  // A janela de capacidade e movel (24h): esta e apenas a proxima
+  // liberacao de vaga, nunca uma renovacao integral do limite.
+  const { data: janelasAtivas, error: liberacoesError } = await supabaseAdmin
+    .from("whatsapp_meta_conversas_iniciadas")
+    .select("telefone_normalizado, janela_expira_em")
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("integracao_whatsapp_id", integracao.id)
+    .gt("janela_expira_em", new Date().toISOString())
+    .in("status", ["reservado", "processando", "enviado"]);
+
+  if (liberacoesError) {
+    return NextResponse.json(
+      { ok: false, error: liberacoesError.message },
+      { status: 500 }
+    );
+  }
+
+  const expiracaoPorTelefone = new Map<string, number>();
+  for (const item of janelasAtivas || []) {
+    const telefone = normalizarTelefoneMetaLimite(item.telefone_normalizado);
+    const expiraEm = new Date(item.janela_expira_em).getTime();
+    if (!telefone || !Number.isFinite(expiraEm)) continue;
+    expiracaoPorTelefone.set(
+      telefone,
+      Math.max(expiracaoPorTelefone.get(telefone) || 0, expiraEm)
+    );
+  }
+  const proximaLiberacaoMs = Array.from(expiracaoPorTelefone.values())
+    .reduce((menor, timestamp) => Math.min(menor, timestamp), Infinity);
+  const proximaLiberacaoEm = Number.isFinite(proximaLiberacaoMs)
+    ? new Date(Math.ceil(proximaLiberacaoMs / 60000) * 60000).toISOString()
+    : null;
+  const quantidadeProximaLiberacao = Number.isFinite(proximaLiberacaoMs)
+    ? Array.from(expiracaoPorTelefone.values()).filter(
+        (timestamp) => Math.ceil(timestamp / 60000) === Math.ceil(proximaLiberacaoMs / 60000)
+      ).length
+    : 0;
+
   let telefoneMetaLimite = null;
 
   if (telefoneNormalizado.length >= 10) {
@@ -124,7 +162,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(
     {
       ok: true,
-      limite_meta: limiteMeta,
+      limite_meta: {
+        ...limiteMeta,
+        proxima_liberacao_em: proximaLiberacaoEm,
+        quantidade_proxima_liberacao: quantidadeProximaLiberacao,
+      },
       telefone_meta_limite: telefoneMetaLimite,
       integracao: {
         id: integracao.id,

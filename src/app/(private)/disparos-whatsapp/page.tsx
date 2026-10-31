@@ -52,6 +52,8 @@ type LimiteMeta = {
   tier: string | null;
   origem: string;
   alerta: "normal" | "amarelo" | "vermelho";
+  proxima_liberacao_em?: string | null;
+  quantidade_proxima_liberacao?: number;
 };
 
 type TemplateButton = {
@@ -1517,53 +1519,6 @@ function formatarPercentualMeta(valor?: number | null) {
   return `${Math.round(valor * 100)}%`;
 }
 
-function formatarLimiteTierMeta(tier?: string | null) {
-  const valor = String(tier || "").trim().toUpperCase();
-
-  if (!valor) return "Limite padrão do sistema";
-  if (valor.includes("UNLIMITED")) return "Alcance sem limite informado";
-  if (valor.includes("100K")) return "Até 100 mil contatos únicos em 24h";
-  if (valor.includes("10K")) return "Até 10 mil contatos únicos em 24h";
-  if (valor.includes("1K")) return "Até 1 mil contatos únicos em 24h";
-  if (valor.includes("250")) return "Até 250 contatos únicos em 24h";
-  if (valor.includes("50")) return "Até 50 contatos únicos em 24h";
-
-  return "Limite informado pela Meta";
-}
-
-function formatarQualidadeMeta(quality?: string | null) {
-  const valor = String(quality || "").trim().toUpperCase();
-
-  switch (valor) {
-    case "GREEN":
-    case "HIGH":
-      return "Saúdavel";
-    case "YELLOW":
-    case "MEDIUM":
-      return "Atenção";
-    case "RED":
-    case "LOW":
-      return "Risco alto";
-    default:
-      return "Não informada";
-  }
-}
-
-function formatarModoMeta(mode?: string | null) {
-  const valor = String(mode || "").trim().toUpperCase();
-
-  switch (valor) {
-    case "LIVE":
-      return "Em produção";
-    case "SANDBOX":
-    case "TEST":
-    case "TESTING":
-      return "Ambiente de teste";
-    default:
-      return "Nao informado";
-  }
-}
-
 function contatoTemTelefoneValido(contato: ContatoOpcao) {
   if (contato.telefone_revisar === true) return false;
 
@@ -2377,8 +2332,6 @@ export default function DisparosWhatsAppPage() {
   const [etapaDisparo, setEtapaDisparo] = useState<1 | 2 | 3>(1);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
-  const [saudeMetaIntegracao, setSaudeMetaIntegracao] =
-    useState<Partial<IntegracaoWhatsApp> | null>(null);
 
   const [integracaoId, setIntegracaoId] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -2541,6 +2494,7 @@ export default function DisparosWhatsAppPage() {
   } | null>(null);
 
   const [loadingPreviewCusto, setLoadingPreviewCusto] = useState(false);
+  const previewCustoRequisicaoRef = useRef(0);
 
   function getSupabaseRealtime() {
     if (!supabaseRealtimeRef.current) {
@@ -3725,11 +3679,9 @@ export default function DisparosWhatsAppPage() {
       }
 
       setLimiteMeta(json.limite_meta || null);
-      setSaudeMetaIntegracao(json.integracao || null);
-    } catch (error: any) {
+      } catch (error: any) {
       setLimiteMeta(null);
-      setSaudeMetaIntegracao(null);
-      console.warn("[DISPAROS WHATSAPP] Erro ao carregar saude Meta:", error);
+        console.warn("[DISPAROS WHATSAPP] Erro ao carregar saude Meta:", error);
     } finally {
       setLoadingSaudeMeta(false);
     }
@@ -3916,8 +3868,7 @@ export default function DisparosWhatsAppPage() {
     } else {
       setTemplates([]);
       setLimiteMeta(null);
-      setSaudeMetaIntegracao(null);
-      setIntegracaoDisparoProcessando(false);
+        setIntegracaoDisparoProcessando(false);
       carregarCampanhaPagina();
     }
   }, [integracaoId, carregarCampanhaPagina]);
@@ -4065,9 +4016,6 @@ export default function DisparosWhatsAppPage() {
   const totalTelefonesQueConsomemLimite = previewCusto
     ? Number(previewCusto.totalTelefonesConsomemLimiteUnicos || 0)
     : telefonesSelecionadosUnicos.length;
-  const totalTelefonesIsentosLimite = previewCusto
-    ? Number(previewCusto.totalTelefonesIsentosLimiteUnicos || 0)
-    : 0;
   const saldoEstimadoAposSelecao = limiteMeta
     ? limiteMeta.restantes - totalTelefonesQueConsomemLimite
     : null;
@@ -5877,9 +5825,11 @@ export default function DisparosWhatsAppPage() {
     categoria: string,
     contatosLista: ContatoOpcao[]
   ) {
+    const requisicaoAtual = ++previewCustoRequisicaoRef.current;
     try {
       if (!categoria || contatosLista.length === 0) {
         setPreviewCusto(null);
+        setLoadingPreviewCusto(false);
         return;
       }
 
@@ -5911,6 +5861,7 @@ export default function DisparosWhatsAppPage() {
       });
 
       const json = await res.json();
+      if (requisicaoAtual !== previewCustoRequisicaoRef.current) return;
 
       if (!res.ok || !json.ok) {
         throw new Error(json.error || "Erro ao calcular custo do disparo.");
@@ -5971,10 +5922,13 @@ export default function DisparosWhatsAppPage() {
           json.disponibilidadeAgendamentoMeta || null,
       });
     } catch (error: any) {
+      if (requisicaoAtual !== previewCustoRequisicaoRef.current) return;
       setPreviewCusto(null);
       setErro(error?.message || "Erro ao calcular custo do disparo.");
     } finally {
-      setLoadingPreviewCusto(false);
+      if (requisicaoAtual === previewCustoRequisicaoRef.current) {
+        setLoadingPreviewCusto(false);
+      }
     }
   }
 
@@ -6033,14 +5987,6 @@ export default function DisparosWhatsAppPage() {
     if (etapaDisparo === 1) {
       if (!integracaoId) { setErro("Selecione um número WhatsApp."); return; }
       if (!templateId) { setErro("Selecione um template aprovado."); return; }
-      if (agendarDisparo) {
-        const dataAgendada = new Date(`${agendamentoData}T${agendamentoHora}:00`);
-        if (!agendamentoData || !agendamentoHora || Number.isNaN(dataAgendada.getTime()) ||
-            dataAgendada.getTime() <= Date.now()) {
-          setErro("Informe uma data e hora futuras para agendar o disparo.");
-          return;
-        }
-      }
       if (totalVariaveis > 6) { setErro("Este template aceita no máximo seis variáveis."); return; }
       if (temVariaveisObrigatoriasPendentes) {
         setErro("Selecione todas as variáveis obrigatórias antes de continuar.");
@@ -6251,11 +6197,13 @@ export default function DisparosWhatsAppPage() {
     const categoria = String(templateSelecionado?.categoria || "").toLowerCase();
 
     if (!categoria || contatosSelecionados.length === 0) {
+      previewCustoRequisicaoRef.current += 1;
       setPreviewCusto(null);
+      setLoadingPreviewCusto(false);
       return;
     }
 
-    calcularPreviewCusto(categoria, contatosSelecionados);
+    void calcularPreviewCusto(categoria, contatosSelecionados);
   }, [
     templateSelecionado,
     contatosSelecionados,
@@ -6287,7 +6235,7 @@ export default function DisparosWhatsAppPage() {
                   <div className={`${styles.disparoWizardHeading} ${styles.disparoWizardHeaderStep}`}>
                     <span>ETAPA {etapaDisparo} DE 3</span>
                     <h3>{etapaDisparo === 1 ? "Mensagem e variáveis" : etapaDisparo === 2 ? "Destinatários e capacidade" : agendarDisparo ? "Confirmar agendamento" : "Confirmar disparo de mensagens"}</h3>
-                    <p>{etapaDisparo === 1 ? "Selecione o número WhatsApp, configure o template, as variáveis e o agendamento." : etapaDisparo === 2 ? "Filtre contatos, resolva duplicidades e confira a capacidade da Meta." : "Revise as informações e a estimativa de cobrança antes de continuar."}</p>
+                    <p>{etapaDisparo === 1 ? "Selecione o número WhatsApp, configure o template e personalize as variáveis." : etapaDisparo === 2 ? "Confira a capacidade, agende se necessário e selecione os destinatários." : "Revise as informações e a estimativa de cobrança antes de continuar."}</p>
                   </div>
                   <button type="button" className={styles.disparoWizardClose}
                     aria-label="Fechar envio de disparos" disabled={disparando}
@@ -6410,7 +6358,160 @@ export default function DisparosWhatsAppPage() {
                         />
                       </div>
                     </div>
-                          <div className={styles.disparoWizardSchedule}>
+                <div className={styles.disparoWizardVariables}>
+                  <div className={styles.field}>
+
+                    
+                    
+                      {totalVariaveis > 0 ? (
+                        <>
+                          <div className={styles.templateHintRow}>
+                            <div className={styles.templateHint}>
+                              Este template usa <strong>{totalVariaveis}</strong> variável(is).
+                              Variável 1 substitui <strong>{" {{1}}"}</strong>, Variável 2 substitui
+                              <strong>{" {{2}}"}</strong> e Variável 3 substitui <strong>{" {{3}}"}</strong>.
+                            </div>
+
+                            <button
+                              type="button"
+                              className={styles.variablesButton}
+                              onClick={() => {
+                                setErroVariavelModal("");
+                                setModalVariaveisAberto(true);
+                              }}
+                            >
+                              Gerenciar variáveis
+                            </button>
+                          </div>
+
+                          <div className={styles.templateVariablesGrid}>
+                            <SeletorVariavelTemplate
+                              label="Variável 1"
+                              value={templateVariavel1}
+                              onChange={setTemplateVariavel1}
+                              opcoes={opcoesVariaveisTemplate}
+                              carregando={loadingVariaveis}
+                            />
+
+                            {totalVariaveis >= 2 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 2"
+                                value={templateVariavel2}
+                                onChange={setTemplateVariavel2}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 3 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 3"
+                                value={templateVariavel3}
+                                onChange={setTemplateVariavel3}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 4 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 4"
+                                value={templateVariavel4}
+                                onChange={setTemplateVariavel4}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 5 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 5"
+                                value={templateVariavel5}
+                                onChange={setTemplateVariavel5}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 6 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 6"
+                                value={templateVariavel6}
+                                onChange={setTemplateVariavel6}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+                          </div>
+                        </>
+                      ) : null}
+                  </div>
+
+                </div>
+
+
+                        </div>
+                      ) : null}
+                      {etapaDisparo === 2 ? (
+                        <div className={styles.disparoWizardStage}>
+                          {(loadingSaudeMeta || limiteMeta) ? (
+                            <section className={`${styles.metaHealthCard} ${
+                              agendarDisparo
+                                ? agendamentoInvalidoPeloLimiteMeta ? styles.metaHealthDanger : ""
+                                : selecaoExcedeLimite || limiteMeta?.alerta === "vermelho"
+                                ? styles.metaHealthDanger
+                                : limiteMeta?.alerta === "amarelo"
+                                ? styles.metaHealthWarning
+                                : ""
+                            }`} aria-label="Capacidade segura para este disparo">
+                              <div className={styles.metaHealthHeader}>
+                                <div>
+                                  <span>Controle preventivo da Meta</span>
+                                  <strong>Capacidade segura para este disparo</strong>
+                                  <p>
+                                    Capacidade em janela móvel de 24 horas. Ative o agendamento
+                                    para aproveitar a liberação gradual de vagas.
+                                  </p>
+                                </div>
+                                <div className={styles.metaHealthHeaderActions}>
+                                  <a href="https://business.facebook.com/latest/whatsapp_manager/messaging_limits"
+                                    target="_blank" rel="noopener noreferrer" className={styles.metaCapacityButton}>
+                                    Mais capacidade
+                                  </a>
+                                  <strong className={styles.metaHealthUsageBadge}>
+                                    {loadingSaudeMeta ? "Atualizando" : `${formatarPercentualMeta(limiteMeta?.percentual)} usado`}
+                                  </strong>
+                                </div>
+                              </div>
+                              <div className={styles.metaHealthGrid}>
+                                <div>
+                                  <span>Limite total</span>
+                                  <strong>{formatarNumeroMeta(limiteMeta?.limite)}</strong>
+                                </div>
+                                <div>
+                                  <span>Disponíveis agora</span>
+                                  <strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
+                                </div>
+                                <div>
+                                  <span>Consomem limite</span>
+                                  <strong>{formatarNumeroMeta(totalTelefonesQueConsomemLimite)}</strong>
+                                </div>
+                                <div className={styles.metaHealthRenewal}>
+                                  <span>Próxima liberação</span>
+                                  <strong>
+                                    {limiteMeta?.proxima_liberacao_em
+                                      ? formatarDataHora(limiteMeta.proxima_liberacao_em)
+                                      : "Sem liberação pendente"}
+                                  </strong>
+                                  <small>
+                                    {limiteMeta?.proxima_liberacao_em
+                                      ? `+${formatarNumeroMeta(limiteMeta.quantidade_proxima_liberacao || 1)} vaga(s) · liberação parcial`
+                                      : "Janela móvel de 24 horas"}
+                                  </small>
+                                </div>
+                              </div>
+                              <div className={styles.disparoWizardSchedule}>
+
                     <div
                       className={`${styles.scheduleToggleCard} ${
                         agendarDisparo ? styles.scheduleToggleCardActive : ""
@@ -6614,104 +6715,14 @@ export default function DisparosWhatsAppPage() {
                         </div>
                       ) : null}
                     </div>
-                          </div>
-
-                <div className={styles.disparoWizardVariables}>
-                  <div className={styles.field}>
-
-                    
-                    
-                      {totalVariaveis > 0 ? (
-                        <>
-                          <div className={styles.templateHintRow}>
-                            <div className={styles.templateHint}>
-                              Este template usa <strong>{totalVariaveis}</strong> variável(is).
-                              Variável 1 substitui <strong>{" {{1}}"}</strong>, Variável 2 substitui
-                              <strong>{" {{2}}"}</strong> e Variável 3 substitui <strong>{" {{3}}"}</strong>.
+                          
+                              </div>
+                            </section>
+                          ) : (
+                            <div className={styles.metaHealthUnavailable} role="status">
+                              Não foi possível consultar a capacidade da Meta. Revise o número WhatsApp e tente novamente.
                             </div>
-
-                            <button
-                              type="button"
-                              className={styles.variablesButton}
-                              onClick={() => {
-                                setErroVariavelModal("");
-                                setModalVariaveisAberto(true);
-                              }}
-                            >
-                              Gerenciar variáveis
-                            </button>
-                          </div>
-
-                          <div className={styles.templateVariablesGrid}>
-                            <SeletorVariavelTemplate
-                              label="Variável 1"
-                              value={templateVariavel1}
-                              onChange={setTemplateVariavel1}
-                              opcoes={opcoesVariaveisTemplate}
-                              carregando={loadingVariaveis}
-                            />
-
-                            {totalVariaveis >= 2 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 2"
-                                value={templateVariavel2}
-                                onChange={setTemplateVariavel2}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 3 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 3"
-                                value={templateVariavel3}
-                                onChange={setTemplateVariavel3}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 4 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 4"
-                                value={templateVariavel4}
-                                onChange={setTemplateVariavel4}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 5 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 5"
-                                value={templateVariavel5}
-                                onChange={setTemplateVariavel5}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 6 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 6"
-                                value={templateVariavel6}
-                                onChange={setTemplateVariavel6}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-                          </div>
-                        </>
-                      ) : null}
-                  </div>
-
-                </div>
-
-
-                        </div>
-                      ) : null}
-                      {etapaDisparo === 2 ? (
-                        <div className={styles.disparoWizardStage}>
+                          )}
                           <div className={styles.contactsFilterCard}>
                   <div className={styles.contactsFilterHeader}>
                     <div>
@@ -7477,127 +7488,37 @@ export default function DisparosWhatsAppPage() {
                 )}
 
 
-                {(loadingSaudeMeta || limiteMeta) && (
-                  <div
-                    className={`${styles.metaHealthCard} ${
-                      selecaoExcedeLimite || limiteMeta?.alerta === "vermelho"
-                        ? styles.metaHealthDanger
-                        : limiteMeta?.alerta === "amarelo"
-                        ? styles.metaHealthWarning
-                        : ""
-                    }`}
-                  >
-                    <div className={styles.metaHealthHeader}>
-                      <div>
-                        <span>Controle preventivo da Meta</span>
-                        <strong>Capacidade segura para este disparo</strong>
-                        <p>
-                          O CRM acompanha o limite de contatos únicos iniciados
-                          por esta integração nas últimas 24 horas e bloqueia
-                          envios que poderiam ultrapassar esse teto.
-                        </p>
-                      </div>
-
-                      <div className={styles.metaHealthHeaderActions}>
-                        <a
-                          href="https://business.facebook.com/latest/whatsapp_manager/messaging_limits"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={styles.metaCapacityButton}
-                        >
-                          Mais capacidade
-                        </a>
-                        <strong className={styles.metaHealthUsageBadge}>
-                          {loadingSaudeMeta
-                            ? "Atualizando"
-                            : `${formatarPercentualMeta(limiteMeta?.percentual)} usado`}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div className={styles.metaHealthGrid}>
-                      <div>
-                        <span>Capacidade da conta</span>
-                        <strong>{formatarNumeroMeta(limiteMeta?.limite)}</strong>
-                      </div>
-                      <div>
-                        <span>Ainda disponíveis</span>
-                        <strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
-                      </div>
-                      <div>
-                        <span>Ja comprometidos</span>
-                        <strong>{formatarNumeroMeta(limiteMeta?.usados)}</strong>
-                      </div>
-                      <div>
-                        <span>Consomem limite</span>
-                        <strong>
-                          {formatarNumeroMeta(totalTelefonesQueConsomemLimite)}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>Disponíveis após envio</span>
-                        <strong>
-                        {typeof saldoEstimadoAposSelecao === "number"
-                          ? formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao, 0))
-                          : "0"}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div className={styles.metaHealthMeta}>
-                      <span>
-                        Alcance: {formatarLimiteTierMeta(limiteMeta?.tier)}
-                      </span>
-                      <span>
-                        Reputação do número:{" "}
-                        {formatarQualidadeMeta(
-                          saudeMetaIntegracao?.quality_rating ||
-                            integracaoSelecionada?.quality_rating
-                        )}
-                      </span>
-                      <span>
-                        Ambiente:{" "}
-                        {formatarModoMeta(
-                          saudeMetaIntegracao?.meta_account_mode ||
-                            integracaoSelecionada?.meta_account_mode
-                        )}
-                      </span>
-                      <span>
-                        Selecionados:{" "}
-                        {formatarNumeroMeta(telefonesSelecionadosUnicos.length)}
-                      </span>
-                      {totalTelefonesIsentosLimite > 0 && (
-                        <span>
-                          Isentos por conversa aberta:{" "}
-                          {formatarNumeroMeta(totalTelefonesIsentosLimite)}
-                        </span>
-                      )}
-                    </div>
-
-                    {selecaoExcedeLimite && (
-                      <p
-                        className={
-                          agendarDisparo &&
-                          disponibilidadeAgendamentoMeta?.disponivel
-                            ? styles.scheduleCapacityOk
-                            : styles.metaHealthAlert
-                        }
-                      >
-                        {agendarDisparo &&
-                        disponibilidadeAgendamentoMeta?.disponivel
-                          ? "A seleção ultrapassa o saldo disponível agora, mas o horário agendado escolhido possui capacidade suficiente."
-                          : agendarDisparo && horarioLiberacaoMeta
-                          ? `O limite disponível agora é insuficiente. Para esta seleção, use um horário a partir de ${formatarDataHora(
-                              horarioLiberacaoMeta
-                            )}.`
-                          : agendarDisparo &&
-                            agendamentoImpossivelPeloLimiteMeta
-                          ? "A seleção ultrapassa a capacidade da Meta para um único horário. Divida o disparo em mais de um agendamento."
-                          : "A seleção atual ultrapassa o limite disponível. O CRM vai bloquear o envio antes de chamar a Meta."}
-                      </p>
-                    )}
-                  </div>
-                )}
+                <div
+                  className={`${styles.capacityResolution} ${
+                    !agendarDisparo && selecaoExcedeLimite ||
+                    agendarDisparo && agendamentoInvalidoPeloLimiteMeta
+                      ? styles.capacityResolutionBlocked
+                      : styles.capacityResolutionGood
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <strong>Resumo da seleção</strong>
+                  <span>
+                    {contatosSelecionados.length === 0
+                      ? "Selecione os contatos acima para validar a capacidade."
+                      : loadingPreviewCusto
+                      ? "Atualizando a disponibilidade para os contatos selecionados..."
+                      : agendarDisparo
+                      ? !agendamentoData || !agendamentoHora
+                        ? "Informe data e hora futuras no card de capacidade."
+                        : agendamentoImpossivelPeloLimiteMeta
+                        ? "A seleção excede o limite total. Divida o envio em mais de um agendamento."
+                        : disponibilidadeAgendamentoMeta?.disponivel && !agendamentoAntesDaLiberacaoMeta
+                        ? `Agendamento possível: ${formatarNumeroMeta(totalTelefonesQueConsomemLimite)} contato(s) que consomem limite no horário selecionado.`
+                        : horarioLiberacaoMeta
+                        ? `Capacidade insuficiente no horário escolhido. Liberação estimada a partir de ${formatarDataHora(horarioLiberacaoMeta)}.`
+                        : "Capacidade não confirmada para o horário escolhido. Verifique a liberação acima."
+                      : selecaoExcedeLimite
+                      ? `Faltam ${formatarNumeroMeta(Math.abs(saldoEstimadoAposSelecao || 0))} vagas agora. Reduza a seleção ou ative Agendar disparo acima.`
+                      : `${formatarNumeroMeta(totalTelefonesQueConsomemLimite)} contato(s) consomem limite. Restantes após o envio: ${formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao ?? 0, 0))}.`}
+                  </span>
+                </div>
 
 
                         </div>

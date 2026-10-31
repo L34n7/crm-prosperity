@@ -5614,3 +5614,87 @@
 @media (prefers-reduced-motion: reduce) {
   .conclusionPendingSpinner { animation: none; }
 }
+
+/* Agendamento e capacidade reunidos antes da selecao de contatos (etapa 2). */
+.disparoWizardStage .metaHealthCard {
+  gap: 15px;
+}
+.disparoWizardStage .metaHealthGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(190px, 1.35fr);
+}
+.disparoWizardStage .metaHealthGrid > div {
+  min-width: 0;
+  align-content: start;
+}
+.disparoWizardStage .metaHealthGrid .metaHealthRenewal {
+  border-color: var(--crm-primary-border);
+  background: color-mix(in srgb, var(--crm-primary-soft) 55%, var(--crm-surface) 45%);
+  text-align: right;
+}
+.disparoWizardStage .metaHealthRenewal strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.disparoWizardStage .metaHealthRenewal small {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.disparoWizardStage .disparoWizardSchedule {
+  padding-top: 13px;
+  border-top: 1px solid var(--crm-border);
+}
+.disparoWizardStage .disparoWizardSchedule .scheduleToggleCard {
+  border-radius: 14px;
+  padding: 13px 16px 13px 19px;
+  background: linear-gradient(
+    105deg,
+    color-mix(in srgb, var(--crm-primary-soft) 58%, var(--crm-surface) 42%),
+    var(--crm-surface) 100%
+  );
+}
+.disparoWizardStage .disparoWizardSchedule .scheduleToggleCardActive {
+  border-color: var(--crm-primary);
+}
+.disparoWizardStage .disparoWizardSchedule .scheduleCapacityPanel {
+  background: var(--crm-surface);
+}
+.capacityResolution,
+.metaHealthUnavailable {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-radius: 15px;
+  padding: 13px 16px;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface-soft);
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.capacityResolution strong {
+  font-size: 13px;
+  color: var(--crm-text-strong);
+  font-weight: 850;
+}
+.capacityResolutionGood {
+  border-color: var(--crm-primary-border);
+  background: color-mix(in srgb, var(--crm-primary-soft) 35%, var(--crm-surface) 65%);
+}
+.capacityResolutionBlocked {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+}
+@media (max-width: 980px) {
+  .disparoWizardStage .metaHealthGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 540px) {
+  .disparoWizardStage .metaHealthGrid {
+    grid-template-columns: 1fr;
+  }
+  .disparoWizardStage .metaHealthGrid .metaHealthRenewal {
+    text-align: left;
+  }
+}
