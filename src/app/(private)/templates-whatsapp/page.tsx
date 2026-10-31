@@ -1540,10 +1540,15 @@ export default function TemplatesWhatsAppPage() {
             aria-labelledby="criacao-template-titulo"
           >
             <header className={styles.creatorModalHeader}>
-              <div>
+              <div className={styles.creatorModalHeaderIntro}>
                 <p className={styles.eyebrow}>WHATSAPP BUSINESS • MODELO DE MENSAGEM</p>
                 <h2 id="criacao-template-titulo">Criar template</h2>
                 <span>Configure sua mensagem e envie para aprovação da Meta.</span>
+              </div>
+              <div className={`${styles.creatorStepHeading} ${styles.creatorModalHeaderStep}`}>
+                <span>ETAPA {etapaCriacao} DE 3</span>
+                <h3>{etapaCriacao === 1 ? "Imagem e cabeçalho" : etapaCriacao === 2 ? "Corpo, rodapé e botões" : "Integração, nome e categoria"}</h3>
+                <p>{etapaCriacao === 1 ? "Defina a mídia e o destaque inicial da mensagem." : etapaCriacao === 2 ? "Configure o texto e as opções de interação." : "Escolha a conta WhatsApp e identifique o template."}</p>
               </div>
               <button
                 type="button"
@@ -1643,11 +1648,6 @@ export default function TemplatesWhatsAppPage() {
                   </nav>
 
                   <div className={styles.creatorWizardScroll} key={etapaCriacao}>
-                    <div className={styles.creatorStepHeading}>
-                      <span>ETAPA {etapaCriacao} DE 3</span>
-                      <h3>{etapaCriacao === 1 ? "Imagem e cabeçalho" : etapaCriacao === 2 ? "Corpo, rodapé e botões" : "Integração, nome e categoria"}</h3>
-                      <p>{etapaCriacao === 1 ? "Defina a mídia e o destaque inicial da mensagem." : etapaCriacao === 2 ? "Configure o texto e as opções de interação." : "Escolha a conta WhatsApp e identifique o template."}</p>
-                    </div>
                     <div className={styles.creatorStepFields}>
                       {etapaCriacao === 1 ? (
                         <>
@@ -2085,7 +2085,7 @@ export default function TemplatesWhatsAppPage() {
                       {etapaCriacao === 3 ? (
                         <>
 <div className={styles.field}>
-                        <label className={styles.label}>Integração WhatsApp</label>
+                        <label className={styles.label}>Número WhatsApp</label>
                         <select
                           value={integracaoId}
                           onChange={(e) => {
@@ -2173,7 +2173,7 @@ export default function TemplatesWhatsAppPage() {
                         </button>
                       ) : (
                         <button type="button" className={styles.primaryButton} onClick={avancarEtapaCriacao}>
-                          Continuar
+                          Próxima etapa
                         </button>
                       )}
                     </div>

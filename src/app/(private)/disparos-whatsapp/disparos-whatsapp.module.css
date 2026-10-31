@@ -5199,7 +5199,15 @@
 }
 .disparoWizardWorkspaceWithPreview {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(365px, 40%);
+  grid-template-columns: minmax(365px, 40%) minmax(0, 1fr);
+}
+.disparoWizardWorkspaceWithPreview .disparoWizardMain {
+  grid-column: 2;
+  grid-row: 1;
+}
+.disparoWizardWorkspaceWithPreview .disparoWizardPreviewColumn {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .disparoWizardMain {
@@ -5218,7 +5226,7 @@
   min-height: 0;
   padding: 18px;
   overflow-y: auto;
-  border-left: 1px solid var(--crm-border);
+  border-right: 1px solid var(--crm-border);
   background: var(--crm-surface-soft);
   overscroll-behavior: contain;
 }
@@ -5351,7 +5359,7 @@
   .disparoWizardOverlay { padding: 12px; }
   .disparoWizardModal { max-height: 94dvh; }
   .disparoWizardWorkspaceWithPreview {
-    grid-template-columns: minmax(0, 1fr) minmax(310px, 38%);
+    grid-template-columns: minmax(310px, 38%) minmax(0, 1fr);
   }
   .disparoWizardPreviewColumn { padding: 12px; }
   .disparoWizardScroll { padding: 16px; }
@@ -5375,12 +5383,14 @@
   .disparoWizardWorkspaceWithPreview .disparoWizardMain {
     flex: 1 1 auto;
     min-height: 0;
+    order: 1;
   }
   .disparoWizardPreviewColumn {
     flex: 0 0 auto;
     max-height: 170px;
-    border-left: none;
-    border-top: 1px solid var(--crm-border);
+    order: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--crm-border);
   }
   .disparoWizardPreviewColumn .previewSideCard { min-height: 0; }
   .disparoWizardVariables .templateVariablesGrid { grid-template-columns: minmax(0, 1fr); }
