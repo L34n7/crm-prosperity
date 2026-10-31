@@ -1616,7 +1616,13 @@ function selecionarFerramentasParaModelo(params: {
   const consultaBase = consultaConhecimentoAutomatica(mensagem);
   const perguntaGeral = /\?|\b(como|qual|quais|quanto|tem|possui|oferece|explica|explique)\b/.test(texto);
 
-  if (sinalTransferenciaHumana(mensagem)) adicionar("transferir_humano");
+  // Configuração opcional por agente: permite encaminhar pedidos operacionais
+  // mesmo quando o contato não pede expressamente um atendente.
+  const transferenciaSempreDisponivel =
+    ativas.get("transferir_humano")?.disponibilizar_sempre === true;
+  if (sinalTransferenciaHumana(mensagem) || transferenciaSempreDisponivel) {
+    adicionar("transferir_humano");
+  }
   if (querContato) adicionar("consultar_contato");
 
   if (querCancelar) {
