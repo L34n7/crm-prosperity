@@ -278,17 +278,14 @@ function tituloAgendamento(ctx: Ctx) {
 }
 
 function label(slot: any, timezone: string) {
-  if (slot?.label) {
-    return String(slot.label).replace(/\s*\(([^)]+)\)\s*$/, " até $1").trim();
-  }
-
-  if (slot?.inicio_at) {
-    return String(formatarSlotAgenda(slot.inicio_at, slot.fim_at, timezone).label || "")
-      .replace(/\s*\(([^)]+)\)\s*$/, " até $1")
-      .trim();
-  }
-
-  return `${slot?.data || ""} às ${slot?.hora || ""}`.trim();
+  // Exibe apenas o início; o período bloqueado permanece no calendário.
+  const rotulo = slot?.label ||
+    (slot?.inicio_at
+      ? formatarSlotAgenda(slot.inicio_at, slot.fim_at, timezone).label
+      : `${slot?.data || ""} às ${slot?.hora || ""}`);
+  return String(rotulo || "")
+    .replace(/\s*(?:\(\d{1,2}:\d{2}\)|at[eé]\s+\d{1,2}:\d{2})\s*$/i, "")
+    .trim();
 }
 
 function resumoDiaHora(slot: Slot) {
