@@ -5666,6 +5666,9 @@ export default function DisparosWhatsAppPage() {
         setAgendamentoHora("");
         setNomeCampanhaDisparo("");
         setContatosSelecionados([]);
+        setModalCriacaoDisparoAberto(false);
+        setConfirmacaoCobranca(false);
+        setEtapaDisparo(1);
         return;
       }
 
@@ -5763,6 +5766,7 @@ export default function DisparosWhatsAppPage() {
         // representar um rascunho válido. Limpamos os dados para impedir que
         // contatos enviados ou recém-bloqueados sejam reutilizados por engano.
         limparFormularioDisparo();
+        setModalCriacaoDisparoAberto(false);
 
         if (usuarioLogado?.empresa_id) {
           invalidarHistoricoCacheEmpresa(usuarioLogado.empresa_id);
@@ -5783,6 +5787,8 @@ export default function DisparosWhatsAppPage() {
       setMensagem(
         `Disparo enviado para a Meta. Aguardando confirmação de entrega pelo WhatsApp. Aceitos: ${sucesso}. Falhas imediatas: ${falha}.`
       );
+      limparFormularioDisparo();
+      setModalCriacaoDisparoAberto(false);
 
       await carregarHistorico({
         silencioso: abaAtiva !== "resultados",
@@ -5968,8 +5974,16 @@ export default function DisparosWhatsAppPage() {
   function avancarEtapaDisparo() {
     setErro("");
     if (etapaDisparo === 1) {
-      if (!integracaoId) { setErro("Selecione uma integração WhatsApp."); return; }
+      if (!integracaoId) { setErro("Selecione um número WhatsApp."); return; }
       if (!templateId) { setErro("Selecione um template aprovado."); return; }
+      if (agendarDisparo) {
+        const dataAgendada = new Date(`${agendamentoData}T${agendamentoHora}:00`);
+        if (!agendamentoData || !agendamentoHora || Number.isNaN(dataAgendada.getTime()) ||
+            dataAgendada.getTime() <= Date.now()) {
+          setErro("Informe uma data e hora futuras para agendar o disparo.");
+          return;
+        }
+      }
       if (totalVariaveis > 6) { setErro("Este template aceita no máximo seis variáveis."); return; }
       if (temVariaveisObrigatoriasPendentes) {
         setErro("Selecione todas as variáveis obrigatórias antes de continuar.");
@@ -6058,9 +6072,6 @@ export default function DisparosWhatsAppPage() {
 
   async function confirmarEDisparar() {
     if (!confirmacaoCobranca) return;
-
-    setModalCriacaoDisparoAberto(false);
-    setConfirmacaoCobranca(false);
 
     if (templateComListaFria) {
       setConfirmacaoResponsabilidadeListaFria(false);
@@ -6226,6 +6237,11 @@ export default function DisparosWhatsAppPage() {
                   <div className={styles.emptyState}>Você não tem permissão para realizar disparos.</div>
                 ) : (
                   <form onSubmit={(event) => event.preventDefault()} className={styles.disparoWizardForm}>
+                    <div className={[
+                      styles.disparoWizardWorkspace,
+                      etapaDisparo === 1 ? styles.disparoWizardWorkspaceWithPreview : "",
+                    ].filter(Boolean).join(" ")}>
+                    <div className={styles.disparoWizardMain}>
                     <nav className={styles.disparoWizardSteps} aria-label="Etapas do disparo">
                       {[
                         { numero: 1, titulo: "Mensagem e variáveis" },
@@ -6249,14 +6265,13 @@ export default function DisparosWhatsAppPage() {
                       <div className={styles.disparoWizardHeading}>
                         <span>ETAPA {etapaDisparo} DE 3</span>
                         <h3>{etapaDisparo === 1 ? "Mensagem e variáveis" : etapaDisparo === 2 ? "Destinatários e capacidade" : agendarDisparo ? "Confirmar agendamento" : "Confirmar disparo de mensagens"}</h3>
-                        <p>{etapaDisparo === 1 ? "Selecione a integração, o template aprovado e personalize suas variáveis." : etapaDisparo === 2 ? "Filtre contatos, resolva duplicidades e confira a capacidade da Meta." : "Revise as informações e a estimativa de cobrança antes de continuar."}</p>
+                        <p>{etapaDisparo === 1 ? "Selecione o número WhatsApp, configure o template, as variáveis e o agendamento." : etapaDisparo === 2 ? "Filtre contatos, resolva duplicidades e confira a capacidade da Meta." : "Revise as informações e a estimativa de cobrança antes de continuar."}</p>
                       </div>
                       {etapaDisparo === 1 ? (
                         <div className={styles.disparoWizardStage}>
-                          <a href="https://business.facebook.com/latest/billing_hub/accounts/details/?" target="_blank" rel="noopener noreferrer" className={styles.metaPaymentButton}>Configurar pagamento na Meta</a>
                     <div className={styles.setupColumn}>
                       <div className={styles.field}>
-                        <label className={styles.label}>Integração WhatsApp</label>
+                        <label className={styles.label}>Número WhatsApp</label>
                         <select
                           value={integracaoId} 
                           onChange={(e) => {
@@ -6338,185 +6353,6 @@ export default function DisparosWhatsAppPage() {
                         />
                       </div>
                     </div>
-                <div className={styles.setupPreviewGrid}>
-                  <div className={styles.field}>
-
-                    
-                    
-                      {totalVariaveis > 0 ? (
-                        <>
-                          <div className={styles.templateHintRow}>
-                            <div className={styles.templateHint}>
-                              Este template usa <strong>{totalVariaveis}</strong> variável(is).
-                              Variável 1 substitui <strong>{" {{1}}"}</strong>, Variável 2 substitui
-                              <strong>{" {{2}}"}</strong> e Variável 3 substitui <strong>{" {{3}}"}</strong>.
-                            </div>
-
-                            <button
-                              type="button"
-                              className={styles.variablesButton}
-                              onClick={() => {
-                                setErroVariavelModal("");
-                                setModalVariaveisAberto(true);
-                              }}
-                            >
-                              Gerenciar variáveis
-                            </button>
-                          </div>
-
-                          <div className={styles.templateVariablesGrid}>
-                            <SeletorVariavelTemplate
-                              label="Variável 1"
-                              value={templateVariavel1}
-                              onChange={setTemplateVariavel1}
-                              opcoes={opcoesVariaveisTemplate}
-                              carregando={loadingVariaveis}
-                            />
-
-                            {totalVariaveis >= 2 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 2"
-                                value={templateVariavel2}
-                                onChange={setTemplateVariavel2}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 3 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 3"
-                                value={templateVariavel3}
-                                onChange={setTemplateVariavel3}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 4 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 4"
-                                value={templateVariavel4}
-                                onChange={setTemplateVariavel4}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 5 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 5"
-                                value={templateVariavel5}
-                                onChange={setTemplateVariavel5}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-
-                            {totalVariaveis >= 6 ? (
-                              <SeletorVariavelTemplate
-                                label="Variável 6"
-                                value={templateVariavel6}
-                                onChange={setTemplateVariavel6}
-                                opcoes={opcoesVariaveisTemplate}
-                                carregando={loadingVariaveis}
-                              />
-                            ) : null}
-                          </div>
-                        </>
-                      ) : null}
-                  </div>
-
-                  <aside className={styles.previewSideCard}>
-                    <div className={styles.previewTopLine}>
-                      {templateSelecionado ? (
-                        <span
-                          className={`${styles.previewCategoryBadge} ${
-                            String(templateSelecionado.categoria || "").toUpperCase() ===
-                            "MARKETING"
-                              ? styles.previewCategoryBadgeMarketing
-                              : ""
-                          }`}
-                        >
-                          {formatarCategoriaMeta(
-                            templateSelecionado.categoria
-                          )}
-                        </span>
-                      ) : null}
-                      <strong>Prévia</strong>
-                    </div>
-
-                    {templateSelecionado ? (
-                      <>
-                        <div className={styles.whatsappPreviewArea}>
-                          <div className={styles.whatsappBubble}>
-                            {previewTemplateSelecionado?.imagemUrl ? (
-                              <img
-                                src={previewTemplateSelecionado.imagemUrl}
-                                alt="Imagem do template"
-                                className={styles.whatsappPreviewImage}
-                              />
-                            ) : previewTemplateSelecionado?.possuiImagem ? (
-                              <div className={styles.whatsappPreviewImageFallback}>
-                                Imagem vinculada ao template
-                              </div>
-                            ) : null}
-
-                            {previewTemplateSelecionado?.titulo ? (
-                              <strong className={styles.whatsappPreviewTitle}>
-                                {previewTemplateSelecionado.titulo}
-                              </strong>
-                            ) : null}
-
-                            <p className={styles.whatsappPreviewText}>
-                              {previewTemplateSelecionado?.corpo || extrairBody(templateSelecionado.payload)}
-                            </p>
-
-                            <div className={styles.whatsappPreviewMeta}>
-                              <span className={styles.whatsappPreviewFooter}>
-                                {previewTemplateSelecionado?.rodape || "Equipe de atendimento"}
-                              </span>
-
-                              <span className={styles.whatsappPreviewTime}>
-                                {agendarDisparo && agendamentoHora
-                                  ? agendamentoHora
-                                  : new Date().toLocaleTimeString("pt-BR", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                              </span>
-                            </div>
-
-                            {previewTemplateSelecionado?.redirectButtons?.map((button, index) => (
-                              <div
-                                key={`${button.url}-redirect-${index}`}
-                                className={styles.whatsappPreviewButton}
-                              >
-                                ↗ {button.text}
-                              </div>
-                            ))}
-
-                            {extrairQuickReplies(templateSelecionado.payload).map((texto, index) => (
-                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
-                                ↩ {texto}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className={styles.previewEmptyState}>
-                        Selecione um template aprovado para visualizar a mensagem do WhatsApp.
-                      </div>
-                    )}
-                  </aside>
-                </div>
-
-
-                        </div>
-                      ) : null}
-                      {etapaDisparo === 2 ? (
-                        <div className={styles.disparoWizardStage}>
                           <div className={styles.disparoWizardSchedule}>
                     <div
                       className={`${styles.scheduleToggleCard} ${
@@ -6722,6 +6558,103 @@ export default function DisparosWhatsAppPage() {
                       ) : null}
                     </div>
                           </div>
+
+                <div className={styles.disparoWizardVariables}>
+                  <div className={styles.field}>
+
+                    
+                    
+                      {totalVariaveis > 0 ? (
+                        <>
+                          <div className={styles.templateHintRow}>
+                            <div className={styles.templateHint}>
+                              Este template usa <strong>{totalVariaveis}</strong> variável(is).
+                              Variável 1 substitui <strong>{" {{1}}"}</strong>, Variável 2 substitui
+                              <strong>{" {{2}}"}</strong> e Variável 3 substitui <strong>{" {{3}}"}</strong>.
+                            </div>
+
+                            <button
+                              type="button"
+                              className={styles.variablesButton}
+                              onClick={() => {
+                                setErroVariavelModal("");
+                                setModalVariaveisAberto(true);
+                              }}
+                            >
+                              Gerenciar variáveis
+                            </button>
+                          </div>
+
+                          <div className={styles.templateVariablesGrid}>
+                            <SeletorVariavelTemplate
+                              label="Variável 1"
+                              value={templateVariavel1}
+                              onChange={setTemplateVariavel1}
+                              opcoes={opcoesVariaveisTemplate}
+                              carregando={loadingVariaveis}
+                            />
+
+                            {totalVariaveis >= 2 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 2"
+                                value={templateVariavel2}
+                                onChange={setTemplateVariavel2}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 3 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 3"
+                                value={templateVariavel3}
+                                onChange={setTemplateVariavel3}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 4 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 4"
+                                value={templateVariavel4}
+                                onChange={setTemplateVariavel4}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 5 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 5"
+                                value={templateVariavel5}
+                                onChange={setTemplateVariavel5}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+
+                            {totalVariaveis >= 6 ? (
+                              <SeletorVariavelTemplate
+                                label="Variável 6"
+                                value={templateVariavel6}
+                                onChange={setTemplateVariavel6}
+                                opcoes={opcoesVariaveisTemplate}
+                                carregando={loadingVariaveis}
+                              />
+                            ) : null}
+                          </div>
+                        </>
+                      ) : null}
+                  </div>
+
+                </div>
+
+
+                        </div>
+                      ) : null}
+                      {etapaDisparo === 2 ? (
+                        <div className={styles.disparoWizardStage}>
                           <div className={styles.contactsFilterCard}>
                   <div className={styles.contactsFilterHeader}>
                     <div>
@@ -7723,6 +7656,96 @@ export default function DisparosWhatsAppPage() {
             </div>
                         </div>
                       ) : null}
+                    </div>
+
+                    </div>
+                    {etapaDisparo === 1 ? (
+                      <aside className={styles.disparoWizardPreviewColumn} aria-label="Prévia da mensagem WhatsApp">
+                  <div className={styles.previewSideCard}>
+                    <div className={styles.previewTopLine}>
+                      {templateSelecionado ? (
+                        <span
+                          className={`${styles.previewCategoryBadge} ${
+                            String(templateSelecionado.categoria || "").toUpperCase() ===
+                            "MARKETING"
+                              ? styles.previewCategoryBadgeMarketing
+                              : ""
+                          }`}
+                        >
+                          {formatarCategoriaMeta(
+                            templateSelecionado.categoria
+                          )}
+                        </span>
+                      ) : null}
+                      <strong>Prévia</strong>
+                    </div>
+
+                    {templateSelecionado ? (
+                      <>
+                        <div className={styles.whatsappPreviewArea}>
+                          <div className={styles.whatsappBubble}>
+                            {previewTemplateSelecionado?.imagemUrl ? (
+                              <img
+                                src={previewTemplateSelecionado.imagemUrl}
+                                alt="Imagem do template"
+                                className={styles.whatsappPreviewImage}
+                              />
+                            ) : previewTemplateSelecionado?.possuiImagem ? (
+                              <div className={styles.whatsappPreviewImageFallback}>
+                                Imagem vinculada ao template
+                              </div>
+                            ) : null}
+
+                            {previewTemplateSelecionado?.titulo ? (
+                              <strong className={styles.whatsappPreviewTitle}>
+                                {previewTemplateSelecionado.titulo}
+                              </strong>
+                            ) : null}
+
+                            <p className={styles.whatsappPreviewText}>
+                              {previewTemplateSelecionado?.corpo || extrairBody(templateSelecionado.payload)}
+                            </p>
+
+                            <div className={styles.whatsappPreviewMeta}>
+                              <span className={styles.whatsappPreviewFooter}>
+                                {previewTemplateSelecionado?.rodape || "Equipe de atendimento"}
+                              </span>
+
+                              <span className={styles.whatsappPreviewTime}>
+                                {agendarDisparo && agendamentoHora
+                                  ? agendamentoHora
+                                  : new Date().toLocaleTimeString("pt-BR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                              </span>
+                            </div>
+
+                            {previewTemplateSelecionado?.redirectButtons?.map((button, index) => (
+                              <div
+                                key={`${button.url}-redirect-${index}`}
+                                className={styles.whatsappPreviewButton}
+                              >
+                                ↗ {button.text}
+                              </div>
+                            ))}
+
+                            {extrairQuickReplies(templateSelecionado.payload).map((texto, index) => (
+                              <div key={`${texto}-${index}`} className={styles.whatsappPreviewButton}>
+                                ↩ {texto}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className={styles.previewEmptyState}>
+                        Selecione um template aprovado para visualizar a mensagem do WhatsApp.
+                      </div>
+                    )}
+                  </div>
+                      </aside>
+                    ) : null}
                     </div>
                     <footer className={styles.disparoWizardFooter}>
                       {erro ? <div className={styles.errorAlert} role="alert">{erro}</div> : null}
@@ -9530,8 +9553,7 @@ export default function DisparosWhatsAppPage() {
             onClick={() => {
               setModalResponsabilidadeListaFriaAberto(false);
               setConfirmacaoResponsabilidadeListaFria(false);
-              setEtapaDisparo(3);
-              setModalCriacaoDisparoAberto(true);
+
             }}
           >
             <div
@@ -9570,8 +9592,7 @@ export default function DisparosWhatsAppPage() {
                   onClick={() => {
                     setModalResponsabilidadeListaFriaAberto(false);
                     setConfirmacaoResponsabilidadeListaFria(false);
-              setEtapaDisparo(3);
-              setModalCriacaoDisparoAberto(true);
+
                   }}
                 >
                   ×
@@ -9677,8 +9698,7 @@ export default function DisparosWhatsAppPage() {
                   onClick={() => {
                     setModalResponsabilidadeListaFriaAberto(false);
                     setConfirmacaoResponsabilidadeListaFria(false);
-              setEtapaDisparo(3);
-              setModalCriacaoDisparoAberto(true);
+
                   }}
                 >
                   Voltar
