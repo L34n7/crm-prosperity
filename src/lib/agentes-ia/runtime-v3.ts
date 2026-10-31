@@ -630,6 +630,19 @@ function normalizarHoraLocal(valor: unknown) {
   return `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
 }
 
+function normalizarReferenciaDataAgendamento(valor: unknown, timezone: string): string | null {
+  const original = String(valor || "").trim();
+  if (!original) return null;
+  const texto = normalizarTextoIntencao(original);
+  const deslocamento = texto === "hoje" ? 0 : texto === "amanha" ? 1 : texto === "depois de amanha" ? 2 : null;
+  if (deslocamento === null) return original;
+  const dataLocal = dataLocalDeIso(new Date().toISOString(), timezone);
+  const dia = new Date(`${dataLocal}T12:00:00.000Z`);
+  if (Number.isNaN(dia.getTime())) return original;
+  dia.setUTCDate(dia.getUTCDate() + deslocamento);
+  return dia.toISOString().slice(0, 10);
+}
+
 function formatarAgendamentoAtivo(item: any, timezone: string) {
   const labels = formatarSlotAgenda(item.inicio_at, item.fim_at, timezone);
   return {
@@ -1321,6 +1334,25 @@ function mensagemEscolheHorarioExplicitamente(mensagem: string) {
   );
 }
 
+function confirmouCancelamentoPendente(
+  mensagem: string,
+  historico: Array<{ role?: string; content?: string }>,
+) {
+  const confirmacao = normalizarTextoIntencao(mensagem).trim();
+  if (!/^(sim|sim por favor|isso|confirmo|confirmado|pode cancelar|pode sim|quero sim)$/.test(confirmacao)) {
+    return false;
+  }
+  // Uma confirmação isolada só autoriza cancelar quando a última resposta
+  // da assistente pediu explicitamente a confirmação do cancelamento.
+  const anteriores = [...historico];
+  if (anteriores.length && anteriores[anteriores.length - 1]?.role === "user") {
+    anteriores.pop();
+  }
+  const ultimaResposta = [...anteriores].reverse().find((item) => item.role === "assistant");
+  const texto = normalizarTextoIntencao(ultimaResposta?.content || "");
+  return /(?:quer|deseja|confirma|confirme|confirmar|posso|se sim).{0,110}(?:cancelar|cancelamento|desmarcar)|(?:cancelar|cancelamento|desmarcar).{0,110}(?:confirma|confirme|confirmar|posso|quer|deseja)/.test(texto);
+}
+
 function mensagemEhConfirmacaoCurtaAgendaConcluida(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem)
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
@@ -1761,7 +1793,7 @@ async function resolverAgendamentoAtivo(params: {
     candidatos = candidatos.filter(
       (item) =>
         dataLocalDeIso(item.inicio_at, timezoneDo(item.agenda_id)) ===
-        referenciaData,
+        normalizarReferenciaDataAgendamento(referenciaData, timezoneDo(item.agenda_id)),
     );
   }
   if (referenciaHora) {
@@ -2625,14 +2657,19 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     }
 
     const agora = new Date().toISOString();
-    const { error } = await supabaseAdmin
+    const { data: cancelado, error } = await supabaseAdmin
       .from("agenda_agendamentos")
       .update({ status: "cancelado", cancelado_em: agora, updated_at: agora })
       .eq("empresa_id", empresaId)
       .eq("id", atual.id)
       .eq("agenda_id", agendaId)
-      .in("status", ["agendado", "confirmado"]);
+      .in("status", ["agendado", "confirmado"])
+      .select("id")
+      .maybeSingle();
     if (error) throw new Error(error.message);
+    if (!cancelado) {
+      return { ok: false, code: "AGENDAMENTO_NAO_ATIVO", error: "O agendamento não está mais ativo." };
+    }
 
     ctx.acaoCriticaExecutada = true;
     ctx.respostaDeterministica = ["Certo — o agendamento foi cancelado."];
@@ -3658,7 +3695,29 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     ctx.estadoConversa = contexto.estado;
     ctx.agendamentosAtivos = contexto.agendamentosAtivos;
 
+    const confirmacaoCancelamento = confirmouCancelamentoPendente(
+      pendencia.conteudo_agregado,
+      contexto.historico,
+    );
+    if (confirmacaoCancelamento && ferramentasAtivas.has("cancelar_agendamento")) {
+      if (ctx.agendamentosAtivos.length === 1) {
+        const argumentos = { referencia_data: null, referencia_hora: null };
+        const resultado = await executarFerramenta("cancelar_agendamento", argumentos, ctx);
+        ctx.ferramentasExecutadas.push({ nome: "cancelar_agendamento", argumentos, resultado });
+        if (!resultado?.ok) {
+          ctx.respostaDeterministica = [
+            "Não consegui efetivar o cancelamento na agenda. Vou precisar que a equipe verifique antes de confirmar.",
+          ];
+        }
+      } else if (ctx.agendamentosAtivos.length > 1) {
+        ctx.respostaDeterministica = [
+          "Encontrei mais de um agendamento ativo. Qual deles você deseja cancelar?",
+        ];
+      }
+    }
+
     if (
+      !confirmacaoCancelamento &&
       contexto.agendamentosAtivos.length > 0 &&
       estadoTemAgendaConcluida(contexto.estado) &&
       mensagemEhConfirmacaoCurtaAgendaConcluida(pendencia.conteudo_agregado)
