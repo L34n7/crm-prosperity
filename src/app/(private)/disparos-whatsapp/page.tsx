@@ -2328,7 +2328,9 @@ export default function DisparosWhatsAppPage() {
   ] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"disparo" | "resultados">("resultados");
   const [modalCriacaoDisparoAberto, setModalCriacaoDisparoAberto] = useState(false);
-  const [etapaDisparo, setEtapaDisparo] = useState<1 | 2 | 3>(1);
+  const [etapaDisparo, setEtapaDisparo] = useState<1 | 2 | 3 | 4>(1);
+  const [quantidadePlanejada, setQuantidadePlanejada] = useState("");
+  const [planoCapacidadeConfirmado, setPlanoCapacidadeConfirmado] = useState<"imediato" | "agendado" | null>(null);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
 
@@ -3648,6 +3650,8 @@ export default function DisparosWhatsAppPage() {
     setTemplateVariavel5("");
     setTemplateVariavel6("");
     setNomeCampanhaDisparo("");
+    setQuantidadePlanejada("");
+    setPlanoCapacidadeConfirmado(null);
     setAgendarDisparo(false);
     setAgendamentoData("");
     setAgendamentoHora("");
@@ -4091,6 +4095,27 @@ export default function DisparosWhatsAppPage() {
     ? new Date(horarioLiberacaoMeta).getTime()
     : null;
   const camposLiberacaoMeta = camposDataHoraLocal(horarioLiberacaoMeta);
+  const quantidadeDesejada = Number.parseInt(quantidadePlanejada, 10) || 0;
+  const capacidadeTotalPlanejamento = Math.max(0, Number(limiteMeta?.limite || 0));
+  const capacidadeAgoraPlanejamento = Math.max(0, Number(limiteMeta?.restantes || 0));
+  const liberacoesPlanejamento = [...(limiteMeta?.liberacoes_previstas || [])]
+    .filter((item) => Number.isFinite(new Date(item.horario).getTime()))
+    .sort((a, b) => new Date(a.horario).getTime() - new Date(b.horario).getTime());
+  const totalCapacidadeALiberar = liberacoesPlanejamento.reduce(
+    (total, item) => total + Math.max(0, Number(item.quantidadeLiberada || 0)), 0
+  );
+  const horarioCapacidadeDesejada = quantidadeDesejada > capacidadeAgoraPlanejamento
+    ? liberacoesPlanejamento.find(
+        (item) => Number(item.disponivelAcumulado || 0) >= quantidadeDesejada
+      )?.horario || null
+    : null;
+  // Margem de um minuto após a liberação da janela móvel, sem prometer reserva.
+  const horarioSugeridoAgendamento = horarioCapacidadeDesejada
+    ? new Date(new Date(horarioCapacidadeDesejada).getTime() + 60_000).toISOString()
+    : new Date(Date.now() + 10 * 60_000).toISOString();
+  const camposHorarioSugerido = camposDataHoraLocal(horarioSugeridoAgendamento);
+  const capacidadeInsuficienteAgora = quantidadeDesejada > capacidadeAgoraPlanejamento;
+  const quantidadeExcedeLimiteTotal = quantidadeDesejada > capacidadeTotalPlanejamento;
   const horarioAgendamentoSelecionadoMs =
     agendamentoData && agendamentoHora
       ? new Date(`${agendamentoData}T${agendamentoHora}:00`).getTime()
@@ -4434,11 +4459,12 @@ export default function DisparosWhatsAppPage() {
   // No envio imediato, a seleção respeita o saldo disponível agora.
   // No agendamento, a seleção pode ocupar a capacidade total da integração,
   // pois o horário futuro será validado pela janela de 24h antes de salvar.
-  const capacidadeBaseParaSelecao = limiteMeta
-    ? agendarDisparo
-      ? Number(limiteMeta.limite || 0)
-      : Number(limiteMeta.restantes || 0)
-    : null;
+  const capacidadeBaseParaSelecao = planoCapacidadeConfirmado && limiteMeta
+    ? Math.min(
+        quantidadeDesejada,
+        agendarDisparo ? Number(limiteMeta.limite || 0) : Number(limiteMeta.restantes || 0)
+      )
+    : 0;
   const capacidadeRestanteParaAdicionar =
     typeof capacidadeBaseParaSelecao === "number"
       ? Math.max(
@@ -4862,6 +4888,10 @@ export default function DisparosWhatsAppPage() {
   }, [integracoes, campanhaPagina?.integracao_whatsapp_id]);
 
   function adicionarContato(contato: ContatoOpcao) {
+    if (capacidadeRestanteParaAdicionar === 0) {
+      setErro(`A seleção já atingiu as ${quantidadeDesejada} vagas definidas na etapa Capacidade e agendamento.`);
+      return;
+    }
     if (
       contatoTemOptOutParaCategoria(
         contato,
@@ -5034,7 +5064,10 @@ export default function DisparosWhatsAppPage() {
     );
     const quantidadeSolicitada = quantidadeInformada > 0
       ? quantidadeInformada
-      : Math.max(totalContatosDisponiveis, contatosDisponiveisValidos.length);
+      : Math.min(
+          quantidadeDesejada - contatosSelecionados.length,
+          Math.max(totalContatosDisponiveis, contatosDisponiveisValidos.length)
+        );
     const capacidadeDisponivel = capacidadeRestanteParaAdicionar;
     const quantidadeAlvo =
       typeof capacidadeDisponivel === "number"
@@ -5046,9 +5079,7 @@ export default function DisparosWhatsAppPage() {
       capacidadeDisponivel <= 0
     ) {
       setErro(
-        agendarDisparo
-          ? "A capacidade total desta integração já foi totalmente preenchida pelos contatos selecionados."
-          : "A capacidade disponível desta integração já foi totalmente preenchida pelos contatos selecionados."
+        "A quantidade definida na etapa 2 já foi preenchida. Volte à etapa de capacidade para ajustá-la."
       );
       return;
     }
@@ -5078,7 +5109,8 @@ export default function DisparosWhatsAppPage() {
       });
       setContatosSelecionados((atuais) => {
         const ids = new Set(atuais.map((contato) => contato.id));
-        return [...atuais, ...novos.filter((contato) => !ids.has(contato.id))];
+        const vagas = Math.max(0, quantidadeDesejada - atuais.length);
+        return [...atuais, ...novos.filter((contato) => !ids.has(contato.id)).slice(0, vagas)];
       });
       setQuantidadeAdicionarContatos("");
 
@@ -5090,8 +5122,8 @@ export default function DisparosWhatsAppPage() {
         limitadoPelaCapacidade
           ? String(novos.length) +
               (agendarDisparo
-                ? " contato(s) adicionado(s). A seleção atingiu a capacidade total da integração para o agendamento."
-                : " contato(s) adicionado(s). A seleção atingiu a capacidade disponível da integração.")
+                ? " contato(s) adicionado(s). A seleção atingiu a quantidade planejada para o agendamento."
+                : " contato(s) adicionado(s). A seleção atingiu a quantidade planejada para envio imediato.")
           : quantidadeInformada > 0
           ? String(novos.length) + " contato(s) adicionado(s)."
           : "Todos os " + String(novos.length) + " contato(s) disponíveis foram adicionados."
@@ -5747,6 +5779,8 @@ export default function DisparosWhatsAppPage() {
         setAgendarDisparo(false);
         setAgendamentoData("");
         setAgendamentoHora("");
+        setQuantidadePlanejada("");
+        setPlanoCapacidadeConfirmado(null);
         setNomeCampanhaDisparo("");
         setContatosSelecionados([]);
         setModalCriacaoDisparoAberto(false);
@@ -6071,7 +6105,46 @@ export default function DisparosWhatsAppPage() {
         return;
       }
       setEtapaDisparo(2);
+      void carregarSaudeMeta(integracaoId);
     } else if (etapaDisparo === 2) {
+      if (loadingSaudeMeta || !limiteMeta) {
+        setErro("Aguarde a consulta de capacidade da Meta antes de continuar.");
+        return;
+      }
+      if (!Number.isInteger(quantidadeDesejada) || quantidadeDesejada <= 0) {
+        setErro("Informe uma quantidade válida de destinatários.");
+        return;
+      }
+      if (quantidadeExcedeLimiteTotal) {
+        setErro("A quantidade ultrapassa o limite total do número. Divida em campanhas menores.");
+        return;
+      }
+      if (!planoCapacidadeConfirmado) {
+        setErro("Escolha enviar a quantidade disponível agora ou agendar a quantidade desejada.");
+        return;
+      }
+      if (!agendarDisparo && (capacidadeInsuficienteAgora || disparoBloqueado)) {
+        setErro("A capacidade disponível agora não comporta a quantidade desejada.");
+        return;
+      }
+      if (agendarDisparo) {
+        const horario = new Date(`${agendamentoData}T${agendamentoHora}:00`).getTime();
+        const projetada = liberacoesPlanejamento.reduce(
+          (vagas, item) => new Date(item.horario).getTime() <= horario
+            ? Number(item.disponivelAcumulado || vagas) : vagas,
+          capacidadeAgoraPlanejamento
+        );
+        if (!agendamentoData || !agendamentoHora || !Number.isFinite(horario) ||
+            horario <= Date.now() || projetada < quantidadeDesejada) {
+          setErro("Escolha uma data futura em que a previsão comporte toda a quantidade desejada.");
+          return;
+        }
+      }
+      if (contatosSelecionados.length > quantidadeDesejada) {
+        setContatosSelecionados((anteriores) => anteriores.slice(0, quantidadeDesejada));
+      }
+      setEtapaDisparo(3);
+    } else if (etapaDisparo === 3) {
       abrirConfirmacaoDisparo();
     }
   }
@@ -6087,8 +6160,8 @@ export default function DisparosWhatsAppPage() {
       setEtapaDisparo(1);
       return;
     }
-    if (contatosSelecionados.length === 0) {
-      setErro("Selecione pelo menos um contato para continuar.");
+    if (contatosSelecionados.length !== quantidadeDesejada) {
+      setErro(`Selecione exatamente ${quantidadeDesejada} contato(s) para continuar. Ajuste a quantidade na etapa 2, se necessário.`);
       return;
     }
     if (loadingConflitos || temConflitosPendentes) {
@@ -6148,7 +6221,7 @@ export default function DisparosWhatsAppPage() {
     setErro("");
     setConfirmacaoCobranca(false);
     setConfirmacaoResponsabilidadeListaFria(false);
-    setEtapaDisparo(3);
+    setEtapaDisparo(4);
   }
 
   async function confirmarEDisparar() {
@@ -6325,9 +6398,9 @@ export default function DisparosWhatsAppPage() {
                     <span>Configure a mensagem, selecione os destinatários e confirme o envio.</span>
                   </div>
                   <div className={`${styles.disparoWizardHeading} ${styles.disparoWizardHeaderStep}`}>
-                    <span>ETAPA {etapaDisparo} DE 3</span>
-                    <h3>{etapaDisparo === 1 ? "Mensagem e variáveis" : etapaDisparo === 2 ? "Destinatários e capacidade" : agendarDisparo ? "Confirmar agendamento" : "Confirmar disparo de mensagens"}</h3>
-                    <p>{etapaDisparo === 1 ? "Selecione o número WhatsApp, configure o template e personalize as variáveis." : etapaDisparo === 2 ? "Confira a capacidade, agende se necessário e selecione os destinatários." : "Revise as informações e a estimativa de cobrança antes de continuar."}</p>
+                    <span>ETAPA {etapaDisparo} DE 4</span>
+                    <h3>{etapaDisparo === 1 ? "Mensagem e variáveis" : etapaDisparo === 2 ? "Capacidade e agendamento" : etapaDisparo === 3 ? "Contatos" : agendarDisparo ? "Confirmar agendamento" : "Confirmar disparo"}</h3>
+                    <p>{etapaDisparo === 1 ? "Configure a mensagem e suas variáveis." : etapaDisparo === 2 ? "Defina a quantidade e o momento do envio." : etapaDisparo === 3 ? "Escolha os contatos até o limite planejado." : "Revise os contatos, o horário e a estimativa de cobrança."}</p>
                   </div>
                   <button type="button" className={styles.disparoWizardClose}
                     aria-label="Fechar envio de disparos" disabled={disparando}
@@ -6342,8 +6415,9 @@ export default function DisparosWhatsAppPage() {
                     <nav className={styles.disparoWizardSteps} aria-label="Etapas do disparo">
                       {[
                         { numero: 1, titulo: "Mensagem e variáveis" },
-                        { numero: 2, titulo: "Contatos e capacidade" },
-                        { numero: 3, titulo: "Confirmar disparo" },
+                        { numero: 2, titulo: "Capacidade e agendamento" },
+                        { numero: 3, titulo: "Contatos" },
+                        { numero: 4, titulo: "Confirmar disparo" },
                       ].map((item) => (
                         <button key={item.numero} type="button"
                           disabled={disparando || item.numero >= etapaDisparo}
@@ -6353,7 +6427,7 @@ export default function DisparosWhatsAppPage() {
                             etapaDisparo > item.numero ? styles.disparoWizardStepCompleted : "",
                           ].filter(Boolean).join(" ")}
                           aria-current={etapaDisparo === item.numero ? "step" : undefined}
-                          onClick={() => { setEtapaDisparo(item.numero as 1 | 2 | 3); setErro(""); }}>
+                          onClick={() => { setEtapaDisparo(item.numero as 1 | 2 | 3 | 4); setErro(""); }}>
                           <span>{item.numero}</span><strong>{item.titulo}</strong>
                         </button>
                       ))}
@@ -6374,6 +6448,12 @@ export default function DisparosWhatsAppPage() {
                           onChange={(e) => {
                             const proximaIntegracaoId = e.target.value;
                             setIntegracaoId(proximaIntegracaoId);
+                            setLimiteMeta(null);
+                            setQuantidadePlanejada("");
+                            setPlanoCapacidadeConfirmado(null);
+                            setAgendarDisparo(false);
+                            setAgendamentoData("");
+                            setAgendamentoHora("");
                             setContatosSelecionados([]);
                             setConfirmacaoResponsabilidadeListaFria(false);
                             setOptInFiltro("");
@@ -6544,262 +6624,167 @@ export default function DisparosWhatsAppPage() {
 
                         </div>
                       ) : null}
+
                       {etapaDisparo === 2 ? (
                         <div className={styles.disparoWizardStage}>
-                          <section className={styles.schedulePlanningCard} aria-label="Planejamento de capacidade e agendamento">
-                            <div className={styles.schedulePlanningHeader}>
-                              <div className={styles.schedulePlanningIntro}>
-                                <span className={styles.schedulePlanningIcon} aria-hidden="true">
-                                  <CalendarClock size={22} strokeWidth={1.9} />
-                                </span>
-                                <div>
-                                  <span className={styles.schedulePlanningEyebrow}>Planejamento do envio</span>
-                                  <strong>Capacidade e agendamento</strong>
-                                  <p>Consulte a disponibilidade antes de escolher os destinatários.</p>
-                                </div>
+                          <section className={`${styles.metaHealthCard} ${limiteMeta?.alerta === "vermelho" ? styles.metaHealthDanger : limiteMeta?.alerta === "amarelo" ? styles.metaHealthWarning : ""}`}
+                            aria-label="Controle preventivo da Meta">
+                            <div className={styles.metaHealthHeader}>
+                              <div>
+                                <span>Controle preventivo da Meta</span>
+                                <strong>Capacidade segura da integração</strong>
+                                <p>Janela móvel de 24 horas: as vagas são liberadas gradualmente.</p>
                               </div>
-                              <span className={styles.schedulePlanningHint}>Janela móvel de 24h</span>
+                              <div className={styles.metaHealthHeaderActions}>
+                                <a className={styles.metaCapacityButton} href="https://business.facebook.com/latest/whatsapp_manager/messaging_limits"
+                                  target="_blank" rel="noopener noreferrer">Mais capacidade</a>
+                                <strong className={styles.metaHealthUsageBadge}>
+                                  {loadingSaudeMeta ? "Atualizando" : `${formatarPercentualMeta(limiteMeta?.percentual)} usado`}
+                                </strong>
+                              </div>
                             </div>
-                            <div className={styles.schedulePlanningStats}>
-                              <div>
-                                <span>Limite total</span>
-                                <strong>{limiteMeta ? formatarNumeroMeta(limiteMeta.limite) : "—"}</strong>
+                            <div className={styles.metaHealthGrid}>
+                              <div><span>Capacidade total</span><strong>{formatarNumeroMeta(limiteMeta?.limite)}</strong></div>
+                              <div><span>Disponíveis agora</span><strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong></div>
+                              <div><span>Próxima liberação</span>
+                                <strong>{liberacoesPlanejamento[0] ? formatarDataHora(liberacoesPlanejamento[0].horario) : "Sem previsão"}</strong>
+                                {liberacoesPlanejamento[0] ? <small>+{formatarNumeroMeta(liberacoesPlanejamento[0].quantidadeLiberada)} vagas</small> : null}
                               </div>
-                              <div>
-                                <span>Disponíveis agora</span>
-                                <strong>{limiteMeta ? formatarNumeroMeta(limiteMeta.restantes) : "—"}</strong>
+                              <div><span>Segunda liberação</span>
+                                <strong>{liberacoesPlanejamento[1] ? formatarDataHora(liberacoesPlanejamento[1].horario) : "—"}</strong>
+                                {liberacoesPlanejamento[1] ? <small>+{formatarNumeroMeta(liberacoesPlanejamento[1].quantidadeLiberada)} vagas</small> : null}
                               </div>
+                              <div><span>Total a liberar</span><strong>{formatarNumeroMeta(totalCapacidadeALiberar)}</strong></div>
+                            </div>
+                            <p className={styles.metaHealthNote}>A previsão não reserva vagas: a Meta revalida o limite quando o disparo for executado.</p>
+                          </section>
+
+                          <section className={styles.dispatchCapacityPlanner} aria-label="Quantidade e momento do disparo">
+                            <div className={styles.dispatchCapacityPlannerIntro}>
                               <div>
-                                <span>Próxima liberação</span>
-                                <strong>{limiteMeta?.proxima_liberacao_em ? formatarDataHora(limiteMeta.proxima_liberacao_em) : "Sem liberação pendente"}</strong>
-                                {limiteMeta?.proxima_liberacao_em ? (
-                                  <small>+{formatarNumeroMeta(limiteMeta.quantidade_proxima_liberacao || 0)} vaga(s) previstas</small>
+                                <span className={styles.schedulePlanningEyebrow}>Planejamento do disparo</span>
+                                <h3>Quantos contatos deseja alcançar?</h3>
+                                <p>Digite a quantidade para escolher a melhor forma de envio.</p>
+                              </div>
+                              <span className={styles.schedulePlanningHint}>Etapa 2 de 4</span>
+                            </div>
+                            <label className={styles.label} htmlFor="disparo-quantidade-desejada">Quantidade desejada</label>
+                            <div className={styles.dispatchCapacityQuantityRow}>
+                              <input id="disparo-quantidade-desejada" type="number" min={1} step={1}
+                                className={`${styles.input} ${styles.dispatchCapacityQuantityInput}`} inputMode="numeric"
+                                value={quantidadePlanejada} placeholder="Ex.: 250"
+                                disabled={loadingSaudeMeta || !limiteMeta}
+                                onChange={(event) => {
+                                  setQuantidadePlanejada(event.target.value.replace(/\D/g, ""));
+                                  setPlanoCapacidadeConfirmado(null);
+                                  setErro("");
+                                }} />
+                              <span>{limiteMeta ? `${formatarNumeroMeta(capacidadeAgoraPlanejamento)} disponíveis agora` : "Consultando..."}</span>
+                            </div>
+
+                            {quantidadeDesejada > 0 && limiteMeta ? (
+                              <div className={`${styles.dispatchCapacityResult} ${capacidadeInsuficienteAgora ? styles.dispatchCapacityResultAlert : styles.dispatchCapacityResultOk}`} role="status">
+                                <strong>{quantidadeExcedeLimiteTotal ? "Quantidade acima do limite total" :
+                                  capacidadeInsuficienteAgora ? "Quantidade maior que a disponível agora" : "Quantidade disponível para envio imediato"}</strong>
+                                <p>{quantidadeExcedeLimiteTotal
+                                  ? `O número comporta no máximo ${formatarNumeroMeta(capacidadeTotalPlanejamento)} destinatários em uma campanha. Divida em campanhas menores.`
+                                  : capacidadeInsuficienteAgora
+                                  ? `Solicitados: ${formatarNumeroMeta(quantidadeDesejada)}. Disponíveis neste momento: ${formatarNumeroMeta(capacidadeAgoraPlanejamento)}.`
+                                  : `Você pode enviar ${formatarNumeroMeta(quantidadeDesejada)} agora ou agendar para depois.`}</p>
+                                {capacidadeInsuficienteAgora && !quantidadeExcedeLimiteTotal ? (
+                                  <p>{horarioCapacidadeDesejada
+                                    ? `A liberação necessária está prevista para ${formatarDataHora(horarioSugeridoAgendamento)}.`
+                                    : "Ainda não há previsão suficiente para essa quantidade. Atualize os dados da Meta."}</p>
                                 ) : null}
                               </div>
-                            </div>
-                            <div className={styles.disparoWizardSchedule}>
+                            ) : null}
 
-                    <div
-                      className={`${styles.scheduleToggleCard} ${
-                        agendarDisparo ? styles.scheduleToggleCardActive : ""
-                      }`}
-                    >
-                      <label className={styles.scheduleToggleRow}>
-                        <span className={styles.scheduleToggleText}>
-                          <strong>Agendar disparo</strong>
-                          <small>Escolha um horário conforme a liberação da capacidade.</small>
-                        </span>
-
-                        <input
-                          type="checkbox"
-                          checked={agendarDisparo}
-                          onChange={(e) => {
-                            const ativo = e.target.checked;
-                            setAgendarDisparo(ativo);
-
-                            if (
-                              ativo &&
-                              camposLiberacaoMeta &&
-                              typeof horarioLiberacaoMetaMs === "number"
-                            ) {
-                              const horarioAtual =
-                                agendamentoData && agendamentoHora
-                                  ? new Date(
-                                      `${agendamentoData}T${agendamentoHora}:00`
-                                    ).getTime()
-                                  : null;
-
-                              if (
-                                typeof horarioAtual !== "number" ||
-                                !Number.isFinite(horarioAtual) ||
-                                horarioAtual < horarioLiberacaoMetaMs
-                              ) {
-                                setAgendamentoData(camposLiberacaoMeta.data);
-                                setAgendamentoHora(camposLiberacaoMeta.hora);
-                              }
-                            }
-                          }}
-                          className={styles.scheduleToggleInput}
-                        />
-                        <span
-                          className={styles.scheduleToggleControl}
-                          aria-hidden="true"
-                        />
-                      </label>
-
-                      {agendarDisparo ? (
-                        <div className={styles.scheduleFields}>
-                          <div className={styles.field}>
-                            <label className={styles.label}>Data</label>
-                            <input
-                              type="date"
-                              value={agendamentoData}
-                              min={
-                                camposLiberacaoMeta?.data &&
-                                camposLiberacaoMeta.data > dataHojeParaInput()
-                                  ? camposLiberacaoMeta.data
-                                  : dataHojeParaInput()
-                              }
-                              onChange={(e) =>
-                                setAgendamentoData(e.target.value)
-                              }
-                              className={styles.input}
-                            />
-                          </div>
-
-                          <div className={styles.field}>
-                            <label className={styles.label}>Hora</label>
-                            <input
-                              type="time"
-                              value={agendamentoHora}
-                              min={
-                                camposLiberacaoMeta &&
-                                agendamentoData === camposLiberacaoMeta.data
-                                  ? camposLiberacaoMeta.hora
-                                  : undefined
-                              }
-                              onChange={(e) =>
-                                setAgendamentoHora(e.target.value)
-                              }
-                              className={styles.input}
-                            />
-                          </div>
-
-                          {contatosSelecionados.length > 0 && loadingPreviewCusto ? (
-                            <p className={styles.scheduleCapacityEmpty}>Atualizando a disponibilidade desta seleção...</p>
-                          ) : agendamentoImpossivelPeloLimiteMeta ? (
-                            <p className={styles.metaHealthAlert}>
-                              Esta seleção excede a capacidade da Meta para um único horário. Divida os contatos em mais de um disparo agendado.
-                            </p>
-                          ) : horarioLiberacaoMeta ? (
-                            <p className={styles.metaHealthAlert}>
-                              Nesse horário ainda não existe capacidade suficiente para esta seleção. Ela fica liberada a partir de{" "}
-                              <strong>
-                                {formatarDataHora(horarioLiberacaoMeta)}
-                              </strong>
-                              .
-                            </p>
-                          ) : !loadingPreviewCusto && contatosSelecionados.length > 0 && disponibilidadeAgendamentoMeta?.disponivel ? (
-                            <p className={styles.scheduleCapacityOk}>
-                              O horário escolhido comporta esta seleção.
-                            </p>
-                          ) : null}
-
-                          {disponibilidadeAgendamentoMeta || limiteMeta ? (
-                            <div className={styles.scheduleCapacityPanel}>
-                              <div className={styles.scheduleCapacityHeader}>
-                                <div>
-                                  <strong>Liberação da capacidade</strong>
-                                  <span>
-                                    Janela móvel de 24 horas desta integração
-                                  </span>
-                                </div>
-                                <span className={styles.scheduleCapacityNow}>
-                                  Agora:{" "}
-                                  {formatarNumeroMeta(
-                                    capacidadeDisponivelAgoraAgendamento
-                                  )}{" "}
-                                  disponíveis
-                                </span>
+                            {quantidadeDesejada > 0 && !quantidadeExcedeLimiteTotal && limiteMeta ? (
+                              <div className={styles.dispatchCapacityChoices}>
+                                <button type="button" className={styles.dispatchCapacityOption}
+                                  disabled={capacidadeAgoraPlanejamento <= 0 || disparoBloqueado}
+                                  onClick={() => {
+                                    const aceite = Math.min(quantidadeDesejada, capacidadeAgoraPlanejamento);
+                                    setQuantidadePlanejada(String(aceite));
+                                    setContatosSelecionados((atuais) => atuais.slice(0, aceite));
+                                    setPlanoCapacidadeConfirmado("imediato");
+                                    setAgendarDisparo(false);
+                                    setAgendamentoData(""); setAgendamentoHora(""); setErro("");
+                                  }}>
+                                  <strong>{capacidadeInsuficienteAgora ? "Realizar quantidade disponível" : "Realizar agora"}</strong>
+                                  <span>{formatarNumeroMeta(Math.min(quantidadeDesejada, capacidadeAgoraPlanejamento))} contatos</span>
+                                </button>
+                                <button type="button" className={styles.dispatchCapacityOption}
+                                  disabled={capacidadeInsuficienteAgora && !horarioCapacidadeDesejada}
+                                  onClick={() => {
+                                    setAgendarDisparo(true);
+                                    setPlanoCapacidadeConfirmado("agendado");
+                                    setAgendamentoData(camposHorarioSugerido?.data || "");
+                                    setAgendamentoHora(camposHorarioSugerido?.hora || "");
+                                    setErro("");
+                                  }}>
+                                  <strong>Agendar quantidade desejada</strong>
+                                  <span>{horarioCapacidadeDesejada ? formatarDataHora(horarioSugeridoAgendamento) : "Escolher data e hora"}</span>
+                                </button>
                               </div>
+                            ) : null}
 
-                              {contatosSelecionados.length > 0 && !loadingPreviewCusto && disponibilidadeAgendamentoMeta && agendamentoData && agendamentoHora ? (
-                                <div
-                                  className={
-                                    disponibilidadeAgendamentoMeta.disponivel
-                                      ? styles.scheduleCapacitySelectedOk
-                                      : styles.scheduleCapacitySelectedBlocked
-                                  }
-                                >
-                                  <strong>
-                                    {disponibilidadeAgendamentoMeta.disponivel
-                                      ? "Horário permitido"
-                                      : "Horário sem capacidade suficiente"}
-                                  </strong>
-                                  <span>
-                                    Em{" "}
-                                    {formatarDataHora(
-                                      disponibilidadeAgendamentoMeta.horarioConsultado
-                                    )}
-                                    :{" "}
-                                    {formatarNumeroMeta(
-                                      capacidadeDisponivelNoHorario
-                                    )}{" "}
-                                    vaga(s) livres
-                                    {typeof novosNecessariosNoHorario === "number"
-                                      ? ` · ${formatarNumeroMeta(
-                                          novosNecessariosNoHorario
-                                        )} nova(s) vaga(s) necessária(s) para esta seleção`
-                                      : ""}
-                                  </span>
-                                </div>
-                              ) : null}
+                            {capacidadeInsuficienteAgora && !quantidadeExcedeLimiteTotal && capacidadeAgoraPlanejamento > 0 && horarioCapacidadeDesejada ? (
+                              <p className={styles.dispatchCapacitySuggestion}>
+                                <Info size={17} aria-hidden="true" />
+                                <span><strong>Sugestão:</strong> envie {formatarNumeroMeta(capacidadeAgoraPlanejamento)} agora e agende
+                                  os {formatarNumeroMeta(quantidadeDesejada - capacidadeAgoraPlanejamento)} restantes após a liberação.
+                                  Serão duas campanhas independentes, cada uma com seus contatos e confirmação.</span>
+                              </p>
+                            ) : null}
 
-                              {contatosSelecionados.length === 0 ? (
-                                <div className={styles.scheduleCapacitySelectedOk}>
-                                  <strong>Planejamento antes da seleção</strong>
-                                  <span>
-                                    {typeof capacidadeProjetadaSemSelecao === "number" && agendamentoData && agendamentoHora
-                                      ? `Até ${formatarNumeroMeta(capacidadeProjetadaSemSelecao)} vaga(s) disponíveis no horário selecionado, conforme a liberação prevista.`
-                                      : "Confira a previsão de liberações abaixo para escolher o melhor horário."}
-                                    {" "}Após selecionar os contatos, o CRM validará a capacidade exata para o disparo.
-                                  </span>
-                                </div>
-                              ) : null}
+                            {planoCapacidadeConfirmado ? (
+                              <div className={styles.dispatchCapacityAccepted} role="status">
+                                <Check size={18} aria-hidden="true" />
+                                <span><strong>{planoCapacidadeConfirmado === "agendado" ? "Agendamento aceito para planejamento." : "Capacidade aceita."}</strong>
+                                  {" "}Quantidade definida: {formatarNumeroMeta(quantidadeDesejada)} contatos.</span>
+                              </div>
+                            ) : null}
+                            {agendarDisparo && planoCapacidadeConfirmado === "agendado" ? (
+                              <div className={styles.dispatchCapacityScheduleFields}>
+                                <label className={styles.field}><span className={styles.label}>Data</span>
+                                  <input type="date" className={styles.input} min={dataHojeParaInput()}
+                                    value={agendamentoData} onChange={(e) => setAgendamentoData(e.target.value)} />
+                                </label>
+                                <label className={styles.field}><span className={styles.label}>Hora</span>
+                                  <input type="time" className={styles.input} value={agendamentoHora}
+                                    onChange={(e) => setAgendamentoHora(e.target.value)} />
+                                </label>
+                                <p>Horário sugerido preenchido automaticamente. É possível ajustá-lo, desde que haja capacidade prevista.</p>
+                              </div>
+                            ) : null}
+                          </section>
 
-                              {liberacoesCapacidadeMetaVisiveis.length > 0 ? (
-                                <div className={styles.scheduleCapacityTimeline}>
-                                  {liberacoesCapacidadeMetaVisiveis.map(
-                                    (liberacao) => (
-                                      <div
-                                        key={liberacao.horario}
-                                        className={styles.scheduleCapacityItem}
-                                      >
-                                        <span>
-                                          <strong>
-                                            +
-                                            {formatarNumeroMeta(
-                                              liberacao.quantidadeLiberada
-                                            )}
-                                          </strong>{" "}
-                                          libera(m)
-                                        </span>
-                                        <span>
-                                          {formatarDataHora(liberacao.horario)}
-                                        </span>
-                                        <span>
-                                          {formatarNumeroMeta(
-                                            liberacao.disponivelAcumulado
-                                          )}{" "}
-                                          disponíveis acumulados
-                                        </span>
-                                      </div>
-                                    )
-                                  )}
-                                  {liberacoesCapacidadeMeta.length >
-                                  liberacoesCapacidadeMetaVisiveis.length ? (
-                                    <p className={styles.scheduleCapacityMore}>
-                                      +{" "}
-                                      {liberacoesCapacidadeMeta.length -
-                                        liberacoesCapacidadeMetaVisiveis.length}{" "}
-                                      horário(s) de liberação posteriores.
-                                    </p>
-                                  ) : null}
+                          <details className={styles.dispatchCapacityReleases}>
+                            <summary>
+                              <span><CalendarClock size={18} aria-hidden="true" /><strong>Liberação da capacidade</strong></span>
+                              <span>{liberacoesPlanejamento.length} {liberacoesPlanejamento.length === 1 ? "horário" : "horários"} <ChevronDown size={16} aria-hidden="true" /></span>
+                            </summary>
+                            <div className={styles.dispatchCapacityReleaseBody}>
+                              {liberacoesPlanejamento.length > 0 ? liberacoesPlanejamento.map((item) => (
+                                <div className={styles.dispatchCapacityReleaseItem} key={item.horario}>
+                                  <strong>+{formatarNumeroMeta(item.quantidadeLiberada)} vagas</strong>
+                                  <span>{formatarDataHora(item.horario)}</span>
+                                  <small>{formatarNumeroMeta(item.disponivelAcumulado)} disponíveis acumulados</small>
                                 </div>
-                              ) : (
-                                <p className={styles.scheduleCapacityEmpty}>
-                                  Não há novas liberações pendentes nas próximas
-                                  24 horas.
-                                </p>
-                              )}
+                              )) : <p>Nenhuma liberação pendente no período consultado.</p>}
                             </div>
-                          ) : null}
+                          </details>
                         </div>
                       ) : null}
-                    </div>
-                          
-                              </div>
-                          </section>
+                      {etapaDisparo === 3 ? (
+                        <div className={styles.disparoWizardStage}>
+                          <div className={styles.dispatchContactsPlan}>
+                            <strong>Selecionados: {formatarNumeroMeta(contatosSelecionados.length)} de {formatarNumeroMeta(quantidadeDesejada)}</strong>
+                            <span>{agendarDisparo && agendamentoData && agendamentoHora
+                              ? `Agendado: ${formatarDataHora(new Date(`${agendamentoData}T${agendamentoHora}:00`).toISOString())}`
+                              : "Envio imediato"} · Quantidade definida na etapa anterior.</span>
+                          </div>
                           <div className={styles.contactsFilterCard}>
                   <div className={styles.contactsFilterHeader}>
                     <div>
@@ -7126,16 +7111,8 @@ export default function DisparosWhatsAppPage() {
                           }
                           className={styles.bulkQuantityInput}
                           placeholder="Qtd."
-                          title={
-                            agendarDisparo
-                              ? "Informe a quantidade. Com 0 ou vazio, adiciona até a capacidade total da integração para o agendamento."
-                              : "Informe a quantidade. Com 0 ou vazio, adiciona até o limite disponível da integração."
-                          }
-                          aria-label={
-                            agendarDisparo
-                              ? "Quantidade de contatos para adicionar; zero ou vazio adiciona até a capacidade total da integração"
-                              : "Quantidade de contatos para adicionar; zero ou vazio adiciona até o limite disponível"
-                          }
+                          title="Informe quantos contatos adicionar. Sem valor, preenche todas as vagas restantes do planejamento."
+                          aria-label="Quantidade a adicionar; vazio preenche as vagas restantes"
                         />
                         <button
                           type="button"
@@ -7148,7 +7125,7 @@ export default function DisparosWhatsAppPage() {
                             capacidadeRestanteParaAdicionar === 0
                           }
                         >
-                          {adicionandoContatosEmMassa ? "Adicionando..." : "Add todos"}
+                          {adicionandoContatosEmMassa ? "Adicionando..." : Number(quantidadeAdicionarContatos) > 0 ? "Adicionar quantidade" : "Preencher seleção"}
                         </button>
                         <span className={styles.contactsCount}>
                           {loadingContatos ? "..." : totalContatosDisponiveisRestantes}
@@ -7238,6 +7215,7 @@ export default function DisparosWhatsAppPage() {
                                 type="button"
                                 className={styles.ButtonAdd}
                                 onClick={() => adicionarContato(contato)}
+                                disabled={capacidadeRestanteParaAdicionar === 0}
                                 aria-disabled={
                                   !telefoneValido ||
                                   contatoTemOptOutParaCategoria(
@@ -7568,108 +7546,16 @@ export default function DisparosWhatsAppPage() {
                 )}
 
 
-                {(loadingSaudeMeta || limiteMeta) ? (
-                  <section
-                    className={`${styles.metaHealthCard} ${
-                      !agendarDisparo && selecaoExcedeLimite || agendamentoInvalidoPeloLimiteMeta
-                        ? styles.metaHealthDanger
-                        : limiteMeta?.alerta === "amarelo" ? styles.metaHealthWarning : ""
-                    }`}
-                    aria-label="Controle preventivo da Meta"
-                  >
-                    <div className={styles.metaHealthHeader}>
-                      <div>
-                        <span>Controle preventivo da Meta</span>
-                        <strong>Capacidade segura para este disparo</strong>
-                        <p>
-                          Análise da quantidade selecionada considerando os limites da Meta.
-                          {agendarDisparo
-                            ? " A disponibilidade será confirmada no horário programado."
-                            : " Para enviar agora, respeite as vagas disponíveis."}
-                        </p>
-                      </div>
-                      <div className={styles.metaHealthHeaderActions}>
-                        <a
-                          href="https://business.facebook.com/latest/whatsapp_manager/messaging_limits"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={styles.metaCapacityButton}
-                        >
-                          Mais capacidade
-                        </a>
-                        <strong className={styles.metaHealthUsageBadge}>
-                          {loadingSaudeMeta ? "Atualizando" : `${formatarPercentualMeta(limiteMeta?.percentual)} usado`}
-                        </strong>
-                      </div>
-                    </div>
-                    <div className={styles.metaHealthGrid}>
-                      <div>
-                        <span>Capacidade da conta</span>
-                        <strong>{formatarNumeroMeta(limiteMeta?.limite)}</strong>
-                      </div>
-                      <div>
-                        <span>Disponíveis agora</span>
-                        <strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
-                      </div>
-                      <div>
-                        <span>Consomem limite</span>
-                        <strong>{formatarNumeroMeta(totalTelefonesQueConsomemLimite)}</strong>
-                      </div>
-                      <div>
-                        <span>{agendarDisparo ? "Disponíveis no horário" : "Disponíveis após envio"}</span>
-                        <strong>
-                          {agendarDisparo
-                            ? disponibilidadeAgendamentoMeta && !loadingPreviewCusto
-                              ? formatarNumeroMeta(capacidadeDisponivelNoHorario)
-                              : "—"
-                            : formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao ?? 0, 0))}
-                        </strong>
-                      </div>
-                    </div>
-                    <p className={styles.metaHealthNote}>
-                      {agendarDisparo
-                        ? "Projeção sujeita a novos disparos e liberações até a execução. O limite será validado novamente antes do envio."
-                        : "Os indicadores consideram contatos únicos que consomem o limite nesta janela móvel de 24 horas."}
-                    </p>
-                  </section>
-                ) : null}
 
-                <div
-                  className={`${styles.capacityResolution} ${
-                    !agendarDisparo && selecaoExcedeLimite ||
-                    agendarDisparo && agendamentoInvalidoPeloLimiteMeta
-                      ? styles.capacityResolutionBlocked
-                      : styles.capacityResolutionGood
-                  }`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  <strong>Resumo da seleção</strong>
-                  <span>
-                    {contatosSelecionados.length === 0
-                      ? "Selecione os contatos acima para validar a capacidade."
-                      : loadingPreviewCusto
-                      ? "Atualizando a disponibilidade para os contatos selecionados..."
-                      : agendarDisparo
-                      ? !agendamentoData || !agendamentoHora
-                        ? "Informe data e hora futuras no card de capacidade."
-                        : agendamentoImpossivelPeloLimiteMeta
-                        ? "A seleção excede o limite total. Divida o envio em mais de um agendamento."
-                        : disponibilidadeAgendamentoMeta?.disponivel && !agendamentoAntesDaLiberacaoMeta
-                        ? `Agendamento possível: ${formatarNumeroMeta(totalTelefonesQueConsomemLimite)} contato(s) que consomem limite no horário selecionado.`
-                        : horarioLiberacaoMeta
-                        ? `Capacidade insuficiente no horário escolhido. Liberação estimada a partir de ${formatarDataHora(horarioLiberacaoMeta)}.`
-                        : "Capacidade não confirmada para o horário escolhido. Verifique a liberação acima."
-                      : selecaoExcedeLimite
-                      ? `Faltam ${formatarNumeroMeta(Math.abs(saldoEstimadoAposSelecao || 0))} vagas agora. Reduza a seleção ou ative Agendar disparo acima.`
-                      : `${formatarNumeroMeta(totalTelefonesQueConsomemLimite)} contato(s) consomem limite. Restantes após o envio: ${formatarNumeroMeta(Math.max(saldoEstimadoAposSelecao ?? 0, 0))}.`}
-                  </span>
+                <div className={`${styles.capacityResolution} ${contatosSelecionados.length === quantidadeDesejada ? styles.capacityResolutionGood : styles.capacityResolutionBlocked}`} role="status">
+                  <strong>{formatarNumeroMeta(contatosSelecionados.length)} de {formatarNumeroMeta(quantidadeDesejada)} contatos selecionados</strong>
+                  <span>{contatosSelecionados.length === quantidadeDesejada
+                    ? "Quantidade definida preenchida. A elegibilidade e a capacidade serão revalidadas na confirmação."
+                    : `Faltam ${formatarNumeroMeta(Math.max(0, quantidadeDesejada - contatosSelecionados.length))} contatos. Use “Preencher seleção” ou adicione individualmente.`}</span>
                 </div>
-
-
                         </div>
                       ) : null}
-                      {etapaDisparo === 3 ? (
+                      {etapaDisparo === 4 ? (
                         <div className={styles.disparoWizardConfirmation}>
             <div className={styles.modalBody}>
               <div className={styles.modalSection}>
@@ -7890,13 +7776,13 @@ export default function DisparosWhatsAppPage() {
                         <button type="button" className={styles.secondaryButton} disabled={disparando}
                           onClick={() => {
                             if (etapaDisparo === 1) fecharModalCriacaoDisparo();
-                            else { setEtapaDisparo((atual) => (atual - 1) as 1 | 2 | 3); setErro(""); }
+                            else { setEtapaDisparo((atual) => (atual - 1) as 1 | 2 | 3 | 4); setErro(""); }
                           }}>
                           {etapaDisparo === 1 ? "Cancelar" : "Voltar"}
                         </button>
-                        {etapaDisparo < 3 ? (
+                        {etapaDisparo < 4 ? (
                           <button type="button" className={styles.primaryButton}
-                            disabled={disparando || loadingIntegracoes || (etapaDisparo === 2 && loadingConflitos)}
+                            disabled={disparando || loadingIntegracoes || (etapaDisparo === 2 && loadingSaudeMeta) || (etapaDisparo === 3 && loadingConflitos)}
                             onClick={avancarEtapaDisparo}>Próxima etapa</button>
                         ) : (
                           <button type="button" className={styles.primaryButton}
