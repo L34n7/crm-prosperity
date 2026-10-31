@@ -115,11 +115,25 @@ export async function GET(req: NextRequest) {
   const proximaLiberacaoEm = Number.isFinite(proximaLiberacaoMs)
     ? new Date(Math.ceil(proximaLiberacaoMs / 60000) * 60000).toISOString()
     : null;
-  const quantidadeProximaLiberacao = Number.isFinite(proximaLiberacaoMs)
-    ? Array.from(expiracaoPorTelefone.values()).filter(
-        (timestamp) => Math.ceil(timestamp / 60000) === Math.ceil(proximaLiberacaoMs / 60000)
-      ).length
-    : 0;
+  // Cronograma independente da lista de contatos, disponivel antes de qualquer
+  // selecao. Agrupa liberacoes por minuto e nao implica renovacao integral.
+  const liberacoesPorMinuto = new Map<number, number>();
+  for (const expiracao of expiracaoPorTelefone.values()) {
+    const minuto = Math.ceil(expiracao / 60000) * 60000;
+    liberacoesPorMinuto.set(minuto, (liberacoesPorMinuto.get(minuto) || 0) + 1);
+  }
+  let acumulado = Math.max(0, limiteMeta.restantes);
+  const liberacoesPrevistas = Array.from(liberacoesPorMinuto.entries())
+    .sort(([primeira], [segunda]) => primeira - segunda)
+    .map(([minuto, quantidadeLiberada]) => {
+      acumulado = Math.min(limiteMeta.limite, acumulado + quantidadeLiberada);
+      return {
+        horario: new Date(minuto).toISOString(),
+        quantidadeLiberada,
+        disponivelAcumulado: acumulado,
+      };
+    });
+  const quantidadeProximaLiberacao = liberacoesPrevistas[0]?.quantidadeLiberada || 0;
 
   let telefoneMetaLimite = null;
 
@@ -166,6 +180,7 @@ export async function GET(req: NextRequest) {
         ...limiteMeta,
         proxima_liberacao_em: proximaLiberacaoEm,
         quantidade_proxima_liberacao: quantidadeProximaLiberacao,
+        liberacoes_previstas: liberacoesPrevistas,
       },
       telefone_meta_limite: telefoneMetaLimite,
       integracao: {

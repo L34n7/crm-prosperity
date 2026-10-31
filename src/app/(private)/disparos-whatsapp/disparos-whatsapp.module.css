@@ -5698,3 +5698,152 @@
     text-align: left;
   }
 }
+
+/* Etapa 2: painel leve de planejamento antes da seleção. */
+.schedulePlanningCard {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--crm-primary-border) 48%, var(--crm-border) 52%);
+  border-radius: 18px;
+  background:
+    linear-gradient(115deg,
+      color-mix(in srgb, var(--crm-primary-soft) 36%, var(--crm-surface) 64%) 0%,
+      var(--crm-surface) 78%);
+}
+.schedulePlanningHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.schedulePlanningHeader > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+.schedulePlanningEyebrow {
+  color: var(--crm-primary-text);
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .075em;
+}
+.schedulePlanningHeader strong {
+  color: var(--crm-text-strong);
+  font-size: 15px;
+  font-weight: 850;
+}
+.schedulePlanningHeader p {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+.schedulePlanningHint {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.schedulePlanningStats {
+  display: grid;
+  grid-template-columns: minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.3fr);
+  gap: 9px;
+}
+.schedulePlanningStats > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 13px;
+  background: var(--crm-surface);
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+}
+.schedulePlanningStats > div:last-child {
+  border-color: var(--crm-primary-border);
+  background: color-mix(in srgb, var(--crm-primary-soft) 38%, var(--crm-surface) 62%);
+}
+.schedulePlanningStats span {
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.schedulePlanningStats strong {
+  color: var(--crm-text-strong);
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.schedulePlanningStats > div:last-child strong {
+  font-size: 14px;
+}
+.schedulePlanningStats small {
+  color: var(--crm-primary-text);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.disparoWizardStage .schedulePlanningCard .disparoWizardSchedule {
+  padding-top: 11px;
+  border-top: 1px solid var(--crm-border);
+}
+.disparoWizardStage .schedulePlanningCard .scheduleToggleCard {
+  padding: 12px 14px 12px 18px;
+  border-radius: 12px;
+  background: var(--crm-surface);
+}
+.disparoWizardStage .schedulePlanningCard .scheduleToggleCardActive {
+  background: color-mix(in srgb, var(--crm-primary-soft) 25%, var(--crm-surface) 75%);
+}
+.disparoWizardStage .schedulePlanningCard .scheduleCapacityPanel {
+  background: var(--crm-surface);
+}
+.disparoWizardStage .metaHealthGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.disparoWizardStage .metaHealthGrid > div {
+  min-width: 0;
+}
+.metaHealthNote {
+  margin: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 900px) {
+  .schedulePlanningStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .schedulePlanningStats > div:last-child {
+    grid-column: 1 / -1;
+  }
+  .disparoWizardStage .metaHealthGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .schedulePlanningCard {
+    padding: 13px;
+  }
+  .schedulePlanningHeader {
+    flex-wrap: wrap;
+  }
+  .schedulePlanningStats,
+  .disparoWizardStage .metaHealthGrid {
+    grid-template-columns: 1fr;
+  }
+  .schedulePlanningStats > div:last-child {
+    grid-column: auto;
+  }
+}
