@@ -203,17 +203,13 @@
 .mediaToggleCard {
   position: relative;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 82%, var(--crm-border));
+  border: 1px solid color-mix(in srgb, var(--crm-primary-border) 76%, var(--crm-border) 24%);
   background:
-    radial-gradient(
-      circle at 0% 0%,
-      color-mix(in srgb, var(--crm-warning-strong) 18%, transparent) 0%,
-      transparent 62%
-    ),
+    radial-gradient(circle at 0% 0%, var(--crm-primary-soft) 0%, transparent 66%),
     linear-gradient(
       112deg,
-      color-mix(in srgb, var(--crm-warning-bg-strong) 74%, var(--crm-warning-strong) 26%) 0%,
-      color-mix(in srgb, var(--crm-warning-bg-strong) 46%, var(--crm-surface) 54%) 58%,
+      color-mix(in srgb, var(--crm-primary-soft) 85%, var(--crm-surface) 15%) 0%,
+      color-mix(in srgb, var(--crm-primary-soft) 28%, var(--crm-surface) 72%) 60%,
       var(--crm-surface) 100%
     );
   border-radius: 18px;
@@ -222,15 +218,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  box-shadow: 0 12px 30px var(--crm-ui-private-shadow-rgb-15-23-42-0-04), inset 0 1px 0 color-mix(in srgb, var(--crm-warning-bg-strong) 42%, transparent);
+  box-shadow: 0 10px 26px var(--crm-ui-private-shadow-rgb-15-23-42-0-04), inset 0 1px 0 color-mix(in srgb, var(--crm-primary-soft) 48%, transparent);
 }
 
 .mediaToggleCard::before {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 4px;
-  background: linear-gradient(180deg, var(--crm-warning-strong), var(--crm-warning-border));
+  width: 3px;
+  background: linear-gradient(180deg, var(--crm-primary), var(--crm-primary-strong));
   border-radius: 18px 0 0 18px;
   pointer-events: none;
 }
@@ -251,7 +247,7 @@
   font-weight: 900;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--crm-warning-text);
+  color: var(--crm-primary-text);
 }
 
 .mediaToggleTitle {
@@ -271,9 +267,9 @@
   width: 48px;
   height: 28px;
   flex: 0 0 auto;
-  border: 1px solid color-mix(in srgb, var(--crm-warning-strong) 58%, var(--crm-border-strong));
+  border: 1px solid var(--crm-border-strong);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--crm-warning-bg-strong) 72%, var(--crm-surface) 28%);
+  background: var(--crm-surface-muted);
   padding: 0;
   cursor: pointer;
   transition: background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
@@ -281,19 +277,19 @@
 }
 
 .premiumSwitch:hover {
-  border-color: var(--crm-warning-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--crm-warning-strong) 16%, transparent);
+  border-color: var(--crm-primary);
+  box-shadow: 0 0 0 3px var(--crm-primary-soft);
 }
 
 .premiumSwitch:focus-visible {
-  outline: 2px solid var(--crm-warning-strong);
+  outline: 2px solid var(--crm-primary-strong);
   outline-offset: 3px;
 }
 
 .premiumSwitchActive {
-  background: linear-gradient(135deg, var(--crm-warning-strong), color-mix(in srgb, var(--crm-warning-strong) 80%, var(--crm-warning-border) 20%));
-  border-color: var(--crm-warning-strong);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--crm-warning-strong) 18%, transparent);
+  background: var(--crm-primary-strong);
+  border-color: var(--crm-primary-strong);
+  box-shadow: 0 0 0 3px var(--crm-primary-soft);
 }
 
 .premiumSwitchThumb {
@@ -640,25 +636,25 @@
   justify-content: center;
   min-height: 40px;
   padding: 9px 16px;
-  border: 1px solid color-mix(in srgb, var(--crm-warning-strong) 72%, #d7a64e 28%);
+  border: 1px solid var(--crm-primary-strong);
   border-radius: 11px;
   background: linear-gradient(
     125deg,
-    color-mix(in srgb, var(--crm-warning-strong) 34%, #fff0bc 66%) 0%,
-    color-mix(in srgb, var(--crm-warning-strong) 58%, #ffdb86 42%) 100%
+    color-mix(in srgb, var(--crm-primary-strong) 82%, var(--crm-primary) 18%),
+    var(--crm-primary-strong)
   );
-  color: #3b290c;
-  box-shadow: 0 4px 11px rgb(151 98 24 / 15%), inset 0 1px 0 rgb(255 255 255 / 45%);
+  color: var(--crm-text-inverse);
+  box-shadow: 0 5px 14px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
   font: inherit;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
-  transition: filter 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .imageUploadActionButton:hover {
-  filter: saturate(1.08) brightness(1.025);
-  box-shadow: 0 6px 14px rgb(151 98 24 / 20%), inset 0 1px 0 rgb(255 255 255 / 45%);
+  background: var(--crm-primary-strong-hover);
+  box-shadow: 0 7px 17px var(--crm-ui-private-shadow-rgb-15-23-42-0-16);
   transform: translateY(-1px);
 }
 
