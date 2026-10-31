@@ -5997,3 +5997,92 @@
     padding: 15px 16px;
   }
 }
+
+/* Alerta de restrição Meta 131048, visível tanto no card como no relatório. */
+.meta131048Notice {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--crm-warning-bg) 82%, var(--crm-surface) 18%);
+  color: var(--crm-warning-text);
+  text-align: left;
+  box-shadow: none;
+}
+.meta131048NoticeHeading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.meta131048NoticeHeading svg {
+  flex: 0 0 auto;
+}
+.meta131048NoticeHeading > strong {
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+.meta131048NoticeHeading > span {
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--crm-warning-text);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.meta131048Notice p {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.meta131048Notice p strong {
+  color: var(--crm-text-strong);
+  font-weight: 850;
+}
+.campaignReportErrorLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 9px;
+  white-space: normal;
+  overflow-x: visible;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.campaignReportErrorLine > strong {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 850;
+}
+.campaignReportErrorLine > span {
+  min-width: 0;
+}
+.campaignReportErrorLine131048 {
+  color: var(--crm-warning-text);
+}
+.campaignReportErrorRow131048 td {
+  background: color-mix(in srgb, var(--crm-warning-bg) 66%, var(--crm-surface) 34%);
+}
+@media (max-width: 640px) {
+  .meta131048Notice {
+    padding: 11px;
+  }
+  .meta131048NoticeHeading > span {
+    margin-left: 0;
+  }
+  .campaignReportErrorLine {
+    display: block;
+  }
+  .campaignReportErrorLine > strong,
+  .campaignReportErrorLine > span {
+    display: block;
+  }
+}

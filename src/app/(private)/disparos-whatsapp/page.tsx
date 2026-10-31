@@ -32,6 +32,7 @@ import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whats
 import {
   descreverErroMetaWhatsApp,
   formatarErroMetaWhatsApp,
+  identificarCodigoErroMetaWhatsApp,
 } from "@/lib/whatsapp/meta-error-messages";
 
 type IntegracaoWhatsApp = {
@@ -1712,14 +1713,10 @@ function feedbackErroCampanhaHistorico(
       ""
   ).trim();
 
-  const codigoExemplo = Number(campanha.erro_codigo_meta_exemplo || 0);
-  const codigoTexto = motivo.match(/\b(\d{5,6})\b/)?.[1] || "";
-  const codigo =
-    Number.isFinite(codigoExemplo) && codigoExemplo > 0
-      ? codigoExemplo
-      : codigoTexto
-      ? Number(codigoTexto)
-      : null;
+  const codigo = identificarCodigoErroMetaWhatsApp(
+    campanha.erro_codigo_meta_exemplo,
+    motivo
+  );
 
   const descricaoMeta = codigo
     ? descreverErroMetaWhatsApp(codigo, motivo || null)
@@ -1763,20 +1760,46 @@ function resumoErrosCampanhaHistorico(
       const quantidade = Math.max(0, Number(item.quantidade || 0));
       if (!quantidade) return "";
 
-      const erro = String(item.erro || "").trim();
-      const codigoNumero = Number(item.erro_codigo_meta || 0);
-      const possuiCodigo =
-        Number.isFinite(codigoNumero) && codigoNumero > 0;
-      const descricaoMeta = possuiCodigo
-        ? descreverErroMetaWhatsApp(codigoNumero, erro || null)
+      const erroTecnico = String(item.erro || "").trim();
+      const codigo = identificarCodigoErroMetaWhatsApp(
+        item.erro_codigo_meta,
+        erroTecnico
+      );
+      const descricaoMeta = codigo
+        ? descreverErroMetaWhatsApp(codigo, erroTecnico)
         : null;
-      const rotuloErro = possuiCodigo
-        ? `Erro ${codigoNumero} · ${erro || descricaoMeta?.nome || "Falha da Meta"}`
-        : erro || "Falha sem descrição";
+      const texto = descricaoMeta && codigo
+        ? `Erro ${codigo} — ${descricaoMeta.nome}`
+        : erroTecnico || "Falha sem descrição";
 
-      return `${quantidade} ${quantidade === 1 ? "falha" : "falhas"}: ${rotuloErro}`;
+      return `${quantidade} ${quantidade === 1 ? "falha" : "falhas"}: ${texto}`;
     })
     .filter(Boolean);
+}
+
+/** Um erro 131048 pode coexistir com 131026 e não ser o erro de exemplo. */
+function ocorrenciasRestricaoEnvioCampanha(campanha: CampanhaHistoricoFiltro) {
+  const erros = Array.isArray(campanha.erros_resumo)
+    ? campanha.erros_resumo
+    : [];
+  const quantidade = erros.reduce((total, item) => {
+    const codigo = identificarCodigoErroMetaWhatsApp(
+      item.erro_codigo_meta,
+      item.erro
+    );
+    return codigo === 131048
+      ? total + Math.max(0, Number(item.quantidade || 0))
+      : total;
+  }, 0);
+
+  const encontrada =
+    quantidade > 0 ||
+    identificarCodigoErroMetaWhatsApp(
+      campanha.erro_codigo_meta_exemplo,
+      campanha.erro_exemplo || campanha.erro || campanha.pausa_motivo
+    ) === 131048;
+
+  return { encontrada, quantidade };
 }
 
 function timestampRelatorio(valor?: string | null) {
@@ -4650,6 +4673,18 @@ export default function DisparosWhatsAppPage() {
   }, [totalResultadosFiltroAtivo]);
 
   const resultadoHistoricoPaginado = resultadoFiltrado;
+
+  const totalRestricoesEnvioRelatorio = useMemo(
+    () =>
+      (relatorioCampanhaDetalhado?.linhas || []).filter(
+        (linha) =>
+          identificarCodigoErroMetaWhatsApp(
+            linha.erro_codigo_meta,
+            linha.erro
+          ) === 131048
+      ).length,
+    [relatorioCampanhaDetalhado]
+  );
 
   const linhasRelatorioCampanhaFiltradas = useMemo(() => {
     let linhas = ordenarLinhasRelatorioCampanha(
@@ -8249,6 +8284,23 @@ export default function DisparosWhatsAppPage() {
                         </button>
                       </div>
 
+                      {totalRestricoesEnvioRelatorio > 0 ? (
+                        <div className={styles.meta131048Notice} role="alert">
+                          <div className={styles.meta131048NoticeHeading}>
+                            <Info size={18} aria-hidden="true" />
+                            <strong>131048 · Restrição de envio do número</strong>
+                            <span>
+                              {totalRestricoesEnvioRelatorio}{" "}
+                              {totalRestricoesEnvioRelatorio === 1 ? "falha identificada" : "falhas identificadas"}
+                            </span>
+                          </div>
+                          <p>{descreverErroMetaWhatsApp(131048).significado}</p>
+                          <p>
+                            <strong>O que fazer:</strong>{" "}
+                            {descreverErroMetaWhatsApp(131048).acao}
+                          </p>
+                        </div>
+                      ) : null}
                       <p className={styles.campaignReportCostNote}>
                         {relatorioCampanhaDetalhado.custo_estimado.criterio}
                       </p>
@@ -8279,9 +8331,14 @@ export default function DisparosWhatsAppPage() {
                                   const status = String(
                                     item.status_final || "pendente"
                                   ).toLowerCase();
-                                  const erroCompleto = item.erro
-                                    ? `${item.erro_codigo_meta ? `Erro ${item.erro_codigo_meta} · ` : ""}${item.erro}`
+                                  const codigoErro = identificarCodigoErroMetaWhatsApp(
+                                    item.erro_codigo_meta,
+                                    item.erro
+                                  );
+                                  const detalheErro = codigoErro
+                                    ? descreverErroMetaWhatsApp(codigoErro, item.erro)
                                     : null;
+                                  const erroCompleto = Boolean(item.erro || codigoErro);
                                   const chaveLinha = `${item.numero || "sem-numero"}-${item.enviado_em || index}`;
 
                                   return (
@@ -8332,10 +8389,29 @@ export default function DisparosWhatsAppPage() {
                                       </td>
                                     </tr>
                                     {erroCompleto ? (
-                                      <tr className={styles.campaignReportErrorRow}>
+                                      <tr className={`${styles.campaignReportErrorRow} ${
+                                          codigoErro === 131048 ? styles.campaignReportErrorRow131048 : ""
+                                        }`}>
                                         <td colSpan={7}>
-                                          <div className={styles.campaignReportErrorLine}>
-                                            <strong>Falha:</strong> {erroCompleto}
+                                          <div
+                                            className={`${styles.campaignReportErrorLine} ${
+                                              codigoErro === 131048 ? styles.campaignReportErrorLine131048 : ""
+                                            }`}
+                                            title={item.erro || undefined}
+                                          >
+                                            <strong>
+                                              {codigoErro ? `Falha ${codigoErro}` : "Falha"}
+                                              {detalheErro ? ` · ${detalheErro.nome}` : ""}
+                                            </strong>
+                                            <span>
+                                              {detalheErro?.significado || item.erro || "Não foi possível entregar a mensagem."}
+                                            </span>
+                                            {codigoErro === 131048 ? (
+                                              <span>
+                                                <strong>Orientação:</strong>{" "}
+                                                {detalheErro?.acao}
+                                              </span>
+                                            ) : null}
                                           </div>
                                         </td>
                                       </tr>
@@ -8453,6 +8529,8 @@ export default function DisparosWhatsAppPage() {
                         : null;
                       const errosResumo =
                         resumoErrosCampanhaHistorico(campanha);
+                      const restricaoMeta =
+                        ocorrenciasRestricaoEnvioCampanha(campanha);
 
                       return (
                         <button
@@ -8614,7 +8692,27 @@ export default function DisparosWhatsAppPage() {
                                 {feedbackErro.titulo}
                               </strong>
 
-                              {feedbackErro.meta ? (
+                              {restricaoMeta.encontrada ? (
+                                <div className={styles.meta131048Notice}>
+                                  <div className={styles.meta131048NoticeHeading}>
+                                    <Info size={16} aria-hidden="true" />
+                                    <strong>131048 · Envios restritos pela Meta</strong>
+                                    {restricaoMeta.quantidade > 0 ? (
+                                      <span>
+                                        {restricaoMeta.quantidade}{" "}
+                                        {restricaoMeta.quantidade === 1 ? "falha" : "falhas"}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <p>{descreverErroMetaWhatsApp(131048).significado}</p>
+                                  <p>
+                                    <strong>O que fazer:</strong>{" "}
+                                    {descreverErroMetaWhatsApp(131048).acao}
+                                  </p>
+                                </div>
+                              ) : null}
+
+                              {feedbackErro.meta && (!restricaoMeta.encontrada || feedbackErro.meta.codigo !== 131048) ? (
                                 <>
                                   <p className={styles.resultErrorDescription}>
                                     <strong>

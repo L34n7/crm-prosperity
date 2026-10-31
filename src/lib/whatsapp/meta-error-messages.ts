@@ -55,7 +55,7 @@ const ERROS_META_WHATSAPP: Record<
     acao: "Revise o telefone e os valores das variáveis antes de reenviar.",
   },
   131026: {
-    nome: "Message Undeliverable",
+    nome: "Mensagem não entregue",
     significado: "A Meta não conseguiu entregar a mensagem ao destinatário.",
     acao: "Confirme se o número está correto e possui WhatsApp ativo; evite tentativas repetidas.",
   },
@@ -75,9 +75,9 @@ const ERROS_META_WHATSAPP: Record<
     acao: "Cadastre ou regularize a forma de pagamento no Gerenciador da Meta.",
   },
   131048: {
-    nome: "Spam Rate Limit Hit",
-    significado: "A Meta limitou temporariamente o número remetente por sinais de spam ou baixa aceitação dos envios.",
-    acao: "Pause os disparos, aguarde a liberação e retome com menor volume e contatos com opt-in.",
+    nome: "Restrição de envio por qualidade do número",
+    significado: "A Meta restringiu a quantidade de mensagens que este número pode enviar, possivelmente porque mensagens anteriores foram bloqueadas ou denunciadas como spam. Não é uma falha específica do destinatário nem simplesmente falta de vagas na janela de 24 horas.",
+    acao: "Pause novos disparos desse número. Verifique a classificação de qualidade e os alertas no WhatsApp Manager; revise o opt-in, a lista e os templates antes de voltar a enviar. Não repita automaticamente as mensagens que falharam.",
   },
   131049: {
     nome: "Meta Chose Not to Deliver",
@@ -121,12 +121,23 @@ const ERROS_META_WHATSAPP: Record<
   },
 };
 
+/** Reconhece códigos estruturados ou embutidos no texto histórico da Meta. */
+export function identificarCodigoErroMetaWhatsApp(
+  codigo?: number | string | null,
+  erroTecnico?: string | null
+): number | null {
+  const numero = Number(codigo ?? 0);
+  if (Number.isSafeInteger(numero) && numero > 0) return numero;
+
+  const encontrado = String(erroTecnico || "").match(/\b(\d{5,6})\b/);
+  return encontrado ? Number(encontrado[1]) : null;
+}
+
 export function descreverErroMetaWhatsApp(
   codigo?: number | string | null,
   erroTecnico?: string | null
 ): DescricaoErroMetaWhatsApp {
-  const numero = Number(codigo ?? 0);
-  const codigoValido = Number.isFinite(numero) && numero > 0 ? numero : null;
+  const codigoValido = identificarCodigoErroMetaWhatsApp(codigo, erroTecnico);
 
   if (codigoValido && ERROS_META_WHATSAPP[codigoValido]) {
     return {
