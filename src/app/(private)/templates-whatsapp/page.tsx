@@ -1618,7 +1618,7 @@ export default function TemplatesWhatsAppPage() {
                 </div>
               </aside>
 
-              <form className={styles.creatorModalForm} onSubmit={handleSubmit}>
+              <form id="criacao-template-form" className={styles.creatorModalForm} onSubmit={handleSubmit}>
                 <fieldset disabled={!podeCriarTemplate || submitting} className={styles.creatorFieldset}>
                   <nav className={styles.creatorWizardSteps} aria-label="Etapas de criação">
                     {[
@@ -2150,6 +2150,11 @@ export default function TemplatesWhatsAppPage() {
                     </div>
                   </div>
 
+
+                </fieldset>
+              </form>
+            </div>
+
                   <footer className={styles.creatorModalFooter}>
                     {erro ? <div className={styles.errorAlert} role="alert">{erro}</div> : null}
                     <div className={styles.creatorFooterActions}>
@@ -2168,19 +2173,16 @@ export default function TemplatesWhatsAppPage() {
                         }}
                       >{etapaCriacao === 1 ? "Cancelar" : "Voltar"}</button>
                       {etapaCriacao === 3 ? (
-                        <button type="submit" disabled={submitting} className={styles.primaryButton}>
+                        <button type="submit" form="criacao-template-form" disabled={!podeCriarTemplate || submitting} className={styles.primaryButton}>
                           {submitting ? "Enviando template..." : "Criar template"}
                         </button>
                       ) : (
-                        <button type="button" className={styles.primaryButton} onClick={avancarEtapaCriacao}>
+                        <button type="button" className={styles.primaryButton} disabled={!podeCriarTemplate || submitting} onClick={avancarEtapaCriacao}>
                           Próxima etapa
                         </button>
                       )}
                     </div>
                   </footer>
-                </fieldset>
-              </form>
-            </div>
 
             {submitting ? (
               <div className={styles.creatorSendingOverlay} role="status" aria-live="polite">

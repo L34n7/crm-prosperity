@@ -1824,8 +1824,10 @@
 .creatorModalFooter {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 12px;
   padding: 14px 24px 17px;
   border-top: 1px solid var(--crm-border);
   background: var(--crm-surface);
@@ -1842,6 +1844,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  width: 100%;
   gap: 10px;
 }
 
