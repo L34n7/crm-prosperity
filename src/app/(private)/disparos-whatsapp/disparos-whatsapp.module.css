@@ -6516,34 +6516,53 @@
   .campaignFailureModalIcon { flex-basis: 40px; width: 40px; height: 40px; }
 }
 
-/* Assistente de disparos: planejamento separado da seleção de contatos. */
+
+/* Planejamento de capacidade: leitura e hierarquia visual da etapa 2. */
 .dispatchCapacityPlanner {
+  position: relative;
+  z-index: 1;
   display: grid;
+  grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+  align-items: stretch;
+  gap: 22px;
+  padding: 23px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 21px;
+  background:
+    radial-gradient(ellipse at 96% 0%, color-mix(in srgb, var(--crm-primary-soft) 65%, transparent), transparent 63%),
+    linear-gradient(125deg, var(--crm-surface) 7%, color-mix(in srgb, var(--crm-primary-soft) 40%, var(--crm-surface) 60%) 100%);
+  box-shadow: 0 17px 35px color-mix(in srgb, var(--crm-primary-strong) 11%, transparent),
+              0 3px 9px color-mix(in srgb, var(--crm-text-strong) 6%, transparent);
+}
+.dispatchCapacityPlannerMain {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 14px;
-  padding: 22px;
-  border: 1px solid var(--crm-border);
-  border-radius: 20px;
-  background: linear-gradient(125deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
-  box-shadow: var(--crm-shadow-xs);
+  min-width: 0;
 }
 .dispatchCapacityPlannerIntro {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  width: 100%;
+  margin-bottom: 10px;
 }
 .dispatchCapacityPlannerIntro > div { min-width: 0; }
 .dispatchCapacityPlannerIntro h3 {
-  margin: 5px 0 5px;
+  margin: 6px 0 6px;
   color: var(--crm-text-strong);
   font-size: 19px;
+  line-height: 1.35;
   font-weight: 850;
 }
 .dispatchCapacityPlannerIntro p {
   margin: 0;
+  max-width: 410px;
   color: var(--crm-text-muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 .dispatchCapacityPlannerIntro .schedulePlanningEyebrow {
   color: var(--crm-primary-text);
@@ -6553,46 +6572,73 @@
   background: var(--crm-surface);
   border-color: var(--crm-border);
 }
+.dispatchCapacityPlannerMain > .label {
+  margin-top: 7px;
+  color: var(--crm-text-strong);
+}
 .dispatchCapacityQuantityRow {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  width: 100%;
 }
 .dispatchCapacityQuantityInput {
-  width: min(220px, 100%);
-  font-size: 20px;
-  font-weight: 850;
+  width: min(194px, 100%);
+  min-height: 45px;
+  font-size: 16px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  min-height: 50px;
 }
 .dispatchCapacityQuantityRow > span {
   color: var(--crm-text-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
+.dispatchCapacityPlannerActions {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding-left: 21px;
+  border-left: 1px solid var(--crm-border);
+}
+.dispatchCapacityEmptyState {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 105px;
+  padding: 14px 16px;
+  border: 1px dashed var(--crm-border-strong);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.dispatchCapacityEmptyState svg { flex-shrink: 0; color: var(--crm-primary-text); }
 .dispatchCapacityResult {
   display: grid;
   gap: 5px;
-  padding: 13px 16px;
+  padding: 11px 14px;
   border: 1px solid var(--crm-success-border);
-  background: var(--crm-success-bg);
-  border-radius: 13px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--crm-success-bg) 68%, var(--crm-surface) 32%);
 }
 .dispatchCapacityResultAlert {
   border-color: var(--crm-warning-border);
-  background: color-mix(in srgb, var(--crm-warning-bg) 70%, var(--crm-surface) 30%);
+  background: color-mix(in srgb, var(--crm-warning-bg) 60%, var(--crm-surface) 40%);
 }
 .dispatchCapacityResult > strong {
   color: var(--crm-text-strong);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 850;
 }
 .dispatchCapacityResult p {
   margin: 0;
   color: var(--crm-text);
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 .dispatchCapacityChoices {
   display: grid;
@@ -6601,44 +6647,81 @@
 }
 .dispatchCapacityOption {
   display: grid;
+  align-content: center;
   text-align: left;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--crm-primary-border);
+  min-height: 85px;
+  padding: 13px 15px;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
   background: var(--crm-surface);
-  border-radius: 14px;
-  box-shadow: var(--crm-shadow-xs);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--crm-text-strong) 5%, transparent);
   cursor: pointer;
   font: inherit;
-  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.dispatchCapacityOptionImmediate {
+  border-color: var(--crm-success-border);
+  background: linear-gradient(112deg,
+    color-mix(in srgb, var(--crm-success-bg) 74%, var(--crm-surface) 26%), var(--crm-surface));
+}
+.dispatchCapacityOptionScheduled {
+  border-color: var(--crm-warning-border);
+  background: linear-gradient(112deg,
+    color-mix(in srgb, var(--crm-warning-bg) 80%, var(--crm-surface) 20%), var(--crm-surface));
 }
 .dispatchCapacityOption:hover:not(:disabled) {
-  border-color: var(--crm-primary-strong);
-  transform: translateY(-1px);
-  box-shadow: var(--crm-shadow-sm);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--crm-text-strong) 9%, transparent);
 }
+.dispatchCapacityOptionImmediate:hover:not(:disabled) { border-color: var(--crm-success-strong); }
+.dispatchCapacityOptionScheduled:hover:not(:disabled) { border-color: var(--crm-warning-text); }
 .dispatchCapacityOption:focus-visible {
   outline: 2px solid var(--crm-primary-strong);
   outline-offset: 2px;
 }
-.dispatchCapacityOption:disabled { opacity: .5; cursor: not-allowed; }
+.dispatchCapacityOption:disabled { opacity: .45; cursor: not-allowed; }
 .dispatchCapacityOption strong {
   color: var(--crm-text-strong);
   font-size: 13px;
   font-weight: 850;
+  line-height: 1.4;
 }
 .dispatchCapacityOption span {
   color: var(--crm-text-muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
+}
+.dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected {
+  border-color: var(--crm-success-strong);
+  background: linear-gradient(120deg, var(--crm-success-strong),
+    color-mix(in srgb, var(--crm-success-strong) 84%, #064e3b 16%));
+  box-shadow: 0 12px 25px color-mix(in srgb, var(--crm-success-strong) 28%, transparent),
+              inset 0 1px 0 rgb(255 255 255 / 23%);
+}
+.dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected strong,
+.dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected span {
+  color: var(--crm-text-inverse);
+}
+.dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected {
+  border-color: var(--crm-warning-text);
+  background: linear-gradient(125deg,
+    color-mix(in srgb, var(--crm-warning-bg) 20%, #f0bb42 80%),
+    color-mix(in srgb, var(--crm-warning-bg) 42%, #f9cf5d 58%));
+  box-shadow: 0 12px 25px color-mix(in srgb, var(--crm-warning-text) 23%, transparent),
+              inset 0 1px 0 rgb(255 255 255 / 45%);
+}
+.dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected strong,
+.dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected span {
+  color: #533509;
 }
 .dispatchCapacitySuggestion {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   margin: 0;
-  padding: 12px 14px;
+  padding: 11px 13px;
   border: 1px solid var(--crm-border);
   border-radius: 12px;
   background: var(--crm-surface);
@@ -6646,25 +6729,29 @@
   font-size: 12px;
   line-height: 1.6;
 }
-.dispatchCapacitySuggestion svg { color: var(--crm-primary-text); flex: 0 0 auto; margin-top: 1px; }
+.dispatchCapacitySuggestion svg {
+  color: var(--crm-primary-text);
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
 .dispatchCapacityAccepted {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 11px 13px;
   border-radius: 12px;
   border: 1px solid var(--crm-success-border);
   background: var(--crm-success-bg);
   color: var(--crm-success-text);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .dispatchCapacityAccepted svg { flex: 0 0 auto; }
 .dispatchCapacityScheduleFields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding-top: 6px;
+  padding-top: 3px;
 }
 .dispatchCapacityScheduleFields > p {
   grid-column: 1 / -1;
@@ -6674,17 +6761,20 @@
   line-height: 1.5;
 }
 .dispatchCapacityReleases {
-  border: 1px solid var(--crm-border);
-  background: var(--crm-surface);
-  border-radius: 14px;
+  border: 1px solid var(--crm-warning-border);
+  border-radius: 15px;
   overflow: hidden;
+  background: linear-gradient(105deg,
+    color-mix(in srgb, var(--crm-warning-bg) 75%, var(--crm-surface) 25%),
+    var(--crm-surface) 95%);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--crm-warning-text) 5%, transparent);
 }
 .dispatchCapacityReleases summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 15px;
+  padding: 15px 18px;
   cursor: pointer;
   list-style: none;
 }
@@ -6701,26 +6791,60 @@
   color: var(--crm-text-strong);
   font-size: 13px;
 }
-.dispatchCapacityReleases summary > span:first-child svg { color: var(--crm-primary-text); }
+.dispatchCapacityReleases summary > span:first-child svg { color: var(--crm-warning-text); }
 .dispatchCapacityReleases summary > span:last-child svg { transition: transform .18s ease; }
 .dispatchCapacityReleases[open] summary > span:last-child svg { transform: rotate(180deg); }
-.dispatchCapacityReleases summary:focus-visible { outline: 2px solid var(--crm-primary-strong); outline-offset: -2px; }
-.dispatchCapacityReleaseBody { padding: 6px 15px 15px; display: grid; gap: 9px; border-top: 1px solid var(--crm-border); }
-.dispatchCapacityReleaseBody > p { color: var(--crm-text-muted); font-size: 12px; }
-.dispatchCapacityReleaseItem {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px 12px;
-  padding: 9px 10px;
-  background: var(--crm-surface-soft);
-  border-radius: 9px;
+.dispatchCapacityReleases summary:focus-visible {
+  outline: 2px solid var(--crm-warning-text);
+  outline-offset: -2px;
+}
+.dispatchCapacityReleaseBody {
+  padding: 10px 15px 15px;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--crm-warning-border);
+}
+.dispatchCapacityReleaseBody > p {
+  color: var(--crm-text-muted);
   font-size: 12px;
 }
-.dispatchCapacityReleaseItem > strong { color: var(--crm-primary-text); }
-.dispatchCapacityReleaseItem > span { color: var(--crm-text-strong); }
-.dispatchCapacityReleaseItem > small { color: var(--crm-text-muted); }
+.dispatchCapacityReleaseColumns,
+.dispatchCapacityReleaseItem {
+  display: grid;
+  grid-template-columns: minmax(0, .75fr) minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 9px;
+}
+.dispatchCapacityReleaseColumns {
+  padding: 5px 12px 3px;
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.dispatchCapacityReleaseItem {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 45%, var(--crm-border) 55%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--crm-surface) 87%, var(--crm-warning-bg) 13%);
+  font-size: 12px;
+}
+.dispatchCapacityReleaseItem > strong {
+  color: var(--crm-warning-text);
+  font-size: 14px;
+  font-weight: 850;
+}
+.dispatchCapacityReleaseItem > span {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+}
+.dispatchCapacityReleaseItem > small {
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 750;
+}
 .dispatchContactsPlan {
   display: flex;
   align-items: center;
@@ -6735,26 +6859,52 @@
 }
 .dispatchContactsPlan > strong { color: var(--crm-text-strong); font-size: 14px; }
 .dispatchContactsPlan > span { color: var(--crm-text-muted); }
+@media (max-width: 980px) {
+  .dispatchCapacityPlanner { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .dispatchCapacityPlannerActions {
+    border-left: 0;
+    border-top: 1px solid var(--crm-border);
+    padding: 17px 0 0;
+  }
+}
 @media (max-width: 760px) {
   .disparoWizardSteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dispatchCapacityPlanner { padding: 16px; }
   .dispatchCapacityChoices { grid-template-columns: minmax(0, 1fr); }
-  .dispatchCapacityPlanner { padding: 15px; }
   .dispatchCapacityScheduleFields { grid-template-columns: minmax(0, 1fr); }
   .dispatchCapacityScheduleFields > p { grid-column: 1; }
   .dispatchCapacityPlannerIntro .schedulePlanningHint { display: none; }
-  .dispatchCapacityReleaseItem { flex-direction: column; }
+  .dispatchCapacityReleaseColumns { display: none; }
+  .dispatchCapacityReleaseItem { grid-template-columns: 1fr; gap: 5px; }
 }
 
-/* Cinco indicadores preventivos, com leitura responsiva das previsões. */
+
+/* Tipografia consistente dos indicadores e datas de liberação mais compactas. */
+.disparoWizardStage .metaHealthCard { box-shadow: 0 3px 11px color-mix(in srgb, var(--crm-text-strong) 5%, transparent); }
 .disparoWizardStage .metaHealthGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .disparoWizardStage .metaHealthGrid > div { min-width: 0; }
-.disparoWizardStage .metaHealthGrid > div strong {
+.disparoWizardStage .metaHealthGrid > div strong.metaHealthMainValue {
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 900;
   overflow-wrap: anywhere;
-  font-size: 16px;
+}
+.disparoWizardStage .metaHealthGrid > div strong.metaHealthDateValue {
+  font-size: 13.5px;
+  line-height: 1.3;
+  font-weight: 850;
+  overflow-wrap: anywhere;
 }
 .disparoWizardStage .metaHealthGrid > div small {
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+.disparoWizardStage .metaHealthGrid > div small.metaHealthMaxDate {
   color: var(--crm-text-muted);
   font-size: 11px;
+  font-weight: 750;
 }
 @media (max-width: 1100px) {
   .disparoWizardStage .metaHealthGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

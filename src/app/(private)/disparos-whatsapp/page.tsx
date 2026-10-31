@@ -4104,6 +4104,12 @@ export default function DisparosWhatsAppPage() {
   const totalCapacidadeALiberar = liberacoesPlanejamento.reduce(
     (total, item) => total + Math.max(0, Number(item.quantidadeLiberada || 0)), 0
   );
+  const capacidadeMaximaDisponivelAgora =
+    capacidadeTotalPlanejamento > 0 && capacidadeAgoraPlanejamento >= capacidadeTotalPlanejamento;
+  const horarioCapacidadeMaxima = liberacoesPlanejamento.find(
+    (item) => Number(item.disponivelAcumulado || 0) >= capacidadeTotalPlanejamento &&
+      capacidadeTotalPlanejamento > 0
+  )?.horario || null;
   const horarioCapacidadeDesejada = quantidadeDesejada > capacidadeAgoraPlanejamento
     ? liberacoesPlanejamento.find(
         (item) => Number(item.disponivelAcumulado || 0) >= quantidadeDesejada
@@ -6644,23 +6650,71 @@ export default function DisparosWhatsAppPage() {
                               </div>
                             </div>
                             <div className={styles.metaHealthGrid}>
-                              <div><span>Capacidade total</span><strong>{formatarNumeroMeta(limiteMeta?.limite)}</strong></div>
-                              <div><span>Disponíveis agora</span><strong>{formatarNumeroMeta(limiteMeta?.restantes)}</strong></div>
-                              <div><span>Próxima liberação</span>
-                                <strong>{liberacoesPlanejamento[0] ? formatarDataHora(liberacoesPlanejamento[0].horario) : "Sem previsão"}</strong>
+                              <div>
+                                <span>Capacidade total</span>
+                                <strong className={styles.metaHealthMainValue}>{formatarNumeroMeta(limiteMeta?.limite)}</strong>
+                              </div>
+                              <div>
+                                <span>Disponíveis agora</span>
+                                <strong className={styles.metaHealthMainValue}>{formatarNumeroMeta(limiteMeta?.restantes)}</strong>
+                              </div>
+                              <div>
+                                <span>Próxima liberação</span>
+                                <strong className={styles.metaHealthDateValue}>
+                                  {liberacoesPlanejamento[0] ? formatarDataHora(liberacoesPlanejamento[0].horario) : "Sem previsão"}
+                                </strong>
                                 {liberacoesPlanejamento[0] ? <small>+{formatarNumeroMeta(liberacoesPlanejamento[0].quantidadeLiberada)} vagas</small> : null}
                               </div>
-                              <div><span>Segunda liberação</span>
-                                <strong>{liberacoesPlanejamento[1] ? formatarDataHora(liberacoesPlanejamento[1].horario) : "—"}</strong>
+                              <div>
+                                <span>Segunda liberação</span>
+                                <strong className={styles.metaHealthDateValue}>
+                                  {liberacoesPlanejamento[1] ? formatarDataHora(liberacoesPlanejamento[1].horario) : "—"}
+                                </strong>
                                 {liberacoesPlanejamento[1] ? <small>+{formatarNumeroMeta(liberacoesPlanejamento[1].quantidadeLiberada)} vagas</small> : null}
                               </div>
-                              <div><span>Total a liberar</span><strong>{formatarNumeroMeta(totalCapacidadeALiberar)}</strong></div>
+                              <div>
+                                <span>Total a liberar</span>
+                                <strong className={styles.metaHealthMainValue}>{formatarNumeroMeta(totalCapacidadeALiberar)}</strong>
+                                <small className={styles.metaHealthMaxDate}>
+                                  {capacidadeMaximaDisponivelAgora
+                                    ? "Limite máximo disponível agora"
+                                    : horarioCapacidadeMaxima
+                                      ? `Capacidade máxima em ${formatarDataHora(horarioCapacidadeMaxima)}`
+                                      : "Sem previsão de liberação integral"}
+                                </small>
+                              </div>
                             </div>
                             <p className={styles.metaHealthNote}>A previsão não reserva vagas: a Meta revalida o limite quando o disparo for executado.</p>
                           </section>
 
+                          <details className={styles.dispatchCapacityReleases}>
+                            <summary>
+                              <span><Info size={19} aria-hidden="true" /><strong>Liberação da capacidade</strong></span>
+                              <span>{liberacoesPlanejamento.length} {liberacoesPlanejamento.length === 1 ? "horário" : "horários"} <ChevronDown size={16} aria-hidden="true" /></span>
+                            </summary>
+                            <div className={styles.dispatchCapacityReleaseBody}>
+                              {liberacoesPlanejamento.length > 0 ? (
+                                <>
+                                  <div className={styles.dispatchCapacityReleaseColumns} aria-hidden="true">
+                                    <span>Vagas a liberar</span>
+                                    <span>Data e horário</span>
+                                    <span>Capacidade acumulada</span>
+                                  </div>
+                                  {liberacoesPlanejamento.map((item) => (
+                                    <div className={styles.dispatchCapacityReleaseItem} key={item.horario}>
+                                      <strong>+{formatarNumeroMeta(item.quantidadeLiberada)} vagas</strong>
+                                      <span>{formatarDataHora(item.horario)}</span>
+                                      <small>{formatarNumeroMeta(item.disponivelAcumulado)} disponíveis acumulados</small>
+                                    </div>
+                                  ))}
+                                </>
+                              ) : <p>Nenhuma liberação pendente no período consultado.</p>}
+                            </div>
+                          </details>
+
                           <section className={styles.dispatchCapacityPlanner} aria-label="Quantidade e momento do disparo">
-                            <div className={styles.dispatchCapacityPlannerIntro}>
+                            <div className={styles.dispatchCapacityPlannerMain}>
+                              <div className={styles.dispatchCapacityPlannerIntro}>
                               <div>
                                 <span className={styles.schedulePlanningEyebrow}>Planejamento do disparo</span>
                                 <h3>Quantos contatos deseja alcançar?</h3>
@@ -6681,7 +6735,14 @@ export default function DisparosWhatsAppPage() {
                                 }} />
                               <span>{limiteMeta ? `${formatarNumeroMeta(capacidadeAgoraPlanejamento)} disponíveis agora` : "Consultando..."}</span>
                             </div>
-
+                            </div>
+                            <div className={styles.dispatchCapacityPlannerActions}>
+                              {quantidadeDesejada <= 0 ? (
+                                <div className={styles.dispatchCapacityEmptyState}>
+                                  <Info size={19} aria-hidden="true" />
+                                  <span>Informe a quantidade para visualizar a disponibilidade e escolher quando disparar.</span>
+                                </div>
+                              ) : null}
                             {quantidadeDesejada > 0 && limiteMeta ? (
                               <div className={`${styles.dispatchCapacityResult} ${capacidadeInsuficienteAgora ? styles.dispatchCapacityResultAlert : styles.dispatchCapacityResultOk}`} role="status">
                                 <strong>{quantidadeExcedeLimiteTotal ? "Quantidade acima do limite total" :
@@ -6701,7 +6762,8 @@ export default function DisparosWhatsAppPage() {
 
                             {quantidadeDesejada > 0 && !quantidadeExcedeLimiteTotal && limiteMeta ? (
                               <div className={styles.dispatchCapacityChoices}>
-                                <button type="button" className={styles.dispatchCapacityOption}
+                                <button type="button" className={`${styles.dispatchCapacityOption} ${styles.dispatchCapacityOptionImmediate} ${planoCapacidadeConfirmado === "imediato" ? styles.dispatchCapacityOptionSelected : ""}`}
+                                  aria-pressed={planoCapacidadeConfirmado === "imediato"}
                                   disabled={capacidadeAgoraPlanejamento <= 0 || disparoBloqueado}
                                   onClick={() => {
                                     const aceite = Math.min(quantidadeDesejada, capacidadeAgoraPlanejamento);
@@ -6714,7 +6776,8 @@ export default function DisparosWhatsAppPage() {
                                   <strong>{capacidadeInsuficienteAgora ? "Realizar quantidade disponível" : "Realizar agora"}</strong>
                                   <span>{formatarNumeroMeta(Math.min(quantidadeDesejada, capacidadeAgoraPlanejamento))} contatos</span>
                                 </button>
-                                <button type="button" className={styles.dispatchCapacityOption}
+                                <button type="button" className={`${styles.dispatchCapacityOption} ${styles.dispatchCapacityOptionScheduled} ${planoCapacidadeConfirmado === "agendado" ? styles.dispatchCapacityOptionSelected : ""}`}
+                                  aria-pressed={planoCapacidadeConfirmado === "agendado"}
                                   disabled={capacidadeInsuficienteAgora && !horarioCapacidadeDesejada}
                                   onClick={() => {
                                     setAgendarDisparo(true);
@@ -6758,23 +6821,10 @@ export default function DisparosWhatsAppPage() {
                                 <p>Horário sugerido preenchido automaticamente. É possível ajustá-lo, desde que haja capacidade prevista.</p>
                               </div>
                             ) : null}
+                            </div>
                           </section>
 
-                          <details className={styles.dispatchCapacityReleases}>
-                            <summary>
-                              <span><CalendarClock size={18} aria-hidden="true" /><strong>Liberação da capacidade</strong></span>
-                              <span>{liberacoesPlanejamento.length} {liberacoesPlanejamento.length === 1 ? "horário" : "horários"} <ChevronDown size={16} aria-hidden="true" /></span>
-                            </summary>
-                            <div className={styles.dispatchCapacityReleaseBody}>
-                              {liberacoesPlanejamento.length > 0 ? liberacoesPlanejamento.map((item) => (
-                                <div className={styles.dispatchCapacityReleaseItem} key={item.horario}>
-                                  <strong>+{formatarNumeroMeta(item.quantidadeLiberada)} vagas</strong>
-                                  <span>{formatarDataHora(item.horario)}</span>
-                                  <small>{formatarNumeroMeta(item.disponivelAcumulado)} disponíveis acumulados</small>
-                                </div>
-                              )) : <p>Nenhuma liberação pendente no período consultado.</p>}
-                            </div>
-                          </details>
+
                         </div>
                       ) : null}
                       {etapaDisparo === 3 ? (
