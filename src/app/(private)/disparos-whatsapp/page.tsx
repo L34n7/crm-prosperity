@@ -11,6 +11,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  AlertTriangle,
+  ArrowLeft,
   CalendarClock,
   Check,
   ChevronDown,
@@ -21,6 +23,7 @@ import {
   Link2,
   Minus,
   Search,
+  ShieldAlert,
   SlidersHorizontal,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
@@ -32,7 +35,9 @@ import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whats
 import {
   descreverErroMetaWhatsApp,
   formatarErroMetaWhatsApp,
+  gravidadeErroMetaWhatsApp,
   identificarCodigoErroMetaWhatsApp,
+  type GravidadeErroMetaWhatsApp,
 } from "@/lib/whatsapp/meta-error-messages";
 
 type IntegracaoWhatsApp = {
@@ -534,6 +539,8 @@ type DecisaoConflitoDisparo = {
   contatoIds: string[];
 };
 
+const PARAMETRO_RELATORIO_DISPAROS = "relatorioDisparos";
+const MARCADOR_HISTORICO_RELATORIO = "crmDisparosRelatorio";
 const EVENTO_DISPARO_ANDAMENTO = "crm:whatsapp-disparo-andamento";
 const EVENTO_DISPARO_REFRESH = "crm:whatsapp-disparo-refresh";
 const EVENTO_DISPARO_PREPARANDO = "crm:whatsapp-disparo-preparando";
@@ -1718,6 +1725,7 @@ type FalhaAgrupadaCampanha = {
   significado: string;
   resumo: string;
   acao: string;
+  gravidade: GravidadeErroMetaWhatsApp;
   detalheTecnico: string | null;
 };
 
@@ -1741,6 +1749,7 @@ function agruparFalhasCampanhaHistorico(c: CampanhaHistoricoFiltro): FalhaAgrupa
       significado: codigo ? descricao.significado : "A Meta não informou um código que permita identificar a causa desta falha.",
       resumo: codigo ? descricao.resumo || descricao.significado : "A falha não possui um código informado pela Meta.",
       acao: descricao.acao,
+      gravidade: gravidadeErroMetaWhatsApp(codigo, detalhe),
       detalheTecnico: !codigo && detalhe ? detalhe : null,
     });
   }
@@ -1752,6 +1761,7 @@ function agruparFalhasCampanhaHistorico(c: CampanhaHistoricoFiltro): FalhaAgrupa
       nome: "Falhas sem classificação detalhada",
       significado: "Essas falhas foram contabilizadas, mas ainda não há dados suficientes para identificar cada causa.",
       resumo: "Não há dados suficientes para identificar a causa.",
+      gravidade: 1,
       acao: "Abra o relatório detalhado para consultar os contatos afetados. Não reenvie sem analisar a causa.",
       detalheTecnico: null,
     });
@@ -2424,6 +2434,52 @@ export default function DisparosWhatsAppPage() {
   const [buscaHistoricoConsulta, setBuscaHistoricoConsulta] = useState("");
   const [filtroHistoricoIntegracao, setFiltroHistoricoIntegracao] = useState("");
   const [filtroHistoricoCampanha, setFiltroHistoricoCampanha] = useState("");
+
+  const selecionarRelatorioCampanha = useCallback((campanhaId: string) => {
+    const id = campanhaId.trim();
+    const url = new URL(window.location.href);
+    const idAtual = url.searchParams.get(PARAMETRO_RELATORIO_DISPAROS) || "";
+
+    if (!id && idAtual && window.history.state?.[MARCADOR_HISTORICO_RELATORIO]) {
+      window.history.back();
+      return;
+    }
+
+    if (id) url.searchParams.set(PARAMETRO_RELATORIO_DISPAROS, id);
+    else url.searchParams.delete(PARAMETRO_RELATORIO_DISPAROS);
+
+    if (id !== idAtual) {
+      const novoEndereco = `${url.pathname}${url.search}${url.hash}`;
+      if (id && !idAtual) {
+        window.history.pushState(
+          { ...window.history.state, [MARCADOR_HISTORICO_RELATORIO]: true },
+          "",
+          novoEndereco
+        );
+      } else {
+        window.history.replaceState(window.history.state, "", novoEndereco);
+      }
+    }
+
+    setFiltroHistoricoCampanha(id);
+    setPaginaRelatorioCampanha(1);
+    setBuscaHistorico("");
+    setErro("");
+  }, []);
+
+  useEffect(() => {
+    const atualizarFiltroPelaNavegacao = () => {
+      const id = new URLSearchParams(window.location.search)
+        .get(PARAMETRO_RELATORIO_DISPAROS) || "";
+      setFiltroHistoricoCampanha(id);
+      setPaginaRelatorioCampanha(1);
+      setBuscaHistorico("");
+    };
+    atualizarFiltroPelaNavegacao();
+    window.addEventListener("popstate", atualizarFiltroPelaNavegacao);
+    return () => window.removeEventListener("popstate", atualizarFiltroPelaNavegacao);
+  }, []);
+
   const [loadingConflitos, setLoadingConflitos] = useState(false);
 
   const [gruposConflitoDisparo, setGruposConflitoDisparo] = useState<
@@ -7928,7 +7984,7 @@ export default function DisparosWhatsAppPage() {
                 value={filtroHistoricoIntegracao}
                 onChange={(e) => {
                   setFiltroHistoricoIntegracao(e.target.value);
-                  setFiltroHistoricoCampanha("");
+                  selecionarRelatorioCampanha("");
                 }}
                 className={styles.input}
               >
@@ -7946,8 +8002,7 @@ export default function DisparosWhatsAppPage() {
               <select
                 value={filtroHistoricoCampanha}
                 onChange={(e) => {
-                  setFiltroHistoricoCampanha(e.target.value);
-                  setPaginaRelatorioCampanha(1);
+                  selecionarRelatorioCampanha(e.target.value);
                 }}
                 className={styles.input}
               >
@@ -7995,6 +8050,11 @@ export default function DisparosWhatsAppPage() {
                 ) : (
                   <>
                     <div className={styles.campaignReportHeader}>
+                      <button type="button" className={styles.campaignReportBack}
+                        onClick={() => selecionarRelatorioCampanha("")}>
+                        <ArrowLeft size={17} aria-hidden="true" />
+                        Voltar ao histórico
+                      </button>
                       <div className={styles.campaignReportHeading}>
                         <div>
                           <p className={styles.campaignReportEyebrow}>
@@ -8275,7 +8335,11 @@ export default function DisparosWhatsAppPage() {
                             {falhasRelatorioAgrupadas.map((tipo) => (
                               <details
                                 key={tipo.chave}
-                                className={`${styles.campaignIssueItem} ${styles.campaignIssueCollapsible} ${tipo.codigo === 131048 ? styles.campaignIssueRestriction : ""}`}
+                                className={`${styles.campaignIssueItem} ${styles.campaignIssueCollapsible} ${
+                                  tipo.gravidade === 3 ? styles.campaignIssueLevel3 :
+                                  tipo.gravidade === 2 ? styles.campaignIssueLevel2 :
+                                  styles.campaignIssueLevel1
+                                }`}
                               >
                                 <summary className={styles.campaignIssueSummary}>
                                   <span className={styles.campaignIssueHeadingText}>
@@ -8558,9 +8622,12 @@ export default function DisparosWhatsAppPage() {
                         >
                           <div className={styles.resultCompactHeader}>
                             <div className={styles.resultCompactMain}>
-                              <strong className={styles.resultCompactName}>
+                              <button type="button"
+                                className={styles.resultCompactNameButton}
+                                onClick={() => selecionarRelatorioCampanha(campanha.id)}
+                                title="Abrir relatório da campanha">
                                 {nomeIntegracao} — {nomeCampanhaHistorico(campanha)}
-                              </strong>
+                              </button>
                               <p className={styles.resultCompactMeta}>
                                 Template: {campanha.template_nome || "-"}
                                 {" • "}
@@ -8621,50 +8688,26 @@ export default function DisparosWhatsAppPage() {
                           </div>
 
                           <div className={styles.massCancelledMetrics}>
-                            <div className={styles.massCancelledMetric}>
+                            <button type="button" className={styles.massCancelledMetric}
+                              onClick={() => selecionarRelatorioCampanha(campanha.id)} title="Ver relatório da campanha">
                               <strong>{total}</strong>
                               <span>Total</span>
-                            </div>
-                            <div className={styles.massCancelledMetric}>
+                            </button>
+                            <button type="button" className={styles.massCancelledMetric}
+                              onClick={() => selecionarRelatorioCampanha(campanha.id)} title="Ver relatório da campanha">
                               <strong>{enviados}</strong>
                               <span>Enviados</span>
-                            </div>
-                            <div className={styles.massCancelledMetric}>
+                            </button>
+                            <button type="button" className={styles.massCancelledMetric}
+                              onClick={() => selecionarRelatorioCampanha(campanha.id)} title="Ver relatório da campanha">
                               <strong>{cancelados}</strong>
                               <span>Cancelados</span>
-                            </div>
-                            <div
-                              className={styles.massCancelledMetric}
-                              style={
-                                falhas > 0 &&
-                                !campanhaCancelada &&
-                                !campanhaFalhouIntegralmente
-                                  ? {
-                                      borderColor: "var(--crm-danger-border)",
-                                      background: "var(--crm-danger-bg)",
-                                    }
-                                  : undefined
-                              }
-                            >
-                              <strong
-                                style={
-                                  falhas > 0
-                                    ? { color: "var(--crm-danger-text)" }
-                                    : undefined
-                                }
-                              >
-                                {falhas}
-                              </strong>
-                              <span
-                                style={
-                                  falhas > 0
-                                    ? { color: "var(--crm-danger-text)" }
-                                    : undefined
-                                }
-                              >
-                                Falhas
-                              </span>
-                            </div>
+                            </button>
+                            <button type="button" className={styles.massCancelledMetric}
+                              onClick={() => selecionarRelatorioCampanha(campanha.id)} title="Ver relatório da campanha">
+                              <strong style={falhas > 0 ? { color: "var(--crm-danger-text)" } : undefined}>{falhas}</strong>
+                              <span style={falhas > 0 ? { color: "var(--crm-danger-text)" } : undefined}>Falhas</span>
+                            </button>
                           </div>
 
                           {tituloProblema ? (
@@ -8678,11 +8721,7 @@ export default function DisparosWhatsAppPage() {
                                       : "Consulte a situação da campanha abaixo."}
                                   </p>
                                 </div>
-                                {falhas > 0 ? (
-                                  <span className={styles.campaignIssuesTotal}>
-                                    {falhas} {falhas === 1 ? "falha" : "falhas"}
-                                  </span>
-                                ) : null}
+
                               </div>
 
 
@@ -8691,7 +8730,11 @@ export default function DisparosWhatsAppPage() {
                                   {falhasPorTipo.map((tipo) => (
                                     <div
                                       key={tipo.chave}
-                                      className={`${styles.campaignIssueItem} ${styles.campaignIssueCompactItem} ${tipo.codigo === 131048 ? styles.campaignIssueRestriction : ""}`}
+                                      className={`${styles.campaignIssueItem} ${styles.campaignIssueCompactItem} ${
+                                        tipo.gravidade === 3 ? styles.campaignIssueLevel3 :
+                                        tipo.gravidade === 2 ? styles.campaignIssueLevel2 :
+                                        styles.campaignIssueLevel1
+                                      }`}
                                     >
                                       <div className={styles.campaignIssueCompactLine}>
                                         <div className={styles.campaignIssueCompactCopy}>
@@ -8733,12 +8776,7 @@ export default function DisparosWhatsAppPage() {
                           <button
                             type="button"
                             className={styles.campaignHistoryCardAction}
-                            onClick={() => {
-                              setFiltroHistoricoCampanha(campanha.id);
-                              setPaginaRelatorioCampanha(1);
-                              setBuscaHistorico("");
-                              setErro("");
-                            }}
+                            onClick={() => selecionarRelatorioCampanha(campanha.id)}
                           >
                             Ver relatório da campanha
                           </button>
@@ -8756,31 +8794,43 @@ export default function DisparosWhatsAppPage() {
       {falhaModal ? (
         <div className={styles.modalOverlay} onClick={() => setFalhaModal(null)}>
           <section
-            className={`${styles.modalConfirmacao} ${styles.campaignFailureModal}`}
+            className={`${styles.modalConfirmacao} ${styles.campaignFailureModal} ${
+              falhaModal.gravidade === 3 ? styles.campaignFailureSeverity3 :
+              falhaModal.gravidade === 2 ? styles.campaignFailureSeverity2 :
+              styles.campaignFailureSeverity1
+            }`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="campanha-falha-titulo"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className={styles.modalHeader}>
-              <div>
-                <p className={styles.modalEyebrow}>Detalhes da falha · {falhaModal.campanhaNome}</p>
-                <h3 className={styles.modalTitle} id="campanha-falha-titulo">
-                  {falhaModal.codigo ? `${falhaModal.codigo} · ${falhaModal.nome}` : falhaModal.nome}
-                </h3>
-                <p className={styles.modalSubtitle}>
-                  {falhaModal.quantidade} {falhaModal.quantidade === 1 ? "envio afetado" : "envios afetados"} nesta campanha.
-                </p>
+            <header className={`${styles.modalHeader} ${styles.campaignFailureModalHeader}`}>
+              <div className={styles.campaignFailureModalIntro}>
+                <div className={styles.campaignFailureModalIcon} aria-hidden="true">
+                  {falhaModal.gravidade === 3 ? <ShieldAlert size={25} /> :
+                   falhaModal.gravidade === 2 ? <AlertTriangle size={25} /> :
+                   <Info size={25} />}
+                </div>
+                <div className={styles.campaignFailureModalHeading}>
+                  <p className={styles.modalEyebrow}>Detalhes da falha · {falhaModal.campanhaNome}</p>
+                  <h3 className={styles.modalTitle} id="campanha-falha-titulo">
+                    {falhaModal.codigo ? `${falhaModal.codigo} · ${falhaModal.nome}` : falhaModal.nome}
+                  </h3>
+                  <p className={styles.modalSubtitle}>
+                    {falhaModal.quantidade} {falhaModal.quantidade === 1 ? "envio afetado" : "envios afetados"} nesta campanha.
+                  </p>
+                </div>
               </div>
-              <button
-                type="button"
-                className={styles.modalClose}
-                onClick={() => setFalhaModal(null)}
-                aria-label="Fechar detalhes da falha"
-                autoFocus
-              >
-                ×
-              </button>
+              <div className={styles.campaignFailureModalActions}>
+                <span className={styles.campaignFailureSeverityBadge}>
+                  Nível {falhaModal.gravidade} · {falhaModal.gravidade === 3 ? "Crítica" : falhaModal.gravidade === 2 ? "Atenção" : "Informativa"}
+                </span>
+                <button type="button" className={styles.modalClose}
+                  onClick={() => setFalhaModal(null)}
+                  aria-label="Fechar detalhes da falha" autoFocus>
+                  ×
+                </button>
+              </div>
             </header>
             <div className={styles.modalBody}>
               <section className={styles.campaignFailureModalSection}>

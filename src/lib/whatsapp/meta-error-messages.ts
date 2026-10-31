@@ -159,6 +159,28 @@ export function descreverErroMetaWhatsApp(
   };
 }
 
+
+export type GravidadeErroMetaWhatsApp = 1 | 2 | 3;
+
+// 1: destinatário/ocorrência isolada; 2: ação preventiva; 3: bloqueio de conta.
+const CODIGOS_META_CRITICOS = new Set([
+  190, 368, 130497, 131031, 131042, 131044, 132016,
+]);
+const CODIGOS_META_ATENCAO = new Set([
+  2, 131000, 131008, 131009, 131048, 131053, 131058,
+  132001, 132012, 132015,
+]);
+
+export function gravidadeErroMetaWhatsApp(
+  codigo?: number | string | null,
+  erroTecnico?: string | null
+): GravidadeErroMetaWhatsApp {
+  const codigoValido = identificarCodigoErroMetaWhatsApp(codigo, erroTecnico);
+  if (codigoValido && CODIGOS_META_CRITICOS.has(codigoValido)) return 3;
+  if (codigoValido && CODIGOS_META_ATENCAO.has(codigoValido)) return 2;
+  return 1;
+}
+
 export function formatarErroMetaWhatsApp(
   codigo?: number | string | null,
   erroTecnico?: string | null

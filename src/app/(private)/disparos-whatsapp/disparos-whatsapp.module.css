@@ -1023,19 +1023,24 @@
 
 .campaignHistoryCard .massCancelledMetric {
   border-color: var(--crm-border);
-  background: color-mix(in srgb, var(--crm-surface) 82%, transparent);
+  background: transparent;
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s ease;
 }
 
 .campaignHistoryCard.resultSuccess .massCancelledMetric {
-  border-color: var(--crm-success-border);
+  border-color: var(--crm-border);
 }
 
 .campaignHistoryCard.resultProcessing .massCancelledMetric {
-  border-color: var(--crm-warning-border);
+  border-color: var(--crm-border);
 }
 
 .campaignHistoryCard.resultError .massCancelledMetric {
-  border-color: var(--crm-danger-border);
+  border-color: var(--crm-border);
 }
 
 .campaignHistoryCardAction {
@@ -6030,12 +6035,12 @@
 /* Resumo de falhas: total geral e grupos separados por causa, sem duplicar detalhes. */
 .campaignIssuesPanel {
   display: grid;
-  gap: 13px;
+  gap: 11px;
   margin-top: 12px;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 58%, var(--crm-border) 42%);
+  padding: 13px;
+  border: 1px solid var(--crm-border);
   border-radius: 15px;
-  background: color-mix(in srgb, var(--crm-surface) 82%, var(--crm-warning-bg) 18%);
+  background: transparent;
   text-align: left;
 }
 .campaignIssuesHeader {
@@ -6058,17 +6063,7 @@
   font-size: 12px;
   line-height: 1.45;
 }
-.campaignIssuesTotal {
-  flex: 0 0 auto;
-  padding: 5px 10px;
-  border: 1px solid var(--crm-danger-border);
-  border-radius: 999px;
-  background: var(--crm-danger-bg);
-  color: var(--crm-danger-text);
-  font-size: 12px;
-  font-weight: 850;
-  white-space: nowrap;
-}
+
 .campaignIssueList {
   display: grid;
   gap: 9px;
@@ -6080,12 +6075,12 @@
   padding: 12px 14px;
   border: 1px solid var(--crm-border);
   border-radius: 12px;
-  background: var(--crm-surface);
+  background: transparent;
   box-shadow: none;
 }
 .campaignIssueRestriction {
-  border-color: var(--crm-warning-border);
-  background: color-mix(in srgb, var(--crm-warning-bg) 46%, var(--crm-surface) 54%);
+  border-color: var(--crm-border);
+  background: transparent;
 }
 .campaignIssueHeading {
   display: flex;
@@ -6114,19 +6109,19 @@
 }
 .campaignIssueQuantity {
   flex: 0 0 auto;
-  padding: 5px 9px;
-  border: 1px solid var(--crm-danger-border);
+  padding: 4px 7px;
+  border: 1px solid var(--crm-border);
   border-radius: 999px;
-  background: var(--crm-danger-bg);
-  color: var(--crm-danger-text);
+  background: transparent;
+  color: var(--campaign-issue-tone, var(--crm-text-strong));
   font-size: 11px;
   font-weight: 850;
   white-space: nowrap;
 }
 .campaignIssueRestriction .campaignIssueQuantity {
-  border-color: var(--crm-warning-border);
-  background: var(--crm-warning-bg);
-  color: var(--crm-warning-text);
+  border-color: var(--crm-border);
+  background: transparent;
+  color: var(--campaign-issue-tone, var(--crm-text-strong));
 }
 .campaignIssueExplanation,
 .campaignIssueGuidance,
@@ -6236,7 +6231,11 @@
   padding: 12px 14px 14px;
   border-top: 1px solid var(--crm-border);
 }
-.campaignIssueCompactItem { padding: 9px 11px; }
+.campaignIssueCompactItem {
+  padding: 9px 11px;
+  background: transparent;
+  border-color: var(--crm-border);
+}
 .campaignIssueCompactLine {
   display: flex;
   align-items: center;
@@ -6254,7 +6253,7 @@
 }
 .campaignIssueCompactCopy > strong {
   flex: 0 0 auto;
-  color: var(--crm-text-strong);
+  color: var(--campaign-issue-tone, var(--crm-text-strong));
   font-weight: 800;
 }
 .campaignIssueCompactCopy > span {
@@ -6294,8 +6293,20 @@
   cursor: pointer;
 }
 .campaignHistoryCardAction:hover { text-decoration: underline; }
-.campaignFailureModal { max-width: 640px; }
-.campaignFailureModal .modalBody { padding-top: 20px; padding-bottom: 20px; }
+.campaignFailureModal {
+  max-width: 680px;
+  --campaign-failure-accent: var(--crm-text-strong);
+  --campaign-failure-header-bg: var(--crm-surface);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.campaignFailureModal .modalBody {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  min-height: 0;
+  overflow-y: auto;
+}
 .campaignFailureModalSection {
   padding: 13px 15px;
   border: 1px solid var(--crm-border);
@@ -6323,4 +6334,135 @@
   .campaignIssueCompactCopy > strong { white-space: normal; }
   .campaignIssueCompactCopy > span { flex: 1; }
   .campaignReportFailures { padding: 11px; }
+}
+
+/* Gravidade dos erros: apenas o texto muda, nunca o fundo do card. */
+.campaignIssueLevel1 { --campaign-issue-tone: var(--crm-text-strong); }
+.campaignIssueLevel2 { --campaign-issue-tone: var(--crm-warning-text); }
+.campaignIssueLevel3 { --campaign-issue-tone: var(--crm-danger-text); }
+.campaignIssueLevel1 .campaignIssueHeadingText > strong,
+.campaignIssueLevel2 .campaignIssueHeadingText > strong,
+.campaignIssueLevel3 .campaignIssueHeadingText > strong {
+  color: var(--campaign-issue-tone);
+}
+.campaignHistoryCard .massCancelledMetric:hover { border-color: var(--crm-primary-border); }
+.campaignHistoryCard .massCancelledMetric:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: 2px;
+}
+.campaignFailureSeverity1 {
+  --campaign-failure-accent: var(--crm-text-strong);
+  --campaign-failure-header-bg: var(--crm-surface);
+}
+.campaignFailureSeverity2 {
+  --campaign-failure-accent: var(--crm-warning-text);
+  --campaign-failure-header-bg: var(--crm-warning-bg);
+}
+.campaignFailureSeverity3 {
+  --campaign-failure-accent: var(--crm-danger-text);
+  --campaign-failure-header-bg: var(--crm-danger-bg);
+}
+.campaignFailureModalHeader {
+  align-items: flex-start;
+  padding: 24px;
+  border-top: 4px solid var(--campaign-failure-accent);
+  border-bottom: 1px solid var(--crm-border);
+  background: var(--campaign-failure-header-bg);
+}
+.campaignFailureModalIntro {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.campaignFailureModalIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+  color: var(--campaign-failure-accent);
+  box-shadow: var(--crm-shadow-sm);
+}
+.campaignFailureModalHeading { min-width: 0; }
+.campaignFailureModalHeading .modalEyebrow { color: var(--campaign-failure-accent); }
+.campaignFailureModalHeading .modalTitle { font-size: 21px; line-height: 1.35; }
+.campaignFailureModalActions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+}
+.campaignFailureSeverityBadge {
+  display: inline-flex;
+  padding: 6px 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 999px;
+  background: var(--crm-surface);
+  color: var(--campaign-failure-accent);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.campaignFailureModal .modalClose {
+  border: 1px solid var(--crm-border);
+  background: var(--crm-surface);
+}
+.campaignFailureModal .modalFooter { background: var(--crm-surface); }
+.resultCompactNameButton {
+  display: block;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.35;
+  font-weight: 850;
+  cursor: pointer;
+}
+.resultCompactNameButton:hover {
+  color: var(--crm-primary-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.resultCompactNameButton:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.campaignReportBack {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--crm-border);
+  border-radius: 9px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.campaignReportBack:hover { border-color: var(--crm-primary-border); color: var(--crm-primary-text); }
+.campaignReportBack:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .campaignFailureModalHeader { flex-wrap: wrap; padding: 18px; gap: 14px; }
+  .campaignFailureModalIntro { flex-basis: 100%; }
+  .campaignFailureModalActions { justify-content: space-between; flex: 1 1 100%; }
+  .campaignFailureModalHeading .modalTitle { font-size: 18px; }
+  .campaignFailureModalIcon { flex-basis: 40px; width: 40px; height: 40px; }
 }
