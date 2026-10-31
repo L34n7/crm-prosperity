@@ -5265,7 +5265,12 @@
   font-size: 12px;
   font-weight: 850;
 }
-.disparoWizardStep strong { font-size: 13px; line-height: 1.35; font-weight: 800; }
+.disparoWizardStep strong {
+  color: color-mix(in srgb, var(--crm-primary) 82%, var(--crm-text-strong) 18%);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+}
 .disparoWizardStepCurrent {
   border-color: var(--crm-primary-border);
   background: var(--crm-primary-soft);
@@ -5277,7 +5282,7 @@
   background: var(--crm-primary-strong);
   color: var(--crm-text-inverse);
 }
-.disparoWizardStep:disabled { cursor: default; opacity: .63; }
+.disparoWizardStep:disabled { cursor: default; opacity: .85; }
 .disparoWizardStepCurrent:disabled { opacity: 1; }
 .disparoWizardScroll {
   display: flex;
@@ -5412,8 +5417,8 @@
       var(--crm-surface) 95%);
   border-radius: 17px;
   padding: 17px 18px 17px 22px;
-  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-08);
-  transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  box-shadow: none;
+  transition: background .2s ease, border-color .2s ease;
 }
 
 .disparoWizardSchedule .scheduleToggleCard::before {
@@ -5430,7 +5435,7 @@
   background: linear-gradient(115deg,
     color-mix(in srgb, var(--crm-primary-soft) 90%, var(--crm-surface) 10%),
     color-mix(in srgb, var(--crm-primary-soft) 35%, var(--crm-surface) 65%));
-  box-shadow: 0 8px 22px var(--crm-ui-private-shadow-rgb-15-23-42-0-08), inset 0 0 0 1px var(--crm-primary-border);
+  box-shadow: none;
 }
 
 .disparoWizardSchedule .scheduleToggleText strong {
