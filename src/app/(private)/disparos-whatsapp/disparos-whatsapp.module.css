@@ -5147,9 +5147,7 @@
 .disparoWizardHeaderIntro { min-width: 0; }
 .disparoWizardHeaderStep {
   min-width: 0;
-  text-align: left;
-  border-left: 1px solid var(--crm-border);
-  padding-left: 20px;
+  text-align: right;
 }
 .disparoWizardHeaderStep h3 {
   margin-top: 4px;
@@ -5157,7 +5155,7 @@
 }
 .disparoWizardHeaderStep p {
   max-width: 530px;
-  margin-left: 0;
+  margin-left: auto;
 }
 .disparoWizardHeader h2 {
   margin: 0 0 5px;
@@ -5340,7 +5338,6 @@
 
 @media (max-width: 1050px) {
   .disparoWizardHeader { grid-template-columns: minmax(200px, 0.75fr) minmax(0, 1fr) 37px; gap: 14px; padding: 15px 18px; }
-  .disparoWizardHeaderStep { padding-left: 12px; }
   .disparoWizardHeaderStep h3 { font-size: 16px; }
   .disparoWizardHeaderStep p { font-size: 12px; }
 }
@@ -5363,13 +5360,10 @@
   .disparoWizardHeaderStep {
     grid-column: 1 / -1;
     grid-row: 2;
-    text-align: left;
-    padding-left: 0;
-    border-left: 0;
-    border-top: 1px solid var(--crm-border);
+    text-align: right;
     padding-top: 10px;
   }
-  .disparoWizardHeaderStep p { margin-left: 0; }
+  .disparoWizardHeaderStep p { margin-left: auto; }
   .disparoWizardClose { grid-column: 2; grid-row: 1; }
   .disparoWizardWorkspaceWithPreview { display: flex; flex-direction: column; }
   .disparoWizardWorkspaceWithPreview .disparoWizardMain {
