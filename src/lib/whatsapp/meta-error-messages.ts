@@ -2,6 +2,7 @@ export type DescricaoErroMetaWhatsApp = {
   codigo: number | null;
   nome: string;
   significado: string;
+  resumo?: string;
   acao: string;
 };
 
@@ -75,8 +76,9 @@ const ERROS_META_WHATSAPP: Record<
     acao: "Cadastre ou regularize a forma de pagamento no Gerenciador da Meta.",
   },
   131048: {
-    nome: "Restrição de envio por qualidade do número",
+    nome: "Restrição de envio do número",
     significado: "A Meta restringiu a quantidade de mensagens que este número pode enviar, possivelmente porque mensagens anteriores foram bloqueadas ou denunciadas como spam. Não é uma falha específica do destinatário nem simplesmente falta de vagas na janela de 24 horas.",
+    resumo: "A Meta limitou os envios deste número por questões de qualidade.",
     acao: "Pause novos disparos desse número. Verifique a classificação de qualidade e os alertas no WhatsApp Manager; revise o opt-in, a lista e os templates antes de voltar a enviar. Não repita automaticamente as mensagens que falharam.",
   },
   131049: {

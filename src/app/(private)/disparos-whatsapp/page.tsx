@@ -1716,6 +1716,7 @@ type FalhaAgrupadaCampanha = {
   quantidade: number;
   nome: string;
   significado: string;
+  resumo: string;
   acao: string;
   detalheTecnico: string | null;
 };
@@ -1738,6 +1739,7 @@ function agruparFalhasCampanhaHistorico(c: CampanhaHistoricoFiltro): FalhaAgrupa
       chave, codigo, quantidade,
       nome: codigo ? descricao.nome : "Falha não classificada",
       significado: codigo ? descricao.significado : "A Meta não informou um código que permita identificar a causa desta falha.",
+      resumo: codigo ? descricao.resumo || descricao.significado : "A falha não possui um código informado pela Meta.",
       acao: descricao.acao,
       detalheTecnico: !codigo && detalhe ? detalhe : null,
     });
@@ -1749,6 +1751,7 @@ function agruparFalhasCampanhaHistorico(c: CampanhaHistoricoFiltro): FalhaAgrupa
       chave: "sem-detalhes", codigo: null, quantidade: totalFalhas - totalAgrupado,
       nome: "Falhas sem classificação detalhada",
       significado: "Essas falhas foram contabilizadas, mas ainda não há dados suficientes para identificar cada causa.",
+      resumo: "Não há dados suficientes para identificar a causa.",
       acao: "Abra o relatório detalhado para consultar os contatos afetados. Não reenvie sem analisar a causa.",
       detalheTecnico: null,
     });
@@ -2391,6 +2394,7 @@ export default function DisparosWhatsAppPage() {
     CampanhaHistoricoFiltro[]
   >([]);
   const [mensagensExpandidas, setMensagensExpandidas] = useState<string[]>([]);
+  const [falhaModal, setFalhaModal] = useState<(FalhaAgrupadaCampanha & { campanhaNome: string }) | null>(null);
   const [paginaHistorico, setPaginaHistorico] = useState(1);
 
   const [confirmacaoCobranca, setConfirmacaoCobranca] = useState(false);
@@ -4630,17 +4634,21 @@ export default function DisparosWhatsAppPage() {
 
   const resultadoHistoricoPaginado = resultadoFiltrado;
 
-  const totalRestricoesEnvioRelatorio = useMemo(
-    () =>
-      (relatorioCampanhaDetalhado?.linhas || []).filter(
-        (linha) =>
-          identificarCodigoErroMetaWhatsApp(
-            linha.erro_codigo_meta,
-            linha.erro
-          ) === 131048
-      ).length,
-    [relatorioCampanhaDetalhado]
-  );
+
+  const falhasRelatorioAgrupadas = useMemo(() => {
+    if (!relatorioCampanhaDetalhado) return [];
+    return agruparFalhasCampanhaHistorico({
+      id: relatorioCampanhaDetalhado.campanha.id,
+      total_falhas: relatorioCampanhaDetalhado.totais.falha,
+      erros_resumo: relatorioCampanhaDetalhado.linhas
+        .filter((linha) => String(linha.status_final || "").toLowerCase() === "falha")
+        .map((linha) => ({
+          erro: linha.erro,
+          erro_codigo_meta: linha.erro_codigo_meta,
+          quantidade: 1,
+        })),
+    });
+  }, [relatorioCampanhaDetalhado]);
 
   const linhasRelatorioCampanhaFiltradas = useMemo(() => {
     let linhas = ordenarLinhasRelatorioCampanha(
@@ -6190,6 +6198,20 @@ export default function DisparosWhatsAppPage() {
 
 
   useEffect(() => {
+    if (!falhaModal) return;
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const fecharComEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFalhaModal(null);
+    };
+    document.addEventListener("keydown", fecharComEscape);
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      document.removeEventListener("keydown", fecharComEscape);
+    };
+  }, [falhaModal]);
+
+  useEffect(() => {
     if (!modalCriacaoDisparoAberto) return;
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -6229,7 +6251,7 @@ export default function DisparosWhatsAppPage() {
 
   return (
     <>
-      <Header title="Resultados dos disparos"
+      <Header title="Disparos em massa"
         subtitle="Acompanhe suas campanhas WhatsApp e consulte os resultados de cada envio." />
       <div className={abaAtiva === "resultados" && filtroHistoricoCampanha ? [styles.pageContent, styles.pageContentCampaignReport].join(" ") : styles.pageContent}>
         {mensagem ? <FeedbackToast success={mensagem} onSuccessDismiss={() => setMensagem("")} /> : null}
@@ -8240,22 +8262,53 @@ export default function DisparosWhatsAppPage() {
                         </button>
                       </div>
 
-                      {totalRestricoesEnvioRelatorio > 0 ? (
-                        <div className={styles.meta131048Notice} role="alert">
-                          <div className={styles.meta131048NoticeHeading}>
-                            <Info size={18} aria-hidden="true" />
-                            <strong>131048 · Restrição de envio do número</strong>
+
+                      {falhasRelatorioAgrupadas.length > 0 ? (
+                        <section className={styles.campaignReportFailures} aria-label="Falhas identificadas na campanha">
+                          <div className={styles.campaignReportFailuresHeading}>
+                            <strong>Falhas identificadas</strong>
                             <span>
-                              {totalRestricoesEnvioRelatorio}{" "}
-                              {totalRestricoesEnvioRelatorio === 1 ? "falha identificada" : "falhas identificadas"}
+                              {falhasRelatorioAgrupadas.length} {falhasRelatorioAgrupadas.length === 1 ? "tipo de falha" : "tipos de falha"} · Clique para ver o que aconteceu e o que fazer.
                             </span>
                           </div>
-                          <p>{descreverErroMetaWhatsApp(131048).significado}</p>
-                          <p>
-                            <strong>O que fazer:</strong>{" "}
-                            {descreverErroMetaWhatsApp(131048).acao}
-                          </p>
-                        </div>
+                          <div className={styles.campaignIssueList}>
+                            {falhasRelatorioAgrupadas.map((tipo) => (
+                              <details
+                                key={tipo.chave}
+                                className={`${styles.campaignIssueItem} ${styles.campaignIssueCollapsible} ${tipo.codigo === 131048 ? styles.campaignIssueRestriction : ""}`}
+                              >
+                                <summary className={styles.campaignIssueSummary}>
+                                  <span className={styles.campaignIssueHeadingText}>
+                                    <span className={styles.campaignIssueCode}>
+                                      {tipo.codigo ? `Erro ${tipo.codigo}` : "Sem código"}
+                                    </span>
+                                    <strong>{tipo.nome}</strong>
+                                  </span>
+                                  <span className={styles.campaignIssueSummaryPreview} title={tipo.resumo}>
+                                    {tipo.resumo}
+                                  </span>
+                                  <span className={styles.campaignIssueQuantity}>
+                                    {tipo.quantidade} {tipo.quantidade === 1 ? "falha" : "falhas"}
+                                  </span>
+                                  <ChevronDown size={17} className={styles.campaignIssueChevron} aria-hidden="true" />
+                                </summary>
+                                <div className={styles.campaignIssueDetails}>
+                                  <p className={styles.campaignIssueExplanation}>
+                                    <strong>O que aconteceu:</strong> {tipo.significado}
+                                  </p>
+                                  <p className={styles.campaignIssueGuidance}>
+                                    <strong>O que fazer:</strong> {tipo.acao}
+                                  </p>
+                                  {tipo.detalheTecnico ? (
+                                    <p className={styles.campaignIssueTechnical}>
+                                      Detalhe registrado: {tipo.detalheTecnico}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        </section>
                       ) : null}
                       <p className={styles.campaignReportCostNote}>
                         {relatorioCampanhaDetalhado.custo_estimado.criterio}
@@ -8353,21 +8406,16 @@ export default function DisparosWhatsAppPage() {
                                             className={`${styles.campaignReportErrorLine} ${
                                               codigoErro === 131048 ? styles.campaignReportErrorLine131048 : ""
                                             }`}
-                                            title={item.erro || undefined}
+                                            title={detalheErro?.significado || item.erro || undefined}
                                           >
                                             <strong>
                                               {codigoErro ? `Falha ${codigoErro}` : "Falha"}
                                               {detalheErro ? ` · ${detalheErro.nome}` : ""}
                                             </strong>
-                                            <span>
-                                              {detalheErro?.significado || item.erro || "Não foi possível entregar a mensagem."}
+
+                                            <span className={styles.campaignReportErrorDescription}>
+                                              {detalheErro?.resumo || detalheErro?.significado || item.erro || "Não foi possível entregar a mensagem."}
                                             </span>
-                                            {codigoErro === 131048 ? (
-                                              <span>
-                                                <strong>Orientação:</strong>{" "}
-                                                {detalheErro?.acao}
-                                              </span>
-                                            ) : null}
                                           </div>
                                         </td>
                                       </tr>
@@ -8488,9 +8536,8 @@ export default function DisparosWhatsAppPage() {
                         : [];
 
                       return (
-                        <button
+                        <article
                           key={campanha.id}
-                          type="button"
                           className={`${styles.resultItem} ${styles.campaignHistoryCard} ${
                             emAndamento
                               ? styles.resultProcessing
@@ -8507,12 +8554,6 @@ export default function DisparosWhatsAppPage() {
                                 : comProblema || emAndamento
                                 ? "inset 4px 0 0 var(--crm-warning-text)"
                                 : "inset 4px 0 0 var(--crm-success-text)",
-                          }}
-                          onClick={() => {
-                            setFiltroHistoricoCampanha(campanha.id);
-                            setPaginaRelatorioCampanha(1);
-                            setBuscaHistorico("");
-                            setErro("");
                           }}
                         >
                           <div className={styles.resultCompactHeader}>
@@ -8644,39 +8685,31 @@ export default function DisparosWhatsAppPage() {
                                 ) : null}
                               </div>
 
+
                               {falhasPorTipo.length > 0 ? (
                                 <div className={styles.campaignIssueList}>
                                   {falhasPorTipo.map((tipo) => (
                                     <div
                                       key={tipo.chave}
-                                      className={`${styles.campaignIssueItem} ${
-                                        tipo.codigo === 131048 ? styles.campaignIssueRestriction : ""
-                                      }`}
+                                      className={`${styles.campaignIssueItem} ${styles.campaignIssueCompactItem} ${tipo.codigo === 131048 ? styles.campaignIssueRestriction : ""}`}
                                     >
-                                      <div className={styles.campaignIssueHeading}>
-                                        <div className={styles.campaignIssueHeadingText}>
-                                          <span className={styles.campaignIssueCode}>
-                                            {tipo.codigo ? `Erro ${tipo.codigo}` : "Sem código informado"}
-                                          </span>
-                                          <strong>{tipo.nome}</strong>
+                                      <div className={styles.campaignIssueCompactLine}>
+                                        <div className={styles.campaignIssueCompactCopy}>
+                                          <strong>{tipo.codigo ? `${tipo.codigo} · ${tipo.nome}` : tipo.nome}</strong>
+                                          <span title={tipo.resumo}>{tipo.resumo}</span>
                                         </div>
                                         <span className={styles.campaignIssueQuantity}>
                                           {tipo.quantidade} {tipo.quantidade === 1 ? "falha" : "falhas"}
                                         </span>
+                                        <button
+                                          type="button"
+                                          className={styles.campaignIssueLearnMore}
+                                          onClick={() => setFalhaModal({ ...tipo, campanhaNome: nomeCampanhaHistorico(campanha) })}
+                                          aria-label={`Saber mais sobre ${tipo.nome}`}
+                                        >
+                                          Saber mais
+                                        </button>
                                       </div>
-                                      <p className={styles.campaignIssueExplanation}>
-                                        <strong>O que aconteceu:</strong>{" "}
-                                        {tipo.significado}
-                                      </p>
-                                      <p className={styles.campaignIssueGuidance}>
-                                        <strong>O que fazer:</strong>{" "}
-                                        {tipo.acao}
-                                      </p>
-                                      {tipo.detalheTecnico ? (
-                                        <p className={styles.campaignIssueTechnical}>
-                                          Detalhe registrado: {tipo.detalheTecnico}
-                                        </p>
-                                      ) : null}
                                     </div>
                                   ))}
                                 </div>
@@ -8697,10 +8730,19 @@ export default function DisparosWhatsAppPage() {
                             </div>
                           ) : null}
 
-                          <span className={styles.campaignHistoryCardAction}>
+                          <button
+                            type="button"
+                            className={styles.campaignHistoryCardAction}
+                            onClick={() => {
+                              setFiltroHistoricoCampanha(campanha.id);
+                              setPaginaRelatorioCampanha(1);
+                              setBuscaHistorico("");
+                              setErro("");
+                            }}
+                          >
                             Ver relatório da campanha
-                          </span>
-                        </button>
+                          </button>
+                        </article>
                       );
                     })}
                   </div>
@@ -8710,6 +8752,59 @@ export default function DisparosWhatsAppPage() {
           </section>
         </div>
       </div>
+
+      {falhaModal ? (
+        <div className={styles.modalOverlay} onClick={() => setFalhaModal(null)}>
+          <section
+            className={`${styles.modalConfirmacao} ${styles.campaignFailureModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="campanha-falha-titulo"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className={styles.modalHeader}>
+              <div>
+                <p className={styles.modalEyebrow}>Detalhes da falha · {falhaModal.campanhaNome}</p>
+                <h3 className={styles.modalTitle} id="campanha-falha-titulo">
+                  {falhaModal.codigo ? `${falhaModal.codigo} · ${falhaModal.nome}` : falhaModal.nome}
+                </h3>
+                <p className={styles.modalSubtitle}>
+                  {falhaModal.quantidade} {falhaModal.quantidade === 1 ? "envio afetado" : "envios afetados"} nesta campanha.
+                </p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={() => setFalhaModal(null)}
+                aria-label="Fechar detalhes da falha"
+                autoFocus
+              >
+                ×
+              </button>
+            </header>
+            <div className={styles.modalBody}>
+              <section className={styles.campaignFailureModalSection}>
+                <h4>O que aconteceu</h4>
+                <p>{falhaModal.significado}</p>
+              </section>
+              <section className={styles.campaignFailureModalSection}>
+                <h4>O que fazer</h4>
+                <p>{falhaModal.acao}</p>
+              </section>
+              {falhaModal.detalheTecnico ? (
+                <p className={styles.campaignIssueTechnical}>
+                  Detalhe registrado: {falhaModal.detalheTecnico}
+                </p>
+              ) : null}
+            </div>
+            <footer className={styles.modalFooter}>
+              <button type="button" className={styles.primaryButton} onClick={() => setFalhaModal(null)}>
+                Entendi
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {disparando && !agendarDisparo ? (
         <div

@@ -5998,63 +5998,16 @@
   }
 }
 
-/* Alerta de restrição Meta 131048, visível tanto no card como no relatório. */
-.meta131048Notice {
-  display: grid;
-  gap: 7px;
-  margin-top: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--crm-warning-border);
-  border-radius: 13px;
-  background: color-mix(in srgb, var(--crm-warning-bg) 82%, var(--crm-surface) 18%);
-  color: var(--crm-warning-text);
-  text-align: left;
-  box-shadow: none;
-}
-.meta131048NoticeHeading {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-.meta131048NoticeHeading svg {
-  flex: 0 0 auto;
-}
-.meta131048NoticeHeading > strong {
-  font-size: 13px;
-  font-weight: 850;
-  line-height: 1.35;
-}
-.meta131048NoticeHeading > span {
-  margin-left: auto;
-  padding: 4px 8px;
-  border: 1px solid var(--crm-warning-border);
-  border-radius: 999px;
-  background: var(--crm-surface);
-  color: var(--crm-warning-text);
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.meta131048Notice p {
-  margin: 0;
-  color: var(--crm-text);
-  font-size: 12px;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-.meta131048Notice p strong {
-  color: var(--crm-text-strong);
-  font-weight: 850;
-}
+
+/* Uma linha por erro individual, com a orientação completa no resumo por tipo. */
 .campaignReportErrorLine {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
-  gap: 4px 9px;
-  white-space: normal;
-  overflow-x: visible;
-  overflow-wrap: anywhere;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   line-height: 1.5;
 }
 .campaignReportErrorLine > strong {
@@ -6062,29 +6015,16 @@
   font-size: 11px;
   font-weight: 850;
 }
-.campaignReportErrorLine > span {
+.campaignReportErrorDescription {
+  flex: 1 1 auto;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.campaignReportErrorLine131048 {
-  color: var(--crm-warning-text);
-}
+.campaignReportErrorLine131048 { color: var(--crm-warning-text); }
 .campaignReportErrorRow131048 td {
   background: color-mix(in srgb, var(--crm-warning-bg) 66%, var(--crm-surface) 34%);
-}
-@media (max-width: 640px) {
-  .meta131048Notice {
-    padding: 11px;
-  }
-  .meta131048NoticeHeading > span {
-    margin-left: 0;
-  }
-  .campaignReportErrorLine {
-    display: block;
-  }
-  .campaignReportErrorLine > strong,
-  .campaignReportErrorLine > span {
-    display: block;
-  }
 }
 
 /* Resumo de falhas: total geral e grupos separados por causa, sem duplicar detalhes. */
@@ -6221,4 +6161,166 @@
     flex-wrap: wrap;
   }
   .campaignIssueItem { padding: 11px; }
+}
+
+/* Diagnóstico por tipo: cartões fechados por padrão e explicação sob demanda. */
+.campaignReportFailures {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 15px;
+  background: var(--crm-surface-soft);
+}
+.campaignReportFailuresHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+}
+.campaignReportFailuresHeading > strong {
+  font-size: 13px;
+  color: var(--crm-text-strong);
+  font-weight: 850;
+}
+.campaignReportFailuresHeading > span {
+  font-size: 11px;
+  color: var(--crm-text-muted);
+}
+.campaignIssueCollapsible {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+.campaignIssueSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 11px 13px;
+  cursor: pointer;
+  list-style: none;
+}
+.campaignIssueSummary::-webkit-details-marker { display: none; }
+.campaignIssueSummary::marker { content: ""; }
+.campaignIssueSummary:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.campaignIssueSummary .campaignIssueHeadingText {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.campaignIssueSummaryPreview {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campaignIssueSummary .campaignIssueQuantity { margin-left: auto; }
+.campaignIssueChevron {
+  flex: 0 0 auto;
+  color: var(--crm-text-muted);
+  transition: transform .2s ease;
+}
+.campaignIssueCollapsible[open] .campaignIssueChevron { transform: rotate(180deg); }
+.campaignIssueDetails {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--crm-border);
+}
+.campaignIssueCompactItem { padding: 9px 11px; }
+.campaignIssueCompactLine {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.campaignIssueCompactCopy {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.campaignIssueCompactCopy > strong {
+  flex: 0 0 auto;
+  color: var(--crm-text-strong);
+  font-weight: 800;
+}
+.campaignIssueCompactCopy > span {
+  color: var(--crm-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.campaignIssueLearnMore {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 8px;
+  background: var(--crm-surface);
+  color: var(--crm-primary-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.campaignIssueLearnMore:hover { background: var(--crm-primary-soft); }
+.campaignIssueLearnMore:focus-visible,
+.campaignHistoryCardAction:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: 2px;
+}
+.campaignHistoryCard { cursor: default; }
+.campaignHistoryCardAction {
+  appearance: none;
+  width: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.campaignHistoryCardAction:hover { text-decoration: underline; }
+.campaignFailureModal { max-width: 640px; }
+.campaignFailureModal .modalBody { padding-top: 20px; padding-bottom: 20px; }
+.campaignFailureModalSection {
+  padding: 13px 15px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface-soft);
+}
+.campaignFailureModalSection h4 {
+  margin: 0 0 7px;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 850;
+}
+.campaignFailureModalSection p {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .campaignIssueSummary { flex-wrap: wrap; gap: 7px 9px; }
+  .campaignIssueSummaryPreview { order: 2; flex-basis: 100%; }
+  .campaignIssueCompactLine { flex-wrap: wrap; }
+  .campaignIssueCompactCopy { flex-basis: 100%; }
+  .campaignIssueCompactCopy > strong { white-space: normal; }
+  .campaignIssueCompactCopy > span { flex: 1; }
+  .campaignReportFailures { padding: 11px; }
 }
