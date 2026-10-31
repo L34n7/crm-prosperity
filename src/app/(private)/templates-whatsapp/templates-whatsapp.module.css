@@ -201,10 +201,12 @@
 }
 
 .mediaToggleCard {
-  border: 1px solid var(--crm-border);
-  background:
-    radial-gradient(circle at 8% 12%, var(--crm-ui-private-surface-rgb-15-23-42-0-04), transparent 36%),
-    linear-gradient(135deg, var(--crm-surface) 0%, var(--crm-surface-soft) 100%);
+  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 60%, var(--crm-border));
+  background: linear-gradient(
+    135deg,
+    var(--crm-warning-bg) 0%,
+    color-mix(in srgb, var(--crm-warning-bg) 70%, var(--crm-surface) 30%) 100%
+  );
   border-radius: 18px;
   padding: 15px 16px;
   display: flex;
@@ -245,9 +247,9 @@
   width: 48px;
   height: 28px;
   flex: 0 0 auto;
-  border: 2px solid var(--crm-primary-strong);
+  border: 1px solid var(--crm-border-strong);
   border-radius: 999px;
-  background: var(--crm-primary-soft);
+  background: var(--crm-surface-soft);
   padding: 0;
   cursor: pointer;
   transition: all 0.22s ease;
@@ -266,8 +268,8 @@
 
 .premiumSwitchThumb {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -608,10 +610,10 @@
   justify-content: center;
   min-height: 40px;
   padding: 9px 16px;
-  border: 1px solid var(--crm-primary-strong);
+  border: 1px solid var(--crm-border-strong);
   border-radius: 11px;
-  background: var(--crm-primary-strong);
-  color: var(--crm-text-inverse);
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
   font: inherit;
   font-size: 13px;
   font-weight: 800;
@@ -620,8 +622,8 @@
 }
 
 .imageUploadActionButton:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
+  border-color: var(--crm-primary-border);
+  background: var(--crm-surface-soft);
 }
 
 .imageUploadActionButton:focus-visible,
