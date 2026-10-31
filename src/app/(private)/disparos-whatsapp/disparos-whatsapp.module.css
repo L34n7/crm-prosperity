@@ -1023,7 +1023,7 @@
 
 .campaignHistoryCard .massCancelledMetric {
   border-color: var(--crm-border);
-  background: transparent;
+  background: color-mix(in srgb, var(--crm-surface) 82%, transparent);
   appearance: none;
   font: inherit;
   text-align: left;
@@ -1032,15 +1032,15 @@
 }
 
 .campaignHistoryCard.resultSuccess .massCancelledMetric {
-  border-color: var(--crm-border);
+  border-color: var(--crm-success-border);
 }
 
 .campaignHistoryCard.resultProcessing .massCancelledMetric {
-  border-color: var(--crm-border);
+  border-color: var(--crm-warning-border);
 }
 
 .campaignHistoryCard.resultError .massCancelledMetric {
-  border-color: var(--crm-border);
+  border-color: var(--crm-danger-border);
 }
 
 .campaignHistoryCardAction {
@@ -6035,12 +6035,12 @@
 /* Resumo de falhas: total geral e grupos separados por causa, sem duplicar detalhes. */
 .campaignIssuesPanel {
   display: grid;
-  gap: 11px;
+  gap: 13px;
   margin-top: 12px;
-  padding: 13px;
-  border: 1px solid var(--crm-border);
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 58%, var(--crm-border) 42%);
   border-radius: 15px;
-  background: transparent;
+  background: color-mix(in srgb, var(--crm-surface) 82%, var(--crm-warning-bg) 18%);
   text-align: left;
 }
 .campaignIssuesHeader {
@@ -6164,20 +6164,33 @@
   gap: 10px;
   margin-top: 14px;
   padding: 14px;
-  border: 1px solid var(--crm-border);
+  border: 1px solid var(--crm-warning-border);
   border-radius: 15px;
-  background: var(--crm-surface-soft);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--crm-warning-bg) 86%, var(--crm-surface) 14%) 0%,
+    var(--crm-surface) 100%
+  );
 }
 .campaignReportFailuresHeading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 5px 12px;
 }
-.campaignReportFailuresHeading > strong {
-  font-size: 13px;
+.campaignReportFailuresHeadingTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.campaignReportFailuresHeadingTitle svg {
+  flex: 0 0 auto;
+  color: var(--crm-warning-text);
+}
+.campaignReportFailuresHeadingTitle strong {
   color: var(--crm-text-strong);
+  font-size: 13px;
   font-weight: 850;
 }
 .campaignReportFailuresHeading > span {

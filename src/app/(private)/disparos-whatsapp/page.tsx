@@ -8326,7 +8326,10 @@ export default function DisparosWhatsAppPage() {
                       {falhasRelatorioAgrupadas.length > 0 ? (
                         <section className={styles.campaignReportFailures} aria-label="Falhas identificadas na campanha">
                           <div className={styles.campaignReportFailuresHeading}>
-                            <strong>Falhas identificadas</strong>
+                            <div className={styles.campaignReportFailuresHeadingTitle}>
+                              <Info size={18} aria-hidden="true" />
+                              <strong>Falhas identificadas</strong>
+                            </div>
                             <span>
                               {falhasRelatorioAgrupadas.length} {falhasRelatorioAgrupadas.length === 1 ? "tipo de falha" : "tipos de falha"} · Clique para ver o que aconteceu e o que fazer.
                             </span>
