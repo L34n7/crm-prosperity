@@ -5153,9 +5153,10 @@
   margin-top: 4px;
   font-size: 18px;
 }
-.disparoWizardHeaderStep p {
+.disparoWizardHeader .disparoWizardHeaderStep p {
   max-width: 530px;
-  margin-left: auto;
+  margin: 0 0 0 auto;
+  text-align: right;
 }
 .disparoWizardHeader h2 {
   margin: 0 0 5px;
