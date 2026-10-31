@@ -403,6 +403,7 @@ export default function TemplatesWhatsAppPage() {
   const [headerText, setHeaderText] = useState("");
   const [headerImageEnabled, setHeaderImageEnabled] = useState(false);
   const [headerImage, setHeaderImage] = useState<File | null>(null);
+  const headerImageInputRef = useRef<HTMLInputElement>(null);
   const [headerImagePreview, setHeaderImagePreview] = useState("");
   const [bodyText, setBodyText] = useState(
     "Olá {{1}}, seu atendimento foi iniciado com sucesso. O protocolo gerado foi {{2}}. Guarde esta informação."
@@ -1663,6 +1664,7 @@ export default function TemplatesWhatsAppPage() {
                           <button
                             type="button"
                             role="switch"
+                            aria-label="Adicionar imagem ao template"
                             aria-checked={headerImageEnabled}
                             className={`${styles.premiumSwitch} ${
                               headerImageEnabled ? styles.premiumSwitchActive : ""
@@ -1705,7 +1707,8 @@ export default function TemplatesWhatsAppPage() {
                             <input
                               type="file"
                               accept="image/jpeg,image/png"
-                              className={styles.fileInput}
+                              ref={headerImageInputRef}
+                              className={styles.imageFileInputHidden}
                               onChange={(e) => {
                                 setErro("");
                                 const file = e.target.files?.[0] || null;
@@ -1732,6 +1735,31 @@ export default function TemplatesWhatsAppPage() {
                                 setHeaderImage(file);
                               }}
                             />
+
+                            <div className={styles.imageUploadActions}>
+                              <button
+                                type="button"
+                                className={styles.imageUploadActionButton}
+                                onClick={() => headerImageInputRef.current?.click()}
+                              >
+                                {headerImage ? "Trocar imagem" : "Adicionar imagem"}
+                              </button>
+                              {headerImage ? (
+                                <button
+                                  type="button"
+                                  className={styles.imageRemoveButton}
+                                  onClick={() => {
+                                    setHeaderImage(null);
+                                    if (headerImageInputRef.current) {
+                                      headerImageInputRef.current.value = "";
+                                    }
+                                    setErro("");
+                                  }}
+                                >
+                                  Remover imagem
+                                </button>
+                              ) : null}
+                            </div>
 
                             {headerImageEnabled && headerImagePreview ? (
                               <img
