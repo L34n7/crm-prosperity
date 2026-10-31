@@ -6086,3 +6086,139 @@
     display: block;
   }
 }
+
+/* Resumo de falhas: total geral e grupos separados por causa, sem duplicar detalhes. */
+.campaignIssuesPanel {
+  display: grid;
+  gap: 13px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 58%, var(--crm-border) 42%);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--crm-surface) 82%, var(--crm-warning-bg) 18%);
+  text-align: left;
+}
+.campaignIssuesHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.campaignIssuesHeader > div { min-width: 0; }
+.campaignIssuesHeader strong {
+  display: block;
+  color: var(--crm-text-strong);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.4;
+}
+.campaignIssuesHeader p {
+  margin: 4px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.campaignIssuesTotal {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 999px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.campaignIssueList {
+  display: grid;
+  gap: 9px;
+}
+.campaignIssueItem {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--crm-border);
+  border-radius: 12px;
+  background: var(--crm-surface);
+  box-shadow: none;
+}
+.campaignIssueRestriction {
+  border-color: var(--crm-warning-border);
+  background: color-mix(in srgb, var(--crm-warning-bg) 46%, var(--crm-surface) 54%);
+}
+.campaignIssueHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.campaignIssueHeadingText {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  gap: 5px 9px;
+}
+.campaignIssueHeadingText > strong {
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 850;
+}
+.campaignIssueCode {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.campaignIssueQuantity {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--crm-danger-border);
+  border-radius: 999px;
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.campaignIssueRestriction .campaignIssueQuantity {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-warning-text);
+}
+.campaignIssueExplanation,
+.campaignIssueGuidance,
+.campaignIssueTechnical,
+.campaignIssuesContext {
+  margin: 0;
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.campaignIssueExplanation strong,
+.campaignIssueGuidance strong {
+  color: var(--crm-text-strong);
+  font-weight: 850;
+}
+.campaignIssueGuidance {
+  padding-top: 8px;
+  border-top: 1px solid var(--crm-border);
+}
+.campaignIssueTechnical {
+  padding-top: 5px;
+  border-top: 1px dashed var(--crm-border);
+  color: var(--crm-text-muted);
+  font-size: 11px;
+}
+@media (max-width: 580px) {
+  .campaignIssuesPanel { padding: 11px; }
+  .campaignIssuesHeader,
+  .campaignIssueHeading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .campaignIssueItem { padding: 11px; }
+}

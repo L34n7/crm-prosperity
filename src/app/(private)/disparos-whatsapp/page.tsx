@@ -1701,105 +1701,61 @@ function campanhaHistoricoFoiAgendada(campanha: CampanhaHistoricoFiltro) {
 }
 
 
-function feedbackErroCampanhaHistorico(
-  campanha: CampanhaHistoricoFiltro
-) {
-  const status = String(campanha.status || "").trim().toLowerCase();
-  const falhas = Math.max(0, Number(campanha.total_falhas || 0));
-  const motivo = String(
-    campanha.pausa_motivo ||
-      campanha.erro ||
-      campanha.erro_exemplo ||
-      ""
-  ).trim();
+function tituloProblemaCampanhaHistorico(c: CampanhaHistoricoFiltro) {
+  const status = String(c.status || "").toLowerCase();
+  const falhas = Number(c.total_falhas || 0);
+  if (status === "cancelada") return "Disparo em massa cancelado";
+  if (status === "concluida" && falhas > 0) return "Campanha concluída com falhas";
+  if (status === "erro" || status.startsWith("pausada_")) return "Disparo em massa interrompido";
+  return falhas > 0 ? "Falhas durante o disparo" : "Ocorrência no disparo";
+}
 
-  const codigo = identificarCodigoErroMetaWhatsApp(
-    campanha.erro_codigo_meta_exemplo,
-    motivo
+type FalhaAgrupadaCampanha = {
+  chave: string;
+  codigo: number | null;
+  quantidade: number;
+  nome: string;
+  significado: string;
+  acao: string;
+  detalheTecnico: string | null;
+};
+
+function agruparFalhasCampanhaHistorico(c: CampanhaHistoricoFiltro): FalhaAgrupadaCampanha[] {
+  const grupos = new Map<string, FalhaAgrupadaCampanha>();
+  for (const item of Array.isArray(c.erros_resumo) ? c.erros_resumo : []) {
+    const quantidade = Math.max(0, Math.trunc(Number(item.quantidade || 0)));
+    if (!Number.isFinite(quantidade) || !quantidade) continue;
+    const detalhe = String(item.erro || "").trim();
+    const codigo = identificarCodigoErroMetaWhatsApp(item.erro_codigo_meta, detalhe);
+    const chave = codigo ? `codigo:${codigo}` : `texto:${detalhe.toLowerCase() || "desconhecido"}`;
+    const existente = grupos.get(chave);
+    if (existente) {
+      existente.quantidade += quantidade;
+      continue;
+    }
+    const descricao = descreverErroMetaWhatsApp(codigo, detalhe);
+    grupos.set(chave, {
+      chave, codigo, quantidade,
+      nome: codigo ? descricao.nome : "Falha não classificada",
+      significado: codigo ? descricao.significado : "A Meta não informou um código que permita identificar a causa desta falha.",
+      acao: descricao.acao,
+      detalheTecnico: !codigo && detalhe ? detalhe : null,
+    });
+  }
+  const totalFalhas = Math.max(0, Math.trunc(Number(c.total_falhas || 0)));
+  const totalAgrupado = Array.from(grupos.values()).reduce((total, g) => total + g.quantidade, 0);
+  if (totalFalhas > totalAgrupado) {
+    grupos.set("sem-detalhes", {
+      chave: "sem-detalhes", codigo: null, quantidade: totalFalhas - totalAgrupado,
+      nome: "Falhas sem classificação detalhada",
+      significado: "Essas falhas foram contabilizadas, mas ainda não há dados suficientes para identificar cada causa.",
+      acao: "Abra o relatório detalhado para consultar os contatos afetados. Não reenvie sem analisar a causa.",
+      detalheTecnico: null,
+    });
+  }
+  return Array.from(grupos.values()).sort(
+    (x,y) => y.quantidade-x.quantidade || x.chave.localeCompare(y.chave,"pt-BR")
   );
-
-  const descricaoMeta = codigo
-    ? descreverErroMetaWhatsApp(codigo, motivo || null)
-    : null;
-
-  const titulo =
-    status === "cancelada"
-      ? "Disparo em massa cancelado"
-      : status === "concluida" && falhas > 0
-      ? "Campanha concluída com falhas"
-      : status === "erro"
-      ? "Disparo em massa interrompido"
-      : status.startsWith("pausada_")
-      ? "Disparo em massa interrompido"
-      : falhas > 0
-      ? "Falhas durante o disparo"
-      : "Ocorrência no disparo";
-
-  const descricao =
-    motivo ||
-    (falhas > 0
-      ? `${falhas} disparo${falhas === 1 ? "" : "s"} falhou${falhas === 1 ? "" : "ram"} durante o processamento.`
-      : "A campanha foi interrompida antes de concluir todos os envios.");
-
-  return {
-    titulo,
-    descricao,
-    meta: descricaoMeta,
-  };
-}
-
-function resumoErrosCampanhaHistorico(
-  campanha: CampanhaHistoricoFiltro
-) {
-  const erros = Array.isArray(campanha.erros_resumo)
-    ? campanha.erros_resumo
-    : [];
-
-  return erros
-    .map((item) => {
-      const quantidade = Math.max(0, Number(item.quantidade || 0));
-      if (!quantidade) return "";
-
-      const erroTecnico = String(item.erro || "").trim();
-      const codigo = identificarCodigoErroMetaWhatsApp(
-        item.erro_codigo_meta,
-        erroTecnico
-      );
-      const descricaoMeta = codigo
-        ? descreverErroMetaWhatsApp(codigo, erroTecnico)
-        : null;
-      const texto = descricaoMeta && codigo
-        ? `Erro ${codigo} — ${descricaoMeta.nome}`
-        : erroTecnico || "Falha sem descrição";
-
-      return `${quantidade} ${quantidade === 1 ? "falha" : "falhas"}: ${texto}`;
-    })
-    .filter(Boolean);
-}
-
-/** Um erro 131048 pode coexistir com 131026 e não ser o erro de exemplo. */
-function ocorrenciasRestricaoEnvioCampanha(campanha: CampanhaHistoricoFiltro) {
-  const erros = Array.isArray(campanha.erros_resumo)
-    ? campanha.erros_resumo
-    : [];
-  const quantidade = erros.reduce((total, item) => {
-    const codigo = identificarCodigoErroMetaWhatsApp(
-      item.erro_codigo_meta,
-      item.erro
-    );
-    return codigo === 131048
-      ? total + Math.max(0, Number(item.quantidade || 0))
-      : total;
-  }, 0);
-
-  const encontrada =
-    quantidade > 0 ||
-    identificarCodigoErroMetaWhatsApp(
-      campanha.erro_codigo_meta_exemplo,
-      campanha.erro_exemplo || campanha.erro || campanha.pausa_motivo
-    ) === 131048;
-
-  return { encontrada, quantidade };
 }
 
 function timestampRelatorio(valor?: string | null) {
@@ -8524,13 +8480,12 @@ export default function DisparosWhatsAppPage() {
                       const comProblema = campanhaHistoricoTemProblema(campanha);
                       const campanhaAgendada =
                         campanhaHistoricoFoiAgendada(campanha);
-                      const feedbackErro = comProblema
-                        ? feedbackErroCampanhaHistorico(campanha)
+                      const tituloProblema = comProblema
+                        ? tituloProblemaCampanhaHistorico(campanha)
                         : null;
-                      const errosResumo =
-                        resumoErrosCampanhaHistorico(campanha);
-                      const restricaoMeta =
-                        ocorrenciasRestricaoEnvioCampanha(campanha);
+                      const falhasPorTipo = falhas > 0
+                        ? agruparFalhasCampanhaHistorico(campanha)
+                        : [];
 
                       return (
                         <button
@@ -8671,84 +8626,73 @@ export default function DisparosWhatsAppPage() {
                             </div>
                           </div>
 
-                          {feedbackErro ? (
-                            <div
-                              className={
-                                campanhaCancelada || campanhaFalhouIntegralmente
-                                  ? styles.resultErrorFeedback
-                                  : styles.resultText
-                              }
-                              style={
-                                campanhaCancelada || campanhaFalhouIntegralmente
-                                  ? undefined
-                                  : {
-                                      padding: "10px 12px",
-                                      borderTop:
-                                        "1px solid var(--crm-warning-border)",
-                                    }
-                              }
-                            >
-                              <strong className={styles.resultErrorTitle}>
-                                {feedbackErro.titulo}
-                              </strong>
-
-                              {restricaoMeta.encontrada ? (
-                                <div className={styles.meta131048Notice}>
-                                  <div className={styles.meta131048NoticeHeading}>
-                                    <Info size={16} aria-hidden="true" />
-                                    <strong>131048 · Envios restritos pela Meta</strong>
-                                    {restricaoMeta.quantidade > 0 ? (
-                                      <span>
-                                        {restricaoMeta.quantidade}{" "}
-                                        {restricaoMeta.quantidade === 1 ? "falha" : "falhas"}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <p>{descreverErroMetaWhatsApp(131048).significado}</p>
+                          {tituloProblema ? (
+                            <div className={styles.campaignIssuesPanel}>
+                              <div className={styles.campaignIssuesHeader}>
+                                <div>
+                                  <strong>{tituloProblema}</strong>
                                   <p>
-                                    <strong>O que fazer:</strong>{" "}
-                                    {descreverErroMetaWhatsApp(131048).acao}
+                                    {falhas > 0
+                                      ? `${falhas} ${falhas === 1 ? "falha identificada" : "falhas identificadas"} em ${falhasPorTipo.length} ${falhasPorTipo.length === 1 ? "tipo" : "tipos"}.`
+                                      : "Consulte a situação da campanha abaixo."}
                                   </p>
                                 </div>
-                              ) : null}
+                                {falhas > 0 ? (
+                                  <span className={styles.campaignIssuesTotal}>
+                                    {falhas} {falhas === 1 ? "falha" : "falhas"}
+                                  </span>
+                                ) : null}
+                              </div>
 
-                              {feedbackErro.meta && (!restricaoMeta.encontrada || feedbackErro.meta.codigo !== 131048) ? (
-                                <>
-                                  <p className={styles.resultErrorDescription}>
-                                    <strong>
-                                      {feedbackErro.meta.codigo} · {feedbackErro.meta.nome}
-                                    </strong>
-                                  </p>
-                                  <p className={styles.resultErrorDescription}>
-                                    <strong>O que significa:</strong>{" "}
-                                    {feedbackErro.meta.significado}
-                                  </p>
-                                  <p className={styles.resultErrorDescription}>
-                                    <strong>O que fazer:</strong>{" "}
-                                    {feedbackErro.meta.acao}
-                                  </p>
-                                </>
-                              ) : null}
-
-                              <p className={styles.resultErrorDetail}>
-                                {feedbackErro.descricao}
-                              </p>
-
-                              <p className={styles.resultErrorDetail}>
-                                Foram enviados {enviados} de {total} disparos.
-                                {cancelados > 0
-                                  ? ` ${cancelados} foram cancelados antes do envio.`
-                                  : ""}
-                                {falhas > 0
-                                  ? ` ${falhas} falharam durante o processamento.`
-                                  : ""}
-                              </p>
-
-                              {errosResumo.length > 0 ? (
-                                <div className={styles.resultErrorBreakdown}>
-                                  <strong>Tipos de falha:</strong>
-                                  <p>{errosResumo.join("; ")}</p>
+                              {falhasPorTipo.length > 0 ? (
+                                <div className={styles.campaignIssueList}>
+                                  {falhasPorTipo.map((tipo) => (
+                                    <div
+                                      key={tipo.chave}
+                                      className={`${styles.campaignIssueItem} ${
+                                        tipo.codigo === 131048 ? styles.campaignIssueRestriction : ""
+                                      }`}
+                                    >
+                                      <div className={styles.campaignIssueHeading}>
+                                        <div className={styles.campaignIssueHeadingText}>
+                                          <span className={styles.campaignIssueCode}>
+                                            {tipo.codigo ? `Erro ${tipo.codigo}` : "Sem código informado"}
+                                          </span>
+                                          <strong>{tipo.nome}</strong>
+                                        </div>
+                                        <span className={styles.campaignIssueQuantity}>
+                                          {tipo.quantidade} {tipo.quantidade === 1 ? "falha" : "falhas"}
+                                        </span>
+                                      </div>
+                                      <p className={styles.campaignIssueExplanation}>
+                                        <strong>O que aconteceu:</strong>{" "}
+                                        {tipo.significado}
+                                      </p>
+                                      <p className={styles.campaignIssueGuidance}>
+                                        <strong>O que fazer:</strong>{" "}
+                                        {tipo.acao}
+                                      </p>
+                                      {tipo.detalheTecnico ? (
+                                        <p className={styles.campaignIssueTechnical}>
+                                          Detalhe registrado: {tipo.detalheTecnico}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  ))}
                                 </div>
+                              ) : (
+                                <p className={styles.campaignIssuesContext}>
+                                  {campanha.pausa_motivo || campanha.erro ||
+                                    (cancelados > 0
+                                      ? "A campanha foi cancelada antes da conclusão dos envios."
+                                      : "O processamento foi interrompido antes da conclusão.")}
+                                </p>
+                              )}
+
+                              {cancelados > 0 && falhas > 0 ? (
+                                <p className={styles.campaignIssuesContext}>
+                                  Além das falhas, {cancelados} {cancelados === 1 ? "envio foi cancelado" : "envios foram cancelados"}.
+                                </p>
                               ) : null}
                             </div>
                           ) : null}
