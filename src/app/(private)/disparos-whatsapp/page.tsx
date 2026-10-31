@@ -9,10 +9,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Check,
   ChevronDown,
   CircleStop,
+  CreditCard,
   FileSpreadsheet,
   FileText,
   Info,
@@ -989,6 +991,13 @@ function SeletorVariavelTemplate({
   const descricaoId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosicao, setMenuPosicao] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState(value);
   const [buscando, setBuscando] = useState(false);
@@ -1015,6 +1024,7 @@ function SeletorVariavelTemplate({
 
   const fecharLista = useCallback(() => {
     setAberto(false);
+    setMenuPosicao(null);
     setBuscando(false);
     setBusca(value);
     setIndiceAtivo(-1);
@@ -1033,13 +1043,48 @@ function SeletorVariavelTemplate({
     );
   }, [opcoes, value]);
 
+  const atualizarPosicaoMenu = useCallback(() => {
+    const controle = inputRef.current?.parentElement;
+    if (!controle) return;
+
+    const rect = controle.getBoundingClientRect();
+    const margem = 12;
+    const espacoAbaixo = Math.max(0, window.innerHeight - rect.bottom - margem);
+    const espacoAcima = Math.max(0, rect.top - margem);
+    const alturaDesejada = Math.min(360, Math.max(120, opcoesFiltradas.length * 60 + 18));
+    const abrirParaCima = espacoAbaixo < Math.min(240, alturaDesejada) && espacoAcima > espacoAbaixo;
+    const espacoDisponivel = abrirParaCima ? espacoAcima : espacoAbaixo;
+    const altura = Math.min(alturaDesejada, Math.max(96, espacoDisponivel - 8));
+    const largura = Math.min(Math.max(rect.width, 270), 390, window.innerWidth - 2 * margem);
+
+    setMenuPosicao({
+      top: abrirParaCima ? Math.max(margem, rect.top - altura - 6) : rect.bottom + 6,
+      left: Math.max(margem, Math.min(rect.left, window.innerWidth - largura - margem)),
+      width: largura,
+      maxHeight: altura,
+    });
+  }, [opcoesFiltradas.length]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    atualizarPosicaoMenu();
+    const atualizar = () => atualizarPosicaoMenu();
+    window.addEventListener("resize", atualizar);
+    document.addEventListener("scroll", atualizar, true);
+    return () => {
+      window.removeEventListener("resize", atualizar);
+      document.removeEventListener("scroll", atualizar, true);
+    };
+  }, [aberto, atualizarPosicaoMenu]);
+
   useEffect(() => {
     if (!aberto) return;
 
     function fecharAoClicarFora(event: PointerEvent) {
+      const alvo = event.target as Node;
       if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !containerRef.current?.contains(alvo) &&
+        !menuRef.current?.contains(alvo)
       ) {
         fecharLista();
       }
@@ -1195,12 +1240,19 @@ function SeletorVariavelTemplate({
         </button>
       </div>
 
-      {aberto ? (
+      {aberto && menuPosicao && typeof document !== "undefined" ? createPortal(
         <div
+          ref={menuRef}
           id={listboxId}
           role="listbox"
           aria-label={`Opções para ${label}`}
-          className={styles.variableComboboxMenu}
+          className={`${styles.variableComboboxMenu} ${styles.variableComboboxMenuPortal}`}
+          style={{
+            top: menuPosicao.top,
+            left: menuPosicao.left,
+            width: menuPosicao.width,
+            maxHeight: menuPosicao.maxHeight,
+          }}
         >
           {opcoesFiltradas.map((opcao, index) => {
             const selecionada = opcao.chave === value;
@@ -1249,7 +1301,8 @@ function SeletorVariavelTemplate({
               Carregando variáveis personalizadas...
             </div>
           ) : null}
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       <p id={descricaoId} className={styles.variableComboboxDescription}>
@@ -7609,6 +7662,19 @@ export default function DisparosWhatsAppPage() {
                 </div>
               </div>
 
+              {(previewCusto?.totalIsentos ?? 0) > 0 ? (
+                <div className={styles.modalFepNotice}>
+                  <Info size={17} aria-hidden="true" />
+                  <span>
+                    <strong>Isenção Free Entry Point identificada.</strong>{" "}
+                    {previewCusto?.totalIsentos} destinatário(s) com janela gratuita
+                    aberta após anúncio de clique para WhatsApp e resposta da
+                    empresa. Essa exceção é diferente da janela comum de 24 horas:
+                    templates Utility fora do Free Entry Point são cobrados.
+                  </span>
+                </div>
+              ) : null}
+
               <div className={styles.modalDestaqueFinanceiro}>
                 <span className={styles.modalFinanceiroLabel}>Total estimado</span>
                 <strong className={styles.modalFinanceiroValor}>
@@ -7792,11 +7858,23 @@ export default function DisparosWhatsAppPage() {
           </div>
 
           <div className={styles.historyHeaderActions}>
-          <button type="button" className={styles.historySendButton}
-            onClick={abrirModalCriacaoDisparo}
-            disabled={!podeDisparar || loadingUsuario || loadingIntegracoes}>
-            Enviar disparos
-          </button>
+          <div className={styles.historyHeaderPrimaryActions}>
+            <a
+              className={styles.historyPaymentButton}
+              href="https://business.facebook.com/latest/billing_hub/accounts/details/"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir a Central de Cobrança da Meta para cadastrar uma forma de pagamento"
+            >
+              <CreditCard size={17} aria-hidden="true" />
+              Cadastrar forma de pagamento
+            </a>
+            <button type="button" className={styles.historySendButton}
+              onClick={abrirModalCriacaoDisparo}
+              disabled={!podeDisparar || loadingUsuario || loadingIntegracoes}>
+              Enviar disparos
+            </button>
+          </div>
           <button
             type="button"
             className={styles.historyAccumulatedReportButton}

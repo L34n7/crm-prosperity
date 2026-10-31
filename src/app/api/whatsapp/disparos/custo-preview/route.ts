@@ -295,14 +295,17 @@ export async function POST(request: Request) {
     // A janela de 24h continua relevante para capacidade da Meta, mas nao
     // pode mais ser usada como isencao financeira.
     //
-    // A isencao de entrega que permanece e o Free Entry Point (CTWA/CTA),
-    // identificado pelo referral de anuncio dentro da janela valida de 72h.
+    // O Free Entry Point (CTWA/CTA) depende do clique E de uma resposta
+    // efetivamente enviada pela empresa em ate 24h. Um referral isolado
+    // nao comprova a abertura da janela gratuita de 72 horas.
     const telefonesFreeEntryPoint = new Set<string>();
     const conversaIdsSelecionadas = Array.from(telefonePorConversaId.keys());
 
     if (conversaIdsSelecionadas.length > 0) {
+      // O inicio da janela de 72h e a primeira resposta da empresa;
+      // o referral pode ocorrer ate 24h antes dessa resposta.
       const inicioFep = new Date(
-        referenciaJanelaMs - JANELA_FREE_ENTRY_POINT_MS
+        referenciaJanelaMs - JANELA_FREE_ENTRY_POINT_MS - JANELA_24H_MS
       ).toISOString();
       const fimFep = new Date(referenciaJanelaMs).toISOString();
 
@@ -327,21 +330,60 @@ export async function POST(request: Request) {
           );
         }
 
+        const referralsPorConversa = new Map<string, number[]>();
         for (const mensagem of mensagensFep || []) {
           const metadata =
             (mensagem as any)?.metadata_json &&
             typeof (mensagem as any).metadata_json === "object"
               ? (mensagem as any).metadata_json
               : null;
-
           if (!referralEhFreeEntryPoint(metadata?.referral)) continue;
 
           const conversaId = String((mensagem as any)?.conversa_id || "").trim();
-          const telefone = telefonePorConversaId.get(conversaId);
+          const recebidoEm = new Date((mensagem as any)?.created_at).getTime();
+          if (!conversaId || !Number.isFinite(recebidoEm)) continue;
 
-          if (telefone) {
-            telefonesFreeEntryPoint.add(telefone);
-          }
+          const anteriores = referralsPorConversa.get(conversaId) || [];
+          anteriores.push(recebidoEm);
+          referralsPorConversa.set(conversaId, anteriores);
+        }
+
+        if (referralsPorConversa.size === 0) continue;
+
+        const { data: respostasFep, error: respostasFepError } =
+          await supabaseAdmin
+            .from("mensagens")
+            .select("conversa_id, created_at, status_envio")
+            .eq("empresa_id", usuario.empresa_id)
+            .neq("origem", "recebida")
+            .in("conversa_id", Array.from(referralsPorConversa.keys()))
+            .gte("created_at", inicioFep)
+            .lte("created_at", fimFep);
+
+        if (respostasFepError) {
+          return NextResponse.json(
+            { ok: false, error: respostasFepError.message },
+            { status: 500 }
+          );
+        }
+
+        for (const resposta of respostasFep || []) {
+          const conversaId = String((resposta as any)?.conversa_id || "").trim();
+          const respostaEm = new Date((resposta as any)?.created_at).getTime();
+          const status = String((resposta as any)?.status_envio || "").toLowerCase();
+          if (!Number.isFinite(respostaEm) ||
+              !["enviado", "enviada", "entregue", "lida", "sent", "delivered", "read"].includes(status)) continue;
+          if (referenciaJanelaMs - respostaEm < 0 ||
+              referenciaJanelaMs - respostaEm >= JANELA_FREE_ENTRY_POINT_MS) continue;
+
+          const referralComRespostaValida = (referralsPorConversa.get(conversaId) || [])
+            .some((recebidoEm) =>
+              respostaEm >= recebidoEm && respostaEm - recebidoEm < JANELA_24H_MS
+            );
+          if (!referralComRespostaValida) continue;
+
+          const telefone = telefonePorConversaId.get(conversaId);
+          if (telefone) telefonesFreeEntryPoint.add(telefone);
         }
       }
     }
@@ -435,7 +477,7 @@ export async function POST(request: Request) {
       totalTelefonesIsentosLimiteUnicos: telefonesIsentosLimite.length,
       telefonesConsomemLimite,
       telefonesIsentosLimite,
-      criterioIsencaoCobranca: "free_entry_point_72h",
+      criterioIsencaoCobranca: "free_entry_point_com_resposta_ate_24h",
       utilityJanela24hIsento: false,
       valorUnitarioUsd,
       valorTotalUsd,
