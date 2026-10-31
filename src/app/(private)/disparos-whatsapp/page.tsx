@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  CalendarClock,
   Check,
   ChevronDown,
   CircleStop,
@@ -20,6 +21,7 @@ import {
   Link2,
   Minus,
   Search,
+  SlidersHorizontal,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
@@ -6477,10 +6479,15 @@ export default function DisparosWhatsAppPage() {
                         <div className={styles.disparoWizardStage}>
                           <section className={styles.schedulePlanningCard} aria-label="Planejamento de capacidade e agendamento">
                             <div className={styles.schedulePlanningHeader}>
-                              <div>
-                                <span className={styles.schedulePlanningEyebrow}>Planejamento do envio</span>
-                                <strong>Capacidade e agendamento</strong>
-                                <p>Consulte a disponibilidade antes de escolher os destinatários.</p>
+                              <div className={styles.schedulePlanningIntro}>
+                                <span className={styles.schedulePlanningIcon} aria-hidden="true">
+                                  <CalendarClock size={22} strokeWidth={1.9} />
+                                </span>
+                                <div>
+                                  <span className={styles.schedulePlanningEyebrow}>Planejamento do envio</span>
+                                  <strong>Capacidade e agendamento</strong>
+                                  <p>Consulte a disponibilidade antes de escolher os destinatários.</p>
+                                </div>
                               </div>
                               <span className={styles.schedulePlanningHint}>Janela móvel de 24h</span>
                             </div>
@@ -6511,6 +6518,7 @@ export default function DisparosWhatsAppPage() {
                       <label className={styles.scheduleToggleRow}>
                         <span className={styles.scheduleToggleText}>
                           <strong>Agendar disparo</strong>
+                          <small>Escolha um horário conforme a liberação da capacidade.</small>
                         </span>
 
                         <input
@@ -6726,7 +6734,10 @@ export default function DisparosWhatsAppPage() {
                           <div className={styles.contactsFilterCard}>
                   <div className={styles.contactsFilterHeader}>
                     <div>
-                      <h3>Filtrar contatos</h3>
+                      <div className={styles.contactsFilterTitle}>
+                        <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />
+                        <h3>Filtrar contatos</h3>
+                      </div>
                       <p>Selecione quem receberá o disparo.</p>
                     </div>
 

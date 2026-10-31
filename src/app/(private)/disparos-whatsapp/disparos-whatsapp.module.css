@@ -5563,14 +5563,83 @@
 
 /* Etapa 2: leve destaque visual nos filtros, sem competir com os contatos. */
 .disparoWizardStage .contactsFilterCard {
-  border-color: color-mix(in srgb, var(--crm-primary-border) 62%, var(--crm-border) 38%);
+  position: relative;
+  isolation: isolate;
+  padding: 18px 20px 20px;
+  gap: 16px;
+  border: 1px solid color-mix(in srgb, var(--crm-border) 52%, #9bb4df 48%);
+  border-radius: 19px;
   background:
-    radial-gradient(circle at 0% 0%, var(--crm-primary-soft) 0%, transparent 60%),
+    radial-gradient(
+      circle at 96% 2%,
+      color-mix(in srgb, var(--crm-surface) 50%, #b5cafa 50%) 0%,
+      transparent 55%
+    ),
     linear-gradient(
-      120deg,
-      color-mix(in srgb, var(--crm-primary-soft) 34%, var(--crm-surface) 66%),
-      var(--crm-surface) 92%
+      110deg,
+      color-mix(in srgb, var(--crm-surface) 75%, #dce7ff 25%) 0%,
+      color-mix(in srgb, var(--crm-surface) 87%, #e7eaff 13%) 100%
     );
+  box-shadow: 0 8px 23px rgb(41 69 112 / 5%);
+}
+.disparoWizardStage .contactsFilterCard::before {
+  position: absolute;
+  inset: 14px auto 14px 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #7294d1, #a4b8e6);
+  pointer-events: none;
+  content: "";
+}
+.disparoWizardStage .contactsFilterHeader {
+  padding-bottom: 13px;
+  border-bottom: 1px solid color-mix(in srgb, var(--crm-border) 55%, #a8bde0 45%);
+}
+.contactsFilterTitle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.contactsFilterTitle svg {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--crm-border) 55%, #a6bde6 45%);
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--crm-text-strong) 65%, #6288c5 35%);
+  background: color-mix(in srgb, var(--crm-surface) 74%, #d1e1fb 26%);
+}
+.disparoWizardStage .contactsFilterHeader h3 {
+  font-size: 17px;
+  font-weight: 850;
+}
+.disparoWizardStage .contactsFilterCard .advancedFiltersToggle {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid color-mix(in srgb, var(--crm-border) 57%, #a2bbe0 43%);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+}
+.disparoWizardStage .contactsFilterCard .advancedFiltersToggle:hover,
+.disparoWizardStage .contactsFilterCard .advancedFiltersToggle:focus-visible {
+  border-color: #83a5d4;
+  background: color-mix(in srgb, var(--crm-surface) 84%, #dce8ff 16%);
+}
+.disparoWizardStage .contactsFilterCard .clearFiltersButton:not(:disabled) {
+  padding: 7px 9px;
+  border: 1px dashed color-mix(in srgb, var(--crm-border) 68%, #aebfdb 32%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--crm-surface) 87%, #e2eaff 13%);
+}
+.disparoWizardStage .contactsFilterCard .label {
+  color: color-mix(in srgb, var(--crm-text-muted) 78%, #5975a0 22%);
+  font-weight: 850;
+}
+.disparoWizardStage .contactsFilterCard .input {
+  border-color: color-mix(in srgb, var(--crm-border) 65%, #bdcae6 35%);
+  background: var(--crm-surface);
 }
 
 /* Evita expor os cards de fundo durante a consolidação assíncrona da campanha. */
@@ -5703,110 +5772,163 @@
 .schedulePlanningCard {
   display: flex;
   flex-direction: column;
-  gap: 13px;
   min-width: 0;
-  padding: 16px 18px;
-  border: 1px solid color-mix(in srgb, var(--crm-primary-border) 48%, var(--crm-border) 52%);
-  border-radius: 18px;
-  background:
-    linear-gradient(115deg,
-      color-mix(in srgb, var(--crm-primary-soft) 36%, var(--crm-surface) 64%) 0%,
-      var(--crm-surface) 78%);
+  border: 1px solid color-mix(in srgb, var(--crm-border) 66%, #879bb5 34%);
+  border-radius: 19px;
+  background: var(--crm-surface);
+  overflow: hidden;
+  box-shadow: 0 7px 24px rgb(25 45 73 / 6%);
 }
+
+/* Identidade editorial, diferente do card analítico de capacidade. */
 .schedulePlanningHeader {
+  position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 18px;
+  padding: 17px 21px;
+  background:
+    radial-gradient(circle at 88% 0%, rgb(161 198 238 / 18%), transparent 38%),
+    linear-gradient(
+      112deg,
+      color-mix(in srgb, var(--crm-primary-strong) 77%, #243454 23%),
+      color-mix(in srgb, var(--crm-primary-strong) 48%, #4b678c 52%)
+    );
+}
+.schedulePlanningIntro {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   gap: 12px;
 }
-.schedulePlanningHeader > div {
+.schedulePlanningIntro > div {
   display: flex;
   flex-direction: column;
   min-width: 0;
   gap: 3px;
 }
+.schedulePlanningIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 12px;
+  color: #fff;
+  background: rgb(255 255 255 / 12%);
+}
 .schedulePlanningEyebrow {
-  color: var(--crm-primary-text);
+  color: rgb(230 246 255 / 84%);
   text-transform: uppercase;
   font-size: 10px;
   font-weight: 850;
-  letter-spacing: .075em;
+  letter-spacing: .095em;
 }
-.schedulePlanningHeader strong {
-  color: var(--crm-text-strong);
-  font-size: 15px;
+.schedulePlanningHeader .schedulePlanningIntro strong {
+  color: #fff;
+  font-size: 17px;
+  line-height: 1.3;
   font-weight: 850;
 }
 .schedulePlanningHeader p {
-  color: var(--crm-text-muted);
+  color: rgb(245 250 255 / 82%);
   font-size: 12px;
   line-height: 1.45;
   margin: 0;
 }
 .schedulePlanningHint {
-  flex-shrink: 0;
-  padding: 5px 9px;
-  border: 1px solid var(--crm-border);
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid rgb(255 255 255 / 26%);
   border-radius: 999px;
-  background: var(--crm-surface-soft);
-  color: var(--crm-text-muted);
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 750;
 }
 .schedulePlanningStats {
   display: grid;
-  grid-template-columns: minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.3fr);
-  gap: 9px;
+  grid-template-columns: minmax(0, .78fr) minmax(0, .85fr) minmax(0, 1.4fr);
+  padding: 15px 20px;
+  gap: 0;
+  background: var(--crm-surface);
 }
 .schedulePlanningStats > div {
-  min-width: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  min-width: 0;
   gap: 5px;
-  padding: 11px 13px;
-  background: var(--crm-surface);
-  border: 1px solid var(--crm-border);
-  border-radius: 12px;
+  padding: 3px 18px;
+  border-right: 1px solid var(--crm-border);
+}
+.schedulePlanningStats > div:first-child {
+  padding-left: 0;
 }
 .schedulePlanningStats > div:last-child {
-  border-color: var(--crm-primary-border);
-  background: color-mix(in srgb, var(--crm-primary-soft) 38%, var(--crm-surface) 62%);
+  padding-right: 0;
+  border-right: 0;
 }
 .schedulePlanningStats span {
   color: var(--crm-text-muted);
   font-size: 10px;
   font-weight: 850;
-  letter-spacing: .055em;
+  letter-spacing: .065em;
   text-transform: uppercase;
 }
 .schedulePlanningStats strong {
   color: var(--crm-text-strong);
-  font-size: 17px;
+  font-size: 25px;
   font-weight: 900;
-  line-height: 1.25;
+  line-height: 1.16;
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 .schedulePlanningStats > div:last-child strong {
-  font-size: 14px;
+  font-size: 15px;
+  color: var(--crm-primary-strong);
 }
 .schedulePlanningStats small {
   color: var(--crm-primary-text);
   font-size: 11px;
   line-height: 1.45;
+  font-weight: 750;
 }
 .disparoWizardStage .schedulePlanningCard .disparoWizardSchedule {
-  padding-top: 11px;
+  margin: 0 20px;
+  padding: 13px 0 18px;
   border-top: 1px solid var(--crm-border);
 }
 .disparoWizardStage .schedulePlanningCard .scheduleToggleCard {
-  padding: 12px 14px 12px 18px;
-  border-radius: 12px;
-  background: var(--crm-surface);
+  position: relative;
+  border: 1px solid var(--crm-border);
+  border-radius: 13px;
+  padding: 13px 15px;
+  background: var(--crm-surface-soft);
+  box-shadow: none;
+}
+.disparoWizardStage .schedulePlanningCard .scheduleToggleCard::before {
+  display: none;
 }
 .disparoWizardStage .schedulePlanningCard .scheduleToggleCardActive {
-  background: color-mix(in srgb, var(--crm-primary-soft) 25%, var(--crm-surface) 75%);
+  border-color: color-mix(in srgb, var(--crm-primary-strong) 50%, var(--crm-border) 50%);
+  background: color-mix(in srgb, var(--crm-primary-soft) 26%, var(--crm-surface) 74%);
+}
+.disparoWizardStage .schedulePlanningCard .scheduleToggleText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.disparoWizardStage .schedulePlanningCard .scheduleToggleText small {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 .disparoWizardStage .schedulePlanningCard .scheduleCapacityPanel {
+  border-color: var(--crm-border);
   background: var(--crm-surface);
 }
 .disparoWizardStage .metaHealthGrid {
@@ -5825,25 +5947,53 @@
   .schedulePlanningStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .schedulePlanningStats > div:nth-child(2) {
+    padding-right: 0;
+    border-right: 0;
+  }
   .schedulePlanningStats > div:last-child {
     grid-column: 1 / -1;
+    margin-top: 12px;
+    padding: 13px 0 0;
+    border-top: 1px solid var(--crm-border);
   }
   .disparoWizardStage .metaHealthGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 560px) {
-  .schedulePlanningCard {
-    padding: 13px;
-  }
   .schedulePlanningHeader {
     flex-wrap: wrap;
+    padding: 16px;
+  }
+  .schedulePlanningIcon {
+    width: 36px;
+    height: 36px;
   }
   .schedulePlanningStats,
   .disparoWizardStage .metaHealthGrid {
     grid-template-columns: 1fr;
   }
+  .schedulePlanningStats {
+    padding: 7px 16px;
+  }
+  .schedulePlanningStats > div,
+  .schedulePlanningStats > div:nth-child(2),
+  .schedulePlanningStats > div:last-child {
+    margin: 0;
+    padding: 12px 0;
+    border: 0;
+    border-bottom: 1px solid var(--crm-border);
+  }
   .schedulePlanningStats > div:last-child {
     grid-column: auto;
+    border-bottom: 0;
+  }
+  .disparoWizardStage .schedulePlanningCard .disparoWizardSchedule {
+    margin: 0 16px;
+    padding-bottom: 16px;
+  }
+  .disparoWizardStage .contactsFilterCard {
+    padding: 15px 16px;
   }
 }
