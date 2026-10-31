@@ -85,31 +85,38 @@
 }
 
 .historyAccumulatedReportButton {
-  min-height: 44px;
+  min-height: 32px;
+  width: fit-content;
+  align-self: flex-end;
   flex-shrink: 0;
-  border: 1px solid var(--crm-border);
-  background: var(--crm-surface);
-  color: var(--crm-text-strong);
-  border-radius: 14px;
-  padding: 10px 15px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--crm-text-muted);
+  border-radius: 9px;
+  padding: 6px 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   font: inherit;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 650;
   cursor: pointer;
-  transition: border-color 0.18s ease, background 0.18s ease;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
 .historyAccumulatedReportButton:hover:not(:disabled) {
-  border-color: var(--crm-primary-border);
-  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  background: var(--crm-surface-soft);
+}
+
+.historyAccumulatedReportButton:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: 2px;
 }
 
 .historyAccumulatedReportButton:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -3645,7 +3652,8 @@
   }
 
   .historyAccumulatedReportButton {
-    width: 100%;
+    width: fit-content;
+    align-self: flex-end;
   }
 
   .accumulatedReportToolbar {
@@ -6285,13 +6293,20 @@
   font-size: 12px;
   line-height: 1.5;
 }
-.campaignIssueCompactCopy > strong {
-  flex: 0 0 auto;
+.campaignIssueCompactLabel {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 8px;
+}
+.campaignIssueCompactLabel > strong {
   color: var(--campaign-issue-tone, var(--crm-text-strong));
   font-weight: 800;
 }
-.campaignIssueCompactCopy > span {
+.campaignIssueCompactCopy > .campaignIssueCompactDescription {
   color: var(--crm-text-muted);
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -6364,9 +6379,9 @@
   .campaignIssueSummary { flex-wrap: wrap; gap: 7px 9px; }
   .campaignIssueSummaryPreview { order: 2; flex-basis: 100%; }
   .campaignIssueCompactLine { flex-wrap: wrap; }
-  .campaignIssueCompactCopy { flex-basis: 100%; }
-  .campaignIssueCompactCopy > strong { white-space: normal; }
-  .campaignIssueCompactCopy > span { flex: 1; }
+  .campaignIssueCompactCopy { flex-basis: 100%; flex-wrap: wrap; }
+  .campaignIssueCompactLabel > strong { white-space: normal; }
+  .campaignIssueCompactCopy > .campaignIssueCompactDescription { flex: 1 1 170px; }
   .campaignReportFailures { padding: 11px; }
 }
 

@@ -8744,12 +8744,14 @@ export default function DisparosWhatsAppPage() {
                                     >
                                       <div className={styles.campaignIssueCompactLine}>
                                         <div className={styles.campaignIssueCompactCopy}>
-                                          <strong>{tipo.codigo ? `${tipo.codigo} · ${tipo.nome}` : tipo.nome}</strong>
-                                          <span title={tipo.resumo}>{tipo.resumo}</span>
+                                          <div className={styles.campaignIssueCompactLabel}>
+                                            <span className={styles.campaignIssueQuantity}>
+                                              {tipo.quantidade} {tipo.quantidade === 1 ? "falha" : "falhas"}
+                                            </span>
+                                            <strong>{tipo.codigo ? `${tipo.codigo} · ${tipo.nome}` : tipo.nome}</strong>
+                                          </div>
+                                          <span className={styles.campaignIssueCompactDescription} title={tipo.resumo}>{tipo.resumo}</span>
                                         </div>
-                                        <span className={styles.campaignIssueQuantity}>
-                                          {tipo.quantidade} {tipo.quantidade === 1 ? "falha" : "falhas"}
-                                        </span>
                                         <button
                                           type="button"
                                           className={styles.campaignIssueLearnMore}
