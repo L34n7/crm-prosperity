@@ -26,3 +26,5 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund --package-lock=false
       - name: Verificar TypeScript
         run: npx tsc --noEmit --pretty false
+      - name: Testar correção de captura de interesse do agente IA
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/agente-ia-interesses-captura-sql.test.mts
