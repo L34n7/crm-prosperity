@@ -1358,6 +1358,7 @@ export default function ContatosPage() {
       }
       const sucesso = data.message || "Contatos atualizados com sucesso.";
       limparSelecao();
+      setMensagem(sucesso);
       setFeedbackEmMassa({ tipo: "sucesso", texto: sucesso });
       await carregarContatos();
       await carregarOpcoesFiltros();
@@ -2051,7 +2052,11 @@ export default function ContatosPage() {
                     ))}
                   </select>
                 </label>
-
+                {origemEmMassa.startsWith("lista:") && (
+                  <p className={styles.bulkImportHint}>
+                    A lista importada não modifica a origem do contato. Use os botões específicos para adicionar ou remover vínculos.
+                  </p>
+                )}
               </div>
 
               <div className={styles.bulkActions}>
@@ -2065,7 +2070,7 @@ export default function ContatosPage() {
                       (origemEmMassa === MANTER_VALOR_EM_MASSA || origemEmMassa.startsWith("lista:")))
                   }
                 >
-                  {atualizandoEmMassa ? "Aplicando..." : "Aplicar alterações"}
+                  {atualizandoEmMassa ? "Aplicando..." : origemEmMassa.startsWith("lista:") ? "Aplicar campanha" : "Aplicar alterações"}
                 </button>
 
                 <button
@@ -2137,6 +2142,12 @@ export default function ContatosPage() {
                   {feedbackEmMassa.texto}
                 </div>
               )}
+            </div>
+          )}
+          {selecionados.size === 0 && feedbackEmMassa && (
+            <div className={`${styles.bulkFeedback} ${feedbackEmMassa.tipo === "erro" ? styles.bulkFeedbackError : styles.bulkFeedbackSuccess}`}
+              role={feedbackEmMassa.tipo === "erro" ? "alert" : "status"}>
+              {feedbackEmMassa.texto}
             </div>
           )}
 

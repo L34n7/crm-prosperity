@@ -2371,3 +2371,12 @@
   background: var(--crm-success-bg);
   color: var(--crm-success-text);
 }
+
+.bulkImportHint {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 5px 2px 0;
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
