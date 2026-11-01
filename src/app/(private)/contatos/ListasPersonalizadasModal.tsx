@@ -97,7 +97,7 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
             onDragOver={e=>e.preventDefault()}
             onDrop={e=>{e.preventDefault();const id=e.dataTransfer.getData("text/plain")||arrastando;setArrastando(null);if(id)mover(id,i);}}
             onDragEnd={()=>setArrastando(null)}
-            style={{opacity:arrastando===lista.id?.55:1}}>
+            style={{ opacity: arrastando === lista.id ? 0.55 : 1 }}>
             <div className={styles.personalListRowTop}>
               <span title="Arrastar para ordenar">⠿</span>
               <strong>{i+1}º</strong>
