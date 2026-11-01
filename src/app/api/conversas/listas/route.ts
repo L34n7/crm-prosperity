@@ -28,9 +28,11 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from("conversas_listas")
-    .select("id, nome, created_at, updated_at")
+    .select("id, nome, created_at, updated_at, exibir_atalho_conversas, ordem_exibicao")
     .eq("empresa_id", usuario.empresa_id)
-    .order("nome", { ascending: true });
+    .order("ordem_exibicao", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) {
     return NextResponse.json(
@@ -81,8 +83,9 @@ export async function POST(request: Request) {
     .insert({
       empresa_id: usuario.empresa_id,
       nome,
+      exibir_atalho_conversas: body?.exibir_atalho_conversas === true,
     })
-    .select("id, nome, created_at, updated_at")
+    .select("id, nome, created_at, updated_at, exibir_atalho_conversas, ordem_exibicao")
     .single();
 
   if (error) {
@@ -122,51 +125,37 @@ export async function PUT(request: Request) {
 
   const body = await request.json();
   const listaId = body?.lista_id;
-  const nome = body?.nome?.trim();
-
+  const listaId = String(body?.lista_id || "").trim();
   if (!listaId) {
-    return NextResponse.json(
-      { ok: false, error: "lista_id é obrigatório" },
-      { status: 400 }
-    );
-  }
-
-  if (!nome) {
-    return NextResponse.json(
-      { ok: false, error: "Nome da lista é obrigatório" },
-      { status: 400 }
-    );
+    return NextResponse.json({ ok: false, error: "lista_id é obrigatório" }, { status: 400 });
   }
 
   const { data: lista, error: listaError } = await supabaseAdmin
     .from("conversas_listas")
-    .select("id, empresa_id")
-    .eq("id", listaId)
-    .maybeSingle();
+    .select("id, empresa_id, nome, exibir_atalho_conversas")
+    .eq("id", listaId).eq("empresa_id", usuario.empresa_id).maybeSingle();
 
-  if (listaError) {
-    return NextResponse.json(
-      { ok: false, error: listaError.message },
-      { status: 500 }
-    );
-  }
+  if (listaError) return NextResponse.json({ ok: false, error: listaError.message }, { status: 500 });
+  if (!lista) return NextResponse.json({ ok: false, error: "Lista não encontrada" }, { status: 404 });
 
-  if (!lista || lista.empresa_id !== usuario.empresa_id) {
-    return NextResponse.json(
-      { ok: false, error: "Lista não encontrada" },
-      { status: 404 }
-    );
+  const atualizacoes: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const renomear = typeof body?.nome === "string";
+  const alterarAtalho = typeof body?.exibir_atalho_conversas === "boolean";
+  if (!renomear && !alterarAtalho) {
+    return NextResponse.json({ ok: false, error: "Informe nome ou visibilidade do atalho." }, { status: 400 });
   }
+  if (renomear) {
+    const nome = body.nome.trim();
+    if (!nome || nome.length > 160) return NextResponse.json({ ok: false, error: "Nome inválido (máximo 160 caracteres)." }, { status: 400 });
+    atualizacoes.nome = nome;
+  }
+  if (alterarAtalho) atualizacoes.exibir_atalho_conversas = body.exibir_atalho_conversas;
 
   const { data, error } = await supabaseAdmin
     .from("conversas_listas")
-    .update({
-      nome,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", listaId)
-    .eq("empresa_id", usuario.empresa_id)
-    .select("id, nome, created_at, updated_at")
+    .update(atualizacoes)
+    .eq("id", listaId).eq("empresa_id", usuario.empresa_id)
+    .select("id, nome, created_at, updated_at, exibir_atalho_conversas, ordem_exibicao")
     .single();
 
   if (error) {

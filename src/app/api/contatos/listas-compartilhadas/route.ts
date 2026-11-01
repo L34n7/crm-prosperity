@@ -32,9 +32,11 @@ export async function GET() {
 
   const { data: listas, error } = await supabaseAdmin
     .from("conversas_listas")
-    .select("id, nome, created_at, updated_at")
+    .select("id, nome, created_at, updated_at, exibir_atalho_conversas, ordem_exibicao")
     .eq("empresa_id", usuario.empresa_id)
-    .order("nome", { ascending: true });
+    .order("ordem_exibicao", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (error) {
     return NextResponse.json(
@@ -131,8 +133,9 @@ export async function POST(request: Request) {
     .insert({
       empresa_id: usuario.empresa_id,
       nome,
+      exibir_atalho_conversas: body.exibir_atalho_conversas === true,
     })
-    .select("id, nome, created_at, updated_at")
+    .select("id, nome, created_at, updated_at, exibir_atalho_conversas, ordem_exibicao")
     .single();
 
   if (error || !lista) {

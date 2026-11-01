@@ -42,7 +42,7 @@ async function contextoLista(id: string) {
 
   const { data: lista, error } = await supabaseAdmin
     .from("conversas_listas")
-    .select("id, nome, created_at, updated_at")
+    .select("id, nome, created_at, updated_at, exibir_atalho_conversas, ordem_exibicao")
     .eq("empresa_id", usuario.empresa_id)
     .eq("id", id)
     .maybeSingle();
@@ -115,28 +115,28 @@ export async function PATCH(
     }
   } catch {}
 
-  const nome = String(body.nome || "").trim();
-
-  if (!nome) {
-    return NextResponse.json(
-      { ok: false, error: "Informe o nome da lista." },
-      { status: 400 }
-    );
+  const atualizacoes: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const alterandoNome = typeof body.nome === "string";
+  const alterandoAtalho = typeof body.exibir_atalho_conversas === "boolean";
+  if (!alterandoNome && !alterandoAtalho) {
+    return NextResponse.json({ ok: false, error: "Informe o nome ou a visibilidade do atalho." }, { status: 400 });
   }
-
-  if (nome.length > 160) {
-    return NextResponse.json(
-      { ok: false, error: "O nome da lista deve ter no máximo 160 caracteres." },
-      { status: 400 }
-    );
+  let nome = lista.nome;
+  if (alterandoNome) {
+    nome = String(body.nome).trim();
+    if (!nome || nome.length > 160) {
+      return NextResponse.json({ ok: false, error: "Informe um nome com até 160 caracteres." }, { status: 400 });
+    }
+    atualizacoes.nome = nome;
   }
+  if (alterandoAtalho) atualizacoes.exibir_atalho_conversas = body.exibir_atalho_conversas;
 
   const { data: atualizada, error } = await supabaseAdmin
     .from("conversas_listas")
-    .update({ nome, updated_at: new Date().toISOString() })
+    .update(atualizacoes)
     .eq("empresa_id", usuario.empresa_id)
     .eq("id", id)
-    .select("id, nome, created_at, updated_at")
+    .select("id, nome, created_at, updated_at, exibir_atalho_conversas, ordem_exibicao")
     .single();
 
   if (error) {
@@ -158,8 +158,8 @@ export async function PATCH(
     categoria: "contatos",
     entidade: "lista_contatos",
     entidade_id: id,
-    acao: "lista_compartilhada_renomeada",
-    descricao: `Lista "${lista.nome}" renomeada para "${nome}"`,
+    acao: alterandoNome ? "lista_compartilhada_renomeada" : "lista_personalizada_atalho_alterado",
+    descricao: alterandoNome ? `Lista "${lista.nome}" renomeada para "${nome}"` : `Atalho de "${lista.nome}" atualizado`,
     usuario_id: usuario.id,
     usuario_nome: usuario.nome,
     usuario_email: usuario.email,

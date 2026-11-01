@@ -100,9 +100,11 @@ export async function GET(
 
   const { data: listas, error: listasError } = await supabaseAdmin
     .from("conversas_listas")
-    .select("id, nome")
+    .select("id, nome, exibir_atalho_conversas, ordem_exibicao")
     .eq("empresa_id", empresaId)
-    .order("nome", { ascending: true });
+    .order("ordem_exibicao", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
 
   if (listasError) {
     return NextResponse.json(
