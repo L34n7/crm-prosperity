@@ -124,7 +124,6 @@ export async function PUT(request: Request) {
   }
 
   const body = await request.json();
-  const listaId = body?.lista_id;
   const listaId = String(body?.lista_id || "").trim();
   if (!listaId) {
     return NextResponse.json({ ok: false, error: "lista_id é obrigatório" }, { status: 400 });
