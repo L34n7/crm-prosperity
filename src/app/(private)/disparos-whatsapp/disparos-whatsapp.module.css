@@ -6693,29 +6693,36 @@
   line-height: 1.4;
 }
 .dispatchCapacityOption span {
-  color: var(--crm-text-muted);
-  font-size: 13px;
-  line-height: 1.5;
+  color: var(--crm-text-strong);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.dispatchCapacityOptionImmediate span {
+  font-size: 20px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
 }
 .dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected {
-  border-color: #1a7059;
-  background: linear-gradient(120deg, #185846 0%, #267a62 52%, #3c9779 100%);
-  box-shadow: 0 12px 24px rgb(22 102 80 / 24%),
-              inset 0 1px 0 rgb(255 255 255 / 20%);
+  border-color: #77caaa;
+  background: linear-gradient(120deg, #e9f9f1 0%, #d1f1e1 53%, #b9e8d3 100%);
+  box-shadow: 0 11px 24px rgb(37 119 89 / 15%),
+              inset 0 1px 0 rgb(255 255 255 / 85%);
 }
 .dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected strong,
 .dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected span {
-  color: var(--crm-text-inverse);
+  color: #16543d;
 }
 .dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected {
-  border-color: #d8a23a;
-  background: linear-gradient(120deg, #f9e9bb 0%, #f3cc72 53%, #eab54e 100%);
-  box-shadow: 0 12px 24px rgb(148 98 28 / 17%),
-              inset 0 1px 0 rgb(255 255 255 / 60%);
+  border-color: #e7be69;
+  background: linear-gradient(120deg, #fff9e8 0%, #fff0c9 53%, #f9dfa2 100%);
+  box-shadow: 0 11px 24px rgb(161 112 31 / 14%),
+              inset 0 1px 0 rgb(255 255 255 / 88%);
 }
 .dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected strong,
 .dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected span {
-  color: #513609;
+  color: #6b480e;
 }
 .dispatchCapacitySuggestion {
   display: flex;
@@ -6891,8 +6898,8 @@
 }
 .disparoWizardStage .metaHealthGrid > div > span:first-child { margin-bottom: 4px; }
 .disparoWizardStage .metaHealthGrid > div strong.metaHealthMainValue {
-  font-size: 29px;
-  line-height: 1.12;
+  font-size: 24px;
+  line-height: 1.2;
   font-weight: 900;
   overflow-wrap: anywhere;
 }

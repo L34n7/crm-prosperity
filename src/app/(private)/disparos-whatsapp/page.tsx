@@ -6689,7 +6689,7 @@ export default function DisparosWhatsAppPage() {
 
                           <details className={styles.dispatchCapacityReleases}>
                             <summary>
-                              <span><Info size={19} aria-hidden="true" /><strong>Liberação da capacidade</strong></span>
+                              <span><Info size={19} aria-hidden="true" /><strong>Detalhes das próximas liberações de capacidade</strong></span>
                               <span>{liberacoesPlanejamento.length} {liberacoesPlanejamento.length === 1 ? "horário" : "horários"} <ChevronDown size={16} aria-hidden="true" /></span>
                             </summary>
                             <div className={styles.dispatchCapacityReleaseBody}>
