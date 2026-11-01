@@ -258,13 +258,24 @@
 .modalFooter > button {
   min-height: 40px;
   padding: 0 13px;
-  border: 1px solid var(--crm-primary-strong);
+  border: 1px solid var(--crm-ui-private-surface-hex-06273c, #06273c);
   border-radius: 10px;
-  color: var(--crm-primary-contrast);
-  background: var(--crm-primary-strong);
+  color: var(--crm-text-inverse, #fff);
+  background: var(--crm-ui-private-surface-hex-06273c, #06273c);
   cursor: pointer;
   font-size: 13px;
   font-weight: 800;
+  transition: background .18s ease, border-color .18s ease;
+}
+.primaryButton:hover:not(:disabled),
+.modalFooter > button:hover:not(:disabled) {
+  background: var(--crm-ui-private-surface-hex-07314b, #07314b);
+  border-color: var(--crm-ui-private-surface-hex-07314b, #07314b);
+}
+.primaryButton:disabled,
+.modalFooter > button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
 }
 
 .variablesList {
@@ -319,8 +330,14 @@
   font-weight: 800;
 }
 
-.deleteButton {
-  color: var(--crm-text-muted) !important;
+.variableItem .deleteButton {
+  color: var(--crm-danger-text);
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+}
+.variableItem .deleteButton:hover:not(:disabled) {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
 }
 
 .error,

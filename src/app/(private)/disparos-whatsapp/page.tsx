@@ -6302,6 +6302,7 @@ export default function DisparosWhatsAppPage() {
     }
     if (agendamentoInvalidoPeloLimiteMeta) {
       setErro("Ajuste o agendamento de acordo com a capacidade da Meta.");
+      setEtapaDisparo(2);
       destacarCampoDisparo("horario");
       return;
     }
@@ -6591,7 +6592,6 @@ export default function DisparosWhatsAppPage() {
                       {etapaDisparo === 1 ? (
                         <div className={styles.disparoWizardStage}>
                     <div className={styles.setupColumn}>
-                      {campoPendente && erro && etapaDisparo === 1 ? orientacaoCampoDisparo(campoPendente) : null}
                       <div className={styles.field} data-disparo-campo="integracao" data-disparo-invalido={campoPendente === "integracao"} data-disparo-destaque={campoAnimando === "integracao"}>
                         <label className={styles.label}>Número WhatsApp</label>
                         <select
@@ -6625,6 +6625,7 @@ export default function DisparosWhatsAppPage() {
                             </option>
                           ))}
                         </select>
+                        {orientacaoCampoDisparo("integracao")}
                       </div>
 
                       <div className={styles.field} data-disparo-campo="template" data-disparo-invalido={campoPendente === "template"} data-disparo-destaque={campoAnimando === "template"}>
@@ -6649,6 +6650,7 @@ export default function DisparosWhatsAppPage() {
                             </option>
                           ))}
                         </select>
+                        {orientacaoCampoDisparo("template")}
                       </div>
 
                       <div className={`${styles.field} ${styles.campaignNameField}`}>
@@ -6767,6 +6769,7 @@ export default function DisparosWhatsAppPage() {
                               />
                             ) : null}
                           </div>
+                          {orientacaoCampoDisparo("variaveis")}
                         </>
                       ) : null}
                   </div>
@@ -6779,7 +6782,6 @@ export default function DisparosWhatsAppPage() {
 
                       {etapaDisparo === 2 ? (
                         <div className={styles.disparoWizardStage}>
-                          {campoPendente && erro && etapaDisparo === 2 ? orientacaoCampoDisparo(campoPendente) : null}
                           <section className={`${styles.metaHealthCard} ${limiteMeta?.alerta === "vermelho" ? styles.metaHealthDanger : limiteMeta?.alerta === "amarelo" ? styles.metaHealthWarning : ""}`}
                             aria-label="Controle preventivo da Meta" data-disparo-campo="capacidade" data-disparo-invalido={campoPendente === "capacidade"} data-disparo-destaque={campoAnimando === "capacidade"}>
                             <div className={styles.metaHealthHeader}>
@@ -6832,6 +6834,7 @@ export default function DisparosWhatsAppPage() {
                               </div>
                             </div>
                             <p className={styles.metaHealthNote}>A previsão não reserva vagas: a Meta revalida o limite quando o disparo for executado.</p>
+                            {orientacaoCampoDisparo("capacidade")}
                           </section>
 
                           <details className={styles.dispatchCapacityReleases}>
@@ -6881,6 +6884,7 @@ export default function DisparosWhatsAppPage() {
                                 }} />
                               <span>{limiteMeta ? `${formatarNumeroMeta(capacidadeAgoraPlanejamento)} disponíveis agora` : "Consultando..."}</span>
                             </div>
+                            {orientacaoCampoDisparo("quantidade")}
                             <div className={styles.dispatchCapacitySuggestion} role="note">
                               <Info size={18} aria-hidden="true" />
                               <span>
@@ -6969,6 +6973,7 @@ export default function DisparosWhatsAppPage() {
                                   <strong>Agendar quantidade desejada</strong>
                                   <span>{horarioCapacidadeDesejada ? formatarDataHora(horarioSugeridoAgendamento) : "Escolher data e hora"}</span>
                                 </button>
+                                {orientacaoCampoDisparo("momento")}
                               </div>
                             ) : null}
 
@@ -6991,6 +6996,7 @@ export default function DisparosWhatsAppPage() {
                                     onChange={(e) => setAgendamentoHora(e.target.value)} />
                                 </label>
                                 <p>Horário sugerido preenchido automaticamente. É possível ajustá-lo, desde que haja capacidade prevista.</p>
+                                {orientacaoCampoDisparo("horario")}
                               </div>
                             ) : null}
                             </div>
@@ -7001,7 +7007,6 @@ export default function DisparosWhatsAppPage() {
                       ) : null}
                       {etapaDisparo === 3 ? (
                         <div className={styles.disparoWizardStage}>
-                          {campoPendente && erro && etapaDisparo === 3 ? orientacaoCampoDisparo(campoPendente) : null}
                           <section className={styles.reserveContactsCard}>
                             <label className={styles.reserveContactsHeading}>
                               <span className={styles.reserveContactsIcon} aria-hidden="true"><ShieldCheck size={19} /></span>
@@ -7356,6 +7361,7 @@ export default function DisparosWhatsAppPage() {
 
                 <div className={styles.contactsSection} data-disparo-campo="contatos" data-disparo-invalido={campoPendente === "contatos"} data-disparo-destaque={campoAnimando === "contatos"}>
                   <div className={styles.contactsColumn}>
+                    {orientacaoCampoDisparo("contatos")}
                     <div className={styles.contactsHeader}>
                       <h3 className={styles.contactsTitle}>Disponíveis</h3>
 
@@ -7704,6 +7710,7 @@ export default function DisparosWhatsAppPage() {
                       </span>
                     </div>
 
+                    {orientacaoCampoDisparo("conflitos")}
                     {erroConflitos ? (
                       <p className={styles.conflictError}>{erroConflitos}</p>
                     ) : null}
@@ -7794,6 +7801,7 @@ export default function DisparosWhatsAppPage() {
                     </div>
                     <span className={styles.capacityResolutionBadge}>{contatosSelecionados.length > 0 ? "Seleção pronta" : "Aguardando contatos"}</span>
                   </div>
+                  {orientacaoCampoDisparo("custo")}
                   <div className={`${styles.capacityResolutionStats} ${!contatosReservaAtivos ? styles.capacityResolutionStatsCompact : ""}`}>
                     <div className={styles.capacityResolutionStat}>
                       <strong>{formatarNumeroMeta(contatosPrincipais.length)}</strong>
@@ -7967,7 +7975,6 @@ export default function DisparosWhatsAppPage() {
                 data-disparo-campo="confirmacao-cobranca"
                 data-disparo-invalido={campoPendente === "confirmacao-cobranca"} data-disparo-destaque={campoAnimando === "confirmacao-cobranca"}
               >
-                {orientacaoCampoDisparo("confirmacao-cobranca")}
                 <input
                   type="checkbox"
                   checked={confirmacaoCobranca}
@@ -7990,6 +7997,7 @@ export default function DisparosWhatsAppPage() {
                   <small>Marque esta opção para confirmar sua ciência antes de concluir.</small>
                 </span>
               </label>
+              {orientacaoCampoDisparo("confirmacao-cobranca")}
             </div>
                         </div>
                       ) : null}
