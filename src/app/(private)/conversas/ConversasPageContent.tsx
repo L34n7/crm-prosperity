@@ -1,4 +1,5 @@
 "use client";
+import AtalhosListasPersonalizadas from "./AtalhosListasPersonalizadas";
 
 import React, {
   Fragment,
@@ -1194,6 +1195,8 @@ export default function ConversasPageContent() {
 
   const [listasConversa, setListasConversa] = useState<ListaConversa[]>([]);
   const [novaListaNome, setNovaListaNome] = useState("");
+  const [novaListaAtalho, setNovaListaAtalho] = useState(false);
+  const [atualizandoListas, setAtualizandoListas] = useState(false);
   const [salvandoLista, setSalvandoLista] = useState(false);
 
   const [listasEmpresa, setListasEmpresa] = useState<ListaEmpresa[]>([]);
@@ -4686,6 +4689,43 @@ export default function ConversasPageContent() {
     }
   }
 
+  async function alternarAtalhoLista(lista: ListaEmpresa) {
+    if (atualizandoListas) return;
+    setAtualizandoListas(true);
+    try {
+      const r = await fetch("/api/conversas/listas", { method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lista_id: lista.id, exibir_atalho_conversas: !lista.exibir_atalho_conversas }) });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Não foi possível alterar o atalho.");
+      if (lista.exibir_atalho_conversas && listaFiltroId === lista.id) setListaFiltroId(null);
+      setMensagemSucesso(lista.exibir_atalho_conversas ? "Atalho ocultado." : "Atalho exibido.");
+      await Promise.all([carregarListasEmpresa(), carregarListasDaConversa()]);
+    } catch(e) { setErro(e instanceof Error ? e.message : "Erro ao alterar atalho."); }
+    finally { setAtualizandoListas(false); }
+  }
+
+  async function moverListaPrioridade(id: string, passo: number) {
+    if (atualizandoListas) return;
+    const origem = listasEmpresa.findIndex(l => l.id === id), destino=origem+passo;
+    if (origem<0 || destino<0 || destino>=listasEmpresa.length) return;
+    const ordem = [...listasEmpresa];
+    const [movida] = ordem.splice(origem, 1);
+    ordem.splice(destino, 0, movida);
+    setAtualizandoListas(true);
+    try {
+      const r = await fetch("/api/contatos/listas-compartilhadas/ordem", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lista_ids: ordem.map(l => l.id) }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Não foi possível alterar a prioridade.");
+      setMensagemSucesso("Prioridade das listas salva.");
+      await Promise.all([carregarListasEmpresa(), carregarListasDaConversa()]);
+    } catch(e) { setErro(e instanceof Error ? e.message : "Erro ao reordenar listas."); }
+    finally { setAtualizandoListas(false); }
+  }
+
   async function carregarListasEmpresa() {
     try {
       const res = await fetch("/api/conversas/listas", {
@@ -7677,21 +7717,16 @@ const templateFooterTexto = useMemo(() => {
                   Sem responsável
                 </button>
 
-                {listasEmpresa.map((lista) => (
-                  <button
-                    key={lista.id}
-                    className={`${styles.quickChip} ${
-                      listaFiltroId === lista.id ? styles.quickChipActive : ""
-                    }`}
-                    onClick={() => {
-                      setListaFiltroId((atual) => (atual === lista.id ? null : lista.id));
-                      setChipRapido("Todas");
-                    }}
-                  >
-                    {lista.nome}
-                  </button>
-                ))}          
+          
               </div>
+              <AtalhosListasPersonalizadas
+                listas={listasEmpresa}
+                selecionada={listaFiltroId}
+                onSelecionar={(id) => {
+                  setListaFiltroId((atual) => atual===id ? null : id);
+                  setChipRapido("Todas");
+                }}
+              />
             </div>
 
             <div
@@ -8052,7 +8087,7 @@ const templateFooterTexto = useMemo(() => {
                                     setPainelDireitoAberto(true);
                                     setAbaPainelDireito("listas");
                                     setMenuContatoAberto(false);
-                                    await carregarListasDaConversa();
+                                    await Promise.all([carregarListasDaConversa(), carregarListasEmpresa()]);
                                   }}
                                 >
                                   Adicionar à lista
@@ -11592,6 +11627,7 @@ const templateFooterTexto = useMemo(() => {
                                     },
                                     body: JSON.stringify({
                                       nome: novaListaNome.trim(),
+                                      exibir_atalho_conversas: novaListaAtalho,
                                     }),
                                   });
 
@@ -11603,6 +11639,7 @@ const templateFooterTexto = useMemo(() => {
                                   }
 
                                   setNovaListaNome("");
+                                  setNovaListaAtalho(false);
                                   setMensagemSucesso(data.message || "Lista criada com sucesso");
                                   await carregarListasDaConversa();
                                 } catch {
@@ -11614,6 +11651,11 @@ const templateFooterTexto = useMemo(() => {
                             >
                               Criar lista
                             </button>
+                            <label className={styles.listaAtalhoCheckbox}>
+                              <input type="checkbox" checked={novaListaAtalho} disabled={salvandoLista}
+                                onChange={e => setNovaListaAtalho(e.target.checked)}/>
+                              Exibir como atalho na lista de conversas
+                            </label>
                           </div>
 
                           {listasConversa.length === 0 ? (
@@ -11668,6 +11710,18 @@ const templateFooterTexto = useMemo(() => {
                                   </button>
 
                                   <div className={styles.listaActions}>
+                                    <button type="button" className={styles.listaIconButton} disabled={atualizandoListas}
+                                      title={lista.exibir_atalho_conversas ? "Ocultar atalho" : "Exibir atalho"}
+                                      aria-label={`${lista.exibir_atalho_conversas ? "Ocultar" : "Exibir"} atalho de ${lista.nome}`}
+                                      onClick={() => { const item=listasEmpresa.find(l=>l.id===lista.id); if(item) void alternarAtalhoLista(item); }}>
+                                      {lista.exibir_atalho_conversas ? "◉" : "○"}
+                                    </button>
+                                    <button type="button" className={styles.listaIconButton} title="Subir prioridade"
+                                      aria-label={`Subir ${lista.nome}`} disabled={atualizandoListas || listasEmpresa[0]?.id===lista.id}
+                                      onClick={() => void moverListaPrioridade(lista.id,-1)}>↑</button>
+                                    <button type="button" className={styles.listaIconButton} title="Descer prioridade"
+                                      aria-label={`Descer ${lista.nome}`} disabled={atualizandoListas || listasEmpresa.at(-1)?.id===lista.id}
+                                      onClick={() => void moverListaPrioridade(lista.id,1)}>↓</button>
                                     <button
                                       type="button"
                                       className={styles.listaIconButton}
