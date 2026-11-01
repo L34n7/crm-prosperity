@@ -12,6 +12,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import FeedbackToast from "@/components/FeedbackToast";
+import InteressesIdentificadosIa from "@/components/InteressesIdentificadosIa";
+import type { InteresseIdentificadoIa } from "@/lib/agentes-ia/interesses-identificados";
 import Header from "@/components/Header";
 import ContatoCadastroNichoAction from "@/components/conversas/ContatoCadastroNichoAction";
 import { solicitarAtualizacaoConversasNaoLidasHeader } from "@/lib/header-summary/events";
@@ -281,6 +283,9 @@ export default function ConversasPageContent() {
   const [contatoCapturaId, setContatoCapturaId] = useState("");
   const [campoContatoConversa, setCampoContatoConversa] = useState("");
   const [interesseContatoConversa, setInteresseContatoConversa] = useState("");
+  const [interessesIdentificadosIa, setInteressesIdentificadosIa] =
+    useState<InteresseIdentificadoIa[]>([]);
+  const [erroInteressesIdentificadosIa, setErroInteressesIdentificadosIa] = useState(false);
   const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
     useState(false);
 
@@ -410,6 +415,10 @@ export default function ConversasPageContent() {
       setContatoCapturaId(String(data?.contato_id || "").trim());
       setCampoContatoConversa(String(data?.campo_contato || "").trim());
       setInteresseContatoConversa(String(data?.interesse || "").trim());
+      setInteressesIdentificadosIa(
+        Array.isArray(data?.interesses_ia) ? data.interesses_ia : []
+      );
+      setErroInteressesIdentificadosIa(Boolean(data?.interesses_ia_erro));
       setInformacoesCapturaConversa(
         Array.isArray(data.informacoes)
           ? data.informacoes.filter(
@@ -426,6 +435,8 @@ export default function ConversasPageContent() {
       setCampoContatoConversa("");
       setInteresseContatoConversa("");
       setInformacoesCapturaConversa([]);
+      setInteressesIdentificadosIa([]);
+      setErroInteressesIdentificadosIa(true);
       console.error("[capturas-conversa]", error);
     } finally {
       if (!signal?.aborted && conversaSelecionadaIdRef.current === conversaId) {
@@ -442,6 +453,8 @@ export default function ConversasPageContent() {
     setCampoContatoConversa("");
     setInteresseContatoConversa("");
     setInformacoesCapturaConversa([]);
+    setInteressesIdentificadosIa([]);
+    setErroInteressesIdentificadosIa(false);
     setCarregandoInformacoesCaptura(Boolean(conversaId));
 
     if (conversaId) {
@@ -10228,6 +10241,14 @@ const templateFooterTexto = useMemo(() => {
                                 onCancelar={() => setEditandoCampo(null)}
                                 onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
                                 podeEditar={podeEditarContatoConversa}
+                              />
+
+                              <InteressesIdentificadosIa
+                                key={String(conversaSelecionada?.contatos?.id || conversaSelecionada.id)}
+                                interesses={interessesIdentificadosIa}
+                                carregando={carregandoInformacoesCaptura}
+                                erro={erroInteressesIdentificadosIa}
+                                compacto
                               />
 
                               {informacoesCapturaResumo.map((informacao) => (
