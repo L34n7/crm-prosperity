@@ -72,11 +72,7 @@ export default function InteressesIdentificadosIa({
                         {interesse.origem === "captura" ? "Registrado pela IA" : "Histórico da IA"}
                       </span>
                     )}
-                    {data && (
-                      <span>
-                        {interesse.tipo_data === "captura" ? "Capturado" : "Estado atualizado"} em {data}
-                      </span>
-                    )}
+                    {data && <span>{data}</span>}
                     {!ocultarHistoricoEAtalho && interesse.conversa_id && (
                       <Link
                         href={`/conversas?id=${encodeURIComponent(interesse.conversa_id)}`}
