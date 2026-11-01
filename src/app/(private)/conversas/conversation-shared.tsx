@@ -404,11 +404,15 @@ export type ListaConversa = {
   id: string;
   nome: string;
   marcada: boolean;
+  exibir_atalho_conversas: boolean;
+  ordem_exibicao: number | null;
 };
 
 export type ListaEmpresa = {
   id: string;
   nome: string;
+  exibir_atalho_conversas: boolean;
+  ordem_exibicao: number | null;
 };
 
 export type ChipRapido =
