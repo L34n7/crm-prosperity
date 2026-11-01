@@ -3,6 +3,7 @@ import { getUsuarioContexto, type UsuarioContexto } from "@/lib/auth/get-usuario
 import { validarCaptura } from "@/lib/automacoes/captura-normalizacao";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarInteressesIdentificadosContato } from "@/lib/agentes-ia/listar-interesses-identificados";
+import type { InteresseIdentificadoIa } from "@/lib/agentes-ia/interesses-identificados";
 
 function temPermissao(
   usuario: UsuarioContexto,
@@ -55,10 +56,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       : informacao;
   });
 
-  let interessesIa = [];
+  let interessesIa: InteresseIdentificadoIa[] = [];
   let interessesIaErro = false;
   try {
-    interessesIa = await listarInteressesIdentificadosContato(acesso.usuario.empresa_id, id);
+    interessesIa = await listarInteressesIdentificadosContato(acesso.usuario.empresa_id!, id);
   } catch (erro) {
     console.error("[interesses-ia-contato]", erro);
     interessesIaErro = true;
