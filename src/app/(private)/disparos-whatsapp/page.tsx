@@ -2333,6 +2333,7 @@ export default function DisparosWhatsAppPage() {
   const [quantidadePlanejada, setQuantidadePlanejada] = useState("");
   const [contatosReservaAtivos, setContatosReservaAtivos] = useState(false);
   const [campoPendente, setCampoPendente] = useState("");
+  const [campoAnimando, setCampoAnimando] = useState("");
   const formularioDisparosRef = useRef<HTMLFormElement>(null);
   const [planoCapacidadeConfirmado, setPlanoCapacidadeConfirmado] = useState<"imediato" | "agendado" | null>(null);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
@@ -6131,25 +6132,73 @@ export default function DisparosWhatsAppPage() {
     if (disparando) return;
     setModalCriacaoDisparoAberto(false);
     setErro("");
+    setCampoPendente("");
+    setCampoAnimando("");
   }
 
   function destacarCampoDisparo(campo: string) {
+    setCampoPendente(campo);
+    setCampoAnimando("");
+    window.requestAnimationFrame(() => setCampoAnimando(campo));
+  }
+
+  function limparErroDisparo(campo: string) {
+    if (campoPendente !== campo) return;
     setCampoPendente("");
-    window.requestAnimationFrame(() => setCampoPendente(campo));
+    setCampoAnimando("");
+    setErro("");
+  }
+
+  function orientacaoCampoDisparo(campo: string) {
+    return campoPendente === campo && erro ? (
+      <div className={styles.disparoWizardFieldError} role="alert">
+        <AlertTriangle size={16} aria-hidden="true" />
+        <span>{erro}</span>
+      </div>
+    ) : null;
   }
 
   useEffect(() => {
-    if (!campoPendente || !modalCriacaoDisparoAberto) return;
-    const alvo = document.querySelector<HTMLElement>(`[data-disparo-campo="${campoPendente}"]`);
-    if (!alvo) return;
-    alvo.scrollIntoView({ behavior: "smooth", block: "center" });
-    const controle = alvo.matches("input,select,button")
-      ? alvo
-      : alvo.querySelector<HTMLElement>("input:not(:disabled),select:not(:disabled),button:not(:disabled)");
-    controle?.focus({ preventScroll: true });
-    const timeout = window.setTimeout(() => setCampoPendente(""), 3000);
+    if (!campoAnimando || !modalCriacaoDisparoAberto) return;
+    const alvo = formularioDisparosRef.current?.querySelector<HTMLElement>(
+      `[data-disparo-campo="${campoAnimando}"]`
+    );
+    if (alvo) {
+      alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+      const controle = alvo.matches("input,select,button")
+        ? alvo
+        : alvo.querySelector<HTMLElement>("input:not(:disabled),select:not(:disabled),button:not(:disabled)");
+      controle?.focus({ preventScroll: true });
+    }
+    const timeout = window.setTimeout(() => setCampoAnimando(""), 2700);
     return () => window.clearTimeout(timeout);
-  }, [campoPendente, etapaDisparo, modalCriacaoDisparoAberto]);
+  }, [campoAnimando, etapaDisparo, modalCriacaoDisparoAberto]);
+
+  useEffect(() => {
+    if (!campoPendente) return;
+    const resolvido =
+      (campoPendente === "integracao" && Boolean(integracaoId)) ||
+      (campoPendente === "template" && Boolean(templateId)) ||
+      (campoPendente === "variaveis" && !temVariaveisObrigatoriasPendentes) ||
+      (campoPendente === "capacidade" && !loadingSaudeMeta && Boolean(limiteMeta)) ||
+      (campoPendente === "quantidade" && quantidadeDesejada > 0 && !quantidadeExcedeLimiteTotal) ||
+      (campoPendente === "momento" && Boolean(planoCapacidadeConfirmado)) ||
+      (campoPendente === "horario" && Boolean(agendamentoData && agendamentoHora &&
+        new Date(`${agendamentoData}T${agendamentoHora}:00`).getTime() > Date.now())) ||
+      (campoPendente === "contatos" && contatosSelecionados.length > 0 &&
+        contatosSelecionados.length <= limiteContatosSelecao) ||
+      (campoPendente === "conflitos" && !loadingConflitos && !temConflitosPendentes) ||
+      (campoPendente === "custo" && !loadingPreviewCusto && Boolean(previewCusto)) ||
+      (campoPendente === "confirmacao-cobranca" && confirmacaoCobranca);
+    if (resolvido) limparErroDisparo(campoPendente);
+  }, [
+    campoPendente, integracaoId, templateId, temVariaveisObrigatoriasPendentes,
+    loadingSaudeMeta, limiteMeta, quantidadeDesejada, quantidadeExcedeLimiteTotal,
+    planoCapacidadeConfirmado, agendamentoData, agendamentoHora,
+    contatosSelecionados.length, limiteContatosSelecao,
+    loadingConflitos, temConflitosPendentes, loadingPreviewCusto,
+    previewCusto, confirmacaoCobranca
+  ]);
 
   useEffect(() => {
     if (!modalCriacaoDisparoAberto || !window.matchMedia("(max-width: 700px)").matches) return;
@@ -6158,6 +6207,8 @@ export default function DisparosWhatsAppPage() {
 
   function avancarEtapaDisparo() {
     setErro("");
+    setCampoPendente("");
+    setCampoAnimando("");
     if (etapaDisparo === 1) {
       if (!integracaoId) { setErro("Selecione um número WhatsApp."); destacarCampoDisparo("integracao"); return; }
       if (!templateId) { setErro("Selecione um template aprovado."); destacarCampoDisparo("template"); return; }
@@ -6299,6 +6350,8 @@ export default function DisparosWhatsAppPage() {
     }
 
     setErro("");
+    setCampoPendente("");
+    setCampoAnimando("");
     setConfirmacaoCobranca(false);
     setConfirmacaoResponsabilidadeListaFria(false);
     setEtapaDisparo(4);
@@ -6519,7 +6572,12 @@ export default function DisparosWhatsAppPage() {
                             etapaDisparo > item.numero ? styles.disparoWizardStepCompleted : "",
                           ].filter(Boolean).join(" ")}
                           aria-current={etapaDisparo === item.numero ? "step" : undefined}
-                          onClick={() => { setEtapaDisparo(item.numero as 1 | 2 | 3 | 4); setErro(""); }}>
+                          onClick={() => {
+                          setEtapaDisparo(item.numero as 1 | 2 | 3 | 4);
+                          setErro("");
+                          setCampoPendente("");
+                          setCampoAnimando("");
+                        }}>
                           <span>{item.numero}<span className={styles.disparoWizardStepTotal}>/4</span></span><strong>{item.titulo}</strong>
                         </button>
                       ))}
@@ -6533,7 +6591,8 @@ export default function DisparosWhatsAppPage() {
                       {etapaDisparo === 1 ? (
                         <div className={styles.disparoWizardStage}>
                     <div className={styles.setupColumn}>
-                      <div className={styles.field} data-disparo-campo="integracao" data-disparo-destaque={campoPendente === "integracao"}>
+                      {campoPendente && erro && etapaDisparo === 1 ? orientacaoCampoDisparo(campoPendente) : null}
+                      <div className={styles.field} data-disparo-campo="integracao" data-disparo-invalido={campoPendente === "integracao"} data-disparo-destaque={campoAnimando === "integracao"}>
                         <label className={styles.label}>Número WhatsApp</label>
                         <select
                           value={integracaoId} 
@@ -6568,7 +6627,7 @@ export default function DisparosWhatsAppPage() {
                         </select>
                       </div>
 
-                      <div className={styles.field} data-disparo-campo="template" data-disparo-destaque={campoPendente === "template"}>
+                      <div className={styles.field} data-disparo-campo="template" data-disparo-invalido={campoPendente === "template"} data-disparo-destaque={campoAnimando === "template"}>
                         <label className={styles.label}>Template aprovado</label>
                         <select
                           value={templateId}
@@ -6649,7 +6708,7 @@ export default function DisparosWhatsAppPage() {
                             </button>
                           </div>
 
-                          <div className={styles.templateVariablesGrid} data-disparo-campo="variaveis" data-disparo-destaque={campoPendente === "variaveis"}>
+                          <div className={styles.templateVariablesGrid} data-disparo-campo="variaveis" data-disparo-invalido={campoPendente === "variaveis"} data-disparo-destaque={campoAnimando === "variaveis"}>
                             <SeletorVariavelTemplate
                               label="Variável 1"
                               value={templateVariavel1}
@@ -6720,8 +6779,9 @@ export default function DisparosWhatsAppPage() {
 
                       {etapaDisparo === 2 ? (
                         <div className={styles.disparoWizardStage}>
+                          {campoPendente && erro && etapaDisparo === 2 ? orientacaoCampoDisparo(campoPendente) : null}
                           <section className={`${styles.metaHealthCard} ${limiteMeta?.alerta === "vermelho" ? styles.metaHealthDanger : limiteMeta?.alerta === "amarelo" ? styles.metaHealthWarning : ""}`}
-                            aria-label="Controle preventivo da Meta" data-disparo-campo="capacidade" data-disparo-destaque={campoPendente === "capacidade"}>
+                            aria-label="Controle preventivo da Meta" data-disparo-campo="capacidade" data-disparo-invalido={campoPendente === "capacidade"} data-disparo-destaque={campoAnimando === "capacidade"}>
                             <div className={styles.metaHealthHeader}>
                               <div>
                                 <span>Controle preventivo da Meta</span>
@@ -6810,7 +6870,7 @@ export default function DisparosWhatsAppPage() {
                               <span className={styles.schedulePlanningHint}>Etapa 2 de 4</span>
                             </div>
                             <label className={styles.label} htmlFor="disparo-quantidade-desejada">Quantidade desejada</label>
-                            <div className={styles.dispatchCapacityQuantityRow} data-disparo-campo="quantidade" data-disparo-destaque={campoPendente === "quantidade"}>
+                            <div className={styles.dispatchCapacityQuantityRow} data-disparo-campo="quantidade" data-disparo-invalido={campoPendente === "quantidade"} data-disparo-destaque={campoAnimando === "quantidade"}>
                               <input id="disparo-quantidade-desejada" type="number" min={1} step={1}
                                 className={`${styles.input} ${styles.dispatchCapacityQuantityInput}`} inputMode="numeric"
                                 value={quantidadePlanejada} placeholder="Ex.: 250"
@@ -6818,7 +6878,6 @@ export default function DisparosWhatsAppPage() {
                                 onChange={(event) => {
                                   setQuantidadePlanejada(event.target.value.replace(/\D/g, ""));
                                   setPlanoCapacidadeConfirmado(null);
-                                  setErro("");
                                 }} />
                               <span>{limiteMeta ? `${formatarNumeroMeta(capacidadeAgoraPlanejamento)} disponíveis agora` : "Consultando..."}</span>
                             </div>
@@ -6882,7 +6941,7 @@ export default function DisparosWhatsAppPage() {
                             ) : null}
 
                             {quantidadeDesejada > 0 && !quantidadeExcedeLimiteTotal && limiteMeta ? (
-                              <div className={styles.dispatchCapacityChoices} data-disparo-campo="momento" data-disparo-destaque={campoPendente === "momento"}>
+                              <div className={styles.dispatchCapacityChoices} data-disparo-campo="momento" data-disparo-invalido={campoPendente === "momento"} data-disparo-destaque={campoAnimando === "momento"}>
                                 <button type="button" className={`${styles.dispatchCapacityOption} ${styles.dispatchCapacityOptionImmediate} ${planoCapacidadeConfirmado === "imediato" ? styles.dispatchCapacityOptionSelected : ""}`}
                                   aria-pressed={planoCapacidadeConfirmado === "imediato"}
                                   disabled={capacidadeAgoraPlanejamento <= 0 || disparoBloqueado}
@@ -6922,7 +6981,7 @@ export default function DisparosWhatsAppPage() {
                               </div>
                             ) : null}
                             {agendarDisparo && planoCapacidadeConfirmado === "agendado" ? (
-                              <div className={styles.dispatchCapacityScheduleFields} data-disparo-campo="horario" data-disparo-destaque={campoPendente === "horario"}>
+                              <div className={styles.dispatchCapacityScheduleFields} data-disparo-campo="horario" data-disparo-invalido={campoPendente === "horario"} data-disparo-destaque={campoAnimando === "horario"}>
                                 <label className={styles.field}><span className={styles.label}>Data</span>
                                   <input type="date" className={styles.input} min={dataHojeParaInput()}
                                     value={agendamentoData} onChange={(e) => setAgendamentoData(e.target.value)} />
@@ -6942,6 +7001,7 @@ export default function DisparosWhatsAppPage() {
                       ) : null}
                       {etapaDisparo === 3 ? (
                         <div className={styles.disparoWizardStage}>
+                          {campoPendente && erro && etapaDisparo === 3 ? orientacaoCampoDisparo(campoPendente) : null}
                           <section className={styles.reserveContactsCard}>
                             <label className={styles.reserveContactsHeading}>
                               <span className={styles.reserveContactsIcon} aria-hidden="true"><ShieldCheck size={19} /></span>
@@ -7294,7 +7354,7 @@ export default function DisparosWhatsAppPage() {
                   ) : null}
                 </div>
 
-                <div className={styles.contactsSection} data-disparo-campo="contatos" data-disparo-destaque={campoPendente === "contatos"}>
+                <div className={styles.contactsSection} data-disparo-campo="contatos" data-disparo-invalido={campoPendente === "contatos"} data-disparo-destaque={campoAnimando === "contatos"}>
                   <div className={styles.contactsColumn}>
                     <div className={styles.contactsHeader}>
                       <h3 className={styles.contactsTitle}>Disponíveis</h3>
@@ -7613,7 +7673,7 @@ export default function DisparosWhatsAppPage() {
                   erroConflitos ||
                   gruposConflitoAtivos.length > 0) && (
                   <div
-                    data-disparo-campo="conflitos" data-disparo-destaque={campoPendente === "conflitos"} className={`${styles.conflictCard} ${
+                    data-disparo-campo="conflitos" data-disparo-invalido={campoPendente === "conflitos"} data-disparo-destaque={campoAnimando === "conflitos"} className={`${styles.conflictCard} ${
                       temConflitosPendentes
                         ? styles.conflictCardPending
                         : styles.conflictCardResolved
@@ -7721,7 +7781,7 @@ export default function DisparosWhatsAppPage() {
 
 
 
-                <section data-disparo-campo="custo" data-disparo-destaque={campoPendente === "custo"} className={`${styles.capacityResolution} ${contatosSelecionados.length > 0 ? styles.capacityResolutionGood : styles.capacityResolutionBlocked}`} role="status" aria-label="Resumo da seleção de contatos">
+                <section data-disparo-campo="custo" data-disparo-invalido={campoPendente === "custo"} data-disparo-destaque={campoAnimando === "custo"} className={`${styles.capacityResolution} ${contatosSelecionados.length > 0 ? styles.capacityResolutionGood : styles.capacityResolutionBlocked}`} role="status" aria-label="Resumo da seleção de contatos">
                   <div className={styles.capacityResolutionHeader}>
                     <span className={styles.capacityResolutionIcon}>
                       {contatosSelecionados.length > 0
@@ -7905,8 +7965,9 @@ export default function DisparosWhatsAppPage() {
               <label
                 className={`${styles.modalCheckbox} ${styles.disparoWizardBillingConsent}`}
                 data-disparo-campo="confirmacao-cobranca"
-                data-disparo-destaque={campoPendente === "confirmacao-cobranca"}
+                data-disparo-invalido={campoPendente === "confirmacao-cobranca"} data-disparo-destaque={campoAnimando === "confirmacao-cobranca"}
               >
+                {orientacaoCampoDisparo("confirmacao-cobranca")}
                 <input
                   type="checkbox"
                   checked={confirmacaoCobranca}
@@ -8024,12 +8085,17 @@ export default function DisparosWhatsAppPage() {
                     ) : null}
                     </div>
                     <footer className={styles.disparoWizardFooter}>
-                      {erro ? <div className={styles.errorAlert} role="alert">{erro}</div> : null}
+                      {erro && !campoPendente ? <div className={styles.errorAlert} role="alert">{erro}</div> : null}
                       <div className={styles.disparoWizardActions}>
                         <button type="button" className={styles.secondaryButton} disabled={disparando}
                           onClick={() => {
                             if (etapaDisparo === 1) fecharModalCriacaoDisparo();
-                            else { setEtapaDisparo((atual) => (atual - 1) as 1 | 2 | 3 | 4); setErro(""); }
+                            else {
+                              setEtapaDisparo((atual) => (atual - 1) as 1 | 2 | 3 | 4);
+                              setErro("");
+                              setCampoPendente("");
+                              setCampoAnimando("");
+                            }
                           }}>
                           {etapaDisparo === 1 ? "Cancelar" : "Voltar"}
                         </button>

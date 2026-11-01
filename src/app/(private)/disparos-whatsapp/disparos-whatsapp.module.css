@@ -7493,3 +7493,112 @@
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 }
+
+
+/* Validação premium: erro permanece, halo dura 2,6 s, sem afetar redução de movimento. */
+.disparoWizardModal [data-disparo-invalido="true"] {
+  position: relative; z-index: 1; min-width: 0; border-radius: 12px;
+  outline: 2px solid color-mix(in srgb, var(--crm-warning-text) 46%, transparent);
+  outline-offset: 5px;
+}
+.disparoWizardModal [data-disparo-destaque="true"] {
+  animation: disparoCampoPremium 2.6s cubic-bezier(.22, .61, .36, 1) 1;
+}
+@keyframes disparoCampoPremium {
+  0%, 100% {
+    outline-color: color-mix(in srgb, var(--crm-warning-text) 46%, transparent);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  20%, 65% {
+    outline-color: var(--crm-warning-text);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--crm-warning-text) 15%, transparent),
+      0 6px 24px color-mix(in srgb, var(--crm-warning-text) 10%, transparent);
+  }
+  43%, 87% {
+    outline-color: color-mix(in srgb, var(--crm-warning-text) 50%, transparent);
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+.disparoWizardFieldError {
+  display: flex; align-items: flex-start; gap: 10px; min-width: 0;
+  padding: 11px 13px; margin: 10px 0;
+  border: 1px solid var(--crm-warning-border);
+  border-left: 3px solid var(--crm-warning-text);
+  border-radius: 11px; background: var(--crm-warning-bg);
+  color: var(--crm-warning-text); font-size: 13px;
+  font-weight: 650; line-height: 1.5; overflow-wrap: anywhere;
+}
+.disparoWizardFieldError > svg { flex: 0 0 auto; margin-top: 2px; }
+.disparoWizardFieldError > span { min-width: 0; }
+.disparoWizardBillingConsent .disparoWizardFieldError { grid-column: 1 / -1; }
+@media (prefers-reduced-motion: reduce) {
+  .disparoWizardModal [data-disparo-destaque="true"] { animation: none; }
+}
+
+/* iPhone: medidas contidas na largura real do assistente, etapas 2, 3 e 4. */
+@media (max-width: 700px) {
+  .disparoWizardModal, .disparoWizardForm, .disparoWizardWorkspace,
+  .disparoWizardMain, .disparoWizardScroll, .disparoWizardStage,
+  .disparoWizardConfirmation, .disparoWizardConfirmation .modalBody {
+    min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .disparoWizardForm, .disparoWizardWorkspace, .disparoWizardMain,
+  .disparoWizardScroll, .disparoWizardStage, .disparoWizardConfirmation {
+    width: 100%;
+  }
+  .disparoWizardScroll { padding: 16px; scrollbar-gutter: auto; }
+  .disparoWizardStage > *, .disparoWizardConfirmation .modalBody > *,
+  .disparoWizardStage .contactsColumn, .disparoWizardStage .metaHealthHeader,
+  .disparoWizardStage .conflictCard, .disparoWizardStage .conflictGroup,
+  .disparoWizardStage .dispatchCapacityPlannerMain,
+  .disparoWizardStage .dispatchCapacityPlannerActions {
+    min-width: 0; max-width: 100%; box-sizing: border-box;
+  }
+  .disparoWizardStage .metaHealthCard,
+  .disparoWizardStage .dispatchCapacityPlanner,
+  .disparoWizardStage .contactsSection,
+  .disparoWizardStage .conflictGroups,
+  .disparoWizardConfirmation .modalGridResumo {
+    width: 100%; min-width: 0; max-width: 100%;
+    box-sizing: border-box; grid-template-columns: minmax(0, 1fr);
+  }
+  .disparoWizardStage .metaHealthCard { padding: 14px; }
+  .disparoWizardStage .metaHealthHeader { flex-direction: column; align-items: stretch; gap: 10px; }
+  .disparoWizardStage .metaHealthHeader > div { min-width: 0; }
+  .disparoWizardStage .metaHealthHeaderActions {
+    min-width: 0; width: 100%; justify-content: flex-start; flex-wrap: wrap;
+  }
+  .disparoWizardStage .metaHealthGrid {
+    width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 9px;
+  }
+  .disparoWizardStage .metaHealthGrid > div { min-width: 0; width: 100%; box-sizing: border-box; padding: 12px 13px; }
+  .disparoWizardStage .metaHealthGrid > div > span:first-child { font-size: 11px; }
+  .disparoWizardStage .metaHealthGrid > div strong.metaHealthMainValue { font-size: clamp(22px, 6vw, 27px); }
+  .disparoWizardStage .metaHealthGrid > div strong.metaHealthDateValue { font-size: 14px; }
+  .disparoWizardStage .metaHealthGrid > div small { font-size: 12px; }
+  .disparoWizardStage .metaHealthHeader strong { font-size: 16px; }
+  .disparoWizardStage .metaHealthHeader p { font-size: 13px; }
+  .disparoWizardStage .dispatchCapacityPlanner { padding: 14px; gap: 14px; }
+  .disparoWizardStage .dispatchCapacityChoices,
+  .disparoWizardStage .dispatchCapacityScheduleFields,
+  .disparoWizardStage .dispatchCapacityReleaseItem {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .disparoWizardStage .dispatchCapacityOption,
+  .disparoWizardStage .dispatchCapacityQuantityInput { min-width: 0; max-width: 100%; }
+  .disparoWizardStage .dispatchCapacityPlannerIntro h3 { font-size: 18px; }
+  .disparoWizardStage .contactsColumn { width: 100%; }
+  .disparoWizardStage .contactsHeader, .disparoWizardStage .contactsHeaderActions,
+  .disparoWizardStage .conflictGroup, .disparoWizardStage .capacityResolutionHeader { flex-wrap: wrap; }
+  .disparoWizardStage .conflictGroup,
+  .disparoWizardStage .conflictGroups { grid-template-columns: minmax(0, 1fr); }
+  .disparoWizardStage .conflictGroupMain,
+  .disparoWizardStage .reserveContactsExplanation,
+  .disparoWizardConfirmation .modalInfoValue,
+  .disparoWizardConfirmation .modalFinanceiroValor { min-width: 0; overflow-wrap: anywhere; }
+  .disparoWizardStage .conflictGroupMain strong { font-size: 14px; }
+  .disparoWizardConfirmation .modalGridResumo { gap: 10px; }
+  .disparoWizardConfirmation .modalInfoItem { min-width: 0; padding: 12px; box-sizing: border-box; }
+  .disparoWizardConfirmation .modalFinanceiroValor { font-size: clamp(22px, 6vw, 28px); }
+  .disparoWizardConfirmation .modalBody { width: 100%; gap: 14px; }
+}

@@ -164,12 +164,15 @@ export default function GerenciarVariaveisModal({
     <div className={styles.modalOverlay} onMouseDown={onClose}>
       <div
         className={styles.modalCard}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="gerenciar-variaveis-email-titulo"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={styles.modalHeader}>
           <div>
             <p>VARIÁVEIS</p>
-            <h3>Gerenciar variáveis</h3>
+            <h3 id="gerenciar-variaveis-email-titulo">Gerenciar variáveis</h3>
             <span>
               As variáveis personalizadas são compartilhadas entre Disparos,
               Fluxos e E-mail Marketing.
