@@ -1419,8 +1419,12 @@ export default function ContatosPage() {
       return;
     }
 
-    const preparadas = confirmadas
-      ? { etapas: confirmadas, alvosRemocao: [] as string[] }
+    const preparadas: {
+      etapas: EtapaAlteracaoEmMassa[];
+      alvosRemocao: string[];
+      erro?: string;
+    } = confirmadas
+      ? { etapas: confirmadas, alvosRemocao: [] }
       : prepararAlteracoesEmMassa();
     if (preparadas.erro) {
       setFeedbackEmMassa({ tipo: "erro", texto: preparadas.erro });
