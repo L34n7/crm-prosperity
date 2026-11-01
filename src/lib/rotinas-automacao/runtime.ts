@@ -284,9 +284,14 @@ async function processarMensagemRotinas(
       let interromperNestaExecucao = false;
       let erroExecucao: string | null = null;
       let canceladaPorContato = false;
+      let canceladaPorAssinatura = false;
       const resultados: Array<Record<string, unknown>> = [];
 
       for (const acao of [...acoes].sort((a, b) => a.ordem - b.ordem)) {
+        if (await automacoesEmpresaEstaoBloqueadas(input.empresaId)) {
+          canceladaPorAssinatura = true;
+          break;
+        }
         if (
           await automacoesContatoEstaoDesabilitadas({
             empresaId: input.empresaId,
@@ -348,6 +353,13 @@ async function processarMensagemRotinas(
         }
 
         try {
+          if (await automacoesEmpresaEstaoBloqueadas(input.empresaId)) {
+            canceladaPorAssinatura = true;
+            await supabase.from("rotina_automacao_jobs")
+              .update({ status: "cancelado", bloqueado_em: null, cancelado_em: new Date().toISOString(), origem_cancelamento: "assinatura_bloqueada" })
+              .eq("id", job.id).eq("empresa_id", input.empresaId);
+            break;
+          }
           const resultado = await executarAcaoRotina({
             empresaId: input.empresaId,
             conversaId: input.conversaId,
@@ -358,6 +370,13 @@ async function processarMensagemRotinas(
             acao,
           });
           resultados.push(resultado);
+          if (resultado.motivo === "assinatura_bloqueada") {
+            canceladaPorAssinatura = true;
+            await supabase.from("rotina_automacao_jobs")
+              .update({ status: "cancelado", bloqueado_em: null, cancelado_em: new Date().toISOString(), origem_cancelamento: "assinatura_bloqueada" })
+              .eq("id", job.id).eq("empresa_id", input.empresaId);
+            break;
+          }
           if (resultado.interromper_fluxo_atual === true) {
             interromperNestaExecucao = true;
             interromperFluxoAtual = true;
@@ -383,7 +402,7 @@ async function processarMensagemRotinas(
       const { error: execucaoFinalError } = await supabase
         .from("rotina_automacao_execucoes")
         .update({
-          status: canceladaPorContato
+          status: canceladaPorContato || canceladaPorAssinatura
             ? "cancelada"
             : erroExecucao
               ? "erro"
@@ -391,10 +410,12 @@ async function processarMensagemRotinas(
           resultado_json: { automacao_nome: automacao.nome, interromper_fluxo_atual: interromperNestaExecucao, acoes: resultados },
           erro: erroExecucao,
           finalizada_em: new Date().toISOString(),
-          ...(canceladaPorContato
+          ...(canceladaPorContato || canceladaPorAssinatura
             ? {
                 cancelado_em: new Date().toISOString(),
-                motivo_cancelamento: "automacoes_contato_desabilitadas",
+                motivo_cancelamento: canceladaPorAssinatura
+                  ? "assinatura_bloqueada"
+                  : "automacoes_contato_desabilitadas",
               }
             : {}),
         })
