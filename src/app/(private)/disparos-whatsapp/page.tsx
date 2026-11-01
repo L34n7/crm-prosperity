@@ -6936,7 +6936,7 @@ export default function DisparosWhatsAppPage() {
                             <label className={styles.reserveContactsHeading}>
                               <span className={styles.reserveContactsIcon} aria-hidden="true"><ShieldCheck size={19} /></span>
                               <span>
-                                <strong>Contatos de reserva</strong>
+                                <strong>Contatos reserva</strong>
                                 <small>Compensar falhas de entrega automaticamente</small>
                               </span>
                               <input
@@ -6951,11 +6951,14 @@ export default function DisparosWhatsAppPage() {
                                   }
                                   setErro("");
                                 }}
-                                aria-label="Ativar contatos de reserva para compensar falhas"
+                                aria-label="Ativar contatos reserva para compensar falhas"
                               />
                             </label>
                             {contatosReservaAtivos ? (
                               <div className={styles.reserveContactsDetails}>
+                                <p className={styles.reserveContactsExplanation}>
+                                  Os contatos reserva ficam em espera e são acionados apenas para compensar falhas definitivas dos principais, respeitando a quantidade desejada e a capacidade da Meta.
+                                </p>
                                 <div className={styles.reserveContactsTotals}>
                                   <div className={styles.reserveContactsMetric}>
                                     <span>Quantidade desejada</span>
@@ -6968,7 +6971,7 @@ export default function DisparosWhatsAppPage() {
                                 </div>
                                 <p className={styles.reserveContactsOrientation}>
                                   <Info size={18} aria-hidden="true" />
-                                  <span>Adicione primeiro os contatos principais e, em seguida, os de reserva. Eles serão usados somente para compensar falhas definitivas, sem ultrapassar a quantidade desejada nem a capacidade disponível da Meta. Se faltar capacidade, a compensação aguardará liberação.</span>
+                                  <span>Adicione primeiro os contatos principais e depois os contatos reserva. Se faltar capacidade, a compensação aguardará a próxima liberação.</span>
                                 </p>
                               </div>
                             ) : null}
@@ -7590,38 +7593,6 @@ export default function DisparosWhatsAppPage() {
                   </div>
                 ) : null}
 
-                {temContatosListaFria ? (
-                  <div
-                    className={`${styles.coldListNotice} ${
-                      listaFriaSemOptOut
-                        ? styles.coldListNoticeBlocked
-                        : styles.coldListNoticeWarning
-                    }`}
-                    role={
-                      listaFriaSemOptOut
-                        ? "alert"
-                        : "status"
-                    }
-                  >
-                    <strong>
-                      {listaFriaSemOptOut
-                        ? "Template sem opt-out"
-                        : `${totalContatosListaFria} contato(s) de lista fria selecionado(s)`}
-                    </strong>
-                    <p>
-                      {listaFriaSemOptOut
-                        ? "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie-o com a instrução para responder SAIR."
-                        : marketingComListaFria
-                        ? "O disparo de marketing para lista fria será liberado após a confirmação dos valores e das orientações de autorização."
-                        : "O disparo Utility para lista fria exigirá confirmação das orientações após a confirmação dos valores."}
-                    </p>
-                    <span>
-                      Contatos sem opt-in permanecem identificados como lista
-                      fria e exigem confirmação das orientações antes do envio.
-                    </span>
-                  </div>
-                ) : null}
-
                 {(loadingConflitos ||
                   erroConflitos ||
                   gruposConflitoAtivos.length > 0) && (
@@ -7747,7 +7718,7 @@ export default function DisparosWhatsAppPage() {
                     </div>
                     <span className={styles.capacityResolutionBadge}>{contatosSelecionados.length > 0 ? "Seleção pronta" : "Aguardando contatos"}</span>
                   </div>
-                  <div className={styles.capacityResolutionStats}>
+                  <div className={`${styles.capacityResolutionStats} ${!contatosReservaAtivos ? styles.capacityResolutionStatsCompact : ""}`}>
                     <div className={styles.capacityResolutionStat}>
                       <strong>{formatarNumeroMeta(contatosPrincipais.length)}</strong>
                       <span>Principais selecionados</span>
@@ -7756,17 +7727,52 @@ export default function DisparosWhatsAppPage() {
                       <strong>{formatarNumeroMeta(quantidadeDesejada)}</strong>
                       <span>Quantidade desejada</span>
                     </div>
-                    <div className={styles.capacityResolutionStat}>
-                      <strong>{formatarNumeroMeta(contatosReserva.length)}</strong>
-                      <span>Contatos de reserva</span>
-                    </div>
+                    {contatosReservaAtivos ? (
+                      <div className={styles.capacityResolutionStat}>
+                        <strong>{formatarNumeroMeta(contatosReserva.length)}</strong>
+                        <span>Contatos reserva</span>
+                      </div>
+                    ) : null}
                   </div>
                   <p className={styles.capacityResolutionDescription}>
                     {contatosSelecionados.length > 0
-                      ? "Você pode continuar com esta seleção. Contatos de reserva só serão utilizados para compensar falhas definitivas, respeitando a capacidade da Meta."
+                      ? contatosReservaAtivos
+                        ? "Você pode continuar com esta seleção. Contatos reserva só entram no envio após falhas definitivas, respeitando a capacidade da Meta."
+                        : "Você pode continuar com esta seleção, mesmo sem preencher toda a quantidade desejada."
                       : "Selecione ao menos um contato para continuar. Você não precisa preencher toda a quantidade planejada."}
                   </p>
                 </section>
+                  {temContatosListaFria ? (
+                    <div
+                      className={`${styles.coldListNotice} ${
+                        listaFriaSemOptOut
+                          ? styles.coldListNoticeBlocked
+                          : styles.coldListNoticeWarning
+                      }`}
+                      role={
+                        listaFriaSemOptOut
+                          ? "alert"
+                          : "status"
+                      }
+                    >
+                      <strong>
+                        {listaFriaSemOptOut
+                          ? "Template sem opt-out"
+                          : `${totalContatosListaFria} contato(s) de lista fria selecionado(s)`}
+                      </strong>
+                      <p>
+                        {listaFriaSemOptOut
+                          ? "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie-o com a instrução para responder SAIR."
+                          : marketingComListaFria
+                          ? "O disparo de marketing para lista fria será liberado após a confirmação dos valores e das orientações de autorização."
+                          : "O disparo Utility para lista fria exigirá confirmação das orientações após a confirmação dos valores."}
+                      </p>
+                      <span>
+                        Contatos sem opt-in permanecem identificados como lista
+                        fria e exigem confirmação das orientações antes do envio.
+                      </span>
+                    </div>
+                  ) : null}
                         </div>
                       ) : null}
                       {etapaDisparo === 4 ? (
