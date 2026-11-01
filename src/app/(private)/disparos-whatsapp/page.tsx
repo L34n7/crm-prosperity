@@ -2371,6 +2371,7 @@ export default function DisparosWhatsAppPage() {
   const [filtrosAvancadosAbertos, setFiltrosAvancadosAbertos] = useState(false);
 
   const [mensagem, setMensagem] = useState("");
+  const [limiteContatosToast, setLimiteContatosToast] = useState("");
   const [erro, setErro] = useState("");
   const [erroConflitos, setErroConflitos] = useState("");
   const [resultado, setResultado] = useState<ResultadoDisparo[]>([]);
@@ -3642,6 +3643,7 @@ export default function DisparosWhatsAppPage() {
     setContatosSelecionados([]);
     setQuantidadeAdicionarContatos("");
     setQuantidadeRemoverContatos("");
+    setLimiteContatosToast("");
     setTemplateId("");
     setTemplateVariavel1("");
     setTemplateVariavel2("");
@@ -4895,7 +4897,7 @@ export default function DisparosWhatsAppPage() {
 
   function adicionarContato(contato: ContatoOpcao) {
     if (capacidadeRestanteParaAdicionar === 0) {
-      setErro(`A seleção já atingiu as ${quantidadeDesejada} vagas definidas na etapa Capacidade e agendamento.`);
+      setLimiteContatosToast("Limite atingido");
       return;
     }
     if (
@@ -4939,6 +4941,7 @@ export default function DisparosWhatsAppPage() {
     invalidarDecisoesConflitoParaContatos([contato.id]);
     setContatosSelecionados((prev) => {
       if (prev.some((item) => item.id === contato.id)) return prev;
+      if (prev.length >= quantidadeDesejada) return prev;
       return [...prev, contato];
     });
   }
@@ -5084,9 +5087,7 @@ export default function DisparosWhatsAppPage() {
       typeof capacidadeDisponivel === "number" &&
       capacidadeDisponivel <= 0
     ) {
-      setErro(
-        "A quantidade definida na etapa 2 já foi preenchida. Volte à etapa de capacidade para ajustá-la."
-      );
+      setLimiteContatosToast("Limite atingido");
       return;
     }
 
@@ -6395,6 +6396,13 @@ export default function DisparosWhatsAppPage() {
           {modalCriacaoDisparoAberto ? (
             <div className={styles.disparoWizardOverlay}
               onMouseDown={(event) => { if (event.target === event.currentTarget) fecharModalCriacaoDisparo(); }}>
+              {limiteContatosToast ? (
+                <FeedbackToast
+                  error={limiteContatosToast}
+                  onErrorDismiss={() => setLimiteContatosToast("")}
+                  duration={3500}
+                />
+              ) : null}
               <section className={styles.disparoWizardModal} role="dialog" aria-modal="true"
                 aria-labelledby="disparo-wizard-titulo">
                 <header className={styles.disparoWizardHeader}>
@@ -6855,12 +6863,6 @@ export default function DisparosWhatsAppPage() {
                       ) : null}
                       {etapaDisparo === 3 ? (
                         <div className={styles.disparoWizardStage}>
-                          <div className={styles.dispatchContactsPlan}>
-                            <strong>Selecionados: {formatarNumeroMeta(contatosSelecionados.length)} de {formatarNumeroMeta(quantidadeDesejada)}</strong>
-                            <span>{agendarDisparo && agendamentoData && agendamentoHora
-                              ? `Agendado: ${formatarDataHora(new Date(`${agendamentoData}T${agendamentoHora}:00`).toISOString())}`
-                              : "Envio imediato"} · Quantidade definida na etapa anterior.</span>
-                          </div>
                           <div className={styles.contactsFilterCard}>
                   <div className={styles.contactsFilterHeader}>
                     <div>
@@ -7196,9 +7198,7 @@ export default function DisparosWhatsAppPage() {
                           onClick={adicionarTodosDisponiveis}
                           disabled={
                             loadingContatos ||
-                            adicionandoContatosEmMassa ||
-                            totalContatosDisponiveisRestantes === 0 ||
-                            capacidadeRestanteParaAdicionar === 0
+                            adicionandoContatosEmMassa
                           }
                         >
                           {adicionandoContatosEmMassa ? "Adicionando..." : Number(quantidadeAdicionarContatos) > 0 ? "Adicionar quantidade" : "Preencher seleção"}
@@ -7291,7 +7291,6 @@ export default function DisparosWhatsAppPage() {
                                 type="button"
                                 className={styles.ButtonAdd}
                                 onClick={() => adicionarContato(contato)}
-                                disabled={capacidadeRestanteParaAdicionar === 0}
                                 aria-disabled={
                                   !telefoneValido ||
                                   contatoTemOptOutParaCategoria(
@@ -7301,7 +7300,9 @@ export default function DisparosWhatsAppPage() {
                                   cooldownDisparoAtivo
                                 }
                                 title={
-                                  !telefoneValido
+                                  capacidadeRestanteParaAdicionar === 0
+                                    ? "Limite atingido — altere a quantidade na etapa anterior para adicionar mais contatos."
+                                    : !telefoneValido
                                     ? contato.telefone_revisar === true
                                       ? "Telefone marcado para revisão. Corrija-o na página de Contatos antes do disparo."
                                       : "Este contato não possui telefone válido."
