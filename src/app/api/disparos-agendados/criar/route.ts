@@ -203,6 +203,22 @@ export async function POST(request: NextRequest) {
       : [];
     
     const contatos = Array.isArray(body.contatos) ? body.contatos : [];
+    const reservaAtiva = body.reserva_ativa === true;
+    const quantidadeDesejada = Number(body.meta_quantidade_desejada || 0);
+    const reservasRecebidas = Array.isArray(body.reserva_contatos) ? body.reserva_contatos : [];
+    const reservaContatos: Array<{
+      contato_id: string | null;
+      numero: string;
+      nome_contato: string | null;
+      variaveis: string[];
+    }> = reservaAtiva ? reservasRecebidas.map((item: any) => ({
+      contato_id: String(item.contato_id || "").trim() || null,
+      numero: somenteDigitos(item.numero || ""),
+      nome_contato: String(item.nome_contato || "").trim() || null,
+      variaveis: Array.isArray(item.variaveis)
+        ? item.variaveis.slice(0, 6).map((valor: unknown) => String(valor ?? ""))
+        : [],
+    })) : [];
     const responsabilidadeListaFriaConfirmada =
       body?.confirmacao_responsabilidade_lista_fria === true;
 
@@ -266,6 +282,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Nenhum contato selecionado possui telefone válido." },
         { status: 400 }
+      );
+    }
+    const todosNumeros = [...contatosValidos.map((item: any) => item.telefone), ...reservaContatos.map((item) => item.numero)];
+    if (
+      (reservaAtiva && (!Number.isSafeInteger(quantidadeDesejada) ||
+        quantidadeDesejada < contatosValidos.length ||
+        reservaContatos.length > Math.floor(quantidadeDesejada * 0.5))) ||
+      (!reservaAtiva && reservasRecebidas.length > 0) ||
+      reservaContatos.some((item) => item.numero.length < 10) ||
+      new Set(todosNumeros).size !== todosNumeros.length
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Contatos de reserva inválidos ou acima de 50% da quantidade planejada." },
+        { status: 422 }
       );
     }
 
@@ -335,7 +365,7 @@ export async function POST(request: NextRequest) {
 
     const telefonesSuprimidos = await buscarTelefonesSuprimidos({
       empresaId: usuario.empresa_id,
-      telefones: contatosValidos.map((contato: any) => contato.telefone),
+      telefones: todosNumeros,
       categoria: template.categoria,
     });
 
@@ -357,10 +387,10 @@ export async function POST(request: NextRequest) {
       empresaId: usuario.empresa_id,
       integracaoWhatsappId,
       phoneNumberId: integracao.phone_number_id,
-      destinatarios: contatosValidos.map((contato: any) => ({
-        contatoId: contato.id,
-        telefone: contato.telefone,
-      })),
+      destinatarios: [
+        ...contatosValidos.map((contato: any) => ({ contatoId: contato.id, telefone: contato.telefone })),
+        ...reservaContatos.map((contato) => ({ contatoId: contato.contato_id, telefone: contato.numero })),
+      ],
     });
     const politicaLista = validarPoliticaListaDisparo({
       categoria: template.categoria,
@@ -605,7 +635,7 @@ export async function POST(request: NextRequest) {
     }
 
     const agendamentoGrupoId = randomUUID();
-    const registros = contatosValidos.map((contato: any) => ({
+    const registros = contatosValidos.map((contato: any, index: number) => ({
       empresa_id: usuario.empresa_id,
       execucao_id: null,
       fluxo_id: null,
@@ -649,6 +679,13 @@ export async function POST(request: NextRequest) {
         contato_nome: contato.nome,
         integracao_nome: integracao.nome_conexao || integracao.numero || null,
         automacao_no_titulo: "Disparo manual agendado",
+        ...(index === 0 && reservaContatos.length > 0 ? {
+          contingencia_reserva_ativa: true,
+          contingencia_meta_quantidade_desejada: quantidadeDesejada,
+          contingencia_meta_contatos_principais: contatosValidos.length,
+          contingencia_reserva_contatos: reservaContatos,
+          contingencia_reserva_cursor: 0,
+        } : {}),
       },
     }));
 

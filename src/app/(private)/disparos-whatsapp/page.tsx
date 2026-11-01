@@ -24,6 +24,7 @@ import {
   Minus,
   Search,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
@@ -2330,6 +2331,8 @@ export default function DisparosWhatsAppPage() {
   const [modalCriacaoDisparoAberto, setModalCriacaoDisparoAberto] = useState(false);
   const [etapaDisparo, setEtapaDisparo] = useState<1 | 2 | 3 | 4>(1);
   const [quantidadePlanejada, setQuantidadePlanejada] = useState("");
+  const [contatosReservaAtivos, setContatosReservaAtivos] = useState(false);
+  const [campoPendente, setCampoPendente] = useState("");
   const [planoCapacidadeConfirmado, setPlanoCapacidadeConfirmado] = useState<"imediato" | "agendado" | null>(null);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
@@ -3653,6 +3656,8 @@ export default function DisparosWhatsAppPage() {
     setTemplateVariavel6("");
     setNomeCampanhaDisparo("");
     setQuantidadePlanejada("");
+    setContatosReservaAtivos(false);
+    setCampoPendente("");
     setPlanoCapacidadeConfirmado(null);
     setAgendarDisparo(false);
     setAgendamentoData("");
@@ -4058,12 +4063,12 @@ export default function DisparosWhatsAppPage() {
   const telefonesSelecionadosUnicos = useMemo(() => {
     return Array.from(
       new Set(
-        contatosSelecionados
+        contatosSelecionados.slice(0, Number.parseInt(quantidadePlanejada, 10) || 0)
           .map((contato) => limparNumero(contato.telefone))
           .filter((telefone) => telefone.length >= 10)
       )
     );
-  }, [contatosSelecionados]);
+  }, [contatosSelecionados, quantidadePlanejada]);
 
   const totalTelefonesQueConsomemLimite = previewCusto
     ? Number(previewCusto.totalTelefonesConsomemLimiteUnicos || 0)
@@ -4467,11 +4472,17 @@ export default function DisparosWhatsAppPage() {
   // No envio imediato, a seleção respeita o saldo disponível agora.
   // No agendamento, a seleção pode ocupar a capacidade total da integração,
   // pois o horário futuro será validado pela janela de 24h antes de salvar.
+  const limiteContatosReserva = Math.floor(quantidadeDesejada * 0.5);
+  const limiteContatosSelecao = quantidadeDesejada +
+    (contatosReservaAtivos ? limiteContatosReserva : 0);
+  const contatosPrincipais = contatosSelecionados.slice(0, quantidadeDesejada);
+  const contatosReserva = contatosReservaAtivos
+    ? contatosSelecionados.slice(quantidadeDesejada, limiteContatosSelecao)
+    : [];
+  // Reservas não são disparos pendentes: a Meta só deve ser consultada
+  // e reservar capacidade quando um substituto for realmente acionado.
   const capacidadeBaseParaSelecao = planoCapacidadeConfirmado && limiteMeta
-    ? Math.min(
-        quantidadeDesejada,
-        agendarDisparo ? Number(limiteMeta.limite || 0) : Number(limiteMeta.restantes || 0)
-      )
+    ? limiteContatosSelecao
     : 0;
   const capacidadeRestanteParaAdicionar =
     typeof capacidadeBaseParaSelecao === "number"
@@ -4941,7 +4952,7 @@ export default function DisparosWhatsAppPage() {
     invalidarDecisoesConflitoParaContatos([contato.id]);
     setContatosSelecionados((prev) => {
       if (prev.some((item) => item.id === contato.id)) return prev;
-      if (prev.length >= quantidadeDesejada) return prev;
+      if (prev.length >= limiteContatosSelecao) return prev;
       return [...prev, contato];
     });
   }
@@ -5074,7 +5085,7 @@ export default function DisparosWhatsAppPage() {
     const quantidadeSolicitada = quantidadeInformada > 0
       ? quantidadeInformada
       : Math.min(
-          quantidadeDesejada - contatosSelecionados.length,
+          limiteContatosSelecao - contatosSelecionados.length,
           Math.max(totalContatosDisponiveis, contatosDisponiveisValidos.length)
         );
     const capacidadeDisponivel = capacidadeRestanteParaAdicionar;
@@ -5116,7 +5127,7 @@ export default function DisparosWhatsAppPage() {
       });
       setContatosSelecionados((atuais) => {
         const ids = new Set(atuais.map((contato) => contato.id));
-        const vagas = Math.max(0, quantidadeDesejada - atuais.length);
+        const vagas = Math.max(0, limiteContatosSelecao - atuais.length);
         return [...atuais, ...novos.filter((contato) => !ids.has(contato.id)).slice(0, vagas)];
       });
       setQuantidadeAdicionarContatos("");
@@ -5735,7 +5746,18 @@ export default function DisparosWhatsAppPage() {
       }
 
       if (agendarDisparo && executarEm) {
-        const res = await fetch("/api/disparos-agendados/criar", {
+        const protocolosReserva = contatosReserva.length && variaveisUsamProtocolo(variaveisObrigatorias)
+        ? await carregarProtocolosDosContatos(contatosReserva) : {};
+      const reservasAgendadas = contatosReserva.map((contato) => ({
+        contato_id: contato.id,
+        numero: limparNumero(contato.telefone),
+        nome_contato: contato.nome,
+        variaveis: variaveisObrigatorias.map((variavel) =>
+          variavel === "nome_captura" || variavel === "primeiro_nome_captura"
+            ? `{{${variavel}}}`
+            : resolverVariavelContato(variavel, contato, variaveisPersonalizadas, protocolosReserva)),
+      }));
+      const res = await fetch("/api/disparos-agendados/criar", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -5749,7 +5771,7 @@ export default function DisparosWhatsAppPage() {
             confirmacao_responsabilidade_lista_fria:
               templateComListaFria &&
               confirmacaoResponsabilidadeListaFria,
-            contatos: contatosSelecionados.map((contato) => ({
+            contatos: contatosPrincipais.map((contato) => ({
               id: contato.id,
               nome: contato.nome,
               telefone: limparNumero(contato.telefone),
@@ -5758,6 +5780,9 @@ export default function DisparosWhatsAppPage() {
               campanha: obterCampanhaContato(contato) || null,
               status_lead: contato.status_lead || null,
             })),
+            reserva_ativa: contatosReservaAtivos && reservasAgendadas.length > 0,
+            meta_quantidade_desejada: quantidadeDesejada,
+            reserva_contatos: reservasAgendadas,
           }),
         });
         const json = await res.json();
@@ -5787,6 +5812,7 @@ export default function DisparosWhatsAppPage() {
         setAgendamentoData("");
         setAgendamentoHora("");
         setQuantidadePlanejada("");
+        setContatosReservaAtivos(false);
         setPlanoCapacidadeConfirmado(null);
         setNomeCampanhaDisparo("");
         setContatosSelecionados([]);
@@ -5833,7 +5859,12 @@ export default function DisparosWhatsAppPage() {
           confirmacao_responsabilidade_lista_fria:
             templateComListaFria &&
             confirmacaoResponsabilidadeListaFria,
-          destinatarios,
+          destinatarios: destinatarios.slice(0, contatosPrincipais.length),
+          reserva_ativa: contatosReservaAtivos && contatosReserva.length > 0,
+          meta_quantidade_desejada: quantidadeDesejada,
+          reserva_destinatarios: contatosReservaAtivos
+            ? destinatarios.slice(contatosPrincipais.length)
+            : [],
         }),
       });
 
@@ -6101,14 +6132,33 @@ export default function DisparosWhatsAppPage() {
     setErro("");
   }
 
+  function destacarCampoDisparo(campo: string) {
+    setCampoPendente("");
+    window.requestAnimationFrame(() => setCampoPendente(campo));
+  }
+
+  useEffect(() => {
+    if (!campoPendente || !modalCriacaoDisparoAberto) return;
+    const alvo = document.querySelector<HTMLElement>(`[data-disparo-campo="${campoPendente}"]`);
+    if (!alvo) return;
+    alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+    const controle = alvo.matches("input,select,button")
+      ? alvo
+      : alvo.querySelector<HTMLElement>("input:not(:disabled),select:not(:disabled),button:not(:disabled)");
+    controle?.focus({ preventScroll: true });
+    const timeout = window.setTimeout(() => setCampoPendente(""), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [campoPendente, etapaDisparo, modalCriacaoDisparoAberto]);
+
   function avancarEtapaDisparo() {
     setErro("");
     if (etapaDisparo === 1) {
-      if (!integracaoId) { setErro("Selecione um número WhatsApp."); return; }
-      if (!templateId) { setErro("Selecione um template aprovado."); return; }
+      if (!integracaoId) { setErro("Selecione um número WhatsApp."); destacarCampoDisparo("integracao"); return; }
+      if (!templateId) { setErro("Selecione um template aprovado."); destacarCampoDisparo("template"); return; }
       if (totalVariaveis > 6) { setErro("Este template aceita no máximo seis variáveis."); return; }
       if (temVariaveisObrigatoriasPendentes) {
         setErro("Selecione todas as variáveis obrigatórias antes de continuar.");
+        destacarCampoDisparo("variaveis");
         return;
       }
       setEtapaDisparo(2);
@@ -6116,22 +6166,27 @@ export default function DisparosWhatsAppPage() {
     } else if (etapaDisparo === 2) {
       if (loadingSaudeMeta || !limiteMeta) {
         setErro("Aguarde a consulta de capacidade da Meta antes de continuar.");
+        destacarCampoDisparo("capacidade");
         return;
       }
       if (!Number.isInteger(quantidadeDesejada) || quantidadeDesejada <= 0) {
         setErro("Informe uma quantidade válida de destinatários.");
+        destacarCampoDisparo("quantidade");
         return;
       }
       if (quantidadeExcedeLimiteTotal) {
         setErro("A quantidade ultrapassa o limite total do número. Divida em campanhas menores.");
+        destacarCampoDisparo("quantidade");
         return;
       }
       if (!planoCapacidadeConfirmado) {
         setErro("Escolha enviar a quantidade disponível agora ou agendar a quantidade desejada.");
+        destacarCampoDisparo("momento");
         return;
       }
       if (!agendarDisparo && (capacidadeInsuficienteAgora || disparoBloqueado)) {
         setErro("A capacidade disponível agora não comporta a quantidade desejada.");
+        destacarCampoDisparo("momento");
         return;
       }
       if (agendarDisparo) {
@@ -6144,11 +6199,12 @@ export default function DisparosWhatsAppPage() {
         if (!agendamentoData || !agendamentoHora || !Number.isFinite(horario) ||
             horario <= Date.now() || projetada < quantidadeDesejada) {
           setErro("Escolha uma data futura em que a previsão comporte toda a quantidade desejada.");
+          destacarCampoDisparo("horario");
           return;
         }
       }
-      if (contatosSelecionados.length > quantidadeDesejada) {
-        setContatosSelecionados((anteriores) => anteriores.slice(0, quantidadeDesejada));
+      if (contatosSelecionados.length > limiteContatosSelecao) {
+        setContatosSelecionados((anteriores) => anteriores.slice(0, limiteContatosSelecao));
       }
       setEtapaDisparo(3);
     } else if (etapaDisparo === 3) {
@@ -6165,14 +6221,22 @@ export default function DisparosWhatsAppPage() {
     if (!integracaoId || !templateId || temVariaveisObrigatoriasPendentes) {
       setErro("Complete a configuração da mensagem e das variáveis.");
       setEtapaDisparo(1);
+      destacarCampoDisparo(!integracaoId ? "integracao" : !templateId ? "template" : "variaveis");
       return;
     }
-    if (contatosSelecionados.length !== quantidadeDesejada) {
-      setErro(`Selecione exatamente ${quantidadeDesejada} contato(s) para continuar. Ajuste a quantidade na etapa 2, se necessário.`);
+    if (contatosSelecionados.length === 0) {
+      setErro("Selecione pelo menos um contato para continuar.");
+      destacarCampoDisparo("contatos");
+      return;
+    }
+    if (contatosSelecionados.length > limiteContatosSelecao) {
+      setErro("A seleção ultrapassa a quantidade planejada, incluindo a reserva.");
+      destacarCampoDisparo("contatos");
       return;
     }
     if (loadingConflitos || temConflitosPendentes) {
       setErro("Resolva os contatos repetidos antes de continuar.");
+      destacarCampoDisparo("conflitos");
       return;
     }
     if (!agendarDisparo && (disparoBloqueado || selecaoExcedeLimite)) {
@@ -6181,10 +6245,12 @@ export default function DisparosWhatsAppPage() {
     }
     if (agendamentoInvalidoPeloLimiteMeta) {
       setErro("Ajuste o agendamento de acordo com a capacidade da Meta.");
+      destacarCampoDisparo("horario");
       return;
     }
     if (loadingPreviewCusto || !previewCusto) {
       setErro("Aguarde a estimativa de custo do disparo antes de continuar.");
+      destacarCampoDisparo("custo");
       return;
     }
 
@@ -6200,6 +6266,7 @@ export default function DisparosWhatsAppPage() {
         executarEm.getTime() <= Date.now()
       ) {
         setErro("Selecione uma data e hora futuras para o agendamento.");
+        destacarCampoDisparo("horario");
         return;
       }
     }
@@ -6375,10 +6442,11 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    void calcularPreviewCusto(categoria, contatosSelecionados);
+    void calcularPreviewCusto(categoria, contatosPrincipais);
   }, [
     templateSelecionado,
     contatosSelecionados,
+    quantidadeDesejada,
     integracaoId,
     agendarDisparo,
     agendamentoData,
@@ -6455,7 +6523,7 @@ export default function DisparosWhatsAppPage() {
                       {etapaDisparo === 1 ? (
                         <div className={styles.disparoWizardStage}>
                     <div className={styles.setupColumn}>
-                      <div className={styles.field}>
+                      <div className={styles.field} data-disparo-campo="integracao" data-disparo-destaque={campoPendente === "integracao"}>
                         <label className={styles.label}>Número WhatsApp</label>
                         <select
                           value={integracaoId} 
@@ -6464,6 +6532,7 @@ export default function DisparosWhatsAppPage() {
                             setIntegracaoId(proximaIntegracaoId);
                             setLimiteMeta(null);
                             setQuantidadePlanejada("");
+                            setContatosReservaAtivos(false);
                             setPlanoCapacidadeConfirmado(null);
                             setAgendarDisparo(false);
                             setAgendamentoData("");
@@ -6489,7 +6558,7 @@ export default function DisparosWhatsAppPage() {
                         </select>
                       </div>
 
-                      <div className={styles.field}>
+                      <div className={styles.field} data-disparo-campo="template" data-disparo-destaque={campoPendente === "template"}>
                         <label className={styles.label}>Template aprovado</label>
                         <select
                           value={templateId}
@@ -6570,7 +6639,7 @@ export default function DisparosWhatsAppPage() {
                             </button>
                           </div>
 
-                          <div className={styles.templateVariablesGrid}>
+                          <div className={styles.templateVariablesGrid} data-disparo-campo="variaveis" data-disparo-destaque={campoPendente === "variaveis"}>
                             <SeletorVariavelTemplate
                               label="Variável 1"
                               value={templateVariavel1}
@@ -6642,7 +6711,7 @@ export default function DisparosWhatsAppPage() {
                       {etapaDisparo === 2 ? (
                         <div className={styles.disparoWizardStage}>
                           <section className={`${styles.metaHealthCard} ${limiteMeta?.alerta === "vermelho" ? styles.metaHealthDanger : limiteMeta?.alerta === "amarelo" ? styles.metaHealthWarning : ""}`}
-                            aria-label="Controle preventivo da Meta">
+                            aria-label="Controle preventivo da Meta" data-disparo-campo="capacidade" data-disparo-destaque={campoPendente === "capacidade"}>
                             <div className={styles.metaHealthHeader}>
                               <div>
                                 <span>Controle preventivo da Meta</span>
@@ -6731,7 +6800,7 @@ export default function DisparosWhatsAppPage() {
                               <span className={styles.schedulePlanningHint}>Etapa 2 de 4</span>
                             </div>
                             <label className={styles.label} htmlFor="disparo-quantidade-desejada">Quantidade desejada</label>
-                            <div className={styles.dispatchCapacityQuantityRow}>
+                            <div className={styles.dispatchCapacityQuantityRow} data-disparo-campo="quantidade" data-disparo-destaque={campoPendente === "quantidade"}>
                               <input id="disparo-quantidade-desejada" type="number" min={1} step={1}
                                 className={`${styles.input} ${styles.dispatchCapacityQuantityInput}`} inputMode="numeric"
                                 value={quantidadePlanejada} placeholder="Ex.: 250"
@@ -6803,7 +6872,7 @@ export default function DisparosWhatsAppPage() {
                             ) : null}
 
                             {quantidadeDesejada > 0 && !quantidadeExcedeLimiteTotal && limiteMeta ? (
-                              <div className={styles.dispatchCapacityChoices}>
+                              <div className={styles.dispatchCapacityChoices} data-disparo-campo="momento" data-disparo-destaque={campoPendente === "momento"}>
                                 <button type="button" className={`${styles.dispatchCapacityOption} ${styles.dispatchCapacityOptionImmediate} ${planoCapacidadeConfirmado === "imediato" ? styles.dispatchCapacityOptionSelected : ""}`}
                                   aria-pressed={planoCapacidadeConfirmado === "imediato"}
                                   disabled={capacidadeAgoraPlanejamento <= 0 || disparoBloqueado}
@@ -6843,7 +6912,7 @@ export default function DisparosWhatsAppPage() {
                               </div>
                             ) : null}
                             {agendarDisparo && planoCapacidadeConfirmado === "agendado" ? (
-                              <div className={styles.dispatchCapacityScheduleFields}>
+                              <div className={styles.dispatchCapacityScheduleFields} data-disparo-campo="horario" data-disparo-destaque={campoPendente === "horario"}>
                                 <label className={styles.field}><span className={styles.label}>Data</span>
                                   <input type="date" className={styles.input} min={dataHojeParaInput()}
                                     value={agendamentoData} onChange={(e) => setAgendamentoData(e.target.value)} />
@@ -6863,6 +6932,38 @@ export default function DisparosWhatsAppPage() {
                       ) : null}
                       {etapaDisparo === 3 ? (
                         <div className={styles.disparoWizardStage}>
+                          <section className={styles.reserveContactsCard}>
+                            <label className={styles.reserveContactsHeading}>
+                              <span className={styles.reserveContactsIcon} aria-hidden="true"><ShieldCheck size={19} /></span>
+                              <span>
+                                <strong>Contatos de reserva</strong>
+                                <small>Compensar falhas de entrega automaticamente</small>
+                              </span>
+                              <input
+                                type="checkbox"
+                                className={styles.reserveContactsSwitch}
+                                checked={contatosReservaAtivos}
+                                onChange={(event) => {
+                                  const ativo = event.target.checked;
+                                  setContatosReservaAtivos(ativo);
+                                  if (!ativo) {
+                                    setContatosSelecionados((anteriores) => anteriores.slice(0, quantidadeDesejada));
+                                  }
+                                  setErro("");
+                                }}
+                                aria-label="Ativar contatos de reserva para compensar falhas"
+                              />
+                            </label>
+                            {contatosReservaAtivos ? (
+                              <div className={styles.reserveContactsDetails}>
+                                <div className={styles.reserveContactsTotals}>
+                                  <span><strong>{formatarNumeroMeta(Math.min(contatosSelecionados.length, quantidadeDesejada))}/{formatarNumeroMeta(quantidadeDesejada)}</strong> principais</span>
+                                  <span><strong>{formatarNumeroMeta(contatosReserva.length)}/{formatarNumeroMeta(limiteContatosReserva)}</strong> de reserva (50%)</span>
+                                </div>
+                                <p><Info size={15} aria-hidden="true" /> Adicione primeiro os contatos principais e, em seguida, os de reserva. Eles serão usados somente para compensar falhas definitivas, sem ultrapassar a quantidade desejada nem a capacidade disponível da Meta. Se faltar capacidade, a compensação aguardará liberação.</p>
+                              </div>
+                            ) : null}
+                          </section>
                           <div className={styles.contactsFilterCard}>
                   <div className={styles.contactsFilterHeader}>
                     <div>
@@ -7165,7 +7266,7 @@ export default function DisparosWhatsAppPage() {
                   ) : null}
                 </div>
 
-                <div className={styles.contactsSection}>
+                <div className={styles.contactsSection} data-disparo-campo="contatos" data-disparo-destaque={campoPendente === "contatos"}>
                   <div className={styles.contactsColumn}>
                     <div className={styles.contactsHeader}>
                       <h3 className={styles.contactsTitle}>Disponíveis</h3>
@@ -7516,7 +7617,7 @@ export default function DisparosWhatsAppPage() {
                   erroConflitos ||
                   gruposConflitoAtivos.length > 0) && (
                   <div
-                    className={`${styles.conflictCard} ${
+                    data-disparo-campo="conflitos" data-disparo-destaque={campoPendente === "conflitos"} className={`${styles.conflictCard} ${
                       temConflitosPendentes
                         ? styles.conflictCardPending
                         : styles.conflictCardResolved
@@ -7624,11 +7725,11 @@ export default function DisparosWhatsAppPage() {
 
 
 
-                <div className={`${styles.capacityResolution} ${contatosSelecionados.length === quantidadeDesejada ? styles.capacityResolutionGood : styles.capacityResolutionBlocked}`} role="status">
-                  <strong>{formatarNumeroMeta(contatosSelecionados.length)} de {formatarNumeroMeta(quantidadeDesejada)} contatos selecionados</strong>
-                  <span>{contatosSelecionados.length === quantidadeDesejada
-                    ? "Quantidade definida preenchida. A elegibilidade e a capacidade serão revalidadas na confirmação."
-                    : `Faltam ${formatarNumeroMeta(Math.max(0, quantidadeDesejada - contatosSelecionados.length))} contatos. Use “Preencher seleção” ou adicione individualmente.`}</span>
+                <div data-disparo-campo="custo" data-disparo-destaque={campoPendente === "custo"} className={`${styles.capacityResolution} ${contatosSelecionados.length > 0 ? styles.capacityResolutionGood : styles.capacityResolutionBlocked}`} role="status">
+                  <strong>{formatarNumeroMeta(contatosPrincipais.length)} principal(is) de até {formatarNumeroMeta(quantidadeDesejada)} · {formatarNumeroMeta(contatosReserva.length)} reserva(s)</strong>
+                  <span>{contatosSelecionados.length > 0
+                    ? "Você pode continuar com esta seleção. Contatos de reserva não serão enviados sem falha definitiva e disponibilidade da Meta."
+                    : "Selecione ao menos um contato para continuar."}</span>
                 </div>
                         </div>
                       ) : null}

@@ -1106,6 +1106,37 @@ async function sincronizarAgendamentosCampanha(campanhaId: string) {
   }
 }
 
+async function ativarReservasCampanha(campanhaId: string) {
+  try {
+    const { data, error } = await supabaseAdmin.rpc(
+      "ativar_contatos_reserva_disparo",
+      { p_campanha_id: campanhaId }
+    );
+    if (error) {
+      if (error.code !== "PGRST202") {
+        console.error("[WHATSAPP CONTINGENCIA] Falha ao ativar reservas:", {
+          campanhaId, erro: error.message,
+        });
+      }
+      return 0;
+    }
+    const ativados = Number(data || 0);
+    if (ativados > 0) {
+      const campanha = await buscarCampanha(campanhaId);
+      await publicarProximoItemCampanhaQstash({
+        campanhaId,
+        integracaoWhatsappId: campanha.integracao_whatsapp_id,
+      });
+    }
+    return ativados;
+  } catch (error) {
+    console.error("[WHATSAPP CONTINGENCIA] Falha inesperada:", {
+      campanhaId, erro: error instanceof Error ? error.message : String(error),
+    });
+    return 0;
+  }
+}
+
 export async function reconciliarCampanhaDisparo(campanhaId: string) {
   const id = String(campanhaId || "").trim();
 
@@ -1113,6 +1144,7 @@ export async function reconciliarCampanhaDisparo(campanhaId: string) {
     return null;
   }
 
+  await ativarReservasCampanha(id);
   const resumo = await recalcularCampanha(id);
   await sincronizarAgendamentosCampanha(id);
   return resumo;
@@ -2061,6 +2093,12 @@ async function processarItemDisparo(item: DisparoItemRow) {
       erroCodigoMeta: resultado.erroCodigoMeta,
       erroMensagem: resultado.erro,
     });
+    // Uma falha definitiva de destinatário libera a próxima reserva,
+    // somente se houver vaga Meta e sem aumentar o alvo da campanha.
+    if ([131026, 130472, 131049].includes(Number(resultado.erroCodigoMeta))) {
+      await ativarReservasCampanha(campanha.id);
+      await recalcularCampanha(campanha.id);
+    }
   }
 
   return { status: resultado.ok ? "enviado" as const : "falha" as const };
@@ -2257,6 +2295,19 @@ export async function processarFilaDisparosWhatsapp(params: {
     1,
     60
   );
+
+  // Reavalia campanhas aguardando capacidade Meta liberada na janela
+  // móvel de 24h. Nunca enfileira reservas antes da validação no banco.
+  const { data: candidatas } = await supabaseAdmin
+    .from("whatsapp_disparo_campanhas")
+    .select("id")
+    .contains("metadata_json", { contingencia_reserva_ativa: true })
+    .in("status", ["pendente", "enviando", "concluida"])
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  for (const campanha of candidatas || []) {
+    await ativarReservasCampanha(String(campanha.id));
+  }
 
   const { data, error } = await supabaseAdmin.rpc(
     "reivindicar_whatsapp_disparo_itens",

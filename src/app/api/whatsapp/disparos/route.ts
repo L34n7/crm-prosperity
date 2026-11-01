@@ -569,6 +569,15 @@ export async function POST(req: NextRequest) {
     const destinatarios = Array.isArray(body?.destinatarios)
       ? (body.destinatarios as DestinatarioEntrada[])
       : [];
+    const reservaAtiva = body?.reserva_ativa === true;
+    const quantidadeDesejada = Number(body?.meta_quantidade_desejada || 0);
+    const reservasRecebidas = Array.isArray(body?.reserva_destinatarios)
+      ? (body.reserva_destinatarios as DestinatarioEntrada[])
+      : [];
+    const reservaDestinatarios = reservaAtiva ? reservasRecebidas : [];
+    const todosDestinatarios = [...destinatarios, ...reservaDestinatarios];
+    const chaveTelefone = (item: DestinatarioEntrada) => limparNumero(item.numero);
+    const listaTelefones = todosDestinatarios.map(chaveTelefone);
     const variaveisConfig = Array.isArray(body?.variaveis_config)
       ? body.variaveis_config
           .map((item: unknown) => normalizarChaveVariavelFluxo(item))
@@ -621,6 +630,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Informe pelo menos um destinatario." },
         { status: 400 }
+      );
+    }
+    if (
+      (reservaAtiva && (
+        !Number.isSafeInteger(quantidadeDesejada) ||
+        quantidadeDesejada < destinatarios.length ||
+        reservaDestinatarios.length > Math.floor(quantidadeDesejada * 0.5)
+      )) ||
+      (!reservaAtiva && reservasRecebidas.length > 0) ||
+      listaTelefones.some((telefone) => telefone.length < 10) ||
+      new Set(listaTelefones).size !== listaTelefones.length
+    ) {
+      return NextResponse.json(
+        { ok: false, error: "Seleção de principais ou reservas inválida. Confira as quantidades e telefones únicos." },
+        { status: 422 }
       );
     }
 
@@ -869,6 +893,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const metadataContingencia = {
+      contingencia_reserva_ativa: reservaAtiva && reservaDestinatarios.length > 0,
+      contingencia_meta_quantidade_desejada: quantidadeDesejada || destinatarios.length,
+      contingencia_meta_contatos_principais: destinatarios.length,
+      contingencia_reserva_contatos: reservaDestinatarios.map((item) => ({
+        contato_id: String(item.contato_id || "").trim() || null,
+        numero: chaveTelefone(item),
+        variaveis: Array.isArray(item.variaveis)
+          ? item.variaveis.slice(0, 6).map((valor) => String(valor ?? ""))
+          : [],
+      })),
+      contingencia_reserva_cursor: 0,
+      contingencia_expira_em: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+    };
     const campanhaCriadaEm = new Date();
     const nomeCampanha = montarNomeCampanhaDisparo({
       nomeInformado: nomeCampanhaInformado,
@@ -899,6 +937,7 @@ export async function POST(req: NextRequest) {
         qstash_flow_control_key: obterFlowControlKeyDisparo(integracaoWhatsappId),
         qstash_publicados: 0,
         metadata_json: {
+          ...metadataContingencia,
           preparacao_status: "aguardando",
           variaveis_config: variaveisConfig,
           responsabilidade_lista_fria_confirmada:
@@ -967,6 +1006,7 @@ export async function POST(req: NextRequest) {
           .from("whatsapp_disparo_campanhas")
           .update({
             metadata_json: {
+              ...metadataContingencia,
               preparacao_status: "processando",
               variaveis_config: variaveisConfig,
               responsabilidade_lista_fria_confirmada:
@@ -979,7 +1019,7 @@ export async function POST(req: NextRequest) {
 
         const telefonesSuprimidos = await buscarTelefonesSuprimidos({
           empresaId,
-          telefones: destinatarios.map((destinatario) => destinatario.numero),
+          telefones: todosDestinatarios.map((destinatario) => destinatario.numero),
           categoria: template.categoria,
         });
 
@@ -994,7 +1034,7 @@ export async function POST(req: NextRequest) {
         const telefonesEmCooldown = templateEhMarketing
           ? await buscarTelefonesEmCooldownDisparo({
               empresaId,
-              telefones: destinatarios.map(
+              telefones: todosDestinatarios.map(
                 (destinatario) => destinatario.numero
               ),
               categoria: "marketing",
@@ -1012,7 +1052,7 @@ export async function POST(req: NextRequest) {
           empresaId,
           integracaoWhatsappId,
           phoneNumberId: integracao.phone_number_id,
-          destinatarios: destinatarios.map((destinatario) => ({
+          destinatarios: todosDestinatarios.map((destinatario) => ({
             contatoId: destinatario.contato_id,
             telefone: destinatario.numero,
           })),
@@ -1088,6 +1128,7 @@ export async function POST(req: NextRequest) {
             limite_meta_restantes: reservaLimite.restantes,
             limite_meta_reserva_ids: reservaLimite.reservaIds,
             metadata_json: {
+              ...metadataContingencia,
               preparacao_status: "criando_itens",
               template_payload: (template.payload || null) as
                 | TemplatePayloadDisparo
@@ -1155,6 +1196,7 @@ export async function POST(req: NextRequest) {
               obterFlowControlKeyDisparo(integracaoWhatsappId),
             qstash_erro: publicacaoQstash.erro || null,
             metadata_json: {
+              ...metadataContingencia,
               preparacao_status: "concluida",
               template_payload: (template.payload || null) as
                 | TemplatePayloadDisparo
@@ -1231,6 +1273,7 @@ export async function POST(req: NextRequest) {
             total_pendentes: 0,
             erro: mensagem,
             metadata_json: {
+              ...metadataContingencia,
               preparacao_status: "erro",
               preparacao_erro: mensagem,
               variaveis_config: variaveisConfig,

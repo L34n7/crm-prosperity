@@ -447,6 +447,12 @@ async function inserirItens(params: {
 async function enfileirarGrupo(agendamentos: AgendamentoDisparo[]) {
   const primeiro = agendamentos[0];
   const payload = objeto(primeiro.payload_json);
+  const payloadContingencia = agendamentos
+    .map((item) => objeto(item.payload_json))
+    .find((dados) => dados.contingencia_reserva_ativa === true) || {};
+  const reservasContingencia = Array.isArray(payloadContingencia.contingencia_reserva_contatos)
+    ? payloadContingencia.contingencia_reserva_contatos
+    : [];
   const empresaId = primeiro.empresa_id;
   const integracaoWhatsappId = String(
     payload.integracao_whatsapp_id || ""
@@ -629,6 +635,14 @@ async function enfileirarGrupo(agendamentos: AgendamentoDisparo[]) {
           integracaoWhatsappId
         ),
         metadata_json: {
+          ...(reservasContingencia.length > 0 ? {
+            contingencia_reserva_ativa: true,
+            contingencia_meta_quantidade_desejada: Number(payloadContingencia.contingencia_meta_quantidade_desejada || agendamentos.length),
+            contingencia_meta_contatos_principais: agendamentos.length,
+            contingencia_reserva_contatos: reservasContingencia,
+            contingencia_reserva_cursor: 0,
+            contingencia_expira_em: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
+          } : {}),
           agendamento_chave: chave,
           executar_em: primeiro.executar_em,
           total_consumem_limite_meta: telefonesQueConsomem.length,
