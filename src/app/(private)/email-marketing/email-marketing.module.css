@@ -5564,3 +5564,111 @@
     font-size: 16px;
   }
 }
+
+
+/* Desktop: mantém as ações da campanha na coluna de configuração após a mudança estrutural. */
+@media (min-width: 821px) {
+  .campaignWizardModal .wizardWorkspace {
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .campaignWizardModal .wizardPreviewSidebar {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+  .campaignWizardModal .wizardMainColumn {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .campaignWizardModal .wizardWorkspace > .wizardFooter {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+
+/* Mobile: campanha com botões somente depois do conteúdo e da prévia. */
+@media (max-width: 700px) {
+  .campaignWizardModal .wizardWorkspace {
+    padding-bottom: 0;
+  }
+  .campaignWizardModal .wizardWorkspace > .wizardFooter {
+    position: static;
+    order: 2;
+    flex: 0 0 auto;
+    inset: auto;
+    z-index: auto;
+    box-shadow: none;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Mobile: editor de templates de e-mail também segue a rolagem contínua. */
+@media (max-width: 700px) {
+  .modalOverlay:has(> .templatePremiumModal) {
+    padding: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .templatePremiumModal {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    border-radius: 0;
+  }
+  .templatePremiumModal .templatePremiumHeader {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: calc(13px + env(safe-area-inset-top)) 16px 13px;
+  }
+  .templatePremiumModal .templatePremiumHeading > span { display: none; }
+  .templatePremiumModal .templatePremiumHeading h2 {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+  .templatePremiumModal .templatePremiumForm {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .templatePremiumModal .templateEditorLayout {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    min-height: auto;
+    overflow: visible;
+  }
+  .templatePremiumModal .templateEditorColumn {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+    padding: 16px;
+  }
+  .templatePremiumModal .templateLivePreview {
+    flex: 0 0 auto;
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    padding: 16px;
+    border-top: 1px solid var(--crm-border);
+    border-left: 0;
+  }
+  .templatePremiumModal .templateLivePreviewFrame {
+    flex: 0 0 auto;
+    height: min(480px, 56dvh);
+    min-height: 300px;
+  }
+  .templatePremiumModal .templatePremiumFooter {
+    position: static;
+    flex: 0 0 auto;
+    box-shadow: none;
+    padding: 13px 16px calc(13px + env(safe-area-inset-bottom));
+  }
+  .templatePremiumModal .field input,
+  .templatePremiumModal .field select,
+  .templatePremiumModal .htmlEditor {
+    font-size: 16px;
+  }
+}

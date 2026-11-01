@@ -2098,3 +2098,33 @@
     margin-left: auto;
   }
 }
+
+
+/* Mobile: a prévia e as ações do criador ficam na mesma rolagem. */
+@media (max-width: 700px) {
+  .creatorModal {
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .creatorModal .creatorModalBody {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .creatorModal .creatorModalForm,
+  .creatorModal .creatorFieldset,
+  .creatorModal .creatorWizardScroll {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .creatorModal .creatorModalFooter {
+    position: static;
+    flex: 0 0 auto;
+    box-shadow: none;
+  }
+}

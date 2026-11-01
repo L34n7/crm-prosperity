@@ -1481,6 +1481,8 @@ export default function CampanhaModal({
             {erro ? <div className={styles.feedbackError}>{erro}</div> : null}
             </div>
 
+          </form>
+            </div>
             <div className={styles.wizardFooter}>
               <div>
                 {etapa > 1 ? (
@@ -1546,8 +1548,6 @@ export default function CampanhaModal({
                   </button>
                 )}
               </div>
-            </div>
-          </form>
             </div>
           </div>
         </div>

@@ -7458,3 +7458,38 @@
     overflow-wrap: anywhere;
   }
 }
+
+
+/* Mobile: os botões do assistente WhatsApp aparecem após todo o conteúdo. */
+@media (max-width: 700px) {
+  .disparoWizardForm {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .disparoWizardForm .disparoWizardSteps { flex: 0 0 auto; }
+  .disparoWizardForm .disparoWizardWorkspace {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .disparoWizardForm .disparoWizardMain {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .disparoWizardForm .disparoWizardScroll {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .disparoWizardForm .disparoWizardFooter {
+    position: static;
+    flex: 0 0 auto;
+    box-shadow: none;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+}

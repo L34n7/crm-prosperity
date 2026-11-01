@@ -388,7 +388,7 @@ export default function TemplatesWhatsAppPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [modalCriacaoAberto, setModalCriacaoAberto] = useState(false);
-  const criacaoModalBodyRef = useRef<HTMLDivElement>(null);
+  const criacaoModalRef = useRef<HTMLElement>(null);
   const [etapaCriacao, setEtapaCriacao] = useState<1 | 2 | 3>(1);
   const [sincronizando, setSincronizando] = useState(false);
 
@@ -454,7 +454,7 @@ export default function TemplatesWhatsAppPage() {
 
   useEffect(() => {
     if (!modalCriacaoAberto || !window.matchMedia("(max-width: 700px)").matches) return;
-    criacaoModalBodyRef.current?.scrollTo({ top: 0 });
+    criacaoModalRef.current?.scrollTo({ top: 0 });
   }, [modalCriacaoAberto, etapaCriacao]);
 
   useEffect(() => {
@@ -1541,6 +1541,7 @@ export default function TemplatesWhatsAppPage() {
         >
           <section
             className={styles.creatorModal}
+            ref={criacaoModalRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="criacao-template-titulo"
@@ -1568,7 +1569,7 @@ export default function TemplatesWhatsAppPage() {
               >✕</button>
             </header>
 
-            <div className={styles.creatorModalBody} ref={criacaoModalBodyRef}>
+            <div className={styles.creatorModalBody}>
               <aside className={styles.creatorModalPreview}>
                 <div className={styles.creatorPreviewInner}>
                       <div className={styles.whatsappPreviewCard}>

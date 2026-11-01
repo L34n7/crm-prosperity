@@ -2333,6 +2333,7 @@ export default function DisparosWhatsAppPage() {
   const [quantidadePlanejada, setQuantidadePlanejada] = useState("");
   const [contatosReservaAtivos, setContatosReservaAtivos] = useState(false);
   const [campoPendente, setCampoPendente] = useState("");
+  const formularioDisparosRef = useRef<HTMLFormElement>(null);
   const [planoCapacidadeConfirmado, setPlanoCapacidadeConfirmado] = useState<"imediato" | "agendado" | null>(null);
   const [totalContatosDisponiveis, setTotalContatosDisponiveis] = useState(0);
   const [limiteMeta, setLimiteMeta] = useState<LimiteMeta | null>(null);
@@ -6150,6 +6151,11 @@ export default function DisparosWhatsAppPage() {
     return () => window.clearTimeout(timeout);
   }, [campoPendente, etapaDisparo, modalCriacaoDisparoAberto]);
 
+  useEffect(() => {
+    if (!modalCriacaoDisparoAberto || !window.matchMedia("(max-width: 700px)").matches) return;
+    formularioDisparosRef.current?.scrollTo({ top: 0 });
+  }, [modalCriacaoDisparoAberto, etapaDisparo]);
+
   function avancarEtapaDisparo() {
     setErro("");
     if (etapaDisparo === 1) {
@@ -6497,7 +6503,7 @@ export default function DisparosWhatsAppPage() {
                 ) : !podeDisparar ? (
                   <div className={styles.emptyState}>Você não tem permissão para realizar disparos.</div>
                 ) : (
-                  <form onSubmit={(event) => event.preventDefault()} className={styles.disparoWizardForm}>
+                  <form ref={formularioDisparosRef} onSubmit={(event) => event.preventDefault()} className={styles.disparoWizardForm}>
                     <nav className={styles.disparoWizardSteps} aria-label="Etapas do disparo">
                       {[
                         { numero: 1, titulo: "Mensagem e variáveis" },
