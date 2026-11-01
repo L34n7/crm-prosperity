@@ -275,16 +275,25 @@ export async function GET(request: NextRequest) {
       const nomeCriadorPorId = new Map(
         (usuariosCriadores || []).map((item: any) => [String(item.id), String(item.nome || "")])
       );
-      const disparosComCriador = (itensGrupo || []).map((item: any) => ({
-        ...item,
-        payload_json: {
-          ...(item.payload_json || {}),
-          usuario_criador_nome:
-            nomeCriadorPorId.get(String(item.payload_json?.usuario_id || "")) ||
-            String(item.payload_json?.usuario_criador_nome || "").trim() ||
-            null,
-        },
-      }));
+      const disparosComCriador = (itensGrupo || []).map((item: any) => {
+        const payload = item.payload_json || {};
+        const criadorEmSuporte = Boolean(payload.usuario_criador_operador_id);
+        const nomeRegistrado = String(payload.usuario_criador_nome || "").trim();
+
+        return {
+          ...item,
+          payload_json: {
+            ...payload,
+            // Em modo suporte, o operador pode pertencer a outra empresa.
+            // Portanto, não substitua seu nome pelo administrador-alvo.
+            usuario_criador_nome: criadorEmSuporte
+              ? nomeRegistrado || "Suporte administrativo"
+              : nomeCriadorPorId.get(String(payload.usuario_id || "")) ||
+                nomeRegistrado ||
+                null,
+          },
+        };
+      });
 
       return NextResponse.json({
         ok: true,
