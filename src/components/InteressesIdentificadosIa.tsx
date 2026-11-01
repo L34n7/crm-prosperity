@@ -10,6 +10,7 @@ type Props = {
   interesses: InteresseIdentificadoIa[];
   carregando?: boolean;
   compacto?: boolean;
+  erro?: boolean;
 };
 
 function formatarData(valor: string | null) {
@@ -30,6 +31,7 @@ export default function InteressesIdentificadosIa({
   interesses,
   carregando = false,
   compacto = false,
+  erro = false,
 }: Props) {
   const [expandido, setExpandido] = useState(false);
   const itens = expandido ? interesses : interesses.slice(0, compacto ? 3 : 4);
@@ -50,6 +52,8 @@ export default function InteressesIdentificadosIa({
 
       {carregando ? (
         <p className={styles.vazio} role="status">Carregando interesses identificados...</p>
+      ) : erro ? (
+        <p className={styles.vazio} role="alert">Não foi possível carregar os interesses agora. Atualize os detalhes para tentar novamente.</p>
       ) : interesses.length === 0 ? (
         <p className={styles.vazio}>A IA ainda não identificou interesses para este contato.</p>
       ) : (
