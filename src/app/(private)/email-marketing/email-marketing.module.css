@@ -5380,3 +5380,187 @@
     font-size: 12px;
   }
 }
+
+
+/* Nova campanha de e-mail: segue o layout compacto do assistente de disparos no mobile. */
+.wizardStepTotal { display: none; }
+
+@media (max-width: 700px) {
+  .modalOverlay:has(> .campaignWizardModal) {
+    padding: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .campaignWizardModal {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 0;
+  }
+  .campaignWizardModal .wizardCompactModalHeader {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: calc(13px + env(safe-area-inset-top)) 16px 13px;
+    gap: 12px;
+  }
+  .campaignWizardModal .wizardCompactTitle {
+    min-width: 0;
+    gap: 2px;
+  }
+  .campaignWizardModal .wizardCompactTitle > span {
+    display: none;
+  }
+  .campaignWizardModal .wizardCompactTitle h2 {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+
+  /* Campos e prévia compartilham a mesma rolagem, com a prévia no final. */
+  .campaignWizardModal .wizardWorkspace {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+  .campaignWizardModal .wizardMainColumn {
+    order: 0;
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .campaignWizardModal .modalBody {
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .campaignWizardModal .wizardScrollArea {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+    padding: 16px;
+  }
+  .campaignWizardModal .wizardPreviewSidebar {
+    order: 1;
+    flex: 0 0 auto;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 16px;
+    border-right: 0;
+    border-bottom: 0;
+    border-top: 1px solid var(--crm-border);
+    background: var(--crm-surface-soft);
+  }
+  .campaignWizardModal .wizardPreviewDocument {
+    flex: 0 0 auto;
+    height: min(480px, 58dvh);
+    min-height: 300px;
+  }
+
+  /* Apenas 1/4 + título da etapa em andamento. */
+  .campaignWizardModal .wizardSteps {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 9px 12px;
+    background: var(--crm-surface);
+    border-bottom: 1px solid var(--crm-border);
+  }
+  .campaignWizardModal .wizardStep,
+  .campaignWizardModal .wizardStepDone {
+    display: none;
+  }
+  .campaignWizardModal .wizardStepActive {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 9px 11px;
+    border: 1px solid var(--crm-primary-border);
+    border-radius: 12px;
+    background: var(--crm-primary-soft);
+  }
+  .campaignWizardModal .wizardStepActive > span {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 1px;
+    width: auto;
+    min-width: 46px;
+    height: 28px;
+    padding: 0 7px;
+    border-radius: 8px;
+    background: var(--crm-primary-strong);
+    color: var(--crm-text-inverse);
+    white-space: nowrap;
+  }
+  .campaignWizardModal .wizardStepActive .wizardStepTotal { display: inline; }
+  .campaignWizardModal .wizardStepActive > div { min-width: 0; }
+  .campaignWizardModal .wizardSteps strong {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .campaignWizardModal .wizardSteps small { display: none; }
+
+  /* Ações sempre acessíveis, mesmo ao rolar até a prévia do e-mail. */
+  .campaignWizardModal .wizardFooter {
+    position: absolute;
+    z-index: 6;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 9px;
+    padding: 11px 14px calc(11px + env(safe-area-inset-bottom));
+    background: var(--crm-surface);
+    box-shadow: 0 -6px 18px rgb(15 23 42 / 6%);
+  }
+  .campaignWizardModal .wizardFooter > div:first-child {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  .campaignWizardModal[data-campaign-step="1"] .wizardFooter > div:first-child { display: none; }
+  .campaignWizardModal .wizardFooter .modalFooterActions {
+    display: flex;
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 8px;
+  }
+  .campaignWizardModal:not([data-campaign-step="1"]) .wizardFooter .modalFooterActions > .secondaryButton {
+    display: none;
+  }
+  .campaignWizardModal .wizardFooter .secondaryButton {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: 0 11px;
+  }
+  .campaignWizardModal .wizardFooter .primaryButton {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .campaignWizardModal .field input,
+  .campaignWizardModal .field select,
+  .campaignWizardModal .field textarea {
+    font-size: 16px;
+  }
+}

@@ -2078,3 +2078,23 @@
     width: 100%;
   }
 }
+
+
+/* Etapa 2 do criador de templates: a ação Remover permanece no topo direito do card no mobile. */
+@media (max-width: 700px) {
+  .creatorModal .templateButtonBuilderHeader {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .creatorModal .templateButtonBuilderHeader > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .creatorModal .templateButtonBuilderHeader .templateButtonRemove {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    margin-left: auto;
+  }
+}

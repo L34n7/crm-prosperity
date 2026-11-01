@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -133,6 +134,12 @@ export default function CampanhaModal({
     null;
 
   const [etapa, setEtapa] = useState(1);
+  const wizardWorkspaceRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!window.matchMedia("(max-width: 700px)").matches) return;
+    if (wizardWorkspaceRef.current) wizardWorkspaceRef.current.scrollTop = 0;
+  }, [etapa]);
+
   const [nome, setNome] = useState("");
   const [templateId, setTemplateId] = useState(templateInicial?.id || "");
   const [assunto, setAssunto] = useState(templateInicial?.assunto || "");
@@ -659,6 +666,7 @@ export default function CampanhaModal({
             styles.campaignModal,
             styles.campaignWizardModal,
           ].join(" ")}
+          data-campaign-step={etapa}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <div className={[styles.modalHeader, styles.wizardCompactModalHeader].join(" ")}>
@@ -676,7 +684,7 @@ export default function CampanhaModal({
             </button>
           </div>
 
-          <div className={styles.wizardWorkspace}>
+          <div className={styles.wizardWorkspace} ref={wizardWorkspaceRef}>
             <aside className={styles.wizardPreviewSidebar} aria-label="Pré-visualização do e-mail">
               <div className={styles.wizardPreviewCompactTop}>
                 <strong>Prévia do e-mail</strong>
@@ -732,7 +740,7 @@ export default function CampanhaModal({
                   if (item.id < etapa) setEtapa(item.id);
                 }}
               >
-                <span>{item.id < etapa ? <Check size={14} /> : item.id}</span>
+                <span>{item.id < etapa ? <Check size={14} /> : item.id}<span className={styles.wizardStepTotal}>/4</span></span>
                 <div>
                   <strong>{item.titulo}</strong>
                   <small>{item.subtitulo}</small>
