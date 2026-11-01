@@ -177,33 +177,44 @@ export default function CampanhaModal({
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState("");
   const [erro, setErro] = useState("");
-  const [campoPendente, setCampoPendente] = useState("");
+  const [campoComErro, setCampoComErro] = useState("");
+  const [campoAnimando, setCampoAnimando] = useState("");
 
+  // A animação termina, mas o erro fica visível até ser corrigido.
   useEffect(() => {
-    if (!campoPendente) return;
-    const campo = document.querySelector<HTMLElement>(
-      `[data-campanha-campo="${campoPendente}"]`
+    if (!campoAnimando) return;
+    const campo = wizardWorkspaceRef.current?.querySelector<HTMLElement>(
+      `[data-campanha-campo="${campoAnimando}"]`
     );
     campo?.scrollIntoView({ behavior: "smooth", block: "center" });
-    const timeout = window.setTimeout(() => setCampoPendente(""), 3100);
+    const timeout = window.setTimeout(() => setCampoAnimando(""), 2700);
     return () => window.clearTimeout(timeout);
-  }, [campoPendente, etapa]);
+  }, [campoAnimando, etapa]);
 
   function destacarCampo(campo: string, mensagem: string) {
+    setCampoComErro(campo);
     setAviso(mensagem);
-    setCampoPendente("");
-    window.requestAnimationFrame(() => setCampoPendente(campo));
+    setCampoAnimando("");
+    window.requestAnimationFrame(() => setCampoAnimando(campo));
   }
 
   function limparDestaque(campo: string) {
-    if (campoPendente !== campo) return;
-    setCampoPendente("");
+    if (campoComErro !== campo) return;
+    setCampoComErro("");
+    setCampoAnimando("");
     setAviso("");
   }
 
   function erroDoCampo(campo: string) {
-    return campoPendente === campo ? (
-      <small className={styles.campaignFieldError} role="alert">{aviso}</small>
+    return campoComErro === campo ? (
+      <span
+        id={`campanha-erro-${campo}`}
+        className={styles.campaignFieldError}
+        role="alert"
+      >
+        <AlertTriangle size={16} aria-hidden="true" />
+        <span>{aviso}</span>
+      </span>
     ) : null;
   }
 
@@ -533,8 +544,6 @@ export default function CampanhaModal({
   }, [audienciaTipo, listaIds, contatosSelecionados]);
 
   function alternarLista(id: string) {
-    limparDestaque("listas");
-    limparDestaque("audiencia");
     setListaIds((atuais) =>
       atuais.includes(id)
         ? atuais.filter((item) => item !== id)
@@ -544,8 +553,6 @@ export default function CampanhaModal({
 
   function alternarContato(contato: ContatoBusca) {
     if (contato.supressao_motivo) return;
-    limparDestaque("contatos");
-    limparDestaque("audiencia");
     setContatosSelecionados((atual) => {
       const novo = new Map(atual);
 
@@ -558,6 +565,19 @@ export default function CampanhaModal({
       return novo;
     });
   }
+
+  // Selecionar qualquer item não basta: limpamos o aviso após o requisito ser atendido.
+  useEffect(() => {
+    if (
+      (campoComErro === "listas" && listaIds.length > 0) ||
+      (campoComErro === "contatos" && contatosSelecionados.size > 0) ||
+      (campoComErro === "audiencia" && (analise?.elegiveis ?? 0) > 0)
+    ) {
+      setCampoComErro("");
+      setCampoAnimando("");
+      setAviso("");
+    }
+  }, [campoComErro, listaIds.length, contatosSelecionados.size, analise?.elegiveis]);
 
   function validarEtapaAtual() {
     setAviso("");
@@ -608,6 +628,8 @@ export default function CampanhaModal({
       setConfirmacaoFinal(false);
     }
 
+    setCampoComErro("");
+    setCampoAnimando("");
     setEtapa((atual) => Math.min(4, atual + 1));
   }
 
@@ -615,7 +637,8 @@ export default function CampanhaModal({
     setAviso("");
     setErro("");
     setConfirmacaoFinal(false);
-    setCampoPendente("");
+    setCampoComErro("");
+    setCampoAnimando("");
     setEtapa((atual) => Math.max(1, atual - 1));
   }
 
@@ -781,7 +804,12 @@ export default function CampanhaModal({
                       : styles.wizardStep
                 }
                 onClick={() => {
-                  if (item.id < etapa) setEtapa(item.id);
+                  if (item.id < etapa) {
+                    setCampoComErro("");
+                    setCampoAnimando("");
+                    setAviso("");
+                    setEtapa(item.id);
+                  }
                 }}
               >
                 <span>{item.id < etapa ? <Check size={14} /> : item.id}<span className={styles.wizardStepTotal}>/4</span></span>
@@ -801,22 +829,28 @@ export default function CampanhaModal({
             {etapa === 1 ? (
               <div className={styles.wizardSection}>
                 <div className={styles.formGridTwo}>
-                  <label className={styles.field} data-campanha-campo="nome" data-campanha-destaque={campoPendente === "nome"}>
+                  <label className={styles.field} data-campanha-campo="nome" data-campanha-invalido={campoComErro === "nome"} data-campanha-destaque={campoAnimando === "nome"}>
                     <span>Nome da campanha</span>
                     <input
                       value={nome}
-                      onChange={(event) => { setNome(event.target.value); limparDestaque("nome"); }}
+                      onChange={(event) => {
+                        setNome(event.target.value);
+                        if (event.target.value.trim()) limparDestaque("nome");
+                      }}
                       placeholder="Ex.: Campanha outubro"
                       maxLength={160}
                     />
                     {erroDoCampo("nome")}
                   </label>
 
-                  <label className={styles.field} data-campanha-campo="remetente" data-campanha-destaque={campoPendente === "remetente"}>
+                  <label className={styles.field} data-campanha-campo="remetente" data-campanha-invalido={campoComErro === "remetente"} data-campanha-destaque={campoAnimando === "remetente"}>
                     <span>Remetente</span>
                     <select
                       value={remetenteId}
-                      onChange={(event) => { setRemetenteId(event.target.value); limparDestaque("remetente"); }}
+                      onChange={(event) => {
+                        setRemetenteId(event.target.value);
+                        if (event.target.value) limparDestaque("remetente");
+                      }}
                     >
                       <option value="">Selecione</option>
                       {remetentes
@@ -832,11 +866,14 @@ export default function CampanhaModal({
                 </div>
 
                 <div className={styles.formGridTwo}>
-                  <label className={styles.field} data-campanha-campo="template" data-campanha-destaque={campoPendente === "template"}>
+                  <label className={styles.field} data-campanha-campo="template" data-campanha-invalido={campoComErro === "template"} data-campanha-destaque={campoAnimando === "template"}>
                     <span>Template</span>
                     <select
                       value={templateId}
-                      onChange={(event) => { setTemplateId(event.target.value); limparDestaque("template"); }}
+                      onChange={(event) => {
+                        setTemplateId(event.target.value);
+                        if (event.target.value) limparDestaque("template");
+                      }}
                     >
                       <option value="">Selecione</option>
                       {templates.map((item) => (
@@ -848,11 +885,14 @@ export default function CampanhaModal({
                     {erroDoCampo("template")}
                   </label>
 
-                  <label className={styles.field} data-campanha-campo="assunto" data-campanha-destaque={campoPendente === "assunto"}>
+                  <label className={styles.field} data-campanha-campo="assunto" data-campanha-invalido={campoComErro === "assunto"} data-campanha-destaque={campoAnimando === "assunto"}>
                     <span>Assunto</span>
                     <input
                       value={assunto}
-                      onChange={(event) => { setAssunto(event.target.value); limparDestaque("assunto"); }}
+                      onChange={(event) => {
+                        setAssunto(event.target.value);
+                        if (event.target.value.trim()) limparDestaque("assunto");
+                      }}
                       placeholder="Assunto da mensagem"
                       maxLength={250}
                     />
@@ -877,7 +917,7 @@ export default function CampanhaModal({
                   </span>
                 </div>
 
-                <div className={styles.audienceModeSelector} role="group" aria-label="Tipo de público" data-campanha-campo="audiencia" data-campanha-destaque={campoPendente === "audiencia"}>
+                <div className={styles.audienceModeSelector} role="group" aria-label="Tipo de público" data-campanha-campo="audiencia" data-campanha-invalido={campoComErro === "audiencia"} data-campanha-destaque={campoAnimando === "audiencia"}>
                   <button
                     type="button"
                     aria-pressed={audienciaTipo === "todos"}
@@ -918,7 +958,7 @@ export default function CampanhaModal({
                 {erroDoCampo("audiencia")}
 
                 {audienciaTipo === "listas" ? (
-                  <div className={styles.audiencePicker} data-campanha-campo="listas" data-campanha-destaque={campoPendente === "listas"}>
+                  <div className={styles.audiencePicker} data-campanha-campo="listas" data-campanha-invalido={campoComErro === "listas"} data-campanha-destaque={campoAnimando === "listas"}>
                     <div className={styles.audiencePickerHeader}>
                       <label className={styles.searchBox}>
                         <Search size={17} />
@@ -985,7 +1025,7 @@ export default function CampanhaModal({
                 ) : null}
 
                 {audienciaTipo === "contatos" ? (
-                  <section className={styles.audienceContactSection} data-campanha-campo="contatos" data-campanha-destaque={campoPendente === "contatos"}>
+                  <section className={styles.audienceContactSection} data-campanha-campo="contatos" data-campanha-invalido={campoComErro === "contatos"} data-campanha-destaque={campoAnimando === "contatos"}>
                     <div className={styles.audienceContactSectionHeader}>
                       <strong>Selecione os contatos</strong>
                       <span>Clique em um contato para adicionar ou remover.</span>
@@ -1291,7 +1331,7 @@ export default function CampanhaModal({
 
             {etapa === 4 ? (
               <div className={styles.wizardSection}>
-                <div className={styles.reviewHero} data-campanha-campo="audiencia-final" data-campanha-destaque={campoPendente === "audiencia-final"}>
+                <div className={styles.reviewHero} data-campanha-campo="audiencia-final" data-campanha-invalido={campoComErro === "audiencia-final"} data-campanha-destaque={campoAnimando === "audiencia-final"}>
                   <div className={styles.reviewHeroIcon}>
                     <Sparkles size={21} />
                   </div>
@@ -1392,7 +1432,7 @@ export default function CampanhaModal({
                   </div>
                 </div>
 
-                <div className={styles.sendDecisionPanel} data-campanha-campo="modo-envio" data-campanha-destaque={campoPendente === "modo-envio"}>
+                <div className={styles.sendDecisionPanel} data-campanha-campo="modo-envio" data-campanha-invalido={campoComErro === "modo-envio"} data-campanha-destaque={campoAnimando === "modo-envio"}>
                   <div className={styles.formSectionHeader}>
                     <div>
                       <strong>Quando enviar?</strong>
@@ -1414,7 +1454,8 @@ export default function CampanhaModal({
                         setModoEnvio("agora");
                         setConfirmacaoFinal(false);
                         setAviso("");
-                        setCampoPendente("");
+                        setCampoComErro("");
+                        setCampoAnimando("");
                       }}
                     >
                       <span className={styles.sendChoiceIcon}>
@@ -1442,7 +1483,8 @@ export default function CampanhaModal({
                         setModoEnvio("agendar");
                         setConfirmacaoFinal(false);
                         setAviso("");
-                        setCampoPendente("");
+                        setCampoComErro("");
+                        setCampoAnimando("");
                       }}
                     >
                       <span className={styles.sendChoiceIcon}>
@@ -1462,7 +1504,7 @@ export default function CampanhaModal({
                   {erroDoCampo("modo-envio")}
 
                   {modoEnvio === "agendar" ? (
-                    <div className={styles.schedulePanel} data-campanha-campo="agendamento" data-campanha-destaque={campoPendente === "agendamento"}>
+                    <div className={styles.schedulePanel} data-campanha-campo="agendamento" data-campanha-invalido={campoComErro === "agendamento"} data-campanha-destaque={campoAnimando === "agendamento"}>
                       <label className={styles.field}>
                         <span>Data e hora do envio</span>
                         <input
@@ -1471,7 +1513,10 @@ export default function CampanhaModal({
                           onChange={(event) => {
                             setAgendadaPara(event.target.value);
                             setConfirmacaoFinal(false);
-                            limparDestaque("agendamento");
+                            const data = new Date(event.target.value);
+                            if (Number.isFinite(data.getTime()) && data.getTime() > Date.now()) {
+                              limparDestaque("agendamento");
+                            }
                           }}
                         />
                         <small>
@@ -1485,7 +1530,7 @@ export default function CampanhaModal({
                 </div>
 
                 {modoEnvio ? (
-                  <label className={styles.finalConfirmation} data-campanha-campo="confirmacao" data-campanha-destaque={campoPendente === "confirmacao"}>
+                  <label className={styles.finalConfirmation} data-campanha-campo="confirmacao" data-campanha-invalido={campoComErro === "confirmacao"} data-campanha-destaque={campoAnimando === "confirmacao"}>
                     <input
                       type="checkbox"
                       checked={confirmacaoFinal}
@@ -1530,7 +1575,7 @@ export default function CampanhaModal({
               </div>
             ) : null}
 
-            {aviso ? (
+            {aviso && !campoComErro ? (
               <div className={styles.feedbackWarning}>
                 <AlertTriangle size={18} />
                 <span>{aviso}</span>

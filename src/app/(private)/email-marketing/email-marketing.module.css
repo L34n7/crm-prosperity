@@ -5674,36 +5674,60 @@
 }
 
 
-/* Destaque de preenchimento obrigatório no assistente de campanhas de e-mail. */
-.campaignWizardModal [data-campanha-destaque="true"] {
+/* Validação premium: aviso persistente e dois halos suaves quando a etapa é bloqueada. */
+.campaignWizardModal [data-campanha-invalido="true"] {
   position: relative;
   z-index: 1;
   border-radius: 12px;
-  outline: 2px solid transparent;
-  outline-offset: 8px;
-  animation: campanhaCampoPendente 2.8s ease-in-out 1;
+  outline: 2px solid color-mix(in srgb, var(--crm-warning-text) 46%, transparent);
+  outline-offset: 5px;
+  transition: outline-color .25s ease, box-shadow .25s ease;
+}
+.campaignWizardModal [data-campanha-destaque="true"] {
+  animation: campanhaCampoPendente 2.6s cubic-bezier(.22, .61, .36, 1) 1;
 }
 @keyframes campanhaCampoPendente {
-  0%, 100% { outline-color: transparent; }
-  18%, 38%, 64%, 84% { outline-color: color-mix(in srgb, var(--crm-warning-text) 68%, transparent); }
-  48%, 93% { outline-color: transparent; }
+  0%, 100% {
+    outline-color: color-mix(in srgb, var(--crm-warning-text) 46%, transparent);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  20%, 65% {
+    outline-color: var(--crm-warning-text);
+    box-shadow:
+      0 0 0 5px color-mix(in srgb, var(--crm-warning-text) 15%, transparent),
+      0 6px 24px color-mix(in srgb, var(--crm-warning-text) 10%, transparent);
+  }
+  43%, 87% {
+    outline-color: color-mix(in srgb, var(--crm-warning-text) 50%, transparent);
+    box-shadow: 0 0 0 10px transparent;
+  }
 }
 .campaignWizardModal .campaignFieldError {
-  display: block;
-  margin-top: 7px;
-  color: var(--crm-danger-text);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--crm-warning-border) 72%, var(--crm-border));
+  border-left: 3px solid var(--crm-warning-text);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--crm-warning-bg) 75%, var(--crm-surface));
+  color: var(--crm-warning-text);
   font-size: 13px;
-  font-weight: 750;
-  line-height: 1.45;
+  font-weight: 650;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
+.campaignWizardModal .campaignFieldError > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.campaignWizardModal .campaignFieldError > span { min-width: 0; }
 .campaignWizardModal .finalConfirmation .campaignFieldError {
   grid-column: 1 / -1;
 }
 @media (prefers-reduced-motion: reduce) {
   .campaignWizardModal [data-campanha-destaque="true"] {
     animation: none;
-    outline: 2px solid var(--crm-warning-text);
-    outline-offset: 8px;
   }
 }
