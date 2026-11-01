@@ -1,0 +1,41 @@
+.section {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--crm-border, rgba(148, 163, 184, .2));
+  border-radius: 16px;
+  background: var(--crm-surface, rgba(148, 163, 184, .05));
+  padding: 17px;
+  color: var(--crm-text-strong, inherit);
+}
+.header { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 13px; }
+.icone { flex: 0 0 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(139, 92, 246, .12); color: #a78bfa; }
+.titulos { flex: 1; min-width: 0; }
+.tituloLinha { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; line-height: 1.35; }
+.tituloLinha strong { font-weight: 750; font-size: 14px; }
+.total { font-weight: 800; font-size: 11px; padding: 2px 7px; border-radius: 99px;
+  color: #a78bfa; background: rgba(139,92,246,.12); }
+.titulos p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; opacity: .67; }
+.lista { display: flex; flex-direction: column; gap: 9px; }
+.item { padding: 11px 13px; border-radius: 11px;
+  border: 1px solid var(--crm-border, rgba(148,163,184,.16));
+  background: var(--crm-surface-subtle, rgba(148,163,184,.06)); min-width: 0; }
+.valor { font-size: 13px; line-height: 1.5; font-weight: 650; overflow-wrap: anywhere; }
+.rodape { display: flex; gap: 7px 11px; align-items: center; flex-wrap: wrap; margin-top: 7px;
+  font-size: 11px; opacity: .75; line-height: 1.35; }
+.origem { font-weight: 700; color: #a78bfa; }
+.link { display: inline-flex; gap: 4px; align-items: center; text-decoration: none;
+  font-weight: 750; color: #9d76ed; }
+.link:hover { text-decoration: underline; }
+.vazio { font-size: 12px; margin: 0; line-height: 1.6; opacity: .67; }
+.verMais { cursor: pointer; border: 0; background: transparent; color: #a78bfa; font-weight: 750;
+  font-size: 12px; margin-top: 11px; padding: 2px 0; }
+.verMais:hover { text-decoration: underline; }
+.compacto { padding: 12px; border-radius: 12px; }
+.compacto .header { gap: 9px; }
+.compacto .icone { flex-basis: 30px; height: 30px; }
+.compacto .tituloLinha strong { font-size: 12px; }
+.compacto .titulos p { font-size: 11px; }
+.compacto .item { padding: 9px 10px; }
+@media (max-width: 520px) { .section { padding: 12px; } .rodape { font-size: 10.5px; } }

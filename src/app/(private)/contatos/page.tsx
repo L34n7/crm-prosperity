@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
+import InteressesIdentificadosIa from "@/components/InteressesIdentificadosIa";
+import type { InteresseIdentificadoIa } from "@/lib/agentes-ia/interesses-identificados";
 import Header from "@/components/Header";
 import ExclusaoContatosEmMassa from "./ExclusaoContatosEmMassa";
 import GerenciarListaContatosModal from "./GerenciarListaContatosModal";
@@ -357,6 +359,10 @@ export default function ContatosPage() {
   >({});
   const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
     useState<string | null>(null);
+  const [interessesIaPorContato, setInteressesIaPorContato] =
+    useState<Record<string, InteresseIdentificadoIa[]>>({});
+  const [errosInteressesIaPorContato, setErrosInteressesIaPorContato] =
+    useState<Record<string, boolean>>({});
   const [editandoInformacaoCaptura, setEditandoInformacaoCaptura] = useState<
     { contatoId: string; id: string; valor: string } | null
   >(null);
@@ -1081,8 +1087,18 @@ export default function ContatosPage() {
         ...atual,
         [contatoId]: Array.isArray(data.informacoes) ? data.informacoes : [],
       }));
+      setInteressesIaPorContato((atual) => ({
+        ...atual,
+        [contatoId]: Array.isArray(data.interesses_ia) ? data.interesses_ia : [],
+      }));
+      setErrosInteressesIaPorContato((atual) => ({
+        ...atual,
+        [contatoId]: Boolean(data.interesses_ia_erro),
+      }));
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao carregar informações de captura.");
+      setInteressesIaPorContato((atual) => ({ ...atual, [contatoId]: [] }));
+      setErrosInteressesIaPorContato((atual) => ({ ...atual, [contatoId]: true }));
     } finally {
       setCarregandoInformacoesCaptura(null);
     }
@@ -2593,6 +2609,13 @@ export default function ContatosPage() {
                                 {contato.observacoes || "Sem observações"}
                               </span>
                             </div>
+
+                            <InteressesIdentificadosIa
+                              key={contato.id}
+                              interesses={interessesIaPorContato[contato.id] || []}
+                              carregando={carregandoInformacoesCaptura === contato.id}
+                              erro={Boolean(errosInteressesIaPorContato[contato.id])}
+                            />
 
                             <section className={styles.captureInfoSection}>
                               <div className={styles.captureInfoHeader}>
