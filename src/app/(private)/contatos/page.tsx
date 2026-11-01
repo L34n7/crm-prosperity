@@ -67,6 +67,11 @@ type Contato = {
   updated_at?: string;
 };
 
+type ListasVinculadasContato = {
+  importacao: { id: string; nome: string }[];
+  conversa: { id: string; nome: string }[];
+};
+
 type InformacaoCaptura = {
   id: string;
   tipo: string;
@@ -363,6 +368,9 @@ export default function ContatosPage() {
   >({});
   const [carregandoInformacoesCaptura, setCarregandoInformacoesCaptura] =
     useState<string | null>(null);
+  const [listasContato, setListasContato] = useState<Record<string, ListasVinculadasContato>>({});
+  const [carregandoListasContato, setCarregandoListasContato] = useState<string | null>(null);
+  const [erroListasContato, setErroListasContato] = useState<Record<string, string>>({});
   const [interessesIaPorContato, setInteressesIaPorContato] =
     useState<Record<string, InteresseIdentificadoIa[]>>({});
   const [errosInteressesIaPorContato, setErrosInteressesIaPorContato] =
@@ -1170,10 +1178,39 @@ export default function ContatosPage() {
     }
   }
 
+  async function carregarListasContato(contatoId: string) {
+    setCarregandoListasContato(contatoId);
+    setErroListasContato((atual) => ({ ...atual, [contatoId]: "" }));
+    try {
+      const resposta = await fetch(`/api/contatos/${contatoId}/listas`, { cache: "no-store" });
+      const dados = await resposta.json();
+      if (!resposta.ok || dados.ok !== true) {
+        throw new Error(dados.error || "Não foi possível consultar as listas.");
+      }
+      setListasContato((atual) => ({
+        ...atual,
+        [contatoId]: {
+          importacao: Array.isArray(dados.importacao) ? dados.importacao : [],
+          conversa: Array.isArray(dados.conversa) ? dados.conversa : [],
+        },
+      }));
+    } catch (erro) {
+      setErroListasContato((atual) => ({
+        ...atual,
+        [contatoId]: erro instanceof Error ? erro.message : "Erro ao consultar listas.",
+      }));
+    } finally {
+      setCarregandoListasContato((atual) => atual === contatoId ? null : atual);
+    }
+  }
+
   function toggleExpandir(contatoId: string) {
     const vaiExpandir = expandidoId !== contatoId;
     setExpandidoId(vaiExpandir ? contatoId : null);
-    if (vaiExpandir) void carregarInformacoesCaptura(contatoId);
+    if (vaiExpandir) {
+      void carregarInformacoesCaptura(contatoId);
+      void carregarListasContato(contatoId);
+    }
   }
 
   function abrirModalExcluir(contato: Contato) {
@@ -2580,6 +2617,27 @@ export default function ContatosPage() {
                                 {getNomeOrigemContato(contato)}
                               </span>
                             </div>
+
+                            {(["importacao", "conversa"] as const).map((tipo) => (
+                              <div className={styles.infoBlock} key={tipo}>
+                                <span className={styles.infoLabel}>
+                                  {tipo === "importacao" ? "Lista Importação" : "Lista Conversa"}
+                                </span>
+                                <div className={styles.contactMembershipValues}>
+                                  {carregandoListasContato === contato.id || !listasContato[contato.id] && !erroListasContato[contato.id] ? (
+                                    <span className={styles.infoValue}>Consultando listas...</span>
+                                  ) : erroListasContato[contato.id] ? (
+                                    <span className={styles.contactMembershipError} role="alert">{erroListasContato[contato.id]}</span>
+                                  ) : (listasContato[contato.id]?.[tipo] || []).length ? (
+                                    listasContato[contato.id][tipo].map((lista) => (
+                                      <span className={styles.contactMembershipTag} key={lista.id}>{lista.nome}</span>
+                                    ))
+                                  ) : (
+                                    <span className={styles.infoValue}>Nenhuma lista vinculada</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
 
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>Email</span>
