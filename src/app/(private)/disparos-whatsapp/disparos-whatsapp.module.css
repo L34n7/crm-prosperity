@@ -6551,9 +6551,9 @@
 }
 .dispatchCapacityPlannerIntro > div { min-width: 0; }
 .dispatchCapacityPlannerIntro h3 {
-  margin: 6px 0 6px;
+  margin: 8px 0 8px;
   color: var(--crm-text-strong);
-  font-size: 19px;
+  font-size: 22px;
   line-height: 1.35;
   font-weight: 850;
 }
@@ -6561,11 +6561,14 @@
   margin: 0;
   max-width: 410px;
   color: var(--crm-text-muted);
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.6;
 }
 .dispatchCapacityPlannerIntro .schedulePlanningEyebrow {
   color: var(--crm-primary-text);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .095em;
 }
 .dispatchCapacityPlannerIntro .schedulePlanningHint {
   color: var(--crm-text-muted);
@@ -6631,14 +6634,15 @@
 }
 .dispatchCapacityResult > strong {
   color: var(--crm-text-strong);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.35;
   font-weight: 850;
 }
 .dispatchCapacityResult p {
   margin: 0;
   color: var(--crm-text);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
 }
 .dispatchCapacityChoices {
   display: grid;
@@ -6690,43 +6694,41 @@
 }
 .dispatchCapacityOption span {
   color: var(--crm-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected {
-  border-color: var(--crm-success-strong);
-  background: linear-gradient(120deg, var(--crm-success-strong),
-    color-mix(in srgb, var(--crm-success-strong) 84%, #064e3b 16%));
-  box-shadow: 0 12px 25px color-mix(in srgb, var(--crm-success-strong) 28%, transparent),
-              inset 0 1px 0 rgb(255 255 255 / 23%);
+  border-color: #1a7059;
+  background: linear-gradient(120deg, #185846 0%, #267a62 52%, #3c9779 100%);
+  box-shadow: 0 12px 24px rgb(22 102 80 / 24%),
+              inset 0 1px 0 rgb(255 255 255 / 20%);
 }
 .dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected strong,
 .dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected span {
   color: var(--crm-text-inverse);
 }
 .dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected {
-  border-color: var(--crm-warning-text);
-  background: linear-gradient(125deg,
-    color-mix(in srgb, var(--crm-warning-bg) 20%, #f0bb42 80%),
-    color-mix(in srgb, var(--crm-warning-bg) 42%, #f9cf5d 58%));
-  box-shadow: 0 12px 25px color-mix(in srgb, var(--crm-warning-text) 23%, transparent),
-              inset 0 1px 0 rgb(255 255 255 / 45%);
+  border-color: #d8a23a;
+  background: linear-gradient(120deg, #f9e9bb 0%, #f3cc72 53%, #eab54e 100%);
+  box-shadow: 0 12px 24px rgb(148 98 28 / 17%),
+              inset 0 1px 0 rgb(255 255 255 / 60%);
 }
 .dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected strong,
 .dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected span {
-  color: #533509;
+  color: #513609;
 }
 .dispatchCapacitySuggestion {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin: 0;
-  padding: 11px 13px;
-  border: 1px solid var(--crm-border);
+  width: 100%;
+  margin: 5px 0 0;
+  padding: 12px 13px;
+  border: 1px solid var(--crm-primary-border);
   border-radius: 12px;
-  background: var(--crm-surface);
+  background: color-mix(in srgb, var(--crm-primary-soft) 32%, var(--crm-surface) 68%);
   color: var(--crm-text);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.6;
 }
 .dispatchCapacitySuggestion svg {
@@ -6882,16 +6884,21 @@
 /* Tipografia consistente dos indicadores e datas de liberação mais compactas. */
 .disparoWizardStage .metaHealthCard { box-shadow: 0 3px 11px color-mix(in srgb, var(--crm-text-strong) 5%, transparent); }
 .disparoWizardStage .metaHealthGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.disparoWizardStage .metaHealthGrid > div { min-width: 0; }
+.disparoWizardStage .metaHealthGrid > div {
+  min-width: 0;
+  align-content: start;
+  row-gap: 8px;
+}
+.disparoWizardStage .metaHealthGrid > div > span:first-child { margin-bottom: 4px; }
 .disparoWizardStage .metaHealthGrid > div strong.metaHealthMainValue {
-  font-size: 22px;
-  line-height: 1.15;
+  font-size: 29px;
+  line-height: 1.12;
   font-weight: 900;
   overflow-wrap: anywhere;
 }
 .disparoWizardStage .metaHealthGrid > div strong.metaHealthDateValue {
-  font-size: 13.5px;
-  line-height: 1.3;
+  font-size: 15px;
+  line-height: 1.35;
   font-weight: 850;
   overflow-wrap: anywhere;
 }

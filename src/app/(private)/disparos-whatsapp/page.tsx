@@ -6674,14 +6674,14 @@ export default function DisparosWhatsAppPage() {
                               </div>
                               <div>
                                 <span>Total a liberar</span>
-                                <strong className={styles.metaHealthMainValue}>{formatarNumeroMeta(totalCapacidadeALiberar)}</strong>
-                                <small className={styles.metaHealthMaxDate}>
+                                <strong className={styles.metaHealthDateValue}>
                                   {capacidadeMaximaDisponivelAgora
-                                    ? "Limite máximo disponível agora"
+                                    ? "Disponível agora"
                                     : horarioCapacidadeMaxima
-                                      ? `Capacidade máxima em ${formatarDataHora(horarioCapacidadeMaxima)}`
-                                      : "Sem previsão de liberação integral"}
-                                </small>
+                                      ? formatarDataHora(horarioCapacidadeMaxima)
+                                      : "Sem previsão"}
+                                </strong>
+                                <small>+{formatarNumeroMeta(totalCapacidadeALiberar)} vagas</small>
                               </div>
                             </div>
                             <p className={styles.metaHealthNote}>A previsão não reserva vagas: a Meta revalida o limite quando o disparo for executado.</p>
@@ -6734,6 +6734,28 @@ export default function DisparosWhatsAppPage() {
                                   setErro("");
                                 }} />
                               <span>{limiteMeta ? `${formatarNumeroMeta(capacidadeAgoraPlanejamento)} disponíveis agora` : "Consultando..."}</span>
+                            </div>
+                            <div className={styles.dispatchCapacitySuggestion} role="note">
+                              <Info size={18} aria-hidden="true" />
+                              <span>
+                                {quantidadeDesejada > 0 && !quantidadeExcedeLimiteTotal && capacidadeInsuficienteAgora
+                                  ? capacidadeAgoraPlanejamento > 0
+                                    ? <>
+                                        <strong>Sugestão:</strong> envie <strong>{formatarNumeroMeta(capacidadeAgoraPlanejamento)}</strong> agora e agende os <strong>{formatarNumeroMeta(quantidadeDesejada - capacidadeAgoraPlanejamento)}</strong> restantes em outra operação
+                                        {horarioCapacidadeDesejada ? `, a partir de ${formatarDataHora(horarioSugeridoAgendamento)}` : " quando houver capacidade"}.
+                                        Cada campanha é confirmada separadamente.
+                                      </>
+                                    : <>
+                                        <strong>Sugestão:</strong> não há vagas para envio imediato. Você pode agendar a quantidade desejada para quando a capacidade for liberada.
+                                      </>
+                                  : quantidadeDesejada > 0 && quantidadeExcedeLimiteTotal
+                                    ? <>
+                                        <strong>Atenção:</strong> a quantidade supera o limite total deste número. Divida em campanhas menores.
+                                      </>
+                                    : <>
+                                        <strong>Você também pode agendar.</strong> Escolha um horário futuro para realizar o disparo, mesmo quando houver capacidade disponível agora.
+                                      </>}
+                              </span>
                             </div>
                             </div>
                             <div className={styles.dispatchCapacityPlannerActions}>
@@ -6792,14 +6814,6 @@ export default function DisparosWhatsAppPage() {
                               </div>
                             ) : null}
 
-                            {capacidadeInsuficienteAgora && !quantidadeExcedeLimiteTotal && capacidadeAgoraPlanejamento > 0 && horarioCapacidadeDesejada ? (
-                              <p className={styles.dispatchCapacitySuggestion}>
-                                <Info size={17} aria-hidden="true" />
-                                <span><strong>Sugestão:</strong> envie {formatarNumeroMeta(capacidadeAgoraPlanejamento)} agora e agende
-                                  os {formatarNumeroMeta(quantidadeDesejada - capacidadeAgoraPlanejamento)} restantes após a liberação.
-                                  Serão duas campanhas independentes, cada uma com seus contatos e confirmação.</span>
-                              </p>
-                            ) : null}
 
                             {planoCapacidadeConfirmado ? (
                               <div className={styles.dispatchCapacityAccepted} role="status">
