@@ -11606,10 +11606,6 @@ const templateFooterTexto = useMemo(() => {
                             <span className={styles.listPanelEyebrow}>ORGANIZAÇÃO</span>
                             <strong>Listas de conversa</strong>
                             <p>Inclua esta conversa em listas, defina atalhos e organize prioridades.</p>
-                            <div className={styles.listPanelStats}>
-                              <span><b>{listasEmpresa.length}</b> listas</span>
-                              <span><b>{listasEmpresa.filter(item=>item.exibir_atalho_conversas).length}</b> atalhos visíveis</span>
-                            </div>
                           </div>
                           <div className={`${styles.noteComposer} ${styles.listPanelCreator}`}>
                             <label className={styles.actionLabel} htmlFor="nova-lista-conversas">Criar nova lista</label>
@@ -11669,7 +11665,6 @@ const templateFooterTexto = useMemo(() => {
 
                           <div className={styles.listPanelListHeader}>
                             <div><strong>Listas existentes</strong><span>Toque em uma lista para incluir ou retirar a conversa.</span></div>
-                            <span className={styles.listPanelListCount}>{listasConversa.length}</span>
                           </div>
                           {listasConversa.length === 0 ? (
                             <div className={styles.infoBoxMuted}>

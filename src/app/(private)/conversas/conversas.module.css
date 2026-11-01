@@ -8222,9 +8222,6 @@ a.buttonMessageOption:hover {
 .listPanelEyebrow { color: var(--crm-primary); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
 .listPanelIntro > strong { font-size: 16px; color: var(--crm-text-strong); }
 .listPanelIntro > p { margin: 0; color: var(--crm-text-muted); font-size: 12px; line-height: 1.5; }
-.listPanelStats { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 5px; }
-.listPanelStats span { padding: 6px 9px; border: 1px solid var(--crm-border); border-radius: 9px; background: var(--crm-surface); color: var(--crm-text); font-size: 11px; }
-.listPanelStats b { color: var(--crm-primary); }
 .listPanelCreator { display: flex; flex-direction: column; gap: 10px; padding: 15px; min-width: 0; border: 1px solid var(--crm-border); border-radius: 14px; background: var(--crm-surface); }
 .listPanelCreator .actionLabel { font-size: 12px; font-weight: 750; }
 .listPanelCreator .messageInput { width: 100%; box-sizing: border-box; min-height: 41px; font-size: 13px; border-radius: 10px; }
@@ -8234,7 +8231,6 @@ a.buttonMessageOption:hover {
 .listPanelListHeader > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .listPanelListHeader strong { color: var(--crm-text-strong); font-size: 14px; }
 .listPanelListHeader span { color: var(--crm-text-muted); font-size: 11px; line-height: 1.45; }
-.listPanelListCount { padding: 5px 9px; border-radius: 99px; background: var(--crm-primary-soft); color: var(--crm-primary) !important; font-weight: 800; }
 .listPanelCard { padding: 12px; border: 1px solid var(--crm-border); border-radius: 14px; background: var(--crm-surface); gap: 9px; }
 .listPanelCard:hover { border-color: var(--crm-primary-border); }
 .listPanelCard .listaCard { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; }
