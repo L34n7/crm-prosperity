@@ -2485,3 +2485,29 @@
 @media (min-width: 1181px) {
   .bulkToolbar { grid-template-columns: 156px minmax(0, 1fr) minmax(310px, 330px); }
 }
+
+
+/* Exclusão em massa apenas da associação indicada no filtro, nunca de todas as listas. */
+.bulkRemoveConfirmDialog {
+  max-width: 610px;
+}
+.bulkRemoveConfirmBody {
+  padding: 17px 18px;
+  border: 1px solid var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+  color: var(--crm-text-strong);
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.bulkRemoveConfirmBody > strong { display: block; font-size: 15px; margin-bottom: 6px; }
+.bulkRemoveConfirmBody p { margin: 9px 0; }
+.bulkRemoveConfirmBody ul { margin: 10px 0; padding-left: 20px; }
+.bulkRemoveConfirmBody li { margin: 6px 0; overflow-wrap: anywhere; font-weight: 750; }
+.bulkField option:disabled { color: var(--crm-text-muted); }
+@media (max-width: 700px) {
+  .bulkRemoveConfirmDialog { max-height: calc(100dvh - 24px); padding: 18px; border-radius: 18px; }
+  .bulkRemoveConfirmDialog .modalTitle { font-size: 21px; }
+  .bulkRemoveConfirmDialog .modalActions { flex-direction: column; }
+  .bulkRemoveConfirmDialog .modalActions > button { width: 100%; min-height: 42px; }
+}

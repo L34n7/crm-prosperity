@@ -125,6 +125,19 @@ type ItemPreviewImportacao = {
 
 const MANTER_VALOR_EM_MASSA = "__manter__";
 const REMOVER_VALOR_EM_MASSA = "__remover__";
+const REMOVER_CONFORME_FILTRO = "__remover_conforme_filtro__";
+
+type EtapaAlteracaoEmMassa = {
+  nome: string;
+  url: string;
+  method: "PATCH" | "POST" | "DELETE";
+  body: Record<string, unknown>;
+};
+type ConfirmacaoRemocaoFiltrada = {
+  etapas: EtapaAlteracaoEmMassa[];
+  alvos: string[];
+  total: number;
+};
 
 function getClassificacaoLabel(classificacao: ClassificacaoContato) {
   switch (classificacao) {
@@ -361,6 +374,7 @@ export default function ContatosPage() {
   const [listaEmMassa, setListaEmMassa] = useState(MANTER_VALOR_EM_MASSA);
   const [feedbackEmMassa, setFeedbackEmMassa] = useState<{ tipo: "erro" | "sucesso"; texto: string } | null>(null);
   const [atualizandoEmMassa, setAtualizandoEmMassa] = useState(false);
+  const [confirmacaoRemocao, setConfirmacaoRemocao] = useState<ConfirmacaoRemocaoFiltrada | null>(null);
   const [atualizandoListaEmMassa, setAtualizandoListaEmMassa] =
     useState(false);
   const [informacoesCapturaPorContato, setInformacoesCapturaPorContato] = useState<
@@ -427,6 +441,18 @@ export default function ContatosPage() {
   );
   const existeAlteracaoEmMassa = campanhaEmMassa !== MANTER_VALOR_EM_MASSA ||
     origemEmMassa !== MANTER_VALOR_EM_MASSA || listaEmMassa !== MANTER_VALOR_EM_MASSA;
+  const campanhaFiltrada = filtroCampanha.trim().length > 0;
+  const origemFiltrada = filtroOrigem.trim().length > 0;
+  const conversaFiltrada = Boolean(listaConversaSelecionada);
+  const nomeCampanhaFiltrada = filtroCampanha.startsWith("rastreamento:")
+    ? getLabelCampanhaRastreamento(
+      campanhasRastreamento.find((item) => item.id === filtroCampanha.slice("rastreamento:".length)) ??
+      { id: "", nome: "Campanha selecionada", codigo: null, status: "ativo" }
+    )
+    : filtroCampanha;
+  const nomeOrigemFiltrada = filtroOrigem.startsWith("lista:")
+    ? listaSelecionada?.nome || "Lista importada selecionada"
+    : filtroOrigem;
 
   function selecionarCampanhaCadastro(campanhaId: string) {
     const campanhaSelecionada = campanhasRastreamento.find(
@@ -1298,49 +1324,130 @@ export default function ContatosPage() {
     setFeedbackEmMassa(null);
   }
 
-  async function aplicarAlteracoesEmMassa() {
-    if (!selecionados.size || !existeAlteracaoEmMassa) {
+  function prepararAlteracoesEmMassa(): {
+    etapas: EtapaAlteracaoEmMassa[];
+    alvosRemocao: string[];
+    erro?: string;
+  } {
+    const ids = Array.from(selecionados);
+    const etapas: EtapaAlteracaoEmMassa[] = [];
+    const alvosRemocao: string[] = [];
+    const dados: Record<string, unknown> = { ids };
+
+    if (campanhaEmMassa === REMOVER_CONFORME_FILTRO) {
+      if (!campanhaFiltrada) {
+        return { etapas, alvosRemocao, erro: "Filtre uma campanha antes de remover conforme o filtro." };
+      }
+      etapas.push({
+        nome: "Remover campanha filtrada",
+        url: "/api/contatos/lote/remover-conforme-filtro",
+        method: "POST",
+        body: { ids, tipo: "campanha", filtro: filtroCampanha },
+      });
+      alvosRemocao.push(`Campanha: ${nomeCampanhaFiltrada}`);
+    } else if (campanhaEmMassa !== MANTER_VALOR_EM_MASSA) {
+      dados.rastreamento_campanha_id = campanhaEmMassa;
+    }
+
+    if (origemEmMassa === REMOVER_CONFORME_FILTRO) {
+      if (!origemFiltrada) {
+        return { etapas, alvosRemocao, erro: "Filtre uma origem ou lista importada antes de remover conforme o filtro." };
+      }
+      if (filtroOrigem.startsWith("lista:")) {
+        etapas.push({
+          nome: "Remover da lista importada filtrada",
+          url: "/api/contatos/listas/vinculos",
+          method: "DELETE",
+          body: { lista_id: filtroOrigem.slice("lista:".length), contato_ids: ids },
+        });
+        alvosRemocao.push(`Lista importação: ${nomeOrigemFiltrada}`);
+      } else {
+        etapas.push({
+          nome: "Remover origem filtrada",
+          url: "/api/contatos/lote/remover-conforme-filtro",
+          method: "POST",
+          body: { ids, tipo: "origem", filtro: filtroOrigem },
+        });
+        alvosRemocao.push(`Origem: ${nomeOrigemFiltrada}`);
+      }
+    } else if (origemEmMassa.startsWith("lista:")) {
+      etapas.push({
+        nome: "Adicionar à lista importação",
+        url: "/api/contatos/listas/vinculos",
+        method: "POST",
+        body: { lista_id: origemEmMassa.slice("lista:".length), contato_ids: ids },
+      });
+    } else if (origemEmMassa !== MANTER_VALOR_EM_MASSA) {
+      dados.origem = origemEmMassa;
+    }
+
+    if (listaEmMassa === REMOVER_CONFORME_FILTRO) {
+      if (!listaConversaSelecionada) {
+        return { etapas, alvosRemocao, erro: "Filtre uma Lista Conversa específica antes de remover conforme o filtro." };
+      }
+      etapas.push({
+        nome: "Remover da lista conversa filtrada",
+        url: "/api/contatos/listas-compartilhadas/vinculos",
+        method: "DELETE",
+        body: { lista_id: listaConversaSelecionada.id, contato_ids: ids },
+      });
+      alvosRemocao.push(`Lista Conversa: ${listaConversaSelecionada.nome}`);
+    } else if (listaEmMassa.startsWith("lista:")) {
+      etapas.push({
+        nome: "Adicionar à lista conversa",
+        url: "/api/contatos/listas-compartilhadas/vinculos",
+        method: "POST",
+        body: { lista_id: listaEmMassa.slice("lista:".length), contato_ids: ids },
+      });
+    }
+
+    if (Object.keys(dados).length > 1) {
+      etapas.unshift({
+        nome: "Atualizar campanha / origem",
+        url: "/api/contatos/lote",
+        method: "PATCH",
+        body: dados,
+      });
+    }
+    return { etapas, alvosRemocao };
+  }
+
+  async function aplicarAlteracoesEmMassa(confirmadas?: EtapaAlteracaoEmMassa[]) {
+    if (atualizandoEmMassa) return;
+    if (!confirmadas && (!selecionados.size || !existeAlteracaoEmMassa)) {
       setFeedbackEmMassa({ tipo: "erro", texto: "Selecione contatos e pelo menos uma alteração." });
       return;
     }
-    const ids = Array.from(selecionados);
-    const etapas: { nome: string; url: string; method: "PATCH" | "POST" | "DELETE"; body: Record<string, unknown> }[] = [];
-    const dados: Record<string, unknown> = { ids };
-    if (campanhaEmMassa !== MANTER_VALOR_EM_MASSA) {
-      dados.rastreamento_campanha_id = campanhaEmMassa === REMOVER_VALOR_EM_MASSA ? null : campanhaEmMassa;
+
+    const preparadas = confirmadas
+      ? { etapas: confirmadas, alvosRemocao: [] as string[] }
+      : prepararAlteracoesEmMassa();
+    if (preparadas.erro) {
+      setFeedbackEmMassa({ tipo: "erro", texto: preparadas.erro });
+      return;
     }
-    if (origemEmMassa === REMOVER_VALOR_EM_MASSA) dados.origem = null;
-    else if (origemEmMassa !== MANTER_VALOR_EM_MASSA &&
-      !origemEmMassa.startsWith("lista:") && !origemEmMassa.startsWith("remover_lista:")) dados.origem = origemEmMassa;
-    if (Object.keys(dados).length > 1) etapas.push({
-      nome: "campanha/origem", url: "/api/contatos/lote", method: "PATCH", body: dados,
-    });
-    if (origemEmMassa.startsWith("lista:") || origemEmMassa.startsWith("remover_lista:")) {
-      etapas.push({
-        nome: "lista importação", url: "/api/contatos/listas/vinculos",
-        method: origemEmMassa.startsWith("remover_lista:") ? "DELETE" : "POST",
-        body: { lista_id: origemEmMassa.split(":")[1], contato_ids: ids },
+    if (!preparadas.etapas.length) return;
+
+    if (!confirmadas && preparadas.alvosRemocao.length > 0) {
+      setFeedbackEmMassa(null);
+      setConfirmacaoRemocao({
+        etapas: preparadas.etapas,
+        alvos: preparadas.alvosRemocao,
+        total: selecionados.size,
       });
+      return;
     }
-    if (listaEmMassa === REMOVER_VALOR_EM_MASSA) {
-      etapas.push({
-        nome: "listas conversa", url: "/api/contatos/listas-compartilhadas/vinculos",
-        method: "DELETE", body: { remover_todas: true, contato_ids: ids },
-      });
-    } else if (listaEmMassa.startsWith("lista:") || listaEmMassa.startsWith("remover_lista:")) {
-      etapas.push({
-        nome: "lista conversa", url: "/api/contatos/listas-compartilhadas/vinculos",
-        method: listaEmMassa.startsWith("remover_lista:") ? "DELETE" : "POST",
-        body: { lista_id: listaEmMassa.split(":")[1], contato_ids: ids },
-      });
-    }
+
     setAtualizandoEmMassa(true);
+    setConfirmacaoRemocao(null);
     setFeedbackEmMassa(null);
+    setErro("");
     const concluidas: string[] = [];
     try {
-      for (const etapa of etapas) {
+      for (const etapa of preparadas.etapas) {
         const res = await fetch(etapa.url, {
-          method: etapa.method, headers: { "Content-Type": "application/json" },
+          method: etapa.method,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(etapa.body),
         });
         const data = await res.json();
@@ -1350,11 +1457,13 @@ export default function ContatosPage() {
             texto: `${concluidas.length ? "Já aplicadas: " + concluidas.join(", ") + ". " : ""}Falha em ${etapa.nome}: ${data.error || "erro desconhecido"}. Revise antes de tentar novamente.`,
           });
           await carregarContatos();
+          await carregarOpcoesFiltros();
+          await carregarListasCompartilhadas();
           return;
         }
         concluidas.push(etapa.nome);
       }
-      const texto = `${ids.length} contato(s) atualizado(s): ${concluidas.join(", ")}.`;
+      const texto = `${selecionados.size} contato(s) processado(s): ${concluidas.join(", ")}. Os demais vínculos foram preservados.`;
       limparSelecao();
       setFeedbackEmMassa({ tipo: "sucesso", texto });
       setMensagem(texto);
@@ -1362,10 +1471,15 @@ export default function ContatosPage() {
       await carregarOpcoesFiltros();
       await carregarListasCompartilhadas();
     } catch {
-      setFeedbackEmMassa({ tipo: "erro", texto: concluidas.length
-        ? `Aplicadas: ${concluidas.join(", ")}. Outras alterações não foram confirmadas; revise antes de repetir.`
-        : "Erro ao aplicar as alterações." });
-    } finally { setAtualizandoEmMassa(false); }
+      setFeedbackEmMassa({
+        tipo: "erro",
+        texto: concluidas.length
+          ? `Aplicadas: ${concluidas.join(", ")}. Outras alterações não foram confirmadas; revise antes de repetir.`
+          : "Erro ao aplicar as alterações.",
+      });
+    } finally {
+      setAtualizandoEmMassa(false);
+    }
   }
 
   function alternarFiltro(
@@ -1542,7 +1656,10 @@ export default function ContatosPage() {
             <select
               className={styles.select}
               value={filtroCampanha}
-              onChange={(e) => setFiltroCampanha(e.target.value)}
+              onChange={(e) => {
+                setFiltroCampanha(e.target.value);
+                if (campanhaEmMassa === REMOVER_CONFORME_FILTRO) setCampanhaEmMassa(MANTER_VALOR_EM_MASSA);
+              }}
             >
               <option value="">Todas</option>
 
@@ -1580,6 +1697,7 @@ export default function ContatosPage() {
                 value={filtroOrigem}
                 onChange={(e) => {
                   setFiltroOrigem(e.target.value);
+                  if (origemEmMassa === REMOVER_CONFORME_FILTRO) setOrigemEmMassa(MANTER_VALOR_EM_MASSA);
                   setModoGerenciarLista(null);
                 }}
               >
@@ -1660,7 +1778,10 @@ export default function ContatosPage() {
             <div className={styles.originFilterRow}>
               <select className={`${styles.select} ${styles.originFilterSelect}`}
                 value={filtroListaConversa}
-                onChange={(event) => setFiltroListaConversa(event.target.value)}>
+                onChange={(event) => {
+                  setFiltroListaConversa(event.target.value);
+                  if (listaEmMassa === REMOVER_CONFORME_FILTRO) setListaEmMassa(MANTER_VALOR_EM_MASSA);
+                }}>
                 <option value="">Todas as listas de conversa</option>
                 {listasCompartilhadas.map((lista) => (
                   <option key={lista.id} value={lista.id}>{lista.nome}</option>
@@ -1909,6 +2030,9 @@ export default function ContatosPage() {
               setFiltroApenasNovos(false);
               setFiltroOrigem("");
               setFiltroListaConversa("");
+              if (campanhaEmMassa === REMOVER_CONFORME_FILTRO) setCampanhaEmMassa(MANTER_VALOR_EM_MASSA);
+              if (origemEmMassa === REMOVER_CONFORME_FILTRO) setOrigemEmMassa(MANTER_VALOR_EM_MASSA);
+              if (listaEmMassa === REMOVER_CONFORME_FILTRO) setListaEmMassa(MANTER_VALOR_EM_MASSA);
               setFiltroIntegracaoWhatsappId("");
               setFiltroMensagemDataInicio("");
               setFiltroMensagemDataFim("");
@@ -2006,12 +2130,15 @@ export default function ContatosPage() {
                 <label className={styles.bulkField}>
                   <span>Campanha</span>
                   <select value={campanhaEmMassa}
-                    className={campanhaEmMassa === REMOVER_VALOR_EM_MASSA ? styles.bulkSelectRemove :
+                    className={campanhaEmMassa === REMOVER_CONFORME_FILTRO ? styles.bulkSelectRemove :
                       campanhaEmMassa === MANTER_VALOR_EM_MASSA ? styles.bulkSelectKeep : ""}
                     onChange={(e) => setCampanhaEmMassa(e.target.value)} disabled={atualizandoEmMassa}>
                     <option value={MANTER_VALOR_EM_MASSA}>— Não alterar —</option>
                     <optgroup label="Ação de remoção">
-                      <option className={styles.bulkOptionRemove} value={REMOVER_VALOR_EM_MASSA}>Remover campanha</option>
+                      <option className={styles.bulkOptionRemove} value={REMOVER_CONFORME_FILTRO}
+                        disabled={!campanhaFiltrada}>
+                        {campanhaFiltrada ? "Remover conforme filtro" : "Remover conforme filtro (filtre campanha)"}
+                      </option>
                     </optgroup>
                     <optgroup label="Campanhas">
                       {campanhasRastreamento.map((campanha) => (
@@ -2023,22 +2150,19 @@ export default function ContatosPage() {
                 <label className={styles.bulkField}>
                   <span>Origem / Lista importação</span>
                   <select value={origemEmMassa}
-                    className={origemEmMassa === REMOVER_VALOR_EM_MASSA || origemEmMassa.startsWith("remover_lista:")
+                    className={origemEmMassa === REMOVER_CONFORME_FILTRO
                       ? styles.bulkSelectRemove : origemEmMassa === MANTER_VALOR_EM_MASSA ? styles.bulkSelectKeep : ""}
                     onChange={(e) => setOrigemEmMassa(e.target.value)} disabled={atualizandoEmMassa}>
                     <option value={MANTER_VALOR_EM_MASSA}>— Não alterar —</option>
                     <optgroup label="Ação de remoção">
-                      <option className={styles.bulkOptionRemove} value={REMOVER_VALOR_EM_MASSA}>Remover origem</option>
+                      <option className={styles.bulkOptionRemove} value={REMOVER_CONFORME_FILTRO}
+                        disabled={!origemFiltrada}>
+                        {origemFiltrada ? "Remover conforme filtro" : "Remover conforme filtro (filtre origem/lista)"}
+                      </option>
                     </optgroup>
                     <optgroup label="Adicionar à lista importação">
                       {listasContatos.map((lista) => (
                         <option key={lista.id} value={`lista:${lista.id}`}>{lista.nome} · {formatarDataHoraLista(lista.created_at)}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Remover da lista importação">
-                      {listasContatos.map((lista) => (
-                        <option key={lista.id} className={styles.bulkOptionRemove}
-                          value={`remover_lista:${lista.id}`}>Remover de: {lista.nome}</option>
                       ))}
                     </optgroup>
                     <optgroup label="Outras origens">
@@ -2050,23 +2174,19 @@ export default function ContatosPage() {
                 </label>
                 <label className={`${styles.bulkField} ${styles.bulkFieldConversation}`}>
                   <span>Lista Conversa</span>
-                  <select value={listaEmMassa} className={listaEmMassa === REMOVER_VALOR_EM_MASSA ||
-                    listaEmMassa.startsWith("remover_lista:") ? styles.bulkSelectRemove :
+                  <select value={listaEmMassa} className={listaEmMassa === REMOVER_CONFORME_FILTRO ? styles.bulkSelectRemove :
                     listaEmMassa === MANTER_VALOR_EM_MASSA ? styles.bulkSelectKeep : ""}
                     onChange={(e) => setListaEmMassa(e.target.value)} disabled={atualizandoEmMassa}>
                     <option value={MANTER_VALOR_EM_MASSA}>— Não alterar —</option>
                     <optgroup label="Ação de remoção">
-                      <option className={styles.bulkOptionRemove} value={REMOVER_VALOR_EM_MASSA}>Remover Lista conversa (todas)</option>
+                      <option className={styles.bulkOptionRemove} value={REMOVER_CONFORME_FILTRO}
+                        disabled={!conversaFiltrada}>
+                        {conversaFiltrada ? "Remover conforme filtro" : "Remover conforme filtro (filtre Lista Conversa)"}
+                      </option>
                     </optgroup>
                     <optgroup label="Adicionar à lista conversa">
                       {listasCompartilhadas.map((lista) => (
                         <option key={lista.id} value={`lista:${lista.id}`}>{lista.nome}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Remover de lista conversa">
-                      {listasCompartilhadas.map((lista) => (
-                        <option key={lista.id} className={styles.bulkOptionRemove}
-                          value={`remover_lista:${lista.id}`}>Remover de: {lista.nome}</option>
                       ))}
                     </optgroup>
                   </select>
@@ -2074,7 +2194,7 @@ export default function ContatosPage() {
               </div>
               <div className={styles.bulkActions}>
                 <button type="button" className={styles.bulkApplyButton}
-                  onClick={aplicarAlteracoesEmMassa}
+                  onClick={() => void aplicarAlteracoesEmMassa()}
                   disabled={atualizandoEmMassa || !existeAlteracaoEmMassa}>
                   {atualizandoEmMassa ? "Aplicando..." : "Aplicar alterações"}
                 </button>
@@ -2832,6 +2952,60 @@ export default function ContatosPage() {
           </div>
         </section>
       </div>
+
+      {confirmacaoRemocao && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => { if (!atualizandoEmMassa) setConfirmacaoRemocao(null); }}
+        >
+          <div
+            className={`${styles.modalCard} ${styles.bulkRemoveConfirmDialog}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-remocao-conforme-filtro"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <p className={styles.eyebrow}>Conferência de alterações</p>
+                <h2 id="titulo-remocao-conforme-filtro" className={styles.modalTitle}>
+                  Remover conforme filtro
+                </h2>
+                <p className={styles.cardDescription}>
+                  Confirme exatamente quais vínculos dos contatos selecionados serão removidos.
+                </p>
+              </div>
+              <button type="button" className={styles.modalCloseButton} aria-label="Fechar"
+                disabled={atualizandoEmMassa} onClick={() => setConfirmacaoRemocao(null)}>×</button>
+            </div>
+            <div className={styles.bulkRemoveConfirmBody}>
+              <strong>{confirmacaoRemocao.total} contato(s) selecionado(s)</strong>
+              <p>Somente os vínculos correspondentes aos filtros abaixo serão removidos:</p>
+              <ul>
+                {confirmacaoRemocao.alvos.map((alvo) => <li key={alvo}>{alvo}</li>)}
+              </ul>
+              <p>
+                Contatos que já estiverem fora dessas listas, origens ou campanhas não serão alterados.
+                Nenhum contato será excluído, e vínculos com outras listas serão preservados.
+              </p>
+              {confirmacaoRemocao.etapas.some((etapa) => !etapa.nome.startsWith("Remover")) && (
+                <p>As demais alterações selecionadas também serão aplicadas após a confirmação.</p>
+              )}
+            </div>
+            <div className={styles.modalActions}>
+              <button type="button" className={styles.dangerButton}
+                disabled={atualizandoEmMassa}
+                onClick={() => void aplicarAlteracoesEmMassa(confirmacaoRemocao.etapas)}>
+                {atualizandoEmMassa ? "Aplicando..." : "Confirmar remoção dos vínculos"}
+              </button>
+              <button type="button" className={styles.secondaryButton}
+                disabled={atualizandoEmMassa} onClick={() => setConfirmacaoRemocao(null)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalExcluirAberto && contatoParaExcluir && (
         <div
