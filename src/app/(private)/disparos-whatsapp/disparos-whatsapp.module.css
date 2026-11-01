@@ -7049,24 +7049,27 @@
 }
 .reserveContactsDetails p svg { flex: 0 0 auto; color: var(--crm-primary-text); margin-top: 1px; }
 
-/* Orientação de avanço: rolagem para o campo com halo pulsante. */
+/* Orientação de avanço: contorno afastado dos rótulos, com pulso suave e lento. */
 .disparoWizardModal [data-disparo-destaque="true"] {
   position: relative;
   z-index: 1;
   border-radius: 11px;
-  animation: disparoCampoPendente 1.6s ease-out 1;
+  outline: 2px solid transparent;
+  outline-offset: 8px;
+  animation: disparoCampoPendente 2.8s ease-in-out 1;
 }
 @keyframes disparoCampoPendente {
-  0%, 100% { box-shadow: 0 0 0 0 transparent; }
-  12%, 48% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--crm-warning-text) 40%, transparent), 0 0 23px color-mix(in srgb, var(--crm-warning-text) 32%, transparent); }
-  30%, 69% { box-shadow: 0 0 0 2px transparent; }
-  82% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--crm-warning-text) 26%, transparent); }
+  0%, 100% { outline-color: transparent; }
+  18%, 38%, 64%, 84% {
+    outline-color: color-mix(in srgb, var(--crm-warning-text) 68%, transparent);
+  }
+  48%, 93% { outline-color: transparent; }
 }
 @media (prefers-reduced-motion: reduce) {
   .disparoWizardModal [data-disparo-destaque="true"] {
     animation: none;
     outline: 2px solid var(--crm-warning-text);
-    outline-offset: 3px;
+    outline-offset: 8px;
   }
 }
 
@@ -7109,12 +7112,17 @@
   border-top-color: #deeee7;
 }
 .reserveContactsDetails .reserveContactsExplanation {
+  display: block;
   margin: 0;
   padding-top: 13px;
   color: #304650;
   font-size: 13px;
   line-height: 1.55;
   font-weight: 500;
+}
+.reserveContactsExplanation strong {
+  color: #183a32;
+  font-weight: 750;
 }
 .reserveContactsTotals {
   display: grid;

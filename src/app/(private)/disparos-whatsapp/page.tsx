@@ -6146,7 +6146,7 @@ export default function DisparosWhatsAppPage() {
       ? alvo
       : alvo.querySelector<HTMLElement>("input:not(:disabled),select:not(:disabled),button:not(:disabled)");
     controle?.focus({ preventScroll: true });
-    const timeout = window.setTimeout(() => setCampoPendente(""), 1800);
+    const timeout = window.setTimeout(() => setCampoPendente(""), 3000);
     return () => window.clearTimeout(timeout);
   }, [campoPendente, etapaDisparo, modalCriacaoDisparoAberto]);
 
@@ -6957,7 +6957,13 @@ export default function DisparosWhatsAppPage() {
                             {contatosReservaAtivos ? (
                               <div className={styles.reserveContactsDetails}>
                                 <p className={styles.reserveContactsExplanation}>
-                                  Os contatos reserva ficam em espera e são acionados apenas para compensar falhas definitivas dos principais, respeitando a quantidade desejada e a capacidade da Meta.
+                                  Com essa funcionalidade ativa, você pode selecionar até{" "}
+                                  <strong>{formatarNumeroMeta(limiteContatosReserva)} contatos extras</strong>{" "}
+                                  além dos <strong>{formatarNumeroMeta(quantidadeDesejada)} planejados</strong>.
+                                  Esses contatos ficam em uma fila de espera e não consomem capacidade da Meta enquanto aguardam.
+                                  Se um envio principal falhar definitivamente — por número inválido, ausência de WhatsApp
+                                  ou outra falha de entrega confirmada pela Meta —, um contato reserva poderá ser acionado
+                                  para compensar a falha, sem ultrapassar a quantidade desejada nem a capacidade disponível.
                                 </p>
                                 <div className={styles.reserveContactsTotals}>
                                   <div className={styles.reserveContactsMetric}>
@@ -7721,7 +7727,7 @@ export default function DisparosWhatsAppPage() {
                   <div className={`${styles.capacityResolutionStats} ${!contatosReservaAtivos ? styles.capacityResolutionStatsCompact : ""}`}>
                     <div className={styles.capacityResolutionStat}>
                       <strong>{formatarNumeroMeta(contatosPrincipais.length)}</strong>
-                      <span>Principais selecionados</span>
+                      <span>Selecionados</span>
                     </div>
                     <div className={styles.capacityResolutionStat}>
                       <strong>{formatarNumeroMeta(quantidadeDesejada)}</strong>
