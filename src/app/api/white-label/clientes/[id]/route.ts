@@ -470,7 +470,7 @@ export async function DELETE(
   if (empresa.status === "cancelada") {
     return NextResponse.json({
       ok: true,
-      message: "Cliente já estava excluído.",
+      message: "Cliente já estava cancelado; nenhuma exclusão adicional foi realizada.",
     });
   }
 
@@ -478,7 +478,7 @@ export async function DELETE(
     const resultado = await encerrarEmpresaAdministrativamente(empresa.id, null);
     return NextResponse.json({
       ok: true,
-      message: "Cliente encerrado. Licença liberada; histórico preservado por 90 dias.",
+      message: "Cliente encerrado. Licença liberada; histórico preservado por até 60 dias.",
       resultado,
       warning: resultado.warning || null,
     });

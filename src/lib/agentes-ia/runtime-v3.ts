@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { validarReservaAgenteIa } from "./validar-reserva";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import {
   dataLocalDeIso,
@@ -3612,7 +3613,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     p_forcar: options.forcar === true,
   });
   if (reservaError) throw new Error(reservaError.message);
-  if (!reservada) {
+  if (!reservada || !validarReservaAgenteIa(reservada)) {
     await garantirNovaTentativaSeIndisponivel(pendenciaId);
     return { ok: true, processado: false, motivo: "pendencia_indisponivel_ou_debounce" };
   }

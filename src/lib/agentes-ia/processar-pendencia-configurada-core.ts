@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { validarReservaAgenteIa } from "./validar-reserva";
 import { buscarSaldoTokensIa } from "@/lib/ia/tokens";
 import { processarCapturaPendenteAgente } from "./captura-contato";
 import { executarContingenciaAgente } from "./fallback";
@@ -51,7 +52,7 @@ async function processarSemTokens(
     }
   );
   if (reservaError) throw new Error(reservaError.message);
-  if (!reservada) {
+  if (!reservada || !validarReservaAgenteIa(reservada)) {
     return {
       ok: true,
       processado: false,
@@ -225,7 +226,7 @@ async function processarAutomacaoExterna(
     }
   );
   if (reservaError) throw new Error(reservaError.message);
-  if (!reservada) {
+  if (!reservada || !validarReservaAgenteIa(reservada)) {
     return processarPendenciaAgenteIaBase(pendenciaId, options);
   }
 

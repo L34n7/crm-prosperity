@@ -3,6 +3,7 @@
 import crypto from "node:crypto";
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { validarReservaAgenteIa } from "./validar-reserva";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import { registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -509,7 +510,7 @@ export async function processarPendenciaNegocio(
     }
   );
   if (reservaError) throw new Error(reservaError.message);
-  if (!reservada) {
+  if (!reservada || !validarReservaAgenteIa(reservada)) {
     return {
       tratado: true,
       resultado: { ok: true, processado: false, motivo: "pendencia_indisponivel_ou_debounce" },

@@ -49,7 +49,8 @@ export async function sincronizarEstadoOperacionalClientesWhiteLabel(
       "id,assinatura_status,assinatura_metadata_json,assinatura_fluxos_pausados_em",
     )
     .eq("white_label_id", whiteLabelId)
-    .eq("white_label_tipo", "cliente");
+    .eq("white_label_tipo", "cliente")
+    .neq("status", "cancelada");
 
   if (clientesError) throw new Error(clientesError.message);
 
@@ -188,7 +189,8 @@ export async function sincronizarEstadoOperacionalClientesWhiteLabel(
         },
         updated_at: new Date().toISOString(),
       })
-      .eq("id", cliente.id);
+      .eq("id", cliente.id)
+      .neq("status", "cancelada");
 
     if (updateError) throw new Error(updateError.message);
     atualizados += 1;
