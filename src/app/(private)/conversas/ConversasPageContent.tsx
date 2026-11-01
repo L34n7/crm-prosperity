@@ -10248,6 +10248,7 @@ const templateFooterTexto = useMemo(() => {
                                 interesses={interessesIdentificadosIa}
                                 carregando={carregandoInformacoesCaptura}
                                 erro={erroInteressesIdentificadosIa}
+                                ocultarHistoricoEAtalho
                                 compacto
                               />
 
