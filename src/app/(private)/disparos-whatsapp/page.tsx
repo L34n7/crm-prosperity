@@ -6766,9 +6766,21 @@ export default function DisparosWhatsAppPage() {
                                 </div>
                               ) : null}
                             {quantidadeDesejada > 0 && limiteMeta ? (
-                              <div className={`${styles.dispatchCapacityResult} ${capacidadeInsuficienteAgora ? styles.dispatchCapacityResultAlert : styles.dispatchCapacityResultOk}`} role="status">
-                                <strong>{quantidadeExcedeLimiteTotal ? "Quantidade acima do limite total" :
-                                  capacidadeInsuficienteAgora ? "Quantidade maior que a disponível agora" : "Quantidade disponível para envio imediato"}</strong>
+                              <div
+                                className={`${styles.dispatchCapacityResult} ${
+                                  quantidadeExcedeLimiteTotal
+                                    ? styles.dispatchCapacityResultDanger
+                                    : capacidadeInsuficienteAgora
+                                      ? styles.dispatchCapacityResultAlert
+                                      : styles.dispatchCapacityResultOk
+                                }`}
+                                role={quantidadeExcedeLimiteTotal ? "alert" : "status"}
+                              >
+                                <div className={styles.dispatchCapacityResultHeading}>
+                                  {quantidadeExcedeLimiteTotal ? <AlertTriangle size={19} aria-hidden="true" /> : null}
+                                  <strong>{quantidadeExcedeLimiteTotal ? "Quantidade acima do limite total" :
+                                    capacidadeInsuficienteAgora ? "Quantidade maior que a disponível agora" : "Quantidade disponível para envio imediato"}</strong>
+                                </div>
                                 <p>{quantidadeExcedeLimiteTotal
                                   ? `O número comporta no máximo ${formatarNumeroMeta(capacidadeTotalPlanejamento)} destinatários em uma campanha. Divida em campanhas menores.`
                                   : capacidadeInsuficienteAgora

@@ -6632,11 +6632,34 @@
   border-color: var(--crm-warning-border);
   background: color-mix(in srgb, var(--crm-warning-bg) 60%, var(--crm-surface) 40%);
 }
-.dispatchCapacityResult > strong {
+.dispatchCapacityResultDanger {
+  border-color: var(--crm-danger-border);
+  background: linear-gradient(
+    115deg,
+    color-mix(in srgb, var(--crm-danger-bg) 85%, var(--crm-surface) 15%),
+    color-mix(in srgb, var(--crm-danger-bg) 55%, var(--crm-surface) 45%)
+  );
+}
+.dispatchCapacityResultHeading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.dispatchCapacityResultHeading > strong {
   color: var(--crm-text-strong);
   font-size: 15px;
   line-height: 1.35;
   font-weight: 850;
+}
+.dispatchCapacityResultDanger .dispatchCapacityResultHeading,
+.dispatchCapacityResultDanger .dispatchCapacityResultHeading > strong {
+  color: var(--crm-danger-text);
+}
+.dispatchCapacityResultDanger .dispatchCapacityResultHeading svg {
+  flex: 0 0 auto;
+}
+.dispatchCapacityResult.dispatchCapacityResultDanger p {
+  color: var(--crm-danger-text);
 }
 .dispatchCapacityResult p {
   margin: 0;
@@ -6693,7 +6716,7 @@
   line-height: 1.4;
 }
 .dispatchCapacityOption span {
-  color: var(--crm-text-strong);
+  color: var(--crm-text-muted);
   font-size: 16px;
   font-weight: 800;
   line-height: 1.4;
@@ -6710,9 +6733,11 @@
   box-shadow: 0 11px 24px rgb(37 119 89 / 15%),
               inset 0 1px 0 rgb(255 255 255 / 85%);
 }
-.dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected strong,
-.dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected span {
+.dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected strong {
   color: #16543d;
+}
+.dispatchCapacityOptionImmediate.dispatchCapacityOptionSelected span {
+  color: #526a60;
 }
 .dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected {
   border-color: #e7be69;
@@ -6720,9 +6745,11 @@
   box-shadow: 0 11px 24px rgb(161 112 31 / 14%),
               inset 0 1px 0 rgb(255 255 255 / 88%);
 }
-.dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected strong,
-.dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected span {
+.dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected strong {
   color: #6b480e;
+}
+.dispatchCapacityOptionScheduled.dispatchCapacityOptionSelected span {
+  color: #776b59;
 }
 .dispatchCapacitySuggestion {
   display: flex;
