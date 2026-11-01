@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { podeVisualizarConversas } from "@/lib/auth/authorization";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { listarInteressesIdentificadosContato } from "@/lib/agentes-ia/listar-interesses-identificados";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import { usuarioPodeVisualizarConversa } from "@/lib/conversas/visibilidade";
 
@@ -110,8 +111,19 @@ export async function GET(
     );
   }
 
+  let interessesIa = [];
+  let interessesIaErro = false;
+  try {
+    interessesIa = await listarInteressesIdentificadosContato(usuario.empresa_id, conversa.contato_id);
+  } catch (erro) {
+    console.error("[interesses-ia-conversa]", erro);
+    interessesIaErro = true;
+  }
+
   return NextResponse.json({
     ok: true,
+    interesses_ia: interessesIa,
+    interesses_ia_erro: interessesIaErro,
     contato_id: conversa.contato_id,
     campo_contato: String(contatoResultado.data?.campo_contato ?? ""),
     interesse: String(contatoResultado.data?.interesse ?? ""),
