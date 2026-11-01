@@ -3,6 +3,7 @@ import { podeVisualizarConversas } from "@/lib/auth/authorization";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarInteressesIdentificadosContato } from "@/lib/agentes-ia/listar-interesses-identificados";
+import type { InteresseIdentificadoIa } from "@/lib/agentes-ia/interesses-identificados";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import { usuarioPodeVisualizarConversa } from "@/lib/conversas/visibilidade";
 
@@ -111,7 +112,7 @@ export async function GET(
     );
   }
 
-  let interessesIa = [];
+  let interessesIa: InteresseIdentificadoIa[] = [];
   let interessesIaErro = false;
   try {
     interessesIa = await listarInteressesIdentificadosContato(usuario.empresa_id, conversa.contato_id);
