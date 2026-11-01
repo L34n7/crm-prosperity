@@ -7,9 +7,9 @@ import type { InteresseIdentificadoIa } from "@/lib/agentes-ia/interesses-identi
 import Header from "@/components/Header";
 import ExclusaoContatosEmMassa from "./ExclusaoContatosEmMassa";
 import GerenciarListaContatosModal from "./GerenciarListaContatosModal";
-import GerenciarListaConversaModal from "./GerenciarListaConversaModal";
+
 import CentralRevisaoTelefones from "./CentralRevisaoTelefones";
-import type { ListaCompartilhadaContato } from "./GerenciarListasCompartilhadasModal";
+import ListasPersonalizadasModal, { type ListaCompartilhadaContato } from "./ListasPersonalizadasModal";
 import styles from "./contatos.module.css";
 
 type ClassificacaoContato =
@@ -319,7 +319,7 @@ export default function ContatosPage() {
   const [modoGerenciarLista, setModoGerenciarLista] = useState<
     "editar" | "excluir" | null
   >(null);
-  const [modoGerenciarListaConversa, setModoGerenciarListaConversa] = useState<"editar" | "excluir" | null>(null);
+  const [gerenciarListasPersonalizadas, setGerenciarListasPersonalizadas] = useState(false);
   const [arquivoImportacao, setArquivoImportacao] = useState<File | null>(null);
   const [importandoPreview, setImportandoPreview] = useState(false);
   const [confirmandoImportacao, setConfirmandoImportacao] = useState(false);
@@ -1383,18 +1383,18 @@ export default function ContatosPage() {
 
     if (listaEmMassa === REMOVER_CONFORME_FILTRO) {
       if (!listaConversaSelecionada) {
-        return { etapas, alvosRemocao, erro: "Filtre uma Lista Conversa específica antes de remover conforme o filtro." };
+        return { etapas, alvosRemocao, erro: "Filtre uma Lista personalizada específica antes de remover conforme o filtro." };
       }
       etapas.push({
-        nome: "Remover da lista conversa filtrada",
+        nome: "Remover da lista personalizada filtrada",
         url: "/api/contatos/listas-compartilhadas/vinculos",
         method: "DELETE",
         body: { lista_id: listaConversaSelecionada.id, contato_ids: ids },
       });
-      alvosRemocao.push(`Lista Conversa: ${listaConversaSelecionada.nome}`);
+      alvosRemocao.push(`Lista personalizada: ${listaConversaSelecionada.nome}`);
     } else if (listaEmMassa.startsWith("lista:")) {
       etapas.push({
-        nome: "Adicionar à lista conversa",
+        nome: "Adicionar à lista personalizada",
         url: "/api/contatos/listas-compartilhadas/vinculos",
         method: "POST",
         body: { lista_id: listaEmMassa.slice("lista:".length), contato_ids: ids },
@@ -1778,7 +1778,7 @@ export default function ContatosPage() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Lista Conversa</label>
+            <label className={styles.label}>Listas personalizadas</label>
             <div className={styles.originFilterRow}>
               <select className={`${styles.select} ${styles.originFilterSelect}`}
                 value={filtroListaConversa}
@@ -1792,16 +1792,9 @@ export default function ContatosPage() {
                 ))}
               </select>
               <button type="button" className={`${styles.originListActionButton} ${styles.originListEditButton}`}
-                onClick={() => setModoGerenciarListaConversa("editar")}
-                disabled={!listaConversaSelecionada} title="Editar lista de conversa" aria-label="Editar lista de conversa">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
-                </svg>
-              </button>
-              <button type="button" className={`${styles.originListActionButton} ${styles.originListDeleteButton}`}
-                onClick={() => setModoGerenciarListaConversa("excluir")}
-                disabled={!listaConversaSelecionada} title="Excluir lista de conversa" aria-label="Excluir lista de conversa">×</button>
+                onClick={() => setGerenciarListasPersonalizadas(true)} title="Criar lista personalizada" aria-label="Criar lista personalizada">+</button>
+              <button type="button" className={`${styles.originListActionButton} ${styles.originListEditButton}`}
+                onClick={() => setGerenciarListasPersonalizadas(true)} title="Gerenciar atalhos e prioridades" aria-label="Gerenciar listas personalizadas">⚙</button>
             </div>
           </div>
 
@@ -2177,7 +2170,7 @@ export default function ContatosPage() {
                   </select>
                 </label>
                 <label className={`${styles.bulkField} ${styles.bulkFieldConversation}`}>
-                  <span>Lista Conversa</span>
+                  <span>Lista personalizada</span>
                   <select value={listaEmMassa} className={listaEmMassa === REMOVER_CONFORME_FILTRO ? styles.bulkSelectRemove :
                     listaEmMassa === MANTER_VALOR_EM_MASSA ? styles.bulkSelectKeep : ""}
                     onChange={(e) => setListaEmMassa(e.target.value)} disabled={atualizandoEmMassa}>
@@ -2185,10 +2178,10 @@ export default function ContatosPage() {
                     <optgroup label="Ação de remoção">
                       <option className={styles.bulkOptionRemove} value={REMOVER_CONFORME_FILTRO}
                         disabled={!conversaFiltrada}>
-                        {conversaFiltrada ? "Remover conforme filtro" : "Remover conforme filtro (filtre Lista Conversa)"}
+                        {conversaFiltrada ? "Remover conforme filtro" : "Remover conforme filtro (filtre Lista personalizada)"}
                       </option>
                     </optgroup>
-                    <optgroup label="Adicionar à lista conversa">
+                    <optgroup label="Adicionar à lista personalizada">
                       {listasCompartilhadas.map((lista) => (
                         <option key={lista.id} value={`lista:${lista.id}`}>{lista.nome}</option>
                       ))}
@@ -2745,7 +2738,7 @@ export default function ContatosPage() {
                             {(["importacao", "conversa"] as const).map((tipo) => (
                               <div className={styles.infoBlock} key={tipo}>
                                 <span className={styles.infoLabel}>
-                                  {tipo === "importacao" ? "Lista Importação" : "Lista Conversa"}
+                                  {tipo === "importacao" ? "Lista Importação" : "Lista personalizada"}
                                 </span>
                                 <div className={styles.contactMembershipValues}>
                                   {carregandoListasContato === contato.id || !listasContato[contato.id] && !erroListasContato[contato.id] ? (
@@ -3228,23 +3221,16 @@ export default function ContatosPage() {
       )}
 
 
-      {modoGerenciarListaConversa && listaConversaSelecionada && (
-        <GerenciarListaConversaModal lista={listaConversaSelecionada} modo={modoGerenciarListaConversa}
-          onClose={() => setModoGerenciarListaConversa(null)}
-          onAtualizada={async (nome) => {
-            setModoGerenciarListaConversa(null);
-            setMensagem(`Lista "${nome}" atualizada.`);
-            await carregarListasCompartilhadas();
-          }}
-          onExcluida={async (mensagem) => {
-            setModoGerenciarListaConversa(null);
-            setFiltroListaConversa("");
-            setListaEmMassa(MANTER_VALOR_EM_MASSA);
-            setPaginaAtual(1);
+      {gerenciarListasPersonalizadas && (
+        <ListasPersonalizadasModal
+          listas={listasCompartilhadas}
+          onClose={() => setGerenciarListasPersonalizadas(false)}
+          onChanged={async (mensagem) => {
             setMensagem(mensagem);
             await carregarListasCompartilhadas();
             await carregarContatos();
-          }} />
+          }}
+        />
       )}
 
       {modoGerenciarLista && listaSelecionada && (
