@@ -7602,3 +7602,120 @@
   .disparoWizardConfirmation .modalFinanceiroValor { font-size: clamp(22px, 6vw, 28px); }
   .disparoWizardConfirmation .modalBody { width: 100%; gap: 14px; }
 }
+
+
+/* Confirmação de lista fria: viewport dinâmica do Safari e rolagem apenas do conteúdo. */
+@media (max-width: 700px) {
+  .coldListConfirmationOverlay {
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+    overflow: hidden;
+  }
+  .coldListConfirmationDialog {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 0;
+    box-sizing: border-box;
+  }
+  .coldListConfirmationDialog .coldListConfirmationHeader {
+    flex: 0 0 auto;
+    min-width: 0;
+    align-items: flex-start;
+    gap: 12px;
+    padding: calc(14px + env(safe-area-inset-top)) 16px 14px;
+    background: var(--crm-surface);
+  }
+  .coldListConfirmationHeader > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .coldListConfirmationHeader .modalEyebrow {
+    margin-bottom: 4px;
+    font-size: 10px;
+  }
+  .coldListConfirmationHeader .modalTitle {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.26;
+    overflow-wrap: anywhere;
+  }
+  .coldListConfirmationHeader .modalSubtitle {
+    margin-top: 8px;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .coldListConfirmationHeader .modalClose {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    font-size: 22px;
+  }
+  .coldListConfirmationDialog .coldListConfirmationBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    padding: 16px 16px 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .coldListConfirmationBody > * {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .coldListConfirmationBody .modalAlert {
+    padding: 14px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .coldListConfirmationBody .modalList {
+    padding-left: 20px;
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+  .coldListConfirmationBody .modalCheckbox {
+    min-width: 0;
+    align-items: flex-start;
+    padding: 13px;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .coldListConfirmationBody .modalCheckbox > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .coldListConfirmationDialog .coldListConfirmationFooter {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--crm-surface);
+    box-shadow: 0 -4px 16px rgb(15 23 42 / 5%);
+  }
+  .coldListConfirmationFooter .primaryButton,
+  .coldListConfirmationFooter .secondaryButton {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.35;
+    white-space: normal;
+  }
+}

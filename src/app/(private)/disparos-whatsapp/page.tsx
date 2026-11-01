@@ -10050,7 +10050,7 @@ export default function DisparosWhatsAppPage() {
         podeDisparar &&
         templateComListaFria && (
           <div
-            className={styles.modalOverlay}
+            className={`${styles.modalOverlay} ${styles.coldListConfirmationOverlay}`}
             onClick={() => {
               setModalResponsabilidadeListaFriaAberto(false);
               setConfirmacaoResponsabilidadeListaFria(false);
@@ -10058,13 +10058,13 @@ export default function DisparosWhatsAppPage() {
             }}
           >
             <div
-              className={styles.modalConfirmacao}
+              className={`${styles.modalConfirmacao} ${styles.coldListConfirmationDialog}`}
               role="dialog"
               aria-modal="true"
               aria-labelledby="responsabilidade-lista-fria-titulo"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className={styles.modalHeader}>
+              <div className={`${styles.modalHeader} ${styles.coldListConfirmationHeader}`}>
                 <div>
                   <p className={styles.modalEyebrow}>Lista fria</p>
                   <h3
@@ -10100,7 +10100,7 @@ export default function DisparosWhatsAppPage() {
                 </button>
               </div>
 
-              <div className={styles.modalBody}>
+              <div className={`${styles.modalBody} ${styles.coldListConfirmationBody}`}>
                 <div className={styles.modalAlert}>
                   <strong>
                     {marketingComListaFria
@@ -10192,7 +10192,7 @@ export default function DisparosWhatsAppPage() {
                 </label>
               </div>
 
-              <div className={styles.modalFooter}>
+              <div className={`${styles.modalFooter} ${styles.coldListConfirmationFooter}`}>
                 <button
                   type="button"
                   className={styles.secondaryButton}
