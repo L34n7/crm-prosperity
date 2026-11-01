@@ -8198,3 +8198,16 @@ a.buttonMessageOption:hover {
     padding-right: 3px;
   }
 }
+
+/* Atalhos de listas personalizadas: faixa horizontal única, com rolagem por arraste e setas. */
+.listaAtalhosWrap { position: relative; width: 100%; min-width: 0; margin-top: 8px; }
+.listaAtalhosScroll { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: 7px; padding: 5px 20px 8px; cursor: grab; scrollbar-width: none; -ms-overflow-style: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; touch-action: pan-x; }
+.listaAtalhosScroll::-webkit-scrollbar { display: none; }
+.listaAtalhosScroll:active { cursor: grabbing; }
+.listaAtalhosChip { flex: 0 0 auto; white-space: nowrap; user-select: none; max-width: 190px; text-overflow: ellipsis; overflow: hidden; }
+.listaAtalhosSeta { position: absolute; top: 0; bottom: 0; z-index: 2; width: 22px; padding: 0; background: var(--crm-surface); color: var(--crm-text); border: none; opacity: .85; cursor: pointer; font-size: 22px; line-height: 1; }
+.listaAtalhosSeta:hover { opacity: 1; background: var(--crm-surface-soft); }
+.listaAtalhosSetaEsq { left: 0; border-radius: 0 6px 6px 0; }
+.listaAtalhosSetaDir { right: 0; border-radius: 6px 0 0 6px; }
+.listaAtalhoCheckbox { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--crm-text); cursor: pointer; padding-top: 8px; }
+.listaAtalhoCheckbox input { width: 16px; height: 16px; accent-color: var(--crm-primary); }
