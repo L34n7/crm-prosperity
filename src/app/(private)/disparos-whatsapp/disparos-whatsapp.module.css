@@ -2217,6 +2217,56 @@
   margin-top: 3px;
 }
 
+/* Confirmação de cobrança da etapa 4: destaque visual sem bloquear o botão. */
+.disparoWizardBillingConsent {
+  align-items: center;
+  gap: 14px;
+  padding: 17px 19px;
+  border: 1px solid color-mix(in srgb, var(--crm-warning-text) 42%, var(--crm-border) 58%);
+  background: color-mix(in srgb, var(--crm-warning-bg) 68%, var(--crm-surface) 32%);
+  color: var(--crm-text-strong);
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease;
+}
+.disparoWizardBillingConsent:hover,
+.disparoWizardBillingConsent:focus-within {
+  border-color: var(--crm-warning-text);
+}
+.disparoWizardBillingConsent:has(input:checked) {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+.disparoWizardBillingConsent input {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--crm-primary-strong);
+  cursor: pointer;
+}
+.disparoWizardBillingConsentText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.disparoWizardBillingConsentText strong {
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.4;
+  color: var(--crm-text-strong);
+}
+.disparoWizardBillingConsentText > span {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--crm-text);
+}
+.disparoWizardBillingConsentText small {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--crm-text-muted);
+}
+
 .modalFooter {
   padding: 16px 22px 22px;
   border-top: 1px solid var(--crm-border);

@@ -6299,7 +6299,11 @@ export default function DisparosWhatsAppPage() {
   }
 
   async function confirmarEDisparar() {
-    if (!confirmacaoCobranca) return;
+    if (!confirmacaoCobranca) {
+      setErro("Para enviar o disparo, é necessário marcar a confirmação de ciência sobre possíveis cobranças.");
+      destacarCampoDisparo("confirmacao-cobranca");
+      return;
+    }
 
     if (templateComListaFria) {
       setConfirmacaoResponsabilidadeListaFria(false);
@@ -7892,14 +7896,31 @@ export default function DisparosWhatsAppPage() {
                 </ul>
               </div>
 
-              <label className={styles.modalCheckbox}>
+              <label
+                className={`${styles.modalCheckbox} ${styles.disparoWizardBillingConsent}`}
+                data-disparo-campo="confirmacao-cobranca"
+                data-disparo-destaque={campoPendente === "confirmacao-cobranca"}
+              >
                 <input
                   type="checkbox"
                   checked={confirmacaoCobranca}
-                  onChange={(e) => setConfirmacaoCobranca(e.target.checked)}
+                  onChange={(e) => {
+                    setConfirmacaoCobranca(e.target.checked);
+                    if (e.target.checked) {
+                      setErro("");
+                      setCampoPendente("");
+                    }
+                  }}
+                  aria-required="true"
+                  aria-invalid={campoPendente === "confirmacao-cobranca"}
+                  aria-describedby="disparo-wizard-confirmacao-cobranca"
                 />
-                <span>
-                  Li as informações acima e estou ciente de que este disparo pode gerar cobrança.
+                <span className={styles.disparoWizardBillingConsentText}>
+                  <strong>Confirmação obrigatória</strong>
+                  <span id="disparo-wizard-confirmacao-cobranca">
+                    Li as informações acima e estou ciente de que este disparo pode gerar cobrança.
+                  </span>
+                  <small>Marque esta opção para confirmar sua ciência antes de concluir.</small>
                 </span>
               </label>
             </div>
@@ -8013,7 +8034,7 @@ export default function DisparosWhatsAppPage() {
                         ) : (
                           <button type="button" className={styles.primaryButton}
                             onClick={confirmarEDisparar}
-                            disabled={!confirmacaoCobranca || disparando || loadingConflitos ||
+                            disabled={disparando || loadingConflitos ||
                               temConflitosPendentes || temVariaveisObrigatoriasPendentes ||
                               temContatosOptOut || temContatosCooldown || listaFriaSemOptOut ||
                               (!agendarDisparo && (disparoBloqueado || selecaoExcedeLimite)) ||
