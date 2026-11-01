@@ -6957,10 +6957,19 @@ export default function DisparosWhatsAppPage() {
                             {contatosReservaAtivos ? (
                               <div className={styles.reserveContactsDetails}>
                                 <div className={styles.reserveContactsTotals}>
-                                  <span><strong>{formatarNumeroMeta(Math.min(contatosSelecionados.length, quantidadeDesejada))}/{formatarNumeroMeta(quantidadeDesejada)}</strong> principais</span>
-                                  <span><strong>{formatarNumeroMeta(contatosReserva.length)}/{formatarNumeroMeta(limiteContatosReserva)}</strong> de reserva (50%)</span>
+                                  <div className={styles.reserveContactsMetric}>
+                                    <span>Quantidade desejada</span>
+                                    <strong>{formatarNumeroMeta(quantidadeDesejada)}</strong>
+                                  </div>
+                                  <div className={styles.reserveContactsMetric}>
+                                    <span>Quantidade contatos reserva (50%)</span>
+                                    <strong>{formatarNumeroMeta(limiteContatosReserva)}</strong>
+                                  </div>
                                 </div>
-                                <p><Info size={15} aria-hidden="true" /> Adicione primeiro os contatos principais e, em seguida, os de reserva. Eles serão usados somente para compensar falhas definitivas, sem ultrapassar a quantidade desejada nem a capacidade disponível da Meta. Se faltar capacidade, a compensação aguardará liberação.</p>
+                                <p className={styles.reserveContactsOrientation}>
+                                  <Info size={18} aria-hidden="true" />
+                                  <span>Adicione primeiro os contatos principais e, em seguida, os de reserva. Eles serão usados somente para compensar falhas definitivas, sem ultrapassar a quantidade desejada nem a capacidade disponível da Meta. Se faltar capacidade, a compensação aguardará liberação.</span>
+                                </p>
                               </div>
                             ) : null}
                           </section>
@@ -7725,12 +7734,39 @@ export default function DisparosWhatsAppPage() {
 
 
 
-                <div data-disparo-campo="custo" data-disparo-destaque={campoPendente === "custo"} className={`${styles.capacityResolution} ${contatosSelecionados.length > 0 ? styles.capacityResolutionGood : styles.capacityResolutionBlocked}`} role="status">
-                  <strong>{formatarNumeroMeta(contatosPrincipais.length)} principal(is) de até {formatarNumeroMeta(quantidadeDesejada)} · {formatarNumeroMeta(contatosReserva.length)} reserva(s)</strong>
-                  <span>{contatosSelecionados.length > 0
-                    ? "Você pode continuar com esta seleção. Contatos de reserva não serão enviados sem falha definitiva e disponibilidade da Meta."
-                    : "Selecione ao menos um contato para continuar."}</span>
-                </div>
+                <section data-disparo-campo="custo" data-disparo-destaque={campoPendente === "custo"} className={`${styles.capacityResolution} ${contatosSelecionados.length > 0 ? styles.capacityResolutionGood : styles.capacityResolutionBlocked}`} role="status" aria-label="Resumo da seleção de contatos">
+                  <div className={styles.capacityResolutionHeader}>
+                    <span className={styles.capacityResolutionIcon}>
+                      {contatosSelecionados.length > 0
+                        ? <Check size={18} aria-hidden="true" />
+                        : <Info size={18} aria-hidden="true" />}
+                    </span>
+                    <div>
+                      <span className={styles.capacityResolutionEyebrow}>Resumo da seleção</span>
+                      <strong className={styles.capacityResolutionTitle}>Contatos para esta campanha</strong>
+                    </div>
+                    <span className={styles.capacityResolutionBadge}>{contatosSelecionados.length > 0 ? "Seleção pronta" : "Aguardando contatos"}</span>
+                  </div>
+                  <div className={styles.capacityResolutionStats}>
+                    <div className={styles.capacityResolutionStat}>
+                      <strong>{formatarNumeroMeta(contatosPrincipais.length)}</strong>
+                      <span>Principais selecionados</span>
+                    </div>
+                    <div className={styles.capacityResolutionStat}>
+                      <strong>{formatarNumeroMeta(quantidadeDesejada)}</strong>
+                      <span>Quantidade desejada</span>
+                    </div>
+                    <div className={styles.capacityResolutionStat}>
+                      <strong>{formatarNumeroMeta(contatosReserva.length)}</strong>
+                      <span>Contatos de reserva</span>
+                    </div>
+                  </div>
+                  <p className={styles.capacityResolutionDescription}>
+                    {contatosSelecionados.length > 0
+                      ? "Você pode continuar com esta seleção. Contatos de reserva só serão utilizados para compensar falhas definitivas, respeitando a capacidade da Meta."
+                      : "Selecione ao menos um contato para continuar. Você não precisa preencher toda a quantidade planejada."}
+                  </p>
+                </section>
                         </div>
                       ) : null}
                       {etapaDisparo === 4 ? (

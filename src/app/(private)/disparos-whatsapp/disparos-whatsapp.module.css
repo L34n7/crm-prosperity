@@ -7069,3 +7069,221 @@
     outline-offset: 3px;
   }
 }
+
+
+/* Etapa 3 — destaque premium para o planejamento de contatos de reserva. */
+.reserveContactsCard {
+  border-radius: 16px;
+  border-color: #c8e3da;
+  background: linear-gradient(118deg, #f5fbf8 0%, #ffffff 75%);
+  box-shadow: 0 10px 25px rgba(21, 72, 61, .07), 0 1px 2px rgba(18, 52, 45, .04);
+}
+.reserveContactsHeading {
+  gap: 13px;
+  padding: 15px 18px;
+}
+.reserveContactsHeading > span:nth-child(2) { gap: 4px; }
+.reserveContactsHeading strong {
+  color: #142a32;
+  font-size: 16px;
+  font-weight: 850;
+  letter-spacing: -.015em;
+}
+.reserveContactsHeading small {
+  color: #46606a;
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.reserveContactsIcon {
+  height: 38px;
+  width: 38px;
+  flex-basis: 38px;
+  border-radius: 11px;
+  border-color: #c1e4d8;
+  background: linear-gradient(135deg, #e2f7ee, #f4fffb);
+  color: #167c61;
+}
+.reserveContactsDetails {
+  gap: 12px;
+  padding: 0 18px 17px;
+  border-top-color: #deeee7;
+}
+.reserveContactsTotals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 14px;
+}
+.reserveContactsMetric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #d7e9e2;
+  border-radius: 13px;
+  background: linear-gradient(125deg, #ffffff, #f0f9f5);
+  box-shadow: 0 2px 9px rgba(30, 76, 64, .035);
+}
+.reserveContactsMetric:nth-child(2) {
+  border-color: #d8e8ef;
+  background: linear-gradient(125deg, #ffffff, #f1f8fc);
+}
+.reserveContactsMetric > span {
+  color: #475e67;
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+.reserveContactsMetric strong {
+  color: #102e38;
+  font-size: 26px;
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+}
+.reserveContactsDetails .reserveContactsOrientation {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid #dceae6;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .86);
+  color: #172730;
+  font-size: 13.5px;
+  font-weight: 560;
+  line-height: 1.6;
+}
+.reserveContactsOrientation svg {
+  flex: 0 0 auto;
+  color: #157d65;
+  margin-top: 2px;
+}
+
+/* Etapa 3 — resumo da seleção com indicadores numéricos legíveis. */
+.capacityResolution {
+  gap: 14px;
+  padding: 17px 19px;
+  border-radius: 16px;
+  border-color: #d7e9e1;
+  background: linear-gradient(115deg, #f5fbf8 0%, #ffffff 88%);
+  box-shadow: 0 9px 25px rgba(20, 62, 52, .055);
+}
+.capacityResolutionGood {
+  border-color: #bde3d1;
+  background: linear-gradient(110deg, #f1faf4 0%, #ffffff 88%);
+}
+.capacityResolutionBlocked {
+  border-color: #eddab1;
+  background: linear-gradient(110deg, #fffbf1 0%, #ffffff 88%);
+}
+.capacityResolutionHeader {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.capacityResolutionIcon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid #c3e6d5;
+  border-radius: 11px;
+  background: #e4f6ed;
+  color: #18865c;
+}
+.capacityResolutionHeader > div {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.capacityResolutionEyebrow {
+  color: #3c7c68;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 850;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.capacityResolution .capacityResolutionTitle {
+  color: #152b35;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.35;
+}
+.capacityResolutionBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #d5eadf;
+  background: #ecf9f0;
+  color: #217853;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.capacityResolutionBlocked .capacityResolutionBadge {
+  border-color: #f0d6a0;
+  color: #92601b;
+  background: #fff6db;
+}
+.capacityResolutionStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.capacityResolutionStat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid #dfece6;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .91);
+}
+.capacityResolutionStat strong {
+  color: #146e54;
+  font-size: 27px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+}
+.capacityResolutionStat:nth-child(2) strong { color: #183243; }
+.capacityResolutionStat:nth-child(3) strong { color: #337894; }
+.capacityResolutionStat > span {
+  color: #47616b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.capacityResolution .capacityResolutionDescription {
+  margin: 0;
+  padding: 0 1px;
+  color: #364d57;
+  font-size: 12.5px;
+  font-weight: 540;
+  line-height: 1.55;
+}
+@media (max-width: 680px) {
+  .reserveContactsTotals { grid-template-columns: minmax(0, 1fr); }
+  .capacityResolutionStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .capacityResolutionStat:last-child { grid-column: span 2; }
+  .capacityResolutionHeader { flex-wrap: wrap; }
+  .capacityResolutionBadge { margin-left: 47px; }
+}
+
+.capacityResolutionBlocked .capacityResolutionIcon {
+  color: #a26c20;
+  border-color: #efdcaf;
+  background: #fff2d3;
+}
