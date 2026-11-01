@@ -2380,3 +2380,48 @@
   font-size: 11px;
   line-height: 1.4;
 }
+
+/* Card de alteração única: campos à esquerda e ações à direita. */
+.bulkToolbar {
+  grid-template-columns: 156px minmax(0, 1fr) 290px;
+  grid-template-areas: "selection fields actions";
+  align-items: stretch;
+  gap: 12px;
+}
+.bulkFields { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 9px; }
+.bulkFieldConversation { grid-column: 1 / -1; }
+.bulkActions {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 9px;
+  padding: 0;
+  border-top: none;
+}
+.bulkActions .bulkApplyButton { width: 100%; min-height: 40px; }
+.bulkActionBottom { display: flex; gap: 7px; min-width: 0; }
+.bulkActionBottom > * { flex: 1 1 0; min-width: 0; }
+.bulkActionBottom button { width: 100%; min-height: 38px; padding: 6px 7px; font-size: 11px; }
+.bulkField select.bulkSelectKeep { color: var(--crm-text-muted); background: var(--crm-surface); }
+.bulkField select.bulkSelectRemove { color: var(--crm-danger-text); background: var(--crm-danger-bg); border-color: var(--crm-danger-border); font-weight: 800; }
+.bulkField select optgroup { font-weight: 800; }
+.bulkOptionRemove { color: var(--crm-danger-text); font-weight: 800; }
+@media (max-width: 1180px) {
+  .bulkToolbar { grid-template-columns: 1fr; grid-template-areas: "selection" "fields" "actions"; }
+  .bulkActions { flex-direction: row; }
+  .bulkActions .bulkApplyButton, .bulkActionBottom { flex: 1 1 0; }
+}
+@media (max-width: 768px) {
+  .bulkFields { grid-template-columns: minmax(0, 1fr); }
+  .bulkFieldConversation { grid-column: auto; }
+  .bulkActions { flex-direction: column; }
+}
+.sharedListPreview {
+  overflow-y: auto; max-height: 250px; margin: 12px 0; padding: 12px;
+  border: 1px solid var(--crm-border); border-radius: 10px; background: var(--crm-surface);
+}
+.sharedListPreviewRow { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--crm-border); }
+.sharedListPreviewRow strong { font-size: 12px; }
+.sharedListPreviewRow span { font-size: 11px; color: var(--crm-text-muted); overflow-wrap: anywhere; }
+.sharedListImpact { line-height: 1.5; font-size: 13px; }
+.sharedListSafety { font-weight: 800; color: var(--crm-danger-text); }

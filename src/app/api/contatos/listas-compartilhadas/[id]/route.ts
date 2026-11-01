@@ -70,6 +70,33 @@ async function contextoLista(id: string) {
   return { ok: true as const, usuario, lista };
 }
 
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const ctx = await contextoLista(id);
+  if (!ctx.ok) return ctx.response;
+  const { usuario, lista } = ctx;
+  const pagina = Math.max(1, Math.min(10000, Number(new URL(request.url).searchParams.get("page")) || 1));
+  const inicio = (pagina - 1) * 30;
+  const membros = await supabaseAdmin.from("conversas_listas_contatos")
+    .select("contato_id", { count: "exact" })
+    .eq("empresa_id", usuario.empresa_id).eq("lista_id", id)
+    .order("created_at", { ascending: false }).range(inicio, inicio + 29);
+  if (membros.error) return NextResponse.json({ ok: false, error: membros.error.message }, { status: 500 });
+  const ids = (membros.data || []).map((m) => m.contato_id);
+  let contatos: { id: string; nome: string | null; email: string | null; telefone: string | null }[] = [];
+  if (ids.length) {
+    const busca = await supabaseAdmin.from("contatos").select("id,nome,email,telefone")
+      .eq("empresa_id", usuario.empresa_id).in("id", ids);
+    if (busca.error) return NextResponse.json({ ok: false, error: busca.error.message }, { status: 500 });
+    const porId = new Map((busca.data || []).map((c) => [c.id, c]));
+    contatos = ids.flatMap((id) => { const c = porId.get(id); return c ? [c] : []; });
+  }
+  return NextResponse.json({
+    ok: true, lista, contatos, total: membros.count || 0, pagina,
+    mais: inicio + ids.length < (membros.count || 0),
+  });
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
