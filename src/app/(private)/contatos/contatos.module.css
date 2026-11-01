@@ -2658,3 +2658,10 @@
   .personalListRowActions { margin-left: auto; }
   .personalListPageButton { min-width: 82px; }
 }
+
+/* Dez listas por página; rolagem exclusiva do modal, não do card. */
+.personalListRows { display: flex; flex-direction: column; gap: 9px; max-height: none; overflow: visible; }
+.personalListRow { cursor: grab; transition: border-color .18s ease, opacity .18s ease; }
+.personalListRow[data-dragging="true"] { opacity: .42; border-style: dashed; border-color: var(--crm-primary-border); }
+.personalListRow:active { cursor: grabbing; }
+.personalListRow input, .personalListRow button, .personalListRow label { cursor: auto; }

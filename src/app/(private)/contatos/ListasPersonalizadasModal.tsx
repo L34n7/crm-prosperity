@@ -29,14 +29,18 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
   const [editando, setEditando] = useState<string | null>(null);
   const [nomeEdicao, setNomeEdicao] = useState("");
   const [excluir, setExcluir] = useState<string | null>(null);
+  const [arrastando, setArrastando] = useState<string | null>(null);
+  const POR_PAGINA = 10;
 
   useEffect(() => {
     setOrdenadas(listas);
-    setPagina((atual) => Math.min(atual, Math.max(0, listas.length - 1)));
+    setPagina((atual) => Math.min(atual, Math.max(0, Math.ceil(listas.length / POR_PAGINA) - 1)));
   }, [listas]);
 
-  const indice = Math.min(pagina, Math.max(0, ordenadas.length - 1));
-  const listaAtual = ordenadas[indice] ?? null;
+  const totalPaginas = Math.max(1, Math.ceil(ordenadas.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas - 1);
+  const inicioPagina = paginaAtual * POR_PAGINA;
+  const listasPagina = ordenadas.slice(inicioPagina, inicioPagina + POR_PAGINA);
 
   async function req(url: string, metodo: string, payload: unknown) {
     const resposta = await fetch(url, {
@@ -73,7 +77,7 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
       });
       setNome("");
       setAtalhoNovo(false);
-      setPagina(ordenadas.length);
+      setPagina(Math.floor(ordenadas.length / POR_PAGINA));
       return "Lista personalizada criada.";
     });
   }
@@ -92,7 +96,7 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
         confirmar_exclusao: true,
       });
       setExcluir(null);
-      setPagina((atual) => Math.max(0, atual - (atual === ordenadas.length - 1 ? 1 : 0)));
+      setPagina((atual) => Math.min(atual, Math.max(0, Math.ceil((ordenadas.length - 1) / POR_PAGINA) - 1)));
       return "Lista excluída. Os contatos foram preservados.";
     });
   }
@@ -105,7 +109,7 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
     const [movida] = depois.splice(origem, 1);
     depois.splice(destino, 0, movida);
     setOrdenadas(depois);
-    setPagina(destino);
+    setPagina(Math.floor(destino / POR_PAGINA));
     void executar(async () => {
       try {
         await req("/api/contatos/listas-compartilhadas/ordem", "PUT", {
@@ -121,7 +125,7 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
   }
 
   function mudarPagina(destino: number) {
-    if (ocupado || destino < 0 || destino >= ordenadas.length) return;
+    if (ocupado || destino < 0 || destino >= totalPaginas) return;
     setPagina(destino);
     setEditando(null);
     setExcluir(null);
@@ -172,112 +176,132 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
         <section className={`${styles.listManagerSection} ${styles.personalListExisting}`}>
           <div className={styles.personalListSectionHeading}>
             <strong>Suas listas</strong>
-            <small>Organize a prioridade com ↑ ↓. Esta ordem também vale no filtro de Contatos.</small>
+            <small>Arraste os cards ou use ↑ ↓ para ordenar. A prioridade também vale nos filtros de Contatos e em Conversas.</small>
           </div>
 
-          {listaAtual ? (
+          {listasPagina.length > 0 ? (
             <div className={styles.personalListRows}>
-              <div className={styles.personalListRow} key={listaAtual.id}>
+              {listasPagina.map((lista, paginaIndex) => {
+                const indiceLista = inicioPagina + paginaIndex;
+                return (
+                  <div key={lista.id} className={styles.personalListRow}
+                    draggable={!ocupado && editando !== lista.id && excluir !== lista.id}
+                    data-dragging={arrastando === lista.id ? "true" : undefined}
+                    onDragStart={(event) => {
+                      setArrastando(lista.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", lista.id);
+                    }}
+                    onDragOver={(event) => { if (!ocupado) event.preventDefault(); }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const origemId = event.dataTransfer.getData("text/plain") || arrastando;
+                      setArrastando(null);
+                      if (origemId) mover(origemId, indiceLista);
+                    }}
+                    onDragEnd={() => setArrastando(null)}>
                 <div className={styles.personalListRowPrimary}>
                   <div className={styles.personalListRowTop}>
-                    <span className={styles.personalListPosition}>{indice + 1}º</span>
-                    {editando === listaAtual.id ? (
+                    <span className={styles.personalListPosition}>{indiceLista + 1}º</span>
+                    {editando === lista.id ? (
                       <input className={`${styles.input} ${styles.personalListEditInput}`}
                         value={nomeEdicao} autoFocus maxLength={160}
-                        aria-label={`Renomear ${listaAtual.nome}`}
+                        aria-label={`Renomear ${lista.nome}`}
                         onChange={(event) => setNomeEdicao(event.target.value)}
                         onKeyDown={(event) => {
                           if (event.key === "Escape") setEditando(null);
                           if (event.key === "Enter" && nomeEdicao.trim()) {
                             event.preventDefault();
-                            alterar(listaAtual, { nome: nomeEdicao.trim() });
+                            alterar(lista, { nome: nomeEdicao.trim() });
                           }
                         }} />
                     ) : (
                       <span className={styles.personalListName}>
-                        <strong title={listaAtual.nome}>{listaAtual.nome}</strong>
-                        <small>{listaAtual.total_contatos} {listaAtual.total_contatos === 1 ? "contato" : "contatos"}</small>
+                        <strong title={lista.nome}>{lista.nome}</strong>
+                        <small>{lista.total_contatos} {lista.total_contatos === 1 ? "contato" : "contatos"}</small>
                       </span>
                     )}
                   </div>
 
                   <div className={styles.personalListRowActions}>
-                    {editando === listaAtual.id ? (
+                    {editando === lista.id ? (
                       <>
                         <button type="button" className={styles.secondaryButton}
                           disabled={ocupado} onClick={() => setEditando(null)}>Cancelar</button>
                         <button type="button" className={styles.primaryButton}
-                          disabled={ocupado || !nomeEdicao.trim() || nomeEdicao.trim() === listaAtual.nome}
-                          onClick={() => alterar(listaAtual, { nome: nomeEdicao.trim() })}>Salvar</button>
+                          disabled={ocupado || !nomeEdicao.trim() || nomeEdicao.trim() === lista.nome}
+                          onClick={() => alterar(lista, { nome: nomeEdicao.trim() })}>Salvar</button>
                       </>
-                    ) : excluir === listaAtual.id ? (
+                    ) : excluir === lista.id ? (
                       <>
                         <button type="button" className={styles.secondaryButton}
                           disabled={ocupado} onClick={() => setExcluir(null)}>Cancelar</button>
                         <button type="button" className={styles.dangerButton}
-                          disabled={ocupado} onClick={() => remover(listaAtual)}>Confirmar</button>
+                          disabled={ocupado} onClick={() => remover(lista)}>Confirmar</button>
                       </>
                     ) : (
                       <>
                         <button type="button" className={styles.secondaryButton}
                           disabled={ocupado}
                           onClick={() => {
-                            setEditando(listaAtual.id);
-                            setNomeEdicao(listaAtual.nome);
+                            setEditando(lista.id);
+                            setNomeEdicao(lista.nome);
                             setExcluir(null);
                           }}>Editar</button>
                         <button type="button" className={styles.dangerButton}
                           disabled={ocupado}
-                          onClick={() => { setExcluir(listaAtual.id); setEditando(null); }}>Excluir</button>
+                          onClick={() => { setExcluir(lista.id); setEditando(null); }}>Excluir</button>
                       </>
                     )}
                   </div>
                 </div>
 
-                {excluir === listaAtual.id && (
+                {excluir === lista.id && (
                   <p className={styles.personalListDeleteNotice} role="alert">
-                    Excluir “{listaAtual.nome}”? Os contatos permanecem cadastrados e apenas os vínculos com a lista serão removidos.
+                    Excluir “{lista.nome}”? Os contatos permanecem cadastrados e apenas os vínculos com a lista serão removidos.
                   </p>
                 )}
 
                 <div className={styles.personalListRowFooter}>
                   <label className={styles.personalListToggle}>
                     <input type="checkbox" disabled={ocupado}
-                      checked={listaAtual.exibir_atalho_conversas}
-                      onChange={() => alterar(listaAtual, {
-                        exibir_atalho_conversas: !listaAtual.exibir_atalho_conversas,
+                      checked={lista.exibir_atalho_conversas}
+                      onChange={() => alterar(lista, {
+                        exibir_atalho_conversas: !lista.exibir_atalho_conversas,
                       })} />
                     <span>Exibir atalho</span>
                   </label>
                   <div className={styles.personalListPriority}>
                     <span>Prioridade</span>
                     <button type="button" className={styles.personalListMiniButton}
-                      disabled={ocupado || indice === 0}
-                      onClick={() => mover(listaAtual.id, indice - 1)}
-                      aria-label={`Subir ${listaAtual.nome}`} title="Subir prioridade">↑</button>
+                      disabled={ocupado || indiceLista === 0}
+                      onClick={() => mover(lista.id, indiceLista - 1)}
+                      aria-label={`Subir ${lista.nome}`} title="Subir prioridade">↑</button>
                     <button type="button" className={styles.personalListMiniButton}
-                      disabled={ocupado || indice === ordenadas.length - 1}
-                      onClick={() => mover(listaAtual.id, indice + 1)}
-                      aria-label={`Descer ${listaAtual.nome}`} title="Descer prioridade">↓</button>
+                      disabled={ocupado || indiceLista === ordenadas.length - 1}
+                      onClick={() => mover(lista.id, indiceLista + 1)}
+                      aria-label={`Descer ${lista.nome}`} title="Descer prioridade">↓</button>
                   </div>
                 </div>
-              </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className={styles.personalListEmpty}>Nenhuma lista criada. Use o formulário acima para começar.</p>
           )}
 
-          {ordenadas.length > 1 && (
+          {totalPaginas > 1 && (
             <nav className={styles.personalListPagination} aria-label="Páginas das listas personalizadas">
               <button type="button" className={styles.personalListPageButton}
-                disabled={ocupado || indice === 0}
-                onClick={() => mudarPagina(indice - 1)}>‹ Anterior</button>
+                disabled={ocupado || paginaAtual === 0}
+                onClick={() => mudarPagina(paginaAtual - 1)}>‹ Anterior</button>
               <span className={styles.personalListPageStatus} aria-live="polite">
-                Lista <strong>{indice + 1}</strong> de <strong>{ordenadas.length}</strong>
+                Página <strong>{paginaAtual + 1}</strong> de <strong>{totalPaginas}</strong>
               </span>
               <button type="button" className={styles.personalListPageButton}
-                disabled={ocupado || indice === ordenadas.length - 1}
-                onClick={() => mudarPagina(indice + 1)}>Próxima ›</button>
+                disabled={ocupado || paginaAtual === totalPaginas - 1}
+                onClick={() => mudarPagina(paginaAtual + 1)}>Próxima ›</button>
             </nav>
           )}
         </section>
