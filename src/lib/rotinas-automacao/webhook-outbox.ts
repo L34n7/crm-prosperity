@@ -103,12 +103,6 @@ export async function enfileirarWebhookAutomacao(params: {
       };
     }
 
-    if (await automacoesEmpresaEstaoBloqueadas(item.empresa_id)) {
-      await supabase.from("integracao_webhooks_outbox")
-        .update({ status: "descartado", ultimo_erro: "assinatura_bloqueada", processado_em: new Date().toISOString(), locked_at: null, updated_at: new Date().toISOString() })
-        .eq("id", item.id);
-      return { ok: true, final: true, motivo: "assinatura_bloqueada" };
-    }
     const { data: conexao, error: conexaoError } = await supabase
       .from("integracoes_api_externas")
       .select("id,nome,status")
@@ -365,6 +359,12 @@ export async function processarWebhookIntegracaoPorId(outboxId: string) {
   const maxTentativas = Number(item.max_tentativas || 5);
 
   try {
+    if (await automacoesEmpresaEstaoBloqueadas(item.empresa_id)) {
+      await supabase.from("integracao_webhooks_outbox")
+        .update({ status: "descartado", ultimo_erro: "assinatura_bloqueada", processado_em: new Date().toISOString(), locked_at: null, updated_at: new Date().toISOString() })
+        .eq("id", item.id);
+      return { ok: true, final: true, motivo: "assinatura_bloqueada" };
+    }
     const { data: conexao, error: conexaoError } = await supabase
       .from("integracoes_api_externas")
       .select("id,base_url,token_criptografado,status")

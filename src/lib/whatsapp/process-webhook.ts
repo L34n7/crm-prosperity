@@ -1139,7 +1139,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           ? "No momento não consegui ouvir seu áudio por aqui. Pode me enviar uma mensagem de texto, por favor?"
           : "Nao consegui entender o áudio. Pode enviar novamente falando mais claro ou escrever uma mensagem";
 
-        if (phoneNumberId && accessToken) {
+        if (phoneNumberId && accessToken && !(await automacoesEmpresaEstaoBloqueadas(integration.empresa_id))) {
           const envioAviso = await sendWhatsAppTextMessage({
             phoneNumberId,
             accessToken,

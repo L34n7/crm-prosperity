@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { validarReservaAgenteIa } from "./validar-reserva";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import {
@@ -1876,6 +1877,10 @@ async function enviarMensagemAgente(params: {
   const accessToken = getWhatsAppAccessToken(integracao);
   if (!accessToken) throw new Error("Token do WhatsApp indisponível.");
 
+  // Revalidação no último ponto de saída: a assinatura pode ter sido bloqueada durante a geração da resposta.
+  if (await automacoesEmpresaEstaoBloqueadas(params.empresaId)) {
+    throw new Error("assinatura_bloqueada");
+  }
   const envio = await sendWhatsAppTextMessage({ phoneNumberId: integracao.phone_number_id, accessToken, to: params.numeroDestino, body: params.texto });
   const agora = new Date().toISOString();
   const { data: protocolo } = await supabaseAdmin
