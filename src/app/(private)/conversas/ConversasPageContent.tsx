@@ -11601,10 +11601,19 @@ const templateFooterTexto = useMemo(() => {
                       )}
 
                       {abaPainelDireito === "listas" && (
-                        <div className={styles.panelSectionStack}>
-                          <div className={styles.noteComposer}>
-                            <label className={styles.actionLabel}>Criar nova lista</label>
-                            <input
+                        <div className={`${styles.panelSectionStack} ${styles.listPanelPremium}`}>
+                          <div className={styles.listPanelIntro}>
+                            <span className={styles.listPanelEyebrow}>ORGANIZAÇÃO</span>
+                            <strong>Listas de conversa</strong>
+                            <p>Inclua esta conversa em listas, defina atalhos e organize prioridades.</p>
+                            <div className={styles.listPanelStats}>
+                              <span><b>{listasEmpresa.length}</b> listas</span>
+                              <span><b>{listasEmpresa.filter(item=>item.exibir_atalho_conversas).length}</b> atalhos visíveis</span>
+                            </div>
+                          </div>
+                          <div className={`${styles.noteComposer} ${styles.listPanelCreator}`}>
+                            <label className={styles.actionLabel} htmlFor="nova-lista-conversas">Criar nova lista</label>
+                            <input id="nova-lista-conversas"
                               className={styles.messageInput}
                               value={novaListaNome}
                               onChange={(e) => setNovaListaNome(e.target.value)}
@@ -11654,21 +11663,27 @@ const templateFooterTexto = useMemo(() => {
                             <label className={styles.listaAtalhoCheckbox}>
                               <input type="checkbox" checked={novaListaAtalho} disabled={salvandoLista}
                                 onChange={e => setNovaListaAtalho(e.target.checked)}/>
-                              Exibir como atalho na lista de conversas
+                              Exibir como atalho em Conversas
                             </label>
                           </div>
 
+                          <div className={styles.listPanelListHeader}>
+                            <div><strong>Listas existentes</strong><span>Toque em uma lista para incluir ou retirar a conversa.</span></div>
+                            <span className={styles.listPanelListCount}>{listasConversa.length}</span>
+                          </div>
                           {listasConversa.length === 0 ? (
                             <div className={styles.infoBoxMuted}>
                               Nenhuma lista criada para esta empresa ainda.
                             </div>
                           ) : (
                             listasConversa.map((lista) => (
-                              <div key={lista.id} className={styles.listaCardWrap}>
+                              <div key={lista.id} className={`${styles.listaCardWrap} ${styles.listPanelCard}`}>
                                 <div className={styles.listaCard}>
                                   <button
                                     type="button"
-                                    className={styles.listaMainButton}
+                                    className={`${styles.listaMainButton} ${lista.marcada ? styles.listPanelSelected : ""}`}
+                                    aria-pressed={lista.marcada}
+                                    title={lista.marcada ? `Remover a conversa de ${lista.nome}` : `Adicionar a conversa a ${lista.nome}`}
                                     onClick={async () => {
                                       if (!conversaSelecionada?.id) return;
 
@@ -11705,7 +11720,10 @@ const templateFooterTexto = useMemo(() => {
                                       <span className={styles.listaCheckIcon}>
                                         {lista.marcada ? "☑" : "☐"}
                                       </span>
-                                      <span className={styles.listaNome}>{lista.nome}</span>
+                                      <span className={styles.listPanelListMeta}>
+                                        <span className={styles.listaNome} title={lista.nome}>{lista.nome}</span>
+                                        <small>{lista.marcada ? "Conversa incluída" : "Toque para adicionar"}</small>
+                                      </span>
                                     </span>
                                   </button>
 
@@ -11831,7 +11849,7 @@ const templateFooterTexto = useMemo(() => {
                                 {listaConfirmandoExclusaoId === lista.id && (
                                   <div className={styles.listaInlinePanelDanger}>
                                     <p className={styles.listaConfirmText}>
-                                      Deseja excluir a lista <strong>{lista.nome}</strong>?
+                                      Excluir a lista <strong>{lista.nome}</strong>? Os contatos serão preservados; apenas os vínculos serão removidos.
                                     </p>
 
                                     <div className={styles.listaInlineActions}>

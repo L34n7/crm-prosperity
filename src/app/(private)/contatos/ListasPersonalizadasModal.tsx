@@ -67,16 +67,24 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
       return "Prioridade das listas salva.";
     });
   }
+  const atalhosVisiveis = ordenadas.filter(l => l.exibir_atalho_conversas).length;
   return <div className={styles.modalOverlay} onClick={e => { if(e.target === e.currentTarget && !ocupado) onClose(); }}>
-    <div className={`${styles.modalCard} ${styles.personalListModal}`} role="dialog" aria-modal="true" aria-label="Gerenciar listas personalizadas">
-      <div className={styles.modalHeader}>
-        <div><p className={styles.eyebrow}>Organização</p><h2 className={styles.modalTitle}>Listas personalizadas</h2>
-          <p className={styles.cardDescription}>Organize seus contatos e escolha quais listas aparecem como atalhos em Conversas.</p></div>
+    <div className={`${styles.modalCard} ${styles.personalListModal}`} role="dialog" aria-modal="true" aria-labelledby="titulo-listas-personalizadas">
+      <div className={`${styles.modalHeader} ${styles.personalListHeader}`}>
+        <div><p className={styles.eyebrow}>Organização</p><h2 className={styles.modalTitle} id="titulo-listas-personalizadas">Listas personalizadas</h2>
+          <p className={styles.cardDescription}>Organize contatos, priorize listas e escolha os atalhos exibidos em Conversas.</p>
+          <div className={styles.personalListStats}>
+            <span><strong>{ordenadas.length}</strong> listas</span>
+            <span><strong>{atalhosVisiveis}</strong> atalhos visíveis</span>
+          </div></div>
         <button type="button" className={styles.modalCloseButton} onClick={onClose} disabled={ocupado} aria-label="Fechar">×</button>
       </div>
       {erro && <div className={styles.alertError} role="alert">{erro}</div>}
-      <div className={styles.listManagerSection}>
-        <label className={styles.label} htmlFor="nome-lista-personalizada">Criar lista</label>
+      <div className={`${styles.listManagerSection} ${styles.personalListCreation}`}>
+        <div className={styles.personalListSectionHeading}>
+          <strong>Nova lista</strong><small>Crie grupos sem duplicar contatos.</small>
+        </div>
+        <label className={styles.label} htmlFor="nome-lista-personalizada">Nome da lista</label>
         <div className={styles.listManagerNameRow}>
           <input id="nome-lista-personalizada" className={styles.input} value={nome} maxLength={160} disabled={ocupado}
             onChange={e=>setNome(e.target.value)} placeholder="Ex.: Clientes VIP"
@@ -87,8 +95,11 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
           disabled={ocupado} onChange={e=>setAtalhoNovo(e.target.checked)}/>Exibir como atalho em Conversas</label>
       </div>
       <div className={styles.listManagerDivider}/>
-      <div className={styles.listManagerSection}>
-        <p className={styles.cardDescription}>Arraste uma lista ou use ↑ ↓ para mudar a prioridade. Esta ordem também vale no filtro de Contatos.</p>
+      <div className={`${styles.listManagerSection} ${styles.personalListExisting}`}>
+        <div className={styles.personalListSectionHeading}>
+          <strong>Suas listas <span className={styles.personalListCount}>{ordenadas.length}</span></strong>
+          <small>Arraste os cards ou use ↑ ↓ para mudar a prioridade. Esta ordem também vale no filtro de Contatos.</small>
+        </div>
         <div className={styles.personalListRows}>
           {ordenadas.length===0 && <p className={styles.cardDescription}>Nenhuma lista criada.</p>}
           {ordenadas.map((lista,i)=><div key={lista.id} className={styles.personalListRow}
@@ -102,7 +113,9 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
               <span title="Arrastar para ordenar">⠿</span>
               <strong>{i+1}º</strong>
               {editando===lista.id
-                ? <input className={styles.input} value={nomeEdicao} maxLength={160} onChange={e=>setNomeEdicao(e.target.value)}/>
+                ? <input className={`${styles.input} ${styles.personalListEditInput}`} value={nomeEdicao} maxLength={160} autoFocus
+                   aria-label={`Renomear ${lista.nome}`} onChange={e=>setNomeEdicao(e.target.value)}
+                   onKeyDown={e=>{if(e.key==="Escape")setEditando(null);if(e.key==="Enter"&&nomeEdicao.trim()){e.preventDefault();alterar(lista,{nome:nomeEdicao.trim()});}}}/>
                 : <span className={styles.personalListName}><strong>{lista.nome}</strong><small>{lista.total_contatos} contatos</small></span>}
             </div>
             <div className={styles.personalListRowActions}>
@@ -112,7 +125,7 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
               <button type="button" className={styles.personalListMiniButton} disabled={ocupado||i===ordenadas.length-1} onClick={()=>mover(lista.id,i+1)} aria-label={`Descer ${lista.nome}`}>↓</button>
               {editando===lista.id?<><button type="button" className={styles.secondaryButton} onClick={()=>setEditando(null)}>Cancelar</button>
                 <button type="button" className={styles.primaryButton} disabled={ocupado||!nomeEdicao.trim()} onClick={()=>alterar(lista,{nome:nomeEdicao.trim()})}>Salvar</button></>
-              : excluir===lista.id?<><span>Excluir lista? Contatos preservados.</span>
+              : excluir===lista.id?<><span className={styles.personalListDeleteNotice}>Excluir lista? Os contatos serão preservados.</span>
                 <button type="button" className={styles.secondaryButton} onClick={()=>setExcluir(null)}>Não</button>
                 <button type="button" className={styles.dangerButton} disabled={ocupado} onClick={()=>remover(lista)}>Excluir</button></>
               :<><button type="button" className={styles.secondaryButton} disabled={ocupado} onClick={()=>{setEditando(lista.id);setNomeEdicao(lista.nome);setExcluir(null);}}>Editar</button>

@@ -2529,3 +2529,36 @@
 .personalListMiniButton { min-width: 29px; height: 29px; border-radius: 8px; border: 1px solid var(--crm-border); background: var(--crm-surface-soft); color: var(--crm-text); cursor: pointer; }
 .personalListMiniButton:disabled { opacity: .3; cursor: not-allowed; }
 @media (max-width: 620px) { .personalListModal { max-height: 95dvh; } .personalListRows { max-height: 55dvh; } }
+
+/* Lista premium — padrão visual do CRM. */
+.personalListModal { width: min(780px,calc(100vw - 28px)); max-height: min(90dvh,880px); padding: 0; overflow-y: auto; overflow-x: hidden; }
+.personalListHeader { padding: 25px 27px 21px; margin: 0; border-bottom: 1px solid var(--crm-border); background: linear-gradient(120deg,var(--crm-primary-soft),var(--crm-surface) 80%); }
+.personalListHeader > div { min-width: 0; }
+.personalListHeader .modalTitle { font-size: clamp(21px,3vw,26px); }
+.personalListHeader .cardDescription { max-width: 505px; line-height: 1.5; }
+.personalListStats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.personalListStats > span { padding: 8px 11px; border: 1px solid var(--crm-primary-border); border-radius: 10px; background: var(--crm-surface); color: var(--crm-text); font-size: 12px; }
+.personalListStats strong { color: var(--crm-primary); font-size: 15px; }
+.personalListCreation,.personalListExisting { margin: 17px 24px 0; padding: 18px; border: 1px solid var(--crm-border); border-radius: 16px; background: var(--crm-surface); }
+.personalListExisting { margin-bottom: 22px; }
+.personalListSectionHeading { display: flex; flex-direction: column; gap: 5px; }
+.personalListSectionHeading strong { color: var(--crm-text-strong); font-size: 15px; }
+.personalListSectionHeading small { color: var(--crm-text-muted); font-size: 12px; line-height: 1.5; }
+.personalListCount { padding: 4px 8px; border-radius: 99px; background: var(--crm-primary-soft); color: var(--crm-primary); font-size: 11px; margin-left: 5px; }
+.personalListCreation .listManagerNameRow { grid-template-columns: minmax(0,1fr) 132px; }
+.personalListCreation .listManagerNameRow .primaryButton { min-height: 44px; border-radius: 10px; }
+.personalListRows { max-height: min(45dvh,440px); gap: 10px; padding: 3px 5px 3px 1px; }
+.personalListRow { padding: 14px 15px; border: 1px solid var(--crm-border); border-radius: 14px; background: var(--crm-surface-soft); gap: 10px; transition: border-color .18s ease; }
+.personalListRow:hover { border-color: var(--crm-primary-border); }
+.personalListRowTop { gap: 10px; min-height: 30px; }
+.personalListRowTop > strong { flex: 0 0 auto; padding: 4px 7px; border-radius: 7px; background: var(--crm-surface); }
+.personalListName { flex: 1 1 auto; }
+.personalListName strong { font-size: 13px; color: var(--crm-text-strong); }
+.personalListName small { color: var(--crm-text-muted); opacity: 1; }
+.personalListRowTop .personalListEditInput { flex: 0 1 225px; width: min(100%,225px); max-width: 225px; min-width: 100px; height: 38px; font-size: 13px; box-sizing: border-box; }
+.personalListRowActions { gap: 8px; flex-wrap: wrap; }
+.personalListRowActions .personalListToggle { min-height: 37px; padding: 7px 10px; border: 1px solid var(--crm-border); background: var(--crm-surface); border-radius: 9px; box-sizing: border-box; }
+.personalListRowActions .personalListMiniButton { min-width: 37px; height: 37px; font-size: 17px; border-radius: 9px; }
+.personalListRowActions .secondaryButton,.personalListRowActions .primaryButton,.personalListRowActions .dangerButton { min-width: 70px; min-height: 37px; padding: 7px 11px; font-size: 12px; font-weight: 750; border-radius: 9px; }
+.personalListDeleteNotice { font-size: 12px; color: var(--crm-danger-text); margin-right: auto; }
+@media(max-width:620px) { .personalListModal { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; } .personalListHeader { padding: 18px 16px; } .personalListCreation,.personalListExisting { margin: 14px 12px 0; padding: 14px; } .personalListExisting { margin-bottom: 18px; } .personalListCreation .listManagerNameRow { grid-template-columns: 1fr; } .personalListRows { max-height: none; overflow: visible; } .personalListRowTop { flex-wrap: wrap; } }

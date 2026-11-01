@@ -1793,8 +1793,7 @@ export default function ContatosPage() {
               </select>
               <button type="button" className={`${styles.originListActionButton} ${styles.originListEditButton}`}
                 onClick={() => setGerenciarListasPersonalizadas(true)} title="Criar lista personalizada" aria-label="Criar lista personalizada">+</button>
-              <button type="button" className={`${styles.originListActionButton} ${styles.originListEditButton}`}
-                onClick={() => setGerenciarListasPersonalizadas(true)} title="Gerenciar atalhos e prioridades" aria-label="Gerenciar listas personalizadas">⚙</button>
+
             </div>
           </div>
 

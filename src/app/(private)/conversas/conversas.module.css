@@ -8211,3 +8211,43 @@ a.buttonMessageOption:hover {
 .listaAtalhosSetaDir { right: 0; border-radius: 6px 0 0 6px; }
 .listaAtalhoCheckbox { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--crm-text); cursor: pointer; padding-top: 8px; }
 .listaAtalhoCheckbox input { width: 16px; height: 16px; accent-color: var(--crm-primary); }
+
+/* Alinhamento horizontal dos atalhos com os filtros fixos. */
+.listaAtalhosWrap { margin-top: 9px; }
+.listaAtalhosScroll { padding: 4px 0 8px; scroll-padding-inline: 0; }
+.listaAtalhosSetaEsq,.listaAtalhosSetaDir { width: 20px; }
+/* Aba de listas premium. */
+.listPanelPremium { gap: 14px; min-width: 0; }
+.listPanelIntro { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--crm-primary-border); border-radius: 15px; background: linear-gradient(120deg,var(--crm-primary-soft),var(--crm-surface) 85%); }
+.listPanelEyebrow { color: var(--crm-primary); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.listPanelIntro > strong { font-size: 16px; color: var(--crm-text-strong); }
+.listPanelIntro > p { margin: 0; color: var(--crm-text-muted); font-size: 12px; line-height: 1.5; }
+.listPanelStats { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 5px; }
+.listPanelStats span { padding: 6px 9px; border: 1px solid var(--crm-border); border-radius: 9px; background: var(--crm-surface); color: var(--crm-text); font-size: 11px; }
+.listPanelStats b { color: var(--crm-primary); }
+.listPanelCreator { display: flex; flex-direction: column; gap: 10px; padding: 15px; min-width: 0; border: 1px solid var(--crm-border); border-radius: 14px; background: var(--crm-surface); }
+.listPanelCreator .actionLabel { font-size: 12px; font-weight: 750; }
+.listPanelCreator .messageInput { width: 100%; box-sizing: border-box; min-height: 41px; font-size: 13px; border-radius: 10px; }
+.listPanelCreator .primaryButton { width: 100%; min-height: 41px; border-radius: 10px; font-size: 13px; font-weight: 750; }
+.listPanelCreator .listaAtalhoCheckbox { margin-top: 0; padding-top: 9px; border-top: 1px solid var(--crm-border-soft); align-items: flex-start; font-size: 12px; }
+.listPanelListHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 3px 1px; }
+.listPanelListHeader > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.listPanelListHeader strong { color: var(--crm-text-strong); font-size: 14px; }
+.listPanelListHeader span { color: var(--crm-text-muted); font-size: 11px; line-height: 1.45; }
+.listPanelListCount { padding: 5px 9px; border-radius: 99px; background: var(--crm-primary-soft); color: var(--crm-primary) !important; font-weight: 800; }
+.listPanelCard { padding: 12px; border: 1px solid var(--crm-border); border-radius: 14px; background: var(--crm-surface); gap: 9px; }
+.listPanelCard:hover { border-color: var(--crm-primary-border); }
+.listPanelCard .listaCard { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; }
+.listPanelCard .listaMainButton { min-width: 0; padding: 11px 12px; background: var(--crm-surface-soft); border-radius: 10px; }
+.listPanelCard .listPanelSelected { border-color: var(--crm-primary-border); background: var(--crm-primary-soft); }
+.listPanelCard .listaCheckIcon { color: var(--crm-primary); }
+.listPanelListMeta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.listPanelListMeta .listaNome { font-size: 13px; }
+.listPanelListMeta small { color: var(--crm-text-muted); font-size: 11px; }
+.listPanelCard .listaActions { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 7px; }
+.listPanelCard .listaIconButton { width: 100%; min-width: 0; height: 36px; border-radius: 9px; font-size: 16px; background: var(--crm-surface-soft); }
+.listPanelCard .listaIconButton:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+.listPanelCard .listaInlinePanel,.listPanelCard .listaInlinePanelDanger { padding: 12px; border-radius: 11px; box-shadow: none; }
+.listPanelCard .listaInlinePanel .messageInput { width: 100%; min-height: 39px; font-size: 13px; box-sizing: border-box; }
+.listPanelCard .listaInlineActions > button { flex: 1 1 100px; min-height: 37px; font-size: 12px; }
+.listPanelCard .listaConfirmText { font-size: 12px; }
