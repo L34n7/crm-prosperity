@@ -2349,3 +2349,25 @@
     flex: 1;
   }
 }
+
+.bulkFeedback {
+  grid-column: 1 / -1;
+  padding: 11px 13px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 10px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.bulkFeedbackError {
+  border-color: var(--crm-danger-border);
+  background: var(--crm-danger-bg);
+  color: var(--crm-danger-text);
+}
+.bulkFeedbackSuccess {
+  border-color: var(--crm-success-border);
+  background: var(--crm-success-bg);
+  color: var(--crm-success-text);
+}

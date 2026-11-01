@@ -322,6 +322,7 @@ export default function ContatosPage() {
     ListaCompartilhadaContato[]
   >([]);
   const [filtroOrigem, setFiltroOrigem] = useState("");
+  const [filtroListaConversa, setFiltroListaConversa] = useState("");
   const [filtroCampanha, setFiltroCampanha] = useState("");
   const [filtroIntegracaoWhatsappId, setFiltroIntegracaoWhatsappId] =
     useState("");
@@ -351,6 +352,7 @@ export default function ContatosPage() {
   );
   const [origemEmMassa, setOrigemEmMassa] = useState(MANTER_VALOR_EM_MASSA);
   const [listaEmMassa, setListaEmMassa] = useState("");
+  const [feedbackEmMassa, setFeedbackEmMassa] = useState<{ tipo: "erro" | "sucesso"; texto: string } | null>(null);
   const [atualizandoEmMassa, setAtualizandoEmMassa] = useState(false);
   const [atualizandoListaEmMassa, setAtualizandoListaEmMassa] =
     useState(false);
@@ -485,6 +487,9 @@ export default function ContatosPage() {
       params.set("lista_id", filtroOrigem.replace("lista:", ""));
     } else if (filtroOrigem.trim()) {
       params.set("origem", filtroOrigem.trim());
+    }
+    if (filtroListaConversa) {
+      params.set("lista_compartilhada_id", filtroListaConversa);
     }
 
     if (filtroCampanha.startsWith("rastreamento:")) {
@@ -781,6 +786,9 @@ export default function ContatosPage() {
       } else if (filtroOrigem.trim()) {
         params.set("origem", filtroOrigem.trim());
       }
+      if (filtroListaConversa) {
+        params.set("lista_compartilhada_id", filtroListaConversa);
+      }
 
       if (filtroCampanha.startsWith("rastreamento:")) {
         params.set(
@@ -937,7 +945,7 @@ export default function ContatosPage() {
       case "validos":
         return "Contatos válidos";
       case "duplicados_banco":
-        return "Duplicados no banco";
+        return "Duplicados no sistema";
       case "duplicados_arquivo":
         return "Duplicados no arquivo";
       case "invalidos":
@@ -1241,44 +1249,61 @@ export default function ContatosPage() {
     setCampanhaEmMassa(MANTER_VALOR_EM_MASSA);
     setOrigemEmMassa(MANTER_VALOR_EM_MASSA);
     setListaEmMassa("");
+    setFeedbackEmMassa(null);
   }
 
   async function alterarListaEmMassa(acao: "adicionar" | "remover") {
-    if (selecionados.size === 0) {
-      setErro("Selecione ao menos um contato.");
+    if (!selecionados.size || !listaEmMassa) {
+      setFeedbackEmMassa({ tipo: "erro", texto: "Selecione contatos e uma lista de conversa." });
       return;
     }
-
-    if (!listaEmMassa) {
-      setErro("Selecione uma lista.");
-      return;
-    }
-
     setAtualizandoListaEmMassa(true);
-    setErro("");
-    setMensagem("");
-
+    setFeedbackEmMassa(null);
     try {
       const res = await fetch("/api/contatos/listas-compartilhadas/vinculos", {
         method: acao === "adicionar" ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lista_id: listaEmMassa,
-          contato_ids: Array.from(selecionados),
-        }),
+        body: JSON.stringify({ lista_id: listaEmMassa, contato_ids: Array.from(selecionados) }),
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        setErro(data.error || "Erro ao atualizar a lista.");
+      if (!res.ok || data.ok !== true) {
+        setFeedbackEmMassa({ tipo: "erro", texto: data.error || "Não foi possível alterar a lista de conversa." });
         return;
       }
-
-      setMensagem(data.message || "Lista atualizada com sucesso.");
+      setFeedbackEmMassa({ tipo: "sucesso", texto: `${data.message || "Lista atualizada."} Confira pelo filtro “Lista Conversa”.` });
       await carregarListasCompartilhadas();
       await carregarContatos();
     } catch {
-      setErro("Erro ao atualizar a lista.");
+      setFeedbackEmMassa({ tipo: "erro", texto: "Erro ao atualizar a lista de conversa." });
+    } finally {
+      setAtualizandoListaEmMassa(false);
+    }
+  }
+
+  async function alterarListaImportacaoEmMassa(acao: "adicionar" | "remover") {
+    const listaId = origemEmMassa.startsWith("lista:") ? origemEmMassa.slice(6) : "";
+    if (!selecionados.size || !listaId) {
+      setFeedbackEmMassa({ tipo: "erro", texto: "Selecione contatos e uma lista importada." });
+      return;
+    }
+    setAtualizandoListaEmMassa(true);
+    setFeedbackEmMassa(null);
+    try {
+      const res = await fetch("/api/contatos/listas/vinculos", {
+        method: acao === "adicionar" ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lista_id: listaId, contato_ids: Array.from(selecionados) }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok !== true) {
+        setFeedbackEmMassa({ tipo: "erro", texto: data.error || "Não foi possível atualizar a lista importada." });
+        return;
+      }
+      setFeedbackEmMassa({ tipo: "sucesso", texto: `${data.message || "Lista importada atualizada."} Confira pelo filtro “Origem / Lista importação”.` });
+      await carregarContatos();
+      await carregarOpcoesFiltros();
+    } catch {
+      setFeedbackEmMassa({ tipo: "erro", texto: "Erro ao atualizar a lista importada." });
     } finally {
       setAtualizandoListaEmMassa(false);
     }
@@ -1301,18 +1326,19 @@ export default function ContatosPage() {
           : campanhaEmMassa;
     }
 
-    if (origemEmMassa !== MANTER_VALOR_EM_MASSA) {
+    if (origemEmMassa !== MANTER_VALOR_EM_MASSA && !origemEmMassa.startsWith("lista:")) {
       payload.origem =
         origemEmMassa === REMOVER_VALOR_EM_MASSA ? null : origemEmMassa;
     }
 
 
     if (Object.keys(payload).length === 1) {
-      setErro("Escolha ao menos uma alteração para aplicar.");
+      setFeedbackEmMassa({ tipo: "erro", texto: origemEmMassa.startsWith("lista:") ? "Use Adicionar ou Remover da lista importação." : "Escolha uma campanha ou origem para aplicar." });
       return;
     }
 
     setAtualizandoEmMassa(true);
+    setFeedbackEmMassa(null);
     setErro("");
     setMensagem("");
 
@@ -1326,17 +1352,17 @@ export default function ContatosPage() {
       });
       const data = await res.json();
 
-      if (!res.ok) {
-        setErro(data.error || "Erro ao atualizar os contatos.");
+      if (!res.ok || data.ok !== true) {
+        setFeedbackEmMassa({ tipo: "erro", texto: data.error || "Erro ao atualizar os contatos." });
         return;
       }
-
-      setMensagem(data.message || "Contatos atualizados com sucesso.");
+      const sucesso = data.message || "Contatos atualizados com sucesso.";
       limparSelecao();
+      setFeedbackEmMassa({ tipo: "sucesso", texto: sucesso });
       await carregarContatos();
       await carregarOpcoesFiltros();
     } catch {
-      setErro("Erro ao atualizar os contatos.");
+      setFeedbackEmMassa({ tipo: "erro", texto: "Erro ao atualizar os contatos." });
     } finally {
       setAtualizandoEmMassa(false);
     }
@@ -1374,6 +1400,7 @@ export default function ContatosPage() {
     filtroStatusConversa,
     filtroApenasNovos,
     filtroOrigem,
+    filtroListaConversa,
     filtroCampanha,
     filtroIntegracaoWhatsappId,
     filtroMensagemDataInicio,
@@ -1415,6 +1442,7 @@ export default function ContatosPage() {
     filtroStatusConversa,
     filtroApenasNovos,
     filtroOrigem,
+    filtroListaConversa,
     filtroCampanha,
     filtroIntegracaoWhatsappId,
     filtroMensagemDataInicio,
@@ -1545,7 +1573,7 @@ export default function ContatosPage() {
           </div>
 
           <div className={styles.field}>
-            <label className={styles.label}>Origem</label>
+            <label className={styles.label}>Origem / Lista importação</label>
             <div className={styles.originFilterRow}>
               <select
                 className={`${styles.select} ${styles.originFilterSelect}`}
@@ -1625,6 +1653,17 @@ export default function ContatosPage() {
                 ×
               </button>
             </div>
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.label}>Lista Conversa</label>
+            <select className={styles.select} value={filtroListaConversa}
+              onChange={(event) => setFiltroListaConversa(event.target.value)}>
+              <option value="">Todas as listas de conversa</option>
+              {listasCompartilhadas.map((lista) => (
+                <option key={lista.id} value={lista.id}>{lista.nome}</option>
+              ))}
+            </select>
           </div>
 
           <div className={styles.field}>
@@ -1855,6 +1894,7 @@ export default function ContatosPage() {
               setFiltroStatusConversa([]);
               setFiltroApenasNovos(false);
               setFiltroOrigem("");
+              setFiltroListaConversa("");
               setFiltroIntegracaoWhatsappId("");
               setFiltroMensagemDataInicio("");
               setFiltroMensagemDataFim("");
@@ -1973,31 +2013,37 @@ export default function ContatosPage() {
                 </label>
 
                 <label className={styles.bulkField}>
-                  <span>Origem</span>
-                  <select
-                    value={origemEmMassa}
-                    onChange={(e) => setOrigemEmMassa(e.target.value)}
-                    disabled={atualizandoEmMassa}
-                  >
+                  <span>Origem / Lista importação</span>
+                  <select value={origemEmMassa}
+                    onChange={(event) => { setOrigemEmMassa(event.target.value); setFeedbackEmMassa(null); }}
+                    disabled={atualizandoEmMassa || atualizandoListaEmMassa}>
                     <option value={MANTER_VALOR_EM_MASSA}>Não alterar</option>
-                    <option value={REMOVER_VALOR_EM_MASSA}>Remover origem</option>
-
-                    {opcoesOrigem.map((origem) => (
-                      <option key={origem} value={origem}>
-                        {origem}
-                      </option>
-                    ))}
+                    <option value={REMOVER_VALOR_EM_MASSA}>Remover origem textual</option>
+                    {listasContatos.length > 0 && (
+                      <optgroup label="Listas importadas">
+                        {listasContatos.map((lista) => (
+                          <option key={lista.id} value={`lista:${lista.id}`}>
+                            {lista.nome} · {formatarDataHoraLista(lista.created_at)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Outras origens">
+                      {opcoesOrigem.filter((origem) => !origem.startsWith("Importação - ")).map((origem) => (
+                        <option key={origem} value={origem}>{origem}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </label>
 
                 <label className={styles.bulkField}>
-                  <span>Lista</span>
+                  <span>Lista Conversa</span>
                   <select
                     value={listaEmMassa}
                     onChange={(e) => setListaEmMassa(e.target.value)}
                     disabled={atualizandoListaEmMassa}
                   >
-                    <option value="">Selecione uma lista</option>
+                    <option value="">Selecione uma lista de conversa</option>
                     {listasCompartilhadas.map((lista) => (
                       <option key={lista.id} value={lista.id}>
                         {lista.nome}
@@ -2016,7 +2062,7 @@ export default function ContatosPage() {
                   disabled={
                     atualizandoEmMassa ||
                     (campanhaEmMassa === MANTER_VALOR_EM_MASSA &&
-                      origemEmMassa === MANTER_VALOR_EM_MASSA)
+                      (origemEmMassa === MANTER_VALOR_EM_MASSA || origemEmMassa.startsWith("lista:")))
                   }
                 >
                   {atualizandoEmMassa ? "Aplicando..." : "Aplicar alterações"}
@@ -2034,7 +2080,7 @@ export default function ContatosPage() {
                 >
                   {atualizandoListaEmMassa
                     ? "Atualizando lista..."
-                    : "Adicionar à lista"}
+                    : "Adicionar à lista conversa"}
                 </button>
 
                 <button
@@ -2047,9 +2093,23 @@ export default function ContatosPage() {
                     listasCompartilhadas.length === 0
                   }
                 >
-                  Remover da lista
+                  Remover da lista conversa
                 </button>
 
+                {origemEmMassa.startsWith("lista:") && (
+                  <>
+                    <button type="button" className={styles.secondaryButton}
+                      onClick={() => alterarListaImportacaoEmMassa("adicionar")}
+                      disabled={atualizandoListaEmMassa || atualizandoEmMassa}>
+                      Adicionar à lista importação
+                    </button>
+                    <button type="button" className={styles.secondaryButton}
+                      onClick={() => alterarListaImportacaoEmMassa("remover")}
+                      disabled={atualizandoListaEmMassa || atualizandoEmMassa}>
+                      Remover da lista importação
+                    </button>
+                  </>
+                )}
                 <ExclusaoContatosEmMassa
                   contatoIds={Array.from(selecionados)}
                   disabled={atualizandoEmMassa}
@@ -2071,6 +2131,12 @@ export default function ContatosPage() {
                   Limpar seleção
                 </button>
               </div>
+              {feedbackEmMassa && (
+                <div className={`${styles.bulkFeedback} ${feedbackEmMassa.tipo === "erro" ? styles.bulkFeedbackError : styles.bulkFeedbackSuccess}`}
+                  role={feedbackEmMassa.tipo === "erro" ? "alert" : "status"}>
+                  {feedbackEmMassa.texto}
+                </div>
+              )}
             </div>
           )}
 
@@ -3169,7 +3235,7 @@ export default function ContatosPage() {
                   </div>
 
                   <div className={styles.infoBlock}>
-                    <span className={styles.infoLabel}>Duplicados no banco</span>
+                    <span className={styles.infoLabel}>Duplicados no sistema</span>
                     <span className={styles.infoValue}>
                       {previewImportacao.resumo.duplicados_banco}
                     </span>
@@ -3229,7 +3295,7 @@ export default function ContatosPage() {
                       setPaginaPreviewImportacao(1);
                     }}
                   >
-                    Duplicados no banco ({previewImportacao.duplicados_banco.length})
+                    Duplicados no sistema ({previewImportacao.duplicados_banco.length})
                   </button>
 
                   <button
