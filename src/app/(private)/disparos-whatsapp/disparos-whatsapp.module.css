@@ -5354,6 +5354,7 @@
   background: var(--crm-primary-strong);
   color: var(--crm-text-inverse);
 }
+.disparoWizardStepTotal { display: none; }
 .disparoWizardStep:disabled { cursor: default; opacity: .85; }
 .disparoWizardStepCurrent:disabled { opacity: 1; }
 .disparoWizardScroll {
@@ -5443,28 +5444,63 @@
     grid-template-columns: minmax(0, 1fr) 37px;
     gap: 10px;
   }
-  .disparoWizardHeaderStep {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    text-align: right;
-    padding-top: 10px;
-  }
-  .disparoWizardHeaderStep p { margin-left: auto; }
+  /* Em telas pequenas, o header mantém apenas a identificação do assistente. */
+  .disparoWizardHeaderStep,
+  .disparoWizardHeaderIntro > span { display: none; }
   .disparoWizardClose { grid-column: 2; grid-row: 1; }
-  .disparoWizardWorkspaceWithPreview { display: flex; flex-direction: column; }
-  .disparoWizardWorkspaceWithPreview .disparoWizardMain {
-    flex: 1 1 auto;
-    min-height: 0;
-    order: 1;
+
+  /* Uma única etapa visível: "1/4 Mensagem e variáveis". */
+  .disparoWizardSteps { grid-template-columns: minmax(0, 1fr); }
+  .disparoWizardStep {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
   }
-  .disparoWizardPreviewColumn {
+  .disparoWizardStep:not(.disparoWizardStepCurrent) { display: none; }
+  .disparoWizardStep > span {
     flex: 0 0 auto;
-    max-height: 170px;
-    order: 0;
-    border-right: none;
-    border-bottom: 1px solid var(--crm-border);
+    width: auto;
+    min-width: 46px;
+    padding: 0 7px;
+    white-space: nowrap;
   }
-  .disparoWizardPreviewColumn .previewSideCard { min-height: 0; }
+  .disparoWizardStepTotal { display: inline; }
+
+  /* Etapa 1: campos primeiro, prévia por último, na mesma rolagem. */
+  .disparoWizardWorkspaceWithPreview {
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .disparoWizardWorkspaceWithPreview .disparoWizardMain {
+    order: 0;
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .disparoWizardWorkspaceWithPreview .disparoWizardScroll {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+  .disparoWizardWorkspaceWithPreview .disparoWizardPreviewColumn {
+    order: 1;
+    flex: 0 0 auto;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
+    border-right: none;
+    border-bottom: none;
+    background: transparent;
+    padding: 0 16px 18px;
+  }
+  .disparoWizardWorkspaceWithPreview .disparoWizardPreviewColumn .previewSideCard {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
   .disparoWizardVariables .templateVariablesGrid { grid-template-columns: minmax(0, 1fr); }
   .disparoWizardConfirmation .modalGridResumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -5475,8 +5511,8 @@
   .disparoWizardHeader { padding: 14px 16px; }
   .disparoWizardHeader h2 { font-size: 20px; }
   .disparoWizardSteps { padding: 10px; gap: 5px; }
-  .disparoWizardStep { padding: 7px 5px; gap: 5px; }
-  .disparoWizardStep strong { font-size: 11.5px; }
+  .disparoWizardStep { padding: 10px 12px; gap: 10px; }
+  .disparoWizardStep strong { font-size: 13px; }
   .disparoWizardFooter { padding: 12px; }
   .disparoWizardActions { flex-direction: column-reverse; }
   .disparoWizardActions button { width: 100%; }
@@ -6940,8 +6976,10 @@
     padding: 17px 0 0;
   }
 }
-@media (max-width: 760px) {
+@media (min-width: 701px) and (max-width: 760px) {
   .disparoWizardSteps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
   .dispatchCapacityPlanner { padding: 16px; }
   .dispatchCapacityChoices { grid-template-columns: minmax(0, 1fr); }
   .dispatchCapacityScheduleFields { grid-template-columns: minmax(0, 1fr); }

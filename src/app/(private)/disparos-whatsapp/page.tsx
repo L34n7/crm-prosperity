@@ -6514,7 +6514,7 @@ export default function DisparosWhatsAppPage() {
                           ].filter(Boolean).join(" ")}
                           aria-current={etapaDisparo === item.numero ? "step" : undefined}
                           onClick={() => { setEtapaDisparo(item.numero as 1 | 2 | 3 | 4); setErro(""); }}>
-                          <span>{item.numero}</span><strong>{item.titulo}</strong>
+                          <span>{item.numero}<span className={styles.disparoWizardStepTotal}>/4</span></span><strong>{item.titulo}</strong>
                         </button>
                       ))}
                     </nav>
