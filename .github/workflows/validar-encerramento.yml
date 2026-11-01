@@ -28,3 +28,5 @@ jobs:
         run: npx tsc --noEmit --pretty false
       - name: Testar correção de captura de interesse do agente IA
         run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/agente-ia-interesses-captura-sql.test.mts
+      - name: Testar apresentação de interesses identificados pela IA
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/interesses-identificados-ia.test.mts
