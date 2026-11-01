@@ -11,6 +11,7 @@ type Props = {
   carregando?: boolean;
   compacto?: boolean;
   erro?: boolean;
+  ocultarHistoricoEAtalho?: boolean;
 };
 
 function formatarData(valor: string | null) {
@@ -32,6 +33,7 @@ export default function InteressesIdentificadosIa({
   carregando = false,
   compacto = false,
   erro = false,
+  ocultarHistoricoEAtalho = false,
 }: Props) {
   const [expandido, setExpandido] = useState(false);
   const itens = expandido ? interesses : interesses.slice(0, compacto ? 3 : 4);
@@ -65,15 +67,17 @@ export default function InteressesIdentificadosIa({
                 <article className={styles.item} key={interesse.id}>
                   <div className={styles.valor}>{interesse.texto}</div>
                   <div className={styles.rodape}>
-                    <span className={styles.origem}>
-                      {interesse.origem === "captura" ? "Registrado pela IA" : "Histórico da IA"}
-                    </span>
+                    {(!ocultarHistoricoEAtalho || interesse.origem === "captura") && (
+                      <span className={styles.origem}>
+                        {interesse.origem === "captura" ? "Registrado pela IA" : "Histórico da IA"}
+                      </span>
+                    )}
                     {data && (
                       <span>
                         {interesse.tipo_data === "captura" ? "Capturado" : "Estado atualizado"} em {data}
                       </span>
                     )}
-                    {interesse.conversa_id && (
+                    {!ocultarHistoricoEAtalho && interesse.conversa_id && (
                       <Link
                         href={`/conversas?id=${encodeURIComponent(interesse.conversa_id)}`}
                         className={styles.link}
