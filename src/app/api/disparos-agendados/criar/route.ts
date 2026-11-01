@@ -113,6 +113,12 @@ export async function POST(request: NextRequest) {
     }
 
     const { usuario } = resultado;
+    // Em acesso de suporte, usuario é o administrador-alvo para autorização
+    // e execução, mas o criador real é o operador autenticado.
+    const operadorCriador = usuario.acesso_temporario?.operador ?? null;
+    const nomeCriador = operadorCriador
+      ? operadorCriador.nome?.trim() || null
+      : usuario.nome?.trim() || null;
 
     if (!usuario.empresa_id) {
       return NextResponse.json(
@@ -668,7 +674,10 @@ export async function POST(request: NextRequest) {
         timezone_empresa: timezoneEmpresa,
         executar_em_local: executarEmLocal || null,
         usuario_id: usuario.id,
-        usuario_criador_nome: usuario.nome || null,
+        usuario_criador_nome: nomeCriador,
+        ...(operadorCriador
+          ? { usuario_criador_operador_id: operadorCriador.id }
+          : {}),
         nome_campanha: nomeCampanha || null,
         total_contatos_frios: classificacaoLista.totalFrios,
         total_contatos_opt_in: classificacaoLista.totalOptIn,
