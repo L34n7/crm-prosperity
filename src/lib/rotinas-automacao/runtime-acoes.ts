@@ -12,6 +12,7 @@ import {
   enviarDisparoWhatsappRotina,
 } from "./runtime-acoes-whatsapp";
 import { enfileirarWebhookAutomacao } from "./webhook-outbox";
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 
 export type AcaoRotina = {
   id: string;
@@ -41,6 +42,10 @@ export async function executarAcaoRotina(params: {
   evento?: string | null;
   acao: AcaoRotina;
 }): Promise<Record<string, unknown>> {
+  if (await automacoesEmpresaEstaoBloqueadas(params.empresaId)) {
+    return { ignorado: true, motivo: "assinatura_bloqueada" };
+  }
+
   if (params.acao.tipo_acao === "fluxo.interromper") {
     return {
       interromper_fluxo_atual: true,

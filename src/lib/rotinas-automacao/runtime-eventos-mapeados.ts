@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { buscarRegistroSistemaMapeado, type ConexaoSistemaMapeado } from "@/lib/integracoes/adapters";
 import { buscarRecursoSistemaMapeado, buscarSistemaMapeado } from "@/lib/integracoes/sistemas-mapeados";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { avaliarCondicoes, type CondicaoRotina, type ContextoEvento } from "./runtime-condicoes";
 import { enviarDisparoWhatsappEventoMapeado } from "./runtime-acoes-whatsapp-externo";
 
@@ -74,6 +75,11 @@ async function processarEvento(o:OutboxRow,registro:Record<string,unknown>){
 
 async function falharOutbox(o:OutboxRow,error:unknown){const t=Number(o.tentativas||0)+1,final=t>=Number(o.max_tentativas||5),atraso=Math.min(30,2**Math.max(0,t-1));await supabase.from("integracao_eventos_outbox").update({status:final?"erro":"pendente",tentativas:t,erro:error instanceof Error?error.message:"Erro no evento externo.",processar_em:final?new Date().toISOString():new Date(Date.now()+atraso*60000).toISOString(),bloqueado_em:null,updated_at:new Date().toISOString()}).eq("id",o.id);}
 async function processarOutbox(o:OutboxRow){
+  if(await automacoesEmpresaEstaoBloqueadas(o.empresa_id)){
+    const r=await supabase.from("integracao_eventos_outbox").update({status:"ignorado",erro:"assinatura_bloqueada",bloqueado_em:null,processado_em:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",o.id).eq("status","pendente");
+    if(r.error)throw r.error;
+    return false;
+  }
   const claim=await supabase.from("integracao_eventos_outbox").update({status:"processando",bloqueado_em:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",o.id).eq("status","pendente").select("id").maybeSingle();if(claim.error)throw claim.error;if(!claim.data)return false;
   try{const registro=await registroAtual({empresaId:o.empresa_id,integracaoId:o.integracao_id,sistema:o.sistema,recurso:o.recurso,entidadeId:o.entidade_id});if(!registro){await supabase.from("integracao_eventos_outbox").update({status:"ignorado",erro:"Registro não encontrado na API externa.",bloqueado_em:null,processado_em:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",o.id);return false;}await processarEvento(o,obj(registro));await supabase.from("integracao_eventos_outbox").update({status:"processado",erro:null,bloqueado_em:null,processado_em:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",o.id);return true;}catch(error){await falharOutbox(o,error);throw error;}
 }
@@ -159,6 +165,13 @@ async function concluirJob(job:JobRow,resultado:Record<string,unknown>,contexto?
 
 async function executarJob(job:JobRow){
   if(!job.execucao_id)throw new Error("Job de integração sem execução vinculada.");
+  if(await automacoesEmpresaEstaoBloqueadas(job.empresa_id)){
+    const r=await supabase.from("rotina_automacao_jobs").update({status:"cancelado",cancelado_em:new Date().toISOString(),origem_cancelamento:"assinatura_bloqueada",bloqueado_em:null,updated_at:new Date().toISOString()}).eq("id",job.id).eq("status","pendente");
+    if(r.error)throw r.error;
+    await cancelarPosteriores(job,"assinatura_bloqueada");
+    await finalizarExecucao(job.execucao_id);
+    return false;
+  }
   if(job.cancelamento_solicitado_em){await supabase.from("rotina_automacao_jobs").update({status:"cancelado",cancelado_em:new Date().toISOString(),origem_cancelamento:"cancelamento_solicitado",updated_at:new Date().toISOString()}).eq("id",job.id);await finalizarExecucao(job.execucao_id);return false;}
   if(job.depende_de_job_id){const d=await supabase.from("rotina_automacao_jobs").select("status").eq("id",job.depende_de_job_id).maybeSingle();if(d.error)throw d.error;if(!d.data||["cancelado","erro"].includes(d.data.status)){await supabase.from("rotina_automacao_jobs").update({status:"cancelado",cancelado_em:new Date().toISOString(),origem_cancelamento:"dependencia_nao_concluida",updated_at:new Date().toISOString()}).eq("id",job.id);await finalizarExecucao(job.execucao_id);return false;}if(d.data.status!=="concluido")return false;}
   const claim=await supabase.from("rotina_automacao_jobs").update({status:"processando",bloqueado_em:new Date().toISOString(),tentativas:Number(job.tentativas||0)+1,updated_at:new Date().toISOString()}).eq("id",job.id).eq("status","pendente").select("id").maybeSingle();if(claim.error)throw claim.error;if(!claim.data)return false;
@@ -166,6 +179,12 @@ async function executarJob(job:JobRow){
   try{
     if(tipo==="aguardar"){await concluirJob(job,{aguardou:true,executar_em:job.executar_em});return true;}
     let contextoEvento=obj(c.contexto_evento);if(c.revalidar_antes_de_executar===true){const rev=await revalidarJob(job);contextoEvento=rev.contexto;if(!rev.valido){await concluirJob(job,{ignorado:true,motivo:"estado_atual_nao_atende_mais_a_automacao"});await cancelarPosteriores(job,"revalidacao_nao_atendida");await finalizarExecucao(job.execucao_id);return true;}}
+    if(await automacoesEmpresaEstaoBloqueadas(job.empresa_id)){
+      await supabase.from("rotina_automacao_jobs").update({status:"cancelado",cancelado_em:new Date().toISOString(),origem_cancelamento:"assinatura_bloqueada",bloqueado_em:null,updated_at:new Date().toISOString()}).eq("id",job.id);
+      await cancelarPosteriores(job,"assinatura_bloqueada");
+      await finalizarExecucao(job.execucao_id);
+      return false;
+    }
     let resultado:Record<string,unknown>;if(tipo==="whatsapp.enviar_template"){if(!job.acao_id)throw new Error("Job WhatsApp sem ação vinculada.");resultado=await enviarDisparoWhatsappEventoMapeado({empresaId:job.empresa_id,automacaoId:job.automacao_id,execucaoId:job.execucao_id,acaoId:job.acao_id,sistema:String(c.sistema||""),recurso:String(c.recurso||""),contexto:contextoEvento,config:obj(c.acao_config)});}else if(tipo==="integracao.consultar_api")resultado={consulta_realizada:true,contexto_atual:contextoEvento};else throw new Error(`A ação ${tipo||"sem tipo"} ainda não é suportada em integração mapeada.`);
     await concluirJob(job,resultado,{...c,contexto_evento:contextoEvento});return true;
   }catch(error){const t=Number(job.tentativas||0)+1,final=t>=Number(job.max_tentativas||5),atraso=Math.min(30,2**Math.max(0,t-1));await supabase.from("rotina_automacao_jobs").update({status:final?"erro":"pendente",tentativas:t,erro:error instanceof Error?error.message:"Erro no job de integração.",bloqueado_em:null,proxima_tentativa_em:final?null:new Date(Date.now()+atraso*60000).toISOString(),updated_at:new Date().toISOString()}).eq("id",job.id);if(final)await finalizarExecucao(job.execucao_id);throw error;}

@@ -45,7 +45,7 @@ import {
   obterGrupoDistribuicao,
 } from "@/lib/agendas/distribuicao";
 import { registrarUsoGrupoDistribuicao } from "@/lib/agendas/capacidade";
-import { buscarAssinaturaEmpresa } from "@/lib/assinaturas/status";
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import {
@@ -1127,6 +1127,10 @@ export async function validarExecucaoAutomacaoAtiva(params: {
   execucaoId: string;
 }) {
   const { empresaId, conversaId, execucaoId } = params;
+
+  if (await automacoesEmpresaEstaoBloqueadas(empresaId)) {
+    return { ok: false, motivo: "assinatura_bloqueada" };
+  }
 
   const { data: execucao, error: execucaoError } = await supabaseAdmin
     .from("automacao_execucoes")
@@ -2351,13 +2355,11 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     mensagemTexto,
   });
 
-  const assinatura = await buscarAssinaturaEmpresa(empresaId);
-
-  if (assinatura?.status === "bloqueada") {
+  if (await automacoesEmpresaEstaoBloqueadas(empresaId)) {
     logOperacional("[AUTOMATION_ENGINE] Automacao ignorada: assinatura bloqueada.", {
       empresaId,
       conversaId,
-      status: assinatura.status,
+      status: "bloqueada",
     });
 
     return {

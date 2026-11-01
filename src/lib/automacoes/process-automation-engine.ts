@@ -1,3 +1,4 @@
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
 import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtime";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -555,6 +556,10 @@ async function processarDepoisDasRotinas(
     ignorarHorarioFluxo?: boolean;
   }
 ) {
+  if (await automacoesEmpresaEstaoBloqueadas(input.empresaId)) {
+    return { ok: true, status: "assinatura_bloqueada" };
+  }
+
   if (opcoes?.permitirDiferimento !== false) {
     const resultadoDiferimento = await deferirMensagemSeFluxoRodando(input);
     if (resultadoDiferimento) return resultadoDiferimento;
@@ -674,6 +679,10 @@ export async function processAutomationEngine(
   input: AutomationEngineInput,
   options: { ignorarValidacaoTemporal?: boolean } = {}
 ) {
+  if (await automacoesEmpresaEstaoBloqueadas(input.empresaId)) {
+    return { ok: true, status: "assinatura_bloqueada" };
+  }
+
   const automacoesDesabilitadas = await automacoesContatoEstaoDesabilitadas({
     empresaId: input.empresaId,
     contatoId: input.contatoId || null,
@@ -918,6 +927,10 @@ export async function processarFilaProcessamentoAutoPendentes(limite = 50) {
 export async function processarTimeoutSemRespostaAgendado(
   params: TimeoutSemRespostaParams
 ) {
+  if (await automacoesEmpresaEstaoBloqueadas(params.empresaId)) {
+    return { ok: true, processado: false, motivo: "assinatura_bloqueada" };
+  }
+
   const reagendadoPorHorario =
     await reagendarTimeoutSemRespostaSeForaHorario(params);
   if (reagendadoPorHorario) return reagendadoPorHorario;

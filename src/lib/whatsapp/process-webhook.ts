@@ -28,6 +28,7 @@ import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { processCoexistenceWebhookBody } from "@/lib/whatsapp/process-coexistence-webhook";
 import { processTemplateWebhookUpdates } from "@/lib/whatsapp/process-template-webhook";
 import { empresaComRecebimentoWhatsappSuspenso } from "@/lib/whatsapp/inadimplencia";
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { processarAlertaFranquiaService } from "@/lib/whatsapp/service-quota";
 import { registrarPricingStatusEventoMeta } from "@/lib/whatsapp/pricing-status-events";
 
@@ -840,7 +841,11 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         !!conversation.responsavel_id &&
         conversation.bot_ativo !== true;
 
-      const deveTranscreverAudioAutomaticamente = !conversaEmAtendimentoHumano;
+      // Aviso de áudio e transcrição são ações automáticas: não executar sob bloqueio.
+      const deveTranscreverAudioAutomaticamente =
+        !conversaEmAtendimentoHumano &&
+        (message.tipoMensagem !== "audio" ||
+          !(await automacoesEmpresaEstaoBloqueadas(integration.empresa_id)));
 
       const { data: protocoloAtivo, error: protocoloAtivoError } =
         await supabaseAdmin

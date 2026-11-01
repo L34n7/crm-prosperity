@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { avaliarCondicoes, type CondicaoRotina, type ContextoEvento } from "./runtime-condicoes";
 import { executarAcaoRotina, tituloAcaoRotina, type AcaoRotina } from "./runtime-acoes";
 
@@ -125,6 +126,9 @@ async function processarMensagemRotinas(
 ): Promise<ProcessarMensagemRecebidaRotinasResultado | null> {
   const mensagemId = String(input.mensagemId || "").trim();
   if (!mensagemId) return null;
+  if (await automacoesEmpresaEstaoBloqueadas(input.empresaId)) {
+    return { executado: false, interromperFluxoAtual: false, execucaoIds: [] };
+  }
 
   try {
     const { data: assinatura, error: assinaturaError } = await supabase

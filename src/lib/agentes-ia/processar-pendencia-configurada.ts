@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
+import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { buscarBloqueioLimiteServiceConversa } from "@/lib/whatsapp/service-quota";
 import { assumirConversaParaPendenciaAgenteIa } from "./estado-atendimento-conversa";
 import { processarPoliticaHorarioAtendimento } from "./politica-horario-atendimento";
@@ -18,6 +19,12 @@ export async function processarPendenciaAgenteIa(
     .maybeSingle();
 
   if (pendencia?.empresa_id && pendencia?.conversa_id) {
+    if (await automacoesEmpresaEstaoBloqueadas(pendencia.empresa_id)) {
+      await supabaseAdmin.from("agente_ia_pendencias")
+        .update({ status: "cancelado", erro: "assinatura_bloqueada", lock_token: null, locked_at: null, updated_at: new Date().toISOString() })
+        .eq("id", pendenciaId).in("status", ["pendente", "processando"]);
+      return { ok: true, processado: false, runtime: "assinatura_bloqueada" };
+    }
     const automacoesDesabilitadas = await automacoesContatoEstaoDesabilitadas({
       empresaId: pendencia.empresa_id,
       contatoId: pendencia.contato_id || null,
