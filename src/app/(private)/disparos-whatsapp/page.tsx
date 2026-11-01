@@ -9452,20 +9452,23 @@ export default function DisparosWhatsAppPage() {
 
       {modalVariaveisAberto && (
         <div
-          className={styles.modalOverlay}
+          className={`${styles.modalOverlay} ${styles.variablesManagerOverlay}`}
           onClick={() => {
             setErroVariavelModal("");
             setModalVariaveisAberto(false);
           }}
         >
           <div
-            className={styles.modalConfirmacao}
+            className={`${styles.modalConfirmacao} ${styles.variablesManagerModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gerenciar-variaveis-titulo"
             onClick={(e) => e.stopPropagation()}
           >
             <div className={styles.modalHeader}>
               <div>
                 <p className={styles.modalEyebrow}>Variáveis</p>
-                <h3 className={styles.modalTitle}>Gerenciar variáveis</h3>
+                <h3 className={styles.modalTitle} id="gerenciar-variaveis-titulo">Gerenciar variáveis</h3>
                 <p className={styles.modalSubtitle}>
                   Cadastre variáveis personalizadas e consulte as variáveis fixas disponíveis para disparos e fluxos.
                 </p>
@@ -9474,6 +9477,7 @@ export default function DisparosWhatsAppPage() {
               <button
                 type="button"
                 className={styles.modalClose}
+                aria-label="Fechar gerenciamento de variáveis"
                 onClick={() => {
                   setErroVariavelModal("");
                   setModalVariaveisAberto(false);

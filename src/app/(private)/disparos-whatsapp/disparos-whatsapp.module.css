@@ -7394,3 +7394,67 @@
   border-color: #efdcaf;
   background: #fff2d3;
 }
+
+
+/* Gerenciar variáveis: diálogo mobile com topo e rodapé sempre acessíveis. */
+@media (max-width: 700px) {
+  .variablesManagerOverlay {
+    padding: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .variablesManagerModal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100dvh;
+    max-width: none;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 0;
+  }
+  .variablesManagerModal .modalHeader {
+    flex: 0 0 auto;
+    align-items: center;
+    padding: calc(13px + env(safe-area-inset-top)) 16px 13px;
+  }
+  .variablesManagerModal .modalEyebrow,
+  .variablesManagerModal .modalSubtitle { display: none; }
+  .variablesManagerModal .modalTitle {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+  .variablesManagerModal .modalClose {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+  }
+  .variablesManagerModal .modalBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 18px 16px 24px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .variablesManagerModal .modalFooter {
+    flex: 0 0 auto;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--crm-border);
+    background: var(--crm-surface);
+  }
+  .variablesManagerModal .modalSection { min-width: 0; }
+  .variablesManagerModal .input,
+  .variablesManagerModal .textarea,
+  .variablesManagerModal .textareadesc {
+    min-width: 0;
+    font-size: 16px;
+  }
+  .variablesManagerModal .variablePreviewBox,
+  .variablesManagerModal .variableMain {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

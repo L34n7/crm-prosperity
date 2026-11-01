@@ -388,6 +388,7 @@ export default function TemplatesWhatsAppPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [modalCriacaoAberto, setModalCriacaoAberto] = useState(false);
+  const criacaoModalBodyRef = useRef<HTMLDivElement>(null);
   const [etapaCriacao, setEtapaCriacao] = useState<1 | 2 | 3>(1);
   const [sincronizando, setSincronizando] = useState(false);
 
@@ -450,6 +451,11 @@ export default function TemplatesWhatsAppPage() {
       URL.revokeObjectURL(objectUrl);
     };
   }, [headerImage]);
+
+  useEffect(() => {
+    if (!modalCriacaoAberto || !window.matchMedia("(max-width: 700px)").matches) return;
+    criacaoModalBodyRef.current?.scrollTo({ top: 0 });
+  }, [modalCriacaoAberto, etapaCriacao]);
 
   useEffect(() => {
     if (!modalCriacaoAberto) return;
@@ -1562,7 +1568,7 @@ export default function TemplatesWhatsAppPage() {
               >✕</button>
             </header>
 
-            <div className={styles.creatorModalBody}>
+            <div className={styles.creatorModalBody} ref={criacaoModalBodyRef}>
               <aside className={styles.creatorModalPreview}>
                 <div className={styles.creatorPreviewInner}>
                       <div className={styles.whatsappPreviewCard}>
@@ -1641,7 +1647,7 @@ export default function TemplatesWhatsAppPage() {
                         }}
                         aria-current={etapaCriacao === item.numero ? "step" : undefined}
                       >
-                        <span>{item.numero}</span>
+                        <span>{item.numero}<span className={styles.creatorWizardStepTotal}>/3</span></span>
                         <strong>{item.titulo}</strong>
                       </button>
                     ))}
