@@ -5672,3 +5672,38 @@
     font-size: 16px;
   }
 }
+
+
+/* Destaque de preenchimento obrigatório no assistente de campanhas de e-mail. */
+.campaignWizardModal [data-campanha-destaque="true"] {
+  position: relative;
+  z-index: 1;
+  border-radius: 12px;
+  outline: 2px solid transparent;
+  outline-offset: 8px;
+  animation: campanhaCampoPendente 2.8s ease-in-out 1;
+}
+@keyframes campanhaCampoPendente {
+  0%, 100% { outline-color: transparent; }
+  18%, 38%, 64%, 84% { outline-color: color-mix(in srgb, var(--crm-warning-text) 68%, transparent); }
+  48%, 93% { outline-color: transparent; }
+}
+.campaignWizardModal .campaignFieldError {
+  display: block;
+  margin-top: 7px;
+  color: var(--crm-danger-text);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.campaignWizardModal .finalConfirmation .campaignFieldError {
+  grid-column: 1 / -1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .campaignWizardModal [data-campanha-destaque="true"] {
+    animation: none;
+    outline: 2px solid var(--crm-warning-text);
+    outline-offset: 8px;
+  }
+}

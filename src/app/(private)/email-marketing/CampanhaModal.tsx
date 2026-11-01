@@ -177,6 +177,35 @@ export default function CampanhaModal({
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState("");
   const [erro, setErro] = useState("");
+  const [campoPendente, setCampoPendente] = useState("");
+
+  useEffect(() => {
+    if (!campoPendente) return;
+    const campo = document.querySelector<HTMLElement>(
+      `[data-campanha-campo="${campoPendente}"]`
+    );
+    campo?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = window.setTimeout(() => setCampoPendente(""), 3100);
+    return () => window.clearTimeout(timeout);
+  }, [campoPendente, etapa]);
+
+  function destacarCampo(campo: string, mensagem: string) {
+    setAviso(mensagem);
+    setCampoPendente("");
+    window.requestAnimationFrame(() => setCampoPendente(campo));
+  }
+
+  function limparDestaque(campo: string) {
+    if (campoPendente !== campo) return;
+    setCampoPendente("");
+    setAviso("");
+  }
+
+  function erroDoCampo(campo: string) {
+    return campoPendente === campo ? (
+      <small className={styles.campaignFieldError} role="alert">{aviso}</small>
+    ) : null;
+  }
 
   const templateSelecionado = useMemo(
     () => templates.find((item) => item.id === templateId) || null,
@@ -504,6 +533,8 @@ export default function CampanhaModal({
   }, [audienciaTipo, listaIds, contatosSelecionados]);
 
   function alternarLista(id: string) {
+    limparDestaque("listas");
+    limparDestaque("audiencia");
     setListaIds((atuais) =>
       atuais.includes(id)
         ? atuais.filter((item) => item !== id)
@@ -513,6 +544,8 @@ export default function CampanhaModal({
 
   function alternarContato(contato: ContatoBusca) {
     if (contato.supressao_motivo) return;
+    limparDestaque("contatos");
+    limparDestaque("audiencia");
     setContatosSelecionados((atual) => {
       const novo = new Map(atual);
 
@@ -529,31 +562,41 @@ export default function CampanhaModal({
   function validarEtapaAtual() {
     setAviso("");
     setErro("");
-
     if (etapa === 1) {
-      if (!nome.trim() || !templateId || !remetenteId || !assunto.trim()) {
-        setAviso("Preencha nome, remetente, template e assunto para continuar.");
+      if (!nome.trim()) {
+        destacarCampo("nome", "Informe o nome da campanha para continuar.");
+        return false;
+      }
+      if (!remetenteId) {
+        destacarCampo("remetente", "Selecione um remetente verificado para continuar.");
+        return false;
+      }
+      if (!templateId || !templateSelecionado) {
+        destacarCampo("template", "Selecione um template de e-mail para continuar.");
+        return false;
+      }
+      if (!assunto.trim()) {
+        destacarCampo("assunto", "Informe o assunto do e-mail para continuar.");
         return false;
       }
     }
-
     if (etapa === 2) {
       if (audienciaTipo === "listas" && !listaIds.length) {
-        setAviso("Selecione pelo menos uma lista para continuar.");
+        destacarCampo("listas", "Selecione pelo menos uma lista de destinatários para continuar.");
         return false;
       }
-
       if (audienciaTipo === "contatos" && !contatosSelecionados.size) {
-        setAviso("Selecione pelo menos um contato para continuar.");
+        destacarCampo("contatos", "Selecione pelo menos um contato para continuar.");
         return false;
       }
-
       if (!analise || analise.elegiveis <= 0) {
-        setAviso("A audiência selecionada não possui e-mails elegíveis.");
+        destacarCampo("audiencia", erroAnalise ||
+          (!analise
+            ? "Aguarde a análise da audiência antes de continuar."
+            : "A audiência selecionada não possui e-mails elegíveis. Revise os destinatários."));
         return false;
       }
     }
-
     return true;
   }
 
@@ -572,6 +615,7 @@ export default function CampanhaModal({
     setAviso("");
     setErro("");
     setConfirmacaoFinal(false);
+    setCampoPendente("");
     setEtapa((atual) => Math.max(1, atual - 1));
   }
 
@@ -582,12 +626,7 @@ export default function CampanhaModal({
     if (etapa !== 4) return;
 
     if (!modoEnvio) {
-      setAviso("Escolha se deseja enviar agora ou agendar a campanha.");
-      return;
-    }
-
-    if (!confirmacaoFinal) {
-      setAviso("Confirme a revisão final antes de enviar ou agendar.");
+      destacarCampo("modo-envio", "Selecione Enviar agora ou Agendar envio para continuar.");
       return;
     }
 
@@ -597,15 +636,20 @@ export default function CampanhaModal({
       const data = new Date(agendadaPara);
 
       if (!Number.isFinite(data.getTime()) || data.getTime() <= Date.now()) {
-        setAviso("Escolha uma data e hora futuras para o agendamento.");
+        destacarCampo("agendamento", "Informe uma data e hora futuras para agendar a campanha.");
         return;
       }
 
       agendamentoIso = data.toISOString();
     }
 
+    if (!confirmacaoFinal) {
+      destacarCampo("confirmacao", "Para enviar ou agendar, marque a confirmação de revisão da campanha.");
+      return;
+    }
+
     if (!analise || analise.elegiveis <= 0) {
-      setAviso("A audiência precisa ser analisada antes do envio.");
+      destacarCampo("audiencia-final", "A audiência precisa ter destinatários elegíveis. Volte à etapa Público para revisar.");
       return;
     }
 
@@ -757,21 +801,22 @@ export default function CampanhaModal({
             {etapa === 1 ? (
               <div className={styles.wizardSection}>
                 <div className={styles.formGridTwo}>
-                  <label className={styles.field}>
+                  <label className={styles.field} data-campanha-campo="nome" data-campanha-destaque={campoPendente === "nome"}>
                     <span>Nome da campanha</span>
                     <input
                       value={nome}
-                      onChange={(event) => setNome(event.target.value)}
+                      onChange={(event) => { setNome(event.target.value); limparDestaque("nome"); }}
                       placeholder="Ex.: Campanha outubro"
                       maxLength={160}
                     />
+                    {erroDoCampo("nome")}
                   </label>
 
-                  <label className={styles.field}>
+                  <label className={styles.field} data-campanha-campo="remetente" data-campanha-destaque={campoPendente === "remetente"}>
                     <span>Remetente</span>
                     <select
                       value={remetenteId}
-                      onChange={(event) => setRemetenteId(event.target.value)}
+                      onChange={(event) => { setRemetenteId(event.target.value); limparDestaque("remetente"); }}
                     >
                       <option value="">Selecione</option>
                       {remetentes
@@ -782,15 +827,16 @@ export default function CampanhaModal({
                           </option>
                         ))}
                     </select>
+                    {erroDoCampo("remetente")}
                   </label>
                 </div>
 
                 <div className={styles.formGridTwo}>
-                  <label className={styles.field}>
+                  <label className={styles.field} data-campanha-campo="template" data-campanha-destaque={campoPendente === "template"}>
                     <span>Template</span>
                     <select
                       value={templateId}
-                      onChange={(event) => setTemplateId(event.target.value)}
+                      onChange={(event) => { setTemplateId(event.target.value); limparDestaque("template"); }}
                     >
                       <option value="">Selecione</option>
                       {templates.map((item) => (
@@ -799,16 +845,18 @@ export default function CampanhaModal({
                         </option>
                       ))}
                     </select>
+                    {erroDoCampo("template")}
                   </label>
 
-                  <label className={styles.field}>
+                  <label className={styles.field} data-campanha-campo="assunto" data-campanha-destaque={campoPendente === "assunto"}>
                     <span>Assunto</span>
                     <input
                       value={assunto}
-                      onChange={(event) => setAssunto(event.target.value)}
+                      onChange={(event) => { setAssunto(event.target.value); limparDestaque("assunto"); }}
                       placeholder="Assunto da mensagem"
                       maxLength={250}
                     />
+                    {erroDoCampo("assunto")}
                   </label>
                 </div>
 
@@ -829,7 +877,7 @@ export default function CampanhaModal({
                   </span>
                 </div>
 
-                <div className={styles.audienceModeSelector} role="group" aria-label="Tipo de público">
+                <div className={styles.audienceModeSelector} role="group" aria-label="Tipo de público" data-campanha-campo="audiencia" data-campanha-destaque={campoPendente === "audiencia"}>
                   <button
                     type="button"
                     aria-pressed={audienciaTipo === "todos"}
@@ -867,9 +915,10 @@ export default function CampanhaModal({
                     </span>
                   </button>
                 </div>
+                {erroDoCampo("audiencia")}
 
                 {audienciaTipo === "listas" ? (
-                  <div className={styles.audiencePicker}>
+                  <div className={styles.audiencePicker} data-campanha-campo="listas" data-campanha-destaque={campoPendente === "listas"}>
                     <div className={styles.audiencePickerHeader}>
                       <label className={styles.searchBox}>
                         <Search size={17} />
@@ -922,6 +971,7 @@ export default function CampanhaModal({
                         );
                       })}
                     </div>
+                    {erroDoCampo("listas")}
 
                     {listaIds.length > 1 ? (
                       <div className={styles.infoNote}>
@@ -935,11 +985,12 @@ export default function CampanhaModal({
                 ) : null}
 
                 {audienciaTipo === "contatos" ? (
-                  <section className={styles.audienceContactSection}>
+                  <section className={styles.audienceContactSection} data-campanha-campo="contatos" data-campanha-destaque={campoPendente === "contatos"}>
                     <div className={styles.audienceContactSectionHeader}>
                       <strong>Selecione os contatos</strong>
                       <span>Clique em um contato para adicionar ou remover.</span>
                     </div>
+                    {erroDoCampo("contatos")}
                     <div className={styles.contactDualPicker}>
                     <div className={styles.contactPickerColumn}>
                       <div className={styles.contactPickerColumnHeader}>
@@ -1240,7 +1291,7 @@ export default function CampanhaModal({
 
             {etapa === 4 ? (
               <div className={styles.wizardSection}>
-                <div className={styles.reviewHero}>
+                <div className={styles.reviewHero} data-campanha-campo="audiencia-final" data-campanha-destaque={campoPendente === "audiencia-final"}>
                   <div className={styles.reviewHeroIcon}>
                     <Sparkles size={21} />
                   </div>
@@ -1257,6 +1308,7 @@ export default function CampanhaModal({
                     <strong>{formatarNumero(analise?.elegiveis || 0)}</strong>
                   </div>
                 </div>
+                {erroDoCampo("audiencia-final")}
 
                 <div className={styles.reviewGrid}>
                   <section className={styles.reviewCard}>
@@ -1340,7 +1392,7 @@ export default function CampanhaModal({
                   </div>
                 </div>
 
-                <div className={styles.sendDecisionPanel}>
+                <div className={styles.sendDecisionPanel} data-campanha-campo="modo-envio" data-campanha-destaque={campoPendente === "modo-envio"}>
                   <div className={styles.formSectionHeader}>
                     <div>
                       <strong>Quando enviar?</strong>
@@ -1362,6 +1414,7 @@ export default function CampanhaModal({
                         setModoEnvio("agora");
                         setConfirmacaoFinal(false);
                         setAviso("");
+                        setCampoPendente("");
                       }}
                     >
                       <span className={styles.sendChoiceIcon}>
@@ -1389,6 +1442,7 @@ export default function CampanhaModal({
                         setModoEnvio("agendar");
                         setConfirmacaoFinal(false);
                         setAviso("");
+                        setCampoPendente("");
                       }}
                     >
                       <span className={styles.sendChoiceIcon}>
@@ -1405,9 +1459,10 @@ export default function CampanhaModal({
                       ) : null}
                     </button>
                   </div>
+                  {erroDoCampo("modo-envio")}
 
                   {modoEnvio === "agendar" ? (
-                    <div className={styles.schedulePanel}>
+                    <div className={styles.schedulePanel} data-campanha-campo="agendamento" data-campanha-destaque={campoPendente === "agendamento"}>
                       <label className={styles.field}>
                         <span>Data e hora do envio</span>
                         <input
@@ -1416,25 +1471,28 @@ export default function CampanhaModal({
                           onChange={(event) => {
                             setAgendadaPara(event.target.value);
                             setConfirmacaoFinal(false);
+                            limparDestaque("agendamento");
                           }}
                         />
                         <small>
                           O processamento começará a partir do horário
                           selecionado.
                         </small>
+                        {erroDoCampo("agendamento")}
                       </label>
                     </div>
                   ) : null}
                 </div>
 
                 {modoEnvio ? (
-                  <label className={styles.finalConfirmation}>
+                  <label className={styles.finalConfirmation} data-campanha-campo="confirmacao" data-campanha-destaque={campoPendente === "confirmacao"}>
                     <input
                       type="checkbox"
                       checked={confirmacaoFinal}
-                      onChange={(event) =>
-                        setConfirmacaoFinal(event.target.checked)
-                      }
+                      onChange={(event) => {
+                        setConfirmacaoFinal(event.target.checked);
+                        if (event.target.checked) limparDestaque("confirmacao");
+                      }}
                     />
                     <span className={styles.finalConfirmationBox}>
                       {confirmacaoFinal ? <Check size={14} /> : null}
@@ -1453,6 +1511,7 @@ export default function CampanhaModal({
                       </small>
                     </span>
                     <ShieldCheck size={21} />
+                    {erroDoCampo("confirmacao")}
                   </label>
                 ) : null}
 
@@ -1515,7 +1574,7 @@ export default function CampanhaModal({
                     onClick={avancar}
                     disabled={
                       enviando ||
-                      (etapa === 2 && (analisando || !analise?.elegiveis))
+                      (etapa === 2 && analisando)
                     }
                   >
                     Continuar
@@ -1526,12 +1585,7 @@ export default function CampanhaModal({
                     type="button"
                     className={styles.primaryButton}
                     onClick={() => void criar()}
-                    disabled={
-                      enviando ||
-                      !analise?.elegiveis ||
-                      !modoEnvio ||
-                      !confirmacaoFinal
-                    }
+                    disabled={enviando}
                   >
                     {modoEnvio === "agendar" ? (
                       <CalendarClock size={16} />
