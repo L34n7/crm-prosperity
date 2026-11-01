@@ -1206,6 +1206,15 @@ export default function ConversasPageContent() {
   const [listaEditandoId, setListaEditandoId] = useState<string | null>(null);
   const [listaEditandoNome, setListaEditandoNome] = useState("");
   const [listaConfirmandoExclusaoId, setListaConfirmandoExclusaoId] = useState<string | null>(null);
+  const [paginaListasConversa, setPaginaListasConversa] = useState(0);
+  const [listaArrastandoId, setListaArrastandoId] = useState<string | null>(null);
+  const LISTAS_POR_PAGINA = 10;
+  const totalPaginasListasConversa = Math.max(1, Math.ceil(listasEmpresa.length / LISTAS_POR_PAGINA));
+  const paginaAtualListas = Math.min(paginaListasConversa, totalPaginasListasConversa - 1);
+  const inicioListas = paginaAtualListas * LISTAS_POR_PAGINA;
+  const listasMarcadas = new Set(listasConversa.filter(lista => lista.marcada).map(lista => lista.id));
+  const listasExibidasPainel = listasEmpresa.slice(inicioListas, inicioListas + LISTAS_POR_PAGINA)
+    .map(lista => ({ ...lista, marcada: listasMarcadas.has(lista.id) }));
 
   const LIMITE_CARACTERES_NOTA = 600;
 
@@ -4705,25 +4714,110 @@ export default function ConversasPageContent() {
     finally { setAtualizandoListas(false); }
   }
 
-  async function moverListaPrioridade(id: string, passo: number) {
-    if (atualizandoListas) return;
-    const origem = listasEmpresa.findIndex(l => l.id === id), destino=origem+passo;
-    if (origem<0 || destino<0 || destino>=listasEmpresa.length) return;
-    const ordem = [...listasEmpresa];
-    const [movida] = ordem.splice(origem, 1);
-    ordem.splice(destino, 0, movida);
+  async function moverListaParaPosicao(id: string, destino: number) {
+    if (atualizandoListas || salvandoLista) return;
+    const origem = listasEmpresa.findIndex(lista => lista.id === id);
+    if (origem < 0 || destino < 0 || destino >= listasEmpresa.length || origem === destino) return;
+    const anterior = [...listasEmpresa];
+    const ordenadas = [...listasEmpresa];
+    const [lista] = ordenadas.splice(origem, 1);
+    ordenadas.splice(destino, 0, lista);
     setAtualizandoListas(true);
+    setErro("");
+    setListasEmpresa(ordenadas);
+    setPaginaListasConversa(Math.floor(destino / LISTAS_POR_PAGINA));
     try {
-      const r = await fetch("/api/contatos/listas-compartilhadas/ordem", {
+      const resposta = await fetch("/api/contatos/listas-compartilhadas/ordem", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lista_ids: ordem.map(l => l.id) }),
+        body: JSON.stringify({ lista_ids: ordenadas.map(item => item.id) }),
       });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Não foi possível alterar a prioridade.");
+      const dados = await resposta.json();
+      if (!resposta.ok || dados.ok !== true) throw new Error(dados.error || "Não foi possível salvar a prioridade.");
       setMensagemSucesso("Prioridade das listas salva.");
       await Promise.all([carregarListasEmpresa(), carregarListasDaConversa()]);
-    } catch(e) { setErro(e instanceof Error ? e.message : "Erro ao reordenar listas."); }
-    finally { setAtualizandoListas(false); }
+    } catch (error) {
+      setListasEmpresa(anterior);
+      setPaginaListasConversa(Math.floor(origem / LISTAS_POR_PAGINA));
+      setErro(error instanceof Error ? error.message : "Erro ao reordenar listas.");
+    } finally {
+      setAtualizandoListas(false);
+    }
+  }
+
+  async function moverListaPrioridade(id: string, passo: number) {
+    const indice = listasEmpresa.findIndex(lista => lista.id === id);
+    if (indice >= 0) await moverListaParaPosicao(id, indice + passo);
+  }
+
+  async function alternarListaNaConversa(lista: ListaEmpresa, marcada: boolean) {
+    if (!conversaSelecionada?.id || atualizandoListas) return;
+    setAtualizandoListas(true);
+    setErro("");
+    try {
+      const resposta = await fetch(`/api/conversas/${conversaSelecionada.id}/listas`, {
+        method: marcada ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lista_id: lista.id }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok || dados.ok === false) throw new Error(dados.error || "Erro ao atualizar a conversa.");
+      setMensagemSucesso(dados.message || "Vínculo com a lista atualizado.");
+      await carregarListasDaConversa();
+      await atualizarConversasCarregadas();
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao atualizar a conversa.");
+    } finally {
+      setAtualizandoListas(false);
+    }
+  }
+
+  async function salvarNomeListaPainel(lista: ListaEmpresa) {
+    const novoNome = listaEditandoNome.trim();
+    if (!novoNome || novoNome === lista.nome || atualizandoListas) return;
+    setAtualizandoListas(true);
+    setErro("");
+    try {
+      const resposta = await fetch("/api/conversas/listas", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lista_id: lista.id, nome: novoNome }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok || dados.ok === false) throw new Error(dados.error || "Não foi possível renomear lista.");
+      setListaEditandoId(null);
+      setListaEditandoNome("");
+      setMensagemSucesso(dados.message || "Lista renomeada.");
+      await Promise.all([carregarListasDaConversa(), carregarListasEmpresa(), atualizarConversasCarregadas()]);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Não foi possível renomear lista.");
+    } finally {
+      setAtualizandoListas(false);
+    }
+  }
+
+  async function excluirListaPainel(lista: ListaEmpresa) {
+    if (atualizandoListas) return;
+    setAtualizandoListas(true);
+    setErro("");
+    try {
+      const resposta = await fetch("/api/conversas/listas", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lista_id: lista.id }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok || dados.ok === false) throw new Error(dados.error || "Não foi possível excluir lista.");
+      setListaConfirmandoExclusaoId(null);
+      if (listaFiltroId === lista.id) setListaFiltroId(null);
+      setMensagemSucesso(dados.message || "Lista excluída. Contatos preservados.");
+      setPaginaListasConversa(atual => Math.min(atual, Math.max(0,
+        Math.ceil((listasEmpresa.length - 1) / LISTAS_POR_PAGINA) - 1)));
+      await Promise.all([carregarListasDaConversa(), carregarListasEmpresa(), atualizarConversasCarregadas()]);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Erro ao excluir lista.");
+    } finally {
+      setAtualizandoListas(false);
+    }
   }
 
   async function carregarListasEmpresa() {
@@ -11604,302 +11698,201 @@ const templateFooterTexto = useMemo(() => {
                         <div className={`${styles.panelSectionStack} ${styles.listPanelPremium}`}>
                           <div className={styles.listPanelIntro}>
                             <span className={styles.listPanelEyebrow}>ORGANIZAÇÃO</span>
-                            <strong>Listas de conversa</strong>
-                            <p>Inclua esta conversa em listas, defina atalhos e organize prioridades.</p>
+                            <strong>Listas personalizadas</strong>
+                            <p>Organize as mesmas listas de Contatos, defina prioridades e escolha os atalhos.</p>
                           </div>
-                          <div className={`${styles.noteComposer} ${styles.listPanelCreator}`}>
-                            <label className={styles.actionLabel} htmlFor="nova-lista-conversas">Criar nova lista</label>
-                            <input id="nova-lista-conversas"
-                              className={styles.messageInput}
-                              value={novaListaNome}
-                              onChange={(e) => setNovaListaNome(e.target.value)}
-                              placeholder="Ex.: Melhores amigos"
-                            />
-                            <button
-                              className={styles.primaryButton}
-                              type="button"
-                              disabled={salvandoLista || !novaListaNome.trim()}
+                          <section className={styles.listPanelCreator}>
+                            <div className={styles.listPanelSectionTitle}>
+                              <strong>Nova lista</strong>
+                              <small>Crie grupos sem duplicar contatos.</small>
+                            </div>
+                            <label className={styles.actionLabel} htmlFor="nova-lista-conversas">Nome da lista</label>
+                            <input id="nova-lista-conversas" className={styles.messageInput}
+                              value={novaListaNome} maxLength={160}
+                              onChange={event => setNovaListaNome(event.target.value)}
+                              placeholder="Ex.: Clientes VIP" />
+                            <button type="button" className={styles.primaryButton}
+                              disabled={salvandoLista || atualizandoListas || !novaListaNome.trim()}
                               onClick={async () => {
+                                setSalvandoLista(true);
+                                setErro("");
                                 try {
-                                  setSalvandoLista(true);
-                                  setErro("");
-                                  setMensagemSucesso("");
-
-                                  const res = await fetch("/api/conversas/listas", {
+                                  const resposta = await fetch("/api/conversas/listas", {
                                     method: "POST",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                    },
+                                    headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
                                       nome: novaListaNome.trim(),
                                       exibir_atalho_conversas: novaListaAtalho,
                                     }),
                                   });
-
-                                  const data = await res.json();
-
-                                  if (!res.ok) {
-                                    setErro(data.error || "Erro ao criar lista");
-                                    return;
-                                  }
-
+                                  const dados = await resposta.json();
+                                  if (!resposta.ok || dados.ok === false) throw new Error(dados.error || "Erro ao criar lista.");
                                   setNovaListaNome("");
                                   setNovaListaAtalho(false);
-                                  setMensagemSucesso(data.message || "Lista criada com sucesso");
-                                  await carregarListasDaConversa();
-                                } catch {
-                                  setErro("Erro ao criar lista");
+                                  setMensagemSucesso(dados.message || "Lista criada.");
+                                  setPaginaListasConversa(Math.floor(listasEmpresa.length / LISTAS_POR_PAGINA));
+                                  await Promise.all([carregarListasDaConversa(), carregarListasEmpresa()]);
+                                } catch (error) {
+                                  setErro(error instanceof Error ? error.message : "Erro ao criar lista.");
                                 } finally {
                                   setSalvandoLista(false);
                                 }
-                              }}
-                            >
-                              Criar lista
-                            </button>
+                              }}>Criar lista</button>
                             <label className={styles.listaAtalhoCheckbox}>
                               <input type="checkbox" checked={novaListaAtalho} disabled={salvandoLista}
-                                onChange={e => setNovaListaAtalho(e.target.checked)}/>
+                                onChange={event => setNovaListaAtalho(event.target.checked)} />
                               Exibir como atalho em Conversas
                             </label>
-                          </div>
+                          </section>
 
-                          <div className={styles.listPanelListHeader}>
-                            <div><strong>Listas existentes</strong><span>Toque em uma lista para incluir ou retirar a conversa.</span></div>
-                          </div>
-                          {listasConversa.length === 0 ? (
-                            <div className={styles.infoBoxMuted}>
-                              Nenhuma lista criada para esta empresa ainda.
+                          <section className={styles.listPanelExisting}>
+                            <div className={styles.listPanelSectionTitle}>
+                              <strong>Suas listas</strong>
+                              <small>Arraste os cards ou use ↑ ↓ para ordenar. A prioridade também vale no filtro de Contatos.</small>
                             </div>
-                          ) : (
-                            listasConversa.map((lista) => (
-                              <div key={lista.id} className={`${styles.listaCardWrap} ${styles.listPanelCard}`}>
-                                <div className={styles.listaCard}>
-                                  <button
-                                    type="button"
-                                    className={`${styles.listaMainButton} ${lista.marcada ? styles.listPanelSelected : ""}`}
-                                    aria-pressed={lista.marcada}
-                                    title={lista.marcada ? `Remover a conversa de ${lista.nome}` : `Adicionar a conversa a ${lista.nome}`}
-                                    onClick={async () => {
-                                      if (!conversaSelecionada?.id) return;
-
-                                      try {
-                                        setErro("");
-                                        setMensagemSucesso("");
-
-                                        const res = await fetch(`/api/conversas/${conversaSelecionada.id}/listas`, {
-                                          method: lista.marcada ? "DELETE" : "POST",
-                                          headers: {
-                                            "Content-Type": "application/json",
-                                          },
-                                          body: JSON.stringify({
-                                            lista_id: lista.id,
-                                          }),
-                                        });
-
-                                        const data = await res.json();
-
-                                        if (!res.ok) {
-                                          setErro(data.error || "Erro ao atualizar lista");
-                                          return;
-                                        }
-
-                                        setMensagemSucesso(data.message || "Lista atualizada com sucesso");
-                                        await carregarListasDaConversa();
-                                        await atualizarConversasCarregadas();
-                                      } catch {
-                                        setErro("Erro ao atualizar lista");
-                                      }
-                                    }}
-                                  >
-                                    <span className={styles.listaMainLeft}>
-                                      <span className={styles.listaCheckIcon}>
-                                        {lista.marcada ? "☑" : "☐"}
-                                      </span>
-                                      <span className={styles.listPanelListMeta}>
-                                        <span className={styles.listaNome} title={lista.nome}>{lista.nome}</span>
-                                        <small>{lista.marcada ? "Conversa incluída" : "Toque para adicionar"}</small>
-                                      </span>
-                                    </span>
-                                  </button>
-
-                                  <div className={styles.listaActions}>
-                                    <button type="button" className={styles.listaIconButton} disabled={atualizandoListas}
-                                      title={lista.exibir_atalho_conversas ? "Ocultar atalho" : "Exibir atalho"}
-                                      aria-label={`${lista.exibir_atalho_conversas ? "Ocultar" : "Exibir"} atalho de ${lista.nome}`}
-                                      onClick={() => { const item=listasEmpresa.find(l=>l.id===lista.id); if(item) void alternarAtalhoLista(item); }}>
-                                      {lista.exibir_atalho_conversas ? "◉" : "○"}
-                                    </button>
-                                    <button type="button" className={styles.listaIconButton} title="Subir prioridade"
-                                      aria-label={`Subir ${lista.nome}`} disabled={atualizandoListas || listasEmpresa[0]?.id===lista.id}
-                                      onClick={() => void moverListaPrioridade(lista.id,-1)}>↑</button>
-                                    <button type="button" className={styles.listaIconButton} title="Descer prioridade"
-                                      aria-label={`Descer ${lista.nome}`} disabled={atualizandoListas || listasEmpresa.at(-1)?.id===lista.id}
-                                      onClick={() => void moverListaPrioridade(lista.id,1)}>↓</button>
-                                    <button
-                                      type="button"
-                                      className={styles.listaIconButton}
-                                      title="Editar lista"
-                                      onClick={() => {
-                                        setListaConfirmandoExclusaoId(null);
-
-                                        if (listaEditandoId === lista.id) {
-                                          setListaEditandoId(null);
-                                          setListaEditandoNome("");
-                                          return;
-                                        }
-
-                                        setListaEditandoId(lista.id);
-                                        setListaEditandoNome(lista.nome);
+                            {listasEmpresa.length === 0 ? (
+                              <div className={styles.infoBoxMuted}>Nenhuma lista criada para esta empresa.</div>
+                            ) : (
+                              <div className={styles.listPanelCards}>
+                                {listasExibidasPainel.map((lista, indiceLocal) => {
+                                  const indice = inicioListas + indiceLocal;
+                                  return (
+                                    <div key={lista.id} className={styles.listPanelCard}
+                                      draggable={!atualizandoListas && !salvandoLista &&
+                                        listaEditandoId !== lista.id && listaConfirmandoExclusaoId !== lista.id}
+                                      data-dragging={listaArrastandoId === lista.id ? "true" : undefined}
+                                      onDragStart={event => {
+                                        setListaArrastandoId(lista.id);
+                                        event.dataTransfer.effectAllowed = "move";
+                                        event.dataTransfer.setData("text/plain", lista.id);
                                       }}
-                                    >
-                                      ✎
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      className={`${styles.listaIconButton} ${styles.listaIconButtonDanger}`}
-                                      title="Excluir lista"
-                                      onClick={() => {
-                                        setListaEditandoId(null);
-                                        setListaEditandoNome("");
-
-                                        setListaConfirmandoExclusaoId((atual) =>
-                                          atual === lista.id ? null : lista.id
-                                        );
+                                      onDragOver={event => { if (!atualizandoListas) event.preventDefault(); }}
+                                      onDrop={event => {
+                                        event.preventDefault();
+                                        const origemId = event.dataTransfer.getData("text/plain") || listaArrastandoId;
+                                        setListaArrastandoId(null);
+                                        if (origemId) void moverListaParaPosicao(origemId, indice);
                                       }}
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {listaEditandoId === lista.id && (
-                                  <div className={styles.listaInlinePanel}>
-                                    <label className={styles.actionLabel}>Editar nome da lista</label>
-
-                                    <input
-                                      className={styles.messageInput}
-                                      value={listaEditandoNome}
-                                      onChange={(e) => setListaEditandoNome(e.target.value)}
-                                      placeholder="Digite o novo nome da lista"
-                                    />
-
-                                    <div className={styles.listaInlineActions}>
-                                      <button
-                                        type="button"
-                                        className={styles.secondaryButton}
-                                        onClick={() => {
-                                          setListaEditandoId(null);
-                                          setListaEditandoNome("");
-                                        }}
-                                      >
-                                        Cancelar
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        className={styles.primaryButton}
-                                        disabled={!listaEditandoNome.trim()}
-                                        onClick={async () => {
-                                          try {
-                                            setErro("");
-                                            setMensagemSucesso("");
-
-                                            const res = await fetch("/api/conversas/listas", {
-                                              method: "PUT",
-                                              headers: {
-                                                "Content-Type": "application/json",
-                                              },
-                                              body: JSON.stringify({
-                                                lista_id: lista.id,
-                                                nome: listaEditandoNome.trim(),
-                                              }),
-                                            });
-
-                                            const data = await res.json();
-
-                                            if (!res.ok) {
-                                              setErro(data.error || "Erro ao atualizar lista");
-                                              return;
-                                            }
-
-                                            setMensagemSucesso(data.message || "Lista atualizada com sucesso");
-                                            setListaEditandoId(null);
-                                            setListaEditandoNome("");
-
-                                            await carregarListasDaConversa();
-                                            await carregarListasEmpresa();
-                                            await atualizarConversasCarregadas();
-                                          } catch {
-                                            setErro("Erro ao atualizar lista");
-                                          }
-                                        }}
-                                      >
-                                        Salvar
-                                      </button>
+                                      onDragEnd={() => setListaArrastandoId(null)}>
+                                      <div className={styles.listPanelCardPrimary}>
+                                        <span className={styles.listPanelDragHandle} title="Arraste para mudar a prioridade">⠿</span>
+                                        <span className={styles.listPanelOrder}>{indice + 1}º</span>
+                                        {listaEditandoId === lista.id ? (
+                                          <input className={styles.listPanelRenameInput} autoFocus
+                                            aria-label={`Renomear ${lista.nome}`}
+                                            value={listaEditandoNome} maxLength={160} disabled={atualizandoListas}
+                                            onChange={event => setListaEditandoNome(event.target.value)}
+                                            onKeyDown={event => {
+                                              if (event.key === "Escape") {
+                                                setListaEditandoId(null);
+                                                setListaEditandoNome("");
+                                              }
+                                              if (event.key === "Enter") {
+                                                event.preventDefault();
+                                                void salvarNomeListaPainel(lista);
+                                              }
+                                            }} />
+                                        ) : (
+                                          <div className={styles.listPanelName}>
+                                            <strong title={lista.nome}>{lista.nome}</strong>
+                                            <small>{lista.marcada ? "Conversa incluída" : "Conversa não incluída"}</small>
+                                          </div>
+                                        )}
+                                        <div className={styles.listPanelRowActions}>
+                                          {listaEditandoId === lista.id ? (
+                                            <>
+                                              <button type="button" className={styles.listPanelButton}
+                                                disabled={atualizandoListas} onClick={() => {
+                                                  setListaEditandoId(null);
+                                                  setListaEditandoNome("");
+                                                }}>Cancelar</button>
+                                              <button type="button"
+                                                className={`${styles.listPanelButton} ${styles.listPanelButtonPrimary}`}
+                                                disabled={atualizandoListas || !listaEditandoNome.trim() ||
+                                                  listaEditandoNome.trim() === lista.nome}
+                                                onClick={() => void salvarNomeListaPainel(lista)}>Salvar</button>
+                                            </>
+                                          ) : listaConfirmandoExclusaoId === lista.id ? (
+                                            <>
+                                              <button type="button" className={styles.listPanelButton}
+                                                disabled={atualizandoListas}
+                                                onClick={() => setListaConfirmandoExclusaoId(null)}>Cancelar</button>
+                                              <button type="button"
+                                                className={`${styles.listPanelButton} ${styles.listPanelButtonDanger}`}
+                                                disabled={atualizandoListas}
+                                                onClick={() => void excluirListaPainel(lista)}>Confirmar</button>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <button type="button" className={styles.listPanelButton}
+                                                disabled={atualizandoListas} onClick={() => {
+                                                  setListaEditandoId(lista.id);
+                                                  setListaEditandoNome(lista.nome);
+                                                  setListaConfirmandoExclusaoId(null);
+                                                }}>Editar</button>
+                                              <button type="button"
+                                                className={`${styles.listPanelButton} ${styles.listPanelButtonDanger}`}
+                                                disabled={atualizandoListas} onClick={() => {
+                                                  setListaEditandoId(null);
+                                                  setListaConfirmandoExclusaoId(lista.id);
+                                                }}>Excluir</button>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {listaConfirmandoExclusaoId === lista.id && (
+                                        <p className={styles.listPanelDeleteNotice} role="alert">
+                                          Excluir “{lista.nome}”? Os contatos permanecem cadastrados; apenas a lista e seus vínculos serão removidos.
+                                        </p>
+                                      )}
+                                      <div className={styles.listPanelCardFooter}>
+                                        <label className={styles.listPanelCheckbox}>
+                                          <input type="checkbox" checked={lista.exibir_atalho_conversas}
+                                            disabled={atualizandoListas}
+                                            onChange={() => void alternarAtalhoLista(lista)} />
+                                          Exibir atalho
+                                        </label>
+                                        <label className={styles.listPanelCheckbox}>
+                                          <input type="checkbox" checked={lista.marcada}
+                                            disabled={atualizandoListas || !conversaSelecionada?.id}
+                                            onChange={() => void alternarListaNaConversa(lista, lista.marcada)} />
+                                          Nesta conversa
+                                        </label>
+                                        <div className={styles.listPanelPriority}>
+                                          <button type="button" className={styles.listPanelOrderButton}
+                                            disabled={atualizandoListas || indice === 0}
+                                            onClick={() => void moverListaPrioridade(lista.id, -1)}
+                                            title="Subir prioridade" aria-label={`Subir ${lista.nome}`}>↑</button>
+                                          <button type="button" className={styles.listPanelOrderButton}
+                                            disabled={atualizandoListas || indice === listasEmpresa.length - 1}
+                                            onClick={() => void moverListaPrioridade(lista.id, 1)}
+                                            title="Descer prioridade" aria-label={`Descer ${lista.nome}`}>↓</button>
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-
-                                {listaConfirmandoExclusaoId === lista.id && (
-                                  <div className={styles.listaInlinePanelDanger}>
-                                    <p className={styles.listaConfirmText}>
-                                      Excluir a lista <strong>{lista.nome}</strong>? Os contatos serão preservados; apenas os vínculos serão removidos.
-                                    </p>
-
-                                    <div className={styles.listaInlineActions}>
-                                      <button
-                                        type="button"
-                                        className={styles.secondaryButton}
-                                        onClick={() => setListaConfirmandoExclusaoId(null)}
-                                      >
-                                        Cancelar
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        className={styles.dangerButton}
-                                        onClick={async () => {
-                                          try {
-                                            setErro("");
-                                            setMensagemSucesso("");
-
-                                            const res = await fetch("/api/conversas/listas", {
-                                              method: "DELETE",
-                                              headers: {
-                                                "Content-Type": "application/json",
-                                              },
-                                              body: JSON.stringify({
-                                                lista_id: lista.id,
-                                              }),
-                                            });
-
-                                            const data = await res.json();
-
-                                            if (!res.ok) {
-                                              setErro(data.error || "Erro ao excluir lista");
-                                              return;
-                                            }
-
-                                            setMensagemSucesso(data.message || "Lista excluída com sucesso");
-                                            setListaConfirmandoExclusaoId(null);
-
-                                            await carregarListasDaConversa();
-                                            await carregarListasEmpresa();
-                                            await atualizarConversasCarregadas();
-                                          } catch {
-                                            setErro("Erro ao excluir lista");
-                                          }
-                                        }}
-                                      >
-                                        Excluir
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
+                                  );
+                                })}
                               </div>
-                            ))
-                          )}
+                            )}
+                            {totalPaginasListasConversa > 1 && (
+                              <nav className={styles.listPanelPagination} aria-label="Páginas das listas">
+                                <button type="button" disabled={atualizandoListas || paginaAtualListas === 0}
+                                  onClick={() => {
+                                    setPaginaListasConversa(paginaAtualListas - 1);
+                                    setListaEditandoId(null);
+                                    setListaConfirmandoExclusaoId(null);
+                                  }}>‹ Anterior</button>
+                                <span>Página {paginaAtualListas + 1} de {totalPaginasListasConversa}</span>
+                                <button type="button" disabled={atualizandoListas ||
+                                  paginaAtualListas === totalPaginasListasConversa - 1}
+                                  onClick={() => {
+                                    setPaginaListasConversa(paginaAtualListas + 1);
+                                    setListaEditandoId(null);
+                                    setListaConfirmandoExclusaoId(null);
+                                  }}>Próxima ›</button>
+                              </nav>
+                            )}
+                          </section>
                         </div>
                       )}
                     </div>
