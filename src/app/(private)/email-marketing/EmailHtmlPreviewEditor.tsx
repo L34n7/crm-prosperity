@@ -54,7 +54,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const [abaPropriedades, setAbaPropriedades] = useState<"elemento" | "pagina">("elemento");
   const [pagina, setPagina] = useState<PropriedadesPagina>({ largura: 600, fundo: "#edf1f8", superficie: "#ffffff", fonte: "Arial" });
   const [larguraDigitada, setLarguraDigitada] = useState("600");
-  const [painelMobileAberto, setPainelMobileAberto] = useState(false);
 
   useEffect(() => {
     if (!mensagem) return;
@@ -351,7 +350,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       alcaRef.current = null;
       elementoRef.current = null;
       setSelecionado(null);
-      setPainelMobileAberto(false);
     }
   }
 
@@ -379,7 +377,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     elementoRef.current = elemento;
     atualizarAlca(elemento);
     setSelecionado(lerElemento(elemento));
-    if (window.matchMedia("(max-width: 700px)").matches) setPainelMobileAberto(true);
     setConfirmarRemocao(false);
     setAbaPropriedades("elemento");
     setMensagem("");
@@ -681,7 +678,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
           <span className={styles.separador}/>
           <button type="button" onClick={() => alternarModo(true)} className={editando ? styles.ativo : ""}><Pencil size={15}/> Editar</button>
           <button type="button" onClick={() => alternarModo(false)} className={!editando ? styles.ativo : ""}><Eye size={15}/> Prévia</button>
-          <button type="button" className={styles.abrirPropriedadesMobile} onClick={() => setPainelMobileAberto(true)} aria-label="Abrir propriedades do elemento"><Layers size={15}/> Propriedades</button>
           <span className={styles.separador}/>
           <button type="button" onClick={() => setDispositivo("desktop")} className={dispositivo === "desktop" ? styles.ativo : ""} aria-label="Desktop" title="Desktop"><Monitor size={16}/></button>
           <button type="button" onClick={() => setDispositivo("mobile")} className={dispositivo === "mobile" ? styles.ativo : ""} aria-label="Mobile" title="Mobile"><Smartphone size={16}/></button>
@@ -696,8 +692,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
           style={{ pointerEvents: "auto" }} />
       </div>
       </div>
-      <aside className={[styles.inspectorLateral, !painelMobileAberto ? styles.painelMobileFechado : ""].join(" ")} aria-label="Propriedades do elemento">
-      <div className={styles.inspectorCabecalho}><Layers size={17}/><strong>Propriedades</strong><button type="button" className={styles.fecharPainelMobile} onClick={() => setPainelMobileAberto(false)} aria-label="Fechar propriedades"><X size={19}/></button></div>
+      <aside className={styles.inspectorLateral} aria-label="Propriedades do elemento">
+      <div className={styles.inspectorCabecalho}><Layers size={17}/><strong>Propriedades</strong></div>
       <div className={styles.abasPropriedades} role="group" aria-label="Configurações do editor">
         <button type="button" className={abaPropriedades === "elemento" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("elemento")}>Elemento</button>
         <button type="button" className={abaPropriedades === "pagina" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("pagina")}>Página</button>
