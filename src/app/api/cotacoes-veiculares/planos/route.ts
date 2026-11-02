@@ -29,6 +29,7 @@ export async function POST(req:Request){
   const acao=String(body.acao||"");
   const admin=getSupabaseAdmin();const empresaId=auth.empresaId!;
   const planos=await listarPlanosEmpresa(empresaId);
+  let codigoAlterado:string|null=null;
   if(acao==="criar"){
     if(planos.length>=30)throw new Error("Limite de 30 planos por empresa.");
     const nome=String(body.nome||"").trim().replace(/\s+/g," ");
@@ -36,6 +37,7 @@ export async function POST(req:Request){
     if(planos.some(p=>p.nome.toLocaleLowerCase("pt-BR")===nome.toLocaleLowerCase("pt-BR")))
       throw new Error("Já existe um plano com este nome.");
     const codigo="p_"+randomUUID().replace(/-/g,"").slice(0,24);
+    codigoAlterado=codigo;
     const {error}=await admin.from("cotacao_veicular_planos").insert({
       empresa_id:empresaId,codigo,nome,ordem:planos.length+1,ativo:true,
     });if(error)throw error;
@@ -50,6 +52,17 @@ export async function POST(req:Request){
       .update({nome,updated_at:new Date().toISOString()})
       .eq("empresa_id",empresaId).eq("codigo",codigo);
     if(error)throw error;
+  }else if(acao==="ativar"||acao==="desativar"){
+    const codigo=String(body.codigo||"");
+    const atual=planos.find(p=>p.codigo===codigo);
+    if(!atual)throw new Error("Plano não encontrado.");
+    const ativo=acao==="ativar";
+    const {data,error}=await admin.from("cotacao_veicular_planos")
+      .update({ativo,updated_at:new Date().toISOString()})
+      .eq("empresa_id",empresaId).eq("codigo",codigo).select("codigo").maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error("Não foi possível alterar a situação do plano.");
+    codigoAlterado=codigo;
   }else if(acao==="excluir"){
     const codigo=String(body.codigo||"");
     if(!planos.some(p=>p.codigo===codigo))throw new Error("Plano não encontrado.");
@@ -58,6 +71,6 @@ export async function POST(req:Request){
       .delete().eq("empresa_id",empresaId).eq("codigo",codigo);
     if(error)throw error;
   }else throw new Error("Operação inválida.");
-  return NextResponse.json({ok:true,planos:await listarPlanosEmpresa(empresaId),status:await statusConfiguracaoCotacao(empresaId)});
+  return NextResponse.json({ok:true,codigo:codigoAlterado,planos:await listarPlanosEmpresa(empresaId),status:await statusConfiguracaoCotacao(empresaId)});
  }catch(e){console.error("[COTACAO_PLANOS]",e);return erro(e);}
 }

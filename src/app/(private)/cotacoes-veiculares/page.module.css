@@ -836,3 +836,120 @@
  .planPriceEditor button{width:100%}
  .planValidity input,.categoryChooser select{font-size:16px}
 }
+
+/* Aba Planos: catálogo em cards amplos + cadastro em modal com três etapas. */
+.plansOverview{width:100%;min-width:0;display:flex;flex-direction:column;gap:22px}
+.plansOverviewHeading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:6px 0}
+.plansOverviewHeading>div{min-width:0;flex:1}
+.plansOverviewHeading h2{margin:7px 0 6px;font-size:clamp(19px,2vw,25px);font-weight:800;letter-spacing:-.025em;color:var(--crm-text-strong,#243447)}
+.plansOverviewHeading p{margin:0;color:var(--crm-text-muted,#66798a);font-size:13px;line-height:1.55}
+.plansOverviewHeading>button,.planEmptyState>button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:11px 17px;white-space:nowrap;border-radius:11px;font-weight:750;cursor:pointer}
+.planCardsGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px;min-width:0}
+.planOverviewCard{display:flex;flex-direction:column;min-width:0;min-height:255px;padding:20px 19px 16px;box-sizing:border-box;border-radius:19px;border:1px solid var(--crm-border,#dce7ec);background:linear-gradient(148deg,var(--crm-surface,#fff) 0%,#fafdfd 65%,#f3f9fa 100%);box-shadow:0 7px 25px rgba(12,57,76,.045);transition:border-color .17s,box-shadow .17s}
+.planOverviewCard:hover{border-color:#b7dedb;box-shadow:0 12px 28px rgba(22,92,107,.08)}
+.planOverviewCard[data-inactive="true"]{opacity:.7;filter:saturate(.6)}
+.planCardHeader{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.planCardHeader .planSymbol{height:48px;width:48px;flex-basis:48px;background:linear-gradient(140deg,#dff5f0,#e7efff);color:#20727a;border-radius:13px}
+.planActiveBadge,.planInactiveBadge{display:inline-flex;gap:6px;align-items:center;min-height:27px;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.planActiveBadge{background:#e5f5ef;color:#176f57;border:1px solid #c5e5d7}
+.planInactiveBadge{background:#f1f3f6;color:#718092;border:1px solid #dfe4ea}
+.planCardBody{margin:20px 0 17px;min-width:0;flex:1}
+.planIndex{color:#8294a3;font-size:10px;font-weight:800;letter-spacing:.12em}
+.planCardBody h3{margin:6px 0 9px;color:var(--crm-text-strong,#1e3c49);font-size:21px;font-weight:800;letter-spacing:-.025em;overflow-wrap:anywhere;line-height:1.25}
+.planCardBody p{margin:0;font-size:12.5px;line-height:1.4;color:var(--crm-text-muted,#6b8190)}
+.planCardMetrics{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:15px}
+.planCardMetrics>span{display:inline-flex;align-items:center;gap:6px;border:1px solid #dce9ea;border-radius:8px;padding:6px 8px;background:rgba(247,252,252,.9);color:#5e7886;font-size:10.5px;font-weight:680}
+.planCardActions{display:flex;align-items:center;gap:7px;padding-top:13px;border-top:1px solid #e6eff1;min-width:0}
+.planCardActions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:39px;border-radius:10px;cursor:pointer;padding:8px 11px;font-size:12px;font-weight:750;white-space:nowrap}
+.planCardActions button:disabled{opacity:.45;cursor:not-allowed}
+.planEditButton{flex:1;background:var(--crm-primary-soft,#e5f5f2);border:1px solid #cce7e2;color:var(--crm-primary-text,#1b7078)}
+.planStatusButton{background:#fff;border:1px solid #dfe8ec;color:#607c89}
+.planDeleteButton{width:39px;flex:0 0 39px;background:#fff;border:1px solid #e5e9ed;color:#ad5b59}
+.planEditButton:hover,.planStatusButton:hover{filter:brightness(.97)}
+.planDeleteButton:hover{background:#fff1f0;border-color:#f0c7c2}
+.planEmptyState{grid-column:1/-1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;min-height:250px;padding:24px;border:1px dashed #c9dce2;background:linear-gradient(140deg,#fff,#f7fbfc);border-radius:18px;color:#3b8b93}
+.planEmptyState h3{margin:5px 0 0;font-size:17px;color:#284b5b}
+.planEmptyState p{max-width:380px;margin:0 0 10px;color:#708392;font-size:13px;line-height:1.55}
+.planModalOverlay{position:fixed;inset:0;z-index:11050;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(10,24,34,.64);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+.planWizard{display:flex;flex-direction:column;width:min(100%,1050px);height:min(88dvh,850px);max-height:calc(100dvh - 32px);min-width:0;border-radius:23px;background:var(--crm-surface,#fff);border:1px solid var(--crm-border,#dce5eb);color:var(--crm-text,#243748);box-shadow:0 30px 90px rgba(3,19,29,.25);overflow:hidden}
+.planWizardHeader{display:flex;align-items:center;justify-content:space-between;gap:14px;flex:0 0 auto;padding:20px 24px 18px;border-bottom:1px solid var(--crm-border,#e1e9ed);background:linear-gradient(120deg,#fff,#f4fafb)}
+.planWizardTitle{display:flex;align-items:center;gap:12px;min-width:0}
+.planWizardTitle>div{min-width:0}
+.planWizardTitle h2{margin:4px 0 0;font-size:19px;line-height:1.25;color:var(--crm-text-strong,#223d4b);overflow-wrap:anywhere}
+.planWizardTitle .planSymbol{display:grid;place-items:center;width:46px;height:46px;flex:0 0 46px;border-radius:12px}
+.planCloseButton{display:grid;place-items:center;border:0;border-radius:11px;width:38px;height:38px;flex:0 0 38px;background:transparent;color:var(--crm-text-muted,#728694);cursor:pointer}
+.planCloseButton:hover{background:#eaf2f5}
+.planSteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;padding:15px 24px;background:var(--crm-surface,#fff);border-bottom:1px solid var(--crm-border,#e3eaed)}
+.planStep,.planStepActive{display:flex;align-items:center;justify-content:center;gap:9px;min-width:0;min-height:43px;padding:7px 10px;border-radius:11px;border:1px solid #e3eaed;background:#f7fafb;color:#718694;font-size:12px;font-weight:750;cursor:pointer}
+.planStep>span,.planStepActive>span{display:grid;place-items:center;width:24px;height:24px;flex:0 0 24px;border-radius:999px;background:#e8f0f2;color:#66808e;font-size:11px;font-weight:850}
+.planStepActive{border-color:#c4e7de;background:#eaf8f5;color:#18716d}
+.planStepActive>span{background:#1c8b82;color:#fff}
+.planStep:disabled{opacity:.45;cursor:not-allowed}
+.planWizardContent{min-width:0;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:23px 24px 30px}
+.planStepContent{min-width:0;display:flex;flex-direction:column;gap:15px}
+.planStepContent>h3{margin:0;color:var(--crm-text-strong,#254554);font-size:20px;letter-spacing:-.02em}
+.planStepContent>p{margin:-8px 0 2px;color:var(--crm-text-muted,#738594);font-size:13px;line-height:1.6}
+.planStepEyebrow{font-size:10px;font-weight:800;letter-spacing:.13em;color:#1c938a}
+.planWizardField{display:flex;flex-direction:column;gap:8px;max-width:100%;min-width:0;font-size:12.5px;font-weight:750;color:#566f7d}
+.planWizardField input,.planWizardField select{width:100%;box-sizing:border-box;min-height:45px;padding:11px 13px;border-radius:11px;border:1px solid #dbe6eb;background:#fff;color:#253e4a;font:inherit;font-size:14px}
+.planWizardField input:focus,.planWizardField select:focus{outline:2px solid #b4e9e0;outline-offset:1px}
+.planWizardEmbedded{min-width:0}
+.planWizardEmbedded>.panel{padding:0;border:0;box-shadow:none;background:transparent}
+.planWizardEmbedded .commercialGrid{grid-template-columns:minmax(0,1fr)}
+.planWizardEmbedded .commercialCard{border:1px solid #e1ecef;box-shadow:none;background:#f9fcfc}
+.planWizardFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;padding:16px 24px;border-top:1px solid var(--crm-border,#e4e9ed);background:#fafdfe}
+.planWizardFooter>span{font-size:11px;color:#708593;line-height:1.4}
+.planWizardFooterActions{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.planWizardFooterActions button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:9px 16px;border-radius:10px;font-size:12px;font-weight:750;cursor:pointer}
+.planUploadGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.planUploadCard{display:flex;flex-direction:column;gap:10px;min-width:0;padding:17px;border:1px solid #dfecef;border-radius:16px;background:linear-gradient(135deg,#fff,#f5fafa)}
+.planUploadCard h4{margin:0;color:#244653;font-size:15px}
+.planUploadCard>p{margin:0;flex:1;color:#708591;font-size:12px;line-height:1.55}
+.planUploadIcon{display:grid;place-items:center;width:43px;height:43px;border-radius:12px;background:#e7f7f3;color:#28847d}
+.planUploadActions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px;padding-top:4px}
+.planUploadActions>button{display:inline-flex;align-items:center;gap:7px;min-height:38px;border-radius:10px;padding:8px 11px;font-size:12px;font-weight:750}
+.planUploadActions .modelLink{font-size:11px}
+.planInlineConfirm{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap;padding:13px;border:1px solid #c9dfde;background:#f1faf8;border-radius:12px}
+.planInlineConfirm>svg{flex:0 0 auto;color:#25867b}
+.planInlineConfirm>div{flex:1;min-width:170px}
+.planInlineConfirm strong{display:block;color:#235864;font-size:12px;overflow-wrap:anywhere}
+.planInlineConfirm p{margin:4px 0 0;font-size:11px;color:#64818d;line-height:1.5}
+.planInlineConfirm button{min-height:36px;padding:7px 12px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;cursor:pointer}
+.planWizard .planValidity{padding:16px;margin:0;border:1px solid #e0eaed;border-radius:14px;background:#fbfdfd}
+.planWizard .planPrices{margin-top:4px;padding:17px;border:1px solid #e0eaed;border-radius:14px;background:#fff}
+.planWizard .planPrices h4{margin:0 0 12px;font-size:14px;color:#274a58}
+.planDeleteDialog{width:min(100%,440px);padding:24px;border-radius:19px;background:var(--crm-surface,#fff);box-shadow:0 22px 65px rgba(6,26,37,.28)}
+.planDeleteVisual{display:grid;place-items:center;width:51px;height:51px;background:#fff0ee;border-radius:13px;color:#bd5954}
+.planDeleteDialog h3{font-size:19px;margin:17px 0 9px;color:var(--crm-text-strong,#243b47)}
+.planDeleteDialog p{font-size:13px;line-height:1.6;color:var(--crm-text-muted,#677e8e)}
+.planModalFooter{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin-top:24px}
+.planModalFooter button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:750;cursor:pointer}
+.planDeleteConfirm{border:1px solid #eec6c2;background:#ffefed;color:#af4c45;font-weight:760}
+.planDeleteConfirm:hover{background:#ffe5e1}
+@media(max-width:1120px){
+ .planCardsGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:710px){
+ .planCardsGrid{grid-template-columns:minmax(0,1fr);gap:12px}
+ .plansOverviewHeading{align-items:stretch}
+ .plansOverviewHeading>button{width:100%}
+ .planOverviewCard{min-height:210px;padding:17px}
+ .planCardBody{margin:13px 0}
+ .planCardBody h3{font-size:19px}
+ .planModalOverlay{padding:8px}
+ .planWizard{width:100%;height:calc(100dvh - 16px);max-height:calc(100dvh - 16px);border-radius:16px}
+ .planWizardHeader{padding:14px 15px}
+ .planWizardTitle h2{font-size:16px}
+ .planSteps{padding:11px 12px;gap:5px}
+ .planStep,.planStepActive{flex-direction:column;gap:4px;padding:7px 3px;min-height:57px;font-size:10px;text-align:center;line-height:1.2}
+ .planStep>span,.planStepActive>span{width:21px;height:21px;flex-basis:21px}
+ .planWizardContent{padding:16px 13px 26px}
+ .planWizardField input,.planWizardField select{font-size:16px}
+ .planUploadGrid{grid-template-columns:minmax(0,1fr)}
+ .planWizardFooter{padding:12px;align-items:stretch;flex-direction:column}
+ .planWizardFooterActions{justify-content:flex-end}
+ .planWizardFooterActions button{min-width:0;padding:9px 11px}
+ .planInlineConfirm>div{flex:1 1 100%}
+ .planInlineConfirm button{flex:1}
+ .planDeleteDialog{padding:18px}
+}

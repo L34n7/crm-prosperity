@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck, Calculator, CarFront, CheckCircle2, CircleAlert, ClipboardList,
-  Copy, FileSpreadsheet, Loader2, Save, Settings2, ShieldCheck, UploadCloud, X, Trash2,
+  Copy, Loader2, Save, Settings2, ShieldCheck,
 } from "lucide-react";
 import Header from "@/components/Header";
 import {
@@ -39,8 +39,6 @@ type Opcao = {code:string;name:string};
 type DetalheFipe = {
   brand:string;model:string;modelYear:number;referenceMonth:string;codeFipe:string;price:string;
 };
-type ImportacaoPendente = {tipo:"precos"|"especiais";plano:string;arquivo:File};
-type RemocaoPendente = {tipo:"precos"|"especiais";plano:string};
 
 const moeda=(n:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n/100);
 const formatoNumerico=(n:number)=>new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n/100);
@@ -89,14 +87,12 @@ export default function CotacoesVeicularesPage() {
   const [ano,setAno]=useState("");
   const [buscandoFipe,setBuscandoFipe]=useState(false);
   const [carregandoMarcas,setCarregandoMarcas]=useState(false);
-  const [importacao,setImportacao]=useState<ImportacaoPendente|null>(null);
-  const [remocao,setRemocao]=useState<RemocaoPendente|null>(null);
 
   const tipoFipe=categoria==="motocicleta"?"motorcycles"
     :categoria.startsWith("caminhao_")?"trucks":"cars";
 
   const atualizar=useCallback(async()=>{
-    setCarregando(true);setErro("");
+    setErro("");
     try{
       const res=await fetch("/api/cotacoes-veiculares?categoria="+categoria,{cache:"no-store"});
       const json=await res.json();
@@ -222,37 +218,6 @@ export default function CotacoesVeicularesPage() {
     ].filter(Boolean).join("\n");
     try{await navigator.clipboard.writeText(linhas);setSucesso("Comparativo copiado.");}
     catch{setErro("Não foi possível copiar no navegador.");}
-  }
-  async function confirmarImportacao(){
-    if(!importacao)return;
-    setOcupado(true);setErro("");setSucesso("");
-    try{
-      const form=new FormData();
-      form.set("tipo",importacao.tipo);
-      form.set("plano",importacao.plano);
-      form.set("arquivo",importacao.arquivo);
-      if(importacao.tipo==="precos")
-        form.set("referencia","Tabela comercial de "+(planos.find(p=>p.codigo===importacao.plano)?.nome||"plano"));
-      const response=await fetch("/api/cotacoes-veiculares/importar",{method:"POST",body:form});
-      const json=await response.json();
-      if(!response.ok||!json.ok)throw new Error(json.error||"Não foi possível importar o arquivo.");
-      setImportacao(null);await atualizarTudo();
-      setSucesso(String(json.total)+" registros importados para "+(planos.find(p=>p.codigo===importacao.plano)?.nome||"plano")+".");
-    }catch(e){setErro(e instanceof Error?e.message:"Erro ao importar arquivo.");}
-    finally{setOcupado(false);}
-  }
-  async function excluirArquivo(){
-    if(!remocao)return;
-    setOcupado(true);setErro("");setSucesso("");
-    try{
-      const query=new URLSearchParams({tipo:remocao.tipo,plano:remocao.plano});
-      const res=await fetch("/api/cotacoes-veiculares/importar?"+query,{method:"DELETE"});
-      const json=await res.json();
-      if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível remover.");
-      setRemocao(null);await atualizarTudo();
-      setSucesso("Arquivo removido somente do plano selecionado.");
-    }catch(e){setErro(e instanceof Error?e.message:"Falha ao remover.");}
-    finally{setOcupado(false);}
   }
   const historico=useMemo(()=>{
     const grupos=new Map<string,Cotacao[]>();
@@ -416,9 +381,7 @@ export default function CotacoesVeicularesPage() {
       {!carregando&&aba==="tabela"&&<>
         <PlanosCotacao planos={planos} arquivos={arquivos} categoria={categoria}
           onCategoria={setCategoria} faixas={faixas} regras={regras} opcionais={catalogoExtras}
-          podeConfigurar={podeConfigurar} onUpdated={atualizarTudo}
-          onImportar={(tipo,plano,arquivo)=>setImportacao({tipo,plano,arquivo})}
-          onRemover={(tipo,plano)=>setRemocao({tipo,plano})}/>
+          podeConfigurar={podeConfigurar} onUpdated={atualizarTudo}/>
         {status.pendencias.length>0&&<div className={styles.completionStatus}>
           <strong>O que falta para habilitar a cotação automática</strong>
           <ul>{status.pendencias.slice(0,12).map((p,i)=><li key={i}>{p}</li>)}</ul>
@@ -445,39 +408,5 @@ export default function CotacoesVeicularesPage() {
       <footer className={styles.footer}><CheckCircle2 size={15}/> O cálculo é feito no servidor; a IA não inventa mensalidades nem confirma contratações.</footer>
     </main>
 
-    {remocao&&<div className={styles.importOverlay} role="presentation"
-      onClick={()=>!ocupado&&setRemocao(null)}>
-      <section className={styles.importModal} role="dialog" aria-modal="true"
-        aria-label="Confirmar remoção do arquivo" onClick={e=>e.stopPropagation()}>
-        <div className={styles.modalHeading}><span className={styles.importIcon}><Trash2 size={19}/></span>
-          <button type="button" disabled={ocupado} aria-label="Fechar" onClick={()=>setRemocao(null)}><X size={20}/></button></div>
-        <h2>Remover {remocao.tipo==="precos"?"tabela de preços":"lista de veículos especiais"} de {planos.find(p=>p.codigo===remocao.plano)?.nome}?</h2>
-        <p>Isso excluirá os dados desta importação para a empresa, sem apagar cotações anteriores.</p>
-        <p>Você poderá importar outro arquivo em seguida. A ferramenta da IA só funcionará com a configuração completa.</p>
-        <div className={styles.actions}>
-          <button type="button" className={styles.secondary} disabled={ocupado} onClick={()=>setRemocao(null)}>Cancelar</button>
-          <button type="button" className={styles.commercialRemove} disabled={ocupado}
-            onClick={()=>void excluirArquivo()}><Trash2 size={16}/> Remover arquivo</button>
-        </div>
-      </section>
-    </div>}
-    {importacao&&<div className={styles.importOverlay} role="presentation" onClick={()=>!ocupado&&setImportacao(null)}>
-      <section className={styles.importModal} role="dialog" aria-modal="true" aria-label="Confirmar importação" onClick={e=>e.stopPropagation()}>
-        <div className={styles.modalHeading}>
-          <span className={styles.importIcon}><FileSpreadsheet size={21}/></span>
-          <button type="button" aria-label="Fechar" disabled={ocupado} onClick={()=>setImportacao(null)}><X size={20}/></button>
-        </div>
-        <h2>Confirmar importação</h2>
-        <p>Arquivo: <strong>{importacao.arquivo.name}</strong></p>
-        <p>Os {importacao.tipo==="precos"?"preços":"modelos especiais"} de <strong>{planos.find(p=>p.codigo===importacao.plano)?.nome}</strong> serão substituídos. Os outros planos e empresas não serão alterados.</p>
-        <p>A cotação automática só será liberada quando os planos estiverem totalmente configurados.</p>
-        <div className={styles.actions}>
-          <button className={styles.secondary} type="button" disabled={ocupado} onClick={()=>setImportacao(null)}>Cancelar</button>
-          <button className={styles.primary} type="button" disabled={ocupado} onClick={()=>void confirmarImportacao()}>
-            {ocupado?<Loader2 size={16}/>:<UploadCloud size={16}/>} Confirmar importação
-          </button>
-        </div>
-      </section>
-    </div>}
   </>);
 }
