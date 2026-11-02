@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Code2, Plus, RotateCcw, Settings2, Trash2, X } from "lucide-react";
+import { Check, Code2, LayoutTemplate, Plus, RotateCcw, Settings2, Trash2, X } from "lucide-react";
 import { TEMPLATES_PADRAO_EMAIL } from "@/lib/email-marketing/templates-padrao";
 import { formatarHtmlParaEdicao } from "@/lib/email-marketing/formatar-html";
 import VariavelCombobox from "@/components/variaveis/VariavelCombobox";
@@ -13,6 +13,11 @@ import {
   type VariavelCatalogo,
 } from "@/lib/variaveis/catalogo";
 import styles from "./email-marketing.module.css";
+import EmailVisualDesigner from "./EmailVisualDesigner";
+import {
+  gerarHtmlEmailVisual, modelosVisuaisEmail, normalizarDocumentoEmail,
+  novoDocumentoEmail, type DocumentoEmail,
+} from "@/lib/email-marketing/editor-visual";
 
 export type EmailTemplateItem = {
   id: string;
@@ -22,6 +27,7 @@ export type EmailTemplateItem = {
   assunto: string;
   html: string;
   texto: string | null;
+  design_json?: DocumentoEmail | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -57,7 +63,15 @@ export default function TemplateModal({
   const [html, setHtml] = useState(() =>
     formatarHtmlParaEdicao(template?.html || TEMPLATE_INICIAL)
   );
+  const [modoEditor, setModoEditor] = useState<"visual" | "html">(
+    template && !normalizarDocumentoEmail(template.design_json) ? "html" : "visual"
+  );
+  const [documento, setDocumento] = useState<DocumentoEmail>(() =>
+    normalizarDocumentoEmail(template?.design_json) || novoDocumentoEmail()
+  );
+  const modelosVisuais = useMemo(() => modelosVisuaisEmail(), []);
   const [modeloPreview, setModeloPreview] = useState("personalizado");
+  const [galeriaAberta, setGaleriaAberta] = useState(false);
   const [htmlAnterior, setHtmlAnterior] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -69,6 +83,9 @@ export default function TemplateModal({
   const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
   const [modalVariaveis, setModalVariaveis] = useState(false);
 
+  const modeloVisualSelecionado = modelosVisuais.find(
+    (item) => modeloPreview === "visual:" + item.id
+  );
   const modeloSelecionado = useMemo(() => {
     if (modeloPreview === "personalizado") return null;
     if (modeloPreview.startsWith("padrao:")) {
@@ -84,15 +101,32 @@ export default function TemplateModal({
     return null;
   }, [modeloPreview, templates]);
 
-  const htmlNaPrevia = modeloSelecionado?.html ?? html;
+  const htmlNaPrevia = modeloSelecionado?.html ??
+    (modeloVisualSelecionado ? gerarHtmlEmailVisual(modeloVisualSelecionado.documento) :
+    modoEditor === "visual" ? gerarHtmlEmailVisual(documento) : html);
 
   function aplicarModelo() {
+    if (modeloVisualSelecionado) {
+      const copia = JSON.parse(JSON.stringify(modeloVisualSelecionado.documento)) as DocumentoEmail;
+      copia.blocos = copia.blocos.map((bloco) => ({ ...bloco, id: crypto.randomUUID() }));
+      setDocumento(copia);
+      setModoEditor("visual");
+      setAssunto(modeloVisualSelecionado.assunto);
+      setModeloPreview("personalizado");
+      return;
+    }
     if (!modeloSelecionado) return;
-    // Uma escolha no select só altera a prévia. Este botão aplica sem
-    // confirmação, mantendo a versão anterior disponível para desfazer.
-    setHtmlAnterior(html);
-    setHtml(formatarHtmlParaEdicao(modeloSelecionado.html));
-    if (!assunto.trim()) setAssunto(modeloSelecionado.assunto);
+    const salvo = "design_json" in modeloSelecionado ? modeloSelecionado as EmailTemplateItem : null;
+    const visual = normalizarDocumentoEmail(salvo?.design_json);
+    if (visual) {
+      setDocumento({ ...visual, blocos: visual.blocos.map(b => ({ ...b })) });
+      setModoEditor("visual");
+    } else {
+      setHtmlAnterior(html);
+      setHtml(formatarHtmlParaEdicao(modeloSelecionado.html));
+      setModoEditor("html");
+    }
+    setAssunto(modeloSelecionado.assunto);
     setModeloPreview("personalizado");
   }
 
@@ -201,8 +235,16 @@ export default function TemplateModal({
     event.preventDefault();
     setErro("");
 
-    if (!nome.trim() || !assunto.trim() || !html.trim()) {
+    const conteudoHtml = modoEditor === "visual" ? gerarHtmlEmailVisual(documento) : html;
+    if (!nome.trim() || !assunto.trim() || !conteudoHtml.trim()) {
       setErro("Preencha nome, assunto e conteúdo.");
+      return;
+    }
+    if (modoEditor === "visual" && documento.blocos.some(b =>
+      (b.tipo === "imagem" && (!b.imagem || !/^https?:\/\//i.test(b.imagem))) ||
+      (b.tipo === "botao" && (!b.url || !/^(https?:\/\/|mailto:)/i.test(b.url)))
+    )) {
+      setErro("Confira os links dos botões e as URLs das imagens antes de salvar.");
       return;
     }
 
@@ -219,7 +261,8 @@ export default function TemplateModal({
           body: JSON.stringify({
             nome: nome.trim(),
             assunto: assunto.trim(),
-            html,
+            html: conteudoHtml,
+            design_json: modoEditor === "visual" ? documento : null,
           }),
         }
       );
@@ -295,7 +338,47 @@ export default function TemplateModal({
           </div>
 
           <form onSubmit={salvar} className={styles.templatePremiumForm}>
-            <div className={styles.templateEditorLayout}>
+            <div className={styles.templateStudioBar}>
+              <div className={styles.templateStudioSwitch} role="group" aria-label="Tipo de editor">
+                <button type="button" className={modoEditor === "visual" ? styles.templateStudioActive : ""} onClick={() => { if (modoEditor === "html" && !window.confirm("O HTML existente não pode ser convertido automaticamente em blocos. Iniciar um modelo visual separado?")) return; setModoEditor("visual"); setModeloPreview("personalizado"); }}>Editor visual</button>
+                <button type="button" className={modoEditor === "html" ? styles.templateStudioActive : ""} onClick={() => { if (modoEditor === "html") return; setModoEditor("html"); setModeloPreview("personalizado"); setHtml(formatarHtmlParaEdicao(gerarHtmlEmailVisual(documento))); }}>Código HTML</button>
+              </div>
+              <label className={styles.templateStudioSelector} htmlFor="modelo-template-email">Biblioteca de modelos
+                <select id="modelo-template-email" value={modeloPreview} onChange={(event) => setModeloPreview(event.target.value)}>
+                  <option value="personalizado">Seu template atual</option>
+                  <optgroup label="Modelos visuais editáveis">{modelosVisuais.map(modelo => <option key={modelo.id} value={"visual:" + modelo.id}>{modelo.nome} · {modelo.categoria}</option>)}</optgroup>
+                  <optgroup label="Modelos HTML prontos">{TEMPLATES_PADRAO_EMAIL.map(modelo => <option key={modelo.id} value={"padrao:" + modelo.id}>{modelo.nome}</option>)}</optgroup>
+                  {templates.length ? <optgroup label="Templates salvos">{templates.map(item => <option key={item.id} value={"salvo:" + item.id}>{item.nome}</option>)}</optgroup> : null}
+                </select>
+              </label>
+              <button type="button" className={styles.templateStudioGalleryButton} onClick={() => setGaleriaAberta(atual => !atual)}><LayoutTemplate size={16}/> {galeriaAberta ? "Fechar galeria" : "Galeria"}</button>
+              {(modeloSelecionado || modeloVisualSelecionado) ? <button type="button" className={styles.templateStudioApply} onClick={aplicarModelo}><Check size={15} /> Aplicar modelo</button> : <span className={styles.templateStudioHint}>Prévia e edição em tempo real</span>}
+            </div>
+            {galeriaAberta ? <div className={styles.templateStudioGallery} aria-label="Modelos prontos de e-mail">
+              {modelosVisuais.map(item => <button type="button" key={item.id} onClick={() => { setModeloPreview("visual:" + item.id); setGaleriaAberta(false); }} className={styles.templateStudioGalleryCard}>
+                <span className={styles.templateStudioGalleryMock}><i/><i/><i/><i/></span>
+                <strong>{item.nome}</strong><small>{item.categoria} · {item.descricao}</small><em>Visual editável</em>
+              </button>)}
+              {TEMPLATES_PADRAO_EMAIL.map(item => <button type="button" key={item.id} onClick={() => { setModeloPreview("padrao:" + item.id); setGaleriaAberta(false); }} className={styles.templateStudioGalleryCard}>
+                <span className={styles.templateStudioGalleryMock}><i/><i/><i/><i/></span>
+                <strong>{item.nome}</strong><small>{item.descricao}</small><em>HTML personalizado</em>
+              </button>)}
+            </div> : null}
+            {modoEditor === "visual" ? (
+              <div className={styles.templateVisualLayout}>
+                <div className={styles.templateVisualMeta}>
+                  <label className={styles.field}><span>Nome do template</span><input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Campanha de lançamento" maxLength={160} required /></label>
+                  <label className={styles.field}><span>Assunto padrão</span><input ref={assuntoRef} value={assunto} onChange={e => setAssunto(e.target.value)} placeholder="Ex.: Uma novidade para {{nome_contato}}" maxLength={250} required /></label>
+                  <button type="button" className={styles.templatePremiumTextButton} onClick={() => setModalVariaveis(true)}><Settings2 size={15}/> Variáveis do CRM</button>
+                </div>
+                {modeloPreview !== "personalizado" ? (
+                  <div className={styles.templateModeloPrevia}>
+                    <span>Visualização do modelo selecionado</span>
+                    <iframe title="Visualização do modelo antes de aplicar" sandbox="" srcDoc={htmlNaPrevia}/>
+                  </div>
+                ) : <EmailVisualDesigner key={template?.id || "novo"} documento={documento} onChange={setDocumento} variaveis={opcoesVariaveis} variavelSelecionada={variavelSelecionada} onVariavelSelecionada={setVariavelSelecionada} onGerenciarVariaveis={() => setModalVariaveis(true)}/>}
+              </div>
+            ) : <div className={styles.templateEditorLayout}>
               <section className={styles.templateEditorColumn} aria-label="Dados e HTML do template">
                 <div className={styles.templateEditorFields}>
                   <label className={styles.field}>
@@ -390,42 +473,11 @@ export default function TemplateModal({
               </section>
 
               <section className={styles.templateLivePreview} aria-label="Prévia do template">
-                <div className={styles.templatePresetCompactBar}>
-                  <label htmlFor="modelo-template-email">Modelo</label>
-                  <select id="modelo-template-email"
-                    value={modeloPreview}
-                    onChange={(event) => setModeloPreview(event.target.value)}
-                    disabled={salvando}
-                    title={modeloSelecionado?.nome || "Personalizado atual"}>
-                    <option value="personalizado">Personalizado atual</option>
-                    <optgroup label="5 modelos padrão">
-                      {TEMPLATES_PADRAO_EMAIL.map((modelo) => (
-                        <option key={modelo.id} value={"padrao:" + modelo.id}>{modelo.nome}</option>
-                      ))}
-                    </optgroup>
-                    {templates.length > 0 ? (
-                      <optgroup label="Templates já criados">
-                        {templates.map((item) => (
-                          <option key={item.id} value={"salvo:" + item.id}>{item.nome}</option>
-                        ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                  {modeloSelecionado ? (
-                    <button type="button" className={styles.templateApplyCompactButton}
-                      onClick={aplicarModelo} disabled={salvando} title="Copiar este modelo para o editor. Você poderá desfazer.">
-                      <Check size={15}/> Usar este HTML
-                    </button>
-                  ) : (
-                    <span className={styles.templatePreviewSynced}>Seu HTML</span>
-                  )}
-                </div>
-
                 <div className={styles.templateLivePreviewFrame}>
                   <iframe title="Prévia do HTML selecionado" sandbox="" srcDoc={htmlNaPrevia} />
                 </div>
               </section>
-            </div>
+            </div>}
 
             {erro ? <div className={styles.templatePremiumError} role="alert">{erro}</div> : null}
 
@@ -454,7 +506,7 @@ export default function TemplateModal({
         onClose={() => setModalVariaveis(false)}
         onUsar={(chave) => {
           setVariavelSelecionada(chave);
-          inserirNoConteudo(chave);
+          if (modoEditor === "html") inserirNoConteudo(chave);
           setModalVariaveis(false);
         }}
         onAtualizadas={setVariaveisPersonalizadas}

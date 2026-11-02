@@ -5,13 +5,14 @@ import {
   textoParaHtml,
 } from "@/lib/email-marketing/conteudo";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { gerarHtmlEmailVisual, normalizarDocumentoEmail } from "@/lib/email-marketing/editor-visual";
 
 const supabaseAdmin = getSupabaseAdmin();
 
 async function obterTemplateAcessivel(id: string, empresaId: string) {
   const { data, error } = await supabaseAdmin
     .from("email_templates")
-    .select("id, empresa_id, escopo, nome, assunto, html, texto, status")
+    .select("id, empresa_id, escopo, nome, assunto, html, texto, design_json, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -61,9 +62,17 @@ export async function PATCH(
   const assunto = String(body?.assunto ?? atual.assunto).trim();
   const texto = String(body?.texto ?? atual.texto ?? "").trim();
   const htmlEntrada = String(body?.html ?? atual.html).trim();
-  const html = sanitizarHtmlEmail(htmlEntrada || textoParaHtml(texto));
+  const editorEntrada = body && Object.prototype.hasOwnProperty.call(body, "design_json")
+    ? body.design_json : atual.design_json;
+  const editor = editorEntrada == null ? null : normalizarDocumentoEmail(editorEntrada);
+  if (editorEntrada != null && !editor) {
+    return NextResponse.json({ ok: false, error: "Estrutura do editor visual inválida." }, { status: 400 });
+  }
+  const html = editor
+    ? sanitizarHtmlEmail(gerarHtmlEmailVisual(editor))
+    : sanitizarHtmlEmail(htmlEntrada || textoParaHtml(texto));
 
-  if (!nome || !assunto || !html) {
+  if (!nome || !assunto || !html || nome.length > 160 || assunto.length > 250) {
     return NextResponse.json(
       { ok: false, error: "Informe nome, assunto e conteúdo do template." },
       { status: 400 }
@@ -76,6 +85,7 @@ export async function PATCH(
       nome,
       assunto,
       html,
+      design_json: editor,
       texto: texto || null,
       status: body?.status === "rascunho" ? "rascunho" : "ativo",
       updated_at: new Date().toISOString(),
@@ -83,7 +93,7 @@ export async function PATCH(
     .eq("id", id)
     .eq("empresa_id", acesso.usuario.empresa_id)
     .select(
-      "id, empresa_id, escopo, nome, assunto, html, texto, status, created_at, updated_at"
+      "id, empresa_id, escopo, nome, assunto, html, texto, design_json, status, created_at, updated_at"
     )
     .single();
 

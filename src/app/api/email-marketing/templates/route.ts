@@ -5,6 +5,7 @@ import {
   textoParaHtml,
 } from "@/lib/email-marketing/conteudo";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { gerarHtmlEmailVisual, normalizarDocumentoEmail } from "@/lib/email-marketing/editor-visual";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -13,9 +14,14 @@ function normalizarTemplate(body: Record<string, unknown> | null) {
   const assunto = String(body?.assunto || "").trim();
   const texto = String(body?.texto || "").trim();
   const htmlEntrada = String(body?.html || "").trim();
-  const html = sanitizarHtmlEmail(htmlEntrada || textoParaHtml(texto));
+  const editorEntrada = body?.design_json;
+  const editor = editorEntrada == null ? null : normalizarDocumentoEmail(editorEntrada);
+  const editorInvalido = editorEntrada != null && !editor;
+  const html = editor
+    ? sanitizarHtmlEmail(gerarHtmlEmailVisual(editor))
+    : sanitizarHtmlEmail(htmlEntrada || textoParaHtml(texto));
 
-  return { nome, assunto, texto: texto || null, html };
+  return { nome, assunto, texto: texto || null, html, design_json: editor, editorInvalido };
 }
 
 export async function GET() {
@@ -38,7 +44,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("email_templates")
     .select(
-      "id, empresa_id, escopo, nome, assunto, html, texto, status, created_at, updated_at"
+      "id, empresa_id, escopo, nome, assunto, html, texto, design_json, status, created_at, updated_at"
     )
     .or(
       "empresa_id.eq." +
@@ -80,6 +86,10 @@ export async function POST(request: Request) {
     | null;
   const template = normalizarTemplate(body);
 
+  if (template.editorInvalido) {
+    return NextResponse.json({ ok: false, error: "Estrutura do editor visual inválida." }, { status: 400 });
+  }
+
   if (!template.nome || !template.assunto || !template.html) {
     return NextResponse.json(
       {
@@ -109,11 +119,12 @@ export async function POST(request: Request) {
       assunto: template.assunto,
       html: template.html,
       texto: template.texto,
+      design_json: template.design_json,
       status: "ativo",
       criado_por_usuario_id: acesso.usuario.id,
     })
     .select(
-      "id, empresa_id, escopo, nome, assunto, html, texto, status, created_at, updated_at"
+      "id, empresa_id, escopo, nome, assunto, html, texto, design_json, status, created_at, updated_at"
     )
     .single();
 
