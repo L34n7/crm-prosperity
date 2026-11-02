@@ -85,3 +85,22 @@
 .avisoEdicaoDireta{margin:0;padding:11px 12px;border:1px solid var(--crm-primary-border);border-radius:10px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-size:12px;line-height:1.5}
 .blocoCanvas .rotuloBloco{cursor:grab;user-select:none}
 .colunaEditavel{padding:12px;min-width:0;display:block}
+
+
+/* Tipografia padrão do CRM para os controles do estúdio visual. */
+.editor .itemBiblioteca strong{font-size:14px}
+.editor .itemBiblioteca small{font-size:12px}
+.editor .dicaBiblioteca{font-size:13px}
+.editor .tituloPainel small,.editor .infoPainel small{font-size:13px}
+.editor .modoGrupo button{font-size:14px}
+.editor .ferramentas button{min-height:38px}
+.editor .campo>span{font-size:14px}
+.editor .campo input:not([type=color]),.editor .campo select,.editor .campo textarea{font-size:14px}
+.editor .inserirVariavel,.editor .linkGerenciar,.editor .ajuda,.editor .invalido{font-size:13px}
+.editor .semSelecao,.editor .avisoEdicaoDireta{font-size:14px}
+.editor .adicionarFinal{font-size:13px}
+.editor .rotuloBloco{font-size:12px}
+@media(max-width:700px){
+ .editor .itemBiblioteca strong{font-size:13px}
+ .editor .campo input:not([type=color]),.editor .campo select,.editor .campo textarea{font-size:16px}
+}

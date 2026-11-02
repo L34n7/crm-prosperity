@@ -52,3 +52,48 @@
  .campos input,.campos select{font-size:16px}
  .acoes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Biblioteca, canvas e inspector do HTML compartilham a estrutura visual do modo blocos. */
+.estudio{display:grid;grid-template-columns:215px minmax(0,1fr) 280px;flex:1 1 auto;min-height:0;overflow:hidden;border-top:1px solid var(--crm-border)}
+.biblioteca,.inspectorLateral{display:flex;flex-direction:column;min-width:0;min-height:0;overflow-y:auto;background:var(--crm-surface);overscroll-behavior:contain}
+.biblioteca{padding:18px 13px;border-right:1px solid var(--crm-border);gap:13px}
+.bibliotecaTitulo,.inspectorCabecalho{display:flex;align-items:center;gap:9px;color:var(--crm-primary-text)}
+.bibliotecaTitulo strong,.inspectorCabecalho strong{font-size:16px;color:var(--crm-text-strong)}
+.biblioteca>p{font-size:13px;line-height:1.5;color:var(--crm-text-muted);margin:0}
+.listaBlocos{display:grid;grid-template-columns:1fr;gap:8px}
+.listaBlocos button{display:flex;align-items:center;gap:10px;min-height:57px;padding:9px 11px;border:1px solid var(--crm-border);border-radius:12px;background:var(--crm-surface-soft);color:var(--crm-text-strong);font-size:14px;font-weight:750;cursor:grab}
+.listaBlocos button svg:first-child{color:var(--crm-primary-text)}
+.listaBlocos button svg:last-child{margin-left:auto;color:var(--crm-text-muted)}
+.listaBlocos button:hover{border-color:var(--crm-primary-border);background:var(--crm-primary-soft)}
+.gerenciar{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--crm-primary-border);border-radius:9px;background:var(--crm-primary-soft);color:var(--crm-primary-text);min-height:40px;font-size:13px;font-weight:800;cursor:pointer}
+.workspace{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.inspectorLateral{border-left:1px solid var(--crm-border)}
+.inspectorCabecalho{padding:17px;border-bottom:1px solid var(--crm-border)}
+.inspector{display:flex;flex-direction:column;align-items:stretch;gap:13px;padding:17px;background:var(--crm-surface);border:0;overflow-y:auto}
+.inspectorTitulo{flex-wrap:wrap}
+.inspectorTitulo strong{font-size:15px}
+.inspectorTitulo span{font-size:13px}
+.inspector .campos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.inspector .campos label{min-width:0}
+.inspector .campos label span{font-size:13px}
+.inspector .campos .campoUrl{grid-column:1/-1}
+.inspector .campos .aplicar{grid-column:1/-1;font-size:13px}
+.inspector .acoes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.inspector .acoes button{min-height:40px;padding:6px;font-size:13px}
+.barra{padding:11px 14px;min-height:58px}
+.titulo strong{font-size:15px}
+.titulo small{font-size:13px}
+.controles button{font-size:13px}
+.instrucao{padding:16px 17px;color:var(--crm-text-muted);font-size:13px;line-height:1.5}
+.extras{padding:12px 16px;border-top:1px solid var(--crm-border);display:flex;gap:8px;flex-wrap:wrap}
+.extras>button,.variaveis button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--crm-border);border-radius:9px;background:var(--crm-surface-soft);color:var(--crm-text-strong);min-height:37px;padding:0 9px;cursor:pointer;font-size:13px;font-weight:750}
+.extras>button:disabled{opacity:.4;cursor:not-allowed}
+.variaveis{display:flex;flex:1 1 100%;flex-direction:column;gap:8px;font-size:13px}
+.variaveis label{font-weight:800}
+.variaveis select{border:1px solid var(--crm-border-strong);border-radius:9px;padding:9px;width:100%;font-size:13px;color:var(--crm-text-strong);background:var(--crm-surface)}
+.dropDica{margin:0;padding:7px 13px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-size:13px;font-weight:800;text-align:center}
+.area iframe{height:780px}
+@media(max-width:1150px){.estudio{grid-template-columns:180px minmax(0,1fr) 240px}.biblioteca{padding:12px 9px}.inspector{padding:12px}.barra{padding:9px}}
+@media(max-width:920px){.estudio{grid-template-columns:175px minmax(0,1fr)}.inspectorLateral{grid-column:1/-1;max-height:360px;border-left:0;border-top:1px solid var(--crm-border)}.inspector .campos{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:700px){.estudio{display:flex;flex-direction:column;overflow:visible;flex:0 0 auto}.biblioteca{overflow:visible;flex:0 0 auto;padding:13px 14px;border-right:0;border-bottom:1px solid var(--crm-border)}.biblioteca>p{display:none}.listaBlocos{display:flex;overflow-x:auto;gap:7px;padding-bottom:7px}.listaBlocos button{flex:0 0 auto;min-height:46px;font-size:13px;padding:7px}.listaBlocos button svg:last-child{display:none}.gerenciar{align-self:flex-start;padding:0 12px}.workspace{flex:0 0 auto;min-height:530px;overflow:visible}.barra{align-items:flex-start;flex-direction:column}.area{height:510px;min-height:510px;flex:0 0 auto;overflow:auto}.inspectorLateral{overflow:visible;max-height:none}.inspector .campos{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector .campos input,.variaveis select{font-size:16px}}
