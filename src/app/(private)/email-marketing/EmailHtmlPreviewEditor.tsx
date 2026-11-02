@@ -2,7 +2,7 @@
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
-  ArrowDown, ArrowUp, Columns2, Copy, Eye, Heading1, Image as ImageIcon, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Smartphone, Trash2, Type, Undo2,
+  ArrowDown, ArrowUp, Columns2, Copy, Eye, Heading1, Image as ImageIcon, Info, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Smartphone, Trash2, Type, Undo2,
 } from "lucide-react";
 import { urlEmailSegura, type TipoBlocoEmail } from "@/lib/email-marketing/editor-visual";
 import type { VariavelCatalogo } from "@/lib/variaveis/catalogo";
@@ -10,13 +10,20 @@ import styles from "./EmailHtmlPreviewEditor.module.css";
 
 export type EmailHtmlPreviewHandle = { obterHtml: () => string; inserirBloco: (tipo: TipoBlocoEmail) => void };
 
-type EstiloCampo = "color" | "backgroundColor" | "fontSize" | "padding" | "textAlign" | "borderRadius";
+type EstiloCampo = "color" | "backgroundColor" | "fontSize" | "fontFamily" | "padding" | "textAlign" | "borderRadius";
+const FONTES_EMAIL = ["Arial", "Georgia", "Verdana", "Tahoma", "Trebuchet MS"] as const;
+type FonteEmail = typeof FONTES_EMAIL[number];
+function detectarFonte(valor: string): FonteEmail {
+  return FONTES_EMAIL.find(fonte => valor.toLowerCase().includes(fonte.toLowerCase())) || "Arial";
+}
+type PropriedadesPagina = { largura: number; fundo: string; superficie: string; fonte: FonteEmail };
 type Selecionado = {
   tag: string;
   tipo: "imagem" | "link" | "elemento";
   cor: string;
   fundo: string;
   tamanho: string;
+  fonte: FonteEmail;
   espaco: string;
   raio: string;
   alinhamento: string;
@@ -39,6 +46,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const [variavel, setVariavel] = useState("nome_contato");
   const [historico, setHistorico] = useState<string[]>([]);
   const [futuro, setFuturo] = useState<string[]>([]);
+  const [abaPropriedades, setAbaPropriedades] = useState<"elemento" | "pagina">("elemento");
+  const [pagina, setPagina] = useState<PropriedadesPagina>({ largura: 600, fundo: "#edf1f8", superficie: "#ffffff", fonte: "Arial" });
 
 
   const obterHtml = useCallback(() => {
@@ -129,6 +138,53 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   useImperativeHandle(ref, () => ({ obterHtml, inserirBloco }), [obterHtml]);
 
 
+  function tabelaPrincipal(doc: Document): HTMLTableElement | null {
+    return doc.querySelector<HTMLTableElement>('table[width="600"], table[style*="max-width"], table[width]:not([width="100%"])');
+  }
+
+  function carregarPagina(doc: Document) {
+    const tabela = tabelaPrincipal(doc);
+    const estiloTabela = tabela ? doc.defaultView?.getComputedStyle(tabela) : undefined;
+    const estiloBody = doc.defaultView?.getComputedStyle(doc.body);
+    const largura = Number.parseInt(tabela?.style.maxWidth || tabela?.getAttribute("width") || "600", 10);
+    setPagina({
+      largura: Number.isFinite(largura) ? Math.max(420, Math.min(700, largura)) : 600,
+      fundo: paraHex(doc.body.style.backgroundColor || estiloBody?.backgroundColor || "", "#edf1f8"),
+      superficie: paraHex(tabela?.style.backgroundColor || estiloTabela?.backgroundColor || "", "#ffffff"),
+      fonte: detectarFonte(estiloBody?.fontFamily || "Arial"),
+    });
+  }
+
+  function alterarPagina(chave: keyof PropriedadesPagina, valor: string | number) {
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+    const tabela = tabelaPrincipal(doc);
+    registrarHistorico();
+    if (chave === "largura") {
+      const largura = Math.max(420, Math.min(700, Number(valor) || 600));
+      if (tabela) {
+        tabela.setAttribute("width", String(largura));
+        tabela.style.maxWidth = largura + "px";
+        tabela.style.width = "100%";
+      }
+      setPagina(atual => ({ ...atual, largura }));
+    } else if (chave === "fundo") {
+      doc.body.style.backgroundColor = String(valor);
+      const exterior = doc.body.querySelector("table");
+      if (exterior && exterior !== tabela && exterior.contains(tabela)) {
+        (exterior as HTMLElement).style.backgroundColor = String(valor);
+      }
+      setPagina(atual => ({ ...atual, fundo: String(valor) }));
+    } else if (chave === "superficie") {
+      if (tabela) tabela.style.backgroundColor = String(valor);
+      setPagina(atual => ({ ...atual, superficie: String(valor) }));
+    } else if (chave === "fonte") {
+      doc.body.style.fontFamily = String(valor) + ",Arial,sans-serif";
+      setPagina(atual => ({ ...atual, fonte: valor as FonteEmail }));
+    }
+    setMensagem("Configuração da página atualizada.");
+  }
+
   function lerElemento(elemento: HTMLElement): Selecionado {
     const janela = elemento.ownerDocument.defaultView;
     const computado = janela?.getComputedStyle(elemento);
@@ -139,6 +195,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       cor: paraHex(computado?.color || elemento.style.color, "#17243d"),
       fundo: paraHex(computado?.backgroundColor || elemento.style.backgroundColor, "#ffffff"),
       tamanho: String(parseInt(computado?.fontSize || elemento.style.fontSize || "16", 10) || 16),
+      fonte: detectarFonte(computado?.fontFamily || elemento.style.fontFamily || "Arial"),
       espaco: String(parseInt(elemento.style.padding || "0", 10) || 0),
       raio: String(parseInt(elemento.style.borderRadius || "0", 10) || 0),
       alinhamento: computado?.textAlign || "left",
@@ -161,6 +218,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     elemento.setAttribute("data-prosperity-selected", "true");
     elementoRef.current = elemento;
     setSelecionado(lerElemento(elemento));
+    setAbaPropriedades("elemento");
     setMensagem("");
   }
 
@@ -217,6 +275,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     doc.querySelectorAll('meta[http-equiv="refresh"]').forEach(meta => meta.remove());
     doc.querySelectorAll("base").forEach(base => base.remove());
     prepararElemento(doc.body);
+    carregarPagina(doc);
     const estilo = doc.createElement("style");
     estilo.setAttribute("data-prosperity-editor-style", "true");
     estilo.textContent = [
@@ -382,12 +441,14 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
             <Icone size={18}/><span>{nome}</span><Plus size={15}/>
           </button>
         ))}</div>
-        <button type="button" className={styles.gerenciar} onClick={onGerenciarVariaveis}><Settings2 size={16}/> Gerenciar variáveis</button>
       </aside>
       <div className={styles.workspace}>
         <div className={styles.barra}>
-        <div className={styles.titulo}><Pencil size={16}/><div><strong>Editor de elementos HTML</strong><small>Selecione textos, imagens, botões ou áreas do modelo para ajustar.</small></div></div>
+        <div className={styles.titulo}><Pencil size={16}/><div><strong>Editor visual de e-mail</strong><small>Personalize textos, seções e componentes diretamente no template.</small></div></div>
         <div className={styles.controles}>
+          <button type="button" onClick={() => navegarHistorico("desfazer")} disabled={!historico.length} title="Desfazer" aria-label="Desfazer"><Undo2 size={16}/></button>
+          <button type="button" onClick={() => navegarHistorico("refazer")} disabled={!futuro.length} title="Refazer" aria-label="Refazer"><Redo2 size={16}/></button>
+          <span className={styles.separador}/>
           <button type="button" onClick={() => setEditando(true)} className={editando ? styles.ativo : ""}><Pencil size={15}/> Editar</button>
           <button type="button" onClick={() => setEditando(false)} className={!editando ? styles.ativo : ""}><Eye size={15}/> Prévia</button>
           <span className={styles.separador}/>
@@ -405,14 +466,30 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       </div>
       <aside className={styles.inspectorLateral} aria-label="Propriedades do elemento">
       <div className={styles.inspectorCabecalho}><Layers size={17}/><strong>Propriedades</strong></div>
-      {editando && selecionado ? (
+      <div className={styles.abasPropriedades} role="group" aria-label="Configurações do editor">
+        <button type="button" className={abaPropriedades === "elemento" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("elemento")}>Elemento</button>
+        <button type="button" className={abaPropriedades === "pagina" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("pagina")}>Página</button>
+      </div>
+      {abaPropriedades === "pagina" ? (
+        <div className={styles.painelPagina}>
+          <strong>Layout do e-mail</strong>
+          <p>Personalize toda a mensagem sem alterar o conteúdo de cada bloco.</p>
+          <label><span>Largura do e-mail (px)</span><input type="number" min={420} max={700} value={pagina.largura} onChange={e => alterarPagina("largura", e.target.value)} /></label>
+          <label><span>Fundo externo</span><input type="color" value={pagina.fundo} onChange={e => alterarPagina("fundo", e.target.value)} /></label>
+          <label><span>Fundo do conteúdo</span><input type="color" value={pagina.superficie} onChange={e => alterarPagina("superficie", e.target.value)} /></label>
+          <label><span>Fonte geral</span><select value={pagina.fonte} onChange={e => alterarPagina("fonte", e.target.value)}>{FONTES_EMAIL.map(fonte => <option key={fonte} value={fonte}>{fonte}</option>)}</select></label>
+          <small>A fonte geral define o padrão. Textos com fonte própria conservam sua formatação.</small>
+        </div>
+      ) : editando && selecionado ? (
         <div className={styles.inspector}>
-          <div className={styles.inspectorTitulo}><Type size={16}/><strong>{selecionado.tipo === "imagem" ? "Imagem" : selecionado.tipo === "link" ? "Botão / link" : "Elemento " + selecionado.tag.toUpperCase()}</strong><span>Propriedades</span></div>
+          <div className={styles.inspectorTitulo}><Type size={16}/><strong>{selecionado.tipo === "imagem" ? "Imagem" : selecionado.tipo === "link" ? "Botão / link" : "Elemento " + selecionado.tag.toUpperCase()}</strong></div>
+          {mensagem ? <p className={styles.feedback} role="status"><Info size={16} aria-hidden="true"/><span>{mensagem}</span></p> : null}
           <div className={styles.campos}>
             {selecionado.tipo !== "imagem" ? <>
               <label><span>Cor do texto</span><input type="color" value={selecionado.cor} onChange={e => aplicarEstilo("color", e.target.value)} /></label>
               <label><span>Fundo</span><input type="color" value={selecionado.fundo} onChange={e => aplicarEstilo("backgroundColor", e.target.value)} /></label>
               <label><span>Fonte (px)</span><input type="number" min={8} max={70} value={selecionado.tamanho} onChange={e => aplicarEstilo("fontSize", e.target.value)}/></label>
+              <label className={styles.campoCompleto}><span>Família da fonte</span><select value={selecionado.fonte} onChange={e => aplicarEstilo("fontFamily", e.target.value)}>{FONTES_EMAIL.map(fonte => <option key={fonte} value={fonte}>{fonte}</option>)}</select></label>
               <label><span>Alinhamento</span><select value={selecionado.alinhamento} onChange={e => aplicarEstilo("textAlign", e.target.value)}>
                 <option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option>
               </select></label>
@@ -435,26 +512,26 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
             <button type="button" onClick={duplicar}><Copy size={15}/> Duplicar</button>
             <button type="button" className={styles.excluir} onClick={() => setConfirmarRemocao(true)}><Trash2 size={15}/> Remover</button>
           </div>
-          {mensagem ? <small role="status">{mensagem}</small> : null}
         </div>
       ) : null}
-      {(!selecionado || !editando) ? <p className={styles.instrucao}>Selecione um elemento no e-mail para editar suas propriedades, cores e posições.</p> : null}
+      {abaPropriedades === "elemento" && (!selecionado || !editando) ? <p className={styles.instrucao}>Selecione um elemento no e-mail para editar cores, alinhamento, fonte, fundo e posição.</p> : null}
       <div className={styles.extras}>
-        <button type="button" onClick={() => navegarHistorico("desfazer")} disabled={!historico.length}><Undo2 size={15}/> Desfazer</button>
-        <button type="button" onClick={() => navegarHistorico("refazer")} disabled={!futuro.length}><Redo2 size={15}/> Refazer</button>
-        {selecionado && variaveis.length ? (
+        {variaveis.length ? (
           <div className={styles.variaveis}>
-            <label htmlFor="email-variavel-html">Inserir variável do CRM</label>
+            <strong>Personalização do CRM</strong>
+            <p>Escolha uma variável para inserir no texto selecionado.</p>
+            <label htmlFor="email-variavel-html">Variável do contato</label>
             <select id="email-variavel-html" value={variavel} onChange={e => setVariavel(e.target.value)}>{variaveis.map(v => <option key={v.chave} value={v.chave}>{v.descricao || v.chave}</option>)}</select>
             <button type="button" onClick={() => {
               const el = elementoRef.current;
               if (!el) return;
-              const texto = el.querySelector("[data-prosperity-edit-text]");
+              const texto = el.matches("[data-prosperity-edit-text]") ? el : el.querySelector("[data-prosperity-edit-text]");
               if (!texto) { setMensagem("Selecione um título, texto ou botão para inserir a variável."); return; }
               registrarHistorico();
               texto.appendChild(el.ownerDocument.createTextNode("{{" + variavel + "}}"));
               setMensagem("Variável inserida.");
             }}><Plus size={15}/> Inserir variável</button>
+            <button type="button" className={styles.botaoGerenciar} onClick={onGerenciarVariaveis}><Settings2 size={15}/> Gerenciar variáveis</button>
           </div>
         ) : null}
       </div>
