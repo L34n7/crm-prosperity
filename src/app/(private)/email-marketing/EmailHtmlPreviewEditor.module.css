@@ -38,12 +38,6 @@
 .acoes{display:flex;flex-wrap:wrap;gap:7px}
 .acoes button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;border:1px solid var(--crm-border);border-radius:9px;padding:0 12px;background:var(--crm-surface-soft);color:var(--crm-text-strong);font-size:11px;font-weight:800;cursor:pointer}
 .acoes .excluir,.confirmarCard .excluir{border-color:var(--crm-danger-border);background:var(--crm-danger-bg);color:var(--crm-danger-text)}
-.confirmarFundo{position:fixed;inset:0;z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px;background:rgb(13 22 39 / 62%);backdrop-filter:blur(4px)}
-.confirmarCard{display:flex;flex-direction:column;gap:12px;width:min(400px,100%);padding:23px;border:1px solid var(--crm-border);border-radius:18px;background:var(--crm-surface);box-shadow:var(--crm-shadow-lg)}
-.confirmarCard strong{color:var(--crm-text-strong);font-size:18px}
-.confirmarCard p{margin:0;color:var(--crm-text-muted);font-size:13px;line-height:1.6}
-.confirmarCard>div{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px}
-.confirmarCard button{min-height:40px;padding:0 15px;border:1px solid var(--crm-border);border-radius:9px;background:var(--crm-surface-soft);color:var(--crm-text-strong);font-weight:800;cursor:pointer}
 @media(max-width:900px){.campos{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){
  .inspector{padding:14px}

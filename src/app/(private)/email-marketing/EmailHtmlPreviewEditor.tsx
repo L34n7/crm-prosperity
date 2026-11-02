@@ -291,6 +291,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       el.setAttribute("tabindex", ativo ? "0" : "-1");
     });
     if (!ativo) {
+      setConfirmarRemocao(false);
       (doc.activeElement as HTMLElement | null)?.blur?.();
       doc.querySelectorAll("[data-prosperity-selected]").forEach(el => el.removeAttribute("data-prosperity-selected"));
       alcaRef.current?.remove();
@@ -324,6 +325,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     elementoRef.current = elemento;
     atualizarAlca(elemento);
     setSelecionado(lerElemento(elemento));
+    setConfirmarRemocao(false);
     setAbaPropriedades("elemento");
     setMensagem("");
   }
@@ -658,7 +660,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
             <button type="button" onClick={() => mover("cima")}><ArrowUp size={15}/> Subir</button>
             <button type="button" onClick={() => mover("baixo")}><ArrowDown size={15}/> Descer</button>
             <button type="button" onClick={duplicar}><Copy size={15}/> Duplicar</button>
-            <button type="button" className={styles.excluir} onClick={() => setConfirmarRemocao(true)}><Trash2 size={15}/> Remover</button>
+            <button type="button" className={styles.excluir} onClick={() => { if (confirmarRemocao) remover(); else setConfirmarRemocao(true); }} aria-label={confirmarRemocao ? "Confirmar remoção do elemento" : "Remover elemento"}>{confirmarRemocao ? <CheckCircle2 size={15}/> : <Trash2 size={15}/>} {confirmarRemocao ? "Confirmar" : "Remover"}</button>
           </div>
         </div>
       ) : null}
@@ -685,7 +687,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       </div>
       </aside>
       {mensagem ? <div className={styles.toast} role="status" aria-live="polite"><CheckCircle2 size={18} aria-hidden="true"/><span>{mensagem}</span><button type="button" onClick={() => setMensagem("")} aria-label="Fechar notificação"><X size={15}/></button></div> : null}
-      {confirmarRemocao ? <div className={styles.confirmarFundo} role="presentation"><div className={styles.confirmarCard} role="alertdialog" aria-modal="true" aria-label="Remover elemento"><strong>Remover elemento?</strong><p>O elemento selecionado será retirado deste template.</p><div><button type="button" onClick={() => setConfirmarRemocao(false)}>Cancelar</button><button type="button" className={styles.excluir} onClick={remover}>Remover</button></div></div></div> : null}
     </div>
   );
 }
