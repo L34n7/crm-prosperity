@@ -34,6 +34,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const [selecionado, setSelecionado] = useState<Selecionado | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [confirmarRemocao, setConfirmarRemocao] = useState(false);
+  const [enviandoImagem, setEnviandoImagem] = useState(false);
   const [arrastando, setArrastando] = useState(false);
   const [variavel, setVariavel] = useState("nome_contato");
   const [historico, setHistorico] = useState<string[]>([]);
@@ -266,6 +267,28 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     setMensagem("Alteração aplicada.");
   }
 
+  async function enviarImagem(arquivo?: File) {
+    const elemento = elementoRef.current;
+    if (!arquivo || !elemento || elemento.tagName !== "IMG") return;
+    setEnviandoImagem(true);
+    setMensagem("");
+    try {
+      const dados = new FormData();
+      dados.set("imagem", arquivo);
+      const resposta = await fetch("/api/email-marketing/imagens", { method: "POST", body: dados });
+      const retorno = await resposta.json();
+      if (!resposta.ok || !retorno?.ok || !retorno.url) throw new Error(retorno?.error || "Falha ao enviar imagem.");
+      registrarHistorico();
+      elemento.setAttribute("src", retorno.url);
+      setSelecionado(lerElemento(elemento));
+      setMensagem("Imagem adicionada ao template.");
+    } catch (error) {
+      setMensagem(error instanceof Error ? error.message : "Erro ao enviar imagem.");
+    } finally {
+      setEnviandoImagem(false);
+    }
+  }
+
   function aplicarUrl(valor: string, alt?: string) {
     const el = elementoRef.current;
     if (!el || !selecionado) return;
@@ -398,7 +421,10 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
             <label><span>Cantos (px)</span><input type="number" min={0} max={120} value={selecionado.raio} onChange={e => aplicarEstilo("borderRadius", e.target.value)}/></label>
             {selecionado.tipo === "link" || selecionado.tipo === "imagem" ? <>
               <label className={styles.campoUrl}><span>{selecionado.tipo === "link" ? "Link de destino" : "URL da imagem"}</span><input type="url" value={selecionado.url} onChange={e => setSelecionado({...selecionado,url:e.target.value})}/></label>
-              {selecionado.tipo === "imagem" ? <label className={styles.campoUrl}><span>Texto alternativo</span><input value={selecionado.alt} onChange={e => setSelecionado({...selecionado,alt:e.target.value})}/></label> : null}
+              {selecionado.tipo === "imagem" ? <>
+                <label className={styles.campoUrl}><span>Enviar imagem (até 3 MB)</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={enviandoImagem} onChange={e => { void enviarImagem(e.target.files?.[0]); e.target.value = ""; }}/></label>
+                <label className={styles.campoUrl}><span>Texto alternativo</span><input value={selecionado.alt} onChange={e => setSelecionado({...selecionado,alt:e.target.value})}/></label>
+              </> : null}
               <button type="button" className={styles.aplicar} onClick={() => aplicarUrl(selecionado.url,selecionado.alt)}>Aplicar link / imagem</button>
             </> : null}
           </div>
