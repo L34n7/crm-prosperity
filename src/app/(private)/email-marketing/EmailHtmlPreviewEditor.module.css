@@ -166,3 +166,28 @@
 .area{position:relative}
 .avisoPrevia{position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--crm-primary-border);border-radius:9px;background:var(--crm-surface);box-shadow:0 4px 14px rgb(15 23 42 / 9%);color:var(--crm-primary-text);font-size:12px;font-weight:800}
 .listaBlocos button:disabled{opacity:.46;cursor:not-allowed}
+
+
+/* Mobile: seleção continua no card Elemento, abaixo da prévia. */
+.atalhoElementoMobile{display:none}
+@media(max-width:700px){
+  .estudio .atalhoElementoMobile{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    flex:0 0 auto;
+    min-height:44px;
+    width:calc(100% - 24px);
+    margin:10px 12px 12px;
+    padding:10px 12px;
+    border:1px solid var(--crm-primary-border);
+    border-radius:10px;
+    background:var(--crm-primary-soft);
+    color:var(--crm-primary-text);
+    font-size:13px;
+    font-weight:800;
+    cursor:pointer;
+  }
+  .estudio .inspectorLateral{scroll-margin-top:12px}
+}

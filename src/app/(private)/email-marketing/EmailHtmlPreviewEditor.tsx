@@ -35,12 +35,12 @@ type Props = { html: string; variaveis?: VariavelCatalogo[]; onGerenciarVariavei
 
 function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: Props, ref: Ref<EmailHtmlPreviewHandle>) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const painelRef = useRef<HTMLElement>(null);
   const elementoRef = useRef<HTMLElement | null>(null);
   const editandoRef = useRef(true);
   const arrasteElementoRef = useRef<HTMLElement | null>(null);
   const alcaRef = useRef<HTMLButtonElement | null>(null);
   const toqueInicialRef = useRef<{ x: number; y: number } | null>(null);
-  const suprimirCliqueToqueRef = useRef(false);
   const [dispositivo, setDispositivo] = useState<"desktop" | "mobile">("desktop");
   const [editando, setEditando] = useState(true);
   const [selecionado, setSelecionado] = useState<Selecionado | null>(null);
@@ -339,7 +339,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     if (!doc?.body) return;
     doc.body.setAttribute("data-prosperity-mode", ativo ? "editar" : "previa");
     doc.querySelectorAll<HTMLElement>("[data-prosperity-edit-text]").forEach(el => {
-      el.setAttribute("contenteditable", ativo ? "plaintext-only" : "false");
+      el.setAttribute("contenteditable", ativo ? "true" : "false");
       el.setAttribute("tabindex", ativo ? "0" : "-1");
     });
     if (!ativo) {
@@ -402,12 +402,19 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     for (const atual of textos) {
       const marca = doc.createElement("span");
       marca.setAttribute("data-prosperity-edit-text", "true");
-      marca.setAttribute("contenteditable", "plaintext-only");
+      // Safari iOS aceita contenteditable=true de forma mais consistente.
+      // O paste é convertido em texto simples pelo manipulador abaixo.
+      marca.setAttribute("contenteditable", "true");
       marca.setAttribute("spellcheck", "true");
       marca.setAttribute("title", "Clique para editar o texto");
       atual.parentNode?.insertBefore(marca, atual);
       marca.appendChild(atual);
-      marca.addEventListener("focus", () => registrarHistorico());
+      marca.addEventListener("focus", () => {
+        registrarHistorico();
+        if (!editandoRef.current) return;
+        const pai = marca.closest("h1,h2,h3,h4,h5,h6,p,a,button,td,th,li,blockquote,div,section,header,footer") || marca.parentElement;
+        if (pai && pai !== doc.body && pai !== elementoRef.current) selecionar(pai as HTMLElement);
+      });
       marca.addEventListener("keydown", event => { if (event.key === "Enter") event.preventDefault(); });
       marca.addEventListener("paste", event => {
         event.preventDefault();
@@ -460,40 +467,56 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     doc.addEventListener("scroll", () => atualizarPosicaoAlca(), true);
     const encontrarElemento = (alvo: Element | null): HTMLElement | null => {
       if (!alvo || alvo.closest("[data-prosperity-drag-handle]")) return null;
-      const imagem = alvo.closest("img");
-      const link = alvo.closest("a");
-      const destino = imagem || link ||
-        alvo.closest("span:not([data-prosperity-edit-text]),strong,em,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
-      return destino && destino !== doc.body ? destino as HTMLElement : null;
+      const alvoEditavel = alvo.closest("[data-prosperity-edit-text]");
+      const origem = alvoEditavel?.parentElement || alvo;
+      const destino = origem.closest("img,a,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
+      if (destino && destino !== doc.body) return destino as HTMLElement;
+      // Textos diretamente dentro de elementos simples também devem ser selecionáveis.
+      return origem !== doc.body && !origem.matches("html,head,body,style,script") ? origem as HTMLElement : null;
     };
-    doc.addEventListener("pointerdown", event => {
-      if (event.pointerType !== "touch" || !editandoRef.current) return;
-      toqueInicialRef.current = { x: event.clientX, y: event.clientY };
+    const selecionarAlvo = (alvo: EventTarget | null) => {
+      if (!editandoRef.current || !alvo) return false;
+      const node = alvo as Node;
+      const elemento = node.nodeType === 1 ? node as Element : node.parentElement;
+      const destino = encontrarElemento(elemento);
+      if (!destino || destino === elementoRef.current) return !!destino;
+      selecionar(destino);
+      return true;
+    };
+    // O foco ocorre mesmo quando o Safari não emite clique sobre um texto editável.
+    doc.addEventListener("focusin", evento => { selecionarAlvo(evento.target); }, true);
+    doc.addEventListener("pointerdown", evento => {
+      if (evento.pointerType !== "touch" || !editandoRef.current) return;
+      toqueInicialRef.current = { x: evento.clientX, y: evento.clientY };
     }, true);
-    doc.addEventListener("pointerup", event => {
-      if (event.pointerType !== "touch" || !editandoRef.current || !toqueInicialRef.current) return;
+    doc.addEventListener("pointerup", evento => {
+      if (evento.pointerType !== "touch" || !editandoRef.current) return;
       const inicio = toqueInicialRef.current;
       toqueInicialRef.current = null;
-      if (Math.hypot(event.clientX - inicio.x, event.clientY - inicio.y) > 12) return;
-      const alvo = (event.target as Node).nodeType === 1 ? event.target as Element : (event.target as Node).parentElement;
-      const destino = encontrarElemento(alvo);
-      if (destino) {
-        selecionar(destino);
-        suprimirCliqueToqueRef.current = true;
-      }
+      if (inicio && Math.hypot(evento.clientX - inicio.x, evento.clientY - inicio.y) > 12) return;
+      selecionarAlvo(evento.target);
     }, true);
     doc.addEventListener("pointercancel", () => { toqueInicialRef.current = null; }, true);
+    // Fallback explícito para WebKit/iOS e prévias dentro de iframes.
+    let inicioToque: { x: number; y: number } | null = null;
+    doc.addEventListener("touchstart", evento => {
+      if (!editandoRef.current || !evento.touches.length) return;
+      inicioToque = { x: evento.touches[0].clientX, y: evento.touches[0].clientY };
+    }, { capture: true, passive: true });
+    doc.addEventListener("touchend", evento => {
+      if (!editandoRef.current || !evento.changedTouches.length) return;
+      const toque = evento.changedTouches[0];
+      const inicio = inicioToque;
+      inicioToque = null;
+      if (inicio && Math.hypot(toque.clientX - inicio.x, toque.clientY - inicio.y) > 12) return;
+      if (!selecionarAlvo(evento.target)) selecionarAlvo(doc.elementFromPoint(toque.clientX, toque.clientY));
+    }, { capture: true, passive: true });
+    doc.addEventListener("touchcancel", () => { inicioToque = null; }, { capture: true, passive: true });
     doc.addEventListener("click", evento => {
-      const alvo = (evento.target as Node).nodeType === 1 ? evento.target as Element : (evento.target as Node).parentElement;
-      const link = alvo?.closest("a");
-      if (link) evento.preventDefault();
-      if (suprimirCliqueToqueRef.current) {
-        suprimirCliqueToqueRef.current = false;
-        return;
-      }
-      if (!editandoRef.current) return;
-      const destino = encontrarElemento(alvo);
-      if (destino) selecionar(destino);
+      const node = evento.target as Node;
+      const elemento = node.nodeType === 1 ? node as Element : node.parentElement;
+      if (elemento?.closest("a")) evento.preventDefault();
+      selecionarAlvo(evento.target);
     }, true);
     doc.addEventListener("submit", event => event.preventDefault(), true);
     doc.addEventListener("dragover", event => {
@@ -692,7 +715,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
           style={{ pointerEvents: "auto" }} />
       </div>
       </div>
-      <aside className={styles.inspectorLateral} aria-label="Propriedades do elemento">
+      {editando && selecionado ? <button type="button" className={styles.atalhoElementoMobile} onClick={() => painelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}><Layers size={16}/> Elemento selecionado · Ver propriedades</button> : null}
+      <aside ref={painelRef} className={styles.inspectorLateral} aria-label="Propriedades do elemento">
       <div className={styles.inspectorCabecalho}><Layers size={17}/><strong>Propriedades</strong></div>
       <div className={styles.abasPropriedades} role="group" aria-label="Configurações do editor">
         <button type="button" className={abaPropriedades === "elemento" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("elemento")}>Elemento</button>
