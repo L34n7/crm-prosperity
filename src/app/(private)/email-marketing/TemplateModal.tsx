@@ -15,8 +15,8 @@ import {
 import styles from "./email-marketing.module.css";
 import EmailHtmlPreviewEditor, { type EmailHtmlPreviewHandle } from "./EmailHtmlPreviewEditor";
 import {
-  gerarHtmlEmailVisual, modelosVisuaisEmail, normalizarDocumentoEmail,
-  novoDocumentoEmail,
+  gerarHtmlEmailVisual, modelosVisuaisEmail,
+  novoDocumentoEmail, type DocumentoEmail,
 } from "@/lib/email-marketing/editor-visual";
 
 export type EmailTemplateItem = {
@@ -32,16 +32,6 @@ export type EmailTemplateItem = {
   created_at: string;
   updated_at: string;
 };
-
-const TEMPLATE_INICIAL =
-  '<div style="font-family:Arial,sans-serif;color:#172033">' +
-  '<h1 style="font-size:24px;margin:0 0 16px">Olá, {{nome_contato}}!</h1>' +
-  '<p style="font-size:15px;line-height:1.65;margin:0 0 16px">' +
-  "Escreva aqui a mensagem da sua campanha." +
-  "</p>" +
-  '<p style="font-size:15px;line-height:1.65;margin:0">' +
-  "Atenciosamente,<br />Sua equipe" +
-  "</p></div>";
 
 type Props = {
   template?: EmailTemplateItem | null;

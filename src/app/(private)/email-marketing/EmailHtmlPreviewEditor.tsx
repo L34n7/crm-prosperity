@@ -48,6 +48,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const [futuro, setFuturo] = useState<string[]>([]);
   const [abaPropriedades, setAbaPropriedades] = useState<"elemento" | "pagina">("elemento");
   const [pagina, setPagina] = useState<PropriedadesPagina>({ largura: 600, fundo: "#edf1f8", superficie: "#ffffff", fonte: "Arial" });
+  const [larguraDigitada, setLarguraDigitada] = useState("600");
 
 
   const obterHtml = useCallback(() => {
@@ -147,6 +148,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     const estiloTabela = tabela ? doc.defaultView?.getComputedStyle(tabela) : undefined;
     const estiloBody = doc.defaultView?.getComputedStyle(doc.body);
     const largura = Number.parseInt(tabela?.style.maxWidth || tabela?.getAttribute("width") || "600", 10);
+    setLarguraDigitada(String(Number.isFinite(largura) ? Math.max(420, Math.min(700, largura)) : 600));
     setPagina({
       largura: Number.isFinite(largura) ? Math.max(420, Math.min(700, largura)) : 600,
       fundo: paraHex(doc.body.style.backgroundColor || estiloBody?.backgroundColor || "", "#edf1f8"),
@@ -168,6 +170,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
         tabela.style.width = "100%";
       }
       setPagina(atual => ({ ...atual, largura }));
+      setLarguraDigitada(String(largura));
     } else if (chave === "fundo") {
       doc.body.style.backgroundColor = String(valor);
       const exterior = doc.body.querySelector("table");
@@ -470,11 +473,12 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
         <button type="button" className={abaPropriedades === "elemento" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("elemento")}>Elemento</button>
         <button type="button" className={abaPropriedades === "pagina" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("pagina")}>Página</button>
       </div>
+      {mensagem ? <p className={styles.feedback} role="status"><Info size={16} aria-hidden="true"/><span>{mensagem}</span></p> : null}
       {abaPropriedades === "pagina" ? (
         <div className={styles.painelPagina}>
           <strong>Layout do e-mail</strong>
           <p>Personalize toda a mensagem sem alterar o conteúdo de cada bloco.</p>
-          <label><span>Largura do e-mail (px)</span><input type="number" min={420} max={700} value={pagina.largura} onChange={e => alterarPagina("largura", e.target.value)} /></label>
+          <label><span>Largura do e-mail (px)</span><input type="number" min={420} max={700} value={larguraDigitada} onChange={e => setLarguraDigitada(e.target.value)} onBlur={() => alterarPagina("largura", larguraDigitada)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }} /></label>
           <label><span>Fundo externo</span><input type="color" value={pagina.fundo} onChange={e => alterarPagina("fundo", e.target.value)} /></label>
           <label><span>Fundo do conteúdo</span><input type="color" value={pagina.superficie} onChange={e => alterarPagina("superficie", e.target.value)} /></label>
           <label><span>Fonte geral</span><select value={pagina.fonte} onChange={e => alterarPagina("fonte", e.target.value)}>{FONTES_EMAIL.map(fonte => <option key={fonte} value={fonte}>{fonte}</option>)}</select></label>
@@ -483,7 +487,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       ) : editando && selecionado ? (
         <div className={styles.inspector}>
           <div className={styles.inspectorTitulo}><Type size={16}/><strong>{selecionado.tipo === "imagem" ? "Imagem" : selecionado.tipo === "link" ? "Botão / link" : "Elemento " + selecionado.tag.toUpperCase()}</strong></div>
-          {mensagem ? <p className={styles.feedback} role="status"><Info size={16} aria-hidden="true"/><span>{mensagem}</span></p> : null}
           <div className={styles.campos}>
             {selecionado.tipo !== "imagem" ? <>
               <label><span>Cor do texto</span><input type="color" value={selecionado.cor} onChange={e => aplicarEstilo("color", e.target.value)} /></label>

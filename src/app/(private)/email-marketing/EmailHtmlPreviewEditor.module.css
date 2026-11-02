@@ -147,3 +147,6 @@
  .abasPropriedades button{font-size:14px}
  .variaveis select{font-size:16px}
 }
+
+/* Mensagens ficam contidas dentro da largura do painel lateral. */
+.inspectorLateral>.feedback{width:auto;max-width:calc(100% - 24px);margin:10px 12px 0;flex:0 0 auto}
