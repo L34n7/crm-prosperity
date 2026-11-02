@@ -743,3 +743,55 @@
  .commercialExtraFields{grid-template-columns:minmax(0,1fr)}
  .commercialCard .actions button{width:100%}
 }
+
+/* Superfícies premium leves, integradas ao tema do CRM Prosperity */
+.hero{background:linear-gradient(125deg,#ffffff 0%,#f6fbfc 64%,#edf8f7 100%);border:1px solid #dce9e9;box-shadow:0 8px 30px rgba(13,73,87,.035)}
+.panel{background:linear-gradient(165deg,#fff 0%,#fcfefe 100%);border:1px solid #dfe8ec;box-shadow:0 8px 26px rgba(25,61,82,.038)}
+.fipePanel,.optionsGroup,.commercialCard,.importCard,.historyCard,.completionStatus{
+ background:linear-gradient(145deg,#ffffff 0%,#f6fafc 100%);
+ border:1px solid #dfebef;box-shadow:0 4px 18px rgba(20,65,83,.03);
+ color:#203b47;
+}
+.optionsGroup .option,.commercialExtra{background:#fff;border-color:#e2ebee}
+.planCard{background:linear-gradient(140deg,#fff 10%,#f6fafa 100%);border:1px solid #dce8ee}
+.planCard:first-child{background:linear-gradient(135deg,#f4fdfb,#fff);border-color:#c5e6df}
+.importIcon,.planSymbol{background:linear-gradient(135deg,#e0f6f0,#e9f4ff);color:#176d77}
+.plansManagerList{display:grid;gap:9px}
+.plansManagerItem{display:flex;align-items:center;gap:12px;min-width:0;padding:12px 14px;border:1px solid #dfebed;border-radius:13px;background:linear-gradient(105deg,#fff,#f8fcfc)}
+.planSymbol{flex:0 0 42px;display:grid;place-items:center;width:42px;height:42px;border-radius:11px}
+.planInfo{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.planInfo strong{color:#244250;font-size:14px;overflow-wrap:anywhere}
+.planInfo small{color:#728995;font-size:11px}
+.planIconActions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.planIconActions button,.importedFile button{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:transparent;border:1px solid transparent;color:#698391;cursor:pointer}
+.planIconActions button:hover,.importedFile button:hover{background:#eef7f7;border-color:#d5e7e7;color:#127683}
+.planEditInput,.createPlanRow input,.coverageForm input{min-height:44px;padding:9px 12px;border-radius:11px;border:1px solid #d9e6e9;background:#fff;color:#203c47;font:inherit;font-size:14px;min-width:0;box-sizing:border-box}
+.planEditInput{flex:1}
+.createPlanRow{display:flex;gap:10px;margin-top:14px;min-width:0}
+.createPlanRow input{flex:1}
+.createPlanRow button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 17px;border:0;border-radius:11px;min-height:44px;cursor:pointer;font-weight:700}
+.planConfirm{margin-top:14px;padding:16px;border-radius:14px;border:1px solid #f4cfcb;background:#fff9f7}
+.planConfirm strong{color:#954432;font-size:14px}
+.planConfirm p{color:#775c55;font-size:12.5px;line-height:1.55}
+.coverageBox{padding:14px;border:1px solid #e0edef;border-radius:13px;background:#fff;margin:14px 0}
+.coverageBox>strong{display:block;color:#284857;font-size:13.5px}
+.coverageBox>p,.coverageBox>small{display:block;margin:5px 0 12px;color:#69808f;font-size:12px;line-height:1.45}
+.coverageForm{display:flex;gap:8px;min-width:0}
+.coverageForm input{flex:1}
+.coverageForm button{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:8px 12px;min-width:96px;min-height:44px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700}
+.coverageChips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.coverageChip{display:inline-flex;align-items:center;gap:7px;padding:7px 9px;border-radius:999px;background:#eaf7f5;border:1px solid #d1e9e4;color:#226873;font-size:12px;line-height:1.25;max-width:100%;overflow-wrap:anywhere}
+.coverageChip button{display:grid;place-items:center;width:20px;height:20px;padding:0;border:0;background:transparent;color:#25747c;cursor:pointer}
+.importedFile{display:flex;align-items:center;gap:10px;min-width:0;padding:12px 10px;margin-top:4px;border:1px solid #d5e6e7;border-radius:12px;background:#eef9f7;color:#26707b}
+.importedFile>svg{flex-shrink:0}
+.importedFile>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.importedFile strong{font-size:12px;overflow-wrap:anywhere}
+.importedFile small{font-size:11px;color:#658895}
+.importedFile button{flex:0 0 36px}
+@media(max-width:768px){
+  .createPlanRow,.coverageForm{flex-direction:column}
+  .createPlanRow button,.coverageForm button{width:100%}
+  .plansManagerItem{padding:10px}
+  .planSymbol{width:36px;height:36px;flex-basis:36px}
+  .coverageChip{white-space:normal}
+}

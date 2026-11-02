@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   categoriaValida, configuracaoCotacao,
 } from "@/lib/cotacoes-veiculares/servico";
-import { listarRegrasComerciais, statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { listarRegrasComerciais, listarPlanosEmpresa, statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import {
   type OpcionalComercial, type RegraComercialPlano, validarRegraComercial,
   USOS_VEICULO, ENERGIAS_VEICULO,
@@ -62,7 +62,7 @@ export async function POST(req:Request) {
     }else if(acao==="regra"){
       const regra=body.regra as RegraComercialPlano;
       if(!regra||typeof regra!=="object"||!categoriaValida(regra.categoria)||
-         !["premium","completo"].includes(regra.plano))throw new Error("Categoria ou plano inválido.");
+         !(await listarPlanosEmpresa(auth.empresaId!,true)).some(plano=>plano.codigo===regra.plano))throw new Error("Categoria ou plano inválido.");
       if(!Array.isArray(body.opcionais))throw new Error("Lista de opcionais inválida.");
       const opcionais=body.opcionais as OpcionalComercial[];
       const erroValidacao=validarRegraComercial(regra,opcionais);
