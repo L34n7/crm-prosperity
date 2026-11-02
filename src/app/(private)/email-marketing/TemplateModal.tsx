@@ -13,10 +13,9 @@ import {
   type VariavelCatalogo,
 } from "@/lib/variaveis/catalogo";
 import styles from "./email-marketing.module.css";
-import EmailVisualDesigner from "./EmailVisualDesigner";
 import EmailHtmlPreviewEditor, { type EmailHtmlPreviewHandle } from "./EmailHtmlPreviewEditor";
 import {
-  gerarHtmlEmailVisual, modelosVisuaisEmail, normalizarDocumentoEmail,
+  gerarHtmlEmailVisual, modelosVisuaisEmail,
   novoDocumentoEmail, type DocumentoEmail,
 } from "@/lib/email-marketing/editor-visual";
 
@@ -33,16 +32,6 @@ export type EmailTemplateItem = {
   created_at: string;
   updated_at: string;
 };
-
-const TEMPLATE_INICIAL =
-  '<div style="font-family:Arial,sans-serif;color:#172033">' +
-  '<h1 style="font-size:24px;margin:0 0 16px">Olá, {{nome_contato}}!</h1>' +
-  '<p style="font-size:15px;line-height:1.65;margin:0 0 16px">' +
-  "Escreva aqui a mensagem da sua campanha." +
-  "</p>" +
-  '<p style="font-size:15px;line-height:1.65;margin:0">' +
-  "Atenciosamente,<br />Sua equipe" +
-  "</p></div>";
 
 type Props = {
   template?: EmailTemplateItem | null;
@@ -63,15 +52,9 @@ export default function TemplateModal({
   const [nome, setNome] = useState(template?.nome || "");
   const [assunto, setAssunto] = useState(template?.assunto || "");
   const [html, setHtml] = useState(() =>
-    formatarHtmlParaEdicao(template?.html || TEMPLATE_INICIAL)
+    formatarHtmlParaEdicao(template?.html || gerarHtmlEmailVisual(novoDocumentoEmail()))
   );
   const [modoEditor, setModoEditor] = useState<"visual" | "html">("visual");
-  const [origemVisual, setOrigemVisual] = useState<"blocos" | "html">(
-    template && !normalizarDocumentoEmail(template.design_json) ? "html" : "blocos"
-  );
-  const [documento, setDocumento] = useState<DocumentoEmail>(() =>
-    normalizarDocumentoEmail(template?.design_json) || novoDocumentoEmail()
-  );
   const modelosVisuais = useMemo(() => modelosVisuaisEmail(), []);
   const [galeriaAberta, setGaleriaAberta] = useState(false);
   const [htmlAnterior, setHtmlAnterior] = useState<string | null>(null);
@@ -92,33 +75,14 @@ export default function TemplateModal({
     perigoso?: boolean;
   } | null>(null);
 
-  function executarTrocaModo(destino: "visual" | "html") {
-    if (destino === "html" && modoEditor === "visual") {
-      const atual = origemVisual === "blocos"
-        ? gerarHtmlEmailVisual(documento)
-        : (htmlPreviewRef.current?.obterHtml() || html);
-      setHtml(formatarHtmlParaEdicao(atual));
-    }
-    if (destino === "visual" && modoEditor === "html") {
-      // HTML é editado visualmente sem converter nem descaracterizar seu layout.
-      setOrigemVisual("html");
+  // Um único documento HTML sustenta as duas visualizações; nenhuma troca perde conteúdo.
+  function trocarModo(destino: "visual" | "html") {
+    if (destino === modoEditor) return;
+    if (modoEditor === "visual") {
+      setHtml(formatarHtmlParaEdicao(htmlPreviewRef.current?.obterHtml() || html));
     }
     setModoEditor(destino);
     setGaleriaAberta(false);
-  }
-
-  function trocarModo(destino: "visual" | "html") {
-    if (destino === modoEditor) return;
-    if (destino === "html" && origemVisual === "blocos") {
-      setConfirmacao({
-        titulo: "Editar o código HTML?",
-        descricao: "O layout atual será convertido em HTML para edição avançada. Depois, você poderá voltar ao editor de blocos com todo o HTML preservado, mas as alterações não serão aplicadas ao antigo documento estruturado.",
-        textoAcao: "Continuar",
-        acao: () => executarTrocaModo(destino),
-      });
-      return;
-    }
-    executarTrocaModo(destino);
   }
 
   function aplicarModelo(tipo: "visual" | "padrao" | "salvo", id: string) {
@@ -135,33 +99,21 @@ export default function TemplateModal({
   }
 
   function aplicarModeloConfirmado(tipo: "visual" | "padrao" | "salvo", id: string) {
-    setHtmlAnterior(modoEditor === "visual" && origemVisual === "html" ? (htmlPreviewRef.current?.obterHtml() || html) : html);
+    setHtmlAnterior(modoEditor === "visual" ? (htmlPreviewRef.current?.obterHtml() || html) : html);
     if (tipo === "visual") {
       const modelo = modelosVisuais.find(item => item.id === id);
       if (!modelo) return;
-      const copia = structuredClone(modelo.documento);
-      copia.blocos = copia.blocos.map(bloco => ({ ...bloco, id: crypto.randomUUID() }));
-      setDocumento(copia);
-      setOrigemVisual("blocos");
+      setHtml(formatarHtmlParaEdicao(gerarHtmlEmailVisual(modelo.documento)));
       setAssunto(modelo.assunto);
-      setModoEditor("visual");
     } else {
       const modelo = tipo === "padrao"
         ? TEMPLATES_PADRAO_EMAIL.find(item => item.id === id)
         : templates.find(item => item.id === id);
       if (!modelo) return;
-      const visual = "design_json" in modelo ? normalizarDocumentoEmail(modelo.design_json) : null;
-      if (visual) {
-        setDocumento({ ...visual, blocos: visual.blocos.map(bloco => ({ ...bloco, id: crypto.randomUUID() })) });
-        setOrigemVisual("blocos");
-        setModoEditor("visual");
-      } else {
-        setHtml(formatarHtmlParaEdicao(modelo.html));
-        setOrigemVisual("html");
-        setModoEditor("visual");
-      }
+      setHtml(formatarHtmlParaEdicao(modelo.html));
       setAssunto(modelo.assunto);
     }
+    setModoEditor("visual");
     setGaleriaAberta(false);
     setErro("");
   }
@@ -267,19 +219,12 @@ export default function TemplateModal({
     event.preventDefault();
     setErro("");
 
-    const conteudoHtml = modoEditor === "html" ? html : origemVisual === "blocos"
-      ? gerarHtmlEmailVisual(documento) : (htmlPreviewRef.current?.obterHtml() || html);
+    const conteudoHtml = modoEditor === "html" ? html : (htmlPreviewRef.current?.obterHtml() || html);
     if (!nome.trim() || !assunto.trim() || !conteudoHtml.trim()) {
       setErro("Preencha nome, assunto e conteúdo.");
       return;
     }
-    if (modoEditor === "visual" && origemVisual === "blocos" && documento.blocos.some(b =>
-      (b.tipo === "imagem" && (!b.imagem || !/^https?:\/\//i.test(b.imagem))) ||
-      (b.tipo === "botao" && (!b.url || !/^(https?:\/\/|mailto:)/i.test(b.url)))
-    )) {
-      setErro("Confira os links dos botões e as URLs das imagens antes de salvar.");
-      return;
-    }
+
 
     setSalvando(true);
 
@@ -295,7 +240,7 @@ export default function TemplateModal({
             nome: nome.trim(),
             assunto: assunto.trim(),
             html: conteudoHtml,
-            design_json: modoEditor === "visual" && origemVisual === "blocos" ? documento : null,
+            design_json: null,
           }),
         }
       );
@@ -394,7 +339,7 @@ export default function TemplateModal({
             {galeriaAberta ? <div className={styles.templateStudioGallery} aria-label="Galeria de modelos de e-mail">
               {modelosVisuais.map(item => <button type="button" key={item.id} onClick={() => aplicarModelo("visual", item.id)} className={styles.templateStudioGalleryCard}>
                 <span className={styles.templateStudioGalleryMock}><iframe tabIndex={-1} title={"Prévia " + item.nome} sandbox="" srcDoc={gerarHtmlEmailVisual(item.documento)} /></span>
-                <strong>{item.nome}</strong><small>{item.categoria} · {item.descricao}</small><em>Blocos editáveis</em>
+                <strong>{item.nome}</strong><small>{item.categoria} · {item.descricao}</small><em>Edição visual completa</em>
               </button>)}
               {TEMPLATES_PADRAO_EMAIL.map(item => <button type="button" key={item.id} onClick={() => aplicarModelo("padrao", item.id)} className={styles.templateStudioGalleryCard}>
                 <span className={styles.templateStudioGalleryMock}><iframe tabIndex={-1} title={"Prévia " + item.nome} sandbox="" srcDoc={item.html} /></span>
@@ -402,7 +347,7 @@ export default function TemplateModal({
               </button>)}
               {templates.filter(item => item.status !== "arquivado").map(item => <button type="button" key={item.id} onClick={() => aplicarModelo("salvo", item.id)} className={styles.templateStudioGalleryCard}>
                 <span className={styles.templateStudioGalleryMock}><iframe tabIndex={-1} title={"Prévia " + item.nome} sandbox="" srcDoc={item.html} /></span>
-                <strong>{item.nome}</strong><small>Modelo salvo · {item.escopo === "sistema" ? "Sistema" : "Minha empresa"}</small><em>{normalizarDocumentoEmail(item.design_json) ? "Blocos editáveis" : "Blocos HTML editáveis"}</em>
+                <strong>{item.nome}</strong><small>Modelo salvo · {item.escopo === "sistema" ? "Sistema" : "Minha empresa"}</small><em>Edição visual completa</em>
               </button>)}
             </div> : null}
             {modoEditor === "visual" ? (
@@ -411,11 +356,7 @@ export default function TemplateModal({
                   <label className={styles.field}><span>Nome do template</span><input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Campanha especial" maxLength={160} required /></label>
                   <label className={styles.field}><span>Assunto padrão</span><input ref={assuntoRef} value={assunto} onChange={e => setAssunto(e.target.value)} placeholder="Ex.: Uma novidade para {{nome_contato}}" maxLength={250} required /></label>
                 </div>
-                {origemVisual === "blocos" ? (
-                  <EmailVisualDesigner key={template?.id || "novo"} documento={documento} onChange={setDocumento} variaveis={opcoesVariaveis} variavelSelecionada={variavelSelecionada} onVariavelSelecionada={setVariavelSelecionada} onGerenciarVariaveis={() => setModalVariaveis(true)}/>
-                ) : (
-                  <EmailHtmlPreviewEditor key={html} ref={htmlPreviewRef} html={html} variaveis={opcoesVariaveis} onGerenciarVariaveis={() => setModalVariaveis(true)}/>
-                )}
+                <EmailHtmlPreviewEditor key={html} ref={htmlPreviewRef} html={html} variaveis={opcoesVariaveis} onGerenciarVariaveis={() => setModalVariaveis(true)}/>
               </div>
             ) : <div className={styles.templateEditorLayout}>
               <section className={styles.templateEditorColumn} aria-label="Dados e HTML do template">
