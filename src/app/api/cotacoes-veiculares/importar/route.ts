@@ -155,8 +155,8 @@ export async function POST(req:Request){
     const admin=getSupabaseAdmin();
     const nome=arquivo.name.slice(0,180);
     if(tipo==="precos"){
-      const referencia=String(form.get("referencia")||"Tabela de "+plano.nome)
-        .trim().slice(0,160);
+      // Nome da tabela definido automaticamente pelo arquivo. Não há campo manual.
+      const referencia=("Tabela: "+arquivo.name).slice(0,160);
       const {data,error}=await admin.rpc("cotacao_veicular_importar_precos_plano",{
         p_empresa_id:auth.empresaId,p_plano:plano.codigo,p_linhas:faixas,
         p_referencia:referencia,p_arquivo_nome:nome,

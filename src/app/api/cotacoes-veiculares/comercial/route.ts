@@ -62,19 +62,19 @@ export async function POST(req:Request) {
       const plano=String(body.plano||"");
       if(!(await listarPlanosEmpresa(auth.empresaId!,true)).some(p=>p.codigo===plano))
         throw new Error("Plano não encontrado.");
-      const referencia=String(body.referencia||"").trim();
       const vigencia=String(body.vigencia_ate||"").trim();
       const valida=/^\d{4}-\d{2}-\d{2}$/.test(vigencia)&&
         !Number.isNaN(Date.parse(vigencia))&&new Date(vigencia).toISOString().slice(0,10)===vigencia;
-      if(referencia.length<3||referencia.length>160||!valida||
-        vigencia<new Date().toISOString().slice(0,10))
-        throw new Error("Informe referência e data de validade atual ou futura.");
+      if(!valida||vigencia<new Date().toISOString().slice(0,10))
+        throw new Error("Informe uma data de validade atual ou futura.");
       const {data:arquivo,error:erroArquivo}=await getSupabaseAdmin()
-        .from("cotacao_veicular_planos_arquivos").select("arquivo_precos_nome")
+        .from("cotacao_veicular_planos_arquivos")
+        .select("arquivo_precos_nome,referencia")
         .eq("empresa_id",auth.empresaId).eq("plano",plano).maybeSingle();
       if(erroArquivo)throw erroArquivo;
       if(!arquivo?.arquivo_precos_nome)
         throw new Error("Importe a tabela de preços deste plano antes de informar a validade.");
+      const referencia=String(arquivo.referencia||arquivo.arquivo_precos_nome).trim().slice(0,160);
       const {error}=await getSupabaseAdmin().from("cotacao_veicular_planos_arquivos")
         .update({referencia,vigencia_ate:vigencia,updated_at:new Date().toISOString()})
         .eq("empresa_id",auth.empresaId).eq("plano",plano);

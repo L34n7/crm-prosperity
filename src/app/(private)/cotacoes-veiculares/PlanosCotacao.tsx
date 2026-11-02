@@ -1,6 +1,6 @@
 "use client";
 
-import {useEffect,useRef,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {
   ArrowLeft,ArrowRight,CalendarDays,CarFront,Check,CheckCircle2,
   Download,FileSpreadsheet,Layers3,Loader2,Pencil,Plus,Power,
@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import {CATEGORIAS_COTACAO,type CategoriaCotacao,type PlanoEmpresa} from "@/lib/cotacoes-veiculares/catalogo";
 import type {RegraComercialPlano,OpcionalComercial} from "@/lib/cotacoes-veiculares/comercial";
-import ConfiguracaoComercialEditor from "./ConfiguracaoComercialEditor";
+import ConfiguracaoComercialEditor, {type EditorHandle} from "./ConfiguracaoComercialEditor";
 import styles from "./page.module.css";
 
 export type ArquivoPlano={
@@ -27,7 +27,7 @@ type Props={
   opcionais:(OpcionalComercial&{plano:string;categoria:string})[];
   podeConfigurar:boolean;onUpdated:()=>Promise<void>;
 };
-type Modal={codigo:string|null;passo:1|2|3};
+type Modal={codigo:string|null;passo:1|2};
 type ArquivoPendente={tipo:"precos"|"especiais";arquivo:File};
 const dinheiro=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v/100);
 const dataHora=(v:string)=>new Date(v).toLocaleString("pt-BR");
@@ -37,7 +37,6 @@ export default function PlanosCotacao({
 }:Props){
   const [modal,setModal]=useState<Modal|null>(null);
   const [nome,setNome]=useState("");
-  const [referencia,setReferencia]=useState("");
   const [vigencia,setVigencia]=useState("");
   const [precoEditando,setPrecoEditando]=useState<Faixa|null>(null);
   const [novoPreco,setNovoPreco]=useState("");
@@ -46,10 +45,19 @@ export default function PlanosCotacao({
   const [excluirPlano,setExcluirPlano]=useState<string|null>(null);
   const [ocupado,setOcupado]=useState(false);
   const [erro,setErro]=useState("");
+  const [errosEtapa,setErrosEtapa]=useState<Record<string,string>>({});
+  const [tentativa,setTentativa]=useState(0);
+  const editorRef=useRef<EditorHandle|null>(null);
+  const nomeRef=useRef<HTMLInputElement|null>(null);
+  const dataRef=useRef<HTMLInputElement|null>(null);
   const [sucesso,setSucesso]=useState("");
   const filePrecos=useRef<HTMLInputElement>(null);
   const fileEspeciais=useRef<HTMLInputElement>(null);
   const plano=planos.find(p=>p.codigo===modal?.codigo);
+  // Props estáveis evitam perder regras preenchidas quando o nome é editado.
+  const planosDoModal=useMemo(()=>plano?[plano]:[],[plano]);
+  const regrasDoPlano=useMemo(()=>regras.filter(r=>r.plano===modal?.codigo),[regras,modal?.codigo]);
+  const opcionaisDoPlano=useMemo(()=>opcionais.filter(o=>o.plano===modal?.codigo),[opcionais,modal?.codigo]);
   const meta=arquivos.find(a=>a.plano===modal?.codigo);
   const itens=faixas.filter(f=>f.plano===modal?.codigo);
   const hoje=new Date().toISOString().slice(0,10);
@@ -67,16 +75,15 @@ export default function PlanosCotacao({
   function abrir(planoAtual?:PlanoEmpresa){
     setNome(planoAtual?.nome||"");
     const info=arquivos.find(x=>x.plano===planoAtual?.codigo);
-    setReferencia(info?.referencia||"");
     setVigencia(info?.vigencia_ate||"");
     setModal({codigo:planoAtual?.codigo||null,passo:1});
     setArquivo(null);setRemoverArquivo(null);setPrecoEditando(null);
-    setErro("");setSucesso("");
+    setErro("");setSucesso("");setErrosEtapa({});
   }
   function fechar(){
     if(ocupado)return;
     setModal(null);setArquivo(null);setRemoverArquivo(null);
-    setPrecoEditando(null);setErro("");setSucesso("");
+    setPrecoEditando(null);setErro("");setSucesso("");setErrosEtapa({});
   }
   async function planoApi(acao:"criar"|"renomear"|"ativar"|"desativar"|"excluir",codigo?:string,nomeNovo?:string){
     const res=await fetch("/api/cotacoes-veiculares/planos",{
@@ -88,23 +95,63 @@ export default function PlanosCotacao({
     await onUpdated();
     return json as {codigo?:string};
   }
-  async function salvarNome(){
+  function erroCampo(campo:string){return errosEtapa[campo]?
+    <span className={styles.requiredError} role="alert">{errosEtapa[campo]}</span>:null;
+  }
+  function destacarCampos(erros:Record<string,string>,alvo?:"nome"|"vigencia"){
+    setErrosEtapa(erros);setTentativa(v=>v+1);
+    setErro("Confira os campos obrigatórios destacados.");
+    requestAnimationFrame(()=>{
+      const elemento=alvo==="nome"?nomeRef.current:alvo==="vigencia"?dataRef.current:
+        document.querySelector('[data-required-error="true"]');
+      elemento?.scrollIntoView({behavior:"smooth",block:"center"});
+      if(elemento instanceof HTMLInputElement)elemento.focus({preventScroll:true});
+    });
+  }
+  function nomeValido(){
     const valor=nome.trim().replace(/\s+/g," ");
-    if(valor.length<2||valor.length>90){setErro("Informe um nome entre 2 e 90 caracteres.");return;}
-    setOcupado(true);setErro("");
+    if(valor.length<2||valor.length>90){
+      destacarCampos({nome:valor.length<2?
+        "Informe o nome do plano (mínimo de 2 caracteres).":
+        "O nome deve ter no máximo 90 caracteres."},"nome");
+      return false;
+    }
+    return true;
+  }
+  async function salvarNome(){
+    if(!nomeValido())return false;
+    setOcupado(true);setErro("");setErrosEtapa({});
     try{
       let codigo=modal?.codigo||null;
       if(codigo){
-        if(plano?.nome!==valor)await planoApi("renomear",codigo,valor);
+        if(plano?.nome!==nome.trim())await planoApi("renomear",codigo,nome.trim());
       }else{
-        const resultado=await planoApi("criar",undefined,valor);
+        const resultado=await planoApi("criar",undefined,nome.trim());
         codigo=resultado.codigo||null;
         if(!codigo)throw new Error("Não foi possível identificar o plano criado.");
       }
-      setModal({codigo,passo:2});
-      setSucesso("");
-    }catch(e){setErro(e instanceof Error?e.message:"Falha ao salvar nome.");}
+      setModal({codigo,passo:1});
+      setSucesso("Nome salvo. Agora preencha as regras do plano.");
+      return true;
+    }catch(e){setErro(e instanceof Error?e.message:"Não foi possível salvar o nome.");return false;}
     finally{setOcupado(false);}
+  }
+  async function avancarParaArquivos(){
+    if(!modal || ocupado || !podeConfigurar)return;
+    if(!nomeValido())return;
+    if(!modal.codigo){
+      await salvarNome();
+      return;
+    }
+    const ok=await editorRef.current?.validateAndSave();
+    if(!ok)return;
+    // Salva o novo nome somente depois de validar as regras, preservando os campos digitados.
+    if(plano?.nome!==nome.trim()){
+      const salvo=await salvarNome();
+      if(!salvo)return;
+    }
+    setErrosEtapa({});setErro("");setSucesso("");
+    setModal(v=>v?{...v,passo:2}:null);
   }
   async function alterarStatus(p:PlanoEmpresa){
     setOcupado(true);setErro("");setSucesso("");
@@ -131,11 +178,11 @@ export default function PlanosCotacao({
     try{
       const form=new FormData();
       form.set("tipo",arquivo.tipo);form.set("plano",modal.codigo);form.set("arquivo",arquivo.arquivo);
-      if(arquivo.tipo==="precos")form.set("referencia",referencia.trim()||"Tabela de "+plano?.nome);
       const res=await fetch("/api/cotacoes-veiculares/importar",{method:"POST",body:form});
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao importar arquivo.");
       setArquivo(null);
+      if(arquivo.tipo==="precos"){setVigencia("");setErrosEtapa(prev=>({...prev,tabela:""}));}
       await onUpdated();
       setSucesso("Arquivo importado: "+json.nome+" ("+json.total+" registros).");
     }catch(e){setErro(e instanceof Error?e.message:"Falha ao importar.");}
@@ -155,26 +202,56 @@ export default function PlanosCotacao({
     }catch(e){setErro(e instanceof Error?e.message:"Falha ao remover arquivo.");}
     finally{setOcupado(false);}
   }
-  async function salvarValores(acao:"vigencia"|"preco"){
-    if(!modal?.codigo)return;
-    setOcupado(true);setErro("");
+  async function salvarValores(acao:"vigencia"|"preco"):Promise<boolean>{
+    if(!modal?.codigo)return false;
+    if(acao==="vigencia"){
+      if(!meta?.arquivo_precos_nome){
+        destacarCampos({tabela:"Importe a tabela de preços antes de definir a validade."});
+        return false;
+      }
+      if(!vigencia||!/^\d{4}-\d{2}-\d{2}$/.test(vigencia)||vigencia<hoje){
+        destacarCampos({vigencia:!vigencia?
+          "Informe até quando estes preços serão válidos.":
+          "A validade precisa ser hoje ou uma data futura."},"vigencia");
+        return false;
+      }
+    }
+    if(acao==="preco"){
+      const preco=Number(novoPreco.replace(",","."));
+      if(!Number.isFinite(preco)||preco<=0){
+        destacarCampos({preco:"Informe uma mensalidade maior que zero."});
+        return false;
+      }
+    }
+    setOcupado(true);setErro("");setErrosEtapa({});
     try{
       const endpoint=acao==="vigencia"?"/api/cotacoes-veiculares/comercial":"/api/cotacoes-veiculares";
       const corpo=acao==="vigencia"
-        ?{acao,plano:modal.codigo,referencia,vigencia_ate:vigencia}
+        ?{acao,plano:modal.codigo,vigencia_ate:vigencia}
         :{acao,plano:modal.codigo,categoria,fipe_min_centavos:precoEditando?.fipe_min_centavos,
-          valor_centavos:Math.round(Number(novoPreco.replace(",", "."))*100)};
+          valor_centavos:Math.round(Number(novoPreco.replace(",","."))*100)};
       const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(corpo)});
       const json=await res.json();
-      if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar.");
+      if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível salvar.");
       setPrecoEditando(null);await onUpdated();
-      setSucesso(acao==="vigencia"?"Referência e validade salvas.":"Mensalidade alterada.");
-    }catch(e){setErro(e instanceof Error?e.message:"Falha ao salvar.");}
+      setSucesso(acao==="vigencia"?"Validade dos preços salva.":"Mensalidade alterada.");
+      return true;
+    }catch(e){setErro(e instanceof Error?e.message:"Erro ao salvar.");return false;}
     finally{setOcupado(false);}
   }
-  function proximaEtapa(passo:1|2|3){
-    setModal(v=>v?{...v,passo}:null);
-    setErro("");setSucesso("");
+  async function concluirCadastro(){
+    if(ocupado)return;
+    const erros:Record<string,string>={};
+    if(!meta?.arquivo_precos_nome)erros.tabela="Importe a tabela de preços deste plano para concluir.";
+    if(!vigencia)erros.vigencia="Informe a validade dos preços.";
+    else if(vigencia<hoje)erros.vigencia="Escolha a data de hoje ou uma data futura.";
+    if(Object.keys(erros).length){
+      destacarCampos(erros,erros.tabela?undefined:"vigencia");return;
+    }
+    if(!meta||meta.vigencia_ate!==vigencia){
+      if(!await salvarValores("vigencia"))return;
+    }
+    fechar();
   }
 
   return <section className={styles.plansOverview}>
@@ -265,12 +342,12 @@ export default function PlanosCotacao({
             disabled={ocupado} onClick={fechar}><X size={21}/></button>
         </header>
         <nav className={styles.planSteps} aria-label="Etapas do cadastro">
-          {([["1","Nome"],["2","Regras"],["3","Arquivos e valores"]] as const).map(([n,rotulo],i)=>{
-            const etapa=(i+1) as 1|2|3;
+          {([["1","Nome e regras"],["2","Arquivos e valores"]] as const).map(([n,rotulo],i)=>{
+            const etapa=(i+1) as 1|2;
             return <button key={n} type="button" disabled={!modal.codigo&&etapa!==1||ocupado}
               aria-current={modal.passo===etapa?"step":undefined}
               className={modal.passo===etapa?styles.planStepActive:styles.planStep}
-              onClick={()=>proximaEtapa(etapa)}>
+              onClick={()=>{if(etapa===1){setModal(v=>v?{...v,passo:1}:null);setErrosEtapa({});}else void avancarParaArquivos();}}>
               <span>{modal.passo>etapa?<Check size={15}/>:n}</span>{rotulo}
             </button>;
           })}
@@ -282,47 +359,55 @@ export default function PlanosCotacao({
             <Power size={18}/><span>Este plano está desativado. Ative-o no card para editar as regras, importar arquivos ou incluí-lo nas novas cotações.</span>
           </div>}
           {modal.passo===1&&<div className={styles.planStepContent}>
-            <span className={styles.planStepEyebrow}>01 / IDENTIFICAÇÃO</span>
-            <h3>Identificação do plano</h3>
-            <p>Escolha o nome que será exibido nas cotações e ao cliente.</p>
-            <label className={styles.planWizardField}>Nome do plano
-              <input autoFocus value={nome} maxLength={90}
+            <span className={styles.planStepEyebrow}>01 / NOME E REGRAS</span>
+            <h3>Identificação e condições do plano</h3>
+            <p>Informe o nome e configure as regras comerciais. Você pode aplicar as mesmas regras a várias categorias.</p>
+            <label key={"nome-"+(errosEtapa.nome?tentativa:0)}
+              className={styles.planWizardField+" "+(errosEtapa.nome?styles.requiredFieldInvalid:"")}>
+              Nome do plano <span className={styles.requiredAsterisk}>*</span>
+              <input ref={nomeRef} value={nome} maxLength={90} aria-invalid={Boolean(errosEtapa.nome)}
                 placeholder="Ex.: Essencial, Plus ou Proteção Total"
                 disabled={!podeConfigurar||ocupado}
-                onChange={e=>setNome(e.target.value)}
-                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();void salvarNome();}}}/>
+                onChange={e=>{setNome(e.target.value);setErrosEtapa(prev=>({...prev,nome:""}));}}
+                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();if(!plano)void salvarNome();}}}/>
+              {erroCampo("nome")}
             </label>
-            {plano&&<small className={styles.smallNote}>Renomear não altera as cotações antigas nem os arquivos cadastrados.</small>}
+            {plano&&<small className={styles.smallNote}>Alterar o nome não modifica as cotações anteriores.</small>}
+            {!plano
+              ?<div className={styles.planRegistrationPrompt}>
+                <ShieldCheck size={19}/>
+                <p>Salve o nome para liberar os campos de coberturas, participação e assistência nesta mesma etapa.</p>
+                <button type="button" className={styles.secondary} disabled={ocupado||!podeConfigurar}
+                  onClick={()=>void salvarNome()}><Save size={16}/> Salvar nome e configurar regras</button>
+              </div>
+              :<>
+                <label className={styles.planWizardField}>Categoria de veículos
+                  <select value={categoria} disabled={ocupado} onChange={e=>onCategoria(e.target.value as CategoriaCotacao)}>
+                    {Object.entries(CATEGORIAS_COTACAO).map(([c,titulo])=><option key={c} value={c}>{titulo}</option>)}
+                  </select>
+                </label>
+                {plano.ativo?<div className={styles.planWizardEmbedded}>
+                  <ConfiguracaoComercialEditor ref={editorRef} categoria={categoria} planos={planosDoModal}
+                    regras={regrasDoPlano}
+                    opcionais={opcionaisDoPlano}
+                    podeConfigurar={podeConfigurar} onSaved={onUpdated}/>
+                </div>:<p className={styles.smallNote}>Ative este plano para continuar a configuração.</p>}
+              </>}
           </div>}
           {modal.passo===2&&plano&&<div className={styles.planStepContent}>
-            <span className={styles.planStepEyebrow}>02 / CONFIGURAÇÃO</span>
-            <h3>Regras e coberturas</h3>
-            <p>Selecione uma categoria para começar. Se as regras forem iguais para outros veículos, marque as categorias adicionais ao final do formulário e salve tudo de uma vez.</p>
-            <label className={styles.planWizardField}>Categoria de veículos
-              <select value={categoria} disabled={ocupado} onChange={e=>
-                onCategoria(e.target.value as CategoriaCotacao)}>
-                {Object.entries(CATEGORIAS_COTACAO).map(([c,titulo])=>
-                  <option key={c} value={c}>{titulo}</option>)}
-              </select>
-            </label>
-            {plano.ativo?<div className={styles.planWizardEmbedded}>
-              <ConfiguracaoComercialEditor categoria={categoria} planos={[plano]}
-                regras={regras.filter(r=>r.plano===plano.codigo)}
-                opcionais={opcionais.filter(o=>o.plano===plano.codigo)}
-                podeConfigurar={podeConfigurar} onSaved={onUpdated}/>
-            </div>:<p className={styles.smallNote}>Ative o plano para continuar a configuração.</p>}
-          </div>}
-          {modal.passo===3&&plano&&<div className={styles.planStepContent}>
-            <span className={styles.planStepEyebrow}>03 / TABELAS E VALORES</span>
+            <span className={styles.planStepEyebrow}>02 / ARQUIVOS E VALORES</span>
             <h3>Arquivos e mensalidades</h3>
             <p>Importe os preços deste plano e, se necessário, sua lista de veículos especiais. Os demais planos não são alterados.</p>
             <div className={styles.planUploadGrid}>
               {(["precos","especiais"] as const).map(tipo=>{
                 const atual=tipo==="precos"?meta?.arquivo_precos_nome:meta?.arquivo_especiais_nome;
                 const data=tipo==="precos"?meta?.arquivo_precos_em:meta?.arquivo_especiais_em;
-                return <div className={styles.planUploadCard} key={tipo}>
+                return <div data-required-error={tipo==="precos"&&Boolean(errosEtapa.tabela)?"true":undefined}
+                  key={tipo+"-"+(tipo==="precos"&&errosEtapa.tabela?tentativa:0)}
+                  className={styles.planUploadCard+" "+(tipo==="precos"&&errosEtapa.tabela?styles.requiredFieldInvalid:"")}>
                   <div className={styles.planUploadIcon}>{tipo==="precos"?<FileSpreadsheet size={22}/>:<CarFront size={22}/>}</div>
-                  <h4>{tipo==="precos"?"Tabela de preços":"Veículos especiais"}</h4>
+                  <h4>{tipo==="precos"?"Tabela de preços *":"Veículos especiais"}</h4>
+                  {tipo==="precos"&&erroCampo("tabela")}
                   <p>{tipo==="precos"?"Faixas FIPE, códigos e valores de mensalidade.":"Modelos e versões especiais aceitos pelo plano."}</p>
                   {atual&&<div className={styles.importedFile}>
                     <FileSpreadsheet size={17}/><div><strong>{atual}</strong>
@@ -365,16 +450,19 @@ export default function PlanosCotacao({
               <button className={styles.planDeleteConfirm} type="button" disabled={ocupado}
                 onClick={()=>void confirmarRemocaoArquivo()}>Remover</button>
             </div>}
-            <div className={styles.planValidity}>
-              <label>Referência da tabela
-                <input value={referencia} maxLength={160} disabled={!podeConfigurar||!plano.ativo}
-                  onChange={e=>setReferencia(e.target.value)} placeholder={"Tabela comercial de "+plano.nome}/></label>
-              <label>Válida até
-                <input value={vigencia} type="date" disabled={!podeConfigurar||!plano.ativo}
-                  onChange={e=>setVigencia(e.target.value)}/></label>
+            <div className={styles.planValidity+" "+(errosEtapa.vigencia?styles.requiredFieldInvalid:"")}
+              key={"validade-"+(errosEtapa.vigencia?tentativa:0)} data-required-error={errosEtapa.vigencia?"true":undefined}>
+              <label>Validade dos preços <span className={styles.requiredAsterisk}>*</span>
+                <input ref={dataRef} value={vigencia} type="date" min={hoje}
+                  aria-invalid={Boolean(errosEtapa.vigencia)}
+                  disabled={!podeConfigurar||!plano.ativo}
+                  onChange={e=>{setVigencia(e.target.value);setErrosEtapa(prev=>({...prev,vigencia:""}));}}/>
+                {erroCampo("vigencia")}
+              </label>
               <button type="button" className={styles.secondary}
                 disabled={!podeConfigurar||!plano.ativo||ocupado||!meta?.arquivo_precos_nome}
                 onClick={()=>void salvarValores("vigencia")}><CalendarDays size={16}/> Salvar validade</button>
+              <small>O nome da tabela é identificado automaticamente pelo arquivo importado.</small>
             </div>
             <div className={styles.planPrices}>
               <h4>Valores por faixa FIPE</h4>
@@ -394,9 +482,9 @@ export default function PlanosCotacao({
                       onClick={()=>{setPrecoEditando(f);setNovoPreco((Number(f.valor_centavos)/100).toFixed(2));}}>Editar</button></td>
                   </tr>)}</tbody>
                 </table></div>}
-              {precoEditando&&<div className={styles.planPriceEditor}>
+              {precoEditando&&<div className={styles.planPriceEditor+" "+(errosEtapa.preco?styles.requiredFieldInvalid:"")} key={"preco-"+(errosEtapa.preco?tentativa:0)}>
                 <label>Nova mensalidade (R$)
-                  <input inputMode="decimal" value={novoPreco} onChange={e=>setNovoPreco(e.target.value)}/></label>
+                  <input inputMode="decimal" aria-invalid={Boolean(errosEtapa.preco)} value={novoPreco} onChange={e=>{setNovoPreco(e.target.value);setErrosEtapa(prev=>({...prev,preco:""}));}}/>{erroCampo("preco")}</label>
                 <button type="button" className={styles.secondary} onClick={()=>setPrecoEditando(null)}>Cancelar</button>
                 <button type="button" className={styles.primary} disabled={ocupado}
                   onClick={()=>void salvarValores("preco")}><Save size={15}/> Salvar preço</button>
@@ -405,20 +493,19 @@ export default function PlanosCotacao({
           </div>}
         </div>
         <footer className={styles.planWizardFooter}>
-          <span>{modal.passo===1?"Preencha o nome para avançar.":modal.passo===2?"Salve a categoria atual e, se desejar, copie para outras.":"Dados salvos por plano, sem afetar outros."}</span>
+          <span>{modal.passo===1?"Preencha o nome e as regras obrigatórias antes de avançar.":"Importe a tabela de preços e defina a validade para concluir."}</span>
           <div className={styles.planWizardFooterActions}>
-            {modal.passo>1&&<button type="button" className={styles.secondary}
-              disabled={ocupado} onClick={()=>proximaEtapa(modal.passo===3?2:1)}>
+            {modal.passo===2&&<button type="button" className={styles.secondary}
+              disabled={ocupado} onClick={()=>setModal(v=>v?{...v,passo:1}:null)}>
               <ArrowLeft size={16}/> Voltar</button>}
             {modal.passo===1
-              ?<button type="button" className={styles.primary}
-                disabled={ocupado||!podeConfigurar||nome.trim().length<2}
-                onClick={()=>void salvarNome()}>{ocupado?<Loader2 size={16}/>:<Save size={16}/>} Salvar e continuar</button>
-              :modal.passo===2
-                ?<button type="button" className={styles.primary} disabled={ocupado}
-                  onClick={()=>proximaEtapa(3)}>Arquivos e valores <ArrowRight size={16}/></button>
-                :<button type="button" className={styles.primary} disabled={ocupado}
-                  onClick={fechar}><CheckCircle2 size={17}/> Concluir</button>}
+              ?<button type="button" className={styles.primary} disabled={ocupado||!podeConfigurar}
+                onClick={()=>void avancarParaArquivos()}>
+                {ocupado?<Loader2 size={16}/>:<ArrowRight size={16}/>}
+                {modal.codigo?"Salvar regras e avançar":"Criar plano e configurar"}
+              </button>
+              :<button type="button" className={styles.primary} disabled={ocupado||!podeConfigurar}
+                onClick={()=>void concluirCadastro()}><CheckCircle2 size={17}/> Concluir</button>}
           </div>
         </footer>
       </section>
