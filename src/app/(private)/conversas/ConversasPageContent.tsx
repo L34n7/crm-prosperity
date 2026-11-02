@@ -11846,17 +11846,25 @@ const templateFooterTexto = useMemo(() => {
                                         </p>
                                       )}
                                       <div className={styles.listPanelCardFooter}>
-                                        <label className={styles.listPanelCheckbox}>
-                                          <input type="checkbox" checked={lista.exibir_atalho_conversas}
+                                        <label className={styles.listPanelSwitch}>
+                                          <input className={styles.listPanelSwitchInput} type="checkbox" role="switch"
+                                            checked={lista.exibir_atalho_conversas}
                                             disabled={atualizandoListas}
                                             onChange={() => void alternarAtalhoLista(lista)} />
-                                          Exibir atalho
+                                          <span className={styles.listPanelSwitchTrack} aria-hidden="true">
+                                            <span className={styles.listPanelSwitchThumb} />
+                                          </span>
+                                          <span className={styles.listPanelSwitchLabel}>Exibir atalho</span>
                                         </label>
-                                        <label className={styles.listPanelCheckbox}>
-                                          <input type="checkbox" checked={lista.marcada}
+                                        <label className={styles.listPanelSwitch}>
+                                          <input className={styles.listPanelSwitchInput} type="checkbox" role="switch"
+                                            checked={lista.marcada}
                                             disabled={atualizandoListas || !conversaSelecionada?.id}
                                             onChange={() => void alternarListaNaConversa(lista, lista.marcada)} />
-                                          Nesta conversa
+                                          <span className={styles.listPanelSwitchTrack} aria-hidden="true">
+                                            <span className={styles.listPanelSwitchThumb} />
+                                          </span>
+                                          <span className={styles.listPanelSwitchLabel}>Nesta conversa</span>
                                         </label>
                                         <div className={styles.listPanelPriority}>
                                           <button type="button" className={styles.listPanelOrderButton}
