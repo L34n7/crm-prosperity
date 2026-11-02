@@ -3,37 +3,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck, Calculator, CarFront, CheckCircle2, CircleAlert, ClipboardList,
-  Copy, Download, FileSpreadsheet, Loader2, Save, Settings2, ShieldCheck, UploadCloud, X,
+  Copy, Download, FileSpreadsheet, Loader2, Save, Settings2, ShieldCheck, UploadCloud, X, Trash2,
 } from "lucide-react";
 import Header from "@/components/Header";
 import {
   CATEGORIAS_COTACAO,
-  type CategoriaCotacao, type PlanoCotacao,
+  type CategoriaCotacao, type PlanoCotacao, type PlanoEmpresa,
 } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO, USOS_VEICULO, type UsoVeiculo, type EnergiaVeiculo, type RegraComercialPlano, type OpcionalComercial } from "@/lib/cotacoes-veiculares/comercial";
 import ConfiguracaoComercialEditor from "./ConfiguracaoComercialEditor";
+import PlanosManager from "./PlanosManager";
 import styles from "./page.module.css";
 
 type Faixa = {
   categoria: string; fipe_min_centavos: number; fipe_max_centavos: number;
-  premium_centavos: number; completo_centavos: number; revisar: boolean;
+  plano:string;valor_centavos:number;codigo_produto:string;
 };
 type Config = {
-  tabela_validada:boolean; ia_habilitada:boolean; tabela_importada:boolean;
+  tabela_importada:boolean;arquivo_precos_nome:string|null;arquivo_precos_em:string|null;arquivo_especiais_nome:string|null;arquivo_especiais_em:string|null;
   modelos_importados:boolean; referencia:string; vigencia_ate:string|null;
 };
 type Calculo = {
-  codigo_produto:string; mensalidade_base_centavos:number; total_centavos:number;
+  plano:string;plano_nome:string;codigo_produto:string; mensalidade_base_centavos:number; total_centavos:number;
   cota_participacao_centavos:number; tabela_validada:boolean; referencia:string;
   assistencia_km_total:number; assistencias_ano:number; terceiros_limite_centavos:number;
   participacao_percentual:number; carro_reserva_incluso_dias:number;
   coberturas:string[]; observacoes:string;
   opcionais:Array<{codigo:string;nome:string;centavos:number}>;
 };
-type Calculos = Record<PlanoCotacao,Calculo>;
+type Calculos = {planos:Calculo[]};
 type Cotacao = {
   id:string; grupo_id:string|null; nome_contato:string|null; veiculo:string;
-  categoria:string; plano:PlanoCotacao; status:string; origem:string;
+  categoria:string; plano:PlanoCotacao; plano_nome:string|null;status:string; origem:string;
   total_centavos:number; created_at:string; tabela_validada:boolean;
 };
 type Status = {pronta:boolean;pendencias:string[];categorias:CategoriaCotacao[];faixas:number;regras:number};
@@ -45,7 +46,6 @@ type DetalheFipe = {
 };
 type ImportacaoPendente = {tipo:"precos"|"especiais";arquivo:File};
 
-const planos:PlanoCotacao[]=["premium","completo"];
 const moeda=(n:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n/100);
 const formatoNumerico=(n:number)=>new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n/100);
 const dataHora=(s:string)=>new Date(s).toLocaleString("pt-BR");
@@ -58,7 +58,6 @@ const valorDeMoeda=(valor:string)=>{
   return Number.isFinite(n)?Math.round(n*100):0;
 };
 const categorias=Object.entries(CATEGORIAS_COTACAO) as Array<[CategoriaCotacao,string]>;
-const rotuloPlano=(plano:PlanoCotacao)=>plano==="premium"?"Premium":"Completo";
 
 export default function CotacoesVeicularesPage() {
   const [aba,setAba]=useState<"nova"|"tabela"|"historico">("nova");
@@ -70,12 +69,13 @@ export default function CotacoesVeicularesPage() {
   const [anoModelo,setAnoModelo]=useState("");
   const [valorFipe,setValorFipe]=useState("");
   const [referenciaFipe,setReferenciaFipe]=useState("");
-  const [opcionaisPorPlano,setOpcionaisPorPlano]=useState<Record<PlanoCotacao,string[]>>({premium:[],completo:[]});
+  const [opcionaisPorPlano,setOpcionaisPorPlano]=useState<Record<string,string[]>>({});
   const [config,setConfig]=useState<Config>({
-    tabela_validada:false,ia_habilitada:false,tabela_importada:false,
-    modelos_importados:false,referencia:"Tabela Save Car jan/2024 — pendente de confirmação",vigencia_ate:null,
+    tabela_importada:false,modelos_importados:false,referencia:"",vigencia_ate:null,
+    arquivo_precos_nome:null,arquivo_precos_em:null,arquivo_especiais_nome:null,arquivo_especiais_em:null,
   });
   const [faixas,setFaixas]=useState<Faixa[]>([]);
+  const [planos,setPlanos]=useState<PlanoEmpresa[]>([]);
   const [status,setStatus]=useState<Status>({pronta:false,pendencias:[],categorias:[],faixas:0,regras:0});
   const [regras,setRegras]=useState<RegraBanco[]>([]);
   const [catalogoExtras,setCatalogoExtras]=useState<OpcionalBanco[]>([]);
@@ -90,8 +90,7 @@ export default function CotacoesVeicularesPage() {
   const [carregando,setCarregando]=useState(true);
   const [ocupado,setOcupado]=useState(false);
   const [editando,setEditando]=useState<Faixa|null>(null);
-  const [precoPremium,setPrecoPremium]=useState("");
-  const [precoCompleto,setPrecoCompleto]=useState("");
+  const [novoPreco,setNovoPreco]=useState("");
   const [marcas,setMarcas]=useState<Opcao[]>([]);
   const [modelos,setModelos]=useState<Opcao[]>([]);
   const [anos,setAnos]=useState<Opcao[]>([]);
@@ -101,6 +100,7 @@ export default function CotacoesVeicularesPage() {
   const [buscandoFipe,setBuscandoFipe]=useState(false);
   const [carregandoMarcas,setCarregandoMarcas]=useState(false);
   const [importacao,setImportacao]=useState<ImportacaoPendente|null>(null);
+  const [remocao,setRemocao]=useState<"precos"|"especiais"|null>(null);
   const inputPrecosRef=useRef<HTMLInputElement>(null);
   const inputEspeciaisRef=useRef<HTMLInputElement>(null);
 
@@ -113,7 +113,7 @@ export default function CotacoesVeicularesPage() {
       const res=await fetch("/api/cotacoes-veiculares?categoria="+categoria,{cache:"no-store"});
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Erro ao carregar cotações.");
-      setConfig(json.config);setFaixas(json.faixas||[]);setStatus(json.status);
+      setConfig(json.config);setFaixas(json.faixas||[]);setStatus(json.status);setPlanos(json.planos||[]);
       setCotacoes(json.cotacoes||[]);setModelosTotal(Number(json.modelos_especiais_total||0));
       setPodeGerenciar(Boolean(json.pode_gerenciar));setPodeConfigurar(Boolean(json.pode_configurar));
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao carregar.");}
@@ -129,7 +129,7 @@ export default function CotacoesVeicularesPage() {
   async function atualizarTudo(){await Promise.all([atualizar(),carregarComercial()]);}
   useEffect(()=>{void atualizar();},[atualizar]);
   useEffect(()=>{setCalculos(null);setCotacaoSalva(null);},[categoria,valorFipe,opcionaisPorPlano,uso,energia]);
-  useEffect(()=>{setOpcionaisPorPlano({premium:[],completo:[]});},[categoria]);
+  useEffect(()=>{setOpcionaisPorPlano({});},[categoria]);
 
   const consultarApiFipe=useCallback(async(etapa:string,params:Record<string,string>={})=>{
     const query=new URLSearchParams({tipo:tipoFipe,etapa,...params});
@@ -187,8 +187,8 @@ export default function CotacoesVeicularesPage() {
       if(acao==="salvar"){
         setCalculos(json.calculos);setCotacaoSalva(json.grupo_id);
         setSucesso(json.cotacoes?.[0]?.status==="rascunho"
-          ?"Premium e Completo salvos como rascunho até a validação comercial."
-          :"Cotação com os dois planos registrada no histórico.");
+          ?"Proposta salva em rascunho até a validação comercial."
+          :"Cotação de todos os planos registrada no histórico.");
         await atualizar();
       }
       if(acao==="preco"){
@@ -206,43 +206,42 @@ export default function CotacoesVeicularesPage() {
       opcionais_por_plano:opcionaisPorPlano,
     };
   }
-  function alternarOpcional(plano:PlanoCotacao,codigo:string,ativado:boolean){
+  function alternarOpcional(plano:string,codigo:string,ativado:boolean){
     setOpcionaisPorPlano(atual=>{
-      const selecionados=atual[plano].filter(item=>item!==codigo);
-      const semAlternativo=ativado && codigo.startsWith("carro_reserva_")
-        ?selecionados.filter(item=>!item.startsWith("carro_reserva_")):selecionados;
-      return {...atual,[plano]:ativado?[...semAlternativo,codigo]:semAlternativo};
+      const selecionados=(atual[plano]||[]).filter(v=>v!==codigo);
+      const extra=catalogoExtras.find(v=>v.plano===plano&&v.codigo===codigo);
+      const semExclusivos=ativado&&extra?.grupo_exclusivo
+        ?selecionados.filter(v=>catalogoExtras.find(e=>e.plano===plano&&e.codigo===v)?.grupo_exclusivo!==extra.grupo_exclusivo)
+        :selecionados;
+      return {...atual,[plano]:ativado?[...semExclusivos,codigo]:semExclusivos};
     });
   }
   async function copiarResumo(){
     if(!calculos)return;
     const linhas=[
-      "COTAÇÃO DE PROTEÇÃO VEICULAR",veiculo ? "Veículo: "+veiculo : "",
+      "COTAÇÃO DE PROTEÇÃO VEICULAR",
+      veiculo?"Veículo: "+veiculo:"",
       anoModelo?"Ano: "+anoModelo:"",
       "Categoria: "+CATEGORIAS_COTACAO[categoria],
-      "Uso: "+USOS_VEICULO[uso], "Motorização: "+ENERGIAS_VEICULO[energia],
+      "Uso: "+USOS_VEICULO[uso],"Motorização: "+ENERGIAS_VEICULO[energia],
       valorFipe?"Valor FIPE: R$ "+valorFipe:"",
-      ...planos.flatMap(plano=>{
-        const c=calculos[plano];
-        return [
-          "", "PLANO "+rotuloPlano(plano).toUpperCase(),
-          "Mensalidade: "+moeda(c.total_centavos),
-          "Cota de participação: "+moeda(c.cota_participacao_centavos),
-          "Terceiros: "+(c.terceiros_limite_centavos?moeda(c.terceiros_limite_centavos):"Não disponível"),
-          "Assistência 24h: "+c.assistencia_km_total+" km totais",
-          ...c.coberturas.map(item=>"Cobertura: "+item),
-          ...(c.observacoes?["Condições: "+c.observacoes]:[]),
-          ...c.opcionais.map(item=>"Opcional: "+item.nome),
-        ];
-      }),
-      "", "Tabela: "+calculos.premium.referencia,
+      ...calculos.planos.flatMap(c=>[
+        "", "PLANO "+c.plano_nome.toUpperCase(),
+        "Mensalidade: "+moeda(c.total_centavos),
+        "Cota de participação: "+moeda(c.cota_participacao_centavos),
+        "Terceiros: "+(c.terceiros_limite_centavos?moeda(c.terceiros_limite_centavos):"Não disponível"),
+        "Assistência: "+c.assistencia_km_total+" km totais",
+        ...c.coberturas.map(item=>"Cobertura: "+item),
+        ...(c.observacoes?["Condições: "+c.observacoes]:[]),
+        ...c.opcionais.map(item=>"Opcional: "+item.nome),
+      ]),
+      "", "Tabela: "+calculos.planos[0]?.referencia,
       "Proposta informativa, sujeita às condições comerciais da associação.",
-      !calculos.premium.tabela_validada?"RASCUNHO — VALIDAÇÃO COMERCIAL PENDENTE":"",
+      !calculos.planos[0]?.tabela_validada?"RASCUNHO — VALIDAÇÃO COMERCIAL PENDENTE":"",
     ].filter(Boolean).join("\n");
-    try{await navigator.clipboard.writeText(linhas);setSucesso("Resumo com os dois planos copiado.");}
-    catch{setErro("Não foi possível copiar o resumo neste navegador.");}
+    try{await navigator.clipboard.writeText(linhas);setSucesso("Comparativo copiado.");}
+    catch{setErro("Não foi possível copiar no navegador.");}
   }
-
   async function salvarVigencia(){
     setOcupado(true);setErro("");setSucesso("");
     try{
@@ -274,8 +273,20 @@ export default function CotacoesVeicularesPage() {
       if(!response.ok||!json.ok)throw new Error(json.error||"Não foi possível importar o arquivo.");
       setImportacao(null);
       await atualizarTudo();
-      setSucesso(String(json.total)+" registros importados com sucesso. "+json.aviso);
+      setSucesso(String(json.total)+" registros importados de "+json.arquivo+".");
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao importar arquivo.");}
+    finally{setOcupado(false);}
+  }
+  async function excluirArquivo(){
+    if(!remocao)return;
+    setOcupado(true);setErro("");
+    try{
+      const res=await fetch("/api/cotacoes-veiculares/importar?tipo="+remocao,{method:"DELETE"});
+      const json=await res.json();
+      if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao remover arquivo.");
+      setRemocao(null);await atualizarTudo();
+      setSucesso("Arquivo desvinculado e respectivos dados removidos da configuração.");
+    }catch(e){setErro(e instanceof Error?e.message:"Falha ao remover.");}
     finally{setOcupado(false);}
   }
   const historico=useMemo(()=>{
@@ -296,14 +307,14 @@ export default function CotacoesVeicularesPage() {
         <div className={styles.heroText}>
           <span className={styles.eyebrow}>Seguro Veicular</span>
           <h1>Cotação de proteção veicular</h1>
-          <p>Uma simulação com os dois planos, calculados pelas faixas FIPE da empresa.</p>
+          <p>Compare automaticamente todos os planos cadastrados pela sua empresa.</p>
         </div>
         <div className={styles.heroStatus}>{status.pronta
           ?<><BadgeCheck size={16}/> Configuração pronta</>
           :<><CircleAlert size={16}/> Configuração incompleta</>}</div>
       </section>
       {alertaTabela&&<div className={styles.warning}><CircleAlert size={20}/>
-        <span>Importe preços vigentes e configure as regras dos dois planos. A ferramenta de cotação ficará disponível nas configurações do agente quando tudo estiver completo.</span>
+        <span>Cadastre seus planos, importe os preços e configure as coberturas para liberar a ferramenta no agente IA.</span>
       </div>}
       {erro&&<div className={styles.error} role="alert">{erro}</div>}
       {sucesso&&<div className={styles.success} role="status">{sucesso}</div>}
@@ -318,7 +329,7 @@ export default function CotacoesVeicularesPage() {
       {!carregando&&aba==="nova"&&<div className={styles.layout}>
         <section className={styles.panel}>
           <div className={styles.sectionHeading}><h2>Dados do veículo</h2>
-            <p>Preencha os dados uma única vez. O sistema apresentará Premium e Completo.</p>
+            <p>Preencha uma vez para comparar todos os planos cadastrados.</p>
           </div>
           <div className={styles.fields}>
             <label>Categoria de proteção
@@ -376,41 +387,40 @@ export default function CotacoesVeicularesPage() {
 
           <div className={styles.options}>
             <h3>Opcionais por plano</h3>
-            <p className={styles.smallNote}>Escolha os opcionais que deseja comparar em cada plano. Ambos são calculados juntos.</p>
+            <p className={styles.smallNote}>Os opcionais disponíveis são os cadastrados pela sua empresa. Todos os planos serão calculados.</p>
             <div className={styles.optionsGrid}>
-              {planos.map(plano=><div key={plano} className={styles.optionsGroup}>
-                <strong>{rotuloPlano(plano)}</strong>
-                {catalogoExtras.filter(extra=>extra.plano===plano && extra.ativo).map(extra=>
+              {planos.filter(p=>p.ativo).map(plano=><div key={plano.codigo} className={styles.optionsGroup}>
+                <strong>{plano.nome}</strong>
+                {catalogoExtras.filter(extra=>extra.plano===plano.codigo && extra.ativo).map(extra=>
                   <label key={extra.codigo} className={styles.option}>
-                    <input type="checkbox" checked={opcionaisPorPlano[plano].includes(extra.codigo)}
-                      onChange={e=>alternarOpcional(plano,extra.codigo,e.target.checked)}/>
+                    <input type="checkbox" checked={(opcionaisPorPlano[plano.codigo]||[]).includes(extra.codigo)}
+                      onChange={e=>alternarOpcional(plano.codigo,extra.codigo,e.target.checked)}/>
                     <span>{extra.nome}</span><b>+ {moeda(extra.valor_centavos)}/mês</b>
                   </label>
                 )}
-                {!catalogoExtras.some(extra=>extra.plano===plano&&extra.ativo)&&<p>Nenhum opcional cadastrado para este plano.</p>}
+                {!catalogoExtras.some(extra=>extra.plano===plano.codigo&&extra.ativo)&&<p>Nenhum opcional cadastrado para este plano.</p>}
               </div>)}
             </div>
           </div>
           <div className={styles.actions}>
             <button type="button" className={styles.secondary} disabled={ocupado||!podeGerenciar}
-              onClick={()=>void enviar("simular",dadosCotacao())}><Calculator size={17}/> Simular os dois planos</button>
+              onClick={()=>void enviar("simular",dadosCotacao())}><Calculator size={17}/> Simular todos os planos</button>
             <button type="button" className={styles.primary} disabled={ocupado||!podeGerenciar||!calculos}
               onClick={()=>void enviar("salvar",dadosCotacao())}><Save size={17}/> Salvar cotação</button>
           </div>
         </section>
         <aside className={styles.panel}>
           <div className={styles.sectionHeading}><h2>Comparativo de planos</h2>
-            <p>O resultado é calculado no servidor e será salvo como uma única proposta.</p>
+            <p>O sistema calcula os preços de todos os seus planos.</p>
           </div>
           {!calculos?<div className={styles.empty}><ShieldCheck size={34}/>
             <strong>Pronto para comparar</strong>
             <p>Preencha o valor FIPE e clique em Simular para ver Premium e Completo juntos.</p>
           </div>:<>
             <div className={styles.comparison}>
-              {planos.map(plano=>{
-                const c=calculos[plano];
-                return <div key={plano} className={styles.planCard}>
-                  <span className={styles.planName}>Plano {rotuloPlano(plano)}</span>
+              {calculos.planos.map(c=>{
+                return <div key={c.plano} className={styles.planCard}>
+                  <span className={styles.planName}>{c.plano_nome}</span>
                   <strong className={styles.planPrice}>{moeda(c.total_centavos)}<small> / mês</small></strong>
                   <dl className={styles.detail}>
                     <div><dt>Mensalidade base</dt><dd>{moeda(c.mensalidade_base_centavos)}</dd></div>
@@ -427,11 +437,11 @@ export default function CotacoesVeicularesPage() {
               })}
             </div>
             <p className={styles.footnote}>Valores informativos. A cota de participação não integra a mensalidade.</p>
-            <span className={calculos.premium.tabela_validada?styles.goodStatus:styles.pendingStatus}>
-              {calculos.premium.tabela_validada?"Tabela validada":"Rascunho — validação comercial pendente"}
+            <span className={calculos.planos[0]?.tabela_validada?styles.goodStatus:styles.pendingStatus}>
+              {calculos.planos[0]?.tabela_validada?"Tabela validada":"Rascunho — validação comercial pendente"}
             </span>
             <div className={styles.actions}>
-              <button type="button" className={styles.secondary} onClick={()=>void copiarResumo()}><Copy size={16}/> Copiar os dois planos</button>
+              <button type="button" className={styles.secondary} onClick={()=>void copiarResumo()}><Copy size={16}/> Copiar comparativo</button>
             </div>
             {cotacaoSalva&&<p className={styles.saved}>Cotação salva: {cotacaoSalva.slice(0,8).toUpperCase()}</p>}
           </>}
@@ -439,9 +449,10 @@ export default function CotacoesVeicularesPage() {
       </div>}
 
       {!carregando&&aba==="tabela"&&<div className={styles.stack}>
+        <PlanosManager planos={planos} podeConfigurar={podeConfigurar} onSaved={atualizarTudo}/>
         <section className={styles.panel}>
-          <div className={styles.sectionHeading}><h2>Configuração comercial</h2>
-            <p>Cadastre os preços e regras da empresa. Quando a configuração estiver completa, a ferramenta poderá ser ativada em Agentes IA.</p>
+          <div className={styles.sectionHeading}><h2>Referência e validade dos preços</h2>
+            <p>Depois de criar planos e importar seus preços, informe o nome e a validade comercial da tabela. A liberação no agente IA é automática quando tudo estiver preenchido.</p>
           </div>
           <div className={styles.fields}>
             <label>Referência da tabela
@@ -472,8 +483,14 @@ export default function CotacoesVeicularesPage() {
             <div className={styles.importCard}>
               <div className={styles.importIcon}><FileSpreadsheet size={22}/></div>
               <h3>Tabela de preços</h3>
-              <p>Importe faixas FIPE, códigos e mensalidades Premium e Completo.</p>
-              <div className={styles.importMeta}>{config.tabela_importada?"Tabela própria importada":"Tabela inicial de referência"}</div>
+              <p>Importe preços por plano e faixa FIPE. Crie os planos primeiro.</p>
+              <div className={styles.importMeta}>{config.tabela_importada?"Tabela de preços cadastrada":"Nenhuma tabela importada"}</div>
+              {config.tabela_importada&&<div className={styles.importedFile}>
+                <FileSpreadsheet size={18}/><div><strong>{config.arquivo_precos_nome||"Tabela anterior (nome não registrado)"}</strong>
+                {config.arquivo_precos_em&&<small>Importada em {dataHora(config.arquivo_precos_em)}</small>}</div>
+                <button type="button" disabled={!podeConfigurar||ocupado} aria-label="Remover tabela importada"
+                  onClick={()=>setRemocao("precos")}><X size={17}/></button>
+              </div>}
               <input className={styles.hiddenFile} type="file" ref={inputPrecosRef} accept=".xlsx"
                 onChange={e=>{const file=e.target.files?.[0];if(file)setImportacao({tipo:"precos",arquivo:file});e.target.value="";}}/>
               <div className={styles.importActions}>
@@ -487,6 +504,12 @@ export default function CotacoesVeicularesPage() {
               <h3>Veículos especiais</h3>
               <p>Importe os modelos e códigos FIPE considerados especiais pela empresa.</p>
               <div className={styles.importMeta}>{modelosTotal} modelo(s) na lista da empresa</div>
+              {config.modelos_importados&&<div className={styles.importedFile}>
+                <FileSpreadsheet size={18}/><div><strong>{config.arquivo_especiais_nome||"Lista anterior (nome não registrado)"}</strong>
+                {config.arquivo_especiais_em&&<small>Importada em {dataHora(config.arquivo_especiais_em)}</small>}</div>
+                <button type="button" disabled={!podeConfigurar||ocupado} aria-label="Remover veículos especiais importados"
+                  onClick={()=>setRemocao("especiais")}><X size={17}/></button>
+              </div>}
               <input className={styles.hiddenFile} type="file" ref={inputEspeciaisRef} accept=".xlsx"
                 onChange={e=>{const file=e.target.files?.[0];if(file)setImportacao({tipo:"especiais",arquivo:file});e.target.value="";}}/>
               <div className={styles.importActions}>
@@ -501,7 +524,7 @@ export default function CotacoesVeicularesPage() {
           </p>
           <p className={styles.smallNote}>Coberturas, participação, opcionais, assistência e elegibilidade são configurados individualmente por empresa.</p>
         </section>
-        <ConfiguracaoComercialEditor categoria={categoria} regras={regras}
+        <ConfiguracaoComercialEditor categoria={categoria} planos={planos} regras={regras}
           opcionais={catalogoExtras} podeConfigurar={podeConfigurar} onSaved={atualizarTudo}/>
         <section className={styles.panel}>
           <div className={styles.sectionHeading}><h2>Faixas FIPE por categoria</h2>
@@ -514,29 +537,29 @@ export default function CotacoesVeicularesPage() {
           </label>
           <p className={styles.scrollHint}>Deslize a tabela para os lados para ver todas as colunas.</p>
           <div className={styles.tableScroll}><table>
-            <thead><tr><th>Faixa FIPE</th><th>Premium</th><th>Completo</th><th>Conferência</th><th></th></tr></thead>
-            <tbody>{faixas.map(f=><tr key={f.fipe_min_centavos}>
+            <thead><tr><th>Faixa FIPE</th><th>Plano</th><th>Mensalidade</th><th>Código</th><th></th></tr></thead>
+            <tbody>{faixas.map(f=><tr key={f.plano+":"+f.fipe_min_centavos}>
               <td>{moeda(f.fipe_min_centavos)} – {moeda(f.fipe_max_centavos)}</td>
-              <td>{moeda(f.premium_centavos)}</td><td>{moeda(f.completo_centavos)}</td>
-              <td><span className={f.revisar?styles.pendingStatus:styles.goodStatus}>{f.revisar?"Revisar":"Sem alerta"}</span></td>
+              <td>{planos.find(p=>p.codigo===f.plano)?.nome||f.plano}</td>
+              <td>{moeda(f.valor_centavos)}</td><td>{f.codigo_produto}</td>
               <td><button type="button" className={styles.smallButton} disabled={!podeConfigurar}
-                onClick={()=>{setEditando(f);setPrecoPremium(formatoNumerico(f.premium_centavos));setPrecoCompleto(formatoNumerico(f.completo_centavos));}}>Editar</button></td>
+                onClick={()=>{setEditando(f);setNovoPreco(formatoNumerico(f.valor_centavos));}}>Editar</button></td>
             </tr>)}</tbody>
           </table></div>
-          {faixas.length===0&&<p className={styles.smallNote}>Não há faixas cadastradas nesta categoria. Importe a tabela incluindo esta categoria para cotá-la.</p>}
+          {!faixas.length&&<p className={styles.smallNote}>Nenhum preço nesta categoria. Importe a tabela para começar.</p>}
         </section>
         {editando&&<section className={styles.panel}>
-          <h2>Editar faixa de {moeda(editando.fipe_min_centavos)} a {moeda(editando.fipe_max_centavos)}</h2>
-          <div className={styles.fields}>
-            <label>Premium (R$)<input value={precoPremium} onChange={e=>setPrecoPremium(e.target.value)}/></label>
-            <label>Completo (R$)<input value={precoCompleto} onChange={e=>setPrecoCompleto(e.target.value)}/></label>
-          </div>
+          <h2>Editar {planos.find(p=>p.codigo===editando.plano)?.nome||editando.plano}</h2>
+          <p className={styles.smallNote}>Faixa: {moeda(editando.fipe_min_centavos)} – {moeda(editando.fipe_max_centavos)}</p>
+          <div className={styles.fields}><label>Mensalidade (R$)
+            <input value={novoPreco} onChange={e=>setNovoPreco(e.target.value)}/></label></div>
           <div className={styles.actions}>
             <button type="button" className={styles.secondary} onClick={()=>setEditando(null)}>Cancelar</button>
-            <button type="button" className={styles.primary} disabled={ocupado} onClick={()=>void enviar("preco",{
-              categoria,fipe_min_centavos:editando.fipe_min_centavos,
-              premium_centavos:valorDeMoeda(precoPremium),completo_centavos:valorDeMoeda(precoCompleto),
-            })}>Salvar preços</button>
+            <button type="button" className={styles.primary} disabled={ocupado}
+              onClick={()=>void enviar("preco",{
+                categoria,plano:editando.plano,fipe_min_centavos:editando.fipe_min_centavos,
+                valor_centavos:valorDeMoeda(novoPreco),
+              })}>Salvar preço</button>
           </div>
         </section>}
       </div>}
@@ -553,16 +576,31 @@ export default function CotacoesVeicularesPage() {
               <span className={grupo.principal.status==="emitida"?styles.goodStatus:styles.pendingStatus}>
                 {grupo.principal.status==="emitida"?"Emitida":"Rascunho"}</span>
             </div>
-            <div className={styles.historyPlans}>{planos.map(plano=>{
-              const item=grupo.itens.find(i=>i.plano===plano);
-              return item?<div key={plano}><span>{rotuloPlano(plano)}</span><strong>{moeda(item.total_centavos)}/mês</strong></div>:null;
-            })}</div>
+            <div className={styles.historyPlans}>{grupo.itens.map(item=>
+              <div key={item.id}><span>{item.plano_nome||planos.find(p=>p.codigo===item.plano)?.nome||item.plano}</span>
+              <strong>{moeda(item.total_centavos)}/mês</strong></div>)}</div>
             <small className={styles.historySource}>{grupo.principal.origem==="agente_ia"?"Agente IA":"Cotação manual"}</small>
           </article>)}</div>}
       </section>}
       <footer className={styles.footer}><CheckCircle2 size={15}/> O cálculo é feito no servidor; a IA não inventa mensalidades nem confirma contratações.</footer>
     </main>
 
+    {remocao&&<div className={styles.importOverlay} role="presentation"
+      onClick={()=>!ocupado&&setRemocao(null)}>
+      <section className={styles.importModal} role="dialog" aria-modal="true"
+        aria-label="Confirmar remoção do arquivo" onClick={e=>e.stopPropagation()}>
+        <div className={styles.modalHeading}><span className={styles.importIcon}><Trash2 size={19}/></span>
+          <button type="button" disabled={ocupado} aria-label="Fechar" onClick={()=>setRemocao(null)}><X size={20}/></button></div>
+        <h2>Remover {remocao==="precos"?"tabela de preços":"lista de veículos especiais"}?</h2>
+        <p>Isso excluirá os dados desta importação para a empresa, sem apagar cotações anteriores.</p>
+        <p>Você poderá importar outro arquivo em seguida. A ferramenta da IA só funcionará com a configuração completa.</p>
+        <div className={styles.actions}>
+          <button type="button" className={styles.secondary} disabled={ocupado} onClick={()=>setRemocao(null)}>Cancelar</button>
+          <button type="button" className={styles.commercialRemove} disabled={ocupado}
+            onClick={()=>void excluirArquivo()}><Trash2 size={16}/> Remover arquivo</button>
+        </div>
+      </section>
+    </div>}
     {importacao&&<div className={styles.importOverlay} role="presentation" onClick={()=>!ocupado&&setImportacao(null)}>
       <section className={styles.importModal} role="dialog" aria-modal="true" aria-label="Confirmar importação" onClick={e=>e.stopPropagation()}>
         <div className={styles.modalHeading}>

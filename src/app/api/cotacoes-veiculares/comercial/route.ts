@@ -5,9 +5,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   categoriaValida, configuracaoCotacao,
 } from "@/lib/cotacoes-veiculares/servico";
-import { listarRegrasComerciais, statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { listarRegrasComerciais, listarPlanosEmpresa, statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import {
-  type OpcionalComercial, type RegraComercialPlano, validarRegraComercial,
+  regraVazia, type OpcionalComercial, type RegraComercialPlano, validarRegraComercial,
   USOS_VEICULO, ENERGIAS_VEICULO,
 } from "@/lib/cotacoes-veiculares/comercial";
 
@@ -59,10 +59,41 @@ export async function POST(req:Request) {
         empresa_id:auth.empresaId,referencia,vigencia_ate:vigencia,updated_at:new Date().toISOString(),
       },{onConflict:"empresa_id"});
       if(error)throw error;
+    }else if(acao==="adicionar_cobertura"||acao==="remover_cobertura"){
+      const categoria=String(body.categoria||"");
+      const plano=String(body.plano||"");
+      const cobertura=String(body.cobertura||"").trim().replace(/\s+/g," ");
+      if(!categoriaValida(categoria) ||
+        !(await listarPlanosEmpresa(auth.empresaId!,true)).some(p=>p.codigo===plano) ||
+        cobertura.length<2||cobertura.length>160)
+        throw new Error("Plano ou cobertura inválidos.");
+      const banco=getSupabaseAdmin();
+      const {data:atual,error:erroAtual}=await banco.from("cotacao_veicular_regras_empresa")
+        .select("*").eq("empresa_id",auth.empresaId).eq("categoria",categoria)
+        .eq("plano",plano).maybeSingle();
+      if(erroAtual)throw erroAtual;
+      const lista=Array.isArray(atual?.coberturas)?atual.coberturas as string[]:[];
+      const existe=lista.some(v=>v.toLowerCase()===cobertura.toLowerCase());
+      if(acao==="adicionar_cobertura"&&existe)throw new Error("Essa cobertura já está cadastrada.");
+      const proxima=acao==="adicionar_cobertura"?[...lista,cobertura]
+        :lista.filter(v=>v.toLowerCase()!==cobertura.toLowerCase());
+      if(proxima.length>30)throw new Error("Limite de 30 coberturas por plano.");
+      if(atual){
+        const {error}=await banco.from("cotacao_veicular_regras_empresa")
+          .update({coberturas:proxima,updated_at:new Date().toISOString()})
+          .eq("empresa_id",auth.empresaId).eq("categoria",categoria).eq("plano",plano);
+        if(error)throw error;
+      }else if(acao==="adicionar_cobertura"){
+        const base=regraVazia(categoria,plano);
+        const {error}=await banco.from("cotacao_veicular_regras_empresa").insert({
+          empresa_id:auth.empresaId,...base,coberturas:proxima,
+        });
+        if(error)throw error;
+      }
     }else if(acao==="regra"){
       const regra=body.regra as RegraComercialPlano;
       if(!regra||typeof regra!=="object"||!categoriaValida(regra.categoria)||
-         !["premium","completo"].includes(regra.plano))throw new Error("Categoria ou plano inválido.");
+         !(await listarPlanosEmpresa(auth.empresaId!,true)).some(plano=>plano.codigo===regra.plano))throw new Error("Categoria ou plano inválido.");
       if(!Array.isArray(body.opcionais))throw new Error("Lista de opcionais inválida.");
       const opcionais=body.opcionais as OpcionalComercial[];
       const erroValidacao=validarRegraComercial(regra,opcionais);

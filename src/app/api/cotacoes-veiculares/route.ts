@@ -2,128 +2,99 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
-import { USOS_VEICULO, ENERGIAS_VEICULO, type UsoVeiculo, type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
-import {
-  CATEGORIAS_COTACAO,
-  categoriaValida,
-  configuracaoCotacao,
-  consultarFaixas,
-  calcularCotacaoPlanos,
-  salvarCotacaoPlanos,
-} from "@/lib/cotacoes-veiculares/servico";
+import { listarPlanosEmpresa,statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { USOS_VEICULO,ENERGIAS_VEICULO,type UsoVeiculo,type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
+import { CATEGORIAS_COTACAO,categoriaValida,configuracaoCotacao,consultarFaixas,calcularCotacaoPlanos,salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 
-async function autenticar() {
-  const contexto = await getUsuarioContexto();
-  if (!contexto.ok) return { erro: NextResponse.json({ ok: false, error: contexto.error }, { status: contexto.status }) };
-  const empresaId = contexto.usuario.empresa_id;
-  if (!empresaId) return { erro: NextResponse.json({ ok: false, error: "Empresa não encontrada." }, { status: 403 }) };
-  const nicho = await buscarNichoEmpresa(empresaId);
-  if (nicho.codigo !== "seguro_veicular") return { erro: NextResponse.json({ ok: false, error: "Módulo exclusivo do nicho Seguro Veicular." }, { status: 403 }) };
-  const permissoes = contexto.usuario.permissoes || [];
-  const podeGerenciar = contexto.usuario.is_admin || permissoes.includes("cotacoes.gerenciar");
-  const podeVer = podeGerenciar || permissoes.includes("cotacoes.visualizar");
-  const podeConfigurar = contexto.usuario.is_admin || permissoes.includes("cotacoes.configurar");
-  if (!podeVer) return { erro: NextResponse.json({ ok: false, error: "Sem permissão para consultar cotações." }, { status: 403 }) };
-  return { empresaId, podeGerenciar, podeConfigurar };
+async function acesso(){
+ const ctx=await getUsuarioContexto();
+ if(!ctx.ok)return {erro:NextResponse.json({ok:false,error:ctx.error},{status:ctx.status})};
+ const empresaId=ctx.usuario.empresa_id;
+ if(!empresaId)return {erro:NextResponse.json({ok:false,error:"Empresa inválida."},{status:403})};
+ const nicho=await buscarNichoEmpresa(empresaId);
+ if(nicho.codigo!=="seguro_veicular")return {erro:NextResponse.json({ok:false,error:"Nicho não autorizado."},{status:403})};
+ const p=ctx.usuario.permissoes||[];
+ const podeConfigurar=ctx.usuario.is_admin||p.includes("cotacoes.configurar");
+ const podeGerenciar=ctx.usuario.is_admin||p.includes("cotacoes.gerenciar");
+ if(!podeConfigurar&&!podeGerenciar&&!p.includes("cotacoes.visualizar"))
+   return {erro:NextResponse.json({ok:false,error:"Sem permissão."},{status:403})};
+ return {empresaId,podeConfigurar,podeGerenciar};
 }
-function erro(e: unknown, status = 400) {
-  return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Erro ao processar cotação." }, { status });
+const erro=(e:unknown,status=400)=>NextResponse.json({ok:false,error:e instanceof Error?e.message:"Falha na cotação."},{status});
+function valorInteiro(v:unknown,nome:string,max=2000000000){
+ const n=Number(v);
+ if(!Number.isSafeInteger(n)||n<0||n>max)throw new Error(nome+" inválido.");
+ return n;
 }
-function inteiro(valor: unknown, nome: string, maximo = 2000000000) {
-  const n = Number(valor);
-  if (!Number.isSafeInteger(n) || n < 0 || n > maximo) throw new Error(nome + " inválido.");
-  return n;
+export async function GET(req:Request){
+ try{
+  const auth=await acesso();if(auth.erro)return auth.erro;
+  const categoria=new URL(req.url).searchParams.get("categoria")||"auto_leves";
+  if(!categoriaValida(categoria))throw new Error("Categoria inválida.");
+  const admin=getSupabaseAdmin();
+  const [config,planos,faixas,status,cot,especial]=await Promise.all([
+    configuracaoCotacao(auth.empresaId!),listarPlanosEmpresa(auth.empresaId!),
+    consultarFaixas(auth.empresaId!,categoria),statusConfiguracaoCotacao(auth.empresaId!),
+    admin.from("cotacao_veicular_cotacoes").select("*").eq("empresa_id",auth.empresaId!).order("created_at",{ascending:false}).limit(100),
+    admin.from("cotacao_veicular_modelos_empresa").select("modelo",{head:true,count:"exact"}).eq("empresa_id",auth.empresaId!),
+  ]);
+  if(cot.error||especial.error)throw new Error(cot.error?.message||especial.error?.message);
+  return NextResponse.json({ok:true,config,planos,faixas,status,cotacoes:cot.data||[],
+    modelos_especiais_total:especial.count||0,categorias:CATEGORIAS_COTACAO,
+    pode_configurar:auth.podeConfigurar,pode_gerenciar:auth.podeGerenciar});
+ }catch(e){console.error("[COTACAO_GET]",e);return erro(e,500);}
 }
-
-export async function GET(request: Request) {
-  try {
-    const acesso = await autenticar();
-    if (acesso.erro) return acesso.erro;
-    const empresaId = acesso.empresaId!;
-    const categoriaBruta = new URL(request.url).searchParams.get("categoria") || "auto_leves";
-    if (!categoriaValida(categoriaBruta)) return erro(new Error("Categoria inválida."));
-    const supabase = getSupabaseAdmin();
-    const [config, faixas, cotacoesResult, modelosResult, status] = await Promise.all([
-      configuracaoCotacao(empresaId), consultarFaixas(empresaId, categoriaBruta),
-      supabase.from("cotacao_veicular_cotacoes").select("*").eq("empresa_id",empresaId)
-        .order("created_at",{ascending:false}).limit(100),
-      supabase.from("cotacao_veicular_modelos_empresa").select("modelo,codigo_fipe",{count:"exact",head:true}).eq("empresa_id",empresaId),
-      statusConfiguracaoCotacao(empresaId),
-    ]);
-    if (cotacoesResult.error) throw cotacoesResult.error;
-    return NextResponse.json({
-      ok: true, config, status, faixas, cotacoes: cotacoesResult.data || [],
-      modelos_especiais_total: modelosResult.count || 0,
-      categorias: CATEGORIAS_COTACAO, pode_gerenciar: acesso.podeGerenciar, pode_configurar: acesso.podeConfigurar,
-    });
-  } catch (e) { console.error("[COTACOES_VEICULARES] GET",e); return erro(e,500); }
-}
-
-export async function POST(request: Request) {
-  try {
-    const acesso = await autenticar();
-    if (acesso.erro) return acesso.erro;
-    const empresaId = acesso.empresaId!;
-    const body = await request.json() as Record<string, unknown>;
-    const acao = String(body.acao || "");
-
-    if (acao === "preco") {
-      if (!acesso.podeConfigurar) return erro(new Error("Sem permissão para editar preços."),403);
-      if (!categoriaValida(body.categoria)) throw new Error("Categoria inválida.");
-      const minimo = inteiro(body.fipe_min_centavos,"Faixa FIPE");
-      const original = (await consultarFaixas(empresaId,body.categoria)).find(f=>Number(f.fipe_min_centavos)===minimo);
-      if(!original) throw new Error("Faixa FIPE não localizada na tabela atual da empresa.");
-      const premium = inteiro(body.premium_centavos,"Valor Premium",100000000);
-      const completo = inteiro(body.completo_centavos,"Valor Completo",100000000);
-      const { error } = await getSupabaseAdmin().from("cotacao_veicular_faixas").upsert({
-        empresa_id: empresaId, categoria: body.categoria,
-        fipe_min_centavos: minimo,
-        fipe_max_centavos: original.fipe_max_centavos,
-        codigo_premium: original.codigo_premium,
-        premium_centavos: premium,
-        codigo_completo: original.codigo_completo,
-        completo_centavos: completo,
-        revisar: false,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "empresa_id,categoria,fipe_min_centavos" });
-      if (error) throw error;
-      // Alterar o preço invalida aprovação anterior e desativa a cotação automática.
-      const { error: revogarErro } = await getSupabaseAdmin().from("cotacao_veicular_configuracoes")
-        .upsert({ empresa_id: empresaId, tabela_validada: false, ia_habilitada: false,
-          validada_em: null, updated_at: new Date().toISOString() },{onConflict:"empresa_id"});
-      if (revogarErro) throw revogarErro;
-      return NextResponse.json({ ok: true });
-    }
-
-    if (acao !== "simular" && acao !== "salvar") throw new Error("Operação inválida.");
-    if (!acesso.podeGerenciar) return erro(new Error("Sem permissão para gerar cotações."),403);
-    if (!categoriaValida(body.categoria)) throw new Error("Categoria inválida.");
-    const uso=String(body.uso||"") as UsoVeiculo;
-    const energia=String(body.energia||"") as EnergiaVeiculo;
-    if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
-      throw new Error("Selecione a finalidade de uso e o tipo de motorização.");
-    const valorFipeCentavos = inteiro(body.valor_fipe_centavos,"Valor FIPE");
-    const opcoes = body.opcionais_por_plano && typeof body.opcionais_por_plano === "object"
-      ? body.opcionais_por_plano as Record<string,unknown> : {};
-    const opcionaisPorPlano = {
-      premium: Array.isArray(opcoes.premium) ? opcoes.premium.map(String) : [],
-      completo: Array.isArray(opcoes.completo) ? opcoes.completo.map(String) : [],
-    };
-    const parametros = { empresaId, categoria: body.categoria, valorFipeCentavos,
-      uso,energia,opcionaisPorPlano, origem: "manual" as const };
-    if (acao === "simular") {
-      return NextResponse.json({ ok: true, calculos: await calcularCotacaoPlanos(parametros) });
-    }
-    const veiculo = String(body.veiculo || "").trim();
-    if (veiculo.length < 3) throw new Error("Informe marca e modelo do veículo.");
-    const ano = body.ano_modelo == null || body.ano_modelo === "" ? null : inteiro(body.ano_modelo,"Ano",32000);
-    if (ano !== null && ano < 1950) throw new Error("Ano do veículo inválido.");
-    const resultado = await salvarCotacaoPlanos({
-      ...parametros, veiculo, anoModelo: ano,
-      nomeContato: String(body.nome_contato || "").slice(0,160),
-      referenciaFipe: String(body.referencia_fipe || "").slice(0,100),
-    });
-    return NextResponse.json({ ok: true, ...resultado });
-  } catch (e) { console.error("[COTACOES_VEICULARES] POST",e); return erro(e); }
+export async function POST(req:Request){
+ try{
+  const auth=await acesso();if(auth.erro)return auth.erro;
+  const empresaId=auth.empresaId!;
+  const body=await req.json() as Record<string,unknown>;
+  const acao=String(body.acao||"");
+  if(acao==="preco"){
+    if(!auth.podeConfigurar)return erro(new Error("Sem permissão para editar preços."),403);
+    const categoria=body.categoria,plano=String(body.plano||"");
+    if(!categoriaValida(categoria))throw new Error("Categoria inválida.");
+    const min=valorInteiro(body.fipe_min_centavos,"FIPE");
+    const valor=valorInteiro(body.valor_centavos,"Preço",100000000);
+    if(valor<=0)throw new Error("Informe uma mensalidade maior que zero.");
+    const {data,error}=await getSupabaseAdmin().from("cotacao_veicular_precos_planos")
+      .update({valor_centavos:valor,updated_at:new Date().toISOString()})
+      .eq("empresa_id",empresaId).eq("categoria",categoria).eq("plano",plano)
+      .eq("fipe_min_centavos",min).select("plano").maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error("Faixa e plano não encontrados.");
+    const {error:err}=await getSupabaseAdmin().from("cotacao_veicular_configuracoes")
+      .update({vigencia_ate:null,updated_at:new Date().toISOString()}).eq("empresa_id",empresaId);
+    if(err)throw err;
+    return NextResponse.json({ok:true});
+  }
+  if(!["simular","salvar"].includes(acao))throw new Error("Operação inválida.");
+  if(!auth.podeGerenciar)return erro(new Error("Sem permissão para gerar cotações."),403);
+  if(!categoriaValida(body.categoria))throw new Error("Categoria inválida.");
+  const uso=String(body.uso||"") as UsoVeiculo,energia=String(body.energia||"") as EnergiaVeiculo;
+  if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
+    throw new Error("Informe o uso e a motorização.");
+  const op=body.opcionais_por_plano;
+  if(op!==undefined && (typeof op!=="object"||op===null||Array.isArray(op)))
+    throw new Error("Opcionais inválidos.");
+  const opc=op as Record<string,unknown>|undefined;
+  const opcionaisPorPlano:Record<string,string[]>={};
+  for(const [plano,codigos] of Object.entries(opc||{})){
+    if(!Array.isArray(codigos)||codigos.length>60||codigos.some(v=>typeof v!=="string"))
+      throw new Error("Opcionais inválidos.");
+    opcionaisPorPlano[plano]=codigos as string[];
+  }
+  const parametros={empresaId,categoria:body.categoria,
+    valorFipeCentavos:valorInteiro(body.valor_fipe_centavos,"Valor FIPE"),uso,energia,
+    origem:"manual" as const,opcionaisPorPlano};
+  if(acao==="simular")return NextResponse.json({ok:true,calculos:await calcularCotacaoPlanos(parametros)});
+  const veiculo=String(body.veiculo||"").trim();
+  if(veiculo.length<3||veiculo.length>240)throw new Error("Informe o veículo.");
+  const ano=body.ano_modelo==null||body.ano_modelo===""?null:valorInteiro(body.ano_modelo,"Ano",32000);
+  if(ano!==null&&ano<1950)throw new Error("Ano inválido.");
+  const resultado=await salvarCotacaoPlanos({...parametros,veiculo,anoModelo:ano,
+    nomeContato:String(body.nome_contato||"").slice(0,160),
+    referenciaFipe:String(body.referencia_fipe||"").slice(0,100)});
+  return NextResponse.json({ok:true,...resultado});
+ }catch(e){console.error("[COTACAO_POST]",e);return erro(e);}
 }
