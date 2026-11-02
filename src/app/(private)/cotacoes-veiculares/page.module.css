@@ -973,7 +973,7 @@
 }
 .requiredFieldInvalid{position:relative;border:1px solid #e16b70!important;border-radius:12px;animation:cotacaoRequiredPulse 1.05s ease-in-out 2;background:rgba(255,241,241,.24)}
 .requiredFieldInvalid input:not([type="checkbox"]),.requiredFieldInvalid select,.requiredFieldInvalid textarea,
-input[aria-invalid="true"]{border-color:#db525a!important;background:rgba(255,250,250,.95)!important}
+.requiredFieldInvalid input[aria-invalid="true"]{border-color:#db525a!important;background:rgba(255,250,250,.95)!important}
 .requiredError{display:block;color:#b83243;font-size:11.5px;line-height:1.45;font-weight:690;margin:5px 0 0;max-width:100%;overflow-wrap:anywhere}
 .requiredAsterisk{color:#d4484e;font-size:13px;margin-left:3px}
 .planWizardField.requiredFieldInvalid{padding:7px 10px 10px}
