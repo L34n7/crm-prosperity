@@ -7778,3 +7778,143 @@
 @media (max-width: 760px) {
   .campaignIssueContactStatus { white-space: normal; }
 }
+
+/* Modal "Saber mais" da campanha: viewport dinâmico e rolagem interna no mobile. */
+@media (max-width: 640px) {
+  .campaignFailureOverlay {
+    padding: 12px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .campaignFailureModal {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px - env(safe-area-inset-bottom));
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .campaignFailureModalHeader {
+    position: relative;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px 10px;
+    border-top-width: 3px;
+  }
+
+  .campaignFailureModalIntro {
+    flex: 0 0 auto;
+    min-width: 0;
+    width: 100%;
+    padding-right: 34px;
+    gap: 0;
+  }
+
+  .campaignFailureModalIcon {
+    display: none;
+  }
+
+  .campaignFailureModalHeading {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .campaignFailureModalHeading .modalEyebrow {
+    font-size: 10px;
+    line-height: 1.35;
+    margin-bottom: 5px;
+    letter-spacing: 0.045em;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .campaignFailureModalHeading .modalTitle {
+    font-size: 17px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .campaignFailureModalHeading .modalSubtitle {
+    margin-top: 5px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .campaignFailureModalActions {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+  }
+
+  .campaignFailureSeverityBadge {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .campaignFailureModal .modalClose {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    font-size: 21px;
+    display: grid;
+    place-items: center;
+  }
+
+  .campaignFailureModal .modalBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    gap: 10px;
+    padding: 12px 14px 16px;
+  }
+
+  .campaignFailureModalSection {
+    padding: 11px 12px;
+    border-radius: 10px;
+  }
+
+  .campaignFailureModalSection h4 {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .campaignFailureModalSection p {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .campaignFailureModal .modalFooter {
+    flex: 0 0 auto;
+    padding: 10px 14px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    gap: 0;
+  }
+
+  .campaignFailureModal .modalFooter .primaryButton {
+    width: 100%;
+    min-height: 44px;
+    font-size: 14px;
+  }
+}
