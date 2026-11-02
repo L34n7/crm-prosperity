@@ -7719,3 +7719,62 @@
     white-space: normal;
   }
 }
+
+
+/* Consequência individual por tipo de falha no card agrupado da campanha. */
+.campaignIssueContactStatus {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--crm-border);
+  border-radius: 7px;
+  background: var(--crm-surface-soft);
+  color: var(--crm-text-muted);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.3;
+  white-space: normal;
+}
+.campaignIssueContactReview {
+  border-color: var(--crm-warning-border);
+  color: var(--crm-warning-text);
+  background: var(--crm-warning-bg);
+}
+.campaignIssueContactPause {
+  border-color: var(--crm-primary-border);
+  color: var(--crm-primary-text);
+  background: var(--crm-primary-soft);
+}
+.campaignIssueContactSender {
+  border-color: var(--crm-border);
+  color: var(--crm-text-muted);
+}
+.campaignIssueCompactCopy:has(.campaignIssueContactStatus) {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.campaignFailureContactImpact {
+  border-color: var(--crm-primary-border);
+  background: var(--crm-primary-soft);
+}
+.campaignFailureContactImpact[data-tipo="revisao"] {
+  border-color: var(--crm-warning-border);
+  background: var(--crm-warning-bg);
+}
+.campaignFailureContactImpact[data-tipo="remetente"],
+.campaignFailureContactImpact[data-tipo="informativo"] {
+  border-color: var(--crm-border);
+  background: var(--crm-surface-soft);
+}
+.campaignFailureContactImpactTitle {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--crm-text-strong);
+  font-size: 13px;
+  font-weight: 800;
+}
+@media (max-width: 760px) {
+  .campaignIssueContactStatus { white-space: normal; }
+}
