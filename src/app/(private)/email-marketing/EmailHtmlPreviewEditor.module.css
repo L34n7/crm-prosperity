@@ -191,3 +191,35 @@
   }
   .estudio .inspectorLateral{scroll-margin-top:12px}
 }
+
+
+/* Em telas touch, o formulário do modal é a única área de rolagem vertical.
+   overflow-x:hidden em um filho transforma overflow-y:visible em auto,
+   prendendo o gesto no card Elemento em vez de rolar a página. */
+@media (max-width:700px){
+  .estudio .inspectorLateral{
+    overflow:visible;
+    overflow-x:visible;
+    overflow-y:visible;
+    overscroll-behavior:auto;
+    touch-action:pan-y;
+    max-height:none;
+    min-height:0;
+  }
+  .estudio .inspectorLateral .inspector{
+    overflow:visible;
+    overflow-x:visible;
+    overflow-y:visible;
+    overscroll-behavior:auto;
+    touch-action:pan-y;
+    max-height:none;
+    min-height:0;
+  }
+  .estudio .inspectorLateral .extras,
+  .estudio .inspectorLateral .variaveis,
+  .estudio .inspectorLateral .painelPagina{
+    overflow:visible;
+    overscroll-behavior:auto;
+    touch-action:pan-y;
+  }
+}
