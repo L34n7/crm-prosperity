@@ -31,6 +31,9 @@ type Modal={codigo:string|null;passo:1|2};
 type ArquivoPendente={tipo:"precos"|"especiais";arquivo:File};
 const dinheiro=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v/100);
 const dataHora=(v:string)=>new Date(v).toLocaleString("pt-BR");
+const PLANO_RASCUNHO:PlanoEmpresa={
+ empresa_id:"",codigo:"rascunho",nome:"Novo plano",ordem:0,ativo:true,
+};
 
 export default function PlanosCotacao({
   planos,arquivos,categoria,onCategoria,faixas,regras,opcionais,podeConfigurar,onUpdated,
@@ -48,6 +51,8 @@ export default function PlanosCotacao({
   const [errosEtapa,setErrosEtapa]=useState<Record<string,string>>({});
   const [tentativa,setTentativa]=useState(0);
   const editorRef=useRef<EditorHandle|null>(null);
+  const pendenteRef=useRef<string|null>(null);
+  const nomePendenteRef=useRef<string>("");
   const nomeRef=useRef<HTMLInputElement|null>(null);
   const dataRef=useRef<HTMLInputElement|null>(null);
   const [sucesso,setSucesso]=useState("");
@@ -55,7 +60,7 @@ export default function PlanosCotacao({
   const fileEspeciais=useRef<HTMLInputElement>(null);
   const plano=planos.find(p=>p.codigo===modal?.codigo);
   // Props estáveis evitam perder regras preenchidas quando o nome é editado.
-  const planosDoModal=useMemo(()=>plano?[plano]:[],[plano]);
+  const planosDoModal=useMemo(()=>plano?[plano]:[PLANO_RASCUNHO],[plano]);
   const regrasDoPlano=useMemo(()=>regras.filter(r=>r.plano===modal?.codigo),[regras,modal?.codigo]);
   const opcionaisDoPlano=useMemo(()=>opcionais.filter(o=>o.plano===modal?.codigo),[opcionais,modal?.codigo]);
   const meta=arquivos.find(a=>a.plano===modal?.codigo);
@@ -67,12 +72,13 @@ export default function PlanosCotacao({
     const original=document.body.style.overflow;
     document.body.style.overflow="hidden";
     const onKey=(e:KeyboardEvent)=>{if(e.key==="Escape"&&!ocupado&&
-      !arquivo&&!removerArquivo&&!excluirPlano)setModal(null);};
+      !arquivo&&!removerArquivo&&!excluirPlano)fechar();};
     window.addEventListener("keydown",onKey);
     return ()=>{document.body.style.overflow=original;window.removeEventListener("keydown",onKey);};
   },[modal!==null,ocupado,arquivo,removerArquivo,excluirPlano]);
 
   function abrir(planoAtual?:PlanoEmpresa){
+    pendenteRef.current=null;nomePendenteRef.current="";
     setNome(planoAtual?.nome||"");
     const info=arquivos.find(x=>x.plano===planoAtual?.codigo);
     setVigencia(info?.vigencia_ate||"");
@@ -84,15 +90,19 @@ export default function PlanosCotacao({
     if(ocupado)return;
     setModal(null);setArquivo(null);setRemoverArquivo(null);
     setPrecoEditando(null);setErro("");setSucesso("");setErrosEtapa({});
+    if(pendenteRef.current){
+      pendenteRef.current=null;nomePendenteRef.current="";
+      void onUpdated();
+    }
   }
-  async function planoApi(acao:"criar"|"renomear"|"ativar"|"desativar"|"excluir",codigo?:string,nomeNovo?:string){
+  async function planoApi(acao:"criar"|"renomear"|"ativar"|"desativar"|"excluir",codigo?:string,nomeNovo?:string,refresh=true){
     const res=await fetch("/api/cotacoes-veiculares/planos",{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({acao,codigo,nome:nomeNovo}),
     });
     const json=await res.json();
     if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível alterar o plano.");
-    await onUpdated();
+    if(refresh)await onUpdated();
     return json as {codigo?:string};
   }
   function erroCampo(campo:string){return errosEtapa[campo]?
@@ -118,40 +128,41 @@ export default function PlanosCotacao({
     }
     return true;
   }
-  async function salvarNome(){
-    if(!nomeValido())return false;
+  async function avancarParaArquivos(){
+    if(!modal||ocupado||!podeConfigurar)return;
+    if(!nomeValido())return;
+    // Valida todos os campos ANTES de criar o plano: nenhum cadastro vazio é gerado.
+    const editor=editorRef.current;
+    if(!editor?.validate())return;
     setOcupado(true);setErro("");setErrosEtapa({});
     try{
-      let codigo=modal?.codigo||null;
-      if(codigo){
-        if(plano?.nome!==nome.trim())await planoApi("renomear",codigo,nome.trim());
-      }else{
-        const resultado=await planoApi("criar",undefined,nome.trim());
-        codigo=resultado.codigo||null;
-        if(!codigo)throw new Error("Não foi possível identificar o plano criado.");
+      const nomeNormalizado=nome.trim().replace(/\s+/g," ");
+      let codigo=modal.codigo;
+      if(!codigo){
+        codigo=pendenteRef.current;
+        if(!codigo){
+          const criado=await planoApi("criar",undefined,nomeNormalizado,false);
+          codigo=criado.codigo||null;
+          if(!codigo)throw new Error("O servidor não retornou o código do novo plano.");
+          pendenteRef.current=codigo;
+          nomePendenteRef.current=nomeNormalizado;
+        }else if(nomePendenteRef.current!==nomeNormalizado){
+          await planoApi("renomear",codigo,nomeNormalizado,false);
+          nomePendenteRef.current=nomeNormalizado;
+        }
       }
-      setModal({codigo,passo:1});
-      setSucesso("Nome salvo. Agora preencha as regras do plano.");
-      return true;
-    }catch(e){setErro(e instanceof Error?e.message:"Não foi possível salvar o nome.");return false;}
-    finally{setOcupado(false);}
-  }
-  async function avancarParaArquivos(){
-    if(!modal || ocupado || !podeConfigurar)return;
-    if(!nomeValido())return;
-    if(!modal.codigo){
-      await salvarNome();
-      return;
-    }
-    const ok=await editorRef.current?.validateAndSave();
-    if(!ok)return;
-    // Salva o novo nome somente depois de validar as regras, preservando os campos digitados.
-    if(plano?.nome!==nome.trim()){
-      const salvo=await salvarNome();
-      if(!salvo)return;
-    }
-    setErrosEtapa({});setErro("");setSucesso("");
-    setModal(v=>v?{...v,passo:2}:null);
+      const salvo=await editor.validateAndSave(codigo||undefined,true);
+      if(!salvo)return; // Preserva o rascunho e permite tentar novamente.
+      if(modal.codigo && plano?.nome!==nomeNormalizado){
+        await planoApi("renomear",modal.codigo,nomeNormalizado,false);
+      }
+      await onUpdated();
+      pendenteRef.current=null;nomePendenteRef.current="";
+      setModal({codigo,passo:2});
+      setErrosEtapa({});setErro("");setSucesso("");
+    }catch(e){
+      setErro(e instanceof Error?e.message:"Não foi possível cadastrar o plano.");
+    }finally{setOcupado(false);}
   }
   async function alterarStatus(p:PlanoEmpresa){
     setOcupado(true);setErro("");setSucesso("");
@@ -369,30 +380,24 @@ export default function PlanosCotacao({
                 placeholder="Ex.: Essencial, Plus ou Proteção Total"
                 disabled={!podeConfigurar||ocupado}
                 onChange={e=>{setNome(e.target.value);setErrosEtapa(prev=>({...prev,nome:""}));}}
-                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();if(!plano)void salvarNome();}}}/>
+                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();void avancarParaArquivos();}}}/>
               {erroCampo("nome")}
             </label>
             {plano&&<small className={styles.smallNote}>Alterar o nome não modifica as cotações anteriores.</small>}
-            {!plano
-              ?<div className={styles.planRegistrationPrompt}>
-                <ShieldCheck size={19}/>
-                <p>Salve o nome para liberar os campos de coberturas, participação e assistência nesta mesma etapa.</p>
-                <button type="button" className={styles.secondary} disabled={ocupado||!podeConfigurar}
-                  onClick={()=>void salvarNome()}><Save size={16}/> Salvar nome e configurar regras</button>
+            <label className={styles.planWizardField}>Categoria de veículos
+              <select value={categoria} disabled={ocupado}
+                onChange={e=>onCategoria(e.target.value as CategoriaCotacao)}>
+                {Object.entries(CATEGORIAS_COTACAO).map(([c,titulo])=><option key={c} value={c}>{titulo}</option>)}
+              </select>
+            </label>
+            {(!plano||plano.ativo)
+              ?<div className={styles.planWizardEmbedded}>
+                <ConfiguracaoComercialEditor ref={editorRef} categoria={categoria}
+                  planos={planosDoModal} regras={regrasDoPlano} opcionais={opcionaisDoPlano}
+                  rascunho={!plano} nomeRascunho={nome}
+                  podeConfigurar={podeConfigurar} onSaved={onUpdated}/>
               </div>
-              :<>
-                <label className={styles.planWizardField}>Categoria de veículos
-                  <select value={categoria} disabled={ocupado} onChange={e=>onCategoria(e.target.value as CategoriaCotacao)}>
-                    {Object.entries(CATEGORIAS_COTACAO).map(([c,titulo])=><option key={c} value={c}>{titulo}</option>)}
-                  </select>
-                </label>
-                {plano.ativo?<div className={styles.planWizardEmbedded}>
-                  <ConfiguracaoComercialEditor ref={editorRef} categoria={categoria} planos={planosDoModal}
-                    regras={regrasDoPlano}
-                    opcionais={opcionaisDoPlano}
-                    podeConfigurar={podeConfigurar} onSaved={onUpdated}/>
-                </div>:<p className={styles.smallNote}>Ative este plano para continuar a configuração.</p>}
-              </>}
+              :<p className={styles.smallNote}>Ative o plano para continuar a configuração.</p>}
           </div>}
           {modal.passo===2&&plano&&<div className={styles.planStepContent}>
             <span className={styles.planStepEyebrow}>02 / ARQUIVOS E VALORES</span>
@@ -502,7 +507,7 @@ export default function PlanosCotacao({
               ?<button type="button" className={styles.primary} disabled={ocupado||!podeConfigurar}
                 onClick={()=>void avancarParaArquivos()}>
                 {ocupado?<Loader2 size={16}/>:<ArrowRight size={16}/>}
-                {modal.codigo?"Salvar regras e avançar":"Criar plano e configurar"}
+                Salvar regras e avançar
               </button>
               :<button type="button" className={styles.primary} disabled={ocupado||!podeConfigurar}
                 onClick={()=>void concluirCadastro()}><CheckCircle2 size={17}/> Concluir</button>}

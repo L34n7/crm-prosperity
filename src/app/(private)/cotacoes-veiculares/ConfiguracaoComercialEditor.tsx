@@ -8,16 +8,20 @@ import { ENERGIAS_VEICULO,USOS_VEICULO,regraVazia,validarRegraComercial,
 import styles from "./page.module.css";
 type RegraBanco=RegraComercialPlano;
 type OpcionalBanco=OpcionalComercial&{plano:string;categoria:string};
-export type EditorHandle={validateAndSave:()=>Promise<boolean>};
+export type EditorHandle={
+ validate:()=>boolean;
+ validateAndSave:(persistedCodigo?:string,skipRefresh?:boolean)=>Promise<boolean>;
+};
 type Props={
  categoria:CategoriaCotacao;planos:PlanoEmpresa[];
  regras:RegraBanco[];opcionais:OpcionalBanco[];
  podeConfigurar:boolean;onSaved:()=>Promise<void>;
+ rascunho?:boolean; nomeRascunho?:string;
 };
 const reais=(centavos:number)=>Number((Number(centavos||0)/100).toFixed(2));
 const centavos=(v:string)=>Math.round(Number(v||0)*100);
 const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function ConfiguracaoComercialEditor({
- categoria,planos,regras,opcionais,podeConfigurar,onSaved,
+ categoria,planos,regras,opcionais,podeConfigurar,onSaved,rascunho=false,nomeRascunho,
 },ref){
  const [rascunhos,setRascunhos]=useState<Record<string,RegraComercialPlano>>({});
  const [extras,setExtras]=useState<Record<string,OpcionalComercial[]>>({});
@@ -62,32 +66,37 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
   const lista=rascunhos[codigo][campo] as string[];
   alterar(codigo,campo,ativado?[...new Set([...lista,valor])]:lista.filter(v=>v!==valor));
  }
- async function atualizarCobertura(codigo:string, nome:string, remover=false){
+ async function atualizarCobertura(codigo:string,nome:string,remover=false){
   const cobertura=nome.trim();
   if(cobertura.length<2||cobertura.length>160){setErro("Informe uma cobertura de 2 a 160 caracteres.");return;}
-  if(!remover&&rascunhos[codigo].coberturas.some(v=>v.toLowerCase()===cobertura.toLowerCase())){
+  const atuais=rascunhos[codigo]?.coberturas||[];
+  if(!remover&&atuais.some(v=>v.toLowerCase()===cobertura.toLowerCase())){
     setErro("Essa cobertura já está cadastrada.");return;
   }
+  if(!remover&&atuais.length>=30){setErro("Limite de 30 coberturas por plano.");return;}
   setSalvando(codigo);setErro("");setSucesso("");
   try{
-   const res=await fetch("/api/cotacoes-veiculares/comercial",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({acao:remover?"remover_cobertura":"adicionar_cobertura",
-      categoria,plano:codigo,cobertura}),
-   });
-   const json=await res.json();
-   if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar cobertura.");
+   if(!rascunho){
+    const res=await fetch("/api/cotacoes-veiculares/comercial",{
+     method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({acao:remover?"remover_cobertura":"adicionar_cobertura",
+       categoria,plano:codigo,cobertura}),
+    });
+    const json=await res.json();
+    if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar cobertura.");
+   }
    setNovasCoberturas(v=>({...v,[codigo]:""}));
    setRascunhos(atual=>{
-     const regraAtual=atual[codigo];
-     if(!regraAtual)return atual;
-     const lista=remover
-       ?regraAtual.coberturas.filter(v=>v.toLowerCase()!==cobertura.toLowerCase())
-       :[...regraAtual.coberturas,cobertura];
-     return {...atual,[codigo]:{...regraAtual,coberturas:lista}};
+    const regraAtual=atual[codigo];if(!regraAtual)return atual;
+    const lista=remover
+      ?regraAtual.coberturas.filter(v=>v.toLowerCase()!==cobertura.toLowerCase())
+      :[...regraAtual.coberturas,cobertura];
+    return {...atual,[codigo]:{...regraAtual,coberturas:lista}};
    });
    setErrosCampos(prev=>{const copy={...prev};delete copy.coberturas;return copy;});
-   setSucesso(remover?"Cobertura removida.":"Cobertura salva. Ao terminar, salve as regras do plano.");
+   setSucesso(remover?"Cobertura removida.":rascunho
+     ?"Cobertura adicionada ao cadastro. Será salva ao avançar."
+     :"Cobertura salva.");
   }catch(e){setErro(e instanceof Error?e.message:"Falha ao salvar cobertura.");}
   finally{setSalvando(null);}
  }
@@ -152,7 +161,7 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
   setErro("");
   return true;
  }
- async function salvar(codigo:string):Promise<boolean>{
+ async function salvar(codigo:string,persistedCodigo=codigo,skipRefresh=false):Promise<boolean>{
   if(!validarCampos(codigo))return false;
   const regra=rascunhos[codigo],items=extras[codigo]||[];
   setSalvando(codigo);setErro("");setSucesso("");
@@ -160,11 +169,11 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
    const categorias=[categoria,...(copiarPara[codigo]||[]).filter(c=>c!==categoria)];
    const res=await fetch("/api/cotacoes-veiculares/comercial",{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({acao:"regra",regra,opcionais:items,categorias}),
+    body:JSON.stringify({acao:"regra",regra:{...regra,plano:persistedCodigo},opcionais:items,categorias}),
    });
    const json=await res.json();
    if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar as regras.");
-   await onSaved();
+   if(!skipRefresh)await onSaved();
    setSucesso(categorias.length===1?"Regras desta categoria salvas.":
     "Regras salvas em "+categorias.length+" categorias.");
    return true;
@@ -172,9 +181,13 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
   finally{setSalvando(null);}
  }
  useImperativeHandle(ref,()=>({
-  validateAndSave:async()=>{
-    const codigo=planos.filter(p=>p.ativo)[0]?.codigo;
-    return codigo?salvar(codigo):false;
+  validate:()=>{
+    const codigo=planos.find(p=>p.ativo)?.codigo;
+    return codigo?validarCampos(codigo):false;
+  },
+  validateAndSave:async(persistedCodigo,skipRefresh=false)=>{
+    const codigo=planos.find(p=>p.ativo)?.codigo;
+    return codigo?salvar(codigo,persistedCodigo||codigo,skipRefresh):false;
   },
  }));
  function campoErro(campo:string){
@@ -199,7 +212,7 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
       !validarRegraComercial(r,opcionais.filter(o=>o.plano===cod)));
     return <article key={cod} className={styles.commercialCard}>
      <div className={styles.commercialCardHeading}>
-      <h3>{p.nome}</h3><span className={salvo?styles.goodStatus:styles.pendingStatus}>
+      <h3>{rascunho?(nomeRascunho?.trim()||"Novo plano"):p.nome}</h3><span className={salvo?styles.goodStatus:styles.pendingStatus}>
        {salvo?"Regras salvas":"Regras ainda incompletas"}</span>
      </div>
      <div className={styles.fields}>
@@ -305,9 +318,6 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
        </span>
      </div>
      {campoErro("geral")}
-     <div className={styles.actions}><button type="button" className={styles.primary}
-      disabled={!podeConfigurar||salvando!==null} onClick={()=>void salvar(cod)}>
-      <Save size={16}/> {salvando===cod?"Salvando...":"Salvar regras de "+p.nome}</button></div>
     </article>;
    })}
   </div>
