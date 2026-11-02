@@ -79,6 +79,9 @@ const CAMPOS_NICHO: Record<NichoCodigo, CampoCadastro[]> = {
       escopo: "paciente",
     },
   ],
+  seguro_veicular: [
+    { chave: "uso_veiculo", nome: "Uso do veículo", tipo: "select", escopo: "pessoa", opcoes: ["Particular", "Aplicativo ou táxi", "Comercial", "Outro"] },
+  ],
   outro: [
     {
       chave: "profissao",

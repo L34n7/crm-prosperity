@@ -233,6 +233,11 @@ const FERRAMENTAS = [
     descricao: "Consulta serviços ativos, descrição, preço e duração cadastrados.",
   },
   {
+    tipo: "gerar_cotacao_veicular",
+    titulo: "Gerar cotação veicular",
+    descricao: "Consulta a FIPE, aplica a tabela comercial validada e registra cotação automática. Requer autorização no módulo Cotação.",
+  },
+  {
     tipo: "consultar_imoveis",
     titulo: "Consultar imóveis",
     descricao: "Busca somente imóveis disponíveis e responde com os dados cadastrados no módulo imobiliário.",

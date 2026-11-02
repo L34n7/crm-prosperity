@@ -27,6 +27,7 @@ const FERRAMENTAS_VALIDAS = new Set([
   "informar_valor_produto",
   "consultar_servicos",
   "consultar_imoveis",
+  "gerar_cotacao_veicular",
   "registrar_interesse_preferencia",
   "realizar_venda",
 ]);

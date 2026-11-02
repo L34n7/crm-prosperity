@@ -14,6 +14,7 @@ type RegraFerramentaNicho = {
 // continuam disponíveis para qualquer nicho porque podem ser úteis em mais de um setor.
 const REGRAS_FERRAMENTAS_POR_NICHO: Readonly<Record<string, RegraFerramentaNicho>> = {
   consultar_imoveis: { codigos: ["imobiliaria"] },
+  gerar_cotacao_veicular: { codigos: ["seguro_veicular"] },
 
   // Proteções para ferramentas clínicas atuais/futuras. Mesmo que uma dessas
   // ferramentas seja adicionada ao catálogo no futuro, uma empresa comercial

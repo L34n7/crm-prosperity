@@ -31,6 +31,7 @@ import {
   CreditCard,
   MoreHorizontal,
   PackageSearch,
+  Calculator,
   UserCircle,
   HelpCircle,
   Moon,
@@ -348,6 +349,9 @@ export default function Sidebar({
             permissao: "prontuarios.visualizar",
           },
         ]
+      : []),
+    ...(nichoConfig.modulos.includes("seguro_veicular.cotacoes")
+      ? [{ label: "Cotação", href: "/cotacoes-veiculares", icon: Calculator }]
       : []),
     ...(nichoConfig.modulos.includes("imobiliario.imoveis")
       ? [

@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import { encontrarVeiculoFipe, tipoFipeDaCategoria } from "@/lib/cotacoes-veiculares/fipe";
+import { categoriaValida, planoValido, salvarCotacaoVeicular, configuracaoCotacao, type CategoriaCotacao } from "@/lib/cotacoes-veiculares/servico";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
 import { carregarNichoEmpresa } from "./nicho-empresa";
@@ -10,6 +12,7 @@ export const TIPOS_FERRAMENTAS_NEGOCIO = [
   "informar_valor_produto",
   "consultar_servicos",
   "consultar_imoveis",
+  "gerar_cotacao_veicular",
   "registrar_interesse_preferencia",
   "realizar_venda",
 ] as const;
@@ -152,6 +155,10 @@ export async function carregarFerramentasNegocioAtivas(empresaId: string, agente
     ) {
       mapa.set(tipo, (item.config_json || {}) as Record<string, unknown>);
     }
+  }
+  if (mapa.has("gerar_cotacao_veicular")) {
+    const configuracao = await configuracaoCotacao(empresaId);
+    if (!configuracao.tabela_validada || !configuracao.ia_habilitada) mapa.delete("gerar_cotacao_veicular");
   }
   return mapa;
 }
@@ -305,6 +312,10 @@ export async function preconsultarNegocio(params: {
   const sinalServico = /\b(servico|servicos|procedimento|atendimento|orcamento de servico|banho|tosa|consulta|instalacao|manutencao)\b/.test(texto);
   const sinalImovel = /\b(imovel|imoveis|casa|apartamento|apto|terreno|sobrado|aluguel|alugar|locacao|quartos|suite|suites|vagas|bairro)\b/.test(texto);
   const sinalOfertaGenerica = /\b(voces tem|voce tem|tem algum|tem alguma|voces fazem|voce faz|oferece|oferecem)\b/.test(texto);
+  const mencionaCotacao = (conteudo: string) =>
+    /\b(cotacao|cotar|cote|simulacao|seguro|protecao veicular|plano premium|plano completo)\b/.test(normalizarTextoNegocio(conteudo));
+  const sinalCotacao = params.ferramentas.has("gerar_cotacao_veicular") &&
+    (mencionaCotacao(params.mensagem) || historico.slice(-6).some((item) => mencionaCotacao(item.content)));
 
   const blocos: string[] = [];
   const resultados: PreconsultaNegocio["resultados"] = [];
@@ -336,13 +347,19 @@ export async function preconsultarNegocio(params: {
     blocos.push(blocoImoveis(dados));
   }
 
+  if (sinalCotacao) {
+    resultados.push({ ferramenta: "gerar_cotacao_veicular", dados: [] });
+    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique categoria comercial, marca, versão exata do modelo, ano/combustível, plano e opcionais. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
+  }
+
   const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
   const houveDado = resultados.some((item) => item.dados.length > 0);
   const sinalExplicitoComFerramenta =
     (sinalProduto && params.ferramentas.has("consultar_produtos_estoque")) ||
     (sinalValor && (params.ferramentas.has("informar_valor_produto") || params.ferramentas.has("consultar_servicos"))) ||
     (sinalServico && params.ferramentas.has("consultar_servicos")) ||
-    (sinalImovel && params.ferramentas.has("consultar_imoveis"));
+    (sinalImovel && params.ferramentas.has("consultar_imoveis")) ||
+    sinalCotacao;
 
   return { relevante: vendaRelevante || houveDado || sinalExplicitoComFerramenta, consulta, blocos, resultados, produtosAutorizados, confirmacaoVenda };
 }
@@ -357,6 +374,48 @@ export async function executarFerramentaNegocio(params: {
   confirmacaoVenda: boolean;
   mensagemIds: string[];
 }) {
+  if (params.tipo === "gerar_cotacao_veicular") {
+    const args = params.argumentos || {};
+    if (!categoriaValida(args.categoria) || !planoValido(args.plano)) {
+      return { ok:false, error:"Informe a categoria correta e o plano Premium ou Completo." };
+    }
+    const categoria = args.categoria as CategoriaCotacao;
+    const marca = textoCurto(args.marca,90);
+    const modelo = textoCurto(args.modelo,150);
+    const ano = textoCurto(args.ano,30);
+    if (!marca || !modelo || !ano) {
+      return { ok:false, error:"Informe marca, versão exata do modelo e ano/combustível do veículo." };
+    }
+    const fipe = await encontrarVeiculoFipe({
+      tipo: tipoFipeDaCategoria(categoria), marca, modelo, ano,
+    });
+    const opcionais = Array.isArray(args.opcionais)
+      ? args.opcionais.filter((item: unknown) => typeof item === "string")
+      : [];
+    const identidade = crypto.createHash("sha256")
+      .update(JSON.stringify([params.empresaId,params.conversaId,params.mensagemIds,categoria,args.plano,fipe.codeFipe,fipe.modelYear,opcionais]))
+      .digest("hex");
+    const { cotacao, calculo } = await salvarCotacaoVeicular({
+      empresaId:params.empresaId, agenteId:params.agenteId, conversaId:params.conversaId,
+      origem:"agente_ia", categoria, plano:args.plano,
+      veiculo:fipe.brand+" "+fipe.model, anoModelo:fipe.modelYear,
+      valorFipeCentavos:fipe.valorCentavos,
+      referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
+      opcionais, idempotencyKey:"agente-ia:"+identidade,
+    });
+    return {
+      ok:true, cotacao_id:cotacao.id, status:cotacao.status,
+      veiculo:fipe.brand+" "+fipe.model, ano:fipe.modelYear, tabela_fipe:fipe.referenceMonth,
+      valor_fipe:formatarDinheiro(fipe.valorCentavos / 100),
+      plano:args.plano, codigo_produto:calculo.codigo_produto,
+      mensalidade:formatarDinheiro(calculo.total_centavos / 100),
+      cota_participacao:formatarDinheiro(calculo.cota_participacao_centavos / 100),
+      limite_terceiros:calculo.terceiros_limite_centavos ? formatarDinheiro(calculo.terceiros_limite_centavos / 100) : "Não disponível",
+      assistencia_24h:calculo.assistencia_km_total+" km totais",
+      opcionais:calculo.opcionais.map((item) => item.nome),
+      observacao:"Cotação informativa, sujeita às condições de adesão e conferência da associação. Não confirma contratação.",
+    };
+  }
   if (params.tipo === "consultar_produtos_estoque") {
     const dados = await consultarProdutosEstoque(params.empresaId, textoCurto(params.argumentos?.consulta, 180));
     dados.forEach((item) => params.produtosAutorizados.add(item.id));
@@ -435,6 +494,26 @@ export function definicoesFerramentasNegocio(
   }
   if (ferramentas.has("consultar_servicos")) {
     defs.push({ type: "function", name: "consultar_servicos", description: "Consulta serviços ativos, preço, descrição e duração atuais.", strict: true, parameters: { type: "object", properties: { consulta: { type: "string", maxLength: 180 } }, required: ["consulta"], additionalProperties: false } });
+  }
+  if (ferramentas.has("gerar_cotacao_veicular")) {
+    defs.push({
+      type:"function", name:"gerar_cotacao_veicular",
+      description:"Consulta FIPE em tempo real para marca, versão exata do modelo e ano/combustível, calcula preço exclusivamente pelas faixas validadas, registra cotação e devolve mensalidade real. Peça dados que faltarem; não use valores estimados. Só se aplica à proteção veicular e não contrata nem cobra nada.",
+      strict:true,
+      parameters:{
+        type:"object",
+        properties:{
+          categoria:{type:"string",enum:["motocicleta","auto_leves","app_taxi","especiais","van_utilitario","caminhao_leve","caminhao_pesado","agregado"]},
+          marca:{type:"string",maxLength:90},
+          modelo:{type:"string",maxLength:150},
+          ano:{type:"string",maxLength:30},
+          plano:{type:"string",enum:["premium","completo"]},
+          opcionais:{type:"array",items:{type:"string",enum:["rastreador","carro_reserva_7d","carro_reserva_15d","destombamento"]},maxItems:4},
+        },
+        required:["categoria","marca","modelo","ano","plano","opcionais"],
+        additionalProperties:false,
+      },
+    });
   }
   if (ferramentas.has("consultar_imoveis")) {
     defs.push({

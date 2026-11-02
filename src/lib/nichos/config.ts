@@ -4,6 +4,7 @@ export const NICHO_CODIGOS = [
   "medicina",
   "podologia",
   "odontologia",
+  "seguro_veicular",
   "outro",
 ] as const;
 
@@ -89,6 +90,14 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
       "saude.odontograma",
     ],
     prontuarioAbas: [...ABAS_PRONTUARIO_PADRAO, "odontograma"],
+  },
+  seguro_veicular: {
+    codigo: "seguro_veicular",
+    nome: "Seguro Veicular",
+    grupo: "comercial",
+    cadastroSingular: "Cliente",
+    cadastroPlural: "Clientes",
+    modulos: ["cadastros.pessoas", "seguro_veicular.cotacoes"],
   },
   outro: {
     codigo: "outro",
