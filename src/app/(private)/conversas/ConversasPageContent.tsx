@@ -11738,11 +11738,12 @@ const templateFooterTexto = useMemo(() => {
                                   setSalvandoLista(false);
                                 }
                               }}>Criar lista</button>
-                            <label className={styles.listaAtalhoCheckbox}>
-                              <input type="checkbox" checked={novaListaAtalho} disabled={salvandoLista}
-                                onChange={event => setNovaListaAtalho(event.target.checked)} />
-                              Exibir como atalho em Conversas
-                            </label>
+                            <label className={`${styles.listPanelSwitch} ${styles.listPanelCreateSwitch}`}>
+  <input type="checkbox" role="switch" className={styles.listPanelSwitchInput} checked={novaListaAtalho}
+    disabled={salvandoLista} onChange={event => setNovaListaAtalho(event.target.checked)} />
+  <span className={styles.listPanelSwitchTrack} aria-hidden="true"><span className={styles.listPanelSwitchThumb} /></span>
+  <span className={styles.listPanelSwitchLabel}>Exibir como atalho em Conversas</span>
+</label>
                           </section>
 
                           <section className={styles.listPanelExisting}>

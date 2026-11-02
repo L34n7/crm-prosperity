@@ -166,11 +166,12 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
             <button type="button" className={styles.primaryButton} disabled={ocupado || !nome.trim()}
               onClick={criar}>Criar lista</button>
           </div>
-          <label className={styles.personalListCreateToggle}>
-            <input type="checkbox" checked={atalhoNovo} disabled={ocupado}
-              onChange={(event) => setAtalhoNovo(event.target.checked)} />
-            Exibir como atalho em Conversas
-          </label>
+          <label className={`${styles.personalListSwitch} ${styles.personalListCreateToggle}`}>
+  <input type="checkbox" role="switch" className={styles.personalListSwitchInput} checked={atalhoNovo}
+    disabled={ocupado} onChange={event => setAtalhoNovo(event.target.checked)} />
+  <span className={styles.personalListSwitchTrack} aria-hidden="true"><span className={styles.personalListSwitchThumb} /></span>
+  <span className={styles.personalListSwitchLabel}>Exibir como atalho em Conversas</span>
+</label>
         </section>
 
         <section className={`${styles.listManagerSection} ${styles.personalListExisting}`}>
@@ -263,14 +264,12 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
                 )}
 
                 <div className={styles.personalListRowFooter}>
-                  <label className={styles.personalListToggle}>
-                    <input type="checkbox" disabled={ocupado}
-                      checked={lista.exibir_atalho_conversas}
-                      onChange={() => alterar(lista, {
-                        exibir_atalho_conversas: !lista.exibir_atalho_conversas,
-                      })} />
-                    <span>Exibir atalho</span>
-                  </label>
+                  <label className={`${styles.personalListSwitch} ${styles.personalListToggle}`}>
+  <input type="checkbox" role="switch" className={styles.personalListSwitchInput} checked={lista.exibir_atalho_conversas}
+    disabled={ocupado} onChange={() => alterar(lista, { exibir_atalho_conversas: !lista.exibir_atalho_conversas })} />
+  <span className={styles.personalListSwitchTrack} aria-hidden="true"><span className={styles.personalListSwitchThumb} /></span>
+  <span className={styles.personalListSwitchLabel}>Exibir atalho</span>
+</label>
                   <div className={styles.personalListPriority}>
                     <span>Prioridade</span>
                     <button type="button" className={styles.personalListMiniButton}

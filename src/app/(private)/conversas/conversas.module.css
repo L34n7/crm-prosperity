@@ -8295,12 +8295,12 @@ a.buttonMessageOption:hover {
   border-radius: 8px; background: var(--crm-danger-bg);
   color: var(--crm-danger-text); font-size: 11px; line-height: 1.5;
 }
-.listPanelCardFooter { display: flex; align-items: center; gap: 8px 11px; flex-wrap: wrap; padding-top: 9px; border-top: 1px solid var(--crm-border-soft); }
+.listPanelCardFooter { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.12fr) auto; align-items: center; gap: 5px; padding-top: 8px; border-top: 1px solid var(--crm-border-soft); }
 .listPanelCheckbox { display: inline-flex; align-items: center; gap: 5px; color: var(--crm-text-muted); font-size: 11px; cursor: pointer; }
 .listPanelCheckbox input { width: 14px; height: 14px; accent-color: var(--crm-primary); }
-.listPanelPriority { display: flex; gap: 6px; margin-left: auto; }
+.listPanelPriority { display: inline-flex; align-items: center; justify-self: end; gap: 4px; margin: 0; white-space: nowrap; }
 .listPanelOrderButton {
-  height: 30px; width: 30px; border: 1px solid var(--crm-border);
+  height: 28px; width: 27px; flex: 0 0 27px; border: 1px solid var(--crm-border);
   border-radius: 8px; background: var(--crm-surface); color: var(--crm-text);
   cursor: pointer; font-size: 14px;
 }
@@ -8317,11 +8317,12 @@ a.buttonMessageOption:hover {
   display: inline-flex;
   position: relative;
   align-items: center;
-  gap: 7px;
-  min-height: 34px;
-  padding: 4px 2px;
+  gap: 5px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0;
   color: var(--crm-text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
   user-select: none;
@@ -8337,9 +8338,9 @@ a.buttonMessageOption:hover {
 .listPanelSwitchTrack {
   display: inline-flex;
   position: relative;
-  flex: 0 0 36px;
-  width: 36px;
-  height: 21px;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 18px;
   border: 1px solid var(--crm-border);
   border-radius: 999px;
   box-sizing: border-box;
@@ -8350,8 +8351,8 @@ a.buttonMessageOption:hover {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--crm-text-muted);
   box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
@@ -8362,7 +8363,7 @@ a.buttonMessageOption:hover {
   border-color: var(--crm-primary);
 }
 .listPanelSwitchInput:checked + .listPanelSwitchTrack .listPanelSwitchThumb {
-  transform: translateX(15px);
+  transform: translateX(12px);
   background: #fff;
 }
 .listPanelSwitchInput:focus-visible + .listPanelSwitchTrack {
@@ -8373,10 +8374,16 @@ a.buttonMessageOption:hover {
   opacity: .46;
   cursor: not-allowed;
 }
-.listPanelSwitchLabel { white-space: nowrap; }
-@media (max-width: 440px) {
-  .listPanelCardFooter { gap: 6px 10px; }
-  .listPanelSwitch { min-height: 36px; }
+.listPanelSwitchLabel { min-width: 0; white-space: nowrap; }
+.listPanelCreateSwitch { width: 100%; min-height: 36px; padding-top: 9px; border-top: 1px solid var(--crm-border-soft); font-size: 12px; }
+.listPanelCreateSwitch .listPanelSwitchTrack { flex-basis: 34px; width: 34px; height: 20px; }
+.listPanelCreateSwitch .listPanelSwitchThumb { width: 14px; height: 14px; }
+.listPanelCreateSwitch .listPanelSwitchInput:checked + .listPanelSwitchTrack .listPanelSwitchThumb { transform: translateX(14px); }
+.listPanelCard { container-type: inline-size; }
+@container (max-width: 265px) {
+  .listPanelCardFooter { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .listPanelCardFooter .listPanelPriority { grid-column: 2; justify-self: end; }
+  .listPanelSwitchLabel { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) {
   .listPanelSwitchTrack, .listPanelSwitchThumb { transition: none; }
