@@ -9079,7 +9079,10 @@ export default function DisparosWhatsAppPage() {
       </div>
 
       {falhaModal ? (
-        <div className={styles.modalOverlay} onClick={() => setFalhaModal(null)}>
+        <div
+          className={`${styles.modalOverlay} ${styles.campaignFailureOverlay}`}
+          onClick={() => setFalhaModal(null)}
+        >
           <section
             className={`${styles.modalConfirmacao} ${styles.campaignFailureModal} ${
               falhaModal.gravidade === 3 ? styles.campaignFailureSeverity3 :
