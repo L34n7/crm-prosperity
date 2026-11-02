@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { CATEGORIAS_COTACAO,type CategoriaCotacao,type PlanoCotacao } from "./catalogo";
 import { type EnergiaVeiculo,type UsoVeiculo } from "./comercial";
-import { consultarRegraComercial, listarPlanosEmpresa,statusConfiguracaoCotacao } from "./configuracao";
+import { consultarRegraComercial, listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } from "./configuracao";
 export { CATEGORIAS_COTACAO };
 export type { CategoriaCotacao, PlanoCotacao };
 const admin=getSupabaseAdmin();
@@ -27,11 +27,16 @@ export async function consultarFaixas(empresaId:string,categoria:CategoriaCotaca
   if(error)throw new Error(error.message);
   return data||[];
 }
-export async function verificarEspecialEmpresa(empresaId:string,modelo:string,codigoFipe?:string){
-  const {data,error}=await admin.from("cotacao_veicular_modelos_empresa").select("modelo,codigo_fipe")
-    .eq("empresa_id",empresaId).limit(5000);
+export async function verificarEspecialEmpresa(
+  empresaId:string, modelo:string, codigoFipe?:string, plano?:string
+){
+  let consulta=admin.from("cotacao_veicular_modelos_plano")
+    .select("modelo,codigo_fipe,plano").eq("empresa_id",empresaId).limit(5000);
+  if(plano)consulta=consulta.eq("plano",plano);
+  const {data,error}=await consulta;
   if(error)throw new Error(error.message);
-  const normalizar=(s:string)=>s.normalize("NFD").replace(/\p{M}/gu,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+  const normalizar=(texto:string)=>texto.normalize("NFD").replace(/\p{M}/gu,"")
+    .toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
   return (data||[]).some(v=>
     Boolean(codigoFipe&&v.codigo_fipe&&v.codigo_fipe.trim()===codigoFipe.trim())||
     normalizar(v.modelo)===normalizar(modelo));
@@ -39,50 +44,60 @@ export async function verificarEspecialEmpresa(empresaId:string,modelo:string,co
 export type ParametrosCotacao={
   empresaId:string;categoria:CategoriaCotacao;valorFipeCentavos:number;
   uso:UsoVeiculo;energia:EnergiaVeiculo;origem:"manual"|"agente_ia";
+  veiculo?:string;codigoFipe?:string;
   opcionaisPorPlano?:Record<string,string[]>;
 };
 export async function calcularCotacaoPlanos(p:ParametrosCotacao){
   if(!categoriaValida(p.categoria)||!Number.isSafeInteger(p.valorFipeCentavos)||
     p.valorFipeCentavos<=0||p.valorFipeCentavos>2000000000)
     throw new Error("Informe uma categoria e valor FIPE válidos.");
-  const [status,planos,faixas,config]=await Promise.all([
-    statusConfiguracaoCotacao(p.empresaId),
-    listarPlanosEmpresa(p.empresaId,true),
+  const [status,planos,faixas,faixasEspeciais,arquivos]=await Promise.all([
+    statusConfiguracaoCotacao(p.empresaId),listarPlanosEmpresa(p.empresaId,true),
     consultarFaixas(p.empresaId,p.categoria),
-    configuracaoCotacao(p.empresaId),
+    p.categoria==="especiais" ? Promise.resolve([]) : consultarFaixas(p.empresaId,"especiais"),
+    listarArquivosPlano(p.empresaId),
   ]);
-  if(!config.tabela_importada||!planos.length)
-    throw new Error("Crie planos e importe a tabela de preços antes de cotar.");
+  if(!planos.length)throw new Error("Crie ao menos um plano antes de cotar.");
   if(p.origem==="agente_ia"&&!status.pronta)
     throw new Error("Configuração comercial pendente: "+status.pendencias.slice(0,2).join(" "));
-  if(!faixas.length)throw new Error("Não há preços para esta categoria.");
-  const resultados=await Promise.all(planos.map(async plano=>{
-    const [{regra,opcionais},faixa]=await Promise.all([
-      consultarRegraComercial(p.empresaId,p.categoria,plano.codigo),
-      Promise.resolve(faixas.find(f=>f.plano===plano.codigo&&
-        p.valorFipeCentavos>=Number(f.fipe_min_centavos)&&p.valorFipeCentavos<=Number(f.fipe_max_centavos))),
-    ]);
-    if(!faixa)throw new Error("Preço FIPE fora das faixas do plano "+plano.nome+".");
+  const hoje=new Date().toISOString().slice(0,10);
+  const resultados=[];
+  for(const plano of planos){
+    const meta=arquivos.find(a=>a.plano===plano.codigo);
+    const especial=Boolean(p.veiculo) && await verificarEspecialEmpresa(
+      p.empresaId,p.veiculo||"",p.codigoFipe,plano.codigo);
+    if(p.categoria==="especiais"&&!especial)continue;
+    const categoriaPlano=especial?"especiais":p.categoria;
+    const faixasPlano=categoriaPlano==="especiais"?p.categoria==="especiais"?faixas:faixasEspeciais:faixas;
+    const faixa=faixasPlano.find(f=>f.plano===plano.codigo&&
+      p.valorFipeCentavos>=Number(f.fipe_min_centavos)&&
+      p.valorFipeCentavos<=Number(f.fipe_max_centavos));
+    if(!faixa)continue; // Planos podem atender categorias e faixas diferentes.
+    if(!meta?.arquivo_precos_nome||!meta.vigencia_ate||meta.vigencia_ate<hoje)continue;
+    if(p.categoria==="especiais"&&
+      !(await verificarEspecialEmpresa(p.empresaId,p.veiculo||"",p.codigoFipe,plano.codigo)))continue;
+    const {regra,opcionais}=await consultarRegraComercial(p.empresaId,categoriaPlano,plano.codigo);
     if(!regra.usos_permitidos.includes(p.uso)||!regra.energias_permitidas.includes(p.energia))
-      throw new Error("Uso ou motorização incompatíveis com o plano "+plano.nome+".");
+      continue;
     const solicitados=[...new Set(p.opcionaisPorPlano?.[plano.codigo]||[])];
     const ativos=opcionais.filter(o=>o.ativo);
     if(solicitados.some(c=>!ativos.some(o=>o.codigo===c)))
-      throw new Error("Opcional inválido para o plano "+plano.nome+".");
+      throw new Error("Opcional inválido para "+plano.nome+".");
     const extras=ativos.filter(o=>solicitados.includes(o.codigo));
     const grupos=extras.map(o=>o.grupo_exclusivo).filter(Boolean);
-    if(grupos.length!==new Set(grupos).size)throw new Error("Existem opcionais incompatíveis.");
+    if(grupos.length!==new Set(grupos).size)
+      throw new Error("Existem opcionais incompatíveis em "+plano.nome+".");
     const base=Number(faixa.valor_centavos);
-    const resultado={
-      plano:plano.codigo,plano_nome:plano.nome,categoria:p.categoria,
+    resultados.push({
+      plano:plano.codigo,plano_nome:plano.nome,categoria:categoriaPlano,
       codigo_produto:faixa.codigo_produto,mensalidade_base_centavos:base,
       opcionais:extras.map(o=>({codigo:o.codigo,nome:o.nome,centavos:Number(o.valor_centavos)})),
-      total_centavos:base+extras.reduce((t,o)=>t+Number(o.valor_centavos),0),
+      total_centavos:base+extras.reduce((total,item)=>total+Number(item.valor_centavos),0),
       cota_participacao_centavos:Math.max(
         Math.round(p.valorFipeCentavos*Number(regra.participacao_percentual)/100),
         Number(regra.participacao_min_centavos)),
       participacao_percentual:Number(regra.participacao_percentual),
-      tabela_validada:status.pronta,referencia:config.referencia,
+      tabela_validada:status.pronta,referencia:meta.referencia,
       terceiros_limite_centavos:Number(regra.terceiros_limite_centavos),
       assistencia_km_total:Number(regra.assistencia_km_total),
       assistencias_ano:Number(regra.assistencias_ano),
@@ -90,9 +105,9 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
       coberturas:regra.coberturas,observacoes:regra.observacoes,
       uso:p.uso,energia:p.energia,faixa_fipe_min_centavos:Number(faixa.fipe_min_centavos),
       faixa_fipe_max_centavos:Number(faixa.fipe_max_centavos),
-    };
-    return resultado;
-  }));
+    });
+  }
+  if(!resultados.length)throw new Error("Nenhum plano disponível para este veículo. Confira as tabelas e regras do plano.");
   return {planos:resultados};
 }
 export async function salvarCotacaoPlanos(p:ParametrosCotacao & {
@@ -119,7 +134,7 @@ export async function salvarCotacaoPlanos(p:ParametrosCotacao & {
     empresa_id:p.empresaId,contato_id:p.contatoId||null,conversa_id:p.conversaId||null,
     agente_id:p.agenteId||null,grupo_id:grupoId,origem:p.origem,
     status:c.tabela_validada?"emitida":"rascunho",nome_contato:(p.nomeContato||"").trim().slice(0,160)||null,
-    veiculo:p.veiculo.trim().slice(0,240),categoria:p.categoria,ano_modelo:p.anoModelo||null,
+    veiculo:p.veiculo.trim().slice(0,240),categoria:c.categoria,ano_modelo:p.anoModelo||null,
     valor_fipe_centavos:p.valorFipeCentavos,referencia_fipe:(p.referenciaFipe||"").slice(0,100)||null,
     plano:c.plano,plano_nome:c.plano_nome,codigo_produto:c.codigo_produto,
     mensalidade_base_centavos:c.mensalidade_base_centavos,opcionais_json:c.opcionais,

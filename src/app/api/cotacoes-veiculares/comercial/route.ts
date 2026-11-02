@@ -48,16 +48,25 @@ export async function POST(req:Request) {
     const body=await req.json() as Record<string,unknown>;
     const acao=String(body.acao||"");
     if(acao==="vigencia"){
+      const plano=String(body.plano||"");
+      if(!(await listarPlanosEmpresa(auth.empresaId!,true)).some(p=>p.codigo===plano))
+        throw new Error("Plano não encontrado.");
       const referencia=String(body.referencia||"").trim();
       const vigencia=String(body.vigencia_ate||"").trim();
-      const dataValida=/^\d{4}-\d{2}-\d{2}$/.test(vigencia) &&
-        !Number.isNaN(Date.parse(vigencia)) && new Date(vigencia).toISOString().slice(0,10)===vigencia;
-      if(referencia.length<3||referencia.length>160||!dataValida||
+      const valida=/^\d{4}-\d{2}-\d{2}$/.test(vigencia)&&
+        !Number.isNaN(Date.parse(vigencia))&&new Date(vigencia).toISOString().slice(0,10)===vigencia;
+      if(referencia.length<3||referencia.length>160||!valida||
         vigencia<new Date().toISOString().slice(0,10))
-        throw new Error("Informe referência (3 a 160 caracteres) e validade atual ou futura.");
-      const {error}=await getSupabaseAdmin().from("cotacao_veicular_configuracoes").upsert({
-        empresa_id:auth.empresaId,referencia,vigencia_ate:vigencia,updated_at:new Date().toISOString(),
-      },{onConflict:"empresa_id"});
+        throw new Error("Informe referência e data de validade atual ou futura.");
+      const {data:arquivo,error:erroArquivo}=await getSupabaseAdmin()
+        .from("cotacao_veicular_planos_arquivos").select("arquivo_precos_nome")
+        .eq("empresa_id",auth.empresaId).eq("plano",plano).maybeSingle();
+      if(erroArquivo)throw erroArquivo;
+      if(!arquivo?.arquivo_precos_nome)
+        throw new Error("Importe a tabela de preços deste plano antes de informar a validade.");
+      const {error}=await getSupabaseAdmin().from("cotacao_veicular_planos_arquivos")
+        .update({referencia,vigencia_ate:vigencia,updated_at:new Date().toISOString()})
+        .eq("empresa_id",auth.empresaId).eq("plano",plano);
       if(error)throw error;
     }else if(acao==="adicionar_cobertura"||acao==="remover_cobertura"){
       const categoria=String(body.categoria||"");

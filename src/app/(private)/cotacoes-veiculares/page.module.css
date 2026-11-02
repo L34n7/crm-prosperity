@@ -795,3 +795,44 @@
   .planSymbol{width:36px;height:36px;flex-basis:36px}
   .coverageChip{white-space:normal}
 }
+
+/* Gestão de planos e arquivos individuais */
+.plansManagerBlock{min-width:0}
+.plansManagerBlock .sectionHeading h2{font-size:19px}
+.plansManagerItem[data-selected="true"]{border-color:#91cfc8;background:linear-gradient(115deg,#f0faf8,#ffffff);box-shadow:0 4px 16px rgba(14,118,116,.055)}
+.planInfoButton{display:flex;flex:1;min-width:0;flex-direction:column;align-items:flex-start;gap:4px;padding:5px 0;border:0;background:transparent;text-align:left;cursor:pointer}
+.planInfoButton strong{font-size:14px;font-weight:750;color:#173f4b;overflow-wrap:anywhere}
+.planInfoButton small{font-size:11px;color:#5f8190}
+.planDetail{margin-top:22px;padding-top:22px;border-top:1px solid #dcebed;min-width:0}
+.planDetailHeader{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:18px}
+.planDetailHeader h3{font-size:22px;font-weight:800;margin:6px 0;color:#214b57}
+.planDetailHeader p{font-size:13px;line-height:1.5;color:#6b8490;margin:0}
+.planDetail .importGrid{margin-bottom:20px}
+.planDetail .importCard{background:linear-gradient(150deg,#fff,#f7fbfb);border-color:#dfe9ed}
+.planValidity{display:flex;flex-direction:column;gap:10px;margin-top:12px;padding-top:13px;border-top:1px solid #deeaec}
+.planValidity label{display:flex;flex-direction:column;gap:6px;color:#647d89;font-size:12px;font-weight:650}
+.planValidity input,.categoryChooser select,.planPriceEditor input{min-height:44px;width:100%;min-width:0;box-sizing:border-box;padding:10px 12px;border:1px solid #d6e7e9;border-radius:10px;background:#fff;color:#203e4c;font:inherit;font-size:14px}
+.planValidity button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:750}
+.categoryChooser{margin:18px 0}
+.categoryChooser label{display:flex;flex-direction:column;gap:8px;color:#506e7b;font-size:13px;font-weight:700}
+.planDetail .commercialGrid{grid-template-columns:minmax(0,1fr)}
+.planDetail .commercialCard{background:linear-gradient(135deg,#ffffff,#f9fcfc)}
+.planDetail>section{box-shadow:none;margin-bottom:18px;padding:19px;background:#fff}
+.planPrices{padding:18px;border:1px solid #e1edef;border-radius:16px;background:linear-gradient(155deg,#fff,#f8fcfc);min-width:0}
+.planPrices h3{font-size:16px;margin:0 0 6px}
+.planPrices p{font-size:12px;color:#708895;line-height:1.5}
+.planPriceEditor{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px;border-top:1px solid #e1edef;padding-top:14px}
+.planPriceEditor label{display:flex;flex-direction:column;gap:6px;flex:1;min-width:140px;font-size:12px;font-weight:650}
+.planPriceEditor button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;border-radius:9px;padding:10px 14px;cursor:pointer;font-size:12px;font-weight:750}
+.planPlaceholder{display:flex;align-items:center;gap:12px;margin-top:20px;padding:23px;border:1px dashed #bcdad9;border-radius:14px;color:#5d7b89;background:#f7fbfb}
+.planPlaceholder p{margin:0;font-size:13px;line-height:1.5}
+@media(max-width:768px){
+ .planDetail{padding-top:18px;margin-top:18px}
+ .planDetailHeader h3{font-size:20px}
+ .planDetail>section{padding:13px}
+ .planPrices{padding:13px}
+ .planPriceEditor{display:grid;grid-template-columns:minmax(0,1fr)}
+ .planPriceEditor input{font-size:16px}
+ .planPriceEditor button{width:100%}
+ .planValidity input,.categoryChooser select{font-size:16px}
+}

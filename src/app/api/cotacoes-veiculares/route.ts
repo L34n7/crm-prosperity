@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { listarPlanosEmpresa,statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO,ENERGIAS_VEICULO,type UsoVeiculo,type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { CATEGORIAS_COTACAO,categoriaValida,configuracaoCotacao,consultarFaixas,calcularCotacaoPlanos,salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 
@@ -32,14 +32,14 @@ export async function GET(req:Request){
   const categoria=new URL(req.url).searchParams.get("categoria")||"auto_leves";
   if(!categoriaValida(categoria))throw new Error("Categoria inválida.");
   const admin=getSupabaseAdmin();
-  const [config,planos,faixas,status,cot,especial]=await Promise.all([
+  const [config,planos,faixas,arquivos,status,cot,especial]=await Promise.all([
     configuracaoCotacao(auth.empresaId!),listarPlanosEmpresa(auth.empresaId!),
-    consultarFaixas(auth.empresaId!,categoria),statusConfiguracaoCotacao(auth.empresaId!),
+    consultarFaixas(auth.empresaId!,categoria),listarArquivosPlano(auth.empresaId!),statusConfiguracaoCotacao(auth.empresaId!),
     admin.from("cotacao_veicular_cotacoes").select("*").eq("empresa_id",auth.empresaId!).order("created_at",{ascending:false}).limit(100),
     admin.from("cotacao_veicular_modelos_empresa").select("modelo",{head:true,count:"exact"}).eq("empresa_id",auth.empresaId!),
   ]);
   if(cot.error||especial.error)throw new Error(cot.error?.message||especial.error?.message);
-  return NextResponse.json({ok:true,config,planos,faixas,status,cotacoes:cot.data||[],
+  return NextResponse.json({ok:true,config,planos,faixas,arquivos,status,cotacoes:cot.data||[],
     modelos_especiais_total:especial.count||0,categorias:CATEGORIAS_COTACAO,
     pode_configurar:auth.podeConfigurar,pode_gerenciar:auth.podeGerenciar});
  }catch(e){console.error("[COTACAO_GET]",e);return erro(e,500);}
@@ -63,8 +63,9 @@ export async function POST(req:Request){
       .eq("fipe_min_centavos",min).select("plano").maybeSingle();
     if(error)throw error;
     if(!data)throw new Error("Faixa e plano não encontrados.");
-    const {error:err}=await getSupabaseAdmin().from("cotacao_veicular_configuracoes")
-      .update({vigencia_ate:null,updated_at:new Date().toISOString()}).eq("empresa_id",empresaId);
+    const {error:err}=await getSupabaseAdmin().from("cotacao_veicular_planos_arquivos")
+      .update({vigencia_ate:null,updated_at:new Date().toISOString()})
+      .eq("empresa_id",empresaId).eq("plano",plano);
     if(err)throw err;
     return NextResponse.json({ok:true});
   }
@@ -85,6 +86,7 @@ export async function POST(req:Request){
     opcionaisPorPlano[plano]=codigos as string[];
   }
   const parametros={empresaId,categoria:body.categoria,
+    veiculo:String(body.veiculo||""),codigoFipe:String(body.referencia_fipe||"").split("|").at(-1)?.trim()||"",
     valorFipeCentavos:valorInteiro(body.valor_fipe_centavos,"Valor FIPE"),uso,energia,
     origem:"manual" as const,opcionaisPorPlano};
   if(acao==="simular")return NextResponse.json({ok:true,calculos:await calcularCotacaoPlanos(parametros)});

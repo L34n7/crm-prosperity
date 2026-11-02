@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck, Calculator, CarFront, CheckCircle2, CircleAlert, ClipboardList,
-  Copy, Download, FileSpreadsheet, Loader2, Save, Settings2, ShieldCheck, UploadCloud, X, Trash2,
+  Copy, FileSpreadsheet, Loader2, Save, Settings2, ShieldCheck, UploadCloud, X, Trash2,
 } from "lucide-react";
 import Header from "@/components/Header";
 import {
@@ -11,17 +11,12 @@ import {
   type CategoriaCotacao, type PlanoCotacao, type PlanoEmpresa,
 } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO, USOS_VEICULO, type UsoVeiculo, type EnergiaVeiculo, type RegraComercialPlano, type OpcionalComercial } from "@/lib/cotacoes-veiculares/comercial";
-import ConfiguracaoComercialEditor from "./ConfiguracaoComercialEditor";
-import PlanosManager from "./PlanosManager";
+import PlanosCotacao, {type ArquivoPlano} from "./PlanosCotacao";
 import styles from "./page.module.css";
 
 type Faixa = {
   categoria: string; fipe_min_centavos: number; fipe_max_centavos: number;
   plano:string;valor_centavos:number;codigo_produto:string;
-};
-type Config = {
-  tabela_importada:boolean;arquivo_precos_nome:string|null;arquivo_precos_em:string|null;arquivo_especiais_nome:string|null;arquivo_especiais_em:string|null;
-  modelos_importados:boolean; referencia:string; vigencia_ate:string|null;
 };
 type Calculo = {
   plano:string;plano_nome:string;codigo_produto:string; mensalidade_base_centavos:number; total_centavos:number;
@@ -44,7 +39,8 @@ type Opcao = {code:string;name:string};
 type DetalheFipe = {
   brand:string;model:string;modelYear:number;referenceMonth:string;codeFipe:string;price:string;
 };
-type ImportacaoPendente = {tipo:"precos"|"especiais";arquivo:File};
+type ImportacaoPendente = {tipo:"precos"|"especiais";plano:string;arquivo:File};
+type RemocaoPendente = {tipo:"precos"|"especiais";plano:string};
 
 const moeda=(n:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n/100);
 const formatoNumerico=(n:number)=>new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n/100);
@@ -70,17 +66,13 @@ export default function CotacoesVeicularesPage() {
   const [valorFipe,setValorFipe]=useState("");
   const [referenciaFipe,setReferenciaFipe]=useState("");
   const [opcionaisPorPlano,setOpcionaisPorPlano]=useState<Record<string,string[]>>({});
-  const [config,setConfig]=useState<Config>({
-    tabela_importada:false,modelos_importados:false,referencia:"",vigencia_ate:null,
-    arquivo_precos_nome:null,arquivo_precos_em:null,arquivo_especiais_nome:null,arquivo_especiais_em:null,
-  });
   const [faixas,setFaixas]=useState<Faixa[]>([]);
   const [planos,setPlanos]=useState<PlanoEmpresa[]>([]);
+  const [arquivos,setArquivos]=useState<ArquivoPlano[]>([]);
   const [status,setStatus]=useState<Status>({pronta:false,pendencias:[],categorias:[],faixas:0,regras:0});
   const [regras,setRegras]=useState<RegraBanco[]>([]);
   const [catalogoExtras,setCatalogoExtras]=useState<OpcionalBanco[]>([]);
   const [cotacoes,setCotacoes]=useState<Cotacao[]>([]);
-  const [modelosTotal,setModelosTotal]=useState(0);
   const [podeGerenciar,setPodeGerenciar]=useState(false);
   const [podeConfigurar,setPodeConfigurar]=useState(false);
   const [calculos,setCalculos]=useState<Calculos|null>(null);
@@ -89,8 +81,6 @@ export default function CotacoesVeicularesPage() {
   const [sucesso,setSucesso]=useState("");
   const [carregando,setCarregando]=useState(true);
   const [ocupado,setOcupado]=useState(false);
-  const [editando,setEditando]=useState<Faixa|null>(null);
-  const [novoPreco,setNovoPreco]=useState("");
   const [marcas,setMarcas]=useState<Opcao[]>([]);
   const [modelos,setModelos]=useState<Opcao[]>([]);
   const [anos,setAnos]=useState<Opcao[]>([]);
@@ -100,9 +90,7 @@ export default function CotacoesVeicularesPage() {
   const [buscandoFipe,setBuscandoFipe]=useState(false);
   const [carregandoMarcas,setCarregandoMarcas]=useState(false);
   const [importacao,setImportacao]=useState<ImportacaoPendente|null>(null);
-  const [remocao,setRemocao]=useState<"precos"|"especiais"|null>(null);
-  const inputPrecosRef=useRef<HTMLInputElement>(null);
-  const inputEspeciaisRef=useRef<HTMLInputElement>(null);
+  const [remocao,setRemocao]=useState<RemocaoPendente|null>(null);
 
   const tipoFipe=categoria==="motocicleta"?"motorcycles"
     :categoria.startsWith("caminhao_")?"trucks":"cars";
@@ -113,8 +101,8 @@ export default function CotacoesVeicularesPage() {
       const res=await fetch("/api/cotacoes-veiculares?categoria="+categoria,{cache:"no-store"});
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Erro ao carregar cotações.");
-      setConfig(json.config);setFaixas(json.faixas||[]);setStatus(json.status);setPlanos(json.planos||[]);
-      setCotacoes(json.cotacoes||[]);setModelosTotal(Number(json.modelos_especiais_total||0));
+      setFaixas(json.faixas||[]);setStatus(json.status);setPlanos(json.planos||[]);setArquivos(json.arquivos||[]);
+      setCotacoes(json.cotacoes||[]);
       setPodeGerenciar(Boolean(json.pode_gerenciar));setPodeConfigurar(Boolean(json.pode_configurar));
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao carregar.");}
     finally{setCarregando(false);}
@@ -163,18 +151,15 @@ export default function CotacoesVeicularesPage() {
         setAnoModelo(String(d.modelYear));
         setValorFipe(formatoNumerico(Number(json.valor_fipe_centavos)));
         setReferenciaFipe(d.referenceMonth+" | "+d.codeFipe);
-        if(json.especial===true && categoria!=="especiais"){
-          setCategoria("especiais");
-          setSucesso("Veículo identificado na lista de especiais. Categoria ajustada automaticamente.");
-        }else{
-          setSucesso("Consulta FIPE concluída: "+d.price+". Confira a categoria comercial.");
-        }
+        setSucesso(json.especial===true
+          ? "Este veículo aparece como especial em algum plano. O enquadramento é verificado individualmente por plano."
+          : "Consulta FIPE concluída: "+d.price+". Confira os dados do veículo.");
       }
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao consultar FIPE.");}
     finally{setBuscandoFipe(false);}
   }
 
-  async function enviar(acao:"simular"|"salvar"|"preco",dados:Record<string,unknown>){
+  async function enviar(acao:"simular"|"salvar",dados:Record<string,unknown>){
     setOcupado(true);setErro("");setSucesso("");
     try{
       const res=await fetch("/api/cotacoes-veiculares",{
@@ -190,10 +175,6 @@ export default function CotacoesVeicularesPage() {
           ?"Proposta salva em rascunho até a validação comercial."
           :"Cotação de todos os planos registrada no histórico.");
         await atualizar();
-      }
-      if(acao==="preco"){
-        setEditando(null);await atualizar();
-        setSucesso("Valores atualizados. A tabela precisa ser validada novamente.");
       }
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao processar solicitação.");}
     finally{setOcupado(false);}
@@ -242,50 +223,34 @@ export default function CotacoesVeicularesPage() {
     try{await navigator.clipboard.writeText(linhas);setSucesso("Comparativo copiado.");}
     catch{setErro("Não foi possível copiar no navegador.");}
   }
-  async function salvarVigencia(){
-    setOcupado(true);setErro("");setSucesso("");
-    try{
-      const resposta=await fetch("/api/cotacoes-veiculares/comercial",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({acao:"vigencia",referencia:config.referencia,vigencia_ate:config.vigencia_ate}),
-      });
-      const json=await resposta.json();
-      if(!resposta.ok||!json.ok)throw new Error(json.error||"Não foi possível salvar a validade.");
-      await atualizarTudo();
-      setSucesso("Referência e validade salvas.");
-    }catch(e){setErro(e instanceof Error?e.message:"Erro ao salvar validade.");}
-    finally{setOcupado(false);}
-  }
   async function confirmarImportacao(){
     if(!importacao)return;
     setOcupado(true);setErro("");setSucesso("");
     try{
       const form=new FormData();
-      form.set("tipo",importacao.tipo);form.set("arquivo",importacao.arquivo);
-      if(importacao.tipo==="precos"){
-        const referencia=config.referencia.includes("Save Car") || !config.referencia.trim()
-          ? "Tabela de preços importada em "+new Date().toLocaleDateString("pt-BR")
-          : config.referencia;
-        form.set("referencia",referencia);
-      }
+      form.set("tipo",importacao.tipo);
+      form.set("plano",importacao.plano);
+      form.set("arquivo",importacao.arquivo);
+      if(importacao.tipo==="precos")
+        form.set("referencia","Tabela comercial de "+(planos.find(p=>p.codigo===importacao.plano)?.nome||"plano"));
       const response=await fetch("/api/cotacoes-veiculares/importar",{method:"POST",body:form});
       const json=await response.json();
       if(!response.ok||!json.ok)throw new Error(json.error||"Não foi possível importar o arquivo.");
-      setImportacao(null);
-      await atualizarTudo();
-      setSucesso(String(json.total)+" registros importados de "+json.arquivo+".");
+      setImportacao(null);await atualizarTudo();
+      setSucesso(String(json.total)+" registros importados para "+(planos.find(p=>p.codigo===importacao.plano)?.nome||"plano")+".");
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao importar arquivo.");}
     finally{setOcupado(false);}
   }
   async function excluirArquivo(){
     if(!remocao)return;
-    setOcupado(true);setErro("");
+    setOcupado(true);setErro("");setSucesso("");
     try{
-      const res=await fetch("/api/cotacoes-veiculares/importar?tipo="+remocao,{method:"DELETE"});
+      const query=new URLSearchParams({tipo:remocao.tipo,plano:remocao.plano});
+      const res=await fetch("/api/cotacoes-veiculares/importar?"+query,{method:"DELETE"});
       const json=await res.json();
-      if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao remover arquivo.");
+      if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível remover.");
       setRemocao(null);await atualizarTudo();
-      setSucesso("Arquivo desvinculado e respectivos dados removidos da configuração.");
+      setSucesso("Arquivo removido somente do plano selecionado.");
     }catch(e){setErro(e instanceof Error?e.message:"Falha ao remover.");}
     finally{setOcupado(false);}
   }
@@ -320,7 +285,7 @@ export default function CotacoesVeicularesPage() {
       {sucesso&&<div className={styles.success} role="status">{sucesso}</div>}
       <nav className={styles.tabs} aria-label="Seções de cotação">
         <button type="button" aria-pressed={aba==="nova"} className={aba==="nova"?styles.active:""} onClick={()=>setAba("nova")}><Calculator size={17}/><span>Nova cotação</span></button>
-        <button type="button" aria-pressed={aba==="tabela"} className={aba==="tabela"?styles.active:""} onClick={()=>setAba("tabela")}><Settings2 size={17}/><span className={styles.tabLabelDesktop}>Tabela e configurações</span><span className={styles.tabLabelMobile}>Tabela</span></button>
+        <button type="button" aria-pressed={aba==="tabela"} className={aba==="tabela"?styles.active:""} onClick={()=>setAba("tabela")}><Settings2 size={17}/><span className={styles.tabLabelDesktop}>Planos</span><span className={styles.tabLabelMobile}>Planos</span></button>
         <button type="button" aria-pressed={aba==="historico"} className={aba==="historico"?styles.active:""} onClick={()=>setAba("historico")}><ClipboardList size={17}/><span>Histórico</span></button>
       </nav>
 
@@ -415,7 +380,7 @@ export default function CotacoesVeicularesPage() {
           </div>
           {!calculos?<div className={styles.empty}><ShieldCheck size={34}/>
             <strong>Pronto para comparar</strong>
-            <p>Preencha o valor FIPE e clique em Simular para ver Premium e Completo juntos.</p>
+            <p>Preencha os dados para comparar todos os planos disponíveis.</p>
           </div>:<>
             <div className={styles.comparison}>
               {calculos.planos.map(c=>{
@@ -448,122 +413,17 @@ export default function CotacoesVeicularesPage() {
         </aside>
       </div>}
 
-      {!carregando&&aba==="tabela"&&<div className={styles.stack}>
-        <PlanosManager planos={planos} podeConfigurar={podeConfigurar} onSaved={atualizarTudo}/>
-        <section className={styles.panel}>
-          <div className={styles.sectionHeading}><h2>Referência e validade dos preços</h2>
-            <p>Depois de criar planos e importar seus preços, informe o nome e a validade comercial da tabela. A liberação no agente IA é automática quando tudo estiver preenchido.</p>
-          </div>
-          <div className={styles.fields}>
-            <label>Referência da tabela
-              <input disabled={!podeConfigurar} maxLength={160} value={config.referencia}
-                onChange={e=>setConfig({...config,referencia:e.target.value})}/>
-            </label>
-            <label>Preços válidos até
-              <input type="date" disabled={!podeConfigurar} value={config.vigencia_ate||""}
-                onChange={e=>setConfig({...config,vigencia_ate:e.target.value})}/>
-            </label>
-          </div>
-          <div className={styles.actions}>
-            <button type="button" disabled={!podeConfigurar||ocupado} className={styles.primary}
-              onClick={()=>void salvarVigencia()}><Save size={16}/> Salvar referência e validade</button>
-          </div>
-          <div className={styles.completionStatus}>
-            <strong>{status.pronta?"Configuração comercial concluída":"O que falta configurar"}</strong>
-            {status.pronta
-              ?<p>Preços e regras configurados. A ferramenta pode ser ativada no agente IA.</p>
-              :<ul>{status.pendencias.map((item,i)=><li key={i}>{item}</li>)}</ul>}
-          </div>
-        </section>
-        <section className={styles.panel}>
-          <div className={styles.sectionHeading}><h2>Importação de tabelas</h2>
-            <p>Use os modelos em Excel para configurar seu próprio catálogo sem precisar alterar o código.</p>
-          </div>
-          <div className={styles.importGrid}>
-            <div className={styles.importCard}>
-              <div className={styles.importIcon}><FileSpreadsheet size={22}/></div>
-              <h3>Tabela de preços</h3>
-              <p>Importe preços por plano e faixa FIPE. Crie os planos primeiro.</p>
-              <div className={styles.importMeta}>{config.tabela_importada?"Tabela de preços cadastrada":"Nenhuma tabela importada"}</div>
-              {config.tabela_importada&&<div className={styles.importedFile}>
-                <FileSpreadsheet size={18}/><div><strong>{config.arquivo_precos_nome||"Tabela anterior (nome não registrado)"}</strong>
-                {config.arquivo_precos_em&&<small>Importada em {dataHora(config.arquivo_precos_em)}</small>}</div>
-                <button type="button" disabled={!podeConfigurar||ocupado} aria-label="Remover tabela importada"
-                  onClick={()=>setRemocao("precos")}><X size={17}/></button>
-              </div>}
-              <input className={styles.hiddenFile} type="file" ref={inputPrecosRef} accept=".xlsx"
-                onChange={e=>{const file=e.target.files?.[0];if(file)setImportacao({tipo:"precos",arquivo:file});e.target.value="";}}/>
-              <div className={styles.importActions}>
-                <button type="button" className={styles.primary} disabled={!podeConfigurar||ocupado}
-                  onClick={()=>inputPrecosRef.current?.click()}><UploadCloud size={16}/> Importar tabela de preços</button>
-                <a className={styles.modelLink} href="/api/cotacoes-veiculares/importar?tipo=precos"><Download size={15}/> Baixar modelo</a>
-              </div>
-            </div>
-            <div className={styles.importCard}>
-              <div className={styles.importIcon}><CarFront size={22}/></div>
-              <h3>Veículos especiais</h3>
-              <p>Importe os modelos e códigos FIPE considerados especiais pela empresa.</p>
-              <div className={styles.importMeta}>{modelosTotal} modelo(s) na lista da empresa</div>
-              {config.modelos_importados&&<div className={styles.importedFile}>
-                <FileSpreadsheet size={18}/><div><strong>{config.arquivo_especiais_nome||"Lista anterior (nome não registrado)"}</strong>
-                {config.arquivo_especiais_em&&<small>Importada em {dataHora(config.arquivo_especiais_em)}</small>}</div>
-                <button type="button" disabled={!podeConfigurar||ocupado} aria-label="Remover veículos especiais importados"
-                  onClick={()=>setRemocao("especiais")}><X size={17}/></button>
-              </div>}
-              <input className={styles.hiddenFile} type="file" ref={inputEspeciaisRef} accept=".xlsx"
-                onChange={e=>{const file=e.target.files?.[0];if(file)setImportacao({tipo:"especiais",arquivo:file});e.target.value="";}}/>
-              <div className={styles.importActions}>
-                <button type="button" className={styles.primary} disabled={!podeConfigurar||ocupado}
-                  onClick={()=>inputEspeciaisRef.current?.click()}><UploadCloud size={16}/> Importar veículos especiais</button>
-                <a className={styles.modelLink} href="/api/cotacoes-veiculares/importar?tipo=especiais"><Download size={15}/> Baixar modelo</a>
-              </div>
-            </div>
-          </div>
-          <p className={styles.importNotice}><CircleAlert size={17}/>
-            Cada importação substitui somente os dados daquele tipo nesta empresa. A disponibilidade da ferramenta depende da configuração comercial completa.
-          </p>
-          <p className={styles.smallNote}>Coberturas, participação, opcionais, assistência e elegibilidade são configurados individualmente por empresa.</p>
-        </section>
-        <ConfiguracaoComercialEditor categoria={categoria} planos={planos} regras={regras}
-          opcionais={catalogoExtras} podeConfigurar={podeConfigurar} onSaved={atualizarTudo}/>
-        <section className={styles.panel}>
-          <div className={styles.sectionHeading}><h2>Faixas FIPE por categoria</h2>
-            <p>Consulte e ajuste individualmente os preços. Qualquer edição exige nova validação comercial.</p>
-          </div>
-          <label className={styles.wideLabel}>Categoria
-            <select value={categoria} onChange={e=>{setCategoria(e.target.value as CategoriaCotacao);setEditando(null);}}>
-              {categorias.map(([id,nome])=><option key={id} value={id}>{nome}</option>)}
-            </select>
-          </label>
-          <p className={styles.scrollHint}>Deslize a tabela para os lados para ver todas as colunas.</p>
-          <div className={styles.tableScroll}><table>
-            <thead><tr><th>Faixa FIPE</th><th>Plano</th><th>Mensalidade</th><th>Código</th><th></th></tr></thead>
-            <tbody>{faixas.map(f=><tr key={f.plano+":"+f.fipe_min_centavos}>
-              <td>{moeda(f.fipe_min_centavos)} – {moeda(f.fipe_max_centavos)}</td>
-              <td>{planos.find(p=>p.codigo===f.plano)?.nome||f.plano}</td>
-              <td>{moeda(f.valor_centavos)}</td><td>{f.codigo_produto}</td>
-              <td><button type="button" className={styles.smallButton} disabled={!podeConfigurar}
-                onClick={()=>{setEditando(f);setNovoPreco(formatoNumerico(f.valor_centavos));}}>Editar</button></td>
-            </tr>)}</tbody>
-          </table></div>
-          {!faixas.length&&<p className={styles.smallNote}>Nenhum preço nesta categoria. Importe a tabela para começar.</p>}
-        </section>
-        {editando&&<section className={styles.panel}>
-          <h2>Editar {planos.find(p=>p.codigo===editando.plano)?.nome||editando.plano}</h2>
-          <p className={styles.smallNote}>Faixa: {moeda(editando.fipe_min_centavos)} – {moeda(editando.fipe_max_centavos)}</p>
-          <div className={styles.fields}><label>Mensalidade (R$)
-            <input value={novoPreco} onChange={e=>setNovoPreco(e.target.value)}/></label></div>
-          <div className={styles.actions}>
-            <button type="button" className={styles.secondary} onClick={()=>setEditando(null)}>Cancelar</button>
-            <button type="button" className={styles.primary} disabled={ocupado}
-              onClick={()=>void enviar("preco",{
-                categoria,plano:editando.plano,fipe_min_centavos:editando.fipe_min_centavos,
-                valor_centavos:valorDeMoeda(novoPreco),
-              })}>Salvar preço</button>
-          </div>
-        </section>}
-      </div>}
-
+      {!carregando&&aba==="tabela"&&<>
+        <PlanosCotacao planos={planos} arquivos={arquivos} categoria={categoria}
+          onCategoria={setCategoria} faixas={faixas} regras={regras} opcionais={catalogoExtras}
+          podeConfigurar={podeConfigurar} onUpdated={atualizarTudo}
+          onImportar={(tipo,plano,arquivo)=>setImportacao({tipo,plano,arquivo})}
+          onRemover={(tipo,plano)=>setRemocao({tipo,plano})}/>
+        {status.pendencias.length>0&&<div className={styles.completionStatus}>
+          <strong>O que falta para habilitar a cotação automática</strong>
+          <ul>{status.pendencias.slice(0,12).map((p,i)=><li key={i}>{p}</li>)}</ul>
+        </div>}
+      </>}
       {!carregando&&aba==="historico"&&<section className={styles.panel}>
         <div className={styles.sectionHeading}><h2>Histórico de cotações</h2>
           <p>Os planos da mesma proposta são exibidos juntos, com data, origem e situação.</p></div>
@@ -591,7 +451,7 @@ export default function CotacoesVeicularesPage() {
         aria-label="Confirmar remoção do arquivo" onClick={e=>e.stopPropagation()}>
         <div className={styles.modalHeading}><span className={styles.importIcon}><Trash2 size={19}/></span>
           <button type="button" disabled={ocupado} aria-label="Fechar" onClick={()=>setRemocao(null)}><X size={20}/></button></div>
-        <h2>Remover {remocao==="precos"?"tabela de preços":"lista de veículos especiais"}?</h2>
+        <h2>Remover {remocao.tipo==="precos"?"tabela de preços":"lista de veículos especiais"} de {planos.find(p=>p.codigo===remocao.plano)?.nome}?</h2>
         <p>Isso excluirá os dados desta importação para a empresa, sem apagar cotações anteriores.</p>
         <p>Você poderá importar outro arquivo em seguida. A ferramenta da IA só funcionará com a configuração completa.</p>
         <div className={styles.actions}>
@@ -609,8 +469,8 @@ export default function CotacoesVeicularesPage() {
         </div>
         <h2>Confirmar importação</h2>
         <p>Arquivo: <strong>{importacao.arquivo.name}</strong></p>
-        <p>Os {importacao.tipo==="precos"?"preços e faixas FIPE":"modelos especiais"} atuais desta empresa serão <strong>substituídos</strong>. Outras empresas não serão afetadas.</p>
-        <p>A disponibilidade da ferramenta será recalculada a partir das regras comerciais cadastradas.</p>
+        <p>Os {importacao.tipo==="precos"?"preços":"modelos especiais"} de <strong>{planos.find(p=>p.codigo===importacao.plano)?.nome}</strong> serão substituídos. Os outros planos e empresas não serão alterados.</p>
+        <p>A cotação automática só será liberada quando os planos estiverem totalmente configurados.</p>
         <div className={styles.actions}>
           <button className={styles.secondary} type="button" disabled={ocupado} onClick={()=>setImportacao(null)}>Cancelar</button>
           <button className={styles.primary} type="button" disabled={ocupado} onClick={()=>void confirmarImportacao()}>

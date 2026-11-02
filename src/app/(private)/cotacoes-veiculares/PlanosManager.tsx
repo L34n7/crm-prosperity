@@ -3,8 +3,9 @@ import {useState} from "react";
 import {Plus,Save,Trash2,Pencil,X,Layers3} from "lucide-react";
 import type {PlanoEmpresa} from "@/lib/cotacoes-veiculares/catalogo";
 import styles from "./page.module.css";
-export default function PlanosManager({planos,podeConfigurar,onSaved}:{
+export default function PlanosManager({planos,podeConfigurar,onSaved,selecionado,onSelecionar}:{
  planos:PlanoEmpresa[];podeConfigurar:boolean;onSaved:()=>Promise<void>;
+ selecionado:string|null;onSelecionar:(codigo:string)=>void;
 }){
  const [nome,setNome]=useState("");
  const [editando,setEditando]=useState<string|null>(null);
@@ -27,19 +28,19 @@ export default function PlanosManager({planos,podeConfigurar,onSaved}:{
   }catch(e){setErro(e instanceof Error?e.message:"Não foi possível salvar.");}
   finally{setLoading(false);}
  }
- return <section className={styles.panel}>
-  <div className={styles.sectionHeading}><h2>Planos da empresa</h2>
-   <p>Crie quantos planos precisar, com os nomes utilizados pela sua empresa. Configure as regras de cada plano e depois importe os preços.</p>
+ return <div className={styles.plansManagerBlock}>
+  <div className={styles.sectionHeading}><h2>Planos</h2>
+   <p>Crie seus planos e selecione qual deseja configurar. Cada plano recebe seus próprios preços, coberturas e veículos especiais.</p>
   </div>
   {erro&&<p className={styles.error} role="alert">{erro}</p>}
   <div className={styles.plansManagerList}>
-   {planos.map(p=><div className={styles.plansManagerItem} key={p.codigo}>
+   {planos.map(p=><div className={styles.plansManagerItem} key={p.codigo} data-selected={selecionado===p.codigo}>
     <span className={styles.planSymbol}><Layers3 size={19}/></span>
     {editando===p.codigo?<input autoFocus className={styles.planEditInput}
       maxLength={90} value={edicao} onChange={e=>setEdicao(e.target.value)}
       onKeyDown={e=>{if(e.key==="Enter")void enviar("renomear",p.codigo);if(e.key==="Escape")setEditando(null);}}/>
-    :<div className={styles.planInfo}><strong>{p.nome}</strong>
-      <small>Plano personalizado</small></div>}
+    :<button type="button" className={styles.planInfoButton} onClick={()=>onSelecionar(p.codigo)} aria-pressed={selecionado===p.codigo}>
+      <strong>{p.nome}</strong><small>{selecionado===p.codigo?"Configurando este plano":"Selecionar para configurar"}</small></button>}
     {podeConfigurar&&(editando===p.codigo?
      <div className={styles.planIconActions}>
       <button type="button" aria-label="Salvar nome" disabled={loading} onClick={()=>void enviar("renomear",p.codigo)}><Save size={17}/></button>
@@ -70,5 +71,5 @@ export default function PlanosManager({planos,podeConfigurar,onSaved}:{
      onClick={()=>void enviar("excluir",removendo)}><Trash2 size={15}/> Excluir plano</button>
    </div>
   </div>}
- </section>;
+ </div>;
 }

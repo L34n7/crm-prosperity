@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO, ENERGIAS_VEICULO, type UsoVeiculo, type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { encontrarVeiculoFipe, tipoFipeDaCategoria } from "@/lib/cotacoes-veiculares/fipe";
-import { categoriaValida, salvarCotacaoPlanos, configuracaoCotacao, verificarEspecialEmpresa, type CategoriaCotacao } from "@/lib/cotacoes-veiculares/servico";
+import { categoriaValida, salvarCotacaoPlanos, type CategoriaCotacao } from "@/lib/cotacoes-veiculares/servico";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
 import { carregarNichoEmpresa } from "./nicho-empresa";
@@ -394,11 +394,7 @@ export async function executarFerramentaNegocio(params: {
     const fipe = await encontrarVeiculoFipe({
       tipo:tipoFipeDaCategoria(categoria),marca,modelo,ano,
     });
-    const especial=await verificarEspecialEmpresa(params.empresaId,fipe.model,fipe.codeFipe);
-    const config=await configuracaoCotacao(params.empresaId);
-    if(especial && tipoFipeDaCategoria(categoria)==="cars") categoria="especiais";
-    if(categoria==="especiais" && config.modelos_importados && !especial)
-      return {ok:false,error:"Este modelo não foi confirmado na lista de veículos especiais da empresa. Encaminhe para avaliação humana."};
+    // A classificação especial é feita dentro do cálculo, individualmente por plano.
     const opcionaisPorPlano:Record<string,string[]>={};
     const extras=Array.isArray(args.opcionais_por_plano)?args.opcionais_por_plano:[];
     for(const item of extras){
@@ -414,7 +410,7 @@ export async function executarFerramentaNegocio(params: {
     const {cotacoes,calculos,grupo_id}=await salvarCotacaoPlanos({
       empresaId:params.empresaId,agenteId:params.agenteId,conversaId:params.conversaId,
       origem:"agente_ia",categoria,uso,energia,
-      veiculo:fipe.brand+" "+fipe.model,anoModelo:fipe.modelYear,
+      veiculo:fipe.brand+" "+fipe.model,codigoFipe:fipe.codeFipe,anoModelo:fipe.modelYear,
       valorFipeCentavos:fipe.valorCentavos,
       referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
       opcionaisPorPlano,idempotencyKey:"agente-ia:"+assinatura,
