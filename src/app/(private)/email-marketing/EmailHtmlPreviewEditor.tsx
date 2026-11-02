@@ -2,7 +2,7 @@
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
-  ArrowDown, ArrowUp, Columns2, Copy, Eye, Heading1, Image as ImageIcon, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Smartphone, Trash2, Type, Undo2,
+  ArrowDown, ArrowUp, Columns2, Copy, Eye, Heading1, Image as ImageIcon, Info, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Smartphone, Trash2, Type, Undo2,
 } from "lucide-react";
 import { urlEmailSegura, type TipoBlocoEmail } from "@/lib/email-marketing/editor-visual";
 import type { VariavelCatalogo } from "@/lib/variaveis/catalogo";
@@ -407,7 +407,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       <div className={styles.inspectorCabecalho}><Layers size={17}/><strong>Propriedades</strong></div>
       {editando && selecionado ? (
         <div className={styles.inspector}>
-          <div className={styles.inspectorTitulo}><Type size={16}/><strong>{selecionado.tipo === "imagem" ? "Imagem" : selecionado.tipo === "link" ? "Botão / link" : "Elemento " + selecionado.tag.toUpperCase()}</strong><span>Propriedades</span></div>
+          <div className={styles.inspectorTitulo}><Type size={16}/><strong>{selecionado.tipo === "imagem" ? "Imagem" : selecionado.tipo === "link" ? "Botão / link" : "Elemento " + selecionado.tag.toUpperCase()}</strong></div>
+          {mensagem ? <p className={styles.feedback} role="status"><Info size={16} aria-hidden="true"/><span>{mensagem}</span></p> : null}
           <div className={styles.campos}>
             {selecionado.tipo !== "imagem" ? <>
               <label><span>Cor do texto</span><input type="color" value={selecionado.cor} onChange={e => aplicarEstilo("color", e.target.value)} /></label>
@@ -435,7 +436,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
             <button type="button" onClick={duplicar}><Copy size={15}/> Duplicar</button>
             <button type="button" className={styles.excluir} onClick={() => setConfirmarRemocao(true)}><Trash2 size={15}/> Remover</button>
           </div>
-          {mensagem ? <small role="status">{mensagem}</small> : null}
         </div>
       ) : null}
       {(!selecionado || !editando) ? <p className={styles.instrucao}>Selecione um elemento no e-mail para editar suas propriedades, cores e posições.</p> : null}

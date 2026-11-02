@@ -97,3 +97,21 @@
 @media(max-width:1150px){.estudio{grid-template-columns:180px minmax(0,1fr) 240px}.biblioteca{padding:12px 9px}.inspector{padding:12px}.barra{padding:9px}}
 @media(max-width:920px){.estudio{grid-template-columns:175px minmax(0,1fr)}.inspectorLateral{grid-column:1/-1;max-height:360px;border-left:0;border-top:1px solid var(--crm-border)}.inspector .campos{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:700px){.estudio{display:flex;flex-direction:column;overflow:visible;flex:0 0 auto}.biblioteca{overflow:visible;flex:0 0 auto;padding:13px 14px;border-right:0;border-bottom:1px solid var(--crm-border)}.biblioteca>p{display:none}.listaBlocos{display:flex;overflow-x:auto;gap:7px;padding-bottom:7px}.listaBlocos button{flex:0 0 auto;min-height:46px;font-size:13px;padding:7px}.listaBlocos button svg:last-child{display:none}.gerenciar{align-self:flex-start;padding:0 12px}.workspace{flex:0 0 auto;min-height:530px;overflow:visible}.barra{align-items:flex-start;flex-direction:column}.area{height:510px;min-height:510px;flex:0 0 auto;overflow:auto}.inspectorLateral{overflow:visible;max-height:none}.inspector .campos{grid-template-columns:repeat(2,minmax(0,1fr))}.inspector .campos input,.variaveis select{font-size:16px}}
+
+
+/* O inspector não pode aumentar a largura da terceira coluna por mensagens ou inputs. */
+.inspectorLateral{overflow-x:hidden;min-width:0;max-width:100%;box-sizing:border-box}
+.inspectorLateral>*{min-width:0;max-width:100%;box-sizing:border-box}
+.inspector{width:100%;max-width:100%;min-width:0;overflow-x:hidden;box-sizing:border-box}
+.inspectorTitulo{display:flex;flex-wrap:wrap;min-width:0;width:100%;max-width:100%;gap:8px;overflow-wrap:anywhere}
+.inspectorTitulo strong{flex:1 1 auto;min-width:0;overflow-wrap:anywhere;word-break:normal}
+.inspector .campos,.inspector .acoes{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.inspector .campos>*{min-width:0;max-width:100%;box-sizing:border-box}
+.inspector .campos input,.inspector .campos select{box-sizing:border-box;max-width:100%;min-width:0}
+.inspector .acoes button{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.inspectorLateral .extras{min-width:0;max-width:100%;width:100%;box-sizing:border-box}
+.inspectorLateral .variaveis{min-width:0;max-width:100%;width:100%}
+.inspectorLateral .variaveis select{min-width:0;max-width:100%}
+.feedback{display:flex;align-items:flex-start;gap:8px;width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin:0;padding:9px 11px;border-radius:9px;border:1px solid var(--crm-primary-border);background:var(--crm-primary-soft);color:var(--crm-primary-text);font-size:13px;line-height:1.45;overflow-wrap:anywhere}
+.feedback svg{flex:0 0 auto;margin-top:1px}
+.feedback span{display:block;flex:1 1 auto;min-width:0;max-width:100%;overflow-wrap:anywhere}
