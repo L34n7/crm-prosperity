@@ -9131,14 +9131,16 @@ export default function DisparosWhatsAppPage() {
                 <h4>O que fazer</h4>
                 <p>{falhaModal.acao}</p>
               </section>
-              <section className={`${styles.campaignFailureModalSection} ${styles.campaignFailureContactImpact}`}
-                data-tipo={consequenciaFalhaNoContato(falhaModal.codigo).tipo}>
-                <h4>O contato fica em pausa ou em revisão?</h4>
-                <strong className={styles.campaignFailureContactImpactTitle}>
-                  {consequenciaFalhaNoContato(falhaModal.codigo).titulo}
-                </strong>
-                <p>{consequenciaFalhaNoContato(falhaModal.codigo).explicacao}</p>
-              </section>
+              {(falhaModal.codigo === 131026 || falhaModal.codigo === 131049) && (
+                <section className={`${styles.campaignFailureModalSection} ${styles.campaignFailureContactImpact}`}
+                  data-tipo={consequenciaFalhaNoContato(falhaModal.codigo).tipo}>
+                  <h4>O contato fica em pausa ou em revisão?</h4>
+                  <strong className={styles.campaignFailureContactImpactTitle}>
+                    {consequenciaFalhaNoContato(falhaModal.codigo).titulo}
+                  </strong>
+                  <p>{consequenciaFalhaNoContato(falhaModal.codigo).explicacao}</p>
+                </section>
+              )}
               {falhaModal.detalheTecnico ? (
                 <p className={styles.campaignIssueTechnical}>
                   Detalhe registrado: {falhaModal.detalheTecnico}
