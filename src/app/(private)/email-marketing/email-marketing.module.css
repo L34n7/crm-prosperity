@@ -5803,3 +5803,14 @@
  .templatePremiumModal .templateStudioGalleryMock iframe{transform:scale(.21)}
  .templatePremiumModal .templateStudioGalleryButton{flex:1}
 }
+
+
+/* Confirmação premium contextual, substitui alertas nativos no editor. */
+.templateConfirmBackdrop{position:fixed;inset:0;z-index:1800;display:flex;align-items:center;justify-content:center;padding:20px;background:rgb(15 23 42 / 61%);backdrop-filter:blur(6px)}
+.templateConfirmCard{display:flex;flex-direction:column;align-items:flex-start;gap:12px;width:min(450px,100%);padding:25px;border:1px solid var(--crm-border);border-radius:20px;background:var(--crm-surface);box-shadow:0 25px 80px rgb(15 23 42 / 25%)}
+.templateConfirmIcon{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;color:var(--crm-primary-text);background:var(--crm-primary-soft);border:1px solid var(--crm-primary-border)}
+.templateConfirmCard h3{margin:1px 0 0;color:var(--crm-text-strong);font-size:19px;line-height:1.3;font-weight:850}
+.templateConfirmCard p{margin:0;color:var(--crm-text-muted);font-size:13px;line-height:1.65}
+.templateConfirmActions{display:flex;align-items:center;justify-content:flex-end;gap:9px;width:100%;margin-top:9px}
+.templateConfirmActions button{min-height:43px;min-width:120px;padding:0 14px;font-size:13px;font-weight:800}
+@media(max-width:640px){.templateConfirmBackdrop{padding:17px}.templateConfirmCard{padding:22px 19px;gap:11px;border-radius:18px}.templateConfirmCard h3{font-size:18px}.templateConfirmActions{display:grid;grid-template-columns:1fr 1fr}.templateConfirmActions button{min-width:0;width:100%}}
