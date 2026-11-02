@@ -2,7 +2,7 @@
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
-  ArrowDown, ArrowUp, Copy, Eye, Monitor, Pencil, Smartphone, Trash2, Type,
+  ArrowDown, ArrowUp, Copy, Eye, Layers, Monitor, Pencil, Smartphone, Trash2, Type,
 } from "lucide-react";
 import { urlEmailSegura } from "@/lib/email-marketing/editor-visual";
 import styles from "./EmailHtmlPreviewEditor.module.css";
@@ -158,7 +158,7 @@ function EmailHtmlPreviewEditor({ html }: Props, ref: Ref<EmailHtmlPreviewHandle
       if (!editando || !elemento) return;
       const imagem = elemento.closest("img");
       const destino = imagem || link ||
-        elemento.closest("h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
+        elemento.closest("span:not([data-prosperity-edit-text]),strong,em,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
       if (destino && destino !== doc.body) selecionar(destino as HTMLElement);
     }, true);
     doc.addEventListener("submit", evento => evento.preventDefault(), true);
@@ -196,10 +196,21 @@ function EmailHtmlPreviewEditor({ html }: Props, ref: Ref<EmailHtmlPreviewHandle
   // tabelas, movemos o bloco selecionado, nunca o documento completo.
   function blocoMovimentavel(elemento: HTMLElement): HTMLElement {
     const linha = elemento.closest("tr");
-    if (linha && linha.parentElement?.children.length && linha.parentElement.children.length > 1) return linha;
+    if (linha && linha.parentElement?.children.length && linha.parentElement.children.length > 1) return linha as HTMLElement;
     const celular = elemento.closest("td,th");
-    if (celular && celular.parentElement?.children.length && celular.parentElement.children.length > 1) return celular;
+    if (celular && celular.parentElement?.children.length && celular.parentElement.children.length > 1) return celular as HTMLElement;
     return elemento;
+  }
+
+  function selecionarConteiner() {
+    const atual = elementoRef.current;
+    if (!atual) return;
+    const pai = atual.parentElement?.closest("td,th,tr,p,div,section,table");
+    if (!pai || pai === atual.ownerDocument.body) {
+      setMensagem("Não há outro contêiner disponível para seleção.");
+      return;
+    }
+    selecionar(pai as HTMLElement);
   }
 
   function mover(direcao: "cima" | "baixo") {
@@ -273,6 +284,7 @@ function EmailHtmlPreviewEditor({ html }: Props, ref: Ref<EmailHtmlPreviewHandle
             </> : null}
           </div>
           <div className={styles.acoes}>
+            <button type="button" onClick={selecionarConteiner}><Layers size={15}/> Contêiner</button>
             <button type="button" onClick={() => mover("cima")}><ArrowUp size={15}/> Subir</button>
             <button type="button" onClick={() => mover("baixo")}><ArrowDown size={15}/> Descer</button>
             <button type="button" onClick={duplicar}><Copy size={15}/> Duplicar</button>
