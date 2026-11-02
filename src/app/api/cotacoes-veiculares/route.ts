@@ -5,11 +5,10 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   CATEGORIAS_COTACAO,
   categoriaValida,
-  planoValido,
   configuracaoCotacao,
   consultarFaixas,
-  calcularCotacaoVeicular,
-  salvarCotacaoVeicular,
+  calcularCotacaoPlanos,
+  salvarCotacaoPlanos,
 } from "@/lib/cotacoes-veiculares/servico";
 
 async function autenticar() {
@@ -43,14 +42,16 @@ export async function GET(request: Request) {
     const categoriaBruta = new URL(request.url).searchParams.get("categoria") || "auto_leves";
     if (!categoriaValida(categoriaBruta)) return erro(new Error("Categoria inválida."));
     const supabase = getSupabaseAdmin();
-    const [config, faixas, cotacoesResult] = await Promise.all([
+    const [config, faixas, cotacoesResult, modelosResult] = await Promise.all([
       configuracaoCotacao(empresaId), consultarFaixas(empresaId, categoriaBruta),
       supabase.from("cotacao_veicular_cotacoes").select("*").eq("empresa_id",empresaId)
-        .order("created_at",{ascending:false}).limit(75),
+        .order("created_at",{ascending:false}).limit(100),
+      supabase.from("cotacao_veicular_modelos_empresa").select("modelo,codigo_fipe",{count:"exact",head:true}).eq("empresa_id",empresaId),
     ]);
     if (cotacoesResult.error) throw cotacoesResult.error;
     return NextResponse.json({
       ok: true, config, faixas, cotacoes: cotacoesResult.data || [],
+      modelos_especiais_total: modelosResult.count || 0,
       categorias: CATEGORIAS_COTACAO, pode_gerenciar: acesso.podeGerenciar, pode_configurar: acesso.podeConfigurar,
     });
   } catch (e) { console.error("[COTACOES_VEICULARES] GET",e); return erro(e,500); }
@@ -87,18 +88,17 @@ export async function POST(request: Request) {
       if (!acesso.podeConfigurar) return erro(new Error("Sem permissão para editar preços."),403);
       if (!categoriaValida(body.categoria)) throw new Error("Categoria inválida.");
       const minimo = inteiro(body.fipe_min_centavos,"Faixa FIPE");
-      const original = await getSupabaseAdmin().from("cotacao_veicular_faixas_base")
-        .select("*").eq("categoria",body.categoria).eq("fipe_min_centavos",minimo).single();
-      if (original.error || !original.data) throw new Error("A faixa não pertence à tabela de referência.");
+      const original = (await consultarFaixas(empresaId,body.categoria)).find(f=>Number(f.fipe_min_centavos)===minimo);
+      if(!original) throw new Error("Faixa FIPE não localizada na tabela atual da empresa.");
       const premium = inteiro(body.premium_centavos,"Valor Premium",100000000);
       const completo = inteiro(body.completo_centavos,"Valor Completo",100000000);
       const { error } = await getSupabaseAdmin().from("cotacao_veicular_faixas").upsert({
         empresa_id: empresaId, categoria: body.categoria,
         fipe_min_centavos: minimo,
-        fipe_max_centavos: original.data.fipe_max_centavos,
-        codigo_premium: original.data.codigo_premium,
+        fipe_max_centavos: original.fipe_max_centavos,
+        codigo_premium: original.codigo_premium,
         premium_centavos: premium,
-        codigo_completo: original.data.codigo_completo,
+        codigo_completo: original.codigo_completo,
         completo_centavos: completo,
         revisar: false,
         updated_at: new Date().toISOString(),
@@ -114,21 +114,24 @@ export async function POST(request: Request) {
 
     if (acao !== "simular" && acao !== "salvar") throw new Error("Operação inválida.");
     if (!acesso.podeGerenciar) return erro(new Error("Sem permissão para gerar cotações."),403);
-    if (!categoriaValida(body.categoria) || !planoValido(body.plano)) throw new Error("Categoria ou plano inválido.");
+    if (!categoriaValida(body.categoria)) throw new Error("Categoria inválida.");
     const valorFipeCentavos = inteiro(body.valor_fipe_centavos,"Valor FIPE");
-    const opcionais = Array.isArray(body.opcionais) ? body.opcionais.map(String) : [];
-    const parametros = {
-      empresaId, categoria: body.categoria, plano: body.plano,
-      valorFipeCentavos, opcionais, origem: "manual" as const,
+    const opcoes = body.opcionais_por_plano && typeof body.opcionais_por_plano === "object"
+      ? body.opcionais_por_plano as Record<string,unknown> : {};
+    const opcionaisPorPlano = {
+      premium: Array.isArray(opcoes.premium) ? opcoes.premium.map(String) : [],
+      completo: Array.isArray(opcoes.completo) ? opcoes.completo.map(String) : [],
     };
+    const parametros = { empresaId, categoria: body.categoria, valorFipeCentavos,
+      opcionaisPorPlano, origem: "manual" as const };
     if (acao === "simular") {
-      return NextResponse.json({ ok: true, calculo: await calcularCotacaoVeicular(parametros) });
+      return NextResponse.json({ ok: true, calculos: await calcularCotacaoPlanos(parametros) });
     }
     const veiculo = String(body.veiculo || "").trim();
     if (veiculo.length < 3) throw new Error("Informe marca e modelo do veículo.");
     const ano = body.ano_modelo == null || body.ano_modelo === "" ? null : inteiro(body.ano_modelo,"Ano",32000);
-    if (ano !== null && (ano < 1950 || ano > 32000)) throw new Error("Ano do veículo inválido.");
-    const resultado = await salvarCotacaoVeicular({
+    if (ano !== null && ano < 1950) throw new Error("Ano do veículo inválido.");
+    const resultado = await salvarCotacaoPlanos({
       ...parametros, veiculo, anoModelo: ano,
       nomeContato: String(body.nome_contato || "").slice(0,160),
       referenciaFipe: String(body.referencia_fipe || "").slice(0,100),

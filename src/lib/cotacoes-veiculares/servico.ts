@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -30,25 +31,49 @@ function regraParticipacao(categoria: CategoriaCotacao, plano: PlanoCotacao) {
 }
 export async function configuracaoCotacao(empresaId: string) {
   const { data, error } = await getSupabaseAdmin().from("cotacao_veicular_configuracoes")
-    .select("tabela_validada,ia_habilitada,referencia,updated_at")
+    .select("tabela_validada,ia_habilitada,tabela_importada,modelos_importados,referencia,updated_at")
     .eq("empresa_id", empresaId).maybeSingle();
   if (error) throw new Error(error.message);
   return data || {
     tabela_validada: false,
     ia_habilitada: false,
+    tabela_importada: false,
+    modelos_importados: false,
     referencia: "Tabela Save Car jan/2024 — pendente de confirmação",
     updated_at: null,
   };
 }
 export async function consultarFaixas(empresaId: string, categoria: CategoriaCotacao) {
   const supabase = getSupabaseAdmin();
+  const config = await configuracaoCotacao(empresaId);
+  if (config.tabela_importada) {
+    const { data, error } = await supabase.from("cotacao_veicular_faixas")
+      .select("*").eq("empresa_id",empresaId).eq("categoria",categoria).order("fipe_min_centavos");
+    if (error) throw new Error(error.message);
+    return (data || []) as Faixa[];
+  }
   const [{ data: base, error: errorBase }, { data: ajustadas, error: errorAjustadas }] = await Promise.all([
-    supabase.from("cotacao_veicular_faixas_base").select("*").eq("categoria", categoria).order("fipe_min_centavos"),
-    supabase.from("cotacao_veicular_faixas").select("*").eq("empresa_id",empresaId).eq("categoria", categoria),
+    supabase.from("cotacao_veicular_faixas_base").select("*").eq("categoria",categoria).order("fipe_min_centavos"),
+    supabase.from("cotacao_veicular_faixas").select("*").eq("empresa_id",empresaId).eq("categoria",categoria),
   ]);
   if (errorBase || errorAjustadas) throw new Error(errorBase?.message || errorAjustadas?.message);
-  const ajustes = new Map((ajustadas || []).map((item) => [Number(item.fipe_min_centavos), item]));
-  return ((base || []) as Faixa[]).map((item) => ajustes.get(Number(item.fipe_min_centavos)) || item) as Faixa[];
+  const ajustes = new Map((ajustadas || []).map(item => [Number(item.fipe_min_centavos), item]));
+  return ((base || []) as Faixa[]).map(item => ajustes.get(Number(item.fipe_min_centavos)) || item) as Faixa[];
+}
+
+/** Correspondência exata pelo código FIPE ou nome normalizado, sem inferências ambíguas. */
+export async function verificarEspecialEmpresa(empresaId:string, modelo:string, codigoFipe?:string) {
+  const {data,error} = await getSupabaseAdmin().from("cotacao_veicular_modelos_empresa")
+    .select("modelo,codigo_fipe").eq("empresa_id",empresaId).limit(5000);
+  if(error) throw new Error(error.message);
+  const normalizar=(v:string)=>v.normalize("NFD").replace(/\p{M}/gu,"")
+    .toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+  const buscado=normalizar(modelo);
+  const especial=(data||[]).some(item=>
+    Boolean(codigoFipe && item.codigo_fipe && item.codigo_fipe.trim()===codigoFipe.trim()) ||
+    normalizar(item.modelo)===buscado
+  );
+  return especial;
 }
 export async function calcularCotacaoVeicular(params: {
   empresaId: string; categoria: CategoriaCotacao; plano: PlanoCotacao;
@@ -134,4 +159,63 @@ export async function salvarCotacaoVeicular(params: {
   }).select("*").single();
   if (error) throw new Error(error.message);
   return { cotacao: data, calculo };
+}
+
+export async function calcularCotacaoPlanos(params: {
+  empresaId:string; categoria:CategoriaCotacao; valorFipeCentavos:number;
+  origem:"manual"|"agente_ia";
+  opcionaisPorPlano?: Partial<Record<PlanoCotacao,string[]>>;
+}) {
+  const [premium,completo] = await Promise.all((["premium","completo"] as const).map(plano =>
+    calcularCotacaoVeicular({
+      empresaId:params.empresaId,categoria:params.categoria,valorFipeCentavos:params.valorFipeCentavos,
+      origem:params.origem,plano,opcionais:params.opcionaisPorPlano?.[plano] || [],
+    })
+  ));
+  return { premium, completo };
+}
+
+export async function salvarCotacaoPlanos(params:{
+  empresaId:string; contatoId?:string|null; conversaId?:string|null; agenteId?:string|null;
+  origem:"manual"|"agente_ia"; nomeContato?:string; veiculo:string; anoModelo?:number|null;
+  categoria:CategoriaCotacao; valorFipeCentavos:number; referenciaFipe?:string;
+  opcionaisPorPlano?:Partial<Record<PlanoCotacao,string[]>>; idempotencyKey?:string|null;
+}) {
+  const calculos=await calcularCotacaoPlanos(params);
+  const supabase=getSupabaseAdmin();
+  const chave=params.idempotencyKey || null;
+  if (chave) {
+    const {data,error}=await supabase.from("cotacao_veicular_cotacoes").select("*")
+      .eq("empresa_id",params.empresaId).eq("idempotency_key",chave+":premium").maybeSingle();
+    if(error) throw new Error(error.message);
+    if(data?.grupo_id) {
+      const {data:existentes,error:erroGrupo}=await supabase.from("cotacao_veicular_cotacoes")
+        .select("*").eq("empresa_id",params.empresaId).eq("grupo_id",data.grupo_id);
+      if(erroGrupo) throw new Error(erroGrupo.message);
+      if((existentes||[]).length===2) return {cotacoes:existentes,calculos,grupo_id:data.grupo_id};
+    }
+  }
+  const grupoId=randomUUID();
+  const linhas=(["premium","completo"] as const).map(plano=>{
+    const calculo=calculos[plano];
+    return {
+      empresa_id:params.empresaId, contato_id:params.contatoId || null,
+      conversa_id:params.conversaId || null, agente_id:params.agenteId || null,
+      grupo_id:grupoId, origem:params.origem,
+      status:calculo.tabela_validada ? "emitida" : "rascunho",
+      nome_contato:(params.nomeContato||"").trim().slice(0,160)||null,
+      veiculo:params.veiculo.trim().slice(0,240),categoria:params.categoria,
+      ano_modelo:params.anoModelo||null,valor_fipe_centavos:params.valorFipeCentavos,
+      referencia_fipe:(params.referenciaFipe||"").slice(0,100)||null,
+      plano,codigo_produto:calculo.codigo_produto,
+      mensalidade_base_centavos:calculo.mensalidade_base_centavos,
+      opcionais_json:calculo.opcionais,total_centavos:calculo.total_centavos,
+      cota_participacao_centavos:calculo.cota_participacao_centavos,
+      tabela_validada:calculo.tabela_validada,
+      idempotency_key:chave?chave+":"+plano:null,
+    };
+  });
+  const {data,error}=await supabase.from("cotacao_veicular_cotacoes").insert(linhas).select("*");
+  if(error) throw new Error(error.message);
+  return {cotacoes:data||[],calculos,grupo_id:grupoId};
 }

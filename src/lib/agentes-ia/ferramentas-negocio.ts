@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { encontrarVeiculoFipe, tipoFipeDaCategoria } from "@/lib/cotacoes-veiculares/fipe";
-import { categoriaValida, planoValido, salvarCotacaoVeicular, configuracaoCotacao, type CategoriaCotacao } from "@/lib/cotacoes-veiculares/servico";
+import { categoriaValida, salvarCotacaoPlanos, configuracaoCotacao, verificarEspecialEmpresa, type CategoriaCotacao } from "@/lib/cotacoes-veiculares/servico";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
 import { carregarNichoEmpresa } from "./nicho-empresa";
@@ -349,7 +349,7 @@ export async function preconsultarNegocio(params: {
 
   if (sinalCotacao) {
     resultados.push({ ferramenta: "gerar_cotacao_veicular", dados: [] });
-    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique categoria comercial, marca, versão exata do modelo, ano/combustível, plano e opcionais. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
+    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique categoria comercial, marca, versão exata do modelo, ano/combustível e opcionais. Cotação gera Premium e Completo juntos. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
   }
 
   const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
@@ -376,44 +376,60 @@ export async function executarFerramentaNegocio(params: {
 }) {
   if (params.tipo === "gerar_cotacao_veicular") {
     const args = params.argumentos || {};
-    if (!categoriaValida(args.categoria) || !planoValido(args.plano)) {
-      return { ok:false, error:"Informe a categoria correta e o plano Premium ou Completo." };
+    if (!categoriaValida(args.categoria)) {
+      return {ok:false,error:"Informe a categoria de proteção do veículo."};
     }
-    const categoria = args.categoria as CategoriaCotacao;
+    let categoria = args.categoria as CategoriaCotacao;
     const marca = textoCurto(args.marca,90);
     const modelo = textoCurto(args.modelo,150);
     const ano = textoCurto(args.ano,30);
-    if (!marca || !modelo || !ano) {
-      return { ok:false, error:"Informe marca, versão exata do modelo e ano/combustível do veículo." };
-    }
+    if (!marca || !modelo || !ano)
+      return {ok:false,error:"Informe marca, versão exata do modelo e ano/combustível do veículo."};
     const fipe = await encontrarVeiculoFipe({
-      tipo: tipoFipeDaCategoria(categoria), marca, modelo, ano,
+      tipo:tipoFipeDaCategoria(categoria),marca,modelo,ano,
     });
-    const opcionais = Array.isArray(args.opcionais)
-      ? args.opcionais.filter((item: unknown) => typeof item === "string")
-      : [];
-    const identidade = crypto.createHash("sha256")
-      .update(JSON.stringify([params.empresaId,params.conversaId,params.mensagemIds,categoria,args.plano,fipe.codeFipe,fipe.modelYear,opcionais]))
+    const especial=await verificarEspecialEmpresa(params.empresaId,fipe.model,fipe.codeFipe);
+    const config=await configuracaoCotacao(params.empresaId);
+    if(especial && tipoFipeDaCategoria(categoria)==="cars") categoria="especiais";
+    if(categoria==="especiais" && config.modelos_importados && !especial)
+      return {ok:false,error:"Este modelo não foi confirmado na lista de veículos especiais da empresa. Encaminhe para avaliação humana."};
+    const extras=args.opcionais_por_plano && typeof args.opcionais_por_plano==="object"
+      ? args.opcionais_por_plano : {};
+    const opcionaisPorPlano={
+      premium:Array.isArray(extras.premium)?extras.premium.filter((v:unknown)=>typeof v==="string"):[],
+      completo:Array.isArray(extras.completo)?extras.completo.filter((v:unknown)=>typeof v==="string"):[],
+    };
+    const assinatura=crypto.createHash("sha256")
+      .update(JSON.stringify([params.empresaId,params.conversaId,params.mensagemIds,categoria,fipe.codeFipe,fipe.modelYear,opcionaisPorPlano]))
       .digest("hex");
-    const { cotacao, calculo } = await salvarCotacaoVeicular({
-      empresaId:params.empresaId, agenteId:params.agenteId, conversaId:params.conversaId,
-      origem:"agente_ia", categoria, plano:args.plano,
-      veiculo:fipe.brand+" "+fipe.model, anoModelo:fipe.modelYear,
+    const {cotacoes,calculos,grupo_id}=await salvarCotacaoPlanos({
+      empresaId:params.empresaId,agenteId:params.agenteId,conversaId:params.conversaId,
+      origem:"agente_ia",categoria,
+      veiculo:fipe.brand+" "+fipe.model,anoModelo:fipe.modelYear,
       valorFipeCentavos:fipe.valorCentavos,
       referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
-      opcionais, idempotencyKey:"agente-ia:"+identidade,
+      opcionaisPorPlano,idempotencyKey:"agente-ia:"+assinatura,
     });
+    const formatarPlano=(plano:"premium"|"completo")=>{
+      const calculo=calculos[plano];
+      return {
+        nome:plano==="premium"?"Premium":"Completo",
+        codigo_produto:calculo.codigo_produto,
+        mensalidade:formatarDinheiro(calculo.total_centavos/100),
+        cota_participacao:formatarDinheiro(calculo.cota_participacao_centavos/100),
+        cobertura_terceiros:calculo.terceiros_limite_centavos
+          ?formatarDinheiro(calculo.terceiros_limite_centavos/100):"Não disponível",
+        assistencia_24h:calculo.assistencia_km_total+" km totais",
+        opcionais:calculo.opcionais.map(i=>i.nome),
+      };
+    };
     return {
-      ok:true, cotacao_id:cotacao.id, status:cotacao.status,
-      veiculo:fipe.brand+" "+fipe.model, ano:fipe.modelYear, tabela_fipe:fipe.referenceMonth,
-      valor_fipe:formatarDinheiro(fipe.valorCentavos / 100),
-      plano:args.plano, codigo_produto:calculo.codigo_produto,
-      mensalidade:formatarDinheiro(calculo.total_centavos / 100),
-      cota_participacao:formatarDinheiro(calculo.cota_participacao_centavos / 100),
-      limite_terceiros:calculo.terceiros_limite_centavos ? formatarDinheiro(calculo.terceiros_limite_centavos / 100) : "Não disponível",
-      assistencia_24h:calculo.assistencia_km_total+" km totais",
-      opcionais:calculo.opcionais.map((item) => item.nome),
-      observacao:"Cotação informativa, sujeita às condições de adesão e conferência da associação. Não confirma contratação.",
+      ok:true,grupo_id,cotacao_ids:cotacoes.map(i=>i.id),
+      veiculo:fipe.brand+" "+fipe.model,ano:fipe.modelYear,
+      categoria,tabela_fipe:fipe.referenceMonth,
+      valor_fipe:formatarDinheiro(fipe.valorCentavos/100),
+      planos:[formatarPlano("premium"),formatarPlano("completo")],
+      observacao:"Apresente obrigatoriamente ambos os planos. Cotação informativa, não confirma contratação.",
     };
   }
   if (params.tipo === "consultar_produtos_estoque") {
@@ -497,8 +513,8 @@ export function definicoesFerramentasNegocio(
   }
   if (ferramentas.has("gerar_cotacao_veicular")) {
     defs.push({
-      type:"function", name:"gerar_cotacao_veicular",
-      description:"Consulta FIPE em tempo real para marca, versão exata do modelo e ano/combustível, calcula preço exclusivamente pelas faixas validadas, registra cotação e devolve mensalidade real. Peça dados que faltarem; não use valores estimados. Só se aplica à proteção veicular e não contrata nem cobra nada.",
+      type:"function",name:"gerar_cotacao_veicular",
+      description:"Consulta FIPE, gera e registra uma cotação com TODOS os planos disponíveis (Premium e Completo) e retorna os dois valores. Nunca peça ao cliente para escolher plano antes de cotar. Não contrata nem cobra.",
       strict:true,
       parameters:{
         type:"object",
@@ -507,10 +523,16 @@ export function definicoesFerramentasNegocio(
           marca:{type:"string",maxLength:90},
           modelo:{type:"string",maxLength:150},
           ano:{type:"string",maxLength:30},
-          plano:{type:"string",enum:["premium","completo"]},
-          opcionais:{type:"array",items:{type:"string",enum:["rastreador","carro_reserva_7d","carro_reserva_15d","destombamento"]},maxItems:4},
+          opcionais_por_plano:{
+            type:"object",
+            properties:{
+              premium:{type:"array",items:{type:"string",enum:["rastreador","carro_reserva_7d","carro_reserva_15d","destombamento"]},maxItems:4},
+              completo:{type:"array",items:{type:"string",enum:["rastreador","carro_reserva_7d","carro_reserva_15d","destombamento"]},maxItems:4},
+            },
+            required:["premium","completo"],additionalProperties:false,
+          },
         },
-        required:["categoria","marca","modelo","ano","plano","opcionais"],
+        required:["categoria","marca","modelo","ano","opcionais_por_plano"],
         additionalProperties:false,
       },
     });

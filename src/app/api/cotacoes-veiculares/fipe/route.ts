@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
+import { verificarEspecialEmpresa } from "@/lib/cotacoes-veiculares/servico";
 import {
   listarMarcasFipe, listarModelosFipe, listarAnosFipe, detalharVeiculoFipe,
   precoFipeCentavos, type TipoFipe,
@@ -31,7 +32,8 @@ export async function GET(request: Request) {
     if (etapa==="anos") return NextResponse.json({ok:true,itens:await listarAnosFipe(tipo,marca,modelo)});
     if (!ano) return NextResponse.json({ok:false,error:"Selecione o ano."},{status:400});
     const veiculo = await detalharVeiculoFipe(tipo,marca,modelo,ano);
-    return NextResponse.json({ok:true,veiculo,valor_fipe_centavos:precoFipeCentavos(veiculo.price)});
+    const especial = await verificarEspecialEmpresa(usuario.usuario.empresa_id,veiculo.model,veiculo.codeFipe);
+    return NextResponse.json({ok:true,veiculo,especial,valor_fipe_centavos:precoFipeCentavos(veiculo.price)});
   } catch(e) {
     return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Consulta FIPE indisponível."},{status:502});
   }
