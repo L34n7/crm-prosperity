@@ -39,6 +39,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const editandoRef = useRef(true);
   const arrasteElementoRef = useRef<HTMLElement | null>(null);
   const alcaRef = useRef<HTMLButtonElement | null>(null);
+  const toqueInicialRef = useRef<{ x: number; y: number } | null>(null);
+  const suprimirCliqueToqueRef = useRef(false);
   const [dispositivo, setDispositivo] = useState<"desktop" | "mobile">("desktop");
   const [editando, setEditando] = useState(true);
   const [selecionado, setSelecionado] = useState<Selecionado | null>(null);
@@ -52,6 +54,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const [abaPropriedades, setAbaPropriedades] = useState<"elemento" | "pagina">("elemento");
   const [pagina, setPagina] = useState<PropriedadesPagina>({ largura: 600, fundo: "#edf1f8", superficie: "#ffffff", fonte: "Arial" });
   const [larguraDigitada, setLarguraDigitada] = useState("600");
+  const [painelMobileAberto, setPainelMobileAberto] = useState(false);
 
   useEffect(() => {
     if (!mensagem) return;
@@ -246,7 +249,11 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     const rect = elemento.getBoundingClientRect();
     const largura = elemento.ownerDocument.documentElement.clientWidth;
     alca.style.display = rect.bottom < 0 || rect.top > elemento.ownerDocument.documentElement.clientHeight ? "none" : "grid";
-    alca.style.left = Math.max(5, Math.min(largura - 33, rect.left - 30)) + "px";
+    const toque = elemento.ownerDocument.defaultView?.matchMedia("(pointer: coarse)").matches;
+    const larguraAlca = toque ? 38 : 33;
+    alca.style.left = (toque
+      ? Math.max(5, Math.min(largura - larguraAlca, rect.right - larguraAlca))
+      : Math.max(5, Math.min(largura - larguraAlca, rect.left - 30))) + "px";
     alca.style.top = Math.max(3, rect.top) + "px";
   }
 
@@ -263,6 +270,52 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     alca.title = "Clique e arraste para reposicionar este elemento";
     alca.draggable = true;
     alca.addEventListener("click", event => event.stopPropagation());
+    // No Safari iOS, o arraste HTML5 não ocorre via toque: usar Pointer Events.
+    let toqueArrastando = false;
+    alca.addEventListener("pointerdown", event => {
+      if (event.pointerType === "mouse" || !editandoRef.current) return;
+      event.preventDefault();
+      toqueArrastando = true;
+      arrasteElementoRef.current = blocoMovimentavel(elemento);
+      alca.setPointerCapture(event.pointerId);
+      setArrastando(true);
+    });
+    alca.addEventListener("pointermove", event => {
+      if (!toqueArrastando) return;
+      event.preventDefault();
+      doc.querySelectorAll("[data-prosperity-drop-target]").forEach(el => el.removeAttribute("data-prosperity-drop-target"));
+      const alvo = doc.elementFromPoint(event.clientX, event.clientY);
+      const destino = localizarDestinoArraste(alvo);
+      if (destino) destino.setAttribute("data-prosperity-drop-target", "true");
+      // Permite alcançar elementos fora da parte visível do documento.
+      const altura = doc.documentElement.clientHeight;
+      if (event.clientY > altura - 48) doc.defaultView?.scrollBy(0, 20);
+      else if (event.clientY < 48) doc.defaultView?.scrollBy(0, -20);
+    });
+    const finalizarToque = (event: PointerEvent, cancelar = false) => {
+      if (!toqueArrastando) return;
+      toqueArrastando = false;
+      event.preventDefault();
+      const origem = arrasteElementoRef.current;
+      const alvo = doc.elementFromPoint(event.clientX, event.clientY);
+      const destino = cancelar ? null : localizarDestinoArraste(alvo);
+      doc.querySelectorAll("[data-prosperity-drop-target]").forEach(el => el.removeAttribute("data-prosperity-drop-target"));
+      if (origem && destino) {
+        registrarHistorico();
+        const rect = destino.getBoundingClientRect();
+        if (event.clientY < rect.top + rect.height / 2) destino.before(origem);
+        else destino.after(origem);
+        selecionar(elemento);
+        setMensagem("Elemento reposicionado.");
+      } else if (!cancelar) {
+        setMensagem("Mova para outro elemento da mesma seção ou use Subir/Descer.");
+      }
+      arrasteElementoRef.current = null;
+      setArrastando(false);
+      if (alca.hasPointerCapture(event.pointerId)) alca.releasePointerCapture(event.pointerId);
+    };
+    alca.addEventListener("pointerup", event => finalizarToque(event));
+    alca.addEventListener("pointercancel", event => finalizarToque(event, true));
     alca.addEventListener("dragstart", event => {
       if (!event.dataTransfer) return;
       arrasteElementoRef.current = blocoMovimentavel(elemento);
@@ -298,6 +351,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       alcaRef.current = null;
       elementoRef.current = null;
       setSelecionado(null);
+      setPainelMobileAberto(false);
     }
   }
 
@@ -325,6 +379,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     elementoRef.current = elemento;
     atualizarAlca(elemento);
     setSelecionado(lerElemento(elemento));
+    if (window.matchMedia("(max-width: 700px)").matches) setPainelMobileAberto(true);
     setConfirmarRemocao(false);
     setAbaPropriedades("elemento");
     setMensagem("");
@@ -397,6 +452,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       "a[data-prosperity-href]{cursor:pointer!important;}",
       "[data-prosperity-drag-handle]{position:fixed;z-index:2147483647;width:28px;height:30px;display:grid;place-items:center;border:1px solid #9c8be7;border-radius:8px;background:#fff;color:#6246ea;box-shadow:0 2px 10px #17243d30;font:bold 23px Arial,sans-serif;cursor:grab;user-select:none;}",
       "[data-prosperity-drag-handle]:active{cursor:grabbing;}",
+      "@media(pointer:coarse){[data-prosperity-drag-handle]{width:38px;height:38px;touch-action:none;font-size:27px;box-shadow:0 3px 13px #17243d40;}}",
       "[data-prosperity-drop-target]{outline:3px dashed #7054ef!important;outline-offset:3px;}",
       "[data-prosperity-mode=previa] [data-prosperity-edit-text]{outline:none!important;background:transparent!important;cursor:default!important;}",
       "[data-prosperity-mode=previa] [data-prosperity-selected]{outline:none!important;}",
@@ -405,16 +461,42 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     doc.head.appendChild(estilo);
     aplicarModoEdicao(editandoRef.current);
     doc.addEventListener("scroll", () => atualizarPosicaoAlca(), true);
-    doc.addEventListener("click", evento => {
-      const alvo = evento.target as Element | null;
-      const elemento = alvo?.nodeType === 1 ? alvo : null;
-      const link = elemento?.closest("a");
-      if (link) evento.preventDefault();
-      if (!editandoRef.current || !elemento) return;
-      const imagem = elemento.closest("img");
+    const encontrarElemento = (alvo: Element | null): HTMLElement | null => {
+      if (!alvo || alvo.closest("[data-prosperity-drag-handle]")) return null;
+      const imagem = alvo.closest("img");
+      const link = alvo.closest("a");
       const destino = imagem || link ||
-        elemento.closest("span:not([data-prosperity-edit-text]),strong,em,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
-      if (destino && destino !== doc.body) selecionar(destino as HTMLElement);
+        alvo.closest("span:not([data-prosperity-edit-text]),strong,em,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
+      return destino && destino !== doc.body ? destino as HTMLElement : null;
+    };
+    doc.addEventListener("pointerdown", event => {
+      if (event.pointerType !== "touch" || !editandoRef.current) return;
+      toqueInicialRef.current = { x: event.clientX, y: event.clientY };
+    }, true);
+    doc.addEventListener("pointerup", event => {
+      if (event.pointerType !== "touch" || !editandoRef.current || !toqueInicialRef.current) return;
+      const inicio = toqueInicialRef.current;
+      toqueInicialRef.current = null;
+      if (Math.hypot(event.clientX - inicio.x, event.clientY - inicio.y) > 12) return;
+      const alvo = (event.target as Node).nodeType === 1 ? event.target as Element : (event.target as Node).parentElement;
+      const destino = encontrarElemento(alvo);
+      if (destino) {
+        selecionar(destino);
+        suprimirCliqueToqueRef.current = true;
+      }
+    }, true);
+    doc.addEventListener("pointercancel", () => { toqueInicialRef.current = null; }, true);
+    doc.addEventListener("click", evento => {
+      const alvo = (evento.target as Node).nodeType === 1 ? evento.target as Element : (evento.target as Node).parentElement;
+      const link = alvo?.closest("a");
+      if (link) evento.preventDefault();
+      if (suprimirCliqueToqueRef.current) {
+        suprimirCliqueToqueRef.current = false;
+        return;
+      }
+      if (!editandoRef.current) return;
+      const destino = encontrarElemento(alvo);
+      if (destino) selecionar(destino);
     }, true);
     doc.addEventListener("submit", event => event.preventDefault(), true);
     doc.addEventListener("dragover", event => {
@@ -599,6 +681,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
           <span className={styles.separador}/>
           <button type="button" onClick={() => alternarModo(true)} className={editando ? styles.ativo : ""}><Pencil size={15}/> Editar</button>
           <button type="button" onClick={() => alternarModo(false)} className={!editando ? styles.ativo : ""}><Eye size={15}/> Prévia</button>
+          <button type="button" className={styles.abrirPropriedadesMobile} onClick={() => setPainelMobileAberto(true)} aria-label="Abrir propriedades do elemento"><Layers size={15}/> Propriedades</button>
           <span className={styles.separador}/>
           <button type="button" onClick={() => setDispositivo("desktop")} className={dispositivo === "desktop" ? styles.ativo : ""} aria-label="Desktop" title="Desktop"><Monitor size={16}/></button>
           <button type="button" onClick={() => setDispositivo("mobile")} className={dispositivo === "mobile" ? styles.ativo : ""} aria-label="Mobile" title="Mobile"><Smartphone size={16}/></button>
@@ -613,8 +696,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
           style={{ pointerEvents: "auto" }} />
       </div>
       </div>
-      <aside className={styles.inspectorLateral} aria-label="Propriedades do elemento">
-      <div className={styles.inspectorCabecalho}><Layers size={17}/><strong>Propriedades</strong></div>
+      <aside className={[styles.inspectorLateral, !painelMobileAberto ? styles.painelMobileFechado : ""].join(" ")} aria-label="Propriedades do elemento">
+      <div className={styles.inspectorCabecalho}><Layers size={17}/><strong>Propriedades</strong><button type="button" className={styles.fecharPainelMobile} onClick={() => setPainelMobileAberto(false)} aria-label="Fechar propriedades"><X size={19}/></button></div>
       <div className={styles.abasPropriedades} role="group" aria-label="Configurações do editor">
         <button type="button" className={abaPropriedades === "elemento" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("elemento")}>Elemento</button>
         <button type="button" className={abaPropriedades === "pagina" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("pagina")}>Página</button>

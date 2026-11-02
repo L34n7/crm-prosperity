@@ -166,3 +166,80 @@
 .area{position:relative}
 .avisoPrevia{position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--crm-primary-border);border-radius:9px;background:var(--crm-surface);box-shadow:0 4px 14px rgb(15 23 42 / 9%);color:var(--crm-primary-text);font-size:12px;font-weight:800}
 .listaBlocos button:disabled{opacity:.46;cursor:not-allowed}
+
+
+/* Mobile: propriedades visíveis em painel flutuante, sem rolar até o fim da prévia. */
+.abrirPropriedadesMobile,.fecharPainelMobile{display:none!important}
+@media(max-width:700px){
+  .estudio .abrirPropriedadesMobile{
+    display:inline-flex!important;
+    align-items:center;
+    gap:6px;
+    border:1px solid var(--crm-primary-border);
+    background:var(--crm-primary-soft);
+    color:var(--crm-primary-text);
+    min-height:38px;
+    padding:0 10px;
+    border-radius:9px;
+    font-size:13px;
+    font-weight:800;
+  }
+  .estudio .inspectorLateral{
+    position:fixed;
+    z-index:1600;
+    left:10px;
+    right:10px;
+    bottom:max(72px,env(safe-area-inset-bottom,0px) + 68px);
+    top:auto;
+    width:auto;
+    max-width:none;
+    max-height:min(55dvh,520px);
+    min-height:0;
+    overflow-x:hidden;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+    border:1px solid var(--crm-primary-border);
+    border-radius:17px;
+    box-shadow:0 16px 52px rgb(14 23 46 / 25%);
+    background:var(--crm-surface);
+  }
+  .estudio .inspectorLateral.painelMobileFechado{display:none}
+  .estudio .inspectorCabecalho{
+    position:sticky;
+    z-index:2;
+    top:0;
+    display:flex;
+    align-items:center;
+    min-height:50px;
+    padding:11px 14px;
+    background:var(--crm-surface);
+    border-bottom:1px solid var(--crm-border);
+  }
+  .estudio .fecharPainelMobile{
+    display:grid!important;
+    place-items:center;
+    width:36px;
+    height:36px;
+    min-width:36px;
+    margin-left:auto;
+    border:1px solid var(--crm-border);
+    border-radius:9px;
+    background:var(--crm-surface-soft);
+    color:var(--crm-text-strong);
+    cursor:pointer;
+  }
+  .estudio .abasPropriedades{
+    position:sticky;
+    z-index:1;
+    top:50px;
+    background:var(--crm-surface);
+  }
+  .estudio .inspector{overflow:visible;padding:12px 14px}
+  .estudio .inspector .campos{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+  .estudio .inspector .acoes button{min-height:43px}
+  .estudio .workspace{min-height:490px}
+  .estudio .area{height:clamp(390px,59dvh,560px);min-height:390px}
+  .estudio .area iframe{height:690px}
+  .estudio .controles{gap:5px}
+}
