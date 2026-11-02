@@ -21,3 +21,34 @@
 .inspector small{flex:1 1 100%;font-size:11px;color:var(--crm-text-muted)}
 .rodape{flex:0 0 auto;border-top:1px solid var(--crm-border);background:var(--crm-surface);margin:0;padding:10px 16px;color:var(--crm-text-muted);font-size:11px;line-height:1.5}
 @media(max-width:700px){.estudio{overflow:visible;flex:0 0 auto}.barra{padding:11px 14px}.controles{width:100%}.area{min-height:520px;height:520px;flex:0 0 auto;padding:13px 9px 18px}.area iframe{height:650px}.inspector{padding:12px}.inspector input{font-size:16px}.rodape{padding:10px 14px}}
+
+/* Painel de propriedades premium para elementos dos modelos HTML. */
+.estudio{position:relative}
+.inspector{align-items:stretch;flex-direction:column;gap:11px;padding:15px 18px}
+.inspectorTitulo{display:flex;align-items:center;gap:8px;color:var(--crm-primary-text)}
+.inspectorTitulo strong{color:var(--crm-text-strong);font-size:14px}
+.inspectorTitulo span{margin-left:auto;font-size:11px;color:var(--crm-text-muted)}
+.campos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
+.campos label{display:flex;flex-direction:column;min-width:0;gap:6px}
+.campos label span{color:var(--crm-text);font-size:11px;font-weight:750}
+.campos input,.campos select{height:38px;width:100%;min-width:0;padding:0 9px;border:1px solid var(--crm-border-strong);border-radius:9px;background:var(--crm-surface);color:var(--crm-text-strong);font-size:13px}
+.campos input[type=color]{padding:4px;cursor:pointer}
+.campos .campoUrl{grid-column:span 2}
+.campos .aplicar{align-self:end;min-height:38px;border:1px solid var(--crm-primary-border);border-radius:9px;padding:0 12px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-size:11px;font-weight:800;cursor:pointer}
+.acoes{display:flex;flex-wrap:wrap;gap:7px}
+.acoes button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;border:1px solid var(--crm-border);border-radius:9px;padding:0 12px;background:var(--crm-surface-soft);color:var(--crm-text-strong);font-size:11px;font-weight:800;cursor:pointer}
+.acoes .excluir,.confirmarCard .excluir{border-color:var(--crm-danger-border);background:var(--crm-danger-bg);color:var(--crm-danger-text)}
+.confirmarFundo{position:fixed;inset:0;z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px;background:rgb(13 22 39 / 62%);backdrop-filter:blur(4px)}
+.confirmarCard{display:flex;flex-direction:column;gap:12px;width:min(400px,100%);padding:23px;border:1px solid var(--crm-border);border-radius:18px;background:var(--crm-surface);box-shadow:var(--crm-shadow-lg)}
+.confirmarCard strong{color:var(--crm-text-strong);font-size:18px}
+.confirmarCard p{margin:0;color:var(--crm-text-muted);font-size:13px;line-height:1.6}
+.confirmarCard>div{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px}
+.confirmarCard button{min-height:40px;padding:0 15px;border:1px solid var(--crm-border);border-radius:9px;background:var(--crm-surface-soft);color:var(--crm-text-strong);font-weight:800;cursor:pointer}
+@media(max-width:900px){.campos{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){
+ .inspector{padding:14px}
+ .campos{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .campos .campoUrl{grid-column:1/-1}
+ .campos input,.campos select{font-size:16px}
+ .acoes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+}

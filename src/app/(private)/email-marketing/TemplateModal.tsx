@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Code2, LayoutTemplate, Plus, RotateCcw, Settings2, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, Code2, LayoutTemplate, Plus, RotateCcw, Settings2, Trash2, X } from "lucide-react";
 import { TEMPLATES_PADRAO_EMAIL } from "@/lib/email-marketing/templates-padrao";
 import { formatarHtmlParaEdicao } from "@/lib/email-marketing/formatar-html";
 import VariavelCombobox from "@/components/variaveis/VariavelCombobox";
@@ -83,13 +83,16 @@ export default function TemplateModal({
   >([]);
   const [carregandoVariaveis, setCarregandoVariaveis] = useState(false);
   const [modalVariaveis, setModalVariaveis] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<{
+    titulo: string;
+    descricao: string;
+    acao: () => void;
+    textoAcao: string;
+    perigoso?: boolean;
+  } | null>(null);
 
-  function trocarModo(destino: "visual" | "html-preview" | "html") {
-    if (destino === modoEditor) return;
-    if (destino === "visual" && modoEditor !== "visual" &&
-      !window.confirm("O layout HTML não pode ser convertido em blocos automaticamente. Abrir o último projeto em blocos? Alterações feitas no HTML não serão transferidas.")) return;
+  function executarTrocaModo(destino: "visual" | "html-preview" | "html") {
     if (modoEditor === "visual" && destino !== "visual") {
-      if (!window.confirm("Ao editar o HTML, a versão passará a ser gerenciada como HTML. O layout em blocos continuará separado. Continuar?")) return;
       setHtml(formatarHtmlParaEdicao(gerarHtmlEmailVisual(documento)));
     } else if (modoEditor === "html-preview") {
       setHtml(htmlPreviewRef.current?.obterHtml() || html);
@@ -98,8 +101,43 @@ export default function TemplateModal({
     setGaleriaAberta(false);
   }
 
+  function trocarModo(destino: "visual" | "html-preview" | "html") {
+    if (destino === modoEditor) return;
+    if (destino === "visual" && modoEditor !== "visual") {
+      setConfirmacao({
+        titulo: "Abrir editor de blocos?",
+        descricao: "Este modelo HTML possui uma estrutura própria e não pode ser convertido automaticamente. A versão em blocos será aberta separadamente e as alterações feitas no HTML não serão transferidas.",
+        textoAcao: "Abrir blocos",
+        acao: () => executarTrocaModo(destino),
+      });
+      return;
+    }
+    if (modoEditor === "visual") {
+      setConfirmacao({
+        titulo: "Continuar com o editor HTML?",
+        descricao: "O conteúdo visual será convertido para HTML. Você poderá editar os elementos na prévia ou trabalhar com o código, mas alterações no HTML não voltarão automaticamente aos blocos.",
+        textoAcao: "Continuar",
+        acao: () => executarTrocaModo(destino),
+      });
+      return;
+    }
+    executarTrocaModo(destino);
+  }
+
   function aplicarModelo(tipo: "visual" | "padrao" | "salvo", id: string) {
-    if (template && !window.confirm("Substituir o conteúdo atual pelo modelo selecionado?")) return;
+    if (template) {
+      setConfirmacao({
+        titulo: "Substituir conteúdo do template?",
+        descricao: "O modelo selecionado substituirá o conteúdo em edição. O template salvo só será alterado quando você clicar em Salvar template.",
+        textoAcao: "Aplicar modelo",
+        acao: () => aplicarModeloConfirmado(tipo, id),
+      });
+      return;
+    }
+    aplicarModeloConfirmado(tipo, id);
+  }
+
+  function aplicarModeloConfirmado(tipo: "visual" | "padrao" | "salvo", id: string) {
     setHtmlAnterior(modoEditor === "html-preview" ? (htmlPreviewRef.current?.obterHtml() || html) : html);
     if (tipo === "visual") {
       const modelo = modelosVisuais.find(item => item.id === id);
@@ -280,8 +318,19 @@ export default function TemplateModal({
     }
   }
 
+  function solicitarArquivamento() {
+    if (!template) return;
+    setConfirmacao({
+      titulo: "Arquivar template?",
+      descricao: "O template deixará de aparecer como opção ativa para novas campanhas. Esta ação não altera as campanhas já enviadas.",
+      textoAcao: "Arquivar template",
+      perigoso: true,
+      acao: () => void arquivar(),
+    });
+  }
+
   async function arquivar() {
-    if (!template || !window.confirm("Arquivar este template?")) return;
+    if (!template) return;
 
     setSalvando(true);
     setErro("");
@@ -478,7 +527,7 @@ export default function TemplateModal({
 
             <div className={styles.templatePremiumFooter}>
               {template ? (
-                <button type="button" className={styles.dangerButton} onClick={arquivar} disabled={salvando}>
+                <button type="button" className={styles.dangerButton} onClick={solicitarArquivamento} disabled={salvando}>
                   <Trash2 size={16} /> Arquivar
                 </button>
               ) : <span />}
@@ -495,6 +544,25 @@ export default function TemplateModal({
           </form>
         </div>
       </div>
+
+      {confirmacao ? (
+        <div className={styles.templateConfirmBackdrop} onMouseDown={event => event.stopPropagation()}>
+          <div className={styles.templateConfirmCard} role="alertdialog" aria-modal="true"
+            aria-labelledby="template-confirm-title" aria-describedby="template-confirm-desc">
+            <span className={styles.templateConfirmIcon}><AlertTriangle size={22}/></span>
+            <h3 id="template-confirm-title">{confirmacao.titulo}</h3>
+            <p id="template-confirm-desc">{confirmacao.descricao}</p>
+            <div className={styles.templateConfirmActions}>
+              <button type="button" className={styles.secondaryButton} onClick={() => setConfirmacao(null)}>Cancelar</button>
+              <button type="button" className={confirmacao.perigoso ? styles.dangerButton : styles.primaryButton} onClick={() => {
+                const acao = confirmacao.acao;
+                setConfirmacao(null);
+                acao();
+              }}>{confirmacao.textoAcao}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <GerenciarVariaveisModal
         aberto={modalVariaveis}
