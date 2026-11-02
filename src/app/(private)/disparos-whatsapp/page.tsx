@@ -1745,41 +1745,41 @@ function consequenciaFalhaNoContato(codigo: number | null): ConsequenciaFalhaCon
   if (codigo === 131026) {
     return {
       tipo: "revisao",
-      titulo: "Número do contato em revisão",
+      titulo: "Contato em revisão e pausa de 24 horas",
       explicacao:
-        "Quando ocorre o erro 131026, o CRM marca o telefone para revisão. " +
-        "Confira DDI, DDD, número e se o destinatário possui WhatsApp ativo antes de enviar novamente. " +
-        "Se houver uma pausa temporária de 24 horas ativa para esse erro, ela também deve ser respeitada.",
+        "Após a falha 131026, o CRM marca o telefone do contato para revisão e aplica uma pausa temporária de 24 horas a novas tentativas para esse número. " +
+        "Quando a pausa terminar, o telefone continuará em revisão até que a situação seja corrigida ou um envio seja aceito com sucesso. " +
+        "Confira DDI (55 para o Brasil), DDD, número e se o destinatário possui WhatsApp ativo antes de tentar novamente.",
     };
   }
   if (codigo === 131049) {
     return {
       tipo: "pausa",
-      titulo: "Contato em pausa para marketing",
+      titulo: "Contato em pausa temporária para marketing",
       explicacao:
-        "Nos disparos de marketing, o CRM registra uma pausa temporária para esse contato " +
-        "após o erro 131049. A duração depende das ocorrências recentes (6, 24 ou 72 horas). " +
-        "Durante a pausa, o contato fica indisponível para novos disparos de marketing. " +
-        "Consulte a situação do contato antes de tentar novamente.",
+        "Após a falha 131049, o CRM coloca o contato em pausa para novos disparos de marketing. " +
+        "O período depende das ocorrências recentes: normalmente 6 horas na primeira, 24 horas na segunda e 72 horas a partir da terceira, conforme a configuração do CRM. " +
+        "Durante essa pausa, o contato não deve receber novos disparos de marketing. " +
+        "Esse erro, por si só, não marca o telefone para revisão. Aguarde a liberação antes de tentar novamente.",
     };
   }
   if (codigo === 131048) {
     return {
       tipo: "remetente",
-      titulo: "Restrição do remetente, não do contato",
+      titulo: "Remetente/campanha em restrição, não o contato",
       explicacao:
-        "O erro 131048 limita o número WhatsApp que está enviando as mensagens. " +
-        "Erros consecutivos podem colocar a campanha em espera temporária, mas essa falha " +
-        "não marca automaticamente o destinatário para revisão nem pausa individual do contato.",
+        "A falha 131048 indica restrição ao número WhatsApp que realiza o envio, e não ao destinatário. " +
+        "Falhas consecutivas podem colocar a campanha em pausa operacional, mas não deixam o contato individual em pausa nem marcam seu telefone para revisão automaticamente. " +
+        "Revise a qualidade e os alertas do número remetente antes de retomar os disparos.",
     };
   }
   return {
     tipo: "informativo",
-    titulo: "Sem pausa ou revisão automática do contato",
+    titulo: "Contato sem pausa ou revisão automática por esta falha",
     explicacao:
-      "Esta falha, isoladamente, não indica que o CRM colocou esse contato em pausa " +
-      "ou marcou seu telefone para revisão. A campanha, conta ou template ainda pode " +
-      "precisar de correção. Siga a orientação acima antes de reenviar.",
+      "Este tipo de falha, isoladamente, não coloca o contato em pausa nem marca seu telefone para revisão automaticamente. " +
+      "Outros bloqueios ou ocorrências anteriores ainda podem afetá-lo. " +
+      "Revise a causa e a orientação acima antes de reenviar; se necessário, consulte a situação atual do contato no módulo Contatos.",
   };
 }
 
@@ -9033,7 +9033,11 @@ export default function DisparosWhatsAppPage() {
                                           onClick={() => setFalhaModal({ ...tipo, campanhaNome: nomeCampanhaHistorico(campanha) })}
                                           aria-label={`Saber mais sobre ${tipo.nome}, inclusive o efeito da falha no contato`}
                                         >
-                                          Saber mais
+                                          {tipo.codigo === 131026
+                                            ? "Saber mais · Revisão"
+                                            : tipo.codigo === 131049
+                                              ? "Saber mais · Pausa"
+                                              : "Saber mais"}
                                         </button>
                                       </div>
                                     </div>
@@ -9126,7 +9130,7 @@ export default function DisparosWhatsAppPage() {
               </section>
               <section className={`${styles.campaignFailureModalSection} ${styles.campaignFailureContactImpact}`}
                 data-tipo={consequenciaFalhaNoContato(falhaModal.codigo).tipo}>
-                <h4>O que acontece com o contato?</h4>
+                <h4>O contato fica em pausa ou em revisão?</h4>
                 <strong className={styles.campaignFailureContactImpactTitle}>
                   {consequenciaFalhaNoContato(falhaModal.codigo).titulo}
                 </strong>
