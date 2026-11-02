@@ -5814,3 +5814,36 @@
 .templateConfirmActions{display:flex;align-items:center;justify-content:flex-end;gap:9px;width:100%;margin-top:9px}
 .templateConfirmActions button{min-height:43px;min-width:120px;padding:0 14px;font-size:13px;font-weight:800}
 @media(max-width:640px){.templateConfirmBackdrop{padding:17px}.templateConfirmCard{padding:22px 19px;gap:11px;border-radius:18px}.templateConfirmCard h3{font-size:18px}.templateConfirmActions{display:grid;grid-template-columns:1fr 1fr}.templateConfirmActions button{min-width:0;width:100%}}
+
+
+/* Controles do editor centralizados no cabeçalho, como no restante do CRM. */
+.templatePremiumModal .templatePremiumHeader{display:grid;grid-template-columns:minmax(150px,1fr) auto minmax(44px,1fr);align-items:center;column-gap:16px;row-gap:10px;padding:14px 21px}
+.templateStudioHeaderActions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;min-width:0}
+.templatePremiumModal .templatePremiumHeader>.iconButton{justify-self:end}
+.templateStudioHeaderActions .templateStudioSwitch{border-radius:12px}
+.templateStudioHeaderActions .templateStudioSwitch button{min-height:43px;padding:0 16px;font-size:14px;font-weight:800;white-space:nowrap}
+.templateStudioHeaderActions .templateStudioGalleryButton{min-height:43px;padding:0 15px;font-size:14px;font-weight:800;white-space:nowrap}
+.templatePremiumModal .templateVisualMeta{padding:15px 19px;gap:17px}
+.templatePremiumModal .templateVisualMeta .field>span{font-size:14px;font-weight:800}
+.templatePremiumModal .templateVisualMeta .field input{min-height:43px;font-size:14px}
+.templatePremiumModal .templateStudioGalleryCard strong{font-size:14px}
+.templatePremiumModal .templateStudioGalleryCard small{font-size:13px;line-height:1.4}
+.templatePremiumModal .templateStudioGalleryCard em{font-size:12px}
+.templatePremiumModal .templatePremiumHeading>span{font-size:13px}
+@media(max-width:1200px){
+ .templatePremiumModal .templatePremiumHeader{grid-template-columns:minmax(120px,1fr) minmax(0,2fr) 43px}
+ .templateStudioHeaderActions .templateStudioSwitch button{padding:0 11px}
+ .templateStudioHeaderActions .templateStudioGalleryButton{padding:0 11px}
+}
+@media(max-width:780px){
+ .templatePremiumModal .templatePremiumHeader{grid-template-columns:minmax(0,1fr) auto;gap:9px 12px;padding:12px 15px}
+ .templateStudioHeaderActions{grid-column:1/-1;grid-row:2;justify-content:center;width:100%}
+ .templatePremiumModal .templatePremiumHeader>.iconButton{grid-column:2;grid-row:1}
+ .templatePremiumModal .templateVisualMeta .field{flex:1 1 100%;max-width:none}
+}
+@media(max-width:500px){
+ .templateStudioHeaderActions{flex-wrap:wrap;gap:7px}
+ .templateStudioHeaderActions .templateStudioSwitch{width:100%}
+ .templateStudioHeaderActions .templateStudioSwitch button{flex:1;font-size:14px;padding:0 8px}
+ .templateStudioHeaderActions .templateStudioGalleryButton{flex:1 1 100%;justify-content:center;font-size:14px}
+}
