@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Plus, Save, Trash2, X } from "lucide-react";
-import type { CategoriaCotacao, PlanoEmpresa } from "@/lib/cotacoes-veiculares/catalogo";
+import { CATEGORIAS_COTACAO, type CategoriaCotacao, type PlanoEmpresa } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO,USOS_VEICULO,regraVazia,validarRegraComercial,
  type OpcionalComercial,type RegraComercialPlano,type EnergiaVeiculo,type UsoVeiculo,
 } from "@/lib/cotacoes-veiculares/comercial";
@@ -21,6 +21,7 @@ export default function ConfiguracaoComercialEditor({
  const [rascunhos,setRascunhos]=useState<Record<string,RegraComercialPlano>>({});
  const [extras,setExtras]=useState<Record<string,OpcionalComercial[]>>({});
  const [novasCoberturas,setNovasCoberturas]=useState<Record<string,string>>({});
+ const [copiarPara,setCopiarPara]=useState<Record<string,CategoriaCotacao[]>>({});
  const [salvando,setSalvando]=useState<string|null>(null);
  const [erro,setErro]=useState(""),[sucesso,setSucesso]=useState("");
  useEffect(()=>{
@@ -32,7 +33,7 @@ export default function ConfiguracaoComercialEditor({
     grupo_exclusivo:v.grupo_exclusivo||"",ativo:v.ativo,
    }));
   }
-  setRascunhos(r);setExtras(o);setNovasCoberturas({});setErro("");setSucesso("");
+  setRascunhos(r);setExtras(o);setNovasCoberturas({});setCopiarPara({});setErro("");setSucesso("");
  },[categoria,planos,regras,opcionais]);
  function alterar(codigo:string,campo:keyof RegraComercialPlano,valor:unknown){
   setRascunhos(prev=>({...prev,[codigo]:{...prev[codigo],[campo]:valor}}));
@@ -57,8 +58,15 @@ export default function ConfiguracaoComercialEditor({
    const json=await res.json();
    if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar cobertura.");
    setNovasCoberturas(v=>({...v,[codigo]:""}));
-   await onSaved();
-   setSucesso(remover?"Cobertura removida.":"Cobertura salva.");
+   setRascunhos(atual=>{
+     const regraAtual=atual[codigo];
+     if(!regraAtual)return atual;
+     const lista=remover
+       ?regraAtual.coberturas.filter(v=>v.toLowerCase()!==cobertura.toLowerCase())
+       :[...regraAtual.coberturas,cobertura];
+     return {...atual,[codigo]:{...regraAtual,coberturas:lista}};
+   });
+   setSucesso(remover?"Cobertura removida.":"Cobertura salva. Ao terminar, salve as regras do plano.");
   }catch(e){setErro(e instanceof Error?e.message:"Falha ao salvar cobertura.");}
   finally{setSalvando(null);}
  }
@@ -80,30 +88,34 @@ export default function ConfiguracaoComercialEditor({
   try{
    const res=await fetch("/api/cotacoes-veiculares/comercial",{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({acao:"regra",regra,opcionais:items}),
+    body:JSON.stringify({acao:"regra",regra,opcionais:items,
+      categorias:[categoria,...(copiarPara[codigo]||[]).filter(c=>c!==categoria)]}),
    });
    const json=await res.json();
    if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar plano.");
    await onSaved();
-   setSucesso("Regras comerciais salvas.");
+   const quantidade=1+(copiarPara[codigo]||[]).filter(c=>c!==categoria).length;
+   setSucesso(quantidade===1?"Regras desta categoria salvas.":
+     "Regras salvas nas "+quantidade+" categorias selecionadas.");
   }catch(e){setErro(e instanceof Error?e.message:"Não foi possível salvar.");}
   finally{setSalvando(null);}
  }
  const ativos=planos.filter(p=>p.ativo);
  return <section className={styles.panel}>
   <div className={styles.sectionHeading}><h2>Regras e coberturas</h2>
-   <p>Escolha a categoria e configure cada plano criado. Adicione as coberturas individualmente.</p></div>
+   <p>Configure as condições para a categoria selecionada. Quando forem iguais, aplique-as a outras categorias sem preencher tudo novamente.</p></div>
   {erro&&<p role="alert" className={styles.error}>{erro}</p>}
   {sucesso&&<p role="status" className={styles.success}>{sucesso}</p>}
   {!ativos.length&&<p className={styles.smallNote}>Crie um plano para começar a configurar suas regras.</p>}
   <div className={styles.commercialGrid}>
    {ativos.map(p=>{
     const regra=rascunhos[p.codigo];if(!regra)return null;
-    const cod=p.codigo,salvo=regras.some(r=>r.plano===cod);
+    const cod=p.codigo,salvo=regras.some(r=>r.plano===cod &&
+      !validarRegraComercial(r,opcionais.filter(o=>o.plano===cod)));
     return <article key={cod} className={styles.commercialCard}>
      <div className={styles.commercialCardHeading}>
       <h3>{p.nome}</h3><span className={salvo?styles.goodStatus:styles.pendingStatus}>
-       {salvo?"Regras cadastradas":"Configuração pendente"}</span>
+       {salvo?"Regras salvas":"Regras ainda incompletas"}</span>
      </div>
      <div className={styles.fields}>
       <label>Participação (%)<input type="number" min="0" max="100" step=".001" disabled={!podeConfigurar}
@@ -180,6 +192,28 @@ export default function ConfiguracaoComercialEditor({
         <Trash2 size={15}/> Remover</button>
       </div>
      </div>)}
+     <div className={styles.ruleApplyBox}>
+       <strong>Aplicar estas regras também em outras categorias?</strong>
+       <p>Opcional. Marque apenas as categorias que possuem as mesmas condições. O salvamento substitui as regras e opcionais já existentes nas categorias marcadas, mas não altera os preços.</p>
+       <div className={styles.ruleCategoryGrid}>
+         {Object.entries(CATEGORIAS_COTACAO).filter(([c])=>c!==categoria).map(([codigo,nome])=>{
+           const marcado=(copiarPara[cod]||[]).includes(codigo as CategoriaCotacao);
+           return <label key={codigo} className={styles.ruleCategoryChoice}>
+             <input type="checkbox" disabled={!podeConfigurar||salvando!==null} checked={marcado}
+               onChange={e=>setCopiarPara(prev=>{
+                 const lista=prev[cod]||[];
+                 return {...prev,[cod]:e.target.checked?
+                   [...lista,codigo as CategoriaCotacao]:
+                   lista.filter(c=>c!==codigo)};
+               })}/>
+             <span>{nome}</span>
+           </label>;
+         })}
+       </div>
+       <span className={styles.ruleCategoryInfo}>
+         {1+(copiarPara[cod]||[]).length} categoria(s) selecionada(s), incluindo a atual.
+       </span>
+     </div>
      <div className={styles.actions}><button type="button" className={styles.primary}
       disabled={!podeConfigurar||salvando!==null} onClick={()=>void salvar(cod)}>
       <Save size={16}/> {salvando===cod?"Salvando...":"Salvar regras de "+p.nome}</button></div>

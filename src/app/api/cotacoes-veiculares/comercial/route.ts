@@ -25,7 +25,18 @@ async function acesso() {
   return {empresaId,podeConfigurar};
 }
 function erro(e:unknown,status=400) {
-  return NextResponse.json({ok:false,error:e instanceof Error?e.message:"Erro na configuração."},{status});
+  const obj=e&&typeof e==="object"?e as {code?:unknown;message?:unknown}:null;
+  const codigo=typeof obj?.code==="string"?obj.code:"";
+  const mensagem=typeof obj?.message==="string"?obj.message:
+    e instanceof Error?e.message:"";
+  const seguro=mensagem.startsWith("Configuração comercial")||
+    mensagem.startsWith("Selecione uma ou mais categorias")||
+    mensagem.startsWith("Seleção de categorias")||
+    codigo==="P0001" || codigo==="23514";
+  const texto=seguro&&mensagem?mensagem:
+    e instanceof Error?e.message:
+    "Não foi possível salvar as regras. Confira os campos e tente novamente.";
+  return NextResponse.json({ok:false,error:texto},{status});
 }
 
 export async function GET(req:Request) {
@@ -110,9 +121,18 @@ export async function POST(req:Request) {
       if(!regra.usos_permitidos.every(v=>v in USOS_VEICULO)||
         !regra.energias_permitidas.every(v=>v in ENERGIAS_VEICULO))
         throw new Error("Finalidade de uso ou motorização inválida.");
-      const {error}=await getSupabaseAdmin().rpc("cotacao_veicular_salvar_regras",{
-        p_empresa_id:auth.empresaId,p_categoria:regra.categoria,p_plano:regra.plano,
-        p_regra:regra,p_opcionais:opcionais,
+      const categoriasAdicionais=body.categorias;
+      if(categoriasAdicionais!==undefined&&!Array.isArray(categoriasAdicionais))
+        throw new Error("Lista de categorias inválida.");
+      const selecionadas=Array.isArray(categoriasAdicionais)?categoriasAdicionais:[regra.categoria];
+      if(selecionadas.length<1||selecionadas.length>8||
+        selecionadas.some(c=>!categoriaValida(c)) ||
+        new Set(selecionadas).size!==selecionadas.length ||
+        !selecionadas.includes(regra.categoria))
+        throw new Error("Selecione categorias válidas, incluindo a categoria atual.");
+      const {error}=await getSupabaseAdmin().rpc("cotacao_veicular_salvar_regras_multiplas",{
+        p_empresa_id:auth.empresaId,p_plano:regra.plano,
+        p_categorias:selecionadas,p_regra:regra,p_opcionais:opcionais,
       });
       if(error)throw error;
     }else throw new Error("Ação inválida.");

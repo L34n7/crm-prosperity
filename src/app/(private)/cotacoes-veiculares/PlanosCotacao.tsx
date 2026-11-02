@@ -297,7 +297,7 @@ export default function PlanosCotacao({
           {modal.passo===2&&plano&&<div className={styles.planStepContent}>
             <span className={styles.planStepEyebrow}>02 / CONFIGURAÇÃO</span>
             <h3>Regras e coberturas</h3>
-            <p>Escolha a categoria, defina cobertura, participação, assistência e opcionais. Salve cada categoria utilizada pelo plano.</p>
+            <p>Selecione uma categoria para começar. Se as regras forem iguais para outros veículos, marque as categorias adicionais ao final do formulário e salve tudo de uma vez.</p>
             <label className={styles.planWizardField}>Categoria de veículos
               <select value={categoria} disabled={ocupado} onChange={e=>
                 onCategoria(e.target.value as CategoriaCotacao)}>
@@ -405,7 +405,7 @@ export default function PlanosCotacao({
           </div>}
         </div>
         <footer className={styles.planWizardFooter}>
-          <span>{modal.passo===1?"Preencha o nome para avançar.":modal.passo===2?"As regras devem ser salvas por categoria.":"Dados salvos por plano, sem afetar outros."}</span>
+          <span>{modal.passo===1?"Preencha o nome para avançar.":modal.passo===2?"Salve a categoria atual e, se desejar, copie para outras.":"Dados salvos por plano, sem afetar outros."}</span>
           <div className={styles.planWizardFooterActions}>
             {modal.passo>1&&<button type="button" className={styles.secondary}
               disabled={ocupado} onClick={()=>proximaEtapa(modal.passo===3?2:1)}>
