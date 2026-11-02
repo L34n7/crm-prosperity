@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { USOS_VEICULO, ENERGIAS_VEICULO, type UsoVeiculo, type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import {
   CATEGORIAS_COTACAO,
   categoriaValida,
@@ -42,15 +44,16 @@ export async function GET(request: Request) {
     const categoriaBruta = new URL(request.url).searchParams.get("categoria") || "auto_leves";
     if (!categoriaValida(categoriaBruta)) return erro(new Error("Categoria inválida."));
     const supabase = getSupabaseAdmin();
-    const [config, faixas, cotacoesResult, modelosResult] = await Promise.all([
+    const [config, faixas, cotacoesResult, modelosResult, status] = await Promise.all([
       configuracaoCotacao(empresaId), consultarFaixas(empresaId, categoriaBruta),
       supabase.from("cotacao_veicular_cotacoes").select("*").eq("empresa_id",empresaId)
         .order("created_at",{ascending:false}).limit(100),
       supabase.from("cotacao_veicular_modelos_empresa").select("modelo,codigo_fipe",{count:"exact",head:true}).eq("empresa_id",empresaId),
+      statusConfiguracaoCotacao(empresaId),
     ]);
     if (cotacoesResult.error) throw cotacoesResult.error;
     return NextResponse.json({
-      ok: true, config, faixas, cotacoes: cotacoesResult.data || [],
+      ok: true, config, status, faixas, cotacoes: cotacoesResult.data || [],
       modelos_especiais_total: modelosResult.count || 0,
       categorias: CATEGORIAS_COTACAO, pode_gerenciar: acesso.podeGerenciar, pode_configurar: acesso.podeConfigurar,
     });
@@ -64,25 +67,6 @@ export async function POST(request: Request) {
     const empresaId = acesso.empresaId!;
     const body = await request.json() as Record<string, unknown>;
     const acao = String(body.acao || "");
-
-    if (acao === "configurar") {
-      if (!acesso.podeConfigurar) return erro(new Error("Sem permissão para configurar."),403);
-      const tabelaValidada = body.tabela_validada === true;
-      const iaHabilitada = body.ia_habilitada === true;
-      if (iaHabilitada && !tabelaValidada) throw new Error("Valide a tabela antes de liberar a IA.");
-      const referencia = String(body.referencia || "").trim().slice(0,160);
-      if (!referencia) throw new Error("Informe a identificação e vigência da tabela.");
-      const { error } = await getSupabaseAdmin().from("cotacao_veicular_configuracoes").upsert({
-        empresa_id: empresaId,
-        tabela_validada: tabelaValidada,
-        ia_habilitada: iaHabilitada,
-        referencia,
-        validada_em: tabelaValidada ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      },{onConflict:"empresa_id"});
-      if (error) throw error;
-      return NextResponse.json({ ok: true, config: await configuracaoCotacao(empresaId) });
-    }
 
     if (acao === "preco") {
       if (!acesso.podeConfigurar) return erro(new Error("Sem permissão para editar preços."),403);
@@ -115,6 +99,10 @@ export async function POST(request: Request) {
     if (acao !== "simular" && acao !== "salvar") throw new Error("Operação inválida.");
     if (!acesso.podeGerenciar) return erro(new Error("Sem permissão para gerar cotações."),403);
     if (!categoriaValida(body.categoria)) throw new Error("Categoria inválida.");
+    const uso=String(body.uso||"") as UsoVeiculo;
+    const energia=String(body.energia||"") as EnergiaVeiculo;
+    if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
+      throw new Error("Selecione a finalidade de uso e o tipo de motorização.");
     const valorFipeCentavos = inteiro(body.valor_fipe_centavos,"Valor FIPE");
     const opcoes = body.opcionais_por_plano && typeof body.opcionais_por_plano === "object"
       ? body.opcionais_por_plano as Record<string,unknown> : {};
@@ -123,7 +111,7 @@ export async function POST(request: Request) {
       completo: Array.isArray(opcoes.completo) ? opcoes.completo.map(String) : [],
     };
     const parametros = { empresaId, categoria: body.categoria, valorFipeCentavos,
-      opcionaisPorPlano, origem: "manual" as const };
+      uso,energia,opcionaisPorPlano, origem: "manual" as const };
     if (acao === "simular") {
       return NextResponse.json({ ok: true, calculos: await calcularCotacaoPlanos(parametros) });
     }

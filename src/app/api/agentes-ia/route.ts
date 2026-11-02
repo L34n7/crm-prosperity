@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import {
   FOLLOWUP_INATIVIDADE_PADRAO,
   erroValidacaoFollowupInatividade,
@@ -695,6 +696,7 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       agentes,
+      cotacao_configuracao: await statusConfiguracaoCotacao(contexto.empresaId),
       opcoes: {
         integracoes: integracoesResult.data || [],
         fluxos: fluxosResult.data || [],
@@ -1065,6 +1067,14 @@ export async function PATCH(request: Request) {
     let ferramentasNormalizadas: FerramentaBody[] | null = null;
     if (Array.isArray(body.ferramentas)) {
       const ferramentas = ferramentasBody(body.ferramentas);
+      if(ferramentas.some(item=>item.tipo==="gerar_cotacao_veicular" && item.ativo)){
+        const status=await statusConfiguracaoCotacao(contexto.empresaId);
+        if(!status.pronta) return NextResponse.json({
+          ok:false,code:"COTACAO_NAO_CONFIGURADA",
+          error:"Conclua a configuração comercial no módulo Cotação antes de ativar a ferramenta. "+
+            status.pendencias.slice(0,3).join(" "),
+        },{status:409});
+      }
       const validacaoAgenda = await validarAgendaObrigatoria(contexto.empresaId, ferramentas);
       if (!validacaoAgenda.ok) {
         return NextResponse.json(

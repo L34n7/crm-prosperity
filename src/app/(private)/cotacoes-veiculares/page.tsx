@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BadgeCheck, Bot, Calculator, CarFront, CheckCircle2, CircleAlert, ClipboardList,
+  BadgeCheck, Calculator, CarFront, CheckCircle2, CircleAlert, ClipboardList,
   Copy, Download, FileSpreadsheet, Loader2, Save, Settings2, ShieldCheck, UploadCloud, X,
 } from "lucide-react";
 import Header from "@/components/Header";
 import {
-  CATEGORIAS_COTACAO, opcionaisDisponiveis,
+  CATEGORIAS_COTACAO,
   type CategoriaCotacao, type PlanoCotacao,
 } from "@/lib/cotacoes-veiculares/catalogo";
+import { ENERGIAS_VEICULO, USOS_VEICULO, type UsoVeiculo, type EnergiaVeiculo, type RegraComercialPlano, type OpcionalComercial } from "@/lib/cotacoes-veiculares/comercial";
+import ConfiguracaoComercialEditor from "./ConfiguracaoComercialEditor";
 import styles from "./page.module.css";
 
 type Faixa = {
@@ -18,13 +20,14 @@ type Faixa = {
 };
 type Config = {
   tabela_validada:boolean; ia_habilitada:boolean; tabela_importada:boolean;
-  modelos_importados:boolean; referencia:string;
+  modelos_importados:boolean; referencia:string; vigencia_ate:string|null;
 };
 type Calculo = {
   codigo_produto:string; mensalidade_base_centavos:number; total_centavos:number;
   cota_participacao_centavos:number; tabela_validada:boolean; referencia:string;
   assistencia_km_total:number; assistencias_ano:number; terceiros_limite_centavos:number;
   participacao_percentual:number; carro_reserva_incluso_dias:number;
+  coberturas:string[]; observacoes:string;
   opcionais:Array<{codigo:string;nome:string;centavos:number}>;
 };
 type Calculos = Record<PlanoCotacao,Calculo>;
@@ -33,6 +36,9 @@ type Cotacao = {
   categoria:string; plano:PlanoCotacao; status:string; origem:string;
   total_centavos:number; created_at:string; tabela_validada:boolean;
 };
+type Status = {pronta:boolean;pendencias:string[];categorias:CategoriaCotacao[];faixas:number;regras:number};
+type RegraBanco=RegraComercialPlano;
+type OpcionalBanco=OpcionalComercial & {plano:PlanoCotacao;categoria:string};
 type Opcao = {code:string;name:string};
 type DetalheFipe = {
   brand:string;model:string;modelYear:number;referenceMonth:string;codeFipe:string;price:string;
@@ -58,6 +64,8 @@ export default function CotacoesVeicularesPage() {
   const [aba,setAba]=useState<"nova"|"tabela"|"historico">("nova");
   const [categoria,setCategoria]=useState<CategoriaCotacao>("auto_leves");
   const [nomeContato,setNomeContato]=useState("");
+  const [uso,setUso]=useState<UsoVeiculo>("particular");
+  const [energia,setEnergia]=useState<EnergiaVeiculo>("combustao");
   const [veiculo,setVeiculo]=useState("");
   const [anoModelo,setAnoModelo]=useState("");
   const [valorFipe,setValorFipe]=useState("");
@@ -65,9 +73,12 @@ export default function CotacoesVeicularesPage() {
   const [opcionaisPorPlano,setOpcionaisPorPlano]=useState<Record<PlanoCotacao,string[]>>({premium:[],completo:[]});
   const [config,setConfig]=useState<Config>({
     tabela_validada:false,ia_habilitada:false,tabela_importada:false,
-    modelos_importados:false,referencia:"Tabela Save Car jan/2024 — pendente de confirmação",
+    modelos_importados:false,referencia:"Tabela Save Car jan/2024 — pendente de confirmação",vigencia_ate:null,
   });
   const [faixas,setFaixas]=useState<Faixa[]>([]);
+  const [status,setStatus]=useState<Status>({pronta:false,pendencias:[],categorias:[],faixas:0,regras:0});
+  const [regras,setRegras]=useState<RegraBanco[]>([]);
+  const [catalogoExtras,setCatalogoExtras]=useState<OpcionalBanco[]>([]);
   const [cotacoes,setCotacoes]=useState<Cotacao[]>([]);
   const [modelosTotal,setModelosTotal]=useState(0);
   const [podeGerenciar,setPodeGerenciar]=useState(false);
@@ -102,14 +113,22 @@ export default function CotacoesVeicularesPage() {
       const res=await fetch("/api/cotacoes-veiculares?categoria="+categoria,{cache:"no-store"});
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Erro ao carregar cotações.");
-      setConfig(json.config);setFaixas(json.faixas||[]);
+      setConfig(json.config);setFaixas(json.faixas||[]);setStatus(json.status);
       setCotacoes(json.cotacoes||[]);setModelosTotal(Number(json.modelos_especiais_total||0));
       setPodeGerenciar(Boolean(json.pode_gerenciar));setPodeConfigurar(Boolean(json.pode_configurar));
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao carregar.");}
     finally{setCarregando(false);}
   },[categoria]);
+  const carregarComercial=useCallback(async()=>{
+    const resposta=await fetch("/api/cotacoes-veiculares/comercial?categoria="+categoria,{cache:"no-store"});
+    const json=await resposta.json();
+    if(!resposta.ok||!json.ok)throw new Error(json.error||"Erro ao consultar regras comerciais.");
+    setRegras(json.regras||[]);setCatalogoExtras(json.opcionais||[]);
+  },[categoria]);
+  useEffect(()=>{void carregarComercial().catch(e=>setErro(e instanceof Error?e.message:"Erro ao carregar regras."));},[carregarComercial]);
+  async function atualizarTudo(){await Promise.all([atualizar(),carregarComercial()]);}
   useEffect(()=>{void atualizar();},[atualizar]);
-  useEffect(()=>{setCalculos(null);setCotacaoSalva(null);},[categoria,valorFipe,opcionaisPorPlano]);
+  useEffect(()=>{setCalculos(null);setCotacaoSalva(null);},[categoria,valorFipe,opcionaisPorPlano,uso,energia]);
   useEffect(()=>{setOpcionaisPorPlano({premium:[],completo:[]});},[categoria]);
 
   const consultarApiFipe=useCallback(async(etapa:string,params:Record<string,string>={})=>{
@@ -155,7 +174,7 @@ export default function CotacoesVeicularesPage() {
     finally{setBuscandoFipe(false);}
   }
 
-  async function enviar(acao:"simular"|"salvar"|"configurar"|"preco",dados:Record<string,unknown>){
+  async function enviar(acao:"simular"|"salvar"|"preco",dados:Record<string,unknown>){
     setOcupado(true);setErro("");setSucesso("");
     try{
       const res=await fetch("/api/cotacoes-veiculares",{
@@ -176,16 +195,13 @@ export default function CotacoesVeicularesPage() {
         setEditando(null);await atualizar();
         setSucesso("Valores atualizados. A tabela precisa ser validada novamente.");
       }
-      if(acao==="configurar"){
-        await atualizar();setSucesso("Configurações comerciais salvas.");
-      }
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao processar solicitação.");}
     finally{setOcupado(false);}
   }
 
   function dadosCotacao(){
     return {
-      categoria,veiculo,nome_contato:nomeContato,ano_modelo:anoModelo,
+      categoria,veiculo,nome_contato:nomeContato,ano_modelo:anoModelo,uso,energia,
       valor_fipe_centavos:valorDeMoeda(valorFipe),referencia_fipe:referenciaFipe,
       opcionais_por_plano:opcionaisPorPlano,
     };
@@ -204,6 +220,7 @@ export default function CotacoesVeicularesPage() {
       "COTAÇÃO DE PROTEÇÃO VEICULAR",veiculo ? "Veículo: "+veiculo : "",
       anoModelo?"Ano: "+anoModelo:"",
       "Categoria: "+CATEGORIAS_COTACAO[categoria],
+      "Uso: "+USOS_VEICULO[uso], "Motorização: "+ENERGIAS_VEICULO[energia],
       valorFipe?"Valor FIPE: R$ "+valorFipe:"",
       ...planos.flatMap(plano=>{
         const c=calculos[plano];
@@ -213,6 +230,8 @@ export default function CotacoesVeicularesPage() {
           "Cota de participação: "+moeda(c.cota_participacao_centavos),
           "Terceiros: "+(c.terceiros_limite_centavos?moeda(c.terceiros_limite_centavos):"Não disponível"),
           "Assistência 24h: "+c.assistencia_km_total+" km totais",
+          ...c.coberturas.map(item=>"Cobertura: "+item),
+          ...(c.observacoes?["Condições: "+c.observacoes]:[]),
           ...c.opcionais.map(item=>"Opcional: "+item.nome),
         ];
       }),
@@ -224,6 +243,20 @@ export default function CotacoesVeicularesPage() {
     catch{setErro("Não foi possível copiar o resumo neste navegador.");}
   }
 
+  async function salvarVigencia(){
+    setOcupado(true);setErro("");setSucesso("");
+    try{
+      const resposta=await fetch("/api/cotacoes-veiculares/comercial",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({acao:"vigencia",referencia:config.referencia,vigencia_ate:config.vigencia_ate}),
+      });
+      const json=await resposta.json();
+      if(!resposta.ok||!json.ok)throw new Error(json.error||"Não foi possível salvar a validade.");
+      await atualizarTudo();
+      setSucesso("Referência e validade salvas.");
+    }catch(e){setErro(e instanceof Error?e.message:"Erro ao salvar validade.");}
+    finally{setOcupado(false);}
+  }
   async function confirmarImportacao(){
     if(!importacao)return;
     setOcupado(true);setErro("");setSucesso("");
@@ -240,7 +273,7 @@ export default function CotacoesVeicularesPage() {
       const json=await response.json();
       if(!response.ok||!json.ok)throw new Error(json.error||"Não foi possível importar o arquivo.");
       setImportacao(null);
-      await atualizar();
+      await atualizarTudo();
       setSucesso(String(json.total)+" registros importados com sucesso. "+json.aviso);
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao importar arquivo.");}
     finally{setOcupado(false);}
@@ -253,7 +286,7 @@ export default function CotacoesVeicularesPage() {
     }
     return [...grupos.entries()].map(([id,itens])=>({id,itens,principal:itens[0]}));
   },[cotacoes]);
-  const alertaTabela=!config.tabela_validada;
+  const alertaTabela=!status.pronta;
 
   return (<>
     <Header title="Cotação" subtitle="Simule, configure e acompanhe propostas de proteção veicular."/>
@@ -265,12 +298,12 @@ export default function CotacoesVeicularesPage() {
           <h1>Cotação de proteção veicular</h1>
           <p>Uma simulação com os dois planos, calculados pelas faixas FIPE da empresa.</p>
         </div>
-        <div className={styles.heroStatus}>{config.tabela_validada
-          ?<><BadgeCheck size={16}/> Tabela validada</>
-          :<><CircleAlert size={16}/> Validação pendente</>}</div>
+        <div className={styles.heroStatus}>{status.pronta
+          ?<><BadgeCheck size={16}/> Configuração pronta</>
+          :<><CircleAlert size={16}/> Configuração incompleta</>}</div>
       </section>
       {alertaTabela&&<div className={styles.warning}><CircleAlert size={20}/>
-        <span>A tabela atual ainda precisa de validação comercial. As cotações ficam em rascunho e a IA permanece bloqueada.</span>
+        <span>Importe preços vigentes e configure as regras dos dois planos. A ferramenta de cotação ficará disponível nas configurações do agente quando tudo estiver completo.</span>
       </div>}
       {erro&&<div className={styles.error} role="alert">{erro}</div>}
       {sucesso&&<div className={styles.success} role="status">{sucesso}</div>}
@@ -323,6 +356,18 @@ export default function CotacoesVeicularesPage() {
             <small>As marcas são carregadas automaticamente. A categoria deve corresponder ao regulamento do veículo.</small>
           </div>
           <div className={styles.fields}>
+            <label>Finalidade de uso
+              <select value={uso} onChange={e=>setUso(e.target.value as UsoVeiculo)}>
+                {Object.entries(USOS_VEICULO).map(([codigo,nome])=><option key={codigo} value={codigo}>{nome}</option>)}
+              </select>
+            </label>
+            <label>Motorização
+              <select value={energia} onChange={e=>setEnergia(e.target.value as EnergiaVeiculo)}>
+                {Object.entries(ENERGIAS_VEICULO).map(([codigo,nome])=><option key={codigo} value={codigo}>{nome}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className={styles.fields}>
             <label>Veículo (marca e modelo)<input value={veiculo} maxLength={240} placeholder="Ex.: Fiat Argo 1.0" onChange={e=>{setVeiculo(e.target.value);setCalculos(null);}}/></label>
             <label>Ano do modelo<input inputMode="numeric" value={anoModelo} placeholder="Ex.: 2022" onChange={e=>setAnoModelo(e.target.value)}/></label>
             <label>Valor FIPE (R$)<input inputMode="decimal" value={valorFipe} placeholder="Ex.: 50.000,00" onChange={e=>setValorFipe(e.target.value)}/></label>
@@ -335,14 +380,14 @@ export default function CotacoesVeicularesPage() {
             <div className={styles.optionsGrid}>
               {planos.map(plano=><div key={plano} className={styles.optionsGroup}>
                 <strong>{rotuloPlano(plano)}</strong>
-                {opcionaisDisponiveis(categoria,plano).map(extra=>
+                {catalogoExtras.filter(extra=>extra.plano===plano && extra.ativo).map(extra=>
                   <label key={extra.codigo} className={styles.option}>
                     <input type="checkbox" checked={opcionaisPorPlano[plano].includes(extra.codigo)}
                       onChange={e=>alternarOpcional(plano,extra.codigo,e.target.checked)}/>
-                    <span>{extra.nome}</span><b>+ {moeda(extra.centavos)}/mês</b>
+                    <span>{extra.nome}</span><b>+ {moeda(extra.valor_centavos)}/mês</b>
                   </label>
                 )}
-                {!opcionaisDisponiveis(categoria,plano).length&&<p>Nenhum opcional disponível.</p>}
+                {!catalogoExtras.some(extra=>extra.plano===plano&&extra.ativo)&&<p>Nenhum opcional cadastrado para este plano.</p>}
               </div>)}
             </div>
           </div>
@@ -375,6 +420,8 @@ export default function CotacoesVeicularesPage() {
                     <div><dt>Assistência 24h</dt><dd>{c.assistencia_km_total} km · {c.assistencias_ano} acionamentos/ano</dd></div>
                     {c.carro_reserva_incluso_dias>0&&<div><dt>Carro reserva</dt><dd>{c.carro_reserva_incluso_dias} dias</dd></div>}
                     <div><dt>Código</dt><dd>{c.codigo_produto}</dd></div>
+                    <div><dt>Coberturas</dt><dd>{c.coberturas.join(", ")}</dd></div>
+                    {c.observacoes&&<div><dt>Condições</dt><dd>{c.observacoes}</dd></div>}
                   </dl>
                 </div>;
               })}
@@ -393,28 +440,29 @@ export default function CotacoesVeicularesPage() {
 
       {!carregando&&aba==="tabela"&&<div className={styles.stack}>
         <section className={styles.panel}>
-          <div className={styles.sectionHeading}><h2>Configurações comerciais e agente IA</h2>
-            <p>Os preços e os veículos especiais são exclusivos da empresa. Valide a tabela antes de liberar a automação.</p>
+          <div className={styles.sectionHeading}><h2>Configuração comercial</h2>
+            <p>Cadastre os preços e regras da empresa. Quando a configuração estiver completa, a ferramenta poderá ser ativada em Agentes IA.</p>
           </div>
-          <label className={styles.wideLabel}>Referência / vigência da tabela
-            <input disabled={!podeConfigurar} maxLength={160} value={config.referencia}
-              onChange={e=>setConfig({...config,referencia:e.target.value})}/>
-          </label>
-          <label className={styles.switchRow}><span><strong>Tabela conferida e validada</strong>
-            <small>Declaro que preços e condições foram revisados pela equipe responsável.</small></span>
-            <input type="checkbox" disabled={!podeConfigurar} checked={config.tabela_validada}
-              onChange={e=>setConfig({...config,tabela_validada:e.target.checked,
-                ia_habilitada:e.target.checked&&config.ia_habilitada})}/>
-          </label>
-          <label className={styles.switchRow}><span><strong><Bot size={16}/> Permitir cotação pelo agente IA</strong>
-            <small>É necessário também ativar a ferramenta no agente.</small></span>
-            <input type="checkbox" disabled={!podeConfigurar||!config.tabela_validada}
-              checked={config.ia_habilitada} onChange={e=>setConfig({...config,ia_habilitada:e.target.checked})}/>
-          </label>
-          <div className={styles.actions}><button type="button" disabled={!podeConfigurar||ocupado}
-            className={styles.primary} onClick={()=>void enviar("configurar",config)}>
-            <Save size={16}/> Salvar configurações
-          </button></div>
+          <div className={styles.fields}>
+            <label>Referência da tabela
+              <input disabled={!podeConfigurar} maxLength={160} value={config.referencia}
+                onChange={e=>setConfig({...config,referencia:e.target.value})}/>
+            </label>
+            <label>Preços válidos até
+              <input type="date" disabled={!podeConfigurar} value={config.vigencia_ate||""}
+                onChange={e=>setConfig({...config,vigencia_ate:e.target.value})}/>
+            </label>
+          </div>
+          <div className={styles.actions}>
+            <button type="button" disabled={!podeConfigurar||ocupado} className={styles.primary}
+              onClick={()=>void salvarVigencia()}><Save size={16}/> Salvar referência e validade</button>
+          </div>
+          <div className={styles.completionStatus}>
+            <strong>{status.pronta?"Configuração comercial concluída":"O que falta configurar"}</strong>
+            {status.pronta
+              ?<p>Preços e regras configurados. A ferramenta pode ser ativada no agente IA.</p>
+              :<ul>{status.pendencias.map((item,i)=><li key={i}>{item}</li>)}</ul>}
+          </div>
         </section>
         <section className={styles.panel}>
           <div className={styles.sectionHeading}><h2>Importação de tabelas</h2>
@@ -449,10 +497,12 @@ export default function CotacoesVeicularesPage() {
             </div>
           </div>
           <p className={styles.importNotice}><CircleAlert size={17}/>
-            Cada importação substitui somente os dados daquele tipo nesta empresa e suspende a validação e a IA até nova aprovação.
+            Cada importação substitui somente os dados daquele tipo nesta empresa. A disponibilidade da ferramenta depende da configuração comercial completa.
           </p>
-          <p className={styles.smallNote}>Os modelos importados configuram preços e classificação especial; opcionais, coberturas e regras de participação ainda seguem as regras comerciais do módulo.</p>
+          <p className={styles.smallNote}>Coberturas, participação, opcionais, assistência e elegibilidade são configurados individualmente por empresa.</p>
         </section>
+        <ConfiguracaoComercialEditor categoria={categoria} regras={regras}
+          opcionais={catalogoExtras} podeConfigurar={podeConfigurar} onSaved={atualizarTudo}/>
         <section className={styles.panel}>
           <div className={styles.sectionHeading}><h2>Faixas FIPE por categoria</h2>
             <p>Consulte e ajuste individualmente os preços. Qualquer edição exige nova validação comercial.</p>
@@ -522,7 +572,7 @@ export default function CotacoesVeicularesPage() {
         <h2>Confirmar importação</h2>
         <p>Arquivo: <strong>{importacao.arquivo.name}</strong></p>
         <p>Os {importacao.tipo==="precos"?"preços e faixas FIPE":"modelos especiais"} atuais desta empresa serão <strong>substituídos</strong>. Outras empresas não serão afetadas.</p>
-        <p>A cotação automática será desativada até você validar os novos dados.</p>
+        <p>A disponibilidade da ferramenta será recalculada a partir das regras comerciais cadastradas.</p>
         <div className={styles.actions}>
           <button className={styles.secondary} type="button" disabled={ocupado} onClick={()=>setImportacao(null)}>Cancelar</button>
           <button className={styles.primary} type="button" disabled={ocupado} onClick={()=>void confirmarImportacao()}>

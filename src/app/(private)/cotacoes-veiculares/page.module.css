@@ -705,3 +705,41 @@
   .importOverlay{padding:12px;align-items:center}
   .importModal{padding:18px;max-height:calc(100dvh - 36px)}
 }
+
+/* Configuração comercial por empresa — mobile-first. */
+.completionStatus{min-width:0;margin-top:20px;padding:15px 16px;border:1px solid var(--crm-border,#e2e8f0);border-radius:14px;background:var(--crm-bg,#f8fafc)}
+.completionStatus>strong{display:block;margin-bottom:9px;font-size:14px;font-weight:750;color:var(--crm-text,#172033)}
+.completionStatus p,.completionStatus li{color:var(--crm-text-muted,#64748b);font-size:12.5px;line-height:1.6}
+.completionStatus p,.completionStatus ul{margin:0}
+.completionStatus ul{padding-left:19px;display:grid;gap:3px}
+.commercialGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;min-width:0}
+.commercialCard{box-sizing:border-box;width:100%;min-width:0;padding:17px;border:1px solid var(--crm-border,#dbe3eb);border-radius:16px;background:var(--crm-bg,#f8fafc)}
+.commercialCardHeading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.commercialCardHeading h3{margin:0;font-size:16px;line-height:1.3}
+.commercialCard .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+.commercialField{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;color:var(--crm-text-muted,#64748b);font-size:12px;font-weight:650}
+.commercialField textarea{box-sizing:border-box;width:100%;min-width:0;min-height:76px;padding:12px;border:1px solid var(--crm-border,#dbe3eb);border-radius:11px;background:var(--crm-surface,#fff);color:var(--crm-text,#172033);font:inherit;font-size:14px;resize:vertical}
+.commercialChoices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.commercialChoices fieldset{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px;border:1px solid var(--crm-border,#dbe3eb);border-radius:12px}
+.commercialChoices legend{padding:0 6px;color:var(--crm-text,#172033);font-size:12px;font-weight:750}
+.commercialChoices label,.commercialExtraActions label{display:inline-flex;align-items:center;gap:8px;font-size:12px;line-height:1.35;color:var(--crm-text,#172033)}
+.commercialChoices input,.commercialExtraActions input{width:17px;height:17px;accent-color:var(--crm-primary,#2563eb);flex-shrink:0}
+.commercialExtrasHeading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 8px}
+.commercialExtrasHeading strong{font-size:14px}
+.commercialExtrasHeading button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:35px;padding:7px 10px;border-radius:9px;cursor:pointer;font-size:12px}
+.commercialExtra{box-sizing:border-box;min-width:0;margin-top:11px;padding:13px;border:1px solid var(--crm-border,#dbe3eb);border-radius:11px;background:var(--crm-surface,#fff)}
+.commercialExtraFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+.commercialExtraFields label{display:flex;flex-direction:column;gap:5px;min-width:0;color:var(--crm-text-muted,#64748b);font-size:11px;font-weight:650}
+.commercialExtraFields input{box-sizing:border-box;width:100%;min-width:0;min-height:40px;padding:8px 10px;border-radius:9px;border:1px solid var(--crm-border,#dbe3eb);background:var(--crm-surface,#fff);color:var(--crm-text,#172033);font:inherit;font-size:13px}
+.commercialExtraActions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px}
+.commercialRemove{display:inline-flex;align-items:center;gap:6px;min-height:35px;padding:6px 9px;border:1px solid var(--crm-border,#dbe3eb);border-radius:8px;background:transparent;color:var(--crm-danger-text,#b42318);cursor:pointer;font:inherit;font-size:12px}
+@media(max-width:1200px){.commercialGrid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:768px){
+ .completionStatus{padding:13px}
+ .commercialGrid,.commercialChoices{grid-template-columns:minmax(0,1fr)}
+ .commercialCard{padding:14px}
+ .commercialCard .fields{grid-template-columns:minmax(0,1fr)}
+ .commercialField textarea,.commercialExtraFields input{font-size:16px}
+ .commercialExtraFields{grid-template-columns:minmax(0,1fr)}
+ .commercialCard .actions button{width:100%}
+}

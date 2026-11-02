@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { USOS_VEICULO, ENERGIAS_VEICULO, type UsoVeiculo, type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { encontrarVeiculoFipe, tipoFipeDaCategoria } from "@/lib/cotacoes-veiculares/fipe";
 import { categoriaValida, salvarCotacaoPlanos, configuracaoCotacao, verificarEspecialEmpresa, type CategoriaCotacao } from "@/lib/cotacoes-veiculares/servico";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -157,8 +159,8 @@ export async function carregarFerramentasNegocioAtivas(empresaId: string, agente
     }
   }
   if (mapa.has("gerar_cotacao_veicular")) {
-    const configuracao = await configuracaoCotacao(empresaId);
-    if (!configuracao.tabela_validada || !configuracao.ia_habilitada) mapa.delete("gerar_cotacao_veicular");
+    const status = await statusConfiguracaoCotacao(empresaId);
+    if (!status.pronta) mapa.delete("gerar_cotacao_veicular");
   }
   return mapa;
 }
@@ -349,7 +351,7 @@ export async function preconsultarNegocio(params: {
 
   if (sinalCotacao) {
     resultados.push({ ferramenta: "gerar_cotacao_veicular", dados: [] });
-    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique categoria comercial, marca, versão exata do modelo, ano/combustível e opcionais. Cotação gera Premium e Completo juntos. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
+    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique categoria comercial, marca, versão exata, ano, finalidade de uso, motorização e opcionais. Cotação gera Premium e Completo juntos. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
   }
 
   const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
@@ -385,6 +387,10 @@ export async function executarFerramentaNegocio(params: {
     const ano = textoCurto(args.ano,30);
     if (!marca || !modelo || !ano)
       return {ok:false,error:"Informe marca, versão exata do modelo e ano/combustível do veículo."};
+    const uso=String(args.uso||"") as UsoVeiculo;
+    const energia=String(args.energia||"") as EnergiaVeiculo;
+    if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
+      return {ok:false,error:"Confirme a finalidade de uso e a motorização antes de cotar."};
     const fipe = await encontrarVeiculoFipe({
       tipo:tipoFipeDaCategoria(categoria),marca,modelo,ano,
     });
@@ -400,11 +406,11 @@ export async function executarFerramentaNegocio(params: {
       completo:Array.isArray(extras.completo)?extras.completo.filter((v:unknown)=>typeof v==="string"):[],
     };
     const assinatura=crypto.createHash("sha256")
-      .update(JSON.stringify([params.empresaId,params.conversaId,params.mensagemIds,categoria,fipe.codeFipe,fipe.modelYear,opcionaisPorPlano]))
+      .update(JSON.stringify([params.empresaId,params.conversaId,params.mensagemIds,categoria,fipe.codeFipe,fipe.modelYear,uso,energia,opcionaisPorPlano]))
       .digest("hex");
     const {cotacoes,calculos,grupo_id}=await salvarCotacaoPlanos({
       empresaId:params.empresaId,agenteId:params.agenteId,conversaId:params.conversaId,
-      origem:"agente_ia",categoria,
+      origem:"agente_ia",categoria,uso,energia,
       veiculo:fipe.brand+" "+fipe.model,anoModelo:fipe.modelYear,
       valorFipeCentavos:fipe.valorCentavos,
       referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
@@ -421,12 +427,14 @@ export async function executarFerramentaNegocio(params: {
           ?formatarDinheiro(calculo.terceiros_limite_centavos/100):"Não disponível",
         assistencia_24h:calculo.assistencia_km_total+" km totais",
         opcionais:calculo.opcionais.map(i=>i.nome),
+        coberturas:calculo.coberturas,
+        condicoes:calculo.observacoes,
       };
     };
     return {
       ok:true,grupo_id,cotacao_ids:cotacoes.map(i=>i.id),
       veiculo:fipe.brand+" "+fipe.model,ano:fipe.modelYear,
-      categoria,tabela_fipe:fipe.referenceMonth,
+      categoria,uso,energia,tabela_fipe:fipe.referenceMonth,
       valor_fipe:formatarDinheiro(fipe.valorCentavos/100),
       planos:[formatarPlano("premium"),formatarPlano("completo")],
       observacao:"Apresente obrigatoriamente ambos os planos. Cotação informativa, não confirma contratação.",
@@ -514,7 +522,7 @@ export function definicoesFerramentasNegocio(
   if (ferramentas.has("gerar_cotacao_veicular")) {
     defs.push({
       type:"function",name:"gerar_cotacao_veicular",
-      description:"Consulta FIPE, gera e registra uma cotação com TODOS os planos disponíveis (Premium e Completo) e retorna os dois valores. Nunca peça ao cliente para escolher plano antes de cotar. Não contrata nem cobra.",
+      description:"Consulta FIPE, gera e registra Premium e Completo com preços, coberturas e opcionais próprios da empresa. Antes pergunte uso (particular/aplicativo/taxi/comercial) e motorização (combustao/hibrido/eletrico). Nunca peça escolha de plano, não invente valores.",
       strict:true,
       parameters:{
         type:"object",
@@ -523,16 +531,18 @@ export function definicoesFerramentasNegocio(
           marca:{type:"string",maxLength:90},
           modelo:{type:"string",maxLength:150},
           ano:{type:"string",maxLength:30},
+          uso:{type:"string",enum:["particular","aplicativo","taxi","comercial"]},
+          energia:{type:"string",enum:["combustao","hibrido","eletrico"]},
           opcionais_por_plano:{
             type:"object",
             properties:{
-              premium:{type:"array",items:{type:"string",enum:["rastreador","carro_reserva_7d","carro_reserva_15d","destombamento"]},maxItems:4},
-              completo:{type:"array",items:{type:"string",enum:["rastreador","carro_reserva_7d","carro_reserva_15d","destombamento"]},maxItems:4},
+              premium:{type:"array",items:{type:"string",maxLength:50},maxItems:4},
+              completo:{type:"array",items:{type:"string",maxLength:50},maxItems:4},
             },
             required:["premium","completo"],additionalProperties:false,
           },
         },
-        required:["categoria","marca","modelo","ano","opcionais_por_plano"],
+        required:["categoria","marca","modelo","ano","uso","energia","opcionais_por_plano"],
         additionalProperties:false,
       },
     });

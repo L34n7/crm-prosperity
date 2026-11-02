@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -150,6 +152,7 @@ type OpcaoAtendente = {
 type RespostaLista = {
   ok: boolean;
   agentes: Agente[];
+  cotacao_configuracao?: {pronta:boolean;pendencias:string[]};
   opcoes: {
     integracoes: OpcaoIntegracao[];
     fluxos: Opcao[];
@@ -235,7 +238,7 @@ const FERRAMENTAS = [
   {
     tipo: "gerar_cotacao_veicular",
     titulo: "Gerar cotação veicular",
-    descricao: "Consulta a FIPE, aplica a tabela comercial validada e registra cotação automática. Requer autorização no módulo Cotação.",
+    descricao: "Consulta a FIPE e gera ambos os planos com as regras comerciais da empresa. Disponível após configurar o módulo Cotação.",
   },
   {
     tipo: "consultar_imoveis",
@@ -427,6 +430,8 @@ export default function AgentesIaPage() {
   const [selecionadoId, setSelecionadoId] = useState("");
   const [editor, setEditor] = useState<Agente | null>(null);
   const [nichoEmpresa, setNichoEmpresa] = useState<ContextoNichoFerramenta | null>(null);
+  const [cotacaoConfigurada, setCotacaoConfigurada] = useState(false);
+  const [cotacaoPendencias, setCotacaoPendencias] = useState<string[]>([]);
   const [integracoes, setIntegracoes] = useState<OpcaoIntegracao[]>([]);
   const [fluxos, setFluxos] = useState<Opcao[]>([]);
   const [setores, setSetores] = useState<Opcao[]>([]);
@@ -553,6 +558,8 @@ export default function AgentesIaPage() {
         normalizarAgente(agente, opcoesIntegracoes, nichoAtual)
       );
       setNichoEmpresa(nichoAtual);
+      setCotacaoConfigurada(Boolean(json.cotacao_configuracao?.pronta));
+      setCotacaoPendencias(json.cotacao_configuracao?.pendencias||[]);
       setAgentes(agentesNormalizados);
       setIntegracoes(opcoesIntegracoes);
       setFluxos(json.opcoes?.fluxos || []);
@@ -650,6 +657,10 @@ export default function AgentesIaPage() {
     if (!editor || !ferramentaPermitidaParaNicho(tipo, nichoEmpresa)) return;
     const existe = editor.ferramentas.find((item) => item.tipo === tipo);
     const ativando = !existe || !existe.ativo;
+    if(tipo==="gerar_cotacao_veicular" && ativando && !cotacaoConfigurada){
+      setErro("Finalize primeiro a configuração comercial no módulo Cotação.");
+      return;
+    }
     const configAgenda =
       ativando && FERRAMENTAS_AGENDA.has(tipo) && origemAgendaConfigurada
         ? {
@@ -2188,6 +2199,7 @@ export default function AgentesIaPage() {
                           <input
                             type="checkbox"
                             checked={ferramentaAtiva(ferramenta.tipo)}
+                            disabled={ferramenta.tipo==="gerar_cotacao_veicular" && !cotacaoConfigurada}
                             onChange={() => alternarFerramenta(ferramenta.tipo)}
                           />
                           <span className={styles.toggleVisual} />
@@ -2195,6 +2207,12 @@ export default function AgentesIaPage() {
                         <div>
                           <strong>{ferramenta.titulo}</strong>
                           <p>{ferramenta.descricao}</p>
+                          {ferramenta.tipo==="gerar_cotacao_veicular" && !cotacaoConfigurada&&(
+                            <p style={{marginTop:8,fontSize:12,lineHeight:1.5}}>
+                              {cotacaoPendencias.slice(0,2).join(" ") || "Configuração comercial pendente."}
+                              {" "}<Link href="/cotacoes-veiculares">Configurar cotação</Link>
+                            </p>
+                          )}
                         </div>
                         {ferramenta.tipo === "criar_agendamento" &&
                           ferramentaAtiva(ferramenta.tipo) && (
