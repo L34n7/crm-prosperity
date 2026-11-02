@@ -452,7 +452,7 @@ export default function TemplateModal({
 
               <section className={styles.templateLivePreview} aria-label="Prévia do template">
                 <div className={styles.templateLivePreviewFrame}>
-                  <iframe title="Prévia do HTML selecionado" sandbox="" srcDoc={html} />
+                  <iframe title="Prévia do HTML selecionado" sandbox="" srcDoc={html.replace(/<a\b[^>]*>/gi, tag => tag.replace(/\s+(?:href|target)\s*=\s*(?:"[^"]*"|\x27[^\x27]*\x27|[^\s>]+)/gi, ""))} />
                 </div>
               </section>
             </div>}

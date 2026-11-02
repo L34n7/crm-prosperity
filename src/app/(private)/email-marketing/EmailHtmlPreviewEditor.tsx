@@ -1,8 +1,8 @@
 "use client";
 
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
-  ArrowDown, ArrowUp, Columns2, Copy, Eye, Heading1, Image as ImageIcon, Info, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Smartphone, Trash2, Type, Undo2,
+  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, CheckCircle2, X, Columns2, Copy, Eye, GripVertical, Heading1, Image as ImageIcon, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Smartphone, Trash2, Type, Undo2,
 } from "lucide-react";
 import { urlEmailSegura, type TipoBlocoEmail } from "@/lib/email-marketing/editor-visual";
 import type { VariavelCatalogo } from "@/lib/variaveis/catalogo";
@@ -36,6 +36,9 @@ type Props = { html: string; variaveis?: VariavelCatalogo[]; onGerenciarVariavei
 function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: Props, ref: Ref<EmailHtmlPreviewHandle>) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const elementoRef = useRef<HTMLElement | null>(null);
+  const editandoRef = useRef(true);
+  const arrasteElementoRef = useRef<HTMLElement | null>(null);
+  const alcaRef = useRef<HTMLButtonElement | null>(null);
   const [dispositivo, setDispositivo] = useState<"desktop" | "mobile">("desktop");
   const [editando, setEditando] = useState(true);
   const [selecionado, setSelecionado] = useState<Selecionado | null>(null);
@@ -50,18 +53,30 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const [pagina, setPagina] = useState<PropriedadesPagina>({ largura: 600, fundo: "#edf1f8", superficie: "#ffffff", fonte: "Arial" });
   const [larguraDigitada, setLarguraDigitada] = useState("600");
 
+  useEffect(() => {
+    if (!mensagem) return;
+    const timeout = window.setTimeout(() => setMensagem(""), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [mensagem]);
+
 
   const obterHtml = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
     if (!doc?.documentElement) return html;
     const copia = doc.documentElement.cloneNode(true) as HTMLElement;
+    copia.querySelectorAll("[data-prosperity-drag-handle]").forEach(elemento => elemento.remove());
+    copia.querySelectorAll("[data-prosperity-drop-target]").forEach(elemento => elemento.removeAttribute("data-prosperity-drop-target"));
+    copia.querySelector("body")?.removeAttribute("data-prosperity-mode");
     copia.querySelectorAll("[data-prosperity-edit-text]").forEach(elemento => {
       elemento.replaceWith(copia.ownerDocument.createTextNode(elemento.textContent || ""));
     });
     copia.querySelectorAll("a[data-prosperity-href]").forEach(elemento => {
       const destino = elemento.getAttribute("data-prosperity-href");
       if (destino) elemento.setAttribute("href", destino);
+      const alvo = elemento.getAttribute("data-prosperity-target");
+      if (alvo) elemento.setAttribute("target", alvo);
       elemento.removeAttribute("data-prosperity-href");
+      elemento.removeAttribute("data-prosperity-target");
     });
     copia.querySelectorAll("[data-prosperity-selected]").forEach(elemento => elemento.removeAttribute("data-prosperity-selected"));
     copia.querySelectorAll("style[data-prosperity-editor-style]").forEach(elemento => elemento.remove());
@@ -182,7 +197,15 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       if (tabela) tabela.style.backgroundColor = String(valor);
       setPagina(atual => ({ ...atual, superficie: String(valor) }));
     } else if (chave === "fonte") {
-      doc.body.style.fontFamily = String(valor) + ",Arial,sans-serif";
+      const fonteCss = String(valor) + ",Arial,sans-serif";
+      doc.body.style.fontFamily = fonteCss;
+      // Substitui também fontes inline e herdadas dos modelos prontos.
+      // A edição individual de um texto depois continua disponível.
+      doc.body.querySelectorAll<HTMLElement>("p,h1,h2,h3,h4,h5,h6,div,span,a,td,th,li,strong,em,small,blockquote").forEach(el => {
+        if (el.hasAttribute("data-prosperity-edit-text") || !el.textContent?.trim()) return;
+        el.style.setProperty("font-family", fonteCss, "important");
+      });
+      setSelecionado(atual => elementoRef.current && atual ? lerElemento(elementoRef.current) : atual);
       setPagina(atual => ({ ...atual, fonte: valor as FonteEmail }));
     }
     setMensagem("Configuração da página atualizada.");
@@ -215,11 +238,91 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     return nums ? "#" + [nums[1], nums[2], nums[3]].map(n => Number(n).toString(16).padStart(2, "0")).join("") : fallback;
   }
 
+
+  function atualizarPosicaoAlca() {
+    const elemento = elementoRef.current;
+    const alca = alcaRef.current;
+    if (!elemento || !alca || !editandoRef.current) return;
+    const rect = elemento.getBoundingClientRect();
+    const largura = elemento.ownerDocument.documentElement.clientWidth;
+    alca.style.display = rect.bottom < 0 || rect.top > elemento.ownerDocument.documentElement.clientHeight ? "none" : "grid";
+    alca.style.left = Math.max(5, Math.min(largura - 33, rect.left - 30)) + "px";
+    alca.style.top = Math.max(3, rect.top) + "px";
+  }
+
+  function atualizarAlca(elemento: HTMLElement) {
+    alcaRef.current?.remove();
+    alcaRef.current = null;
+    if (!editandoRef.current) return;
+    const doc = elemento.ownerDocument;
+    const alca = doc.createElement("button");
+    alca.type = "button";
+    alca.textContent = "⠿";
+    alca.setAttribute("data-prosperity-drag-handle", "true");
+    alca.setAttribute("aria-label", "Arrastar elemento para outra posição");
+    alca.title = "Clique e arraste para reposicionar este elemento";
+    alca.draggable = true;
+    alca.addEventListener("click", event => event.stopPropagation());
+    alca.addEventListener("dragstart", event => {
+      if (!event.dataTransfer) return;
+      arrasteElementoRef.current = blocoMovimentavel(elemento);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("application/x-prosperity-email-move", "1");
+      event.dataTransfer.setData("text/plain", "prosperity-move");
+      setArrastando(true);
+    });
+    alca.addEventListener("dragend", () => {
+      arrasteElementoRef.current = null;
+      doc.querySelectorAll("[data-prosperity-drop-target]").forEach(el => el.removeAttribute("data-prosperity-drop-target"));
+      setArrastando(false);
+    });
+    doc.body.appendChild(alca);
+    alcaRef.current = alca;
+    atualizarPosicaoAlca();
+  }
+
+  function aplicarModoEdicao(ativo: boolean) {
+    editandoRef.current = ativo;
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc?.body) return;
+    doc.body.setAttribute("data-prosperity-mode", ativo ? "editar" : "previa");
+    doc.querySelectorAll<HTMLElement>("[data-prosperity-edit-text]").forEach(el => {
+      el.setAttribute("contenteditable", ativo ? "plaintext-only" : "false");
+      el.setAttribute("tabindex", ativo ? "0" : "-1");
+    });
+    if (!ativo) {
+      (doc.activeElement as HTMLElement | null)?.blur?.();
+      doc.querySelectorAll("[data-prosperity-selected]").forEach(el => el.removeAttribute("data-prosperity-selected"));
+      alcaRef.current?.remove();
+      alcaRef.current = null;
+      elementoRef.current = null;
+      setSelecionado(null);
+    }
+  }
+
+  function alternarModo(ativo: boolean) {
+    if (editandoRef.current === ativo) return;
+    aplicarModoEdicao(ativo);
+    setEditando(ativo);
+  }
+
+  function localizarDestinoArraste(target: EventTarget | null): HTMLElement | null {
+    const origem = arrasteElementoRef.current;
+    if (!origem || !target || (target as Node).nodeType !== 1) return null;
+    const doc = origem.ownerDocument;
+    const el = target as HTMLElement;
+    const candidato = el.closest("tr,td,th,h1,h2,h3,h4,h5,h6,p,div,section,li,blockquote,table") as HTMLElement | null;
+    if (!candidato || candidato === doc.body) return null;
+    const destino = blocoMovimentavel(candidato);
+    return destino !== origem && destino.parentElement === origem.parentElement ? destino : null;
+  }
+
   function selecionar(elemento: HTMLElement) {
     const doc = iframeRef.current?.contentDocument;
     doc?.querySelectorAll("[data-prosperity-selected]").forEach(el => el.removeAttribute("data-prosperity-selected"));
     elemento.setAttribute("data-prosperity-selected", "true");
     elementoRef.current = elemento;
+    atualizarAlca(elemento);
     setSelecionado(lerElemento(elemento));
     setAbaPropriedades("elemento");
     setMensagem("");
@@ -230,6 +333,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     container.querySelectorAll("a").forEach(link => {
       const destino = link.getAttribute("href");
       if (destino !== null) link.setAttribute("data-prosperity-href", destino);
+      const alvo = link.getAttribute("target");
+      if (alvo !== null) link.setAttribute("data-prosperity-target", alvo);
       link.removeAttribute("href");
       link.removeAttribute("target");
     });
@@ -272,6 +377,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     const doc = iframeRef.current?.contentDocument;
     if (!doc?.body) return;
     elementoRef.current = null;
+    alcaRef.current = null;
     setSelecionado(null);
     setMensagem("");
     doc.querySelectorAll("form").forEach(form => form.removeAttribute("action"));
@@ -287,14 +393,22 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       "[data-prosperity-edit-text]:focus{outline:2px solid #6c4fe1;background:rgba(123,94,236,.09);}",
       "[data-prosperity-selected]{outline:2px solid #7c66e6!important;outline-offset:3px;}",
       "a[data-prosperity-href]{cursor:pointer!important;}",
+      "[data-prosperity-drag-handle]{position:fixed;z-index:2147483647;width:28px;height:30px;display:grid;place-items:center;border:1px solid #9c8be7;border-radius:8px;background:#fff;color:#6246ea;box-shadow:0 2px 10px #17243d30;font:bold 23px Arial,sans-serif;cursor:grab;user-select:none;}",
+      "[data-prosperity-drag-handle]:active{cursor:grabbing;}",
+      "[data-prosperity-drop-target]{outline:3px dashed #7054ef!important;outline-offset:3px;}",
+      "[data-prosperity-mode=previa] [data-prosperity-edit-text]{outline:none!important;background:transparent!important;cursor:default!important;}",
+      "[data-prosperity-mode=previa] [data-prosperity-selected]{outline:none!important;}",
+      "[data-prosperity-mode=previa] [data-prosperity-drag-handle]{display:none!important;}",
     ].join("");
     doc.head.appendChild(estilo);
+    aplicarModoEdicao(editandoRef.current);
+    doc.addEventListener("scroll", () => atualizarPosicaoAlca(), true);
     doc.addEventListener("click", evento => {
       const alvo = evento.target as Element | null;
       const elemento = alvo?.nodeType === 1 ? alvo : null;
       const link = elemento?.closest("a");
       if (link) evento.preventDefault();
-      if (!editando || !elemento) return;
+      if (!editandoRef.current || !elemento) return;
       const imagem = elemento.closest("img");
       const destino = imagem || link ||
         elemento.closest("span:not([data-prosperity-edit-text]),strong,em,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
@@ -302,11 +416,40 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     }, true);
     doc.addEventListener("submit", event => event.preventDefault(), true);
     doc.addEventListener("dragover", event => {
-      if (!event.dataTransfer?.types.includes("application/x-prosperity-email-block")) return;
+      if (event.dataTransfer?.types.includes("application/x-prosperity-email-move")) {
+        const destino = localizarDestinoArraste(event.target);
+        doc.querySelectorAll("[data-prosperity-drop-target]").forEach(el => el.removeAttribute("data-prosperity-drop-target"));
+        if (!destino || !editandoRef.current) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        destino.setAttribute("data-prosperity-drop-target", "true");
+        return;
+      }
+      if (!event.dataTransfer?.types.includes("application/x-prosperity-email-block") || !editandoRef.current) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "copy";
     });
     doc.addEventListener("drop", event => {
+      if (!editandoRef.current) return;
+      if (event.dataTransfer?.types.includes("application/x-prosperity-email-move")) {
+        const origem = arrasteElementoRef.current;
+        const destino = localizarDestinoArraste(event.target);
+        event.preventDefault();
+        doc.querySelectorAll("[data-prosperity-drop-target]").forEach(el => el.removeAttribute("data-prosperity-drop-target"));
+        if (origem && destino) {
+          registrarHistorico();
+          const rect = destino.getBoundingClientRect();
+          if (event.clientY < rect.top + rect.height / 2) destino.before(origem);
+          else destino.after(origem);
+          setMensagem("Elemento reposicionado.");
+          if (elementoRef.current) atualizarPosicaoAlca();
+        } else {
+          setMensagem("Arraste para outro elemento do mesmo grupo ou seção.");
+        }
+        arrasteElementoRef.current = null;
+        setArrastando(false);
+        return;
+      }
       const tipo = event.dataTransfer?.getData("application/x-prosperity-email-block") as TipoBlocoEmail;
       if (!opcoes.some(item => item.tipo === tipo)) return;
       event.preventDefault();
@@ -430,9 +573,9 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     <div className={styles.estudio}>
       <aside className={styles.biblioteca} aria-label="Componentes disponíveis para o HTML">
         <div className={styles.bibliotecaTitulo}><Layers size={18}/><strong>Componentes</strong></div>
-        <p>Arraste para o e-mail ou clique para adicionar ao layout.</p>
+        <p>Arraste para inserir componentes. Para mover um elemento existente, selecione-o e arraste pela alça <GripVertical size={14} aria-hidden="true"/>.</p>
         <div className={styles.listaBlocos}>{opcoes.map(({tipo,nome,Icone}) => (
-          <button type="button" key={tipo} draggable
+          <button type="button" key={tipo} draggable={editando} disabled={!editando}
             onDragStart={evento => {
               evento.dataTransfer.setData("application/x-prosperity-email-block", tipo);
               evento.dataTransfer.setData("text/plain", tipo);
@@ -440,7 +583,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
               setArrastando(true);
             }}
             onDragEnd={() => setArrastando(false)}
-            onClick={() => inserirBloco(tipo)}>
+            onClick={() => { if (editando) inserirBloco(tipo); }}>
             <Icone size={18}/><span>{nome}</span><Plus size={15}/>
           </button>
         ))}</div>
@@ -452,8 +595,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
           <button type="button" onClick={() => navegarHistorico("desfazer")} disabled={!historico.length} title="Desfazer" aria-label="Desfazer"><Undo2 size={16}/></button>
           <button type="button" onClick={() => navegarHistorico("refazer")} disabled={!futuro.length} title="Refazer" aria-label="Refazer"><Redo2 size={16}/></button>
           <span className={styles.separador}/>
-          <button type="button" onClick={() => setEditando(true)} className={editando ? styles.ativo : ""}><Pencil size={15}/> Editar</button>
-          <button type="button" onClick={() => setEditando(false)} className={!editando ? styles.ativo : ""}><Eye size={15}/> Prévia</button>
+          <button type="button" onClick={() => alternarModo(true)} className={editando ? styles.ativo : ""}><Pencil size={15}/> Editar</button>
+          <button type="button" onClick={() => alternarModo(false)} className={!editando ? styles.ativo : ""}><Eye size={15}/> Prévia</button>
           <span className={styles.separador}/>
           <button type="button" onClick={() => setDispositivo("desktop")} className={dispositivo === "desktop" ? styles.ativo : ""} aria-label="Desktop" title="Desktop"><Monitor size={16}/></button>
           <button type="button" onClick={() => setDispositivo("mobile")} className={dispositivo === "mobile" ? styles.ativo : ""} aria-label="Mobile" title="Mobile"><Smartphone size={16}/></button>
@@ -461,10 +604,11 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       </div>
         {arrastando ? <p className={styles.dropDica}>Solte no ponto desejado do modelo</p> : null}
       <div className={styles.area}>
+        {!editando ? <div className={styles.avisoPrevia}><Eye size={15}/> Prévia do e-mail — edição desativada</div> : null}
         <iframe ref={iframeRef} title="Edição direta do modelo HTML" sandbox="allow-same-origin"
           srcDoc={html} onLoad={iniciarEdicao}
           className={dispositivo === "mobile" ? styles.mobile : styles.desktop}
-          style={{ pointerEvents: editando ? "auto" : "none" }} />
+          style={{ pointerEvents: "auto" }} />
       </div>
       </div>
       <aside className={styles.inspectorLateral} aria-label="Propriedades do elemento">
@@ -473,7 +617,6 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
         <button type="button" className={abaPropriedades === "elemento" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("elemento")}>Elemento</button>
         <button type="button" className={abaPropriedades === "pagina" ? styles.abaAtiva : ""} onClick={() => setAbaPropriedades("pagina")}>Página</button>
       </div>
-      {mensagem ? <p className={styles.feedback} role="status"><Info size={16} aria-hidden="true"/><span>{mensagem}</span></p> : null}
       {abaPropriedades === "pagina" ? (
         <div className={styles.painelPagina}>
           <strong>Layout do e-mail</strong>
@@ -482,7 +625,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
           <label><span>Fundo externo</span><input type="color" value={pagina.fundo} onChange={e => alterarPagina("fundo", e.target.value)} /></label>
           <label><span>Fundo do conteúdo</span><input type="color" value={pagina.superficie} onChange={e => alterarPagina("superficie", e.target.value)} /></label>
           <label><span>Fonte geral</span><select value={pagina.fonte} onChange={e => alterarPagina("fonte", e.target.value)}>{FONTES_EMAIL.map(fonte => <option key={fonte} value={fonte}>{fonte}</option>)}</select></label>
-          <small>A fonte geral define o padrão. Textos com fonte própria conservam sua formatação.</small>
+          <small>Atenção: ao selecionar uma fonte geral, ela será aplicada a todos os textos do e-mail, inclusive aos que já têm uma fonte personalizada.</small>
         </div>
       ) : editando && selecionado ? (
         <div className={styles.inspector}>
@@ -491,11 +634,13 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
             {selecionado.tipo !== "imagem" ? <>
               <label><span>Cor do texto</span><input type="color" value={selecionado.cor} onChange={e => aplicarEstilo("color", e.target.value)} /></label>
               <label><span>Fundo</span><input type="color" value={selecionado.fundo} onChange={e => aplicarEstilo("backgroundColor", e.target.value)} /></label>
-              <label><span>Fonte (px)</span><input type="number" min={8} max={70} value={selecionado.tamanho} onChange={e => aplicarEstilo("fontSize", e.target.value)}/></label>
-              <label className={styles.campoCompleto}><span>Família da fonte</span><select value={selecionado.fonte} onChange={e => aplicarEstilo("fontFamily", e.target.value)}>{FONTES_EMAIL.map(fonte => <option key={fonte} value={fonte}>{fonte}</option>)}</select></label>
-              <label><span>Alinhamento</span><select value={selecionado.alinhamento} onChange={e => aplicarEstilo("textAlign", e.target.value)}>
-                <option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option>
-              </select></label>
+              <label><span>Tamanho</span><input type="number" min={8} max={70} value={selecionado.tamanho} onChange={e => aplicarEstilo("fontSize", e.target.value)}/></label>
+              <label><span>Fonte</span><select value={selecionado.fonte} onChange={e => aplicarEstilo("fontFamily", e.target.value)}>{FONTES_EMAIL.map(fonte => <option key={fonte} value={fonte}>{fonte}</option>)}</select></label>
+              <div className={styles.campoAlinhamento}><span>Alinhamento</span><div className={styles.grupoAlinhamento} role="group" aria-label="Alinhamento do texto">
+                {([["left", AlignLeft, "Esquerda"], ["center", AlignCenter, "Centralizado"], ["right", AlignRight, "Direita"]] as const).map(([valor, Icone, titulo]) => (
+                  <button type="button" key={valor} title={titulo} aria-label={titulo} aria-pressed={selecionado.alinhamento === valor} className={selecionado.alinhamento === valor ? styles.alinhamentoAtivo : ""} onClick={() => aplicarEstilo("textAlign", valor)}><Icone size={17}/></button>
+                ))}
+              </div></div>
             </> : null}
             <label><span>Margem interna (px)</span><input type="number" min={0} max={120} value={selecionado.espaco} onChange={e => aplicarEstilo("padding", e.target.value)}/></label>
             <label><span>Cantos (px)</span><input type="number" min={0} max={120} value={selecionado.raio} onChange={e => aplicarEstilo("borderRadius", e.target.value)}/></label>
@@ -539,6 +684,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
         ) : null}
       </div>
       </aside>
+      {mensagem ? <div className={styles.toast} role="status" aria-live="polite"><CheckCircle2 size={18} aria-hidden="true"/><span>{mensagem}</span><button type="button" onClick={() => setMensagem("")} aria-label="Fechar notificação"><X size={15}/></button></div> : null}
       {confirmarRemocao ? <div className={styles.confirmarFundo} role="presentation"><div className={styles.confirmarCard} role="alertdialog" aria-modal="true" aria-label="Remover elemento"><strong>Remover elemento?</strong><p>O elemento selecionado será retirado deste template.</p><div><button type="button" onClick={() => setConfirmarRemocao(false)}>Cancelar</button><button type="button" className={styles.excluir} onClick={remover}>Remover</button></div></div></div> : null}
     </div>
   );

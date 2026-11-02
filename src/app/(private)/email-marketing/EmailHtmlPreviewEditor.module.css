@@ -150,3 +150,25 @@
 
 /* Mensagens ficam contidas dentro da largura do painel lateral. */
 .inspectorLateral>.feedback{width:auto;max-width:calc(100% - 24px);margin:10px 12px 0;flex:0 0 auto}
+
+
+/* Alinhamento com três ações e tipografia em duas colunas. */
+.inspector .campos .campoAlinhamento{grid-column:1/-1;display:flex;flex-direction:column;gap:7px;min-width:0}
+.campoAlinhamento>span{font-size:13px;font-weight:750;color:var(--crm-text)}
+.grupoAlinhamento{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:4px;border:1px solid var(--crm-border);border-radius:9px;background:var(--crm-surface-soft)}
+.grupoAlinhamento button{min-width:0;height:36px;display:flex;align-items:center;justify-content:center;border:0;border-radius:7px;background:transparent;color:var(--crm-text-muted);cursor:pointer}
+.grupoAlinhamento button:hover{background:var(--crm-surface);color:var(--crm-text-strong)}
+.grupoAlinhamento .alinhamentoAtivo{background:var(--crm-primary-soft);color:var(--crm-primary-text)}
+/* O retorno de uma alteração é global e não interfere no painel lateral. */
+.estudio .toast{position:fixed;z-index:1800;right:24px;bottom:94px;display:flex;align-items:center;gap:10px;width:max-content;max-width:min(390px,calc(100vw - 30px));min-height:44px;padding:11px 12px;border-radius:12px;background:var(--crm-surface);border:1px solid var(--crm-primary-border);box-shadow:0 14px 42px rgb(15 23 42 / 21%);color:var(--crm-text-strong);font-size:13px;font-weight:650;line-height:1.4;box-sizing:border-box}
+.estudio .toast>svg{flex:0 0 auto;color:var(--crm-primary-text)}
+.estudio .toast>span{min-width:0;overflow-wrap:anywhere}
+.estudio .toast>button{display:grid;place-items:center;flex:0 0 26px;height:26px;margin-left:auto;border:0;background:transparent;border-radius:6px;color:var(--crm-text-muted);cursor:pointer}
+.estudio .toast>button:hover{background:var(--crm-surface-soft)}
+.controles button:disabled{opacity:.35;cursor:not-allowed}
+@media(max-width:700px){.estudio .toast{bottom:80px;right:14px;left:14px;max-width:none;width:auto}}
+
+/* Alternar para prévia realmente desativa a edição e evidencia o estado. */
+.area{position:relative}
+.avisoPrevia{position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;align-items:center;gap:7px;padding:7px 11px;border:1px solid var(--crm-primary-border);border-radius:9px;background:var(--crm-surface);box-shadow:0 4px 14px rgb(15 23 42 / 9%);color:var(--crm-primary-text);font-size:12px;font-weight:800}
+.listaBlocos button:disabled{opacity:.46;cursor:not-allowed}
