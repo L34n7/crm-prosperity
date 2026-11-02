@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from "react";
 import {
   AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, Columns2, Copy,
   GripVertical, Heading1, Image as ImageIcon, LayoutTemplate, Link2, Minus,
@@ -147,6 +147,58 @@ export default function EmailVisualDesigner({
     }
   }
 
+  function textoEditavel(
+    item: BlocoEmail,
+    campo: "texto" | "textoDireita",
+    classe: string,
+    estilo?: CSSProperties,
+    comoBotao = false,
+  ) {
+    const propriedades = {
+      contentEditable: true,
+      suppressContentEditableWarning: true,
+      spellCheck: true,
+      role: "textbox",
+      tabIndex: 0,
+      "aria-label": "Editar " + (campo === "textoDireita" ? "segunda coluna" : ROTULOS[item.tipo]) + " diretamente no e-mail",
+      "aria-multiline": !comoBotao,
+      className: classe + " " + styles.textoEditavel,
+      style: estilo,
+      onFocus: () => { setIdSelecionado(item.id); setPainel("bloco"); },
+      onClick: (evento: React.MouseEvent) => evento.stopPropagation(),
+      onKeyDown: (evento: React.KeyboardEvent) => {
+        evento.stopPropagation();
+        if (comoBotao && evento.key === "Enter") evento.preventDefault();
+      },
+      onDragStart: (evento: React.DragEvent) => evento.stopPropagation(),
+      onPaste: (evento: React.ClipboardEvent) => {
+        evento.preventDefault();
+        const texto = evento.clipboardData.getData("text/plain").slice(0, 6000);
+        const selecao = window.getSelection();
+        if (!selecao?.rangeCount) return;
+        const intervalo = selecao.getRangeAt(0);
+        if (!evento.currentTarget.contains(intervalo.commonAncestorContainer)) return;
+        intervalo.deleteContents();
+        const no = document.createTextNode(comoBotao ? texto.replace(/[\r\n]+/g, " ") : texto);
+        intervalo.insertNode(no);
+        intervalo.setStartAfter(no);
+        intervalo.collapse(true);
+        selecao.removeAllRanges();
+        selecao.addRange(intervalo);
+      },
+      onBlur: (evento: React.FocusEvent<HTMLElement>) => {
+        const valor = evento.currentTarget.innerText.replace(/\r/g, "").replace(/\n$/, "").slice(0, 6000);
+        if (valor === item[campo]) return;
+        atualizar({
+          ...documento,
+          blocos: documento.blocos.map(atual => atual.id === item.id ? { ...atual, [campo]: valor } : atual),
+        });
+      },
+    } as const;
+    if (comoBotao) return <span {...propriedades}>{item[campo]}</span>;
+    return <div {...propriedades}>{item[campo]}</div>;
+  }
+
   function blocoVisual(item: BlocoEmail) {
     if (item.tipo === "imagem") {
       const src = urlEmailSegura(item.imagem, true);
@@ -158,20 +210,20 @@ export default function EmailVisualDesigner({
     if (item.tipo === "espaco") return <div className={styles.espacoBloco} style={{ height: item.altura }}><MoveVertical size={14} /> {item.altura}px</div>;
     if (item.tipo === "divisor") return <div style={{ background: item.cor, height: 1, width: "100%" }} />;
     if (item.tipo === "botao") return (
-      <span className={styles.botaoBloco} style={{
+      textoEditavel(item, "texto", styles.botaoBloco, {
         background: item.fundo, color: item.cor, fontSize: item.tamanho, borderRadius: item.borda,
-      }}>{item.texto || "Botão"}</span>
+      }, true)
     );
     if (item.tipo === "colunas") return (
       <div className={styles.colunasBloco} style={{ color: item.cor, fontSize: item.tamanho }}>
-        <div style={{ background: item.fundo }}>{item.texto}</div>
-        <div style={{ background: item.fundo }}>{item.textoDireita}</div>
+        {textoEditavel(item, "texto", styles.colunaEditavel, { background: item.fundo })}
+        {textoEditavel(item, "textoDireita", styles.colunaEditavel, { background: item.fundo })}
       </div>
     );
-    return <div className={styles.textoBloco} style={{
+    return textoEditavel(item, "texto", styles.textoBloco, {
       color: item.cor, fontSize: item.tamanho, fontWeight: item.tipo === "titulo" ? 800 : 400,
       lineHeight: item.tipo === "titulo" ? 1.2 : 1.6, whiteSpace: "pre-wrap",
-    }}>{item.texto || (item.tipo === "titulo" ? "Seu título" : "Seu texto")}</div>;
+    });
   }
 
   async function enviarImagem(arquivo: File | undefined) {
@@ -198,10 +250,6 @@ export default function EmailVisualDesigner({
   }
   function campoCor(rotulo: string, valor: string, onAlterar: (valor: string) => void) {
     return <label className={styles.campo}><span>{rotulo}</span><div className={styles.campoCor}><input type="color" value={valor} onChange={e => onAlterar(e.target.value)} /><code>{valor}</code></div></label>;
-  }
-  function campoTexto(rotulo: string, chave: "texto" | "textoDireita", linhas = 4) {
-    if (!bloco) return null;
-    return <label className={styles.campo}><span>{rotulo}</span><textarea rows={linhas} value={bloco[chave]} onChange={e => alterarBloco(chave, e.target.value)} maxLength={6000} /></label>;
   }
 
   return (
@@ -260,10 +308,9 @@ export default function EmailVisualDesigner({
                       role="button" tabIndex={0} aria-label={"Editar " + ROTULOS[item.tipo]}
                       onClick={() => { setIdSelecionado(item.id);setPainel("bloco"); }}
                       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setIdSelecionado(item.id);setPainel("bloco"); } }}
-                      draggable onDragStart={e => comecarArraste(e, "bloco:" + item.id)}
-                      onDragEnd={() => {setArrastando(false);setSobreIndice(null);}}
+                      draggable={false}
                       style={{ textAlign: item.alinhamento, padding: item.espacamento + "px 0" }}>
-                      <span className={styles.rotuloBloco}><GripVertical size={12}/>{ROTULOS[item.tipo]}</span>
+                      <span className={styles.rotuloBloco} draggable onDragStart={e => {e.stopPropagation();comecarArraste(e, "bloco:" + item.id);}} onDragEnd={() => {setArrastando(false);setSobreIndice(null);}} title="Arraste pela alça para reorganizar"><GripVertical size={12}/>{ROTULOS[item.tipo]}</span>
                       {blocoVisual(item)}
                     </div>
                   </div>
@@ -304,8 +351,7 @@ export default function EmailVisualDesigner({
               <button type="button" title="Duplicar bloco" aria-label="Duplicar bloco" disabled={documento.blocos.length >= 60} onClick={duplicar}><Copy size={16}/></button>
               <button type="button" title="Excluir bloco" aria-label="Excluir bloco" disabled={documento.blocos.length <= 1} onClick={excluir} className={styles.excluir}><Trash2 size={16}/></button>
             </div>
-            {["titulo","texto","botao","colunas"].includes(bloco.tipo) ? campoTexto(bloco.tipo === "botao" ? "Texto do botão" : "Conteúdo", "texto", bloco.tipo === "botao" ? 2 : 5) : null}
-            {bloco.tipo === "colunas" ? campoTexto("Segunda coluna", "textoDireita") : null}
+            {["titulo","texto","botao","colunas"].includes(bloco.tipo) ? <p className={styles.avisoEdicaoDireta}>Clique no texto ou no botão na área central para editar diretamente, sem utilizar uma caixa de texto.</p> : null}
             {bloco.tipo === "imagem" ? (<>
               <label className={styles.campo}><span>Enviar imagem</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={enviandoImagem} onChange={e => { void enviarImagem(e.target.files?.[0]); e.target.value = ""; }} /><small className={styles.ajuda}>{enviandoImagem ? "Enviando imagem..." : "JPG, PNG, WebP ou GIF · até 3 MB"}</small></label>
               {erroImagem ? <small className={styles.invalido} role="alert">{erroImagem}</small> : null}

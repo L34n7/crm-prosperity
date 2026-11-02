@@ -5783,3 +5783,23 @@
 .templateStudioGalleryMock i:first-child{width:55%;height:13px;border-radius:4px;background:rgb(56 50 112 / 50%)}
 .templateStudioGalleryMock i:last-child{width:42%;height:12px;margin-top:3px;background:#6855b8}
 @media(max-width:700px){.templateStudioGallery{grid-template-columns:repeat(2,minmax(0,1fr));max-height:none;padding:11px}.templateStudioGalleryCard{min-height:150px}}
+
+/* Galeria única com miniaturas reais, sem seletor redundante. */
+.templatePremiumModal .templateStudioBar{justify-content:flex-start}
+.templatePremiumModal .templateStudioSwitch{flex:0 1 auto}
+.templatePremiumModal .templateStudioGallery{grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:14px;max-height:320px}
+.templatePremiumModal .templateStudioGalleryCard{min-height:192px;gap:6px}
+.templatePremiumModal .templateStudioGalleryMock{display:block;position:relative;overflow:hidden;width:100%;height:113px;padding:0;background:var(--crm-surface-soft)!important;border:1px solid var(--crm-border);border-radius:8px}
+.templatePremiumModal .templateStudioGalleryMock iframe{display:block;position:absolute;top:0;left:50%;margin-left:-300px;width:600px;height:430px;border:0;pointer-events:none;transform:scale(.25);transform-origin:top center;background:white}
+.templatePremiumModal .templateStudioGalleryCard:hover .templateStudioGalleryMock{border-color:var(--crm-primary-border)}
+.templatePremiumModal .templateStudioGalleryCard small{min-height:26px}
+.templatePremiumModal .templateStudioGalleryCard strong{font-size:13px}
+@media(max-width:700px){
+ .templatePremiumModal .templateStudioSwitch{width:100%}
+ .templatePremiumModal .templateStudioSwitch button{min-width:0;padding:0 5px;font-size:11px}
+ .templatePremiumModal .templateStudioGallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:none;gap:9px}
+ .templatePremiumModal .templateStudioGalleryCard{min-width:0;min-height:186px}
+ .templatePremiumModal .templateStudioGalleryMock{height:93px}
+ .templatePremiumModal .templateStudioGalleryMock iframe{transform:scale(.21)}
+ .templatePremiumModal .templateStudioGalleryButton{flex:1}
+}

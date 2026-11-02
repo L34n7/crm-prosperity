@@ -75,3 +75,13 @@
 @media(max-width:1200px){.editor{grid-template-columns:185px minmax(0,1fr) 242px}.biblioteca{padding:12px 8px}.campos{padding:14px}}
 @media(max-width:920px){.editor{grid-template-columns:165px minmax(0,1fr)}.propriedades{grid-column:1/-1;max-height:none;border-left:0;border-top:1px solid var(--crm-border)}.campos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.infoPainel,.acoesBloco,.variaveis{grid-column:1/-1}}
 @media(max-width:700px){.editor{display:flex;flex-direction:column;overflow:visible;flex:0 0 auto}.biblioteca,.propriedades{overflow:visible;border:0}.biblioteca{padding:14px 16px;border-bottom:1px solid var(--crm-border)}.gradeBiblioteca{display:flex;overflow-x:auto;gap:9px;padding-bottom:8px}.itemBiblioteca{flex:0 0 136px;min-height:56px;gap:6px;padding:8px}.itemBiblioteca small,.adicionarIcone,.dicaBiblioteca{display:none}.iconeComponente{flex-basis:29px;height:29px}.workspace{min-height:490px;flex:0 0 auto}.barraWorkspace{padding:9px 11px}.areaCanvas{flex:0 0 auto;min-height:410px;max-height:610px;overflow:auto;padding:16px 10px 25px}.pagina{padding:14px 7px;min-height:360px}.canvasConteudo{padding:18px!important}.iframePrevia{height:510px}.propriedades{border-top:1px solid var(--crm-border)}.campos{grid-template-columns:1fr;gap:13px;padding:17px}.itemBiblioteca strong{font-size:11px}.variaveis{grid-column:1}.campo input:not([type=color]),.campo select,.campo textarea{font-size:16px}}
+
+/* Edição direta no conteúdo, sem campos duplicados na lateral. */
+.textoEditavel{cursor:text;min-width:8px;min-height:1em;border-radius:4px;outline:1px dashed transparent;outline-offset:3px;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;-webkit-user-select:text}
+.textoEditavel:hover{outline-color:color-mix(in srgb,var(--crm-primary-strong) 55%,transparent)}
+.textoEditavel:focus{outline:2px solid var(--crm-primary-strong);background:color-mix(in srgb,var(--crm-primary-soft) 18%,transparent)}
+.blocoCanvas:has(.textoEditavel:focus){outline-color:transparent;background:none}
+.blocoCanvas:has(.textoEditavel:focus) .rotuloBloco{display:none}
+.avisoEdicaoDireta{margin:0;padding:11px 12px;border:1px solid var(--crm-primary-border);border-radius:10px;background:var(--crm-primary-soft);color:var(--crm-primary-text);font-size:12px;line-height:1.5}
+.blocoCanvas .rotuloBloco{cursor:grab;user-select:none}
+.colunaEditavel{padding:12px;min-width:0;display:block}
