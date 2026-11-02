@@ -203,6 +203,8 @@ export default function ListasPersonalizadasModal({ listas, onClose, onChanged }
                     onDragEnd={() => setArrastando(null)}>
                 <div className={styles.personalListRowPrimary}>
                   <div className={styles.personalListRowTop}>
+                    <span className={styles.personalListDragHandle}
+                      title="Clique e arraste para reorganizar" aria-hidden="true">⠿</span>
                     <span className={styles.personalListPosition}>{indiceLista + 1}º</span>
                     {editando === lista.id ? (
                       <input className={`${styles.input} ${styles.personalListEditInput}`}

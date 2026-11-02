@@ -2571,6 +2571,21 @@
   display: flex; align-items: center; gap: 9px;
   flex: 1 1 auto; min-width: 0;
 }
+.personalListDragHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 29px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--crm-text-muted);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.personalListRow:active .personalListDragHandle { cursor: grabbing; }
 .personalListPosition {
   display: inline-flex; align-items: center; justify-content: center;
   flex: 0 0 auto; min-width: 30px; min-height: 29px;
