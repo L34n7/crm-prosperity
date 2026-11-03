@@ -1293,75 +1293,6 @@ export default function CampanhaModal({
 
                 {analise ? (
   
-                <section className={styles.campaignTestPanel} aria-label="Teste do e-mail da campanha">
-                  <div className={styles.campaignTestHeader}>
-                    <div className={styles.campaignTestIcon}><Mail size={19}/></div>
-                    <div>
-                      <strong>Enviar e-mail de teste</strong>
-                      <span>Confira o template e o assunto antes de enviar a campanha. Apenas o contato selecionado receberá este teste.</span>
-                    </div>
-                  </div>
-                  <div className={styles.campaignTestControls}>
-                    <div className={styles.campaignTestSearch}>
-                      <label htmlFor="campanha-email-teste">Destinatário do teste</label>
-                      <div className={styles.campaignTestInputWrap}>
-                        <Search size={17} aria-hidden="true"/>
-                        <input id="campanha-email-teste" type="email" autoComplete="off"
-                          aria-autocomplete="list" aria-controls="campanha-email-teste-resultados"
-                          aria-expanded={mostrarSugestoesTeste && buscaEmailTeste.trim().length >= 2}
-                          placeholder="Digite o e-mail cadastrado no CRM"
-                          value={buscaEmailTeste}
-                          onChange={event => {
-                            setBuscaEmailTeste(event.target.value);
-                            setContatoTeste(null);
-                            setMostrarSugestoesTeste(true);
-                            setResultadoEmailTeste(null);
-                            setErroEmailTeste("");
-                          }}
-                          onFocus={() => { if (!contatoTeste) setMostrarSugestoesTeste(true); }}
-                        />
-                        {buscandoEmailTeste ? <span className={styles.campaignTestSearching} aria-label="Buscando">Buscando...</span> : null}
-                      </div>
-                      {mostrarSugestoesTeste && buscaEmailTeste.trim().length >= 2 && !contatoTeste ? (
-                        <div id="campanha-email-teste-resultados" className={styles.campaignTestSuggestions}
-                          role="listbox" aria-label="E-mails encontrados">
-                          {sugestoesEmailTeste.length ? sugestoesEmailTeste.map(contato => (
-                            <button type="button" role="option" aria-selected={false} key={contato.id}
-                              className={styles.campaignTestSuggestion}
-                              disabled={Boolean(contato.supressao_motivo)}
-                              onClick={() => selecionarContatoTeste(contato)}>
-                              <Mail size={15}/>
-                              <span><strong>{contato.email}</strong><small>{contato.nome || "Contato cadastrado"}</small></span>
-                              {contato.supressao_motivo ? <em>Bloqueado</em> : <Check size={15}/>}
-                            </button>
-                          )) : !buscandoEmailTeste && !erroEmailTeste ? (
-                            <p className={styles.campaignTestEmpty}>Nenhum e-mail cadastrado encontrado.</p>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                    <button type="button" className={[styles.primaryButton, styles.campaignTestSendButton].join(" ")}
-                      disabled={enviandoEmailTeste || enviando || !contatoTeste || !templateSelecionado || !remetenteSelecionado}
-                      onClick={() => void enviarTesteCampanha()}>
-                      <Send size={16}/>{enviandoEmailTeste ? "Enviando..." : "Enviar teste"}
-                    </button>
-                  </div>
-                  {contatoTeste ? (
-                    <div className={styles.campaignTestSelected}><Check size={15}/> E-mail selecionado: <strong>{contatoTeste.email}</strong></div>
-                  ) : (
-                    <small className={styles.campaignTestHint}>Selecione um resultado da busca para habilitar o envio.</small>
-                  )}
-                  {erroEmailTeste ? <p className={styles.campaignTestError} role="alert"><AlertTriangle size={17}/>{erroEmailTeste}</p> : null}
-                  {resultadoEmailTeste ? (
-                    <div className={styles.campaignTestSuccess} role="status">
-                      <CheckCircle2 size={19}/>
-                      <div><strong>Teste enviado para {resultadoEmailTeste.email}</strong>
-                        <span>Data e hora: {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(resultadoEmailTeste.enviadoEm))} (horário de Brasília).</span>
-                      </div>
-                    </div>
-                  ) : null}
-                </section>
-
                 <div className={styles.audienceAnalysisGrid}>
                     <div>
                       <span>Registros encontrados</span>
@@ -1544,6 +1475,75 @@ export default function CampanhaModal({
                     </small>
                   </section>
                 </div>
+
+                <section className={styles.campaignTestPanel} aria-label="Teste do e-mail da campanha">
+                  <div className={styles.campaignTestHeader}>
+                    <div className={styles.campaignTestIcon}><Mail size={19}/></div>
+                    <div>
+                      <strong>Enviar e-mail de teste</strong>
+                      <span>Confira o template e o assunto antes de enviar a campanha. Apenas o contato selecionado receberá este teste.</span>
+                    </div>
+                  </div>
+                  <div className={styles.campaignTestControls}>
+                    <div className={styles.campaignTestSearch}>
+                      <label htmlFor="campanha-email-teste">Destinatário do teste</label>
+                      <div className={styles.campaignTestInputWrap}>
+                        <Search size={17} aria-hidden="true"/>
+                        <input id="campanha-email-teste" type="email" autoComplete="off"
+                          aria-autocomplete="list" aria-controls="campanha-email-teste-resultados"
+                          aria-expanded={mostrarSugestoesTeste && buscaEmailTeste.trim().length >= 2}
+                          placeholder="Digite o e-mail cadastrado no CRM"
+                          value={buscaEmailTeste}
+                          onChange={event => {
+                            setBuscaEmailTeste(event.target.value);
+                            setContatoTeste(null);
+                            setMostrarSugestoesTeste(true);
+                            setResultadoEmailTeste(null);
+                            setErroEmailTeste("");
+                          }}
+                          onFocus={() => { if (!contatoTeste) setMostrarSugestoesTeste(true); }}
+                        />
+                        {buscandoEmailTeste ? <span className={styles.campaignTestSearching} aria-label="Buscando">Buscando...</span> : null}
+                      </div>
+                      {mostrarSugestoesTeste && buscaEmailTeste.trim().length >= 2 && !contatoTeste ? (
+                        <div id="campanha-email-teste-resultados" className={styles.campaignTestSuggestions}
+                          role="listbox" aria-label="E-mails encontrados">
+                          {sugestoesEmailTeste.length ? sugestoesEmailTeste.map(contato => (
+                            <button type="button" role="option" aria-selected={false} key={contato.id}
+                              className={styles.campaignTestSuggestion}
+                              disabled={Boolean(contato.supressao_motivo)}
+                              onClick={() => selecionarContatoTeste(contato)}>
+                              <Mail size={15}/>
+                              <span><strong>{contato.email}</strong><small>{contato.nome || "Contato cadastrado"}</small></span>
+                              {contato.supressao_motivo ? <em>Bloqueado</em> : <Check size={15}/>}
+                            </button>
+                          )) : !buscandoEmailTeste && !erroEmailTeste ? (
+                            <p className={styles.campaignTestEmpty}>Nenhum e-mail cadastrado encontrado.</p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    <button type="button" className={[styles.primaryButton, styles.campaignTestSendButton].join(" ")}
+                      disabled={enviandoEmailTeste || enviando || !contatoTeste || !templateSelecionado || !remetenteSelecionado}
+                      onClick={() => void enviarTesteCampanha()}>
+                      <Send size={16}/>{enviandoEmailTeste ? "Enviando..." : "Enviar teste"}
+                    </button>
+                  </div>
+                  {contatoTeste ? (
+                    <div className={styles.campaignTestSelected}><Check size={15}/> E-mail selecionado: <strong>{contatoTeste.email}</strong></div>
+                  ) : (
+                    <small className={styles.campaignTestHint}>Selecione um resultado da busca para habilitar o envio.</small>
+                  )}
+                  {erroEmailTeste ? <p className={styles.campaignTestError} role="alert"><AlertTriangle size={17}/>{erroEmailTeste}</p> : null}
+                  {resultadoEmailTeste ? (
+                    <div className={styles.campaignTestSuccess} role="status">
+                      <CheckCircle2 size={19}/>
+                      <div><strong>Teste enviado para {resultadoEmailTeste.email}</strong>
+                        <span>Data e hora: {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(resultadoEmailTeste.enviadoEm))} (horário de Brasília).</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
 
                 <div className={styles.audienceAnalysisGrid}>
                   <div>
