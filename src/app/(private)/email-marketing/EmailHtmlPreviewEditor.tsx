@@ -483,7 +483,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       if (!alvo || alvo.closest("[data-prosperity-drag-handle]")) return null;
       const alvoEditavel = alvo.closest("[data-prosperity-edit-text]");
       const origem = alvoEditavel?.parentElement || alvo;
-      const destino = origem.closest("a[data-prosperity-social],img,a,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
+      const destino = origem.closest("a[data-prosperity-social]") || origem.closest("img,a,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
       if (destino && destino !== doc.body) return destino as HTMLElement;
       // Textos diretamente dentro de elementos simples também devem ser selecionáveis.
       return origem !== doc.body && !origem.matches("html,head,body,style,script") ? origem as HTMLElement : null;
