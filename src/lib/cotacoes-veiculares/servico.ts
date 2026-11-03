@@ -60,7 +60,6 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
   if(!planos.length)throw new Error("Crie ao menos um plano antes de cotar.");
   if(p.origem==="agente_ia"&&!status.pronta)
     throw new Error("Configuração comercial pendente: "+status.pendencias.slice(0,2).join(" "));
-  const hoje=new Date().toISOString().slice(0,10);
   const resultados=[];
   for(const plano of planos){
     const meta=arquivos.find(a=>a.plano===plano.codigo);
@@ -73,7 +72,7 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
       p.valorFipeCentavos>=Number(f.fipe_min_centavos)&&
       p.valorFipeCentavos<=Number(f.fipe_max_centavos));
     if(!faixa)continue; // Planos podem atender categorias e faixas diferentes.
-    if(!meta?.arquivo_precos_nome||!meta.vigencia_ate||meta.vigencia_ate<hoje)continue;
+    if(!meta?.arquivo_precos_nome)continue;
     if(p.categoria==="especiais"&&
       !(await verificarEspecialEmpresa(p.empresaId,p.veiculo||"",p.codigoFipe,plano.codigo)))continue;
     const {regra,opcionais}=await consultarRegraComercial(p.empresaId,categoriaPlano,plano.codigo);

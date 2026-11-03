@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useRef,useState} from "react";
 import {
-  ArrowLeft,ArrowRight,CalendarDays,CarFront,Check,CheckCircle2,
+  ArrowLeft,ArrowRight,CarFront,Check,CheckCircle2,
   Download,FileSpreadsheet,Layers3,Loader2,Pencil,Plus,Power,
   Save,ShieldCheck,Trash2,UploadCloud,X,
 } from "lucide-react";
@@ -40,7 +40,6 @@ export default function PlanosCotacao({
 }:Props){
   const [modal,setModal]=useState<Modal|null>(null);
   const [nome,setNome]=useState("");
-  const [vigencia,setVigencia]=useState("");
   const [precoEditando,setPrecoEditando]=useState<Faixa|null>(null);
   const [novoPreco,setNovoPreco]=useState("");
   const [arquivo,setArquivo]=useState<ArquivoPendente|null>(null);
@@ -54,7 +53,6 @@ export default function PlanosCotacao({
   const pendenteRef=useRef<string|null>(null);
   const nomePendenteRef=useRef<string>("");
   const nomeRef=useRef<HTMLInputElement|null>(null);
-  const dataRef=useRef<HTMLInputElement|null>(null);
   const [sucesso,setSucesso]=useState("");
   const filePrecos=useRef<HTMLInputElement>(null);
   const fileEspeciais=useRef<HTMLInputElement>(null);
@@ -65,7 +63,6 @@ export default function PlanosCotacao({
   const opcionaisDoPlano=useMemo(()=>opcionais.filter(o=>o.plano===modal?.codigo),[opcionais,modal?.codigo]);
   const meta=arquivos.find(a=>a.plano===modal?.codigo);
   const itens=faixas.filter(f=>f.plano===modal?.codigo);
-  const hoje=new Date().toISOString().slice(0,10);
 
   useEffect(()=>{
     if(!modal)return;
@@ -80,8 +77,6 @@ export default function PlanosCotacao({
   function abrir(planoAtual?:PlanoEmpresa){
     pendenteRef.current=null;nomePendenteRef.current="";
     setNome(planoAtual?.nome||"");
-    const info=arquivos.find(x=>x.plano===planoAtual?.codigo);
-    setVigencia(info?.vigencia_ate||"");
     setModal({codigo:planoAtual?.codigo||null,passo:1});
     setArquivo(null);setRemoverArquivo(null);setPrecoEditando(null);
     setErro("");setSucesso("");setErrosEtapa({});
@@ -108,11 +103,11 @@ export default function PlanosCotacao({
   function erroCampo(campo:string){return errosEtapa[campo]?
     <span className={styles.requiredError} role="alert">{errosEtapa[campo]}</span>:null;
   }
-  function destacarCampos(erros:Record<string,string>,alvo?:"nome"|"vigencia"){
+  function destacarCampos(erros:Record<string,string>,alvo?:"nome"){
     setErrosEtapa(erros);setTentativa(v=>v+1);
     setErro("Confira os campos obrigatórios destacados.");
     requestAnimationFrame(()=>{
-      const elemento=alvo==="nome"?nomeRef.current:alvo==="vigencia"?dataRef.current:
+      const elemento=alvo==="nome"?nomeRef.current:
         document.querySelector('[data-required-error="true"]');
       elemento?.scrollIntoView({behavior:"smooth",block:"center"});
       if(elemento instanceof HTMLInputElement)elemento.focus({preventScroll:true});
@@ -193,7 +188,7 @@ export default function PlanosCotacao({
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao importar arquivo.");
       setArquivo(null);
-      if(arquivo.tipo==="precos"){setVigencia("");setErrosEtapa(prev=>({...prev,tabela:""}));}
+      if(arquivo.tipo==="precos")setErrosEtapa(prev=>({...prev,tabela:""}));
       await onUpdated();
       setSucesso("Arquivo importado: "+json.nome+" ("+json.total+" registros).");
     }catch(e){setErro(e instanceof Error?e.message:"Falha ao importar.");}
@@ -213,54 +208,33 @@ export default function PlanosCotacao({
     }catch(e){setErro(e instanceof Error?e.message:"Falha ao remover arquivo.");}
     finally{setOcupado(false);}
   }
-  async function salvarValores(acao:"vigencia"|"preco"):Promise<boolean>{
+  async function salvarPreco():Promise<boolean>{
     if(!modal?.codigo)return false;
-    if(acao==="vigencia"){
-      if(!meta?.arquivo_precos_nome){
-        destacarCampos({tabela:"Importe a tabela de preços antes de definir a validade."});
-        return false;
-      }
-      if(!vigencia||!/^\d{4}-\d{2}-\d{2}$/.test(vigencia)||vigencia<hoje){
-        destacarCampos({vigencia:!vigencia?
-          "Informe até quando estes preços serão válidos.":
-          "A validade precisa ser hoje ou uma data futura."},"vigencia");
-        return false;
-      }
-    }
-    if(acao==="preco"){
-      const preco=Number(novoPreco.replace(",","."));
-      if(!Number.isFinite(preco)||preco<=0){
-        destacarCampos({preco:"Informe uma mensalidade maior que zero."});
-        return false;
-      }
+    const preco=Number(novoPreco.replace(",","."));
+    if(!Number.isFinite(preco)||preco<=0){
+      destacarCampos({preco:"Informe uma mensalidade maior que zero."});return false;
     }
     setOcupado(true);setErro("");setErrosEtapa({});
     try{
-      const endpoint=acao==="vigencia"?"/api/cotacoes-veiculares/comercial":"/api/cotacoes-veiculares";
-      const corpo=acao==="vigencia"
-        ?{acao,plano:modal.codigo,vigencia_ate:vigencia}
-        :{acao,plano:modal.codigo,categoria,fipe_min_centavos:precoEditando?.fipe_min_centavos,
-          valor_centavos:Math.round(Number(novoPreco.replace(",","."))*100)};
-      const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(corpo)});
+      const res=await fetch("/api/cotacoes-veiculares",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          acao:"preco",plano:modal.codigo,categoria,
+          fipe_min_centavos:precoEditando?.fipe_min_centavos,
+          valor_centavos:Math.round(preco*100),
+        }),
+      });
       const json=await res.json();
-      if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível salvar.");
+      if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar a mensalidade.");
       setPrecoEditando(null);await onUpdated();
-      setSucesso(acao==="vigencia"?"Validade dos preços salva.":"Mensalidade alterada.");
-      return true;
+      setSucesso("Mensalidade alterada.");return true;
     }catch(e){setErro(e instanceof Error?e.message:"Erro ao salvar.");return false;}
     finally{setOcupado(false);}
   }
-  async function concluirCadastro(){
+  function concluirCadastro(){
     if(ocupado)return;
-    const erros:Record<string,string>={};
-    if(!meta?.arquivo_precos_nome)erros.tabela="Importe a tabela de preços deste plano para concluir.";
-    if(!vigencia)erros.vigencia="Informe a validade dos preços.";
-    else if(vigencia<hoje)erros.vigencia="Escolha a data de hoje ou uma data futura.";
-    if(Object.keys(erros).length){
-      destacarCampos(erros,erros.tabela?undefined:"vigencia");return;
-    }
-    if(!meta||meta.vigencia_ate!==vigencia){
-      if(!await salvarValores("vigencia"))return;
+    if(!meta?.arquivo_precos_nome){
+      destacarCampos({tabela:"Importe a tabela de preços deste plano para concluir."});return;
     }
     fechar();
   }
@@ -280,7 +254,6 @@ export default function PlanosCotacao({
       {planos.map((p,index)=>{
         const info=arquivos.find(a=>a.plano===p.codigo);
         const temPreco=Boolean(info?.arquivo_precos_nome);
-        const valido=Boolean(info?.vigencia_ate&&info.vigencia_ate>=hoje);
         return <article key={p.codigo} className={styles.planOverviewCard} data-inactive={!p.ativo}>
           <div className={styles.planCardHeader}>
             <span className={styles.planSymbol}><Layers3 size={22}/></span>
@@ -295,7 +268,7 @@ export default function PlanosCotacao({
           </div>
           <div className={styles.planCardMetrics}>
             <span><FileSpreadsheet size={15}/> {temPreco?"Tabela cadastrada":"Sem tabela"}</span>
-            <span><CalendarDays size={15}/> {valido?"Vigente":info?.vigencia_ate?"Vencido":"Sem validade"}</span>
+            {info?.arquivo_precos_em&&<span><CheckCircle2 size={15}/> Importada em {new Date(info.arquivo_precos_em).toLocaleDateString("pt-BR")}</span>}
           </div>
           <div className={styles.planCardActions}>
             <button type="button" className={styles.planEditButton} onClick={()=>abrir(p)}>
@@ -455,20 +428,6 @@ export default function PlanosCotacao({
               <button className={styles.planDeleteConfirm} type="button" disabled={ocupado}
                 onClick={()=>void confirmarRemocaoArquivo()}>Remover</button>
             </div>}
-            <div className={styles.planValidity+" "+(errosEtapa.vigencia?styles.requiredFieldInvalid:"")}
-              key={"validade-"+(errosEtapa.vigencia?tentativa:0)} data-required-error={errosEtapa.vigencia?"true":undefined}>
-              <label>Validade dos preços <span className={styles.requiredAsterisk}>*</span>
-                <input ref={dataRef} value={vigencia} type="date" min={hoje}
-                  aria-invalid={Boolean(errosEtapa.vigencia)}
-                  disabled={!podeConfigurar||!plano.ativo}
-                  onChange={e=>{setVigencia(e.target.value);setErrosEtapa(prev=>({...prev,vigencia:""}));}}/>
-                {erroCampo("vigencia")}
-              </label>
-              <button type="button" className={styles.secondary}
-                disabled={!podeConfigurar||!plano.ativo||ocupado||!meta?.arquivo_precos_nome}
-                onClick={()=>void salvarValores("vigencia")}><CalendarDays size={16}/> Salvar validade</button>
-              <small>O nome da tabela é identificado automaticamente pelo arquivo importado.</small>
-            </div>
             <div className={styles.planPrices}>
               <h4>Valores por faixa FIPE</h4>
               <label className={styles.planWizardField}>Categoria
@@ -492,13 +451,13 @@ export default function PlanosCotacao({
                   <input inputMode="decimal" aria-invalid={Boolean(errosEtapa.preco)} value={novoPreco} onChange={e=>{setNovoPreco(e.target.value);setErrosEtapa(prev=>({...prev,preco:""}));}}/>{erroCampo("preco")}</label>
                 <button type="button" className={styles.secondary} onClick={()=>setPrecoEditando(null)}>Cancelar</button>
                 <button type="button" className={styles.primary} disabled={ocupado}
-                  onClick={()=>void salvarValores("preco")}><Save size={15}/> Salvar preço</button>
+                  onClick={()=>void salvarPreco()}><Save size={15}/> Salvar preço</button>
               </div>}
             </div>
           </div>}
         </div>
         <footer className={styles.planWizardFooter}>
-          <span>{modal.passo===1?"Preencha o nome e as regras obrigatórias antes de avançar.":"Importe a tabela de preços e defina a validade para concluir."}</span>
+          <span>{modal.passo===1?"Preencha o nome e as regras obrigatórias antes de avançar.":"Importe a tabela de preços do plano para concluir."}</span>
           <div className={styles.planWizardFooterActions}>
             {modal.passo===2&&<button type="button" className={styles.secondary}
               disabled={ocupado} onClick={()=>setModal(v=>v?{...v,passo:1}:null)}>

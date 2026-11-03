@@ -5,6 +5,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO,ENERGIAS_VEICULO,type UsoVeiculo,type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { CATEGORIAS_COTACAO,categoriaValida,configuracaoCotacao,consultarFaixas,calcularCotacaoPlanos,salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
+import {detalharVeiculoFipe,precoFipeCentavos,type TipoFipe} from "@/lib/cotacoes-veiculares/fipe";
+import {classificarVeiculoFipe} from "@/lib/cotacoes-veiculares/classificacao";
 
 async function acesso(){
  const ctx=await getUsuarioContexto();
@@ -71,10 +73,23 @@ export async function POST(req:Request){
   }
   if(!["simular","salvar"].includes(acao))throw new Error("Operação inválida.");
   if(!auth.podeGerenciar)return erro(new Error("Sem permissão para gerar cotações."),403);
-  if(!categoriaValida(body.categoria))throw new Error("Categoria inválida.");
+  // Os dados FIPE e a categoria comercial são obtidos no servidor, nunca aceitos do cliente.
+  const tipo=String(body.tipo_fipe||"") as TipoFipe;
+  const marcaFipe=String(body.marca_fipe||"");
+  const modeloFipe=String(body.modelo_fipe||"");
+  const anoFipe=String(body.ano_fipe||"");
+  if(!["cars","motorcycles","trucks"].includes(tipo)||
+    [marcaFipe,modeloFipe,anoFipe].some(v=>!v||v.length>60||!/^\w[\w-]*$/.test(v)))
+    throw new Error("Selecione marca, modelo e ano diretamente na consulta FIPE.");
   const uso=String(body.uso||"") as UsoVeiculo,energia=String(body.energia||"") as EnergiaVeiculo;
   if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
     throw new Error("Informe o uso e a motorização.");
+  const veiculoFipe=await detalharVeiculoFipe(tipo,marcaFipe,modeloFipe,anoFipe);
+  const categoriaInterna=await classificarVeiculoFipe({
+    empresaId,tipo,codigoFipe:veiculoFipe.codeFipe,modelo:veiculoFipe.model,uso,
+  });
+  if(!categoriaInterna.categoria)
+    throw new Error("Classificação FIPE pendente: informe a categoria deste veículo na aba Planos, em Classificações FIPE.");
   const op=body.opcionais_por_plano;
   if(op!==undefined && (typeof op!=="object"||op===null||Array.isArray(op)))
     throw new Error("Opcionais inválidos.");
@@ -85,18 +100,16 @@ export async function POST(req:Request){
       throw new Error("Opcionais inválidos.");
     opcionaisPorPlano[plano]=codigos as string[];
   }
-  const parametros={empresaId,categoria:body.categoria,
-    veiculo:String(body.veiculo||""),codigoFipe:String(body.referencia_fipe||"").split("|").at(-1)?.trim()||"",
-    valorFipeCentavos:valorInteiro(body.valor_fipe_centavos,"Valor FIPE"),uso,energia,
+  const veiculo=veiculoFipe.brand+" "+veiculoFipe.model;
+  const parametros={empresaId,categoria:categoriaInterna.categoria,
+    veiculo,codigoFipe:veiculoFipe.codeFipe,
+    valorFipeCentavos:precoFipeCentavos(veiculoFipe.price),uso,energia,
     origem:"manual" as const,opcionaisPorPlano};
   if(acao==="simular")return NextResponse.json({ok:true,calculos:await calcularCotacaoPlanos(parametros)});
-  const veiculo=String(body.veiculo||"").trim();
-  if(veiculo.length<3||veiculo.length>240)throw new Error("Informe o veículo.");
-  const ano=body.ano_modelo==null||body.ano_modelo===""?null:valorInteiro(body.ano_modelo,"Ano",32000);
-  if(ano!==null&&ano<1950)throw new Error("Ano inválido.");
+  const ano=veiculoFipe.modelYear;
   const resultado=await salvarCotacaoPlanos({...parametros,veiculo,anoModelo:ano,
     nomeContato:String(body.nome_contato||"").slice(0,160),
-    referenciaFipe:String(body.referencia_fipe||"").slice(0,100)});
+    referenciaFipe:(veiculoFipe.referenceMonth+" | "+veiculoFipe.codeFipe).slice(0,100)});
   return NextResponse.json({ok:true,...resultado});
  }catch(e){console.error("[COTACAO_POST]",e);return erro(e);}
 }

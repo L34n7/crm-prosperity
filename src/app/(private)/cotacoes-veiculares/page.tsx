@@ -12,6 +12,7 @@ import {
 } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO, USOS_VEICULO, type UsoVeiculo, type EnergiaVeiculo, type RegraComercialPlano, type OpcionalComercial } from "@/lib/cotacoes-veiculares/comercial";
 import PlanosCotacao, {type ArquivoPlano} from "./PlanosCotacao";
+import ClassificacoesFipe from "./ClassificacoesFipe";
 import styles from "./page.module.css";
 
 type Faixa = {
@@ -55,7 +56,11 @@ const categorias=Object.entries(CATEGORIAS_COTACAO) as Array<[CategoriaCotacao,s
 
 export default function CotacoesVeicularesPage() {
   const [aba,setAba]=useState<"nova"|"tabela"|"historico">("nova");
-  const [categoria,setCategoria]=useState<CategoriaCotacao>("auto_leves");
+  const [categoria,setCategoria]=useState<CategoriaCotacao>("auto_leves"); // Somente administração de planos
+  const [categoriaCotacao,setCategoriaCotacao]=useState<CategoriaCotacao|null>(null);
+  const [tipoFipe,setTipoFipe]=useState<"cars"|"motorcycles"|"trucks">("cars");
+  const [codigoMarcaFipe,setCodigoMarcaFipe]=useState("");
+  const [extrasCotacao,setExtrasCotacao]=useState<OpcionalBanco[]>([]);
   const [nomeContato,setNomeContato]=useState("");
   const [uso,setUso]=useState<UsoVeiculo>("particular");
   const [energia,setEnergia]=useState<EnergiaVeiculo>("combustao");
@@ -88,8 +93,6 @@ export default function CotacoesVeicularesPage() {
   const [buscandoFipe,setBuscandoFipe]=useState(false);
   const [carregandoMarcas,setCarregandoMarcas]=useState(false);
 
-  const tipoFipe=categoria==="motocicleta"?"motorcycles"
-    :categoria.startsWith("caminhao_")?"trucks":"cars";
 
   const atualizar=useCallback(async()=>{
     setErro("");
@@ -112,28 +115,37 @@ export default function CotacoesVeicularesPage() {
   useEffect(()=>{void carregarComercial().catch(e=>setErro(e instanceof Error?e.message:"Erro ao carregar regras."));},[carregarComercial]);
   async function atualizarTudo(){await Promise.all([atualizar(),carregarComercial()]);}
   useEffect(()=>{void atualizar();},[atualizar]);
-  useEffect(()=>{setCalculos(null);setCotacaoSalva(null);},[categoria,valorFipe,opcionaisPorPlano,uso,energia]);
-  useEffect(()=>{setOpcionaisPorPlano({});},[categoria]);
+  useEffect(()=>{setCalculos(null);setCotacaoSalva(null);},[categoriaCotacao,valorFipe,opcionaisPorPlano,uso,energia]);
+  useEffect(()=>{setOpcionaisPorPlano({});},[categoriaCotacao]);
 
   const consultarApiFipe=useCallback(async(etapa:string,params:Record<string,string>={})=>{
-    const query=new URLSearchParams({tipo:tipoFipe,etapa,...params});
+    const query=new URLSearchParams({tipo:etapa==="marcas"?"all":tipoFipe,etapa,uso,...params});
     const response=await fetch("/api/cotacoes-veiculares/fipe?"+query,{cache:"no-store"});
     const json=await response.json();
     if(!response.ok||!json.ok)throw new Error(json.error||"Consulta FIPE indisponível.");
     return json;
   },[tipoFipe]);
 
+  // As três bases FIPE são reunidas na lista de marcas, sem pedir categoria comercial.
   useEffect(()=>{
     let ativo=true;
-    setMarcas([]);setModelos([]);setAnos([]);setMarca("");setModelo("");setAno("");
     setCarregandoMarcas(true);
-    void consultarApiFipe("marcas").then(json=>{
-      if(ativo)setMarcas(json.itens||[]);
-    }).catch(e=>{
-      if(ativo)setErro(e instanceof Error?e.message:"Não foi possível carregar marcas FIPE.");
-    }).finally(()=>{if(ativo)setCarregandoMarcas(false);});
+    void fetch("/api/cotacoes-veiculares/fipe?tipo=all&etapa=marcas",{cache:"no-store"})
+      .then(async r=>{const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||"Falha na FIPE.");return j;})
+      .then(j=>{if(ativo)setMarcas(j.itens||[]);})
+      .catch(e=>{if(ativo)setErro(e instanceof Error?e.message:"Falha ao carregar marcas FIPE.");})
+      .finally(()=>{if(ativo)setCarregandoMarcas(false);});
     return ()=>{ativo=false;};
-  },[consultarApiFipe]);
+  },[]);
+  useEffect(()=>{
+    if(!categoriaCotacao){setExtrasCotacao([]);return;}
+    let ativo=true;
+    void fetch("/api/cotacoes-veiculares/comercial?categoria="+categoriaCotacao,{cache:"no-store"})
+      .then(async r=>{const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||"Falha nas opções comerciais.");return j;})
+      .then(j=>{if(ativo)setExtrasCotacao(j.opcionais||[]);})
+      .catch(e=>{if(ativo)setErro(e instanceof Error?e.message:"Falha nas opções comerciais.");});
+    return ()=>{ativo=false;};
+  },[categoriaCotacao]);
 
   async function consultarFipe(etapa:"modelos"|"anos"|"preco",params:Record<string,string>){
     setBuscandoFipe(true);setErro("");
@@ -147,7 +159,10 @@ export default function CotacoesVeicularesPage() {
         setAnoModelo(String(d.modelYear));
         setValorFipe(formatoNumerico(Number(json.valor_fipe_centavos)));
         setReferenciaFipe(d.referenceMonth+" | "+d.codeFipe);
-        setSucesso(json.especial===true
+        setCategoriaCotacao(json.categoria_interna||null);
+        setSucesso(json.classificacao_pendente
+          ? "Classificação interna pendente. Acesse Planos → Classificações FIPE para definir a categoria."
+          : json.especial===true
           ? "Este veículo aparece como especial em algum plano. O enquadramento é verificado individualmente por plano."
           : "Consulta FIPE concluída: "+d.price+". Confira os dados do veículo.");
       }
@@ -178,7 +193,8 @@ export default function CotacoesVeicularesPage() {
 
   function dadosCotacao(){
     return {
-      categoria,veiculo,nome_contato:nomeContato,ano_modelo:anoModelo,uso,energia,
+      tipo_fipe:tipoFipe,marca_fipe:codigoMarcaFipe,modelo_fipe:modelo,ano_fipe:ano,
+      veiculo,nome_contato:nomeContato,ano_modelo:anoModelo,uso,energia,
       valor_fipe_centavos:valorDeMoeda(valorFipe),referencia_fipe:referenciaFipe,
       opcionais_por_plano:opcionaisPorPlano,
     };
@@ -186,9 +202,9 @@ export default function CotacoesVeicularesPage() {
   function alternarOpcional(plano:string,codigo:string,ativado:boolean){
     setOpcionaisPorPlano(atual=>{
       const selecionados=(atual[plano]||[]).filter(v=>v!==codigo);
-      const extra=catalogoExtras.find(v=>v.plano===plano&&v.codigo===codigo);
+      const extra=extrasCotacao.find(v=>v.plano===plano&&v.codigo===codigo);
       const semExclusivos=ativado&&extra?.grupo_exclusivo
-        ?selecionados.filter(v=>catalogoExtras.find(e=>e.plano===plano&&e.codigo===v)?.grupo_exclusivo!==extra.grupo_exclusivo)
+        ?selecionados.filter(v=>extrasCotacao.find(e=>e.plano===plano&&e.codigo===v)?.grupo_exclusivo!==extra.grupo_exclusivo)
         :selecionados;
       return {...atual,[plano]:ativado?[...semExclusivos,codigo]:semExclusivos};
     });
@@ -199,7 +215,7 @@ export default function CotacoesVeicularesPage() {
       "COTAÇÃO DE PROTEÇÃO VEICULAR",
       veiculo?"Veículo: "+veiculo:"",
       anoModelo?"Ano: "+anoModelo:"",
-      "Categoria: "+CATEGORIAS_COTACAO[categoria],
+      "Categoria: "+(categoriaCotacao?CATEGORIAS_COTACAO[categoriaCotacao]:"Não classificada"),
       "Uso: "+USOS_VEICULO[uso],"Motorização: "+ENERGIAS_VEICULO[energia],
       valorFipe?"Valor FIPE: R$ "+valorFipe:"",
       ...calculos.planos.flatMap(c=>[
@@ -261,44 +277,52 @@ export default function CotacoesVeicularesPage() {
           <div className={styles.sectionHeading}><h2>Dados do veículo</h2>
             <p>Preencha uma vez para comparar todos os planos cadastrados.</p>
           </div>
-          <div className={styles.fields}>
-            <label>Categoria de proteção
-              <select value={categoria} onChange={e=>{setCategoria(e.target.value as CategoriaCotacao);setValorFipe("");setVeiculo("");setReferenciaFipe("");setAnoModelo("");}}>
-                {categorias.map(([codigo,nome])=><option key={codigo} value={codigo}>{nome}</option>)}
-              </select>
-            </label>
-          </div>
           <div className={styles.fipePanel}>
             <div className={styles.fipeHeader}><strong>Buscar veículo na Tabela FIPE</strong>
               {carregandoMarcas&&<span className={styles.fipeLoading}><Loader2 size={14}/> Carregando marcas...</span>}
             </div>
             <div className={styles.fieldsThree}>
               <label>Marca<select value={marca} disabled={carregandoMarcas||!marcas.length} onChange={e=>{
-                const v=e.target.value;setMarca(v);setModelo("");setAno("");setModelos([]);setAnos([]);
-                if(v)void consultarFipe("modelos",{marca:v});
+                const v=e.target.value;
+                setMarca(v);setModelo("");setAno("");setModelos([]);setAnos([]);
+                setCategoriaCotacao(null);setVeiculo("");setAnoModelo("");setValorFipe("");setReferenciaFipe("");
+                const [tipo,codigo]=v.split("|");
+                if(v&&["cars","motorcycles","trucks"].includes(tipo)&&codigo){
+                  setTipoFipe(tipo as "cars"|"motorcycles"|"trucks");
+                  setCodigoMarcaFipe(codigo);
+                  void consultarFipe("modelos",{marca:codigo,tipo});
+                }else setCodigoMarcaFipe("");
               }}>
-                <option value="">{carregandoMarcas?"Carregando...":"Selecione a marca"}</option>
+                <option value="">{carregandoMarcas?"Carregando...":"Selecione a marca na FIPE"}</option>
                 {marcas.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}
               </select></label>
               <label>Modelo<select value={modelo} disabled={buscandoFipe||!modelos.length} onChange={e=>{
                 const v=e.target.value;setModelo(v);setAno("");setAnos([]);
-                if(v)void consultarFipe("anos",{marca,modelo:v});
+                setCategoriaCotacao(null);setVeiculo("");setValorFipe("");setReferenciaFipe("");
+                if(v)void consultarFipe("anos",{marca:codigoMarcaFipe,modelo:v});
               }}>
                 <option value="">Selecione o modelo</option>
                 {modelos.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}
               </select></label>
               <label>Ano/combustível<select value={ano} disabled={buscandoFipe||!anos.length} onChange={e=>{
-                const v=e.target.value;setAno(v);if(v)void consultarFipe("preco",{marca,modelo,ano:v});
+                const v=e.target.value;setAno(v);setCategoriaCotacao(null);
+                if(v)void consultarFipe("preco",{marca:codigoMarcaFipe,modelo,ano:v});
               }}>
                 <option value="">Selecione o ano</option>
                 {anos.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}
               </select></label>
             </div>
-            <small>As marcas são carregadas automaticamente. A categoria deve corresponder ao regulamento do veículo.</small>
+            <small>O sistema identifica a categoria comercial internamente ao consultar a FIPE.</small>
+            <div className={styles.fipeCategoryStatus}>
+              <strong>Classificação interna:</strong>{" "}
+              {categoriaCotacao?CATEGORIAS_COTACAO[categoriaCotacao]:
+                referenciaFipe?"Pendente de classificação":"Identificada após selecionar o veículo"}
+            </div>
           </div>
           <div className={styles.fields}>
             <label>Finalidade de uso
-              <select value={uso} onChange={e=>setUso(e.target.value as UsoVeiculo)}>
+              <select value={uso} onChange={e=>{const novo=e.target.value as UsoVeiculo;setUso(novo);
+                if(ano&&codigoMarcaFipe&&modelo)void consultarFipe("preco",{marca:codigoMarcaFipe,modelo,ano,uso:novo});}}>
                 {Object.entries(USOS_VEICULO).map(([codigo,nome])=><option key={codigo} value={codigo}>{nome}</option>)}
               </select>
             </label>
@@ -309,9 +333,9 @@ export default function CotacoesVeicularesPage() {
             </label>
           </div>
           <div className={styles.fields}>
-            <label>Veículo (marca e modelo)<input value={veiculo} maxLength={240} placeholder="Ex.: Fiat Argo 1.0" onChange={e=>{setVeiculo(e.target.value);setCalculos(null);}}/></label>
-            <label>Ano do modelo<input inputMode="numeric" value={anoModelo} placeholder="Ex.: 2022" onChange={e=>setAnoModelo(e.target.value)}/></label>
-            <label>Valor FIPE (R$)<input inputMode="decimal" value={valorFipe} placeholder="Ex.: 50.000,00" onChange={e=>setValorFipe(e.target.value)}/></label>
+            <label>Veículo (marca e modelo)<input value={veiculo} maxLength={240} placeholder="Ex.: Fiat Argo 1.0" readOnly/></label>
+            <label>Ano do modelo<input inputMode="numeric" value={anoModelo} placeholder="Ex.: 2022" readOnly/></label>
+            <label>Valor FIPE (R$)<input inputMode="decimal" value={valorFipe} placeholder="Ex.: 50.000,00" readOnly/></label>
             <label>Interessado (opcional)<input value={nomeContato} placeholder="Nome do contato" onChange={e=>setNomeContato(e.target.value)}/></label>
           </div>
 
@@ -321,19 +345,19 @@ export default function CotacoesVeicularesPage() {
             <div className={styles.optionsGrid}>
               {planos.filter(p=>p.ativo).map(plano=><div key={plano.codigo} className={styles.optionsGroup}>
                 <strong>{plano.nome}</strong>
-                {catalogoExtras.filter(extra=>extra.plano===plano.codigo && extra.ativo).map(extra=>
+                {extrasCotacao.filter(extra=>extra.plano===plano.codigo && extra.ativo).map(extra=>
                   <label key={extra.codigo} className={styles.option}>
                     <input type="checkbox" checked={(opcionaisPorPlano[plano.codigo]||[]).includes(extra.codigo)}
                       onChange={e=>alternarOpcional(plano.codigo,extra.codigo,e.target.checked)}/>
                     <span>{extra.nome}</span><b>+ {moeda(extra.valor_centavos)}/mês</b>
                   </label>
                 )}
-                {!catalogoExtras.some(extra=>extra.plano===plano.codigo&&extra.ativo)&&<p>Nenhum opcional cadastrado para este plano.</p>}
+                {!extrasCotacao.some(extra=>extra.plano===plano.codigo&&extra.ativo)&&<p>Nenhum opcional cadastrado para este plano.</p>}
               </div>)}
             </div>
           </div>
           <div className={styles.actions}>
-            <button type="button" className={styles.secondary} disabled={ocupado||!podeGerenciar}
+            <button type="button" className={styles.secondary} disabled={ocupado||!podeGerenciar||!categoriaCotacao||!referenciaFipe}
               onClick={()=>void enviar("simular",dadosCotacao())}><Calculator size={17}/> Simular todos os planos</button>
             <button type="button" className={styles.primary} disabled={ocupado||!podeGerenciar||!calculos}
               onClick={()=>void enviar("salvar",dadosCotacao())}><Save size={17}/> Salvar cotação</button>
@@ -382,6 +406,7 @@ export default function CotacoesVeicularesPage() {
         <PlanosCotacao planos={planos} arquivos={arquivos} categoria={categoria}
           onCategoria={setCategoria} faixas={faixas} regras={regras} opcionais={catalogoExtras}
           podeConfigurar={podeConfigurar} onUpdated={atualizarTudo}/>
+        <ClassificacoesFipe podeConfigurar={podeConfigurar}/>
         {status.pendencias.length>0&&<div className={styles.completionStatus}>
           <strong>O que falta para habilitar a cotação automática</strong>
           <ul>{status.pendencias.slice(0,12).map((p,i)=><li key={i}>{p}</li>)}</ul>

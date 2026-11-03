@@ -69,14 +69,11 @@ export async function statusConfiguracaoCotacao(empresaId:string):Promise<Status
  const categorias=[...new Set(faixas.map(f=>f.categoria))]
   .filter((cat):cat is CategoriaCotacao=>Object.hasOwn(CATEGORIAS_COTACAO,cat));
  if(!planos.length)pendencias.push("Crie seu primeiro plano na aba Planos.");
- const hoje=new Date().toISOString().slice(0,10);
  for(const plano of planos){
    const meta=arquivos.find(a=>a.plano===plano.codigo);
    const precos=faixas.filter(f=>f.plano===plano.codigo);
    if(!precos.length||!meta?.arquivo_precos_nome)
      pendencias.push(plano.nome+": importe a tabela de preços.");
-   if(!meta?.referencia?.trim()||!meta.vigencia_ate||meta.vigencia_ate<hoje)
-     pendencias.push(plano.nome+": informe referência e validade vigente.");
    if(precos.some(f=>Number(f.valor_centavos)<=0||
      Number(f.fipe_max_centavos)<=Number(f.fipe_min_centavos)||!f.codigo_produto||
      !Object.hasOwn(CATEGORIAS_COTACAO,f.categoria)))

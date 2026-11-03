@@ -990,3 +990,21 @@
  .planRegistrationPrompt>button{width:100%}
  .planWizard .planValidity>small{grid-column:auto}
 }
+
+/* Categoria comercial identificada automaticamente a partir da FIPE */
+.fipeCategoryStatus{margin-top:13px;padding:10px 13px;border:1px solid #d3e7e5;border-radius:10px;background:linear-gradient(110deg,#eef9f7,#fff);color:var(--crm-text,#284c5b);font-size:12px;line-height:1.5}
+.fipeCategoryStatus strong{font-weight:760;color:#297c7b}
+.classificationToolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 0;color:var(--crm-text-muted,#698293);font-size:12px}
+.classificationToolbar label{display:inline-flex;align-items:center;gap:8px}
+.classificationToolbar input{width:16px;height:16px;accent-color:#238a86}
+.classificationList{display:grid;gap:10px;min-width:0}
+.classificationItem{display:flex;align-items:center;gap:13px;min-width:0;padding:12px 14px;border:1px solid #dbe9e9;border-radius:12px;background:linear-gradient(125deg,#fff,#f8fbfc)}
+.classificationIcon{display:grid;place-items:center;width:39px;height:39px;flex:0 0 39px;border-radius:10px;background:#e7f6f3;color:#247d78}
+.classificationText{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.classificationText strong{font-size:13px;color:var(--crm-text,#274653);overflow-wrap:anywhere}
+.classificationText small{font-size:11px;color:var(--crm-text-muted,#7690a0)}
+.classificationSelector{display:flex;flex-direction:column;gap:6px;flex:0 1 220px;min-width:155px;font-size:11px;color:var(--crm-text-muted,#6c8390);font-weight:690}
+.classificationSelector select{width:100%;min-width:0;min-height:39px;padding:8px;border-radius:9px;border:1px solid #d7e5e8;background:var(--crm-surface,#fff);font:inherit;color:var(--crm-text,#274653)}
+.classificationItem>button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:39px;padding:8px 11px;border-radius:9px;font-size:12px;cursor:pointer}
+.classificationEmpty{display:flex;align-items:center;gap:9px;padding:17px;border:1px dashed #d6e9e9;border-radius:11px;background:#f8fcfb;color:#5d8584;font-size:12px}
+@media(max-width:720px){.classificationItem{flex-wrap:wrap;padding:12px}.classificationText{flex:1 1 calc(100% - 60px)}.classificationSelector{flex:1 1 180px}.classificationItem>button{min-width:78px}}

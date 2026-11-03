@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO, ENERGIAS_VEICULO, type UsoVeiculo, type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
-import { encontrarVeiculoFipe, tipoFipeDaCategoria } from "@/lib/cotacoes-veiculares/fipe";
-import { categoriaValida, salvarCotacaoPlanos, type CategoriaCotacao } from "@/lib/cotacoes-veiculares/servico";
+import { encontrarVeiculoFipe,type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
+import {classificarVeiculoFipe} from "@/lib/cotacoes-veiculares/classificacao";
+import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
 import { carregarNichoEmpresa } from "./nicho-empresa";
@@ -351,7 +352,7 @@ export async function preconsultarNegocio(params: {
 
   if (sinalCotacao) {
     resultados.push({ ferramenta: "gerar_cotacao_veicular", dados: [] });
-    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique categoria comercial, marca, versão exata, ano, finalidade de uso, motorização e opcionais. Cotação gera todos os planos cadastrados juntos. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
+    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique marca, versão exata, ano, finalidade de uso, motorização e opcionais. A categoria comercial é interna e calculada com a FIPE. Cotação gera todos os planos cadastrados juntos. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
   }
 
   const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
@@ -378,10 +379,6 @@ export async function executarFerramentaNegocio(params: {
 }) {
   if (params.tipo === "gerar_cotacao_veicular") {
     const args = params.argumentos || {};
-    if (!categoriaValida(args.categoria)) {
-      return {ok:false,error:"Informe a categoria de proteção do veículo."};
-    }
-    let categoria = args.categoria as CategoriaCotacao;
     const marca = textoCurto(args.marca,90);
     const modelo = textoCurto(args.modelo,150);
     const ano = textoCurto(args.ano,30);
@@ -391,9 +388,25 @@ export async function executarFerramentaNegocio(params: {
     const energia=String(args.energia||"") as EnergiaVeiculo;
     if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
       return {ok:false,error:"Confirme a finalidade de uso e a motorização antes de cotar."};
-    const fipe = await encontrarVeiculoFipe({
-      tipo:tipoFipeDaCategoria(categoria),marca,modelo,ano,
+    // Busca o veículo nos grupos FIPE, sem pedir categoria comercial ao cliente.
+    const tipos:TipoFipe[]=["cars","motorcycles","trucks"];
+    const buscas=await Promise.allSettled(tipos.map(async tipo=>({
+      tipo,fipe:await encontrarVeiculoFipe({tipo,marca,modelo,ano}),
+    })));
+    const encontrados=buscas.filter((r):r is PromiseFulfilledResult<{
+      tipo:TipoFipe;fipe:Awaited<ReturnType<typeof encontrarVeiculoFipe>>;
+    }>=>r.status==="fulfilled").map(r=>r.value);
+    if(!encontrados.length)return {ok:false,error:
+      "Não encontrei uma versão FIPE única. Confirme marca, versão exata e ano/combustível."};
+    if(encontrados.length!==1)return {ok:false,error:
+      "Há versões com este nome em mais de um grupo FIPE. Confirme se é automóvel, moto ou caminhão."};
+    const {tipo,fipe}=encontrados[0];
+    const classificacao=await classificarVeiculoFipe({
+      empresaId:params.empresaId,tipo,codigoFipe:fipe.codeFipe,modelo:fipe.model,uso,
     });
+    if(!classificacao.categoria)return {ok:false,error:
+      "Este veículo precisa de classificação comercial interna. Encaminhe à equipe para configurá-lo na aba Planos."};
+    const categoria=classificacao.categoria;
     // A classificação especial é feita dentro do cálculo, individualmente por plano.
     const opcionaisPorPlano:Record<string,string[]>={};
     const extras=Array.isArray(args.opcionais_por_plano)?args.opcionais_por_plano:[];
@@ -517,12 +530,11 @@ export function definicoesFerramentasNegocio(
   if (ferramentas.has("gerar_cotacao_veicular")) {
     defs.push({
       type:"function",name:"gerar_cotacao_veicular",
-      description:"Cota TODOS os planos ativos cadastrados pela empresa (não presuma nomes Premium/Completo). Antes colete categoria, marca, modelo, ano FIPE, uso e energia. Os opcionais devem ser consultados na empresa; use lista vazia se o cliente não pediu. Jamais invente valores.",
+      description:"Cota TODOS os planos ativos cadastrados pela empresa (não presuma nomes Premium/Completo). Antes colete marca, modelo, ano FIPE, uso e energia. A classificação comercial vem da FIPE e do catálogo interno. Os opcionais devem ser consultados na empresa; use lista vazia se o cliente não pediu. Jamais invente valores.",
       strict:true,
       parameters:{
         type:"object",
         properties:{
-          categoria:{type:"string",enum:["motocicleta","auto_leves","app_taxi","especiais","van_utilitario","caminhao_leve","caminhao_pesado","agregado"]},
           marca:{type:"string",maxLength:90},
           modelo:{type:"string",maxLength:150},
           ano:{type:"string",maxLength:30},
@@ -541,7 +553,7 @@ export function definicoesFerramentasNegocio(
             },maxItems:30,
           },
         },
-        required:["categoria","marca","modelo","ano","uso","energia","opcionais_por_plano"],
+        required:["marca","modelo","ano","uso","energia","opcionais_por_plano"],
         additionalProperties:false,
       },
     });
