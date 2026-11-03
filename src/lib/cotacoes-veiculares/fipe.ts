@@ -62,7 +62,7 @@ export async function encontrarVeiculoFipe(params: {
   const anos = await listarAnosFipe(params.tipo, marca.code, modelo.code);
   const ano = unico(anos, params.ano);
   const detalhe = await detalharVeiculoFipe(params.tipo, marca.code, modelo.code, ano.code);
-  return { ...detalhe, valorCentavos: precoFipeCentavos(detalhe.price) };
+  return { ...detalhe, anoCodigo:ano.code, valorCentavos: precoFipeCentavos(detalhe.price) };
 }
 
 export function tipoFipeDaCategoria(categoria: string): TipoFipe {

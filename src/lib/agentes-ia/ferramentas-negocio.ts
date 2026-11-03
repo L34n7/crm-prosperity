@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO, ENERGIAS_VEICULO, type UsoVeiculo, type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { encontrarVeiculoFipe,type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
-import {classificarVeiculoFipe} from "@/lib/cotacoes-veiculares/classificacao";
+import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
@@ -401,11 +401,11 @@ export async function executarFerramentaNegocio(params: {
     if(encontrados.length!==1)return {ok:false,error:
       "Há versões com este nome em mais de um grupo FIPE. Confirme se é automóvel, moto ou caminhão."};
     const {tipo,fipe}=encontrados[0];
-    const classificacao=await classificarVeiculoFipe({
-      empresaId:params.empresaId,tipo,codigoFipe:fipe.codeFipe,modelo:fipe.model,uso,
+    const classificacao=await registrarConsultaFipe({
+      empresaId:params.empresaId,tipo,anoCodigo:fipe.anoCodigo,veiculo:fipe,uso,
     });
     if(!classificacao.categoria)return {ok:false,error:
-      "Este veículo precisa de classificação comercial interna. Encaminhe à equipe para configurá-lo na aba Planos."};
+      "Este veículo precisa de classificação comercial interna. Encaminhe à equipe para configurá-lo diretamente no banco de dados."};
     const categoria=classificacao.categoria;
     // A classificação especial é feita dentro do cálculo, individualmente por plano.
     const opcionaisPorPlano:Record<string,string[]>={};

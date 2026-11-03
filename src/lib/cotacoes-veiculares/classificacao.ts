@@ -1,7 +1,7 @@
 import "server-only";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { CATEGORIAS_COTACAO,type CategoriaCotacao } from "./catalogo";
-import type { TipoFipe } from "./fipe";
+import { precoFipeCentavos,type TipoFipe,type DetalheFipe } from "./fipe";
 import type { UsoVeiculo } from "./comercial";
 
 export type ClassificacaoFipe={
@@ -47,4 +47,26 @@ export async function classificarVeiculoFipe(params:{
   const categoria=base==="auto_leves"&&(params.uso==="aplicativo"||params.uso==="taxi")
     ?"app_taxi":base;
   return {categoria,categoria_base:base,origem,pendente:!categoria};
+}
+
+/** Persiste somente versões FIPE efetivamente consultadas; os preços têm referência mensal. */
+export async function registrarConsultaFipe(params:{
+ empresaId:string;tipo:TipoFipe;anoCodigo:string;veiculo:DetalheFipe;uso:UsoVeiculo;
+}):Promise<ClassificacaoFipe>{
+ const {veiculo,tipo,empresaId,anoCodigo,uso}=params;
+ const classificacao=await classificarVeiculoFipe({
+  empresaId,tipo,codigoFipe:veiculo.codeFipe,modelo:veiculo.model,uso,
+ });
+ const {error}=await admin.from("cotacao_veicular_catalogo_fipe").upsert({
+  empresa_id:empresaId,tipo_fipe:tipo,codigo_fipe:veiculo.codeFipe,
+  codigo_ano_fipe:anoCodigo,marca:veiculo.brand.slice(0,160),
+  modelo:veiculo.model.slice(0,240),ano_modelo:veiculo.modelYear,
+  combustivel:veiculo.fuel.slice(0,80),
+  valor_fipe_centavos:precoFipeCentavos(veiculo.price),
+  referencia_fipe:veiculo.referenceMonth.slice(0,100),
+  categoria:classificacao.categoria_base,
+  consultado_em:new Date().toISOString(),
+ },{onConflict:"empresa_id,tipo_fipe,codigo_fipe,codigo_ano_fipe"});
+ if(error)throw new Error("Falha ao atualizar catálogo FIPE: "+error.message);
+ return classificacao;
 }

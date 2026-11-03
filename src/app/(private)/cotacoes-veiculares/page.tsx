@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck, Calculator, CarFront, CheckCircle2, CircleAlert, ClipboardList,
-  Copy, Loader2, Save, Settings2, ShieldCheck,
+  Copy, Loader2, Save, Settings2, ShieldCheck, X, FileText,
 } from "lucide-react";
 import Header from "@/components/Header";
 import {
@@ -12,7 +12,6 @@ import {
 } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO, USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo, type EnergiaVeiculo, type RegraComercialPlano, type OpcionalComercial } from "@/lib/cotacoes-veiculares/comercial";
 import PlanosCotacao, {type ArquivoPlano} from "./PlanosCotacao";
-import ClassificacoesFipe from "./ClassificacoesFipe";
 import styles from "./page.module.css";
 
 type Faixa = {
@@ -25,13 +24,21 @@ type Calculo = {
   assistencia_km_total:number; assistencias_ano:number; terceiros_limite_centavos:number;
   participacao_percentual:number; carro_reserva_incluso_dias:number;
   coberturas:string[]; observacoes:string;
+  categoria:CategoriaCotacao;
   opcionais:Array<{codigo:string;nome:string;centavos:number}>;
+  opcionais_disponiveis?:Array<{codigo:string;nome:string;centavos:number;grupo_exclusivo:string}>;
 };
 type Calculos = {planos:Calculo[]};
 type Cotacao = {
   id:string; grupo_id:string|null; nome_contato:string|null; veiculo:string;
   categoria:string; plano:PlanoCotacao; plano_nome:string|null;status:string; origem:string;
   total_centavos:number; created_at:string; tabela_validada:boolean;
+};
+type CotacaoDetalhe=Cotacao&{
+ valor_fipe_centavos:number;referencia_fipe:string|null;ano_modelo:number|null;
+ mensalidade_base_centavos:number;cota_participacao_centavos:number;codigo_produto:string;
+ opcionais_json:Array<{codigo:string;nome:string;centavos:number}>;
+ regras_snapshot:Calculo|null;
 };
 type Status = {pronta:boolean;pendencias:string[];categorias:CategoriaCotacao[];faixas:number;regras:number};
 type RegraBanco=RegraComercialPlano;
@@ -60,7 +67,6 @@ export default function CotacoesVeicularesPage() {
   const [categoriaCotacao,setCategoriaCotacao]=useState<CategoriaCotacao|null>(null);
   const [tipoFipe,setTipoFipe]=useState<"cars"|"motorcycles"|"trucks">("cars");
   const [codigoMarcaFipe,setCodigoMarcaFipe]=useState("");
-  const [extrasCotacao,setExtrasCotacao]=useState<OpcionalBanco[]>([]);
   const [nomeContato,setNomeContato]=useState("");
   const [uso,setUso]=useState<UsoVeiculo>("particular");
   const [energia,setEnergia]=useState<EnergiaVeiculo|null>(null);
@@ -82,6 +88,12 @@ export default function CotacoesVeicularesPage() {
   const [podeConfigurar,setPodeConfigurar]=useState(false);
   const [calculos,setCalculos]=useState<Calculos|null>(null);
   const [cotacaoSalva,setCotacaoSalva]=useState<string|null>(null);
+  const [idsSalvos,setIdsSalvos]=useState<Record<string,string>>({});
+  const [salvandoOpcional,setSalvandoOpcional]=useState<string|null>(null);
+  const [historicoAberto,setHistoricoAberto]=useState<string|null>(null);
+  const [detalhesHistorico,setDetalhesHistorico]=useState<CotacaoDetalhe[]>([]);
+  const [carregandoDetalhes,setCarregandoDetalhes]=useState(false);
+  const [erroDetalhes,setErroDetalhes]=useState("");
   const [erro,setErro]=useState("");
   const [sucesso,setSucesso]=useState("");
   const [carregando,setCarregando]=useState(true);
@@ -117,7 +129,7 @@ export default function CotacoesVeicularesPage() {
   useEffect(()=>{void carregarComercial().catch(e=>setErro(e instanceof Error?e.message:"Erro ao carregar regras."));},[carregarComercial]);
   async function atualizarTudo(){await Promise.all([atualizar(),carregarComercial()]);}
   useEffect(()=>{void atualizar();},[atualizar]);
-  useEffect(()=>{setCalculos(null);setCotacaoSalva(null);},[categoriaCotacao,valorFipe,opcionaisPorPlano,uso,energia]);
+  useEffect(()=>{setCalculos(null);setCotacaoSalva(null);setIdsSalvos({});},[categoriaCotacao,valorFipe,uso,energia]);
   useEffect(()=>{setOpcionaisPorPlano({});},[categoriaCotacao]);
 
   const consultarApiFipe=useCallback(async(etapa:string,params:Record<string,string>={})=>{
@@ -140,14 +152,11 @@ export default function CotacoesVeicularesPage() {
     return ()=>{ativo=false;};
   },[]);
   useEffect(()=>{
-    if(!categoriaCotacao){setExtrasCotacao([]);return;}
-    let ativo=true;
-    void fetch("/api/cotacoes-veiculares/comercial?categoria="+categoriaCotacao,{cache:"no-store"})
-      .then(async r=>{const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||"Falha nas opções comerciais.");return j;})
-      .then(j=>{if(ativo)setExtrasCotacao(j.opcionais||[]);})
-      .catch(e=>{if(ativo)setErro(e instanceof Error?e.message:"Falha nas opções comerciais.");});
-    return ()=>{ativo=false;};
-  },[categoriaCotacao]);
+    if(!historicoAberto)return;
+    const aoTeclar=(event:KeyboardEvent)=>{if(event.key==="Escape")setHistoricoAberto(null);};
+    document.addEventListener("keydown",aoTeclar);
+    return ()=>document.removeEventListener("keydown",aoTeclar);
+  },[historicoAberto]);
 
   async function consultarFipe(etapa:"modelos"|"anos"|"preco",params:Record<string,string>){
     const requisicao=++requisicaoFipe.current;
@@ -167,7 +176,7 @@ export default function CotacoesVeicularesPage() {
         setReferenciaFipe(d.referenceMonth+" | "+d.codeFipe);
         setCategoriaCotacao(json.categoria_interna||null);
         if(json.classificacao_pendente)
-          setSucesso("Classificação pendente: configure o veículo em Planos → Classificações FIPE.");
+          setSucesso("Veículo sem classificação comercial definida. Ajuste a categoria diretamente no banco FIPE.");
         else if(!motorizacaoDaFipe(d.fuel,d.model))
           setSucesso("A motorização não pôde ser identificada pela FIPE. Confira os dados antes de cotar.");
         else if(json.especial===true)
@@ -184,13 +193,14 @@ export default function CotacoesVeicularesPage() {
     try{
       const res=await fetch("/api/cotacoes-veiculares",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({acao,...dados}),
+        body:JSON.stringify({acao,...dados,...(acao==="simular"?{opcionais_por_plano:{}}:{})}),
       });
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível concluir.");
-      if(acao==="simular"){setCalculos(json.calculos);setCotacaoSalva(null);}
+      if(acao==="simular"){setCalculos(json.calculos);setCotacaoSalva(null);setIdsSalvos({});setOpcionaisPorPlano({});}
       if(acao==="salvar"){
         setCalculos(json.calculos);setCotacaoSalva(json.grupo_id);
+        setIdsSalvos(Object.fromEntries((json.cotacoes||[]).map((c:{id:string;plano:string})=>[c.plano,c.id])));
         setSucesso(json.cotacoes?.[0]?.status==="rascunho"
           ?"Proposta salva em rascunho até a validação comercial."
           :"Cotação de todos os planos registrada no histórico.");
@@ -208,15 +218,74 @@ export default function CotacoesVeicularesPage() {
       opcionais_por_plano:opcionaisPorPlano,
     };
   }
-  function alternarOpcional(plano:string,codigo:string,ativado:boolean){
-    setOpcionaisPorPlano(atual=>{
-      const selecionados=(atual[plano]||[]).filter(v=>v!==codigo);
-      const extra=extrasCotacao.find(v=>v.plano===plano&&v.codigo===codigo);
-      const semExclusivos=ativado&&extra?.grupo_exclusivo
-        ?selecionados.filter(v=>extrasCotacao.find(e=>e.plano===plano&&e.codigo===v)?.grupo_exclusivo!==extra.grupo_exclusivo)
-        :selecionados;
-      return {...atual,[plano]:ativado?[...semExclusivos,codigo]:semExclusivos};
+
+  function calcularComOpcional(c:Calculo,codigo:string,ativar:boolean):Calculo{
+    const catalogo=c.opcionais_disponiveis||[];
+    const alvo=catalogo.find(e=>e.codigo===codigo);
+    if(!alvo)throw new Error("Opcional não encontrado na cotação.");
+    const restantes=c.opcionais.filter(e=>e.codigo!==codigo);
+    const semIncompativeis=ativar&&alvo.grupo_exclusivo
+      ?restantes.filter(e=>catalogo.find(v=>v.codigo===e.codigo)?.grupo_exclusivo!==alvo.grupo_exclusivo)
+      :restantes;
+    const escolhidos=ativar?[...semIncompativeis,{codigo:alvo.codigo,nome:alvo.nome,centavos:alvo.centavos}]:semIncompativeis;
+    return {...c,opcionais:escolhidos,
+      total_centavos:c.mensalidade_base_centavos+escolhidos.reduce((total,e)=>total+e.centavos,0)};
+  }
+  async function atualizarOpcionalSalvo(id:string,codigos:string[]):Promise<CotacaoDetalhe>{
+    const res=await fetch("/api/cotacoes-veiculares",{
+      method:"PATCH",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({cotacao_id:id,opcionais:codigos}),
     });
+    const json=await res.json();
+    if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível atualizar os opcionais.");
+    return json.cotacao as CotacaoDetalhe;
+  }
+  async function alternarOpcionalResultado(plano:string,codigo:string,ativar:boolean){
+    const calculo=calculos?.planos.find(c=>c.plano===plano);
+    if(!calculo||salvandoOpcional)return;
+    try{
+      const atualizado=calcularComOpcional(calculo,codigo,ativar);
+      if(cotacaoSalva){
+        const id=idsSalvos[plano];
+        if(!id)throw new Error("Cotação salva não identificada.");
+        setSalvandoOpcional("resultado:"+plano);
+        const registro=await atualizarOpcionalSalvo(id,atualizado.opcionais.map(o=>o.codigo));
+        atualizado.opcionais=registro.opcionais_json;
+        atualizado.total_centavos=registro.total_centavos;
+        await atualizar();
+      }
+      setCalculos(prev=>prev?{planos:prev.planos.map(c=>c.plano===plano?atualizado:c)}:prev);
+      setOpcionaisPorPlano(prev=>({...prev,[plano]:atualizado.opcionais.map(o=>o.codigo)}));
+      setErro("");
+    }catch(e){setErro(e instanceof Error?e.message:"Não foi possível alterar o opcional.");}
+    finally{setSalvandoOpcional(null);}
+  }
+  async function abrirDetalhesHistorico(id:string){
+    setHistoricoAberto(id);setDetalhesHistorico([]);setCarregandoDetalhes(true);setErroDetalhes("");
+    try{
+      const res=await fetch("/api/cotacoes-veiculares?grupo_id="+encodeURIComponent(id),{cache:"no-store"});
+      const json=await res.json();
+      if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível consultar a proposta.");
+      setDetalhesHistorico(json.cotacoes||[]);
+    }catch(e){setErroDetalhes(e instanceof Error?e.message:"Falha ao abrir a proposta.");}
+    finally{setCarregandoDetalhes(false);}
+  }
+  async function alternarOpcionalHistorico(item:CotacaoDetalhe,codigo:string,ativar:boolean){
+    if(!item.regras_snapshot||salvandoOpcional)return;
+    try{
+      const novo=calcularComOpcional({...item.regras_snapshot,
+        opcionais:item.opcionais_json||[],total_centavos:item.total_centavos},codigo,ativar);
+      setSalvandoOpcional("historico:"+item.id);
+      const atualizado=await atualizarOpcionalSalvo(item.id,novo.opcionais.map(o=>o.codigo));
+      setDetalhesHistorico(prev=>prev.map(v=>v.id===atualizado.id?atualizado:v));
+      setCotacoes(prev=>prev.map(v=>v.id===atualizado.id?{...v,total_centavos:atualizado.total_centavos}:v));
+      if(idsSalvos[item.plano]===item.id){
+        setCalculos(prev=>prev?{planos:prev.planos.map(c=>c.plano===item.plano?{
+          ...c,opcionais:atualizado.opcionais_json,total_centavos:atualizado.total_centavos}:c)}:prev);
+      }
+      setErroDetalhes("");
+    }catch(e){setErroDetalhes(e instanceof Error?e.message:"Não foi possível atualizar a proposta.");}
+    finally{setSalvandoOpcional(null);}
   }
   async function copiarResumo(){
     if(!calculos)return;
@@ -235,7 +304,8 @@ export default function CotacoesVeicularesPage() {
         "Assistência: "+c.assistencia_km_total+" km totais",
         ...c.coberturas.map(item=>"Cobertura: "+item),
         ...(c.observacoes?["Condições: "+c.observacoes]:[]),
-        ...c.opcionais.map(item=>"Opcional: "+item.nome),
+        ...(c.opcionais_disponiveis||[]).map(item=>
+          "Opcional "+(c.opcionais.some(v=>v.codigo===item.codigo)?"incluído":"disponível")+": "+item.nome+" (+ "+moeda(item.centavos)+"/mês)"),
       ]),
       "", "Tabela: "+calculos.planos[0]?.referencia,
       "Proposta informativa, sujeita às condições comerciais da associação.",
@@ -373,28 +443,11 @@ export default function CotacoesVeicularesPage() {
             </label>
           </div>
 
-          <div className={styles.options}>
-            <h3>Opcionais por plano</h3>
-            <p className={styles.smallNote}>Os opcionais disponíveis são os cadastrados pela sua empresa. Todos os planos serão calculados.</p>
-            <div className={styles.optionsGrid}>
-              {planos.filter(p=>p.ativo).map(plano=><div key={plano.codigo} className={styles.optionsGroup}>
-                <strong>{plano.nome}</strong>
-                {extrasCotacao.filter(extra=>extra.plano===plano.codigo && extra.ativo).map(extra=>
-                  <label key={extra.codigo} className={styles.option}>
-                    <input type="checkbox" checked={(opcionaisPorPlano[plano.codigo]||[]).includes(extra.codigo)}
-                      onChange={e=>alternarOpcional(plano.codigo,extra.codigo,e.target.checked)}/>
-                    <span>{extra.nome}</span><b>+ {moeda(extra.valor_centavos)}/mês</b>
-                  </label>
-                )}
-                {!extrasCotacao.some(extra=>extra.plano===plano.codigo&&extra.ativo)&&<p>Nenhum opcional cadastrado para este plano.</p>}
-              </div>)}
-            </div>
-          </div>
           <div className={styles.actions}>
             <button type="button" className={styles.secondary} disabled={ocupado||buscandoFipe||!podeGerenciar||!categoriaCotacao||!energia||!referenciaFipe}
               onClick={()=>void enviar("simular",dadosCotacao())}><Calculator size={17}/> Simular todos os planos</button>
-            <button type="button" className={styles.primary} disabled={ocupado||!podeGerenciar||!calculos}
-              onClick={()=>void enviar("salvar",dadosCotacao())}><Save size={17}/> Salvar cotação</button>
+            <button type="button" className={styles.primary} disabled={ocupado||!podeGerenciar||!calculos||Boolean(cotacaoSalva)}
+              onClick={()=>void enviar("salvar",dadosCotacao())}><Save size={17}/> {cotacaoSalva?"Cotação salva":"Salvar cotação"}</button>
           </div>
         </section>
         <aside className={styles.panel}>
@@ -412,7 +465,6 @@ export default function CotacoesVeicularesPage() {
                   <strong className={styles.planPrice}>{moeda(c.total_centavos)}<small> / mês</small></strong>
                   <dl className={styles.detail}>
                     <div><dt>Mensalidade base</dt><dd>{moeda(c.mensalidade_base_centavos)}</dd></div>
-                    {c.opcionais.map(item=><div key={item.codigo}><dt>{item.nome}</dt><dd>+ {moeda(item.centavos)}</dd></div>)}
                     <div><dt>Cota de participação</dt><dd>{moeda(c.cota_participacao_centavos)}</dd></div>
                     <div><dt>Terceiros</dt><dd>{c.terceiros_limite_centavos?moeda(c.terceiros_limite_centavos):"Não disponível"}</dd></div>
                     <div><dt>Assistência 24h</dt><dd>{c.assistencia_km_total} km · {c.assistencias_ano} acionamentos/ano</dd></div>
@@ -421,6 +473,30 @@ export default function CotacoesVeicularesPage() {
                     <div><dt>Coberturas</dt><dd>{c.coberturas.join(", ")}</dd></div>
                     {c.observacoes&&<div><dt>Condições</dt><dd>{c.observacoes}</dd></div>}
                   </dl>
+                  <div className={styles.quoteExtras}>
+                    <div className={styles.quoteExtrasHeader}>
+                      <strong>Opcionais deste plano</strong>
+                      <small>Ative ou desative para atualizar a mensalidade</small>
+                    </div>
+                    {(c.opcionais_disponiveis||[]).length?
+                      c.opcionais_disponiveis!.map(extra=>{
+                        const ligado=c.opcionais.some(item=>item.codigo===extra.codigo);
+                        return <div key={extra.codigo} className={styles.quoteExtraRow}>
+                          <div><strong>{extra.nome}</strong><span>+ {moeda(extra.centavos)}/mês</span></div>
+                          <button type="button" role="switch" aria-checked={ligado}
+                            aria-label={(ligado?"Remover ":"Incluir ")+extra.nome+" no plano "+c.plano_nome}
+                            className={styles.quoteSwitch+" "+(ligado?styles.quoteSwitchOn:"")}
+                            disabled={!podeGerenciar||Boolean(salvandoOpcional)}
+                            onClick={()=>void alternarOpcionalResultado(c.plano,extra.codigo,!ligado)}>
+                            <span/>
+                          </button>
+                        </div>;
+                      })
+                    :<p className={styles.smallNote}>Não há opcionais disponíveis para este plano.</p>}
+                    <div className={styles.quoteExtrasTotal}>
+                      <span>Total mensal com opcionais</span><strong>{moeda(c.total_centavos)}</strong>
+                    </div>
+                  </div>
                 </div>;
               })}
             </div>
@@ -440,7 +516,6 @@ export default function CotacoesVeicularesPage() {
         <PlanosCotacao planos={planos} arquivos={arquivos} categoria={categoria}
           onCategoria={setCategoria} faixas={faixas} regras={regras} opcionais={catalogoExtras}
           podeConfigurar={podeConfigurar} onUpdated={atualizarTudo}/>
-        <ClassificacoesFipe podeConfigurar={podeConfigurar}/>
         {status.pendencias.length>0&&<div className={styles.completionStatus}>
           <strong>O que falta para habilitar a cotação automática</strong>
           <ul>{status.pendencias.slice(0,12).map((p,i)=><li key={i}>{p}</li>)}</ul>
@@ -451,7 +526,8 @@ export default function CotacoesVeicularesPage() {
           <p>Os planos da mesma proposta são exibidos juntos, com data, origem e situação.</p></div>
         {historico.length===0?<div className={styles.empty}><ClipboardList size={32}/>
           <p>Nenhuma cotação registrada ainda.</p></div>
-          :<div className={styles.historyList}>{historico.map(grupo=><article className={styles.historyCard} key={grupo.id}>
+          :<div className={styles.historyList}>{historico.map(grupo=><button type="button" className={styles.historyCard+" "+styles.historyCardAction} key={grupo.id}
+            onClick={()=>void abrirDetalhesHistorico(grupo.id)} aria-label={"Ver detalhes da cotação de "+(grupo.principal.nome_contato||grupo.principal.veiculo)}>
             <div className={styles.historyTop}>
               <div><strong>{grupo.principal.nome_contato||"Interessado não informado"}</strong>
                 <small>{grupo.principal.veiculo} · {dataHora(grupo.principal.created_at)}</small></div>
@@ -462,8 +538,92 @@ export default function CotacoesVeicularesPage() {
               <div key={item.id}><span>{item.plano_nome||planos.find(p=>p.codigo===item.plano)?.nome||item.plano}</span>
               <strong>{moeda(item.total_centavos)}/mês</strong></div>)}</div>
             <small className={styles.historySource}>{grupo.principal.origem==="agente_ia"?"Agente IA":"Cotação manual"}</small>
-          </article>)}</div>}
+            <span className={styles.historyView}>Ver detalhes <FileText size={15}/></span>
+          </button>)}</div>}
       </section>}
+
+      {historicoAberto&&<div className={styles.quoteModalBackdrop}
+        onMouseDown={e=>{if(e.target===e.currentTarget)setHistoricoAberto(null);}}>
+        <section role="dialog" aria-modal="true" aria-labelledby="detalhes-cotacao-titulo"
+          className={styles.quoteModal}>
+          <header className={styles.quoteModalHeader}>
+            <div><span className={styles.vehicleSummaryEyebrow}>PROPOSTA DE PROTEÇÃO</span>
+              <h2 id="detalhes-cotacao-titulo">Detalhes da cotação</h2></div>
+            <button type="button" className={styles.quoteModalClose}
+              aria-label="Fechar detalhes" onClick={()=>setHistoricoAberto(null)}><X size={21}/></button>
+          </header>
+          <div className={styles.quoteModalBody}>
+            {erroDetalhes&&<div className={styles.error} role="alert">{erroDetalhes}</div>}
+            {carregandoDetalhes?<p className={styles.loading}><Loader2 size={18}/> Carregando detalhes...</p>
+              :detalhesHistorico.length>0&&<>
+                <div className={styles.quoteModalSummary}>
+                  <div><span>Interessado</span><strong>{detalhesHistorico[0].nome_contato||"Não informado"}</strong></div>
+                  <div><span>Veículo</span><strong>{detalhesHistorico[0].veiculo}</strong></div>
+                  <div><span>Ano</span><strong>{detalhesHistorico[0].ano_modelo||"—"}</strong></div>
+                  <div><span>Valor FIPE</span><strong>{moeda(detalhesHistorico[0].valor_fipe_centavos)}</strong></div>
+                  <div><span>Referência FIPE</span><strong>{detalhesHistorico[0].referencia_fipe||"Não informada"}</strong></div>
+                  <div><span>Data e origem</span><strong>{dataHora(detalhesHistorico[0].created_at)} · {detalhesHistorico[0].origem==="agente_ia"?"Agente IA":"Manual"}</strong></div>
+                </div>
+                <div className={styles.quoteModalPlans}>
+                  {detalhesHistorico.map(item=>{
+                    const snap=item.regras_snapshot;
+                    const selecionados=item.opcionais_json||[];
+                    const disponiveis=snap?.opcionais_disponiveis||[];
+                    return <article key={item.id} className={styles.quoteModalPlan}>
+                      <div className={styles.quoteModalPlanHead}>
+                        <div><span className={styles.vehicleSummaryEyebrow}>{item.status==="emitida"?"EMITIDA":"RASCUNHO"}</span>
+                          <h3>{item.plano_nome||item.plano}</h3></div>
+                        <strong>{moeda(item.total_centavos)}<small>/mês</small></strong>
+                      </div>
+                      <dl className={styles.detail}>
+                        <div><dt>Mensalidade base</dt><dd>{moeda(item.mensalidade_base_centavos)}</dd></div>
+                        <div><dt>Categoria</dt><dd>{CATEGORIAS_COTACAO[item.categoria as CategoriaCotacao]||item.categoria}</dd></div>
+                        <div><dt>Código do produto</dt><dd>{item.codigo_produto}</dd></div>
+                        <div><dt>Cota de participação</dt><dd>{moeda(item.cota_participacao_centavos)}</dd></div>
+                        {snap&&<>
+                          <div><dt>Participação</dt><dd>{snap.participacao_percentual}%</dd></div>
+                          <div><dt>Terceiros</dt><dd>{snap.terceiros_limite_centavos?moeda(snap.terceiros_limite_centavos):"Não disponível"}</dd></div>
+                          <div><dt>Assistência 24h</dt><dd>{snap.assistencia_km_total} km · {snap.assistencias_ano} acionamentos/ano</dd></div>
+                          <div><dt>Carro reserva incluso</dt><dd>{snap.carro_reserva_incluso_dias? (snap.carro_reserva_incluso_dias+" dias"):"Não incluso"}</dd></div>
+                          <div><dt>Coberturas</dt><dd>{snap.coberturas?.join(", ")||"Não informado"}</dd></div>
+                          {snap.observacoes&&<div><dt>Condições</dt><dd>{snap.observacoes}</dd></div>}
+                        </>}
+                      </dl>
+                      <div className={styles.quoteExtras}>
+                        <div className={styles.quoteExtrasHeader}><strong>Opcionais do plano</strong>
+                          <small>Valores mensais adicionais</small></div>
+                        {disponiveis.length?
+                          disponiveis.map(extra=>{
+                            const ligado=selecionados.some(v=>v.codigo===extra.codigo);
+                            const editavel=item.origem==="manual"&&item.status!=="cancelada"&&podeGerenciar;
+                            return <div className={styles.quoteExtraRow} key={extra.codigo}>
+                              <div><strong>{extra.nome}</strong><span>+ {moeda(extra.centavos)}/mês</span></div>
+                              <button type="button" role="switch" aria-checked={ligado}
+                                aria-label={(ligado?"Remover ":"Incluir ")+extra.nome+" no plano "+(item.plano_nome||item.plano)}
+                                className={styles.quoteSwitch+" "+(ligado?styles.quoteSwitchOn:"")}
+                                disabled={!editavel||Boolean(salvandoOpcional)}
+                                onClick={()=>void alternarOpcionalHistorico(item,extra.codigo,!ligado)}>
+                                <span/>
+                              </button>
+                            </div>;
+                          })
+                          :selecionados.length?selecionados.map(extra=>
+                            <div className={styles.quoteExtraRow} key={extra.codigo}>
+                              <div><strong>{extra.nome}</strong><span>+ {moeda(extra.centavos)}/mês · incluído</span></div>
+                            </div>)
+                          :<p className={styles.smallNote}>Nenhum opcional incluído nesta cotação.</p>}
+                        <div className={styles.quoteExtrasTotal}><span>Total mensal deste plano</span>
+                          <strong>{moeda(item.total_centavos)}</strong></div>
+                      </div>
+                    </article>;
+                  })}
+                </div>
+              </>}
+          </div>
+          <footer className={styles.quoteModalFooter}><button type="button" className={styles.primary}
+            onClick={()=>setHistoricoAberto(null)}>Fechar</button></footer>
+        </section>
+      </div>}
       <footer className={styles.footer}><CheckCircle2 size={15}/> O cálculo é feito no servidor; a IA não inventa mensalidades nem confirma contratações.</footer>
     </main>
 

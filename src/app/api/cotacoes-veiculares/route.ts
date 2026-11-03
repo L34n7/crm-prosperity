@@ -6,7 +6,7 @@ import { listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } fr
 import { USOS_VEICULO,motorizacaoDaFipe,type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { CATEGORIAS_COTACAO,categoriaValida,configuracaoCotacao,consultarFaixas,calcularCotacaoPlanos,salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import {detalharVeiculoFipe,precoFipeCentavos,type TipoFipe} from "@/lib/cotacoes-veiculares/fipe";
-import {classificarVeiculoFipe} from "@/lib/cotacoes-veiculares/classificacao";
+import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 
 async function acesso(){
  const ctx=await getUsuarioContexto();
@@ -34,6 +34,23 @@ export async function GET(req:Request){
   const categoria=new URL(req.url).searchParams.get("categoria")||"auto_leves";
   if(!categoriaValida(categoria))throw new Error("Categoria inválida.");
   const admin=getSupabaseAdmin();
+  const grupoId=new URL(req.url).searchParams.get("grupo_id");
+  if(grupoId!==null){
+    if(!/^[0-9a-fA-F-]{36}$/.test(grupoId))return erro(new Error("Identificador inválido."));
+    const {data,error}=await admin.from("cotacao_veicular_cotacoes").select("*")
+      .eq("empresa_id",auth.empresaId!).eq("grupo_id",grupoId)
+      .order("created_at",{ascending:true}).limit(50);
+    if(error)throw error;
+    let itens=data||[];
+    if(!itens.length){
+      const {data:registro,error:err}=await admin.from("cotacao_veicular_cotacoes").select("*")
+        .eq("empresa_id",auth.empresaId!).eq("id",grupoId).maybeSingle();
+      if(err)throw err;
+      if(registro)itens=[registro];
+    }
+    if(!itens.length)return erro(new Error("Cotação não encontrada."),404);
+    return NextResponse.json({ok:true,cotacoes:itens});
+  }
   const [config,planos,faixas,arquivos,status,cot,especial]=await Promise.all([
     configuracaoCotacao(auth.empresaId!),listarPlanosEmpresa(auth.empresaId!),
     consultarFaixas(auth.empresaId!,categoria),listarArquivosPlano(auth.empresaId!),statusConfiguracaoCotacao(auth.empresaId!),
@@ -88,11 +105,11 @@ export async function POST(req:Request){
   if(!energia)throw new Error(
     "A FIPE não identificou a motorização deste veículo. Solicite uma conferência antes de cotar."
   );
-  const categoriaInterna=await classificarVeiculoFipe({
-    empresaId,tipo,codigoFipe:veiculoFipe.codeFipe,modelo:veiculoFipe.model,uso,
+  const categoriaInterna=await registrarConsultaFipe({
+    empresaId,tipo,anoCodigo:anoFipe,veiculo:veiculoFipe,uso,
   });
   if(!categoriaInterna.categoria)
-    throw new Error("Classificação FIPE pendente: informe a categoria deste veículo na aba Planos, em Classificações FIPE.");
+    throw new Error("Classificação FIPE pendente: informe a categoria deste veículo no cadastro interno de veículos FIPE.");
   const op=body.opcionais_por_plano;
   if(op!==undefined && (typeof op!=="object"||op===null||Array.isArray(op)))
     throw new Error("Opcionais inválidos.");
@@ -115,4 +132,50 @@ export async function POST(req:Request){
     referenciaFipe:(veiculoFipe.referenceMonth+" | "+veiculoFipe.codeFipe).slice(0,100)});
   return NextResponse.json({ok:true,...resultado});
  }catch(e){console.error("[COTACAO_POST]",e);return erro(e);}
+}
+
+export async function PATCH(req:Request){
+ try{
+  const auth=await acesso();if(auth.erro)return auth.erro;
+  if(!auth.podeGerenciar)return erro(new Error("Sem permissão para editar cotações."),403);
+  const body=await req.json() as Record<string,unknown>;
+  const id=String(body.cotacao_id||"");
+  const selecionados=body.opcionais;
+  if(!/^[0-9a-fA-F-]{36}$/.test(id)||!Array.isArray(selecionados)||
+     selecionados.length>60||selecionados.some(v=>typeof v!=="string"))
+    throw new Error("Seleção de opcionais inválida.");
+  const codigos=[...new Set(selecionados as string[])];
+  const admin=getSupabaseAdmin();
+  const {data:cotacao,error:erroConsulta}=await admin.from("cotacao_veicular_cotacoes")
+    .select("*").eq("empresa_id",auth.empresaId!).eq("id",id).maybeSingle();
+  if(erroConsulta)throw erroConsulta;
+  if(!cotacao)return erro(new Error("Cotação não encontrada."),404);
+  if(cotacao.origem!=="manual"||cotacao.status==="cancelada")
+    throw new Error("Essa cotação não permite alterações de opcionais.");
+  const snapshot=cotacao.regras_snapshot as Record<string,unknown>|null;
+  if(!snapshot||!Array.isArray(snapshot.opcionais_disponiveis))
+    throw new Error("Esta cotação antiga não tem catálogo de opcionais registrado. Gere uma nova cotação para editá-los.");
+  const disponiveis=snapshot.opcionais_disponiveis as Array<Record<string,unknown>>;
+  const escolhidos=codigos.map(codigo=>{
+    const item=disponiveis.find(o=>o.codigo===codigo);
+    if(!item||!Number.isSafeInteger(Number(item.centavos))||Number(item.centavos)<0)
+      throw new Error("Opcional não cadastrado no plano.");
+    return {codigo,nome:String(item.nome||"").slice(0,160),centavos:Number(item.centavos),
+      grupo_exclusivo:String(item.grupo_exclusivo||"")};
+  });
+  const grupos=escolhidos.map(o=>o.grupo_exclusivo).filter(Boolean);
+  if(new Set(grupos).size!==grupos.length)
+    throw new Error("Não é possível combinar opcionais do mesmo grupo, como dois prazos de carro reserva.");
+  const base=Number(cotacao.mensalidade_base_centavos);
+  const total=base+escolhidos.reduce((n,o)=>n+o.centavos,0);
+  if(!Number.isSafeInteger(total)||total<0||total>100000000)
+    throw new Error("Total de mensalidade inválido.");
+  const opcionais=escolhidos.map(({codigo,nome,centavos})=>({codigo,nome,centavos}));
+  const {data:atualizada,error:erroUpdate}=await admin.from("cotacao_veicular_cotacoes")
+    .update({opcionais_json:opcionais,total_centavos:total,
+      regras_snapshot:{...snapshot,opcionais,total_centavos:total}})
+    .eq("empresa_id",auth.empresaId!).eq("id",id).select("*").single();
+  if(erroUpdate)throw erroUpdate;
+  return NextResponse.json({ok:true,cotacao:atualizada});
+ }catch(e){return erro(e);}
 }

@@ -99,6 +99,10 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
       plano:plano.codigo,plano_nome:plano.nome,categoria:categoriaPlano,
       codigo_produto:faixa.codigo_produto,mensalidade_base_centavos:base,
       opcionais:extras.map(o=>({codigo:o.codigo,nome:o.nome,centavos:Number(o.valor_centavos)})),
+      opcionais_disponiveis:ativos.map(o=>({
+        codigo:o.codigo,nome:o.nome,centavos:Number(o.valor_centavos),
+        grupo_exclusivo:o.grupo_exclusivo||"",
+      })),
       total_centavos:base+extras.reduce((total,item)=>total+Number(item.valor_centavos),0),
       cota_participacao_centavos:Math.max(
         Math.round(p.valorFipeCentavos*Number(regra.participacao_percentual)/100),

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import { verificarEspecialEmpresa } from "@/lib/cotacoes-veiculares/servico";
-import { classificarVeiculoFipe } from "@/lib/cotacoes-veiculares/classificacao";
+import { registrarConsultaFipe } from "@/lib/cotacoes-veiculares/classificacao";
 import { USOS_VEICULO,type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import {
   listarMarcasFipe, listarModelosFipe, listarAnosFipe, detalharVeiculoFipe,
@@ -57,9 +57,9 @@ export async function GET(request: Request) {
     const veiculo = await detalharVeiculoFipe(tipo,marca,modelo,ano);
     const [especial,classificacao]=await Promise.all([
       verificarEspecialEmpresa(usuario.usuario.empresa_id,veiculo.model,veiculo.codeFipe),
-      classificarVeiculoFipe({
-        empresaId:usuario.usuario.empresa_id,tipo:tipo as TipoFipe,
-        codigoFipe:veiculo.codeFipe,modelo:veiculo.model,uso:uso as UsoVeiculo,
+      registrarConsultaFipe({
+        empresaId:usuario.usuario.empresa_id,tipo:tipo as TipoFipe,anoCodigo:ano,
+        veiculo,uso:uso as UsoVeiculo,
       }),
     ]);
     return NextResponse.json({ok:true,veiculo,especial,
