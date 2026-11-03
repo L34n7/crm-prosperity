@@ -21,7 +21,7 @@ export default function ClassificacoesFipe({podeConfigurar}:{
  const [carregando,setCarregando]=useState(true);
  const [salvando,setSalvando]=useState<string|null>(null);
  const [erro,setErro]=useState(""),[sucesso,setSucesso]=useState("");
- const [somentePendentes,setSomentePendentes]=useState(false);
+ const [somentePendentes,setSomentePendentes]=useState(true);
  const carregar=useCallback(async()=>{
   setCarregando(true);
   try{
@@ -57,18 +57,18 @@ export default function ClassificacoesFipe({podeConfigurar}:{
  return <section className={styles.panel}>
   <div className={styles.sectionHeading}>
    <h2>Classificações FIPE</h2>
-   <p>Os veículos são classificados automaticamente pela FIPE. Modelos ambíguos, como caminhões leves ou pesados, são enviados para conferência interna. Nenhuma categoria é solicitada na nova cotação.</p>
+   <p>Esta área é utilizada somente quando algum veículo precisa de revisão. Automóveis e motos comuns já recebem categoria automaticamente: não é necessário cadastrá-los novamente.</p>
   </div>
   <div className={styles.classificationToolbar}>
-   <label><input type="checkbox" checked={somentePendentes}
-     onChange={e=>setSomentePendentes(e.target.checked)}/> Mostrar apenas pendentes ({pendentes})</label>
-   <span>{registros.length} veículo(s) consultado(s)</span>
+   <span><strong>{pendentes}</strong> pendente(s) de classificação</span>
+   <label><input type="checkbox" checked={!somentePendentes}
+     onChange={e=>setSomentePendentes(!e.target.checked)}/> Exibir também veículos já classificados ({registros.length-pendentes})</label>
   </div>
   {erro&&<p className={styles.error} role="alert">{erro}</p>}
   {sucesso&&<p className={styles.success} role="status">{sucesso}</p>}
   {carregando?<p className={styles.smallNote}><Loader2 size={16}/> Carregando veículos...</p>
    :!itens.length?<div className={styles.classificationEmpty}><CheckCircle2 size={20}/>
-      {somentePendentes?"Nenhuma classificação pendente.":"Os veículos consultados na FIPE aparecerão aqui."}
+      {somentePendentes?"Nenhum veículo precisa de classificação manual.":"Ainda não há veículos consultados na FIPE."}
      </div>
    :<div className={styles.classificationList}>
      {itens.map(item=>{
@@ -89,13 +89,13 @@ export default function ClassificacoesFipe({podeConfigurar}:{
             <option key={cat} value={cat}>{CATEGORIAS_COTACAO[cat]}</option>)}
          </select>
        </label>
-       {podeConfigurar&&<button type="button" className={styles.secondary}
+       {podeConfigurar&&atual!==item.categoria&&<button type="button" className={styles.secondary}
          disabled={!atual||salvando!==null||atual===item.categoria}
          onClick={()=>void salvar(item)}>
          <Save size={15}/>{salvando===chave?"Salvando...":"Salvar"}</button>}
       </div>;
      })}
     </div>}
-  <p className={styles.smallNote}>As classificações personalizadas são exclusivas da empresa e aplicadas automaticamente às próximas cotações. A lista exibe os 300 registros mais recentes.</p>
+  <p className={styles.smallNote}>Se houver um caminhão ou outro modelo sem categoria definida, ele aparecerá aqui para revisão. A classificação é salva pelo código FIPE e reaproveitada nas próximas cotações.</p>
  </section>;
 }
