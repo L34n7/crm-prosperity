@@ -50,23 +50,47 @@ export async function classificarVeiculoFipe(params:{
 }
 
 /** Persiste somente versões FIPE efetivamente consultadas; os preços têm referência mensal. */
+/** Armazena a versão FIPE efetivamente consultada e respeita ajustes
+ * feitos diretamente na categoria do catálogo (inclusive por ano). */
 export async function registrarConsultaFipe(params:{
  empresaId:string;tipo:TipoFipe;anoCodigo:string;veiculo:DetalheFipe;uso:UsoVeiculo;
 }):Promise<ClassificacaoFipe>{
  const {veiculo,tipo,empresaId,anoCodigo,uso}=params;
- const classificacao=await classificarVeiculoFipe({
-  empresaId,tipo,codigoFipe:veiculo.codeFipe,modelo:veiculo.model,uso,
- });
- const {error}=await admin.from("cotacao_veicular_catalogo_fipe").upsert({
-  empresa_id:empresaId,tipo_fipe:tipo,codigo_fipe:veiculo.codeFipe,
-  codigo_ano_fipe:anoCodigo,marca:veiculo.brand.slice(0,160),
-  modelo:veiculo.model.slice(0,240),ano_modelo:veiculo.modelYear,
-  combustivel:veiculo.fuel.slice(0,80),
-  valor_fipe_centavos:precoFipeCentavos(veiculo.price),
-  referencia_fipe:veiculo.referenceMonth.slice(0,100),
-  categoria:classificacao.categoria_base,
-  consultado_em:new Date().toISOString(),
- },{onConflict:"empresa_id,tipo_fipe,codigo_fipe,codigo_ano_fipe"});
- if(error)throw new Error("Falha ao atualizar catálogo FIPE: "+error.message);
- return classificacao;
+ const chave={empresa_id:empresaId,tipo_fipe:tipo,
+   codigo_fipe:veiculo.codeFipe,codigo_ano_fipe:anoCodigo};
+ const [classificacao,consulta]=await Promise.all([
+   classificarVeiculoFipe({
+     empresaId,tipo,codigoFipe:veiculo.codeFipe,modelo:veiculo.model,uso,
+   }),
+   admin.from("cotacao_veicular_catalogo_fipe")
+     .select("categoria").match(chave).maybeSingle(),
+ ]);
+ if(consulta.error)throw new Error(consulta.error.message);
+ const categoriaExistente=consulta.data?.categoria as CategoriaCotacao|null|undefined;
+ const categoriaBase=categoriaExistente??classificacao.categoria_base;
+ const categoria=categoriaBase==="auto_leves"&&(uso==="aplicativo"||uso==="taxi")
+   ?"app_taxi":categoriaBase;
+ const valores={
+   marca:veiculo.brand.slice(0,160),modelo:veiculo.model.slice(0,240),
+   ano_modelo:veiculo.modelYear,combustivel:veiculo.fuel.slice(0,80),
+   valor_fipe_centavos:precoFipeCentavos(veiculo.price),
+   referencia_fipe:veiculo.referenceMonth.slice(0,100),
+   consultado_em:new Date().toISOString(),
+ };
+ if(consulta.data){
+   // Nunca regrava a categoria quando a linha já existe: administrador pode
+   // corrigi-la diretamente no banco.
+   const {error}=await admin.from("cotacao_veicular_catalogo_fipe")
+     .update(valores).match(chave);
+   if(error)throw new Error("Falha ao atualizar FIPE: "+error.message);
+ }else{
+   const {error}=await admin.from("cotacao_veicular_catalogo_fipe")
+     .upsert({...chave,...valores,categoria:categoriaBase},{
+       onConflict:"empresa_id,tipo_fipe,codigo_fipe,codigo_ano_fipe",
+       ignoreDuplicates:true,
+     });
+   if(error)throw new Error("Falha ao inserir catálogo FIPE: "+error.message);
+ }
+ return {categoria,categoria_base:categoriaBase,origem:classificacao.origem,
+   pendente:!categoria};
 }
