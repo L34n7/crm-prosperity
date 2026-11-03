@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
-import { USOS_VEICULO, ENERGIAS_VEICULO, type UsoVeiculo, type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
+import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { encontrarVeiculoFipe,type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
+import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
@@ -352,7 +353,7 @@ export async function preconsultarNegocio(params: {
 
   if (sinalCotacao) {
     resultados.push({ ferramenta: "gerar_cotacao_veicular", dados: [] });
-    blocos.push("COTAÇÃO VEICULAR: coleta de dados em andamento. Identifique marca, versão exata, ano, finalidade de uso, motorização e opcionais. A categoria comercial é interna e calculada com a FIPE. Cotação gera todos os planos cadastrados juntos. Use a ferramenta para consultar valor FIPE e gerar preço exato; se faltar dado, faça uma pergunta objetiva. Nunca invente valores.");
+    blocos.push("COTAÇÃO VEICULAR: identifique o modelo e o ano a partir do histórico da conversa. Não pergunte marca se puder ser inferida pelo modelo, nem motorização/combustível: a ferramenta identifica na FIPE. Pergunte finalidade de uso apenas se ainda não estiver clara; a versão exata só se a FIPE apontar ambiguidade. Opcionais podem ficar vazios. A categoria comercial é interna e a ferramenta calcula todos os planos. Use-a assim que tiver modelo, ano e uso; nunca invente preços.");
   }
 
   const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
@@ -379,28 +380,53 @@ export async function executarFerramentaNegocio(params: {
 }) {
   if (params.tipo === "gerar_cotacao_veicular") {
     const args = params.argumentos || {};
-    const marca = textoCurto(args.marca,90);
-    const modelo = textoCurto(args.modelo,150);
     const ano = textoCurto(args.ano,30);
-    if (!marca || !modelo || !ano)
-      return {ok:false,error:"Informe marca, versão exata do modelo e ano/combustível do veículo."};
+    const modeloBruto=textoCurto(args.modelo,150);
+    const anoNumero=ano.match(/\b(?:19|20)\d{2}\b/)?.[0];
+    const modelo=anoNumero
+      ?modeloBruto.replace(new RegExp("\\s+"+anoNumero+"\\s*$"),"").trim()
+      :modeloBruto;
+    if(!modelo||!ano)return {ok:false,error:
+      "Para consultar a FIPE preciso somente do modelo e ano ainda não informados."};
     const uso=String(args.uso||"") as UsoVeiculo;
-    const energia=String(args.energia||"") as EnergiaVeiculo;
-    if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
-      return {ok:false,error:"Confirme a finalidade de uso e a motorização antes de cotar."};
-    // Busca o veículo nos grupos FIPE, sem pedir categoria comercial ao cliente.
-    const tipos:TipoFipe[]=["cars","motorcycles","trucks"];
+    if(!Object.hasOwn(USOS_VEICULO,uso))
+      return {ok:false,error:"Confirme somente a finalidade de uso: particular, aplicativo, táxi ou comercial."};
+
+    // O cliente pode dizer "BMW 320i 2007" ou apenas "320i 2007".
+    // Identifica a marca no próprio nome, no catálogo da empresa ou pela pista
+    // de modelos conhecidos, mas SEM assumir preço ou motorização pela pista.
+    const identificacao=await identificarMarcaFipe({
+      empresaId:params.empresaId,marca:args.marca,modelo,
+    });
+    if(!identificacao)return {ok:false,error:
+      "Não consegui identificar a marca desse modelo com segurança. Qual é a marca? Não é necessário informar a motorização."};
+
+    const tipos:TipoFipe[]=identificacao.tipoPreferencial
+      ?[identificacao.tipoPreferencial]:["cars","motorcycles","trucks"];
     const buscas=await Promise.allSettled(tipos.map(async tipo=>({
-      tipo,fipe:await encontrarVeiculoFipe({tipo,marca,modelo,ano}),
+      tipo,fipe:await encontrarVeiculoFipe({
+        tipo,marca:identificacao.marca,modelo:identificacao.modelo,ano,
+      }),
     })));
     const encontrados=buscas.filter((r):r is PromiseFulfilledResult<{
       tipo:TipoFipe;fipe:Awaited<ReturnType<typeof encontrarVeiculoFipe>>;
     }>=>r.status==="fulfilled").map(r=>r.value);
-    if(!encontrados.length)return {ok:false,error:
-      "Não encontrei uma versão FIPE única. Confirme marca, versão exata e ano/combustível."};
+    if(!encontrados.length){
+      const erros=buscas.filter((r):r is PromiseRejectedResult=>r.status==="rejected")
+        .map(r=>r.reason instanceof Error?r.reason.message:String(r.reason));
+      const ambiguidade=erros.find(e=>e.includes("Informe uma versão mais específica"));
+      const indisponivel=erros.find(e=>e.includes("Consulta FIPE indisponível"));
+      return {ok:false,error:ambiguidade
+        ?"A FIPE encontrou mais de uma versão do modelo. Qual das opções corresponde ao veículo? "+
+          ambiguidade.split(":").slice(1).join(":").trim()
+        :indisponivel||"Não localizei o modelo e ano informados na FIPE. Confirme apenas a versão do modelo."};
+    }
     if(encontrados.length!==1)return {ok:false,error:
-      "Há versões com este nome em mais de um grupo FIPE. Confirme se é automóvel, moto ou caminhão."};
+      "O modelo existe em mais de um tipo de veículo na FIPE. Ele é automóvel, motocicleta ou caminhão?"};
     const {tipo,fipe}=encontrados[0];
+    const energia=motorizacaoDaFipe(fipe.fuel,fipe.model);
+    if(!energia)return {ok:false,error:
+      "A FIPE não identificou a motorização deste veículo. A equipe deve conferir o cadastro; não é necessário pedir que o cliente adivinhe."};
     const classificacao=await registrarConsultaFipe({
       empresaId:params.empresaId,tipo,anoCodigo:fipe.anoCodigo,veiculo:fipe,uso,
     });
@@ -530,16 +556,15 @@ export function definicoesFerramentasNegocio(
   if (ferramentas.has("gerar_cotacao_veicular")) {
     defs.push({
       type:"function",name:"gerar_cotacao_veicular",
-      description:"Cota TODOS os planos ativos cadastrados pela empresa (não presuma nomes Premium/Completo). Antes colete marca, modelo, ano FIPE, uso e energia. A classificação comercial vem da FIPE e do catálogo interno. Os opcionais devem ser consultados na empresa; use lista vazia se o cliente não pediu. Jamais invente valores.",
+      description:"Cota TODOS os planos ativos cadastrados pela empresa. Use o MODELO e ANO já ditos na conversa, e finalidade de uso. MARCA é opcional: informe a marca se for inequívoca ou estiver no texto; caso contrário passe null, pois o servidor tenta identificá-la pelo modelo e catálogo FIPE. NÃO pergunte motorização ou combustível, pois o servidor identifica na FIPE. Não peça para escolher plano ou opcionais se não quiser; opcionais_por_plano pode ser []. Se o modelo for ambíguo, a ferramenta retornará as versões possíveis. Nunca invente valores.",
       strict:true,
       parameters:{
         type:"object",
         properties:{
-          marca:{type:"string",maxLength:90},
+          marca:{anyOf:[{type:"string",maxLength:90},{type:"null"}]},
           modelo:{type:"string",maxLength:150},
           ano:{type:"string",maxLength:30},
           uso:{type:"string",enum:["particular","aplicativo","taxi","comercial"]},
-          energia:{type:"string",enum:["combustao","hibrido","eletrico"]},
           opcionais_por_plano:{
             type:"array",
             items:{
@@ -553,7 +578,7 @@ export function definicoesFerramentasNegocio(
             },maxItems:30,
           },
         },
-        required:["marca","modelo","ano","uso","energia","opcionais_por_plano"],
+        required:["marca","modelo","ano","uso","opcionais_por_plano"],
         additionalProperties:false,
       },
     });

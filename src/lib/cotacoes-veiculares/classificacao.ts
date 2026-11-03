@@ -2,7 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { CATEGORIAS_COTACAO,type CategoriaCotacao } from "./catalogo";
 import { precoFipeCentavos,type TipoFipe,type DetalheFipe } from "./fipe";
-import type { UsoVeiculo } from "./comercial";
+import {motorizacaoDaFipe,type UsoVeiculo} from "./comercial";
 
 export type ClassificacaoFipe={
  categoria:CategoriaCotacao|null;categoria_base:CategoriaCotacao|null;
@@ -56,6 +56,10 @@ export async function registrarConsultaFipe(params:{
  empresaId:string;tipo:TipoFipe;anoCodigo:string;veiculo:DetalheFipe;uso:UsoVeiculo;
 }):Promise<ClassificacaoFipe>{
  const {veiculo,tipo,empresaId,anoCodigo,uso}=params;
+ const energia=motorizacaoDaFipe(veiculo.fuel,veiculo.model);
+ if(!energia)throw new Error(
+   "A FIPE não identificou a motorização com segurança. O modelo precisa de revisão antes do cadastro."
+ );
  const chave={empresa_id:empresaId,tipo_fipe:tipo,
    codigo_fipe:veiculo.codeFipe,codigo_ano_fipe:anoCodigo};
  const [classificacao,consulta]=await Promise.all([
@@ -72,7 +76,7 @@ export async function registrarConsultaFipe(params:{
    ?"app_taxi":categoriaBase;
  const valores={
    marca:veiculo.brand.slice(0,160),modelo:veiculo.model.slice(0,240),
-   ano_modelo:veiculo.modelYear,combustivel:veiculo.fuel.slice(0,80),
+   ano_modelo:veiculo.modelYear,combustivel:veiculo.fuel.slice(0,80),energia,
    valor_fipe_centavos:precoFipeCentavos(veiculo.price),
    referencia_fipe:veiculo.referenceMonth.slice(0,100),
    consultado_em:new Date().toISOString(),

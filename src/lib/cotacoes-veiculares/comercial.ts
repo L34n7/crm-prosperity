@@ -20,12 +20,13 @@ export function motorizacaoDaFipe(combustivel: string, modelo: string): EnergiaV
     .replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const fuel=limpar(combustivel);
   const nome=limpar(modelo);
-  if (/\b(hibrid[oa]?|hybrid|phev|mhev|hev)\b/.test(fuel+" "+nome))
-    return "hibrido";
-  if (/\b(eletric[oa]?|electric|eletricidade|electricity|bev|100% electric[oa]?|ev)\b/.test(fuel+" "+nome))
+  const marcaHibrida=/\b(hibrid[oa]?|hybrid|phev|mhev|hev)\b/.test(fuel+" "+nome);
+  const temEletrico=/\b(eletric[oa]?|electric|eletricidade|electricity|bev|100% electric[oa]?|ev)\b/.test(fuel);
+  const temCombustao=/\b(gasolina|diesel|etanol|alcool|flex|gnv|gas natural|bicombustivel)\b/.test(fuel);
+  if(marcaHibrida||(temEletrico&&temCombustao))return "hibrido";
+  if(temEletrico||/\b(eletric[oa]?|electric|bev|100% electric[oa]?|ev)\b/.test(nome))
     return "eletrico";
-  if (/\b(gasolina|diesel|etanol|alcool|flex|gnv|gas natural|bicombustivel)\b/.test(fuel))
-    return "combustao";
+  if(temCombustao)return "combustao";
   return null; // Não presume combustão quando a fonte não permite determinar.
 }
 
