@@ -393,7 +393,10 @@ export default function CotacoesVeicularesPage() {
               </div>
               {carregandoMarcas&&<span className={styles.fipeLoading}><Loader2 size={14}/> Carregando marcas...</span>}
             </div>
-            <div className={styles.fipeTypeRow}>
+            <div className={styles.fipeSearchContent}>
+              <div className={styles.fipeSearchForm}>
+                <div className={styles.fipeFourFields}>
+                  <div className={styles.fipeTypeRow}>
               <label>Categoria do veículo
                 <select value={tipoFipe} onChange={e=>{
                   const tipo=e.target.value as "cars"|"motorcycles"|"trucks";
@@ -408,8 +411,7 @@ export default function CotacoesVeicularesPage() {
                   <option value="trucks">Caminhões</option>
                 </select>
               </label>
-            </div>
-            <div className={styles.fieldsThree+" "+styles.fipeSearchGrid}>
+                  </div>
               <SeletorFipe label="Marca" valor={marca} opcoes={marcas}
                 placeholder="Selecione ou pesquise a marca"
                 disabled={carregandoMarcas||!marcas.length} carregando={carregandoMarcas}
@@ -441,8 +443,30 @@ export default function CotacoesVeicularesPage() {
                   setSucesso("");
                   if(v)void consultarFipe("preco",{marca:codigoMarcaFipe,modelo,ano:v});
                 }}/>
+                </div>
+                <small className={styles.fipeSearchHelper}>
+                  Selecione uma categoria para filtrar as marcas e digite para pesquisar nas listas.
+                </small>
+              </div>
+              <aside className={styles.fipeVisualPanel} aria-label="Orientações de pesquisa na FIPE">
+                <div className={styles.fipeVisualIllustration} aria-hidden="true">
+                  <span className={styles.fipeVisualRing}>
+                    <CarFront size={48} strokeWidth={1.65}/>
+                  </span>
+                  <span className={styles.fipeVisualCheck}><BadgeCheck size={19}/></span>
+                  <span className={styles.fipeVisualTrack}/>
+                </div>
+                <span className={styles.fipeVisualEyebrow}>CONSULTA AUTOMÁTICA</span>
+                <strong>{referenciaFipe?"Veículo identificado":!marca?"Encontre seu veículo":!modelo?"Selecione o modelo":!ano?"Escolha o ano":"Consultando a FIPE"}</strong>
+                <p>O valor FIPE, o combustível e a categoria comercial serão preenchidos automaticamente.</p>
+                <div className={styles.fipeVisualProgress} aria-label="Etapas da seleção">
+                  <span className={styles.fipeVisualProgressItem+" "+styles.fipeVisualProgressDone}>Tipo</span>
+                  <span className={styles.fipeVisualProgressItem+" "+(marca?styles.fipeVisualProgressDone:"")}>Marca</span>
+                  <span className={styles.fipeVisualProgressItem+" "+(modelo?styles.fipeVisualProgressDone:"")}>Modelo</span>
+                  <span className={styles.fipeVisualProgressItem+" "+(referenciaFipe?styles.fipeVisualProgressDone:"")}>FIPE</span>
+                </div>
+              </aside>
             </div>
-            <small>Escolha a categoria FIPE para filtrar as marcas. Digite dentro dos seletores para pesquisar modelos e anos.</small>
           </div>
           {referenciaFipe&&<section className={styles.vehicleSummary} aria-label="Informações do veículo na FIPE">
             <div className={styles.vehicleSummaryHeader}>
