@@ -105,7 +105,7 @@ export async function POST(req:Request){
   }
   const veiculo=veiculoFipe.brand+" "+veiculoFipe.model;
   const parametros={empresaId,categoria:categoriaInterna.categoria,
-    veiculo,codigoFipe:veiculoFipe.codeFipe,
+    veiculo,modeloFipe:veiculoFipe.model,codigoFipe:veiculoFipe.codeFipe,
     valorFipeCentavos:precoFipeCentavos(veiculoFipe.price),uso,energia,
     origem:"manual" as const,opcionaisPorPlano};
   if(acao==="simular")return NextResponse.json({ok:true,calculos:await calcularCotacaoPlanos(parametros)});

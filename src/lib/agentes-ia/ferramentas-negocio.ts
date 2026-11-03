@@ -423,7 +423,7 @@ export async function executarFerramentaNegocio(params: {
     const {cotacoes,calculos,grupo_id}=await salvarCotacaoPlanos({
       empresaId:params.empresaId,agenteId:params.agenteId,conversaId:params.conversaId,
       origem:"agente_ia",categoria,uso,energia,
-      veiculo:fipe.brand+" "+fipe.model,codigoFipe:fipe.codeFipe,anoModelo:fipe.modelYear,
+      veiculo:fipe.brand+" "+fipe.model,modeloFipe:fipe.model,codigoFipe:fipe.codeFipe,anoModelo:fipe.modelYear,
       valorFipeCentavos:fipe.valorCentavos,
       referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
       opcionaisPorPlano,idempotencyKey:"agente-ia:"+assinatura,

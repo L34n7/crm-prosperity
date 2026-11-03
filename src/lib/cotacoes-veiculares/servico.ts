@@ -37,14 +37,21 @@ export async function verificarEspecialEmpresa(
   if(error)throw new Error(error.message);
   const normalizar=(texto:string)=>texto.normalize("NFD").replace(/\p{M}/gu,"")
     .toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-  return (data||[]).some(v=>
-    Boolean(codigoFipe&&v.codigo_fipe&&v.codigo_fipe.trim()===codigoFipe.trim())||
-    normalizar(v.modelo)===normalizar(modelo));
+  const nomeModelo=normalizar(modelo);
+  return (data||[]).some(v=>{
+    if(codigoFipe&&v.codigo_fipe&&v.codigo_fipe.trim()===codigoFipe.trim())
+      return true;
+    const referencia=normalizar(v.modelo);
+    if(referencia===nomeModelo)return true;
+    // Tabela de origem admite registros como "316 (todas)" para a família.
+    const familia=v.modelo.match(/^([0-9]{3,4})\s*\(todas\)$/i);
+    return Boolean(familia && new RegExp("^"+familia[1]+"(?:[a-z]|\\b)","i").test(nomeModelo));
+  });
 }
 export type ParametrosCotacao={
   empresaId:string;categoria:CategoriaCotacao;valorFipeCentavos:number;
   uso:UsoVeiculo;energia:EnergiaVeiculo;origem:"manual"|"agente_ia";
-  veiculo?:string;codigoFipe?:string;
+  veiculo?:string;modeloFipe?:string;codigoFipe?:string;
   opcionaisPorPlano?:Record<string,string[]>;
 };
 export async function calcularCotacaoPlanos(p:ParametrosCotacao){
@@ -63,8 +70,9 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
   const resultados=[];
   for(const plano of planos){
     const meta=arquivos.find(a=>a.plano===plano.codigo);
-    const especial=Boolean(p.veiculo) && await verificarEspecialEmpresa(
-      p.empresaId,p.veiculo||"",p.codigoFipe,plano.codigo);
+    const modeloConsulta=p.modeloFipe||p.veiculo||"";
+    const especial=Boolean(modeloConsulta) && await verificarEspecialEmpresa(
+      p.empresaId,modeloConsulta,p.codigoFipe,plano.codigo);
     if(p.categoria==="especiais"&&!especial)continue;
     const categoriaPlano=especial?"especiais":p.categoria;
     const faixasPlano=categoriaPlano==="especiais"?p.categoria==="especiais"?faixas:faixasEspeciais:faixas;
@@ -74,7 +82,7 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
     if(!faixa)continue; // Planos podem atender categorias e faixas diferentes.
     if(!meta?.arquivo_precos_nome)continue;
     if(p.categoria==="especiais"&&
-      !(await verificarEspecialEmpresa(p.empresaId,p.veiculo||"",p.codigoFipe,plano.codigo)))continue;
+      !(await verificarEspecialEmpresa(p.empresaId,modeloConsulta,p.codigoFipe,plano.codigo)))continue;
     const {regra,opcionais}=await consultarRegraComercial(p.empresaId,categoriaPlano,plano.codigo);
     if(!regra.usos_permitidos.includes(p.uso)||!regra.energias_permitidas.includes(p.energia))
       continue;
