@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck, Calculator, CarFront, CheckCircle2, CircleAlert, ClipboardList,
-  Copy, Loader2, Save, Settings2, ShieldCheck, X, FileText,
+  Copy, Loader2, Save, Settings2, ShieldCheck, X, FileText, Search, UserRound,
 } from "lucide-react";
 import Header from "@/components/Header";
 import {
@@ -82,12 +82,14 @@ export default function CotacoesVeicularesPage() {
   const [planos,setPlanos]=useState<PlanoEmpresa[]>([]);
   const [arquivos,setArquivos]=useState<ArquivoPlano[]>([]);
   const [status,setStatus]=useState<Status>({pronta:false,pendencias:[],categorias:[],faixas:0,regras:0});
+  const [configuracaoCarregada,setConfiguracaoCarregada]=useState(false);
   const [regras,setRegras]=useState<RegraBanco[]>([]);
   const [catalogoExtras,setCatalogoExtras]=useState<OpcionalBanco[]>([]);
   const [cotacoes,setCotacoes]=useState<Cotacao[]>([]);
   const [podeGerenciar,setPodeGerenciar]=useState(false);
   const [podeConfigurar,setPodeConfigurar]=useState(false);
   const [calculos,setCalculos]=useState<Calculos|null>(null);
+  const comparativoRef=useRef<HTMLElement|null>(null);
   const [cotacaoSalva,setCotacaoSalva]=useState<string|null>(null);
   const [idsSalvos,setIdsSalvos]=useState<Record<string,string>>({});
   const [salvandoOpcional,setSalvandoOpcional]=useState<string|null>(null);
@@ -115,10 +117,13 @@ export default function CotacoesVeicularesPage() {
       const res=await fetch("/api/cotacoes-veiculares?categoria="+categoria,{cache:"no-store"});
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Erro ao carregar cotações.");
-      setFaixas(json.faixas||[]);setStatus(json.status);setPlanos(json.planos||[]);setArquivos(json.arquivos||[]);
+      if(!json.status||typeof json.status.pronta!=="boolean")
+        throw new Error("Não foi possível confirmar o estado da configuração comercial.");
+      setFaixas(json.faixas||[]);setStatus(json.status);setConfiguracaoCarregada(true);
+      setPlanos(json.planos||[]);setArquivos(json.arquivos||[]);
       setCotacoes(json.cotacoes||[]);
       setPodeGerenciar(Boolean(json.pode_gerenciar));setPodeConfigurar(Boolean(json.pode_configurar));
-    }catch(e){setErro(e instanceof Error?e.message:"Erro ao carregar.");}
+    }catch(e){setConfiguracaoCarregada(false);setErro(e instanceof Error?e.message:"Erro ao carregar.");}
     finally{setCarregando(false);}
   },[categoria]);
   const carregarComercial=useCallback(async()=>{
@@ -199,7 +204,13 @@ export default function CotacoesVeicularesPage() {
       });
       const json=await res.json();
       if(!res.ok||!json.ok)throw new Error(json.error||"Não foi possível concluir.");
-      if(acao==="simular"){setCalculos(json.calculos);setCotacaoSalva(null);setIdsSalvos({});setOpcionaisPorPlano({});}
+      if(acao==="simular"){
+        setCalculos(json.calculos);setCotacaoSalva(null);setIdsSalvos({});setOpcionaisPorPlano({});
+        requestAnimationFrame(()=>comparativoRef.current?.scrollIntoView({
+          behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",
+          block:"start",
+        }));
+      }
       if(acao==="salvar"){
         setCalculos(json.calculos);setCotacaoSalva(json.grupo_id);
         setIdsSalvos(Object.fromEntries((json.cotacoes||[]).map((c:{id:string;plano:string})=>[c.plano,c.id])));
@@ -324,7 +335,7 @@ export default function CotacoesVeicularesPage() {
     }
     return [...grupos.entries()].map(([id,itens])=>({id,itens,principal:itens[0]}));
   },[cotacoes]);
-  const alertaTabela=!status.pronta;
+  const alertaTabela=!carregando&&configuracaoCarregada&&!status.pronta;
 
   return (<>
     <Header title="Cotação" subtitle="Simule, configure e acompanhe propostas de proteção veicular."/>
@@ -336,12 +347,20 @@ export default function CotacoesVeicularesPage() {
           <h1>Cotação de proteção veicular</h1>
           <p>Compare automaticamente todos os planos cadastrados pela sua empresa.</p>
         </div>
-        <div className={styles.heroStatus+" "+(status.pronta?styles.heroStatusReady:styles.heroStatusPending)}
-          role="status" aria-label={status.pronta?"Configuração pronta":"Configuração pendente"}>
-          {status.pronta
-            ?<><BadgeCheck size={16}/> Configuração pronta</>
-            :<><CircleAlert size={16}/> Configuração pendente</>}
-        </div>
+        {carregando
+          ?<div className={styles.heroStatus+" "+styles.heroStatusChecking} role="status">
+              <Loader2 size={16} className={styles.statusSpinner}/> Verificando configuração
+            </div>
+          :configuracaoCarregada
+            ?<div className={styles.heroStatus+" "+(status.pronta?styles.heroStatusReady:styles.heroStatusPending)}
+                role="status" aria-label={status.pronta?"Configuração pronta":"Configuração pendente"}>
+                {status.pronta
+                  ?<><BadgeCheck size={16}/> Configuração pronta</>
+                  :<><CircleAlert size={16}/> Configuração pendente</>}
+              </div>
+            :<div className={styles.heroStatus+" "+styles.heroStatusChecking} role="status">
+                <CircleAlert size={16}/> Configuração indisponível
+              </div>}
       </section>
       {alertaTabela&&<div className={styles.warning}><CircleAlert size={20}/>
         <span>Cadastre seus planos, importe os preços e configure as coberturas para liberar a ferramenta no agente IA.</span>
@@ -356,13 +375,22 @@ export default function CotacoesVeicularesPage() {
 
       {carregando&&<p className={styles.loading}><Loader2 size={18}/> Carregando...</p>}
 
-      {!carregando&&aba==="nova"&&<div className={styles.layout}>
-        <section className={styles.panel}>
-          <div className={styles.sectionHeading}><h2>Dados do veículo</h2>
-            <p>Preencha uma vez para comparar todos os planos cadastrados.</p>
+      {!carregando&&aba==="nova"&&<div className={styles.quoteFlow}>
+        <section className={styles.panel+" "+styles.quoteVehiclePanel}>
+          <div className={styles.quoteMainHeading}>
+            <span className={styles.quoteMainHeadingIcon}><CarFront size={24}/></span>
+            <div>
+              <span className={styles.quoteStepLabel}>01 · IDENTIFICAÇÃO DO VEÍCULO</span>
+              <h2>Dados do veículo</h2>
+              <p>Pesquise na FIPE e preencha apenas as informações necessárias para gerar a proposta.</p>
+            </div>
           </div>
-          <div className={styles.fipePanel}>
-            <div className={styles.fipeHeader}><strong>Buscar veículo na Tabela FIPE</strong>
+          <div className={styles.fipePanel+" "+styles.quoteSearchCard}>
+            <div className={styles.fipeHeader+" "+styles.quoteSearchHeading}>
+              <div className={styles.quoteSearchHeadingTitle}>
+                <Search size={18}/>
+                <strong>Buscar veículo na Tabela FIPE</strong>
+              </div>
               {carregandoMarcas&&<span className={styles.fipeLoading}><Loader2 size={14}/> Carregando marcas...</span>}
             </div>
             <div className={styles.fipeTypeRow}>
@@ -442,10 +470,17 @@ export default function CotacoesVeicularesPage() {
             {(!energia||!categoriaCotacao)&&<p className={styles.vehicleSummaryWarning}>
               <CircleAlert size={16}/> {categoriaCotacao
                 ?"A FIPE não identificou a motorização. Não é possível cotar sem confirmar esse dado."
-                :"O veículo precisa ser classificado em Planos → Classificações FIPE antes da cotação."}
+                :"A categoria comercial deste veículo precisa ser conferida pelo administrador no cadastro FIPE."}
             </p>}
           </section>}
-          <div className={styles.fields}>
+          <div className={styles.quoteCustomerBlock}>
+            <div className={styles.quoteSubHeading}>
+              <span className={styles.quoteSubHeadingIcon}><UserRound size={18}/></span>
+              <div><strong>Dados da cotação</strong>
+                <p>Defina a finalidade e, se desejar, identifique o interessado.</p>
+              </div>
+            </div>
+            <div className={styles.fields+" "+styles.quoteCustomerFields}>
             <label>Finalidade de uso
               <select value={uso} disabled={buscandoFipe} onChange={e=>{
                 const novo=e.target.value as UsoVeiculo;setUso(novo);setCategoriaCotacao(null);
@@ -460,25 +495,33 @@ export default function CotacoesVeicularesPage() {
                 placeholder="Nome do contato"
                 onChange={e=>setNomeContato(e.target.value)}/>
             </label>
+            </div>
           </div>
 
-          <div className={styles.actions}>
+          <div className={styles.actions+" "+styles.quoteFormActions}>
+            <span><CheckCircle2 size={16}/> Todos os planos disponíveis serão comparados.</span>
             <button type="button" className={styles.primary} disabled={ocupado||buscandoFipe||!podeGerenciar||!categoriaCotacao||!energia||!referenciaFipe}
               onClick={()=>void enviar("simular",dadosCotacao())}><Calculator size={17}/> Gerar cotação</button>
           </div>
         </section>
-        <aside className={styles.panel}>
-          <div className={styles.sectionHeading}><h2>Comparativo de planos</h2>
-            <p>O sistema calcula os preços de todos os seus planos.</p>
+        <section ref={comparativoRef} className={styles.panel+" "+styles.quoteComparisonPanel} id="comparativo-planos" aria-label="Comparativo de planos">
+          <div className={styles.quoteMainHeading+" "+styles.quoteComparisonHeading}>
+            <span className={styles.quoteMainHeadingIcon}><ShieldCheck size={23}/></span>
+            <div>
+              <span className={styles.quoteStepLabel}>02 · RESULTADO DA COTAÇÃO</span>
+              <h2>Comparativo de planos</h2>
+              <p>Mensalidades, coberturas e opcionais calculados individualmente para cada plano.</p>
+            </div>
+            {calculos&&<span className={styles.quotePlanCount}>{calculos.planos.length} plano(s)</span>}
           </div>
-          {!calculos?<div className={styles.empty}><ShieldCheck size={34}/>
+          {!calculos?<div className={styles.empty+" "+styles.quoteCompareEmpty}><ShieldCheck size={34}/>
             <strong>Pronto para comparar</strong>
-            <p>Preencha os dados para comparar todos os planos disponíveis.</p>
+            <p>Selecione um veículo na FIPE e clique em Gerar cotação para visualizar os planos.</p>
           </div>:<>
-            <div className={styles.comparison}>
+            <div className={styles.comparison+" "+styles.quoteComparisonGrid}>
               {calculos.planos.map(c=>{
                 return <div key={c.plano} className={styles.planCard}>
-                  <span className={styles.planName}>{c.plano_nome}</span>
+                  <span className={styles.planName}>{/^plano\b/i.test(c.plano_nome.trim())?c.plano_nome:"Plano "+c.plano_nome}</span>
                   <strong className={styles.planPrice}>{moeda(c.total_centavos)}<small> / mês</small></strong>
                   <dl className={styles.detail}>
                     <div><dt>Mensalidade base</dt><dd>{moeda(c.mensalidade_base_centavos)}</dd></div>
@@ -528,7 +571,7 @@ export default function CotacoesVeicularesPage() {
             </div>
             {cotacaoSalva&&<p className={styles.saved}>Cotação salva: {cotacaoSalva.slice(0,8).toUpperCase()}</p>}
           </>}
-        </aside>
+        </section>
       </div>}
 
       {!carregando&&aba==="tabela"&&<>

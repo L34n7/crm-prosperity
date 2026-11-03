@@ -1204,3 +1204,263 @@
  .fipeComboOption{font-size:14px;min-height:44px}
 }
 @media(prefers-reduced-motion:reduce){.fipeComboTrigger,.fipeComboOption{transition:none}}
+
+/* Nova cotação: fluxo vertical com leitura natural e comparação lado a lado. */
+.quoteFlow{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  align-items:start;
+  gap:20px;
+  min-width:0;
+  width:100%;
+}
+.quoteFlow>.panel{min-width:0;width:100%}
+.quoteVehiclePanel{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  padding:clamp(18px,2.6vw,32px);
+  overflow:visible;
+}
+.quoteMainHeading{
+  display:flex;
+  align-items:center;
+  gap:15px;
+  min-width:0;
+  padding-bottom:20px;
+  margin-bottom:21px;
+  border-bottom:1px solid var(--crm-border,#e5edef);
+}
+.quoteMainHeadingIcon{
+  display:grid;
+  place-items:center;
+  flex:0 0 54px;
+  width:54px;
+  height:54px;
+  border-radius:16px;
+  color:#197b77;
+  background:linear-gradient(135deg,#e4f6f2,#eaf4fb);
+}
+.quoteMainHeading>div{flex:1;min-width:0}
+.quoteStepLabel{
+  display:block;
+  margin-bottom:6px;
+  color:#237b78;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.11em;
+}
+.quoteMainHeading h2{
+  margin:0 0 5px;
+  color:var(--crm-text,#203c49);
+  font-size:clamp(19px,2vw,23px);
+  font-weight:800;
+  letter-spacing:-.02em;
+  line-height:1.3;
+}
+.quoteMainHeading p{
+  margin:0;
+  max-width:800px;
+  color:var(--crm-text-muted,#6b8390);
+  font-size:12.5px;
+  line-height:1.55;
+}
+.quoteSearchCard{
+  margin:0 0 18px;
+  padding:clamp(15px,2vw,22px);
+  border-radius:15px;
+  border:1px solid #d8e8e9;
+  background:linear-gradient(140deg,#f6fbfb,#fcfdfd);
+  box-shadow:none;
+}
+.quoteSearchHeading{
+  padding-bottom:12px;
+  border-bottom:1px solid #e0ebed;
+}
+.quoteSearchHeadingTitle{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  min-width:0;
+  color:var(--crm-text,#244453);
+}
+.quoteSearchHeadingTitle>svg{color:#25827d;flex:0 0 18px}
+.quoteSearchHeadingTitle strong{font-size:14px;line-height:1.4}
+.quoteSearchCard .fipeTypeRow{margin:15px 0 14px}
+.quoteSearchCard .fipeSearchGrid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:13px;
+  margin:0 0 11px;
+}
+.quoteSearchCard>small{font-size:11px;color:#708b94;line-height:1.55}
+.quoteVehiclePanel .vehicleSummary{
+  margin-bottom:20px;
+  background:linear-gradient(130deg,#f4faf8,#fff 55%,#f7fbfc);
+  border-color:#cce8df;
+  box-shadow:none;
+}
+.quoteCustomerBlock{
+  padding:18px;
+  border:1px solid #e0ebee;
+  border-radius:14px;
+  background:var(--crm-surface,#fff);
+}
+.quoteSubHeading{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  margin-bottom:14px;
+  min-width:0;
+}
+.quoteSubHeadingIcon{
+  display:grid;
+  place-items:center;
+  flex:0 0 38px;
+  width:38px;
+  height:38px;
+  border-radius:11px;
+  color:#277d79;
+  background:#eaf7f4;
+}
+.quoteSubHeading>div{min-width:0}
+.quoteSubHeading strong{
+  display:block;
+  font-size:13.5px;
+  font-weight:770;
+  color:var(--crm-text,#2b4653);
+}
+.quoteSubHeading p{
+  margin:4px 0 0;
+  font-size:11.5px;
+  color:var(--crm-text-muted,#6b8390);
+  line-height:1.45;
+}
+.quoteCustomerFields{
+  margin:0;
+  gap:14px;
+}
+.quoteCustomerFields label{font-weight:650}
+.quoteCustomerFields input,.quoteCustomerFields select{
+  background:var(--crm-surface,#fff);
+}
+.quoteFormActions{
+  margin-top:18px;
+  padding-top:17px;
+  border-top:1px solid #e8eff0;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px 16px;
+}
+.quoteFormActions>span{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:#64818b;
+  font-size:11.5px;
+  line-height:1.5;
+}
+.quoteFormActions>span svg{flex:0 0 16px;color:#2b8981}
+.quoteFormActions>button{
+  padding:11px 23px;
+  min-height:45px;
+}
+.quoteComparisonPanel{
+  padding:clamp(18px,2.6vw,32px);
+  min-width:0;
+}
+.quoteComparisonHeading{
+  margin-bottom:18px;
+}
+.quotePlanCount{
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  padding:7px 11px;
+  border:1px solid #c9e6dd;
+  border-radius:999px;
+  background:#edf9f5;
+  color:#28766b;
+  font-size:11px;
+  font-weight:750;
+}
+.quoteComparisonGrid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:17px;
+  align-items:stretch;
+  margin:0 0 17px;
+}
+.quoteComparisonGrid .planCard{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  min-width:0;
+  padding:clamp(15px,1.9vw,22px);
+  border-radius:16px;
+}
+.quoteComparisonGrid .planName{
+  font-size:13px;
+  letter-spacing:.025em;
+  color:#21766f;
+}
+.quoteComparisonGrid .planPrice{
+  margin-bottom:3px;
+}
+.quoteComparisonGrid .detail{flex:1}
+.quoteComparisonGrid .quoteExtras{margin-top:15px}
+.quoteComparisonPanel .comparisonActions{
+  width:min(100%,335px);
+  margin:15px 0 0 auto;
+}
+.quoteCompareEmpty{
+  gap:9px;
+  padding:29px 15px;
+  min-height:134px;
+  border:1px dashed #d6e6e5;
+  border-radius:13px;
+  background:linear-gradient(120deg,#f8fcfb,#fff);
+}
+.quoteCompareEmpty svg{color:#6a9a99}
+.heroStatusChecking{
+  color:#657d89;
+  background:#f0f5f7;
+  border-color:#dbe7eb;
+}
+@keyframes quoteSpin{to{transform:rotate(360deg)}}
+.statusSpinner{animation:quoteSpin 1.1s linear infinite}
+.fipeComboSearch input::placeholder{
+  font-size:13px!important;
+  color:#81949e;
+  font-weight:400;
+  opacity:1;
+}
+@media(max-width:920px){
+  .quoteComparisonGrid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:768px){
+  .quoteFlow{gap:15px}
+  .quoteVehiclePanel,.quoteComparisonPanel{padding:17px 14px}
+  .quoteMainHeading{align-items:flex-start;gap:11px;padding-bottom:15px;margin-bottom:15px}
+  .quoteMainHeadingIcon{flex-basis:42px;width:42px;height:42px;border-radius:12px}
+  .quoteMainHeading h2{font-size:19px}
+  .quoteMainHeading p{font-size:12px}
+  .quoteStepLabel{font-size:9.5px}
+  .quoteSearchCard{padding:14px;border-radius:13px}
+  .quoteSearchCard .fipeSearchGrid{grid-template-columns:minmax(0,1fr);gap:13px}
+  .quoteCustomerBlock{padding:14px}
+  .quoteCustomerFields{grid-template-columns:minmax(0,1fr);gap:13px}
+  .quoteFormActions{align-items:stretch;flex-direction:column}
+  .quoteFormActions>button{width:100%}
+  .quoteComparisonHeading .quotePlanCount{margin-left:auto}
+  .quoteComparisonGrid{gap:12px}
+  .quoteComparisonPanel .comparisonActions{width:100%}
+  .quoteCompareEmpty{padding:22px 14px}
+}
+@media(max-width:460px){
+  .quoteMainHeading{flex-wrap:wrap}
+  .quoteMainHeading>div{flex:1 1 calc(100% - 56px)}
+  .quotePlanCount{margin-left:0!important}
+}
+@media(prefers-reduced-motion:reduce){
+  .statusSpinner{animation:none}
+}
