@@ -100,6 +100,12 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     copia.querySelectorAll("[data-prosperity-edit-text]").forEach(elemento => {
       elemento.replaceWith(...Array.from(elemento.childNodes));
     });
+    copia.querySelectorAll("[data-prosperity-richtext]").forEach(elemento => {
+      elemento.removeAttribute("contenteditable");
+      elemento.removeAttribute("spellcheck");
+      elemento.removeAttribute("tabindex");
+      elemento.removeAttribute("title");
+    });
     copia.querySelectorAll("a[data-prosperity-href]").forEach(elemento => {
       const destino = elemento.getAttribute("data-prosperity-href");
       if (destino) elemento.setAttribute("href", destino);
@@ -388,7 +394,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     const doc = iframeRef.current?.contentDocument;
     if (!doc?.body) return;
     doc.body.setAttribute("data-prosperity-mode", ativo ? "editar" : "previa");
-    doc.querySelectorAll<HTMLElement>("[data-prosperity-edit-text]").forEach(el => {
+    doc.querySelectorAll<HTMLElement>("[data-prosperity-edit-text],[data-prosperity-richtext]").forEach(el => {
       el.setAttribute("contenteditable", ativo ? "true" : "false");
       el.setAttribute("tabindex", ativo ? "0" : "-1");
     });
@@ -423,7 +429,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
 
   function marcadorDoNo(no: Node): HTMLElement | null {
     const el = no.nodeType === 1 ? no as Element : no.parentElement;
-    return el?.closest<HTMLElement>("[data-prosperity-edit-text]") || null;
+    return el?.closest<HTMLElement>("[data-prosperity-edit-text],[data-prosperity-richtext]") || null;
   }
 
   function registrarSelecaoTexto() {
@@ -484,9 +490,9 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     if (!el) return null;
     const range = cursorRef.current;
     if (range && el.contains(range.startContainer) && el.contains(range.endContainer)) return range.cloneRange();
-    const editaveis = el.matches("[data-prosperity-edit-text]")
+    const editaveis = el.matches("[data-prosperity-edit-text],[data-prosperity-richtext]")
       ? [el]
-      : [...el.querySelectorAll<HTMLElement>("[data-prosperity-edit-text]")];
+      : [...el.querySelectorAll<HTMLElement>("[data-prosperity-edit-text],[data-prosperity-richtext]")];
     const marca = editaveis[editaveis.length - 1];
     if (!marca) return null;
     const novo = marca.ownerDocument.createRange();
@@ -550,11 +556,22 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       link.removeAttribute("href");
       link.removeAttribute("target");
     });
+    // Blocos marcados como richtext são uma única região editável, inclusive com parágrafos e grifos.
+    container.querySelectorAll<HTMLElement>("[data-prosperity-richtext]").forEach(bloco => {
+      bloco.setAttribute("contenteditable", editandoRef.current ? "true" : "false");
+      bloco.setAttribute("spellcheck", "true");
+      bloco.setAttribute("title", "Clique para editar todo o texto");
+      bloco.addEventListener("focus", () => {
+        if (!editandoRef.current) return;
+        registrarHistorico();
+        if (bloco !== elementoRef.current) selecionar(bloco);
+      });
+    });
     const textos: Text[] = [];
     const walker = doc.createTreeWalker(container, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const atual = walker.currentNode as Text;
-      if (!atual.nodeValue?.trim() || atual.parentElement?.closest("script,style,noscript,svg,textarea,option,[data-prosperity-edit-text]")) continue;
+      if (!atual.nodeValue?.trim() || atual.parentElement?.closest("script,style,noscript,svg,textarea,option,[data-prosperity-edit-text],[data-prosperity-richtext]")) continue;
       textos.push(atual);
     }
     for (const atual of textos) {
@@ -634,6 +651,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     estilo.setAttribute("data-prosperity-editor-style", "true");
     estilo.textContent = [
       "[data-prosperity-edit-text]{outline:1px dashed transparent;outline-offset:3px;cursor:text;min-width:2px;}",
+      "[data-prosperity-richtext]{outline:1px dashed transparent;outline-offset:3px;cursor:text;}",
+      "[data-prosperity-richtext]:focus{outline:2px solid #6c4fe1;}",
       "[data-prosperity-edit-text]:hover{outline-color:#9b8fe2;}",
       "[data-prosperity-edit-text]:focus{outline:2px solid #6c4fe1;background:rgba(123,94,236,.09);}",
       "[data-prosperity-selected]{outline:2px solid #7c66e6!important;outline-offset:3px;}",
@@ -655,6 +674,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     doc.addEventListener("scroll", () => atualizarPosicaoAlca(), true);
     const encontrarElemento = (alvo: Element | null): HTMLElement | null => {
       if (!alvo || alvo.closest("[data-prosperity-drag-handle]")) return null;
+      const blocoCompleto = alvo.closest("[data-prosperity-richtext]");
+      if (blocoCompleto) return blocoCompleto as HTMLElement;
       const alvoEditavel = alvo.closest("[data-prosperity-edit-text]");
       const origem = alvoEditavel?.parentElement || alvo;
       const destino = origem.closest("a[data-prosperity-social]") || origem.closest("img,a,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");

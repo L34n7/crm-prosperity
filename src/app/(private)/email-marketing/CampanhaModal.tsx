@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   CalendarClock,
   Check,
+  CheckCircle2,
   Ban,
   ChevronLeft,
   ChevronRight,
@@ -177,6 +178,14 @@ export default function CampanhaModal({
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState("");
   const [erro, setErro] = useState("");
+  const [buscaEmailTeste, setBuscaEmailTeste] = useState("");
+  const [contatoTeste, setContatoTeste] = useState<ContatoBusca | null>(null);
+  const [sugestoesEmailTeste, setSugestoesEmailTeste] = useState<ContatoBusca[]>([]);
+  const [buscandoEmailTeste, setBuscandoEmailTeste] = useState(false);
+  const [mostrarSugestoesTeste, setMostrarSugestoesTeste] = useState(false);
+  const [enviandoEmailTeste, setEnviandoEmailTeste] = useState(false);
+  const [erroEmailTeste, setErroEmailTeste] = useState("");
+  const [resultadoEmailTeste, setResultadoEmailTeste] = useState<{ email: string; enviadoEm: string } | null>(null);
   const [campoComErro, setCampoComErro] = useState("");
   const [campoAnimando, setCampoAnimando] = useState("");
 
@@ -216,6 +225,90 @@ export default function CampanhaModal({
         <span>{aviso}</span>
       </span>
     ) : null;
+  }
+
+
+  // Busca de contatos salvos desta empresa: a lista já verifica supressões.
+  useEffect(() => {
+    if (etapa !== 4 || !mostrarSugestoesTeste || buscaEmailTeste.trim().length < 2 ||
+        (contatoTeste && contatoTeste.email.trim().toLowerCase() === buscaEmailTeste.trim().toLowerCase())) {
+      setBuscandoEmailTeste(false);
+      setSugestoesEmailTeste([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setBuscandoEmailTeste(true);
+      try {
+        const response = await fetch(
+          "/api/email-marketing/audiencia?pagina=1&limite=20&busca=" + encodeURIComponent(buscaEmailTeste.trim()),
+          { cache: "no-store", signal: controller.signal }
+        );
+        const data = await response.json();
+        if (!response.ok || !data?.ok) throw new Error(data?.error || "Não foi possível buscar e-mails cadastrados.");
+        const unicos = new Map<string, ContatoBusca>();
+        for (const contato of (data.contatos || []) as ContatoBusca[]) {
+          const email = String(contato.email || "").trim().toLowerCase();
+          if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !unicos.has(email)) unicos.set(email, contato);
+        }
+        if (!controller.signal.aborted) {
+          setSugestoesEmailTeste([...unicos.values()].slice(0, 10));
+          setErroEmailTeste("");
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setSugestoesEmailTeste([]);
+          setErroEmailTeste(error instanceof Error ? error.message : "Não foi possível pesquisar contatos.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setBuscandoEmailTeste(false);
+      }
+    }, 280);
+    return () => { controller.abort(); window.clearTimeout(timeout); };
+  }, [etapa, buscaEmailTeste, contatoTeste, mostrarSugestoesTeste]);
+
+  function selecionarContatoTeste(contato: ContatoBusca) {
+    if (contato.supressao_motivo) return;
+    setContatoTeste(contato);
+    setBuscaEmailTeste(contato.email);
+    setMostrarSugestoesTeste(false);
+    setSugestoesEmailTeste([]);
+    setErroEmailTeste("");
+    setResultadoEmailTeste(null);
+  }
+
+  useEffect(() => {
+    setResultadoEmailTeste(null);
+  }, [templateId, remetenteId, assunto, fallbacks]);
+
+  async function enviarTesteCampanha() {
+    if (!contatoTeste || !templateSelecionado || !remetenteSelecionado || enviandoEmailTeste) {
+      setErroEmailTeste("Selecione um e-mail cadastrado e confira o template e o remetente.");
+      return;
+    }
+    setEnviandoEmailTeste(true);
+    setErroEmailTeste("");
+    setResultadoEmailTeste(null);
+    try {
+      const response = await fetch("/api/email-marketing/campanhas/teste", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contato_id: contatoTeste.id,
+          template_id: templateSelecionado.id,
+          remetente_id: remetenteSelecionado.id,
+          assunto: assunto.trim(),
+          variaveis_fallbacks: fallbacks,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "O envio de teste não pôde ser confirmado.");
+      setResultadoEmailTeste({ email: String(data.email || contatoTeste.email), enviadoEm: String(data.enviado_em || new Date().toISOString()) });
+    } catch (error) {
+      setErroEmailTeste(error instanceof Error ? error.message : "Não foi possível enviar o teste.");
+    } finally {
+      setEnviandoEmailTeste(false);
+    }
   }
 
   const templateSelecionado = useMemo(
@@ -1199,7 +1292,77 @@ export default function CampanhaModal({
                 ) : null}
 
                 {analise ? (
-                  <div className={styles.audienceAnalysisGrid}>
+  
+                <section className={styles.campaignTestPanel} aria-label="Teste do e-mail da campanha">
+                  <div className={styles.campaignTestHeader}>
+                    <div className={styles.campaignTestIcon}><Mail size={19}/></div>
+                    <div>
+                      <strong>Enviar e-mail de teste</strong>
+                      <span>Confira o template e o assunto antes de enviar a campanha. Apenas o contato selecionado receberá este teste.</span>
+                    </div>
+                  </div>
+                  <div className={styles.campaignTestControls}>
+                    <div className={styles.campaignTestSearch}>
+                      <label htmlFor="campanha-email-teste">Destinatário do teste</label>
+                      <div className={styles.campaignTestInputWrap}>
+                        <Search size={17} aria-hidden="true"/>
+                        <input id="campanha-email-teste" type="email" autoComplete="off"
+                          aria-autocomplete="list" aria-controls="campanha-email-teste-resultados"
+                          aria-expanded={mostrarSugestoesTeste && buscaEmailTeste.trim().length >= 2}
+                          placeholder="Digite o e-mail cadastrado no CRM"
+                          value={buscaEmailTeste}
+                          onChange={event => {
+                            setBuscaEmailTeste(event.target.value);
+                            setContatoTeste(null);
+                            setMostrarSugestoesTeste(true);
+                            setResultadoEmailTeste(null);
+                            setErroEmailTeste("");
+                          }}
+                          onFocus={() => { if (!contatoTeste) setMostrarSugestoesTeste(true); }}
+                        />
+                        {buscandoEmailTeste ? <span className={styles.campaignTestSearching} aria-label="Buscando">Buscando...</span> : null}
+                      </div>
+                      {mostrarSugestoesTeste && buscaEmailTeste.trim().length >= 2 && !contatoTeste ? (
+                        <div id="campanha-email-teste-resultados" className={styles.campaignTestSuggestions}
+                          role="listbox" aria-label="E-mails encontrados">
+                          {sugestoesEmailTeste.length ? sugestoesEmailTeste.map(contato => (
+                            <button type="button" role="option" aria-selected={false} key={contato.id}
+                              className={styles.campaignTestSuggestion}
+                              disabled={Boolean(contato.supressao_motivo)}
+                              onClick={() => selecionarContatoTeste(contato)}>
+                              <Mail size={15}/>
+                              <span><strong>{contato.email}</strong><small>{contato.nome || "Contato cadastrado"}</small></span>
+                              {contato.supressao_motivo ? <em>Bloqueado</em> : <Check size={15}/>}
+                            </button>
+                          )) : !buscandoEmailTeste && !erroEmailTeste ? (
+                            <p className={styles.campaignTestEmpty}>Nenhum e-mail cadastrado encontrado.</p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    <button type="button" className={[styles.primaryButton, styles.campaignTestSendButton].join(" ")}
+                      disabled={enviandoEmailTeste || enviando || !contatoTeste || !templateSelecionado || !remetenteSelecionado}
+                      onClick={() => void enviarTesteCampanha()}>
+                      <Send size={16}/>{enviandoEmailTeste ? "Enviando..." : "Enviar teste"}
+                    </button>
+                  </div>
+                  {contatoTeste ? (
+                    <div className={styles.campaignTestSelected}><Check size={15}/> E-mail selecionado: <strong>{contatoTeste.email}</strong></div>
+                  ) : (
+                    <small className={styles.campaignTestHint}>Selecione um resultado da busca para habilitar o envio.</small>
+                  )}
+                  {erroEmailTeste ? <p className={styles.campaignTestError} role="alert"><AlertTriangle size={17}/>{erroEmailTeste}</p> : null}
+                  {resultadoEmailTeste ? (
+                    <div className={styles.campaignTestSuccess} role="status">
+                      <CheckCircle2 size={19}/>
+                      <div><strong>Teste enviado para {resultadoEmailTeste.email}</strong>
+                        <span>Data e hora: {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(resultadoEmailTeste.enviadoEm))} (horário de Brasília).</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+
+                <div className={styles.audienceAnalysisGrid}>
                     <div>
                       <span>Registros encontrados</span>
                       <strong>
