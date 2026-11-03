@@ -5922,3 +5922,107 @@
 @media(max-width:420px){
   .templateCloneButton{padding:0 8px}
 }
+
+
+/* Editor de templates: ações no cabeçalho, sem faixa vazia no rodapé. */
+.templatePremiumModal .templatePremiumHeader{
+  display:grid;
+  grid-template-columns:minmax(140px,1fr) auto minmax(285px,1fr);
+  align-items:center;
+  gap:8px 12px;
+  padding:9px 17px;
+  min-height:64px;
+}
+.templatePremiumModal .templatePremiumHeading>span{
+  font-size:11px;
+  letter-spacing:.065em;
+}
+.templatePremiumModal .templatePremiumHeader .templateStudioHeaderActions{
+  grid-column:2;
+  min-width:0;
+  justify-self:center;
+}
+.templateHeaderFormActions{
+  display:flex;
+  align-items:center;
+  justify-self:end;
+  justify-content:flex-end;
+  min-width:0;
+  gap:7px;
+}
+.templatePremiumModal .templateHeaderFormActions .primaryButton,
+.templatePremiumModal .templateHeaderFormActions .secondaryButton,
+.templatePremiumModal .templateHeaderFormActions .dangerButton{
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:36px;
+  height:36px;
+  padding:0 11px;
+  font-size:12px;
+  font-weight:750;
+  border-radius:9px;
+  white-space:nowrap;
+}
+.templatePremiumModal .templateHeaderFormActions>.iconButton{
+  display:grid;
+  flex:0 0 34px;
+  place-items:center;
+  width:34px;
+  height:34px;
+  min-height:34px;
+  padding:0;
+}
+.templatePremiumModal .templateHeaderArchive{
+  padding:0 8px;
+}
+.templatePremiumModal .templatePremiumForm,
+.templatePremiumModal .templateVisualLayout{
+  flex:1 1 auto;
+  min-height:0;
+}
+@media(max-width:1180px){
+  .templatePremiumModal .templatePremiumHeader{
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+  .templatePremiumModal .templatePremiumHeader .templateStudioHeaderActions{
+    grid-column:1/-1;
+    grid-row:2;
+    width:100%;
+    justify-content:center;
+  }
+  .templatePremiumModal .templateHeaderFormActions{grid-column:2;grid-row:1}
+}
+@media(max-width:580px){
+  .templatePremiumModal .templatePremiumHeader{
+    position:relative;
+    grid-template-columns:minmax(0,1fr) 36px;
+    row-gap:7px;
+    padding:10px 12px 8px;
+  }
+  .templatePremiumModal .templatePremiumHeading{grid-column:1;grid-row:1}
+  .templatePremiumModal .templatePremiumHeader .templateStudioHeaderActions{
+    grid-column:1/-1;
+    grid-row:2;
+    justify-self:stretch;
+    gap:6px;
+  }
+  .templatePremiumModal .templateHeaderFormActions{
+    grid-column:1/-1;
+    grid-row:3;
+    justify-self:stretch;
+    justify-content:flex-end;
+    padding-right:0;
+  }
+  .templatePremiumModal .templateHeaderFormActions>.iconButton{
+    position:absolute;
+    right:12px;
+    top:11px;
+  }
+  .templatePremiumModal .templateHeaderFormActions .primaryButton{
+    flex:1 1 auto;
+  }
+  .templatePremiumModal .templateHeaderArchive span{display:none}
+}

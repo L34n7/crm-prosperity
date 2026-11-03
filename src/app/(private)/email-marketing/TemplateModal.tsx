@@ -93,7 +93,7 @@ export default function TemplateModal({
     if (template) {
       setConfirmacao({
         titulo: "Substituir conteúdo do template?",
-        descricao: "O modelo selecionado substituirá o conteúdo em edição. O template salvo só será alterado quando você clicar em Salvar template.",
+        descricao: "O modelo selecionado substituirá o conteúdo em edição. O template salvo só será alterado quando você clicar em Salvar edição.",
         textoAcao: "Aplicar modelo",
         acao: () => aplicarModeloConfirmado(tipo, id),
       });
@@ -333,13 +333,27 @@ export default function TemplateModal({
                 <LayoutTemplate size={18}/> {galeriaAberta ? "Fechar galeria" : "Escolher modelo na galeria"}
               </button>
             </div>
-            <button type="button" className={styles.iconButton} onClick={onClose}
-              aria-label="Fechar" disabled={salvando}>
-              <X size={18} />
-            </button>
+            <div className={styles.templateHeaderFormActions}>
+              {template ? (
+                <button type="button" className={[styles.dangerButton, styles.templateHeaderArchive].join(" ")}
+                  onClick={solicitarArquivamento} disabled={salvando} title="Arquivar template">
+                  <Trash2 size={15}/><span>Arquivar</span>
+                </button>
+              ) : null}
+              <button type="button" className={styles.secondaryButton} onClick={onClose} disabled={salvando}>
+                Cancelar
+              </button>
+              <button type="submit" form="email-template-editor-form" className={styles.primaryButton} disabled={salvando}>
+                <Check size={16}/> {salvando ? "Salvando..." : template ? "Salvar edição" : "Criar template"}
+              </button>
+              <button type="button" className={styles.iconButton} onClick={onClose}
+                aria-label="Fechar" disabled={salvando}>
+                <X size={18}/>
+              </button>
+            </div>
           </div>
 
-          <form onSubmit={salvar} className={styles.templatePremiumForm}>
+          <form id="email-template-editor-form" onSubmit={salvar} className={styles.templatePremiumForm}>
             {galeriaAberta ? <div className={styles.templateStudioGallery} aria-label="Galeria de modelos de e-mail">
               {modelosVisuais.map(item => <button type="button" key={item.id} onClick={() => aplicarModelo("visual", item.id)} className={styles.templateStudioGalleryCard}>
                 <span className={styles.templateStudioGalleryMock}><iframe tabIndex={-1} title={"Prévia " + item.nome} sandbox="" srcDoc={gerarHtmlEmailVisual(item.documento)} /></span>
@@ -463,22 +477,6 @@ export default function TemplateModal({
 
             {erro ? <div className={styles.templatePremiumError} role="alert">{erro}</div> : null}
 
-            <div className={styles.templatePremiumFooter}>
-              {template ? (
-                <button type="button" className={styles.dangerButton} onClick={solicitarArquivamento} disabled={salvando}>
-                  <Trash2 size={16} /> Arquivar
-                </button>
-              ) : <span />}
-
-              <div className={styles.modalFooterActions}>
-                <button type="button" className={styles.secondaryButton} onClick={onClose} disabled={salvando}>
-                  Cancelar
-                </button>
-                <button type="submit" className={styles.primaryButton} disabled={salvando}>
-                  <Check size={16} /> {salvando ? "Salvando..." : "Salvar template"}
-                </button>
-              </div>
-            </div>
           </form>
         </div>
       </div>
