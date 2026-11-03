@@ -5,6 +5,7 @@ import { encontrarVeiculoFipe,type TipoFipe } from "@/lib/cotacoes-veiculares/fi
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
+import {formatarPropostaVeicular,dividirPropostaWhatsApp} from "@/lib/cotacoes-veiculares/formatar-proposta";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { ferramentaPermitidaParaNicho } from "./ferramentas-por-nicho";
 import { carregarNichoEmpresa } from "./nicho-empresa";
@@ -458,24 +459,32 @@ export async function executarFerramentaNegocio(params: {
       referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
       opcionaisPorPlano,idempotencyKey:"agente-ia:"+assinatura,
     });
+    const textoCliente=formatarPropostaVeicular({
+      veiculo:fipe.brand+" "+fipe.model,
+      anoModelo:fipe.modelYear,
+      uso:USOS_VEICULO[uso],
+      planos:calculos.planos,
+    });
     return {
       ok:true,grupo_id,cotacao_ids:cotacoes.map(i=>i.id),
       veiculo:fipe.brand+" "+fipe.model,ano:fipe.modelYear,
-      categoria,uso,energia,tabela_fipe:fipe.referenceMonth,
-      valor_fipe:formatarDinheiro(fipe.valorCentavos/100),
+      categoria,uso,energia,
+      // A FIPE continua sendo registrada para cálculo, mas não compõe a resposta ao cliente.
+      mensagens_cliente:dividirPropostaWhatsApp(textoCliente),
       planos:calculos.planos.map(calculo=>({
         codigo:calculo.plano,nome:calculo.plano_nome,
-        codigo_produto:calculo.codigo_produto,
-        mensalidade:formatarDinheiro(calculo.total_centavos/100),
+        mensalidade:formatarDinheiro(calculo.mensalidade_base_centavos/100),
         cota_participacao:formatarDinheiro(calculo.cota_participacao_centavos/100),
         cobertura_terceiros:calculo.terceiros_limite_centavos
           ?formatarDinheiro(calculo.terceiros_limite_centavos/100):"Não disponível",
         assistencia_24h:calculo.assistencia_km_total+" km totais",
-        opcionais:calculo.opcionais.map(i=>i.nome),
+        opcionais_disponiveis:calculo.opcionais_disponiveis.map(item=>({
+          nome:item.nome,valor_mensal:formatarDinheiro(item.centavos/100),
+        })),
         coberturas:calculo.coberturas,
         condicoes:calculo.observacoes,
       })),
-      observacao:"Apresente todos os planos cadastrados com seus nomes reais. Não confirme contratação.",
+      observacao:"A proposta é apresentada com a mensalidade base, sem opcionais. Os opcionais são listados separadamente e a FIPE é usada apenas internamente.",
     };
   }
   if (params.tipo === "consultar_produtos_estoque") {
