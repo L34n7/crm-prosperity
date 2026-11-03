@@ -1128,3 +1128,7 @@
  .quoteModalSummary strong{font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){.quoteSwitch,.quoteSwitch span,.historyCardAction{transition:none}}
+
+/* Ações do comparativo: copiar primeiro, salvar logo abaixo. */
+.comparisonActions{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
+.comparisonActions>button{display:inline-flex;align-items:center;justify-content:center;gap:8px;max-width:100%;width:100%}

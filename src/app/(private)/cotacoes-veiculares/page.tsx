@@ -444,10 +444,8 @@ export default function CotacoesVeicularesPage() {
           </div>
 
           <div className={styles.actions}>
-            <button type="button" className={styles.secondary} disabled={ocupado||buscandoFipe||!podeGerenciar||!categoriaCotacao||!energia||!referenciaFipe}
-              onClick={()=>void enviar("simular",dadosCotacao())}><Calculator size={17}/> Simular todos os planos</button>
-            <button type="button" className={styles.primary} disabled={ocupado||!podeGerenciar||!calculos||Boolean(cotacaoSalva)}
-              onClick={()=>void enviar("salvar",dadosCotacao())}><Save size={17}/> {cotacaoSalva?"Cotação salva":"Salvar cotação"}</button>
+            <button type="button" className={styles.primary} disabled={ocupado||buscandoFipe||!podeGerenciar||!categoriaCotacao||!energia||!referenciaFipe}
+              onClick={()=>void enviar("simular",dadosCotacao())}><Calculator size={17}/> Gerar cotação</button>
           </div>
         </section>
         <aside className={styles.panel}>
@@ -504,8 +502,10 @@ export default function CotacoesVeicularesPage() {
             <span className={calculos.planos[0]?.tabela_validada?styles.goodStatus:styles.pendingStatus}>
               {calculos.planos[0]?.tabela_validada?"Tabela validada":"Rascunho — validação comercial pendente"}
             </span>
-            <div className={styles.actions}>
+            <div className={styles.actions+" "+styles.comparisonActions}>
               <button type="button" className={styles.secondary} onClick={()=>void copiarResumo()}><Copy size={16}/> Copiar comparativo</button>
+              <button type="button" className={styles.primary} disabled={ocupado||!podeGerenciar||!calculos||Boolean(cotacaoSalva)}
+                onClick={()=>void enviar("salvar",dadosCotacao())}><Save size={17}/> {cotacaoSalva?"Cotação salva":"Salvar cotação"}</button>
             </div>
             {cotacaoSalva&&<p className={styles.saved}>Cotação salva: {cotacaoSalva.slice(0,8).toUpperCase()}</p>}
           </>}
