@@ -2,7 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, Bold, CaseUpper, CheckCircle2, X, Columns2, Copy, Eye, GripVertical, Heading1, Highlighter, Image as ImageIcon, Italic, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Share2, Smartphone, Strikethrough, Trash2, Type, Underline, Undo2,
+  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, Bold, CaseUpper, CornerDownLeft, Smile, CheckCircle2, X, Columns2, Copy, Eye, GripVertical, Heading1, Highlighter, Image as ImageIcon, Italic, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Share2, Smartphone, Strikethrough, Trash2, Type, Underline, Undo2,
 } from "lucide-react";
 import { urlEmailSegura, type TipoBlocoEmail } from "@/lib/email-marketing/editor-visual";
 import type { VariavelCatalogo } from "@/lib/variaveis/catalogo";
@@ -14,6 +14,14 @@ export type EmailHtmlPreviewHandle = { obterHtml: () => string; inserirBloco: (t
 
 type EstiloCampo = "color" | "backgroundColor" | "fontSize" | "fontFamily" | "padding" | "textAlign" | "borderRadius";
 const FONTES_EMAIL = ["Arial", "Georgia", "Verdana", "Tahoma", "Trebuchet MS"] as const;
+const EMOJIS_EMAIL = [
+  ["✨", "Brilho"], ["🏡", "Casa"], ["🏠", "Imóvel"], ["📍", "Localização"],
+  ["💬", "Mensagem"], ["📱", "Celular"], ["📞", "Telefone"], ["📧", "E-mail"],
+  ["🎯", "Objetivo"], ["🚀", "Lançamento"], ["✅", "Confirmado"], ["⭐", "Estrela"],
+  ["💚", "Coração verde"], ["❤️", "Coração"], ["🔥", "Fogo"], ["🎉", "Festa"],
+  ["🎁", "Presente"], ["💰", "Dinheiro"], ["📅", "Calendário"], ["🔑", "Chaves"],
+  ["🏆", "Troféu"], ["👋", "Aceno"], ["😊", "Sorriso"], ["🤝", "Acordo"],
+] as const;
 type FonteEmail = typeof FONTES_EMAIL[number];
 function detectarFonte(valor: string): FonteEmail {
   return FONTES_EMAIL.find(fonte => valor.toLowerCase().includes(fonte.toLowerCase())) || "Arial";
@@ -51,6 +59,9 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const painelRef = useRef<HTMLElement>(null);
   const elementoRef = useRef<HTMLElement | null>(null);
+  const trechoRef = useRef<Range | null>(null);
+  const cursorRef = useRef<Range | null>(null);
+  const trechoEstiloRef = useRef<HTMLElement | null>(null);
   const editandoRef = useRef(true);
   const arrasteElementoRef = useRef<HTMLElement | null>(null);
   const alcaRef = useRef<HTMLButtonElement | null>(null);
@@ -59,6 +70,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   const [editando, setEditando] = useState(true);
   const [selecionado, setSelecionado] = useState<Selecionado | null>(null);
   const [mensagem, setMensagem] = useState("");
+  const [trechoAtivo, setTrechoAtivo] = useState(false);
+  const [emojisAbertos, setEmojisAbertos] = useState(false);
   const [confirmarRemocao, setConfirmarRemocao] = useState(false);
   const [enviandoImagem, setEnviandoImagem] = useState(false);
   const [arrastando, setArrastando] = useState(false);
@@ -83,8 +96,9 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     copia.querySelectorAll("[data-prosperity-drag-handle]").forEach(elemento => elemento.remove());
     copia.querySelectorAll("[data-prosperity-drop-target]").forEach(elemento => elemento.removeAttribute("data-prosperity-drop-target"));
     copia.querySelector("body")?.removeAttribute("data-prosperity-mode");
+    // Desembrulha SOMENTE os marcadores de edição; preserva <br> e spans coloridos.
     copia.querySelectorAll("[data-prosperity-edit-text]").forEach(elemento => {
-      elemento.replaceWith(copia.ownerDocument.createTextNode(elemento.textContent || ""));
+      elemento.replaceWith(...Array.from(elemento.childNodes));
     });
     copia.querySelectorAll("a[data-prosperity-href]").forEach(elemento => {
       const destino = elemento.getAttribute("data-prosperity-href");
@@ -406,15 +420,123 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     return destino !== origem && destino.parentElement === origem.parentElement ? destino : null;
   }
 
+
+  function marcadorDoNo(no: Node): HTMLElement | null {
+    const el = no.nodeType === 1 ? no as Element : no.parentElement;
+    return el?.closest<HTMLElement>("[data-prosperity-edit-text]") || null;
+  }
+
+  function registrarSelecaoTexto() {
+    const el = elementoRef.current;
+    const doc = iframeRef.current?.contentDocument;
+    const selection = doc?.getSelection();
+    if (!el || !selection?.rangeCount || !editandoRef.current) return;
+    const range = selection.getRangeAt(0);
+    if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return;
+    if (marcadorDoNo(range.startContainer)) cursorRef.current = range.cloneRange();
+    if (!range.collapsed && range.toString().trim()) {
+      trechoRef.current = range.cloneRange();
+      trechoEstiloRef.current = null;
+      setTrechoAtivo(true);
+    } else {
+      trechoRef.current = null;
+      trechoEstiloRef.current = null;
+      setTrechoAtivo(false);
+    }
+  }
+
+  function alcanceTexto(): Range | null {
+    const el = elementoRef.current;
+    const range = trechoRef.current;
+    if (!el || !range || range.collapsed || !range.toString().trim()) return null;
+    return el.contains(range.startContainer) && el.contains(range.endContainer) ? range.cloneRange() : null;
+  }
+
+  /** Insere formatação em um trecho sem alterar o estilo do restante da caixa. */
+  function estilizarTrecho(chave: string, valor: string): boolean {
+    const range = alcanceTexto();
+    if (!range) return false;
+    const doc = range.startContainer.ownerDocument || iframeRef.current?.contentDocument;
+    if (!doc) return false;
+    registrarHistorico();
+    let span = trechoEstiloRef.current;
+    if (!span || !span.isConnected || !span.contains(range.startContainer) || !span.contains(range.endContainer)) {
+      span = doc.createElement("span");
+      const fragmento = range.extractContents();
+      span.appendChild(fragmento);
+      range.insertNode(span);
+    }
+    span.style.setProperty(chave, valor, "important");
+    const proximo = doc.createRange();
+    proximo.selectNodeContents(span);
+    trechoRef.current = proximo.cloneRange();
+    trechoEstiloRef.current = span;
+    const selection = doc.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(proximo);
+    setTrechoAtivo(true);
+    setMensagem("Trecho selecionado formatado.");
+    return true;
+  }
+
+  function alcanceInsercao(): Range | null {
+    const el = elementoRef.current;
+    if (!el) return null;
+    const range = cursorRef.current;
+    if (range && el.contains(range.startContainer) && el.contains(range.endContainer)) return range.cloneRange();
+    const editaveis = el.matches("[data-prosperity-edit-text]")
+      ? [el]
+      : [...el.querySelectorAll<HTMLElement>("[data-prosperity-edit-text]")];
+    const marca = editaveis[editaveis.length - 1];
+    if (!marca) return null;
+    const novo = marca.ownerDocument.createRange();
+    novo.selectNodeContents(marca);
+    novo.collapse(false);
+    return novo;
+  }
+
+  function inserirNoCursor(conteudo: string, quebra = false, rangeDado?: Range) {
+    const range = rangeDado?.cloneRange() || alcanceInsercao();
+    if (!range) {
+      setMensagem("Selecione um título, texto ou botão na prévia antes de inserir conteúdo.");
+      return;
+    }
+    registrarHistorico();
+    const doc = range.startContainer.ownerDocument || iframeRef.current?.contentDocument;
+    if (!doc) return;
+    range.deleteContents();
+    const node = quebra ? doc.createElement("br") : doc.createTextNode(conteudo);
+    range.insertNode(node);
+    const proximo = doc.createRange();
+    proximo.setStartAfter(node);
+    proximo.collapse(true);
+    cursorRef.current = proximo.cloneRange();
+    trechoRef.current = null;
+    trechoEstiloRef.current = null;
+    setTrechoAtivo(false);
+    const sel = doc.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(proximo);
+    setMensagem(quebra ? "Quebra de linha inserida." : "Emoji inserido no texto.");
+  }
+
   function selecionar(elemento: HTMLElement) {
     const doc = iframeRef.current?.contentDocument;
     doc?.querySelectorAll("[data-prosperity-selected]").forEach(el => el.removeAttribute("data-prosperity-selected"));
     elemento.setAttribute("data-prosperity-selected", "true");
+    if (elementoRef.current !== elemento) {
+      trechoRef.current = null;
+      cursorRef.current = null;
+      trechoEstiloRef.current = null;
+      setTrechoAtivo(false);
+      setEmojisAbertos(false);
+    }
     elementoRef.current = elemento;
     atualizarAlca(elemento);
     setSelecionado(lerElemento(elemento));
     setConfirmarRemocao(false);
     setAbaPropriedades("elemento");
+    registrarSelecaoTexto();
     setMensagem("");
   }
 
@@ -451,21 +573,42 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
         const pai = marca.closest("h1,h2,h3,h4,h5,h6,p,a,button,td,th,li,blockquote,div,section,header,footer") || marca.parentElement;
         if (pai && pai !== doc.body && pai !== elementoRef.current) selecionar(pai as HTMLElement);
       });
-      marca.addEventListener("keydown", event => { if (event.key === "Enter") event.preventDefault(); });
+      const inserirEnter = (evento: Event) => {
+        const selection = doc.getSelection();
+        if (!selection?.rangeCount || !marca.contains(selection.anchorNode)) return;
+        evento.preventDefault();
+        inserirNoCursor("", true, selection.getRangeAt(0));
+      };
+      marca.addEventListener("keydown", event => {
+        if (event.key === "Enter") inserirEnter(event);
+      });
+      marca.addEventListener("beforeinput", event => {
+        if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") inserirEnter(event);
+      });
       marca.addEventListener("paste", event => {
         event.preventDefault();
-        const texto = event.clipboardData?.getData("text/plain")?.replace(/[\r\n]+/g, " ") || "";
+        const texto = event.clipboardData?.getData("text/plain") || "";
         const selection = doc.getSelection();
-        if (!selection?.rangeCount) return;
+        if (!selection?.rangeCount || !marca.contains(selection.anchorNode)) return;
+        registrarHistorico();
         const range = selection.getRangeAt(0);
-        if (!marca.contains(range.commonAncestorContainer)) return;
         range.deleteContents();
-        const novo = doc.createTextNode(texto);
-        range.insertNode(novo);
-        range.setStartAfter(novo);
-        range.collapse(true);
+        const fragment = doc.createDocumentFragment();
+        const linhas = texto.replace(/\r\n?/g, "\n").split("\n");
+        for (let i = 0; i < linhas.length; i++) {
+          if (i) fragment.appendChild(doc.createElement("br"));
+          fragment.appendChild(doc.createTextNode(linhas[i]));
+        }
+        const ancora = doc.createTextNode("");
+        fragment.appendChild(ancora);
+        range.insertNode(fragment);
+        const proximo = doc.createRange();
+        proximo.setStartBefore(ancora);
+        proximo.collapse(true);
+        cursorRef.current = proximo.cloneRange();
         selection.removeAllRanges();
-        selection.addRange(range);
+        selection.addRange(proximo);
+        ancora.remove();
       });
     }
   }
@@ -475,6 +618,11 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     if (!doc?.body) return;
     elementoRef.current = null;
     alcaRef.current = null;
+    cursorRef.current = null;
+    trechoRef.current = null;
+    trechoEstiloRef.current = null;
+    setTrechoAtivo(false);
+    setEmojisAbertos(false);
     setSelecionado(null);
     setMensagem("");
     doc.querySelectorAll("form").forEach(form => form.removeAttribute("action"));
@@ -499,6 +647,10 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       "[data-prosperity-mode=previa] [data-prosperity-drag-handle]{display:none!important;}",
     ].join("");
     doc.head.appendChild(estilo);
+    doc.addEventListener("selectionchange", registrarSelecaoTexto);
+    doc.addEventListener("keyup", registrarSelecaoTexto);
+    doc.addEventListener("mouseup", registrarSelecaoTexto);
+    doc.addEventListener("touchend", registrarSelecaoTexto, { passive: true });
     aplicarModoEdicao(editandoRef.current);
     doc.addEventListener("scroll", () => atualizarPosicaoAlca(), true);
     const encontrarElemento = (alvo: Element | null): HTMLElement | null => {
@@ -602,6 +754,12 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   function aplicarEstilo(campo: EstiloCampo, valor: string) {
     const el = elementoRef.current;
     if (!el) return;
+    const css = campo === "color" ? "color" : campo === "fontSize" ? "font-size" : campo === "fontFamily" ? "font-family" : "";
+    const pixel = campo === "fontSize" ? Math.max(8, Math.min(70, Number(valor) || 8)) + "px" : valor;
+    if (css && estilizarTrecho(css, pixel)) {
+      setSelecionado(atual => atual ? { ...atual, ...(campo === "color" ? { cor: valor } : campo === "fontSize" ? { tamanho: String(Number(valor)) } : { fonte: valor as FonteEmail }) } : atual);
+      return;
+    }
     registrarHistorico();
     const propriedade = campo === "fontSize" || campo === "padding" || campo === "borderRadius";
     const minimo = campo === "fontSize" ? 8 : 0;
@@ -617,6 +775,21 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   function aplicarFormatacaoTexto(campo: "negrito" | "italico" | "sublinhado" | "riscado" | "maiusculas" | "entrelinhas" | "letras", valor?: string) {
     const el = elementoRef.current;
     if (!el || !selecionado || selecionado.tipo === "imagem" || selecionado.tipo === "social") return;
+    const formatacaoTrecho: Record<string,string> = {
+      negrito: selecionado.negrito ? "400" : "700",
+      italico: selecionado.italico ? "normal" : "italic",
+      maiusculas: selecionado.maiusculas ? "none" : "uppercase",
+      sublinhado: selecionado.sublinhado ? "none" : "underline",
+      riscado: selecionado.riscado ? "none" : "line-through",
+      entrelinhas: String(Math.max(1, Math.min(2.5, Number(valor) || 1.5))),
+      letras: String(Math.max(-1, Math.min(8, Number(valor) || 0))) + "px",
+    };
+    const propriedadesTrecho: Record<string,string> = {
+      negrito: "font-weight", italico: "font-style", maiusculas: "text-transform",
+      sublinhado: "text-decoration-line", riscado: "text-decoration-line",
+      entrelinhas: "line-height", letras: "letter-spacing",
+    };
+    if (estilizarTrecho(propriedadesTrecho[campo], formatacaoTrecho[campo])) return;
     registrarHistorico();
     const doc = el.ownerDocument;
     const valores = [el, ...Array.from(el.querySelectorAll<HTMLElement>("strong,em,span,p,h1,h2,h3,h4,h5,h6,a,li,blockquote"))]
@@ -644,6 +817,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   function aplicarGrifo(cor: string, ativar: boolean) {
     const el = elementoRef.current;
     if (!el || !selecionado || selecionado.tipo === "imagem" || selecionado.tipo === "social") return;
+    if (ativar && estilizarTrecho("background-color", cor)) return;
+    if (!ativar && estilizarTrecho("background-color", "transparent")) return;
     registrarHistorico();
     const doc = el.ownerDocument;
     const textos = el.hasAttribute("data-prosperity-edit-text") ? [el] :
@@ -919,6 +1094,29 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
               </div>
               <label className={styles.campoGrifo}><span>Cor do grifo</span><input type="color"
                 value={selecionado.corGrifo} onChange={e => aplicarGrifo(e.target.value, true)}/></label>
+              <div className={styles.edicaoTrecho}>
+                <strong>Texto e emojis</strong>
+                <p>{trechoAtivo
+                  ? "Trecho selecionado: cor, fonte, negrito e grifo serão aplicados somente a ele."
+                  : "Para colorir uma palavra, selecione-a na prévia. Pressione Enter no texto para quebrar a linha."}</p>
+                <div className={styles.acoesTrecho}>
+                  <button type="button" onClick={() => inserirNoCursor("", true)}
+                    title="Adicionar quebra de linha no ponto do cursor">
+                    <CornerDownLeft size={16}/> Quebra de linha
+                  </button>
+                  <button type="button" aria-expanded={emojisAbertos}
+                    onClick={() => setEmojisAbertos(atual => !atual)}
+                    title="Escolher emoji para inserir no texto">
+                    <Smile size={16}/> Emojis
+                  </button>
+                </div>
+                {emojisAbertos ? <div className={styles.paletaEmojis} role="group" aria-label="Emojis disponíveis">
+                  {EMOJIS_EMAIL.map(([emoji, nome]) => (
+                    <button type="button" key={emoji} aria-label={"Inserir " + nome}
+                      title={nome} onClick={() => inserirNoCursor(emoji)}>{emoji}</button>
+                  ))}
+                </div> : null}
+              </div>
               <label><span>Entrelinhas</span><input type="number" min={1} max={2.5} step={0.1} value={selecionado.entrelinhas}
                 onChange={e => aplicarFormatacaoTexto("entrelinhas", e.target.value)}/></label>
               <label><span>Espaçamento (px)</span><input type="number" min={-1} max={8} step={1} value={selecionado.letras}
