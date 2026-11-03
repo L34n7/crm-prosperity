@@ -395,7 +395,7 @@ export default function ContatosPage() {
   const [salvandoInformacaoCaptura, setSalvandoInformacaoCaptura] = useState(false);
 
   const [abaPreviewImportacao, setAbaPreviewImportacao] = useState<
-    "alertas" | "validos" | "duplicados_banco" | "duplicados_arquivo" | "invalidos"
+    "alertas" | "validos" | "recuperaveis" | "duplicados_banco" | "duplicados_arquivo" | "invalidos"
   >("alertas");
 
   const [paginaPreviewImportacao, setPaginaPreviewImportacao] = useState(1);
@@ -407,12 +407,14 @@ export default function ContatosPage() {
       total: number;
       validos: number;
       alertas: number;
+      recuperaveis: number;
       duplicados_banco: number;
       duplicados_arquivo: number;
       invalidos: number;
     };
     validos: ItemPreviewImportacao[];
     alertas: ItemPreviewImportacao[];
+    recuperaveis: ItemPreviewImportacao[];
     duplicados_banco: ItemPreviewImportacao[];
     duplicados_arquivo: ItemPreviewImportacao[];
     invalidos: ItemPreviewImportacao[];
@@ -697,7 +699,9 @@ export default function ContatosPage() {
 
     setPreviewImportacao(data);
 
-    if ((data.alertas || []).length > 0) {
+    if ((data.recuperaveis || []).length > 0) {
+      setAbaPreviewImportacao("recuperaveis");
+    } else if ((data.alertas || []).length > 0) {
       setAbaPreviewImportacao("alertas");
     } else if ((data.invalidos || []).length > 0) {
       setAbaPreviewImportacao("invalidos");
@@ -727,6 +731,7 @@ export default function ContatosPage() {
     const contatosImportaveis = [
       ...(previewImportacao.validos || []),
       ...(previewImportacao.alertas || []),
+      ...(previewImportacao.recuperaveis || []),
       ...(previewImportacao.duplicados_banco || []),
     ];
 
@@ -970,6 +975,8 @@ export default function ContatosPage() {
         return previewImportacao.alertas || [];
       case "validos":
         return previewImportacao.validos || [];
+      case "recuperaveis":
+        return previewImportacao.recuperaveis || [];
       case "duplicados_banco":
         return previewImportacao.duplicados_banco || [];
       case "duplicados_arquivo":
@@ -987,6 +994,8 @@ export default function ContatosPage() {
         return "Contatos com alerta";
       case "validos":
         return "Contatos válidos";
+      case "recuperaveis":
+        return "E-mails que serão recuperados";
       case "duplicados_banco":
         return "Duplicados no sistema";
       case "duplicados_arquivo":
@@ -1018,9 +1027,12 @@ export default function ContatosPage() {
         : 0)
     : 0;
 
+  // Atualizar e-mails ausentes também é uma operação válida sem criar contatos novos.
+  const quantidadeEmailsRecuperaveis = previewImportacao?.recuperaveis?.length || 0;
   const listaFicariaVazia =
     Boolean(previewImportacao) &&
     quantidadeContatosLista === 0 &&
+    quantidadeEmailsRecuperaveis === 0 &&
     (previewImportacao?.duplicados_banco.length || 0) > 0;
 
   async function salvarEdicao() {
@@ -3265,8 +3277,8 @@ export default function ContatosPage() {
                 <p className={styles.eyebrow}>Importação</p>
                 <h2 className={styles.modalTitle}>Importar contatos</h2>
                 <p className={styles.cardDescription}>
-                  Importe contatos com telefone, e-mail ou ambos. Para E-mail Marketing, basta uma coluna de e-mail válido (o nome é opcional).
-                  Cada importação é salva como lista. O "campo_contato" é mantido por lista e, se estiver vazio, preserva o valor anterior.
+                  Importe contatos com telefone, e-mail ou ambos. Colunas como "Contato (e-mail)" são reconhecidas automaticamente.
+                  E-mails ausentes de contatos existentes podem ser recuperados pelo telefone, sem sobrescrever os e-mails já cadastrados.
                 </p>
               </div>
 
@@ -3422,6 +3434,12 @@ export default function ContatosPage() {
                   </div>
                 </div>
 
+                {quantidadeEmailsRecuperaveis > 0 ? (
+                  <div role="status" style={{ padding: "11px 13px", borderRadius: 10, background: "var(--crm-primary-soft)", border: "1px solid var(--crm-primary-border)", color: "var(--crm-primary-text)", fontSize: 13, lineHeight: 1.5 }}>
+                    <strong>{quantidadeEmailsRecuperaveis} e-mail(s) recuperável(is).</strong>{" "}
+                    Serão preenchidos apenas em contatos que estão sem e-mail, identificados pelo telefone. E-mails existentes não serão alterados.
+                  </div>
+                ) : null}
                 <div className={styles.importTabs}>
                   <button
                     type="button"
@@ -3448,6 +3466,13 @@ export default function ContatosPage() {
                   >
                     Válidos ({previewImportacao.validos.length})
                   </button>
+
+                  {quantidadeEmailsRecuperaveis > 0 ? (
+                    <button type="button" className={`${styles.importTabButton} ${abaPreviewImportacao === "recuperaveis" ? styles.importTabButtonActive : ""}`}
+                      onClick={() => { setAbaPreviewImportacao("recuperaveis"); setPaginaPreviewImportacao(1); }}>
+                      Recuperar e-mails ({quantidadeEmailsRecuperaveis})
+                    </button>
+                  ) : null}
 
                   <button
                     type="button"
@@ -3636,13 +3661,17 @@ export default function ContatosPage() {
                       disabled={
                         confirmandoImportacao ||
                         !nomeListaImportacao.trim() ||
-                        quantidadeContatosLista === 0
+                        (quantidadeContatosLista === 0 && quantidadeEmailsRecuperaveis === 0)
                       }
                       className={styles.primaryButton}
                     >
                       {confirmandoImportacao
                         ? "Importando..."
-                        : `Salvar lista com ${quantidadeContatosLista} contato(s)`}
+                        : quantidadeContatosLista === 0
+                          ? `Recuperar ${quantidadeEmailsRecuperaveis} e-mail(s)`
+                          : quantidadeEmailsRecuperaveis > 0
+                            ? `Salvar ${quantidadeContatosLista} e recuperar ${quantidadeEmailsRecuperaveis}`
+                            : `Salvar lista com ${quantidadeContatosLista} contato(s)`}
                     </button>
                   </div>
                 </div>

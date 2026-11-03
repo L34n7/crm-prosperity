@@ -289,6 +289,18 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
   const emailsSemTelefoneLote = new Set<string>();
   const registros: RegistroImportacao[] = [];
   const ignorados: Array<{ telefone: string; motivo: string }> = [];
+  const emailsPorTelefone = new Map<string, Set<string>>();
+  for (const item of contatos as ContatoImportacao[]) {
+    const telefone = normalizarTelefoneBrasilParaWhatsApp(item.telefone_normalizado || item.telefone_original || "");
+    const email = normalizarEmailContato(item.email);
+    if (!telefone || !email || !emailContatoValido(email)) continue;
+    const encontrados = emailsPorTelefone.get(telefone) || new Set<string>();
+    encontrados.add(email);
+    emailsPorTelefone.set(telefone, encontrados);
+  }
+  const telefonesConflitantes = new Set(
+    [...emailsPorTelefone].filter(([, emails]) => emails.size > 1).map(([telefone]) => telefone)
+  );
 
   for (const contato of contatos as ContatoImportacao[]) {
     const telefone = normalizarTelefoneBrasilParaWhatsApp(
@@ -307,6 +319,10 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     }
     if (email && !emailContatoValido(email)) {
       ignorados.push({ telefone: identificador, motivo: "E-mail inválido" });
+      continue;
+    }
+    if (telefone && telefonesConflitantes.has(telefone)) {
+      ignorados.push({ telefone: identificador, motivo: "Telefone repetido com e-mails diferentes no arquivo" });
       continue;
     }
     if (telefone && telefonesLote.has(telefone)) {
@@ -375,14 +391,32 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
     }
   }
 
+  // A importação também atualiza e-mails ausentes de contatos existentes:
+  // não precisa permitir contatos repetidos na lista para enriquecer o cadastro.
+  const telefonesSemEmail = new Set<string>();
+  if (telefonesRegistros.length) {
+    const { data, error } = await supabaseAdmin.rpc("buscar_telefones_contatos_sem_email", {
+      p_empresa_id: usuario.empresa_id,
+      p_telefones: Array.from(new Set(telefonesRegistros)),
+    });
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    for (const item of data || []) {
+      const telefone = String(item?.telefone_normalizado || "").trim();
+      if (telefone) telefonesSemEmail.add(telefone);
+    }
+  }
+
   const registrosParaProcessar = permitirContatosExistentes
     ? registros
-    : registros.filter(
-        (registro) =>
-          registro.telefone
-            ? !telefonesExistentes.has(registro.telefone)
-            : !emailsExistentes.has(String(registro.email || ""))
+    : registros.filter((registro) =>
+        registro.telefone
+          ? !telefonesExistentes.has(registro.telefone) ||
+              (Boolean(registro.email) && telefonesSemEmail.has(registro.telefone))
+          : !emailsExistentes.has(String(registro.email || ""))
       );
+  const emailsPossiveisRecuperar = registrosParaProcessar.filter(registro =>
+    Boolean(registro.telefone && registro.email && telefonesSemEmail.has(registro.telefone))
+  ).length;
 
   if (!registrosParaProcessar.length) {
     return NextResponse.json(
@@ -519,6 +553,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       total: registrosParaProcessar.length,
       ignorados_antes_da_fila:
         ignorados.length + (registros.length - registrosParaProcessar.length),
+      emails_possiveis_recuperar: emailsPossiveisRecuperar,
     },
     ip: auditMeta.ip,
     user_agent: auditMeta.user_agent,
@@ -533,6 +568,7 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
       nome_lista: nomeLista,
       permitir_contatos_existentes: permitirContatosExistentes,
       total: registrosParaProcessar.length,
+      emails_possiveis_recuperar: emailsPossiveisRecuperar,
       ignorados,
       message: `Lista "${nomeLista}" registrada e enviada para processamento.`,
     },

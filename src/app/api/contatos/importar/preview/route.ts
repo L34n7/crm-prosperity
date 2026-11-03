@@ -124,17 +124,15 @@ function obterTelefoneDaLinha(headers: string[], row: string[]) {
   ]);
 }
 
+const POSSIVEIS_CABECALHOS_EMAIL = [
+  "email", "e-mail", "email address", "e-mail address",
+  "email 2 address", "e-mail 2 address", "email 3 address", "e-mail 3 address",
+  "contato (e-mail)", "contato (email)", "contato email", "contato_e-mail",
+  "e-mail do contato", "email do contato", "endereço de e-mail", "endereco de email",
+];
+
 function obterEmailDaLinha(headers: string[], row: string[]) {
-  return getFirstValueByPossibleHeaders(headers, row, [
-    "email",
-    "e-mail",
-    "email address",
-    "e-mail address",
-    "e-mail 2 address",
-    "e-mail 3 address",
-    "email 2 address",
-    "email 3 address",
-  ]);
+  return getFirstValueByPossibleHeaders(headers, row, POSSIVEIS_CABECALHOS_EMAIL);
 }
 
 function obterObservacoesDaLinha(headers: string[], row: string[]) {
@@ -411,7 +409,7 @@ export async function POST(request: Request) {
     }
 
     const encontrouColunaEmail = headers.some((header) =>
-      ["email", "e-mail", "email address", "e-mail address", "email 2 address", "e-mail 2 address", "email 3 address", "e-mail 3 address"].includes(normalizeHeaderName(header))
+      POSSIVEIS_CABECALHOS_EMAIL.some((nome) => normalizeHeaderName(nome) === normalizeHeaderName(header))
     );
     if (!encontrouAlgumaColunaDeTelefone && !encontrouColunaEmail) {
       return NextResponse.json(
@@ -430,12 +428,27 @@ export async function POST(request: Request) {
     const validos: LinhaPreview[] = [];
     const alertas: LinhaPreview[] = [];
     const duplicadosBanco: LinhaPreview[] = [];
+    const recuperaveis: LinhaPreview[] = [];
     const duplicadosArquivo: LinhaPreview[] = [];
     const invalidos: LinhaPreview[] = [];
 
     const nomeArquivoImportacao = file.name;
     const dataImportacaoTexto = formatarDataHoraImportacao(new Date());
     const origemImportacaoPadrao = `Importação - ${nomeArquivoImportacao} - ${dataImportacaoTexto}`;
+
+    // Não escolha arbitrariamente um e-mail para telefones repetidos com e-mails diferentes.
+    const emailsPorTelefone = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const telefone = normalizarTelefoneBrasilParaWhatsApp(obterTelefoneDaLinha(headers, row));
+      const email = normalizarEmailContato(obterEmailDaLinha(headers, row));
+      if (!telefone || !email || !emailContatoValido(email)) continue;
+      const encontrados = emailsPorTelefone.get(telefone) || new Set<string>();
+      encontrados.add(email);
+      emailsPorTelefone.set(telefone, encontrados);
+    }
+    const telefonesConflitantes = new Set(
+      [...emailsPorTelefone].filter(([, emails]) => emails.size > 1).map(([telefone]) => telefone)
+    );
 
     rows.forEach((row, index) => {
       const linhaReal = index + (arquivoSemCabecalho ? 1 : 2);
@@ -481,6 +494,10 @@ export async function POST(request: Request) {
 
       if (email && !emailContatoValido(email)) {
         invalidos.push({ ...base, motivo: "E-mail inválido" });
+        return;
+      }
+      if (telefoneNormalizado && telefonesConflitantes.has(telefoneNormalizado)) {
+        invalidos.push({ ...base, motivo: "Telefone repetido com e-mails diferentes: revise antes de importar." });
         return;
       }
 
@@ -536,6 +553,23 @@ export async function POST(request: Request) {
       }
     }
 
+    const telefonesSemEmail = new Set<string>();
+    if (telefonesArquivo.size > 0) {
+      const { data: existentesSemEmail, error: erroSemEmail } = await supabaseAdmin.rpc(
+        "buscar_telefones_contatos_sem_email", {
+          p_empresa_id: usuario.empresa_id,
+          p_telefones: Array.from(telefonesArquivo),
+        }
+      );
+      if (erroSemEmail) {
+        return NextResponse.json({ ok: false, error: erroSemEmail.message }, { status: 500 });
+      }
+      for (const item of existentesSemEmail || []) {
+        const telefone = String(item?.telefone_normalizado || "").trim();
+        if (telefone) telefonesSemEmail.add(telefone);
+      }
+    }
+
     // Busca duplicados por e-mail somente para linhas sem telefone.
     // Usa RPC para não transferir todos os contatos da empresa ao navegador.
     if (emailsSemTelefoneArquivo.size > 0) {
@@ -563,10 +597,17 @@ export async function POST(request: Request) {
         continue;
       }
       if (base.telefone_normalizado && telefonesBanco.has(base.telefone_normalizado)) {
-        duplicadosBanco.push({
-          ...base,
-          motivo: "Telefone já cadastrado no sistema",
-        });
+        if (base.email && telefonesSemEmail.has(base.telefone_normalizado)) {
+          recuperaveis.push({
+            ...base,
+            motivo: "Contato existente: o e-mail ausente será preenchido sem sobrescrever outros dados.",
+          });
+        } else {
+          duplicadosBanco.push({
+            ...base,
+            motivo: "Telefone já cadastrado no sistema",
+          });
+        }
         continue;
       }
 
@@ -653,6 +694,7 @@ export async function POST(request: Request) {
         total: rows.length,
         validos: validos.length,
         alertas: alertas.length,
+        recuperaveis: recuperaveis.length,
         duplicados_banco: duplicadosBanco.length,
         duplicados_arquivo: duplicadosArquivo.length,
         invalidos: invalidos.length,
@@ -660,11 +702,13 @@ export async function POST(request: Request) {
       headers,
       validos: validos.map(itemPreviewTela),
       alertas: alertas.map(itemPreviewTela),
+      recuperaveis: recuperaveis.map(itemPreviewTela),
       duplicados_banco: duplicadosBanco.map(itemPreviewTela),
       duplicados_arquivo: duplicadosArquivo.map(itemPreviewTela),
       invalidos: invalidos.map(itemPreviewTela),
       campos_detectados: {
         headers_recebidos: headers,
+        coluna_email: headers.find(header => POSSIVEIS_CABECALHOS_EMAIL.some(nome => normalizeHeaderName(nome) === normalizeHeaderName(header))) || null,
       },
     });
   } catch (error: any) {
