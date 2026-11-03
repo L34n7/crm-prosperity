@@ -88,6 +88,20 @@
 
 .heroStatus svg { flex-shrink: 0; }
 
+/* Indicadores comerciais: estados distinguíveis também por texto e ícone. */
+.heroStatusReady {
+  color: #13684e;
+  background: #e8f8f0;
+  border-color: #a7ddc5;
+}
+
+.heroStatusPending {
+  color: #8b591a;
+  background: #fff4df;
+  border-color: #eacb8e;
+}
+
+
 .warning,
 .error,
 .success {

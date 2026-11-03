@@ -334,9 +334,12 @@ export default function CotacoesVeicularesPage() {
           <h1>Cotação de proteção veicular</h1>
           <p>Compare automaticamente todos os planos cadastrados pela sua empresa.</p>
         </div>
-        <div className={styles.heroStatus}>{status.pronta
-          ?<><BadgeCheck size={16}/> Configuração pronta</>
-          :<><CircleAlert size={16}/> Configuração incompleta</>}</div>
+        <div className={styles.heroStatus+" "+(status.pronta?styles.heroStatusReady:styles.heroStatusPending)}
+          role="status" aria-label={status.pronta?"Configuração pronta":"Configuração pendente"}>
+          {status.pronta
+            ?<><BadgeCheck size={16}/> Configuração pronta</>
+            :<><CircleAlert size={16}/> Configuração pendente</>}
+        </div>
       </section>
       {alertaTabela&&<div className={styles.warning}><CircleAlert size={20}/>
         <span>Cadastre seus planos, importe os preços e configure as coberturas para liberar a ferramenta no agente IA.</span>
