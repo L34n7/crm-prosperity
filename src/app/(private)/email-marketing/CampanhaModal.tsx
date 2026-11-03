@@ -1292,34 +1292,29 @@ export default function CampanhaModal({
                 ) : null}
 
                 {analise ? (
-  
-                <div className={styles.audienceAnalysisGrid}>
+                  <div className={styles.audienceAnalysisGrid}>
                     <div>
-                      <span>Registros encontrados</span>
-                      <strong>
-                        {formatarNumero(analise.total_registros)}
-                      </strong>
+                      <span>Total de contatos</span>
+                      <strong>{formatarNumero(analise.total_registros)}</strong>
                     </div>
                     <div>
-                      <span>E-mails únicos</span>
+                      <span>Com e-mail válido</span>
                       <strong>{formatarNumero(analise.emails_unicos)}</strong>
                     </div>
                     <div>
-                      <span>Duplicados removidos</span>
+                      <span>Sem e-mail válido</span>
+                      <strong>{formatarNumero(analise.sem_email_valido)}</strong>
+                    </div>
+                    <div>
+                      <span>Duplicados</span>
                       <strong>{formatarNumero(analise.duplicados)}</strong>
                     </div>
                     <div>
-                      <span>Sem e-mail válido</span>
-                      <strong>
-                        {formatarNumero(analise.sem_email_valido)}
-                      </strong>
-                    </div>
-                    <div>
-                      <span>Suprimidos</span>
+                      <span>Bloqueados</span>
                       <strong>{formatarNumero(analise.suprimidos)}</strong>
                     </div>
                     <div className={styles.audienceAnalysisPrimary}>
-                      <span>Receberão a campanha</span>
+                      <span>Vão receber</span>
                       <strong>{formatarNumero(analise.elegiveis)}</strong>
                     </div>
                   </div>
@@ -1547,40 +1542,28 @@ export default function CampanhaModal({
 
                 <div className={styles.audienceAnalysisGrid}>
                   <div>
-                    <span>Encontrados</span>
-                    <strong>
-                      {formatarNumero(analise?.total_registros || 0)}
-                    </strong>
+                    <span>Total de contatos</span>
+                    <strong>{formatarNumero(analise?.total_registros || 0)}</strong>
                   </div>
                   <div>
-                    <span>Únicos</span>
-                    <strong>
-                      {formatarNumero(analise?.emails_unicos || 0)}
-                    </strong>
+                    <span>Com e-mail válido</span>
+                    <strong>{formatarNumero(analise?.emails_unicos || 0)}</strong>
+                  </div>
+                  <div>
+                    <span>Sem e-mail válido</span>
+                    <strong>{formatarNumero(analise?.sem_email_valido || 0)}</strong>
                   </div>
                   <div>
                     <span>Duplicados</span>
-                    <strong>
-                      {formatarNumero(analise?.duplicados || 0)}
-                    </strong>
+                    <strong>{formatarNumero(analise?.duplicados || 0)}</strong>
                   </div>
                   <div>
-                    <span>Sem e-mail</span>
-                    <strong>
-                      {formatarNumero(analise?.sem_email_valido || 0)}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Suprimidos</span>
-                    <strong>
-                      {formatarNumero(analise?.suprimidos || 0)}
-                    </strong>
+                    <span>Bloqueados</span>
+                    <strong>{formatarNumero(analise?.suprimidos || 0)}</strong>
                   </div>
                   <div className={styles.audienceAnalysisPrimary}>
-                    <span>Total final</span>
-                    <strong>
-                      {formatarNumero(analise?.elegiveis || 0)}
-                    </strong>
+                    <span>Vão receber</span>
+                    <strong>{formatarNumero(analise?.elegiveis || 0)}</strong>
                   </div>
                 </div>
 
