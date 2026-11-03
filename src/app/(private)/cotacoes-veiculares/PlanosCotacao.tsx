@@ -348,7 +348,7 @@ export default function PlanosCotacao({
             <p>Informe o nome e configure as regras comerciais. Você pode aplicar as mesmas regras a várias categorias.</p>
             <label key={"nome-"+(errosEtapa.nome?tentativa:0)}
               className={styles.planWizardField+" "+(errosEtapa.nome?styles.requiredFieldInvalid:"")}>
-              Nome do plano <span className={styles.requiredAsterisk}>*</span>
+              <span className={styles.planNameLabel}>Nome do plano <span className={styles.requiredAsterisk}>*</span></span>
               <input ref={nomeRef} value={nome} maxLength={90} aria-invalid={Boolean(errosEtapa.nome)}
                 placeholder="Ex.: Essencial, Plus ou Proteção Total"
                 disabled={!podeConfigurar||ocupado}

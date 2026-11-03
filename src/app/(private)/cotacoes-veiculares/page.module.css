@@ -1146,3 +1146,61 @@
 /* Ações do comparativo: copiar primeiro, salvar logo abaixo. */
 .comparisonActions{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
 .comparisonActions>button{display:inline-flex;align-items:center;justify-content:center;gap:8px;max-width:100%;width:100%}
+
+/* Seletor FIPE com categoria e pesquisa por marca/modelo/ano. */
+.fipeTypeRow{display:flex;max-width:100%;margin:14px 0 10px}
+.fipeTypeRow>label{display:flex;flex-direction:column;gap:6px;min-width:0;width:min(100%,300px);
+ color:var(--crm-text-muted,#667488);font-size:12px;font-weight:650}
+.fipeTypeRow select{box-sizing:border-box;width:100%;min-height:43px;padding:10px 12px;
+ border:1px solid var(--crm-border,#d9e1eb);border-radius:10px;background:var(--crm-surface,#fff);
+ color:var(--crm-text,#172033);font:inherit;font-size:14px;cursor:pointer}
+.fipeTypeRow select:focus{border-color:var(--crm-primary,#2667b7);outline:2px solid #b4e9e0;outline-offset:1px}
+.fipeSearchGrid{overflow:visible}
+.fipeSearchField{display:flex;flex-direction:column;min-width:0;gap:6px;
+ font-size:12px;font-weight:650;color:var(--crm-text-muted,#667488)}
+.fipeSearchLabel{min-height:16px}
+.fipeComboRoot{position:relative;min-width:0;width:100%}
+.fipeComboTrigger{box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+ gap:6px;width:100%;min-width:0;min-height:44px;padding:10px 12px;
+ border:1px solid var(--crm-border,#d9e1eb);border-radius:10px;
+ background:var(--crm-surface,#fff);color:var(--crm-text,#172033);
+ font:inherit;font-size:14px;font-weight:600;text-align:left;cursor:pointer}
+.fipeComboTrigger>span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fipeComboTrigger svg{flex:0 0 17px}
+.fipeComboTrigger:hover:not(:disabled){border-color:#80bcb5}
+.fipeComboTrigger:focus-visible{outline:2px solid #8accc1;outline-offset:2px}
+.fipeComboTrigger:disabled{opacity:.6;cursor:not-allowed}
+.fipeComboPlaceholder{color:#80939e;font-weight:500}
+.fipeComboValue{color:var(--crm-text,#172033)}
+.fipeComboPopup{position:absolute;top:calc(100% + 5px);left:0;z-index:50;
+ box-sizing:border-box;width:max(100%,230px);max-width:min(430px,calc(100vw - 40px));
+ padding:7px;border:1px solid #cddfe1;border-radius:12px;background:var(--crm-surface,#fff);
+ box-shadow:0 14px 38px rgba(24,60,73,.18)}
+.fipeComboSearch{display:flex;align-items:center;gap:8px;min-width:0;
+ padding:7px 9px;border:1px solid #cbdfe1;border-radius:9px;background:var(--crm-surface,#fff)}
+.fipeComboSearch svg{flex:0 0 16px;color:#66858c}
+.fipeComboSearch input{border:0!important;outline:0!important;padding:2px!important;min-width:0;
+ flex:1;width:100%;background:transparent!important;color:var(--crm-text,#172033);
+ font:inherit;font-size:16px!important;line-height:1.5;box-shadow:none!important}
+.fipeComboList{display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;
+ max-height:250px;margin-top:6px;gap:1px}
+.fipeComboOption{display:flex;align-items:center;justify-content:space-between;gap:8px;
+ min-height:35px;padding:9px;border:0;border-radius:7px;
+ background:transparent;color:var(--crm-text,#253d49);
+ text-align:left;font:inherit;font-size:12.5px;font-weight:550;cursor:pointer}
+.fipeComboOption span{min-width:0;overflow-wrap:anywhere}
+.fipeComboOption svg{flex:0 0 15px;color:#20867c}
+.fipeComboOptionFocused,.fipeComboOption:hover{background:#ecf8f5}
+.fipeComboEmpty,.fipeComboHint{display:block;padding:9px;color:#627e88;font-size:12px;font-weight:500}
+.planNameLabel{display:inline-flex;align-self:flex-start;align-items:center;
+ gap:4px;max-width:100%;font-weight:750;line-height:1.35}
+.planNameLabel .requiredAsterisk{display:inline-block;margin:0;line-height:1;color:#d4484e}
+.planUploadActions>button:not(:disabled){cursor:pointer}
+.planUploadActions>button:disabled{cursor:not-allowed}
+@media(max-width:760px){
+ .fipeTypeRow>label{width:100%}
+ .fipeTypeRow select,.fipeComboTrigger{min-height:46px;font-size:16px}
+ .fipeComboPopup{width:100%;min-width:0;max-width:100%;left:0}
+ .fipeComboOption{font-size:14px;min-height:44px}
+}
+@media(prefers-reduced-motion:reduce){.fipeComboTrigger,.fipeComboOption{transition:none}}

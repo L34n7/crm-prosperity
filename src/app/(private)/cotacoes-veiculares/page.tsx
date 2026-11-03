@@ -12,6 +12,7 @@ import {
 } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO, USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo, type EnergiaVeiculo, type RegraComercialPlano, type OpcionalComercial } from "@/lib/cotacoes-veiculares/comercial";
 import PlanosCotacao, {type ArquivoPlano} from "./PlanosCotacao";
+import SeletorFipe from "./SeletorFipe";
 import styles from "./page.module.css";
 
 type Faixa = {
@@ -133,24 +134,25 @@ export default function CotacoesVeicularesPage() {
   useEffect(()=>{setOpcionaisPorPlano({});},[categoriaCotacao]);
 
   const consultarApiFipe=useCallback(async(etapa:string,params:Record<string,string>={})=>{
-    const query=new URLSearchParams({tipo:etapa==="marcas"?"all":tipoFipe,etapa,uso,...params});
+    const query=new URLSearchParams({tipo:tipoFipe,etapa,uso,...params});
     const response=await fetch("/api/cotacoes-veiculares/fipe?"+query,{cache:"no-store"});
     const json=await response.json();
     if(!response.ok||!json.ok)throw new Error(json.error||"Consulta FIPE indisponível.");
     return json;
   },[tipoFipe,uso]);
 
-  // As três bases FIPE são reunidas na lista de marcas, sem pedir categoria comercial.
+  // A categoria FIPE escolhida determina as marcas disponíveis, sem limitar a categoria comercial.
   useEffect(()=>{
     let ativo=true;
-    setCarregandoMarcas(true);
-    void fetch("/api/cotacoes-veiculares/fipe?tipo=all&etapa=marcas",{cache:"no-store"})
+    setMarcas([]);setCarregandoMarcas(true);
+    void fetch("/api/cotacoes-veiculares/fipe?tipo="+tipoFipe+"&etapa=marcas",{cache:"no-store"})
       .then(async r=>{const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||"Falha na FIPE.");return j;})
       .then(j=>{if(ativo)setMarcas(j.itens||[]);})
       .catch(e=>{if(ativo)setErro(e instanceof Error?e.message:"Falha ao carregar marcas FIPE.");})
       .finally(()=>{if(ativo)setCarregandoMarcas(false);});
     return ()=>{ativo=false;};
-  },[]);
+  },[tipoFipe]);
+
   useEffect(()=>{
     if(!historicoAberto)return;
     const aoTeclar=(event:KeyboardEvent)=>{if(event.key==="Escape")setHistoricoAberto(null);};
@@ -363,42 +365,56 @@ export default function CotacoesVeicularesPage() {
             <div className={styles.fipeHeader}><strong>Buscar veículo na Tabela FIPE</strong>
               {carregandoMarcas&&<span className={styles.fipeLoading}><Loader2 size={14}/> Carregando marcas...</span>}
             </div>
-            <div className={styles.fieldsThree}>
-              <label>Marca<select value={marca} disabled={carregandoMarcas||!marcas.length} onChange={e=>{
-                const v=e.target.value;
-                setMarca(v);setModelo("");setAno("");setModelos([]);setAnos([]);
-                setCategoriaCotacao(null);setVeiculo("");setAnoModelo("");setValorFipe("");setReferenciaFipe("");
-                setEnergia(null);setCombustivelFipe("");
-                const [tipo,codigo]=v.split("|");
-                if(v&&["cars","motorcycles","trucks"].includes(tipo)&&codigo){
-                  setTipoFipe(tipo as "cars"|"motorcycles"|"trucks");
-                  setCodigoMarcaFipe(codigo);
-                  void consultarFipe("modelos",{marca:codigo,tipo});
-                }else setCodigoMarcaFipe("");
-              }}>
-                <option value="">{carregandoMarcas?"Carregando...":"Selecione a marca na FIPE"}</option>
-                {marcas.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}
-              </select></label>
-              <label>Modelo<select value={modelo} disabled={buscandoFipe||!modelos.length} onChange={e=>{
-                const v=e.target.value;setModelo(v);setAno("");setAnos([]);
-                setCategoriaCotacao(null);setVeiculo("");setAnoModelo("");setValorFipe("");setReferenciaFipe("");
-                setEnergia(null);setCombustivelFipe("");
-                if(v)void consultarFipe("anos",{marca:codigoMarcaFipe,modelo:v});
-              }}>
-                <option value="">Selecione o modelo</option>
-                {modelos.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}
-              </select></label>
-              <label>Ano/combustível<select value={ano} disabled={buscandoFipe||!anos.length} onChange={e=>{
-                const v=e.target.value;setAno(v);setCategoriaCotacao(null);
-                setVeiculo("");setAnoModelo("");setValorFipe("");setReferenciaFipe("");
-                setEnergia(null);setCombustivelFipe("");
-                if(v)void consultarFipe("preco",{marca:codigoMarcaFipe,modelo,ano:v});
-              }}>
-                <option value="">Selecione o ano</option>
-                {anos.map(item=><option key={item.code} value={item.code}>{item.name}</option>)}
-              </select></label>
+            <div className={styles.fipeTypeRow}>
+              <label>Categoria do veículo
+                <select value={tipoFipe} onChange={e=>{
+                  const tipo=e.target.value as "cars"|"motorcycles"|"trucks";
+                  requisicaoFipe.current++;
+                  setBuscandoFipe(false);setTipoFipe(tipo);setCodigoMarcaFipe("");
+                  setMarca("");setModelo("");setAno("");setMarcas([]);setModelos([]);setAnos([]);
+                  setCategoriaCotacao(null);setVeiculo("");setAnoModelo("");setValorFipe("");setReferenciaFipe("");
+                  setEnergia(null);setCombustivelFipe("");setCalculos(null);setErro("");setSucesso("");
+                }}>
+                  <option value="cars">Automóveis</option>
+                  <option value="motorcycles">Motocicletas</option>
+                  <option value="trucks">Caminhões</option>
+                </select>
+              </label>
             </div>
-            <small>Marca, modelo e ano são consultados diretamente na FIPE.</small>
+            <div className={styles.fieldsThree+" "+styles.fipeSearchGrid}>
+              <SeletorFipe label="Marca" valor={marca} opcoes={marcas}
+                placeholder="Selecione ou pesquise a marca"
+                disabled={carregandoMarcas||!marcas.length} carregando={carregandoMarcas}
+                onChange={v=>{
+                  requisicaoFipe.current++;setBuscandoFipe(false);
+                  setMarca(v);setCodigoMarcaFipe(v);setModelo("");setAno("");
+                  setModelos([]);setAnos([]);setCategoriaCotacao(null);
+                  setVeiculo("");setAnoModelo("");setValorFipe("");setReferenciaFipe("");
+                  setEnergia(null);setCombustivelFipe("");setSucesso("");
+                  if(v)void consultarFipe("modelos",{marca:v});
+                }}/>
+              <SeletorFipe label="Modelo" valor={modelo} opcoes={modelos}
+                placeholder="Selecione ou pesquise o modelo"
+                disabled={buscandoFipe||!modelos.length}
+                onChange={v=>{
+                  requisicaoFipe.current++;setBuscandoFipe(false);
+                  setModelo(v);setAno("");setAnos([]);setCategoriaCotacao(null);
+                  setVeiculo("");setAnoModelo("");setValorFipe("");setReferenciaFipe("");
+                  setEnergia(null);setCombustivelFipe("");setSucesso("");
+                  if(v)void consultarFipe("anos",{marca:codigoMarcaFipe,modelo:v});
+                }}/>
+              <SeletorFipe label="Ano/combustível" valor={ano} opcoes={anos}
+                placeholder="Selecione ou pesquise o ano"
+                disabled={buscandoFipe||!anos.length}
+                onChange={v=>{
+                  requisicaoFipe.current++;setBuscandoFipe(false);
+                  setAno(v);setCategoriaCotacao(null);setVeiculo("");setAnoModelo("");
+                  setValorFipe("");setReferenciaFipe("");setEnergia(null);setCombustivelFipe("");
+                  setSucesso("");
+                  if(v)void consultarFipe("preco",{marca:codigoMarcaFipe,modelo,ano:v});
+                }}/>
+            </div>
+            <small>Escolha a categoria FIPE para filtrar as marcas. Digite dentro dos seletores para pesquisar modelos e anos.</small>
           </div>
           {referenciaFipe&&<section className={styles.vehicleSummary} aria-label="Informações do veículo na FIPE">
             <div className={styles.vehicleSummaryHeader}>

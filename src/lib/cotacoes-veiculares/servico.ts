@@ -68,6 +68,7 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
   if(p.origem==="agente_ia"&&!status.pronta)
     throw new Error("Configuração comercial pendente: "+status.pendencias.slice(0,2).join(" "));
   const resultados=[];
+  const tetosFipe:number[]=[];
   for(const plano of planos){
     const meta=arquivos.find(a=>a.plano===plano.codigo);
     const modeloConsulta=p.modeloFipe||p.veiculo||"";
@@ -76,7 +77,10 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
     if(p.categoria==="especiais"&&!especial)continue;
     const categoriaPlano=especial?"especiais":p.categoria;
     const faixasPlano=categoriaPlano==="especiais"?p.categoria==="especiais"?faixas:faixasEspeciais:faixas;
-    const faixa=faixasPlano.find(f=>f.plano===plano.codigo&&
+    const faixasDisponiveis=faixasPlano.filter(f=>f.plano===plano.codigo);
+    const limite=Math.max(0,...faixasDisponiveis.map(f=>Number(f.fipe_max_centavos)));
+    if(limite>0&&Number.isFinite(limite))tetosFipe.push(limite);
+    const faixa=faixasDisponiveis.find(f=>
       p.valorFipeCentavos>=Number(f.fipe_min_centavos)&&
       p.valorFipeCentavos<=Number(f.fipe_max_centavos));
     if(!faixa)continue; // Planos podem atender categorias e faixas diferentes.
@@ -118,7 +122,16 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
       faixa_fipe_max_centavos:Number(faixa.fipe_max_centavos),
     });
   }
-  if(!resultados.length)throw new Error("Nenhum plano disponível para este veículo. Confira as tabelas e regras do plano.");
+  if(!resultados.length){
+    const teto=tetosFipe.length?Math.max(...tetosFipe):0;
+    if(teto>0&&p.valorFipeCentavos>teto){
+      const reais=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v/100);
+      throw new Error("O valor FIPE deste veículo ("+reais(p.valorFipeCentavos)+
+        ") ultrapassa a maior faixa cadastrada para sua categoria ("+reais(teto)+
+        "). Não há mensalidade definida para este valor. Atualize a tabela de preços do plano antes de cotar.");
+    }
+    throw new Error("Nenhum plano disponível para este veículo. Confira os critérios de aceitação, a categoria e as faixas de preço cadastradas.");
+  }
   return {planos:resultados};
 }
 export async function salvarCotacaoPlanos(p:ParametrosCotacao & {
