@@ -456,7 +456,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   function estilizarTrecho(chave: string, valor: string): boolean {
     const range = alcanceTexto();
     if (!range) return false;
-    const doc = range.startContainer.ownerDocument;
+    const doc = range.startContainer.ownerDocument || iframeRef.current?.contentDocument;
+    if (!doc) return false;
     registrarHistorico();
     let span = trechoEstiloRef.current;
     if (!span || !span.isConnected || !span.contains(range.startContainer) || !span.contains(range.endContainer)) {
