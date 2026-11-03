@@ -3,7 +3,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
-import { USOS_VEICULO,ENERGIAS_VEICULO,type UsoVeiculo,type EnergiaVeiculo } from "@/lib/cotacoes-veiculares/comercial";
+import { USOS_VEICULO,motorizacaoDaFipe,type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { CATEGORIAS_COTACAO,categoriaValida,configuracaoCotacao,consultarFaixas,calcularCotacaoPlanos,salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import {detalharVeiculoFipe,precoFipeCentavos,type TipoFipe} from "@/lib/cotacoes-veiculares/fipe";
 import {classificarVeiculoFipe} from "@/lib/cotacoes-veiculares/classificacao";
@@ -81,10 +81,13 @@ export async function POST(req:Request){
   if(!["cars","motorcycles","trucks"].includes(tipo)||
     [marcaFipe,modeloFipe,anoFipe].some(v=>!v||v.length>60||!/^\w[\w-]*$/.test(v)))
     throw new Error("Selecione marca, modelo e ano diretamente na consulta FIPE.");
-  const uso=String(body.uso||"") as UsoVeiculo,energia=String(body.energia||"") as EnergiaVeiculo;
-  if(!Object.hasOwn(USOS_VEICULO,uso)||!Object.hasOwn(ENERGIAS_VEICULO,energia))
-    throw new Error("Informe o uso e a motorização.");
+  const uso=String(body.uso||"") as UsoVeiculo;
+  if(!Object.hasOwn(USOS_VEICULO,uso))throw new Error("Informe a finalidade de uso.");
   const veiculoFipe=await detalharVeiculoFipe(tipo,marcaFipe,modeloFipe,anoFipe);
+  const energia=motorizacaoDaFipe(veiculoFipe.fuel,veiculoFipe.model);
+  if(!energia)throw new Error(
+    "A FIPE não identificou a motorização deste veículo. Solicite uma conferência antes de cotar."
+  );
   const categoriaInterna=await classificarVeiculoFipe({
     empresaId,tipo,codigoFipe:veiculoFipe.codeFipe,modelo:veiculoFipe.model,uso,
   });

@@ -14,6 +14,22 @@ export const ENERGIAS_VEICULO = {
 export type UsoVeiculo = keyof typeof USOS_VEICULO;
 export type EnergiaVeiculo = keyof typeof ENERGIAS_VEICULO;
 
+/** Identifica a motorização pelos dados da FIPE sem depender de escolha manual. */
+export function motorizacaoDaFipe(combustivel: string, modelo: string): EnergiaVeiculo | null {
+  const limpar=(texto:string)=>String(texto||"").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const fuel=limpar(combustivel);
+  const nome=limpar(modelo);
+  if (/\b(hibrid[oa]?|hybrid|phev|mhev|hev)\b/.test(fuel+" "+nome))
+    return "hibrido";
+  if (/\b(eletric[oa]?|electric|eletricidade|electricity|bev|100% electric[oa]?|ev)\b/.test(fuel+" "+nome))
+    return "eletrico";
+  if (/\b(gasolina|diesel|etanol|alcool|flex|gnv|gas natural|bicombustivel)\b/.test(fuel))
+    return "combustao";
+  return null; // Não presume combustão quando a fonte não permite determinar.
+}
+
+
 export type RegraComercialPlano = {
   categoria: CategoriaCotacao;
   plano: PlanoCotacao;
