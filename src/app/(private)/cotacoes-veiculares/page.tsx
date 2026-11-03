@@ -301,31 +301,86 @@ export default function CotacoesVeicularesPage() {
     finally{setSalvandoOpcional(null);}
   }
   async function copiarResumo(){
-    if(!calculos)return;
-    const linhas=[
-      "COTAÇÃO DE PROTEÇÃO VEICULAR",
-      veiculo?"Veículo: "+veiculo:"",
-      anoModelo?"Ano: "+anoModelo:"",
-      "Categoria: "+(categoriaCotacao?CATEGORIAS_COTACAO[categoriaCotacao]:"Não classificada"),
-      "Uso: "+USOS_VEICULO[uso],"Motorização: "+(energia?ENERGIAS_VEICULO[energia]:"Não identificada"),
-      valorFipe?"Valor FIPE: R$ "+valorFipe:"",
-      ...calculos.planos.flatMap(c=>[
-        "", "PLANO "+c.plano_nome.toUpperCase(),
-        "Mensalidade: "+moeda(c.total_centavos),
-        "Cota de participação: "+moeda(c.cota_participacao_centavos),
-        "Terceiros: "+(c.terceiros_limite_centavos?moeda(c.terceiros_limite_centavos):"Não disponível"),
-        "Assistência: "+c.assistencia_km_total+" km totais",
-        ...c.coberturas.map(item=>"Cobertura: "+item),
-        ...(c.observacoes?["Condições: "+c.observacoes]:[]),
-        ...(c.opcionais_disponiveis||[]).map(item=>
-          "Opcional "+(c.opcionais.some(v=>v.codigo===item.codigo)?"incluído":"disponível")+": "+item.nome+" (+ "+moeda(item.centavos)+"/mês)"),
-      ]),
-      "", "Tabela: "+calculos.planos[0]?.referencia,
-      "Proposta informativa, sujeita às condições comerciais da associação.",
-      !calculos.planos[0]?.tabela_validada?"RASCUNHO — VALIDAÇÃO COMERCIAL PENDENTE":"",
-    ].filter(Boolean).join("\n");
-    try{await navigator.clipboard.writeText(linhas);setSucesso("Comparativo copiado.");}
-    catch{setErro("Não foi possível copiar no navegador.");}
+    if(!calculos?.planos.length)return;
+    // Mensagem pronta para copiar e compartilhar no WhatsApp, sem misturar planos.
+    const valor=(centavos:number)=>moeda(centavos).replace(/\u00a0/g," ");
+    const titulo=(nome:string)=>/^plano\b/i.test(nome.trim())?nome:"Plano "+nome;
+    const linhas:string[]=[
+      "🚘 *COTAÇÃO DE PROTEÇÃO VEICULAR*",
+      "",
+      "📋 *DADOS DO VEÍCULO*",
+      ...(nomeContato.trim()?["• Interessado: "+nomeContato.trim()]:[]),
+      "• Veículo: "+(veiculo||"Não informado"),
+      ...(anoModelo?["• Ano: "+anoModelo]:[]),
+      "• Categoria: "+(categoriaCotacao?CATEGORIAS_COTACAO[categoriaCotacao]:"Não classificada"),
+      "• Uso: "+USOS_VEICULO[uso],
+      "• Motorização: "+(energia?ENERGIAS_VEICULO[energia]:"Não identificada"),
+      ...(valorFipe?["• Valor FIPE: R$ "+valorFipe]:[]),
+      ...(referenciaFipe?["• Referência FIPE: "+referenciaFipe]:[]),
+    ];
+    for(const plano of calculos.planos){
+      const disponiveis=plano.opcionais_disponiveis||[];
+      const incluidos=plano.opcionais;
+      const naoIncluidos=disponiveis.filter(o=>!incluidos.some(i=>i.codigo===o.codigo));
+      linhas.push(
+        "",
+        "━━━━━━━━━━━━━━━━━━",
+        "🛡️ *"+titulo(plano.plano_nome).toLocaleUpperCase("pt-BR")+"*",
+        "━━━━━━━━━━━━━━━━━━",
+        "💰 *Mensalidade: "+valor(plano.total_centavos)+"/mês*",
+        ...(plano.total_centavos!==plano.mensalidade_base_centavos?
+          ["• Valor base: "+valor(plano.mensalidade_base_centavos)]:[]),
+        "• Cota de participação: "+valor(plano.cota_participacao_centavos),
+        "• Cobertura para terceiros: "+(plano.terceiros_limite_centavos?
+          valor(plano.terceiros_limite_centavos):"Não disponível"),
+        "• Assistência 24h: "+plano.assistencia_km_total+" km totais"+
+          (plano.assistencias_ano?" • "+plano.assistencias_ano+" acionamentos/ano":""),
+        ...(plano.carro_reserva_incluso_dias>0?
+          ["• Carro reserva incluso: "+plano.carro_reserva_incluso_dias+" dias"]:[]),
+        "",
+        "✅ *COBERTURAS*",
+        ...(plano.coberturas.length?
+          plano.coberturas.map(cobertura=>"• "+cobertura):["• Consulte as condições do plano"]),
+      );
+      linhas.push(
+        "",
+        "➕ *OPCIONAIS*",
+        ...(incluidos.length?
+          ["Incluídos na mensalidade:",
+           ...incluidos.map(o=>"✅ "+o.nome+" (+ "+valor(o.centavos)+"/mês)")]:[]),
+        ...(naoIncluidos.length?
+          ["Disponíveis, não incluídos:",
+           ...naoIncluidos.map(o=>"▫️ "+o.nome+" (+ "+valor(o.centavos)+"/mês)")]:[]),
+        ...(!incluidos.length&&!naoIncluidos.length?["Nenhum opcional disponível."]:[]),
+        "",
+        "*Total "+titulo(plano.plano_nome)+": "+valor(plano.total_centavos)+"/mês*",
+      );
+      // Quando as condições diferirem entre planos, mantê-las no plano correto.
+      if(plano.observacoes&&calculos.planos.some(outro=>outro.observacoes!==plano.observacoes)){
+        linhas.push("","📝 *CONDIÇÕES DO "+titulo(plano.plano_nome).toLocaleUpperCase("pt-BR")+"*",
+          plano.observacoes.trim());
+      }
+    }
+    const notas=calculos.planos[0]?.observacoes?.trim();
+    if(notas&&calculos.planos.every(plano=>plano.observacoes?.trim()===notas)){
+      linhas.push("","📝 *CONDIÇÕES COMERCIAIS*",notas);
+    }
+    const referencia=calculos.planos[0]?.referencia;
+    linhas.push(
+      "",
+      "━━━━━━━━━━━━━━━━━━",
+      ...(referencia?["📚 Tabela comercial: "+referencia]:[]),
+      "ℹ️ Proposta informativa, sujeita às condições comerciais da associação.",
+      "A cota de participação não integra a mensalidade.",
+      ...(!calculos.planos.every(plano=>plano.tabela_validada)?
+        ["⚠️ Rascunho — validação comercial pendente."]:[]),
+    );
+    try{
+      await navigator.clipboard.writeText(linhas.join("\n"));
+      setSucesso("Comparativo formatado copiado. Pronto para compartilhar.");
+    }catch{
+      setErro("Não foi possível copiar no navegador.");
+    }
   }
   const historico=useMemo(()=>{
     const grupos=new Map<string,Cotacao[]>();

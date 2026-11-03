@@ -1144,8 +1144,9 @@
 @media(prefers-reduced-motion:reduce){.quoteSwitch,.quoteSwitch span,.historyCardAction{transition:none}}
 
 /* Ações do comparativo: copiar primeiro, salvar logo abaixo. */
-.comparisonActions{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
-.comparisonActions>button{display:inline-flex;align-items:center;justify-content:center;gap:8px;max-width:100%;width:100%}
+.comparisonActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:10px;min-width:0}
+.comparisonActions>button{display:inline-flex;align-items:center;justify-content:center;gap:8px;max-width:100%;width:100%;text-align:center;white-space:normal}
+.comparisonActions>button svg{flex-shrink:0}
 
 /* Seletor FIPE com categoria e pesquisa por marca/modelo/ano. */
 .fipeTypeRow{display:flex;max-width:100%;margin:14px 0 10px}
@@ -1409,7 +1410,7 @@
 .quoteComparisonGrid .detail{flex:1}
 .quoteComparisonGrid .quoteExtras{margin-top:15px}
 .quoteComparisonPanel .comparisonActions{
-  width:min(100%,335px);
+  width:min(100%,560px);
   margin:15px 0 0 auto;
 }
 .quoteCompareEmpty{
@@ -1621,4 +1622,13 @@
   .fipeFourFields{grid-template-columns:minmax(0,1fr);gap:13px}
   .quoteSearchCard .fipeFourFields .fipeTypeRow select{min-height:46px;font-size:16px}
   .fipeSearchContent{margin-top:14px}
+}
+
+/* Os dois comandos permanecem lado a lado mesmo no comparativo mobile. */
+@media(max-width:460px){
+  .quoteComparisonPanel .comparisonActions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .quoteComparisonPanel .comparisonActions>button{
+    min-height:46px;padding:9px 6px;font-size:11.5px;gap:5px;line-height:1.25
+  }
+  .quoteComparisonPanel .comparisonActions>button svg{width:15px;height:15px}
 }
