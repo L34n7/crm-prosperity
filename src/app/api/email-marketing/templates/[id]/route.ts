@@ -58,6 +58,32 @@ export async function PATCH(
   const body = (await request.json().catch(() => null)) as
     | Record<string, unknown>
     | null;
+
+  if (body?.acao === "restaurar") {
+    if (atual.status !== "arquivado") {
+      return NextResponse.json({ ok: false, error: "Somente templates arquivados podem ser restaurados." }, { status: 409 });
+    }
+    const { data, error } = await supabaseAdmin
+      .from("email_templates")
+      .update({ status: "ativo", updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("empresa_id", acesso.usuario.empresa_id)
+      .eq("status", "arquivado")
+      .select("id, empresa_id, escopo, nome, assunto, html, texto, design_json, status, created_at, updated_at")
+      .maybeSingle();
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ ok: false, error: "O status do template mudou. Atualize a página." }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, template: data, message: "Template restaurado com sucesso." });
+  }
+
+  if (atual.status === "arquivado") {
+    return NextResponse.json({ ok: false, error: "Restaure o template antes de editá-lo." }, { status: 409 });
+  }
+
   const nome = String(body?.nome ?? atual.nome).trim();
   const assunto = String(body?.assunto ?? atual.assunto).trim();
   const texto = String(body?.texto ?? atual.texto ?? "").trim();
@@ -112,7 +138,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   const acesso = await validarAcessoEmailMarketing("email_marketing.templates");
@@ -141,6 +167,51 @@ export async function DELETE(
     );
   }
 
+  const excluirDefinitivamente = new URL(request.url).searchParams.get("definitivo") === "1";
+
+  if (excluirDefinitivamente) {
+    if (atual.status !== "arquivado") {
+      return NextResponse.json(
+        { ok: false, error: "Somente templates arquivados podem ser excluídos definitivamente." },
+        { status: 409 }
+      );
+    }
+    // Não desfazemos vínculos históricos com campanhas existentes.
+    const { count, error: erroCampanhas } = await supabaseAdmin
+      .from("email_campanhas")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", acesso.usuario.empresa_id)
+      .eq("template_id", id);
+    if (erroCampanhas) {
+      return NextResponse.json({ ok: false, error: erroCampanhas.message }, { status: 500 });
+    }
+    if ((count ?? 0) > 0) {
+      return NextResponse.json(
+        { ok: false, error: "Este template está vinculado a campanhas anteriores e não pode ser excluído definitivamente. Ele pode permanecer arquivado." },
+        { status: 409 }
+      );
+    }
+    const { data, error } = await supabaseAdmin
+      .from("email_templates")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", acesso.usuario.empresa_id)
+      .eq("status", "arquivado")
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: error.code === "23503" ? 409 : 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ ok: false, error: "O template não está mais arquivado. Atualize a página." }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, message: "Template excluído definitivamente." });
+  }
+
+  if (atual.status === "arquivado") {
+    return NextResponse.json({ ok: true, message: "Template já está arquivado." });
+  }
+
   const { error } = await supabaseAdmin
     .from("email_templates")
     .update({
@@ -148,7 +219,8 @@ export async function DELETE(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("empresa_id", acesso.usuario.empresa_id);
+    .eq("empresa_id", acesso.usuario.empresa_id)
+    .neq("status", "arquivado");
 
   if (error) {
     return NextResponse.json(

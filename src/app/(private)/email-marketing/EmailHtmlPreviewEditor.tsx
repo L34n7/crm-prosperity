@@ -1135,9 +1135,9 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
             </> : null}
           </div>
           <div className={styles.acoes}>
-            <button type="button" onClick={selecionarConteiner}><Layers size={15}/> Contêiner</button>
-            <button type="button" onClick={() => mover("cima")}><ArrowUp size={15}/> Subir</button>
             <button type="button" onClick={() => mover("baixo")}><ArrowDown size={15}/> Descer</button>
+            <button type="button" onClick={() => mover("cima")}><ArrowUp size={15}/> Subir</button>
+            <button type="button" onClick={selecionarConteiner}><Layers size={15}/> Contêiner</button>
             <button type="button" onClick={duplicar}><Copy size={15}/> Duplicar</button>
             <button type="button" className={styles.excluir} onClick={() => { if (confirmarRemocao) remover(); else setConfirmarRemocao(true); }} aria-label={confirmarRemocao ? "Confirmar remoção do elemento" : "Remover elemento"}>{confirmarRemocao ? <CheckCircle2 size={15}/> : <Trash2 size={15}/>} {confirmarRemocao ? "Confirmar" : "Remover"}</button>
           </div>

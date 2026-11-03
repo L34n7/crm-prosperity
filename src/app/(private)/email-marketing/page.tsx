@@ -8,6 +8,8 @@ import {
   useState,
 } from "react";
 import {
+  Archive,
+  ArchiveRestore,
   BarChart3,
   CheckCircle2,
   FileText,
@@ -22,6 +24,9 @@ import {
   Send,
   Settings2,
   ShieldCheck,
+  Trash2,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import Header from "@/components/Header";
 import CampanhaModal, {
@@ -167,6 +172,11 @@ export default function EmailMarketingPage() {
   const [metricas, setMetricas] =
     useState<MetricasEmailMarketing>(metricasIniciais);
   const [templates, setTemplates] = useState<EmailTemplateItem[]>([]);
+  const [templatesArquivados, setTemplatesArquivados] = useState<EmailTemplateItem[]>([]);
+  const [acaoArquivado, setAcaoArquivado] = useState<{ tipo: "restaurar" | "excluir"; template: EmailTemplateItem } | null>(null);
+  const [executandoAcaoArquivado, setExecutandoAcaoArquivado] = useState(false);
+  const [erroAcaoArquivado, setErroAcaoArquivado] = useState("");
+  const [feedbackArquivados, setFeedbackArquivados] = useState("");
   const [remetentes, setRemetentes] = useState<EmailRemetenteItem[]>([]);
   const [campanhas, setCampanhas] = useState<CampanhaItem[]>([]);
   const [listas, setListas] = useState<EmailListaAudiencia[]>([]);
@@ -200,7 +210,7 @@ export default function EmailMarketingPage() {
       const [statusRes, templatesRes, remetentesRes, campanhasRes, audienciaRes] =
         await Promise.all([
           fetch("/api/email-marketing/status", { cache: "no-store" }),
-          fetch("/api/email-marketing/templates", { cache: "no-store" }),
+          fetch("/api/email-marketing/templates?incluir_arquivados=1", { cache: "no-store" }),
           fetch("/api/email-marketing/remetentes", { cache: "no-store" }),
           fetch("/api/email-marketing/campanhas", { cache: "no-store" }),
           fetch("/api/email-marketing/audiencia?limite=1", {
@@ -237,7 +247,9 @@ export default function EmailMarketingPage() {
 
       setConfiguracao(statusData.configuracao || null);
       setMetricas(statusData.metricas || metricasIniciais);
-      setTemplates(templatesData.templates || []);
+      const todosTemplates = (templatesData.templates || []) as EmailTemplateItem[];
+      setTemplates(todosTemplates.filter(item => item.status !== "arquivado"));
+      setTemplatesArquivados(todosTemplates.filter(item => item.status === "arquivado" && Boolean(item.empresa_id)));
       setRemetentes(remetentesData.remetentes || []);
       setCampanhas(campanhasData.campanhas || []);
       setListas(audienciaData.listas || []);
@@ -258,6 +270,38 @@ export default function EmailMarketingPage() {
   useEffect(() => {
     void carregarDados();
   }, [carregarDados]);
+
+  function confirmarAcaoArquivado(tipo: "restaurar" | "excluir", template: EmailTemplateItem) {
+    setErroAcaoArquivado("");
+    setFeedbackArquivados("");
+    setAcaoArquivado({ tipo, template });
+  }
+
+  async function executarAcaoArquivado() {
+    if (!acaoArquivado || executandoAcaoArquivado) return;
+    const { template, tipo } = acaoArquivado;
+    setExecutandoAcaoArquivado(true);
+    setErroAcaoArquivado("");
+    try {
+      const resposta = await fetch(
+        "/api/email-marketing/templates/" + encodeURIComponent(template.id) + (tipo === "excluir" ? "?definitivo=1" : ""),
+        tipo === "restaurar"
+          ? { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "restaurar" }) }
+          : { method: "DELETE" }
+      );
+      const resultado = await resposta.json().catch(() => null);
+      if (!resposta.ok || !resultado?.ok) {
+        throw new Error(resultado?.error || "Não foi possível concluir a operação.");
+      }
+      await carregarDados(true);
+      setAcaoArquivado(null);
+      setFeedbackArquivados(tipo === "restaurar" ? "Template restaurado e disponível novamente." : "Template excluído definitivamente.");
+    } catch (error) {
+      setErroAcaoArquivado(error instanceof Error ? error.message : "Erro ao atualizar template arquivado.");
+    } finally {
+      setExecutandoAcaoArquivado(false);
+    }
+  }
 
   const campanhaEmAndamento = campanhas.some((item) =>
     ["agendada", "processando"].includes(item.status)
@@ -730,6 +774,8 @@ export default function EmailMarketingPage() {
                 </button>
               </div>
 
+              {feedbackArquivados ? <p className={styles.templateArchivedFeedback} role="status"><CheckCircle2 size={16}/>{feedbackArquivados}</p> : null}
+
               {templates.length ? (
                 <div className={styles.templateGrid}>
                   {templates.map((template) => (
@@ -799,6 +845,51 @@ export default function EmailMarketingPage() {
                   </button>
                 </div>
               )}
+              {templatesArquivados.length > 0 ? (
+                <section className={styles.templateArchivedSection} aria-label="Templates arquivados">
+                  <div className={styles.templateArchivedDivider}>
+                    <span className={styles.templateArchivedLine}/>
+                    <div className={styles.templateArchivedHeading}>
+                      <Archive size={18}/>
+                      <strong>Templates arquivados</strong>
+                      <span className={styles.templateArchivedCount}>{templatesArquivados.length}</span>
+                    </div>
+                    <span className={styles.templateArchivedLine}/>
+                  </div>
+                  <p className={styles.templateArchivedDescription}>
+                    Modelos fora de uso. Restaure para utilizá-los novamente ou exclua definitivamente.
+                  </p>
+                  <div className={styles.templateGrid}>
+                    {templatesArquivados.map(template => (
+                      <article className={[styles.templateCard, styles.templateCardArchived].join(" ")} key={template.id}>
+                        <div className={styles.templateCardPreview} aria-label={"Miniatura do template arquivado " + template.nome}>
+                          <iframe title={"Prévia arquivada de " + template.nome} sandbox="" loading="lazy" tabIndex={-1} srcDoc={template.html}/>
+                        </div>
+                        <div className={styles.templateCardDetails}>
+                          <div className={[styles.templateCardIcon, styles.templateArchivedIcon].join(" ")}><Archive size={18}/></div>
+                          <div className={styles.templateCardBody}>
+                            <span className={styles.templateArchivedBadge}>Arquivado</span>
+                            <strong>{template.nome}</strong>
+                            <span>{template.assunto}</span>
+                            <small>Arquivado / atualizado em {dataHora(template.updated_at)}</small>
+                          </div>
+                          <div className={styles.templateArchivedActions}>
+                            <button type="button" className={styles.templateRestoreButton}
+                              onClick={() => confirmarAcaoArquivado("restaurar", template)}>
+                              <ArchiveRestore size={15}/> Restaurar
+                            </button>
+                            <button type="button" className={styles.templateDeleteButton}
+                              onClick={() => confirmarAcaoArquivado("excluir", template)}>
+                              <Trash2 size={15}/> Excluir
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
             </div>
           ) : null}
 
@@ -1074,6 +1165,39 @@ export default function EmailMarketingPage() {
           ) : null}
         </section>
       </div>
+
+      {acaoArquivado ? (
+        <div className={styles.templateArchiveConfirmOverlay}
+          onMouseDown={event => {
+            if (event.target === event.currentTarget && !executandoAcaoArquivado) setAcaoArquivado(null);
+          }}>
+          <div className={styles.templateArchiveConfirmModal} role="alertdialog" aria-modal="true"
+            aria-labelledby="template-arquivado-titulo" aria-describedby="template-arquivado-descricao">
+            <div className={[styles.templateArchiveConfirmIcon, acaoArquivado.tipo === "excluir" ? styles.templateArchiveConfirmIconDanger : ""].join(" ")}>
+              {acaoArquivado.tipo === "excluir" ? <AlertTriangle size={22}/> : <ArchiveRestore size={22}/>}
+            </div>
+            <h2 id="template-arquivado-titulo">
+              {acaoArquivado.tipo === "excluir" ? "Excluir template definitivamente?" : "Restaurar template?"}
+            </h2>
+            <p className={styles.templateArchiveConfirmName}>{acaoArquivado.template.nome}</p>
+            <p id="template-arquivado-descricao">
+              {acaoArquivado.tipo === "excluir"
+                ? "Esta ação não pode ser desfeita. Por segurança, templates vinculados a campanhas anteriores não podem ser excluídos."
+                : "O template voltará para a lista de modelos disponíveis e poderá ser utilizado em novas campanhas."}
+            </p>
+            {erroAcaoArquivado ? <p className={styles.templateArchiveConfirmError} role="alert">{erroAcaoArquivado}</p> : null}
+            <div className={styles.templateArchiveConfirmActions}>
+              <button type="button" className={styles.secondaryButton} disabled={executandoAcaoArquivado}
+                onClick={() => setAcaoArquivado(null)}>Cancelar</button>
+              <button type="button" className={acaoArquivado.tipo === "excluir" ? styles.templateConfirmDeleteButton : styles.primaryButton}
+                disabled={executandoAcaoArquivado} onClick={() => void executarAcaoArquivado()}>
+                {acaoArquivado.tipo === "excluir" ? <Trash2 size={16}/> : <ArchiveRestore size={16}/>}
+                {executandoAcaoArquivado ? "Processando..." : acaoArquivado.tipo === "excluir" ? "Excluir definitivamente" : "Restaurar template"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {templateModal ? (
         <TemplateModal

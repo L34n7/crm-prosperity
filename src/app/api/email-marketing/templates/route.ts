@@ -24,7 +24,8 @@ function normalizarTemplate(body: Record<string, unknown> | null) {
   return { nome, assunto, texto: texto || null, html, design_json: editor, editorInvalido };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const incluirArquivados = new URL(request.url).searchParams.get("incluir_arquivados") === "1";
   const acesso = await validarAcessoEmailMarketing();
 
   if (!acesso.ok) {
@@ -41,7 +42,9 @@ export async function GET() {
     );
   }
 
-  const { data, error } = await supabaseAdmin
+  // A listagem padrão (campanhas/galeria) continua mostrando apenas templates ativos.
+  // A tela de gerenciamento solicita os arquivados explicitamente.
+  const consulta = supabaseAdmin
     .from("email_templates")
     .select(
       "id, empresa_id, escopo, nome, assunto, html, texto, design_json, status, created_at, updated_at"
@@ -49,9 +52,10 @@ export async function GET() {
     .or(
       "empresa_id.eq." +
         acesso.usuario.empresa_id +
-        ",and(empresa_id.is.null,escopo.eq.sistema)"
-    )
-    .neq("status", "arquivado")
+        ",and(empresa_id.is.null,escopo.eq.sistema,status.neq.arquivado)"
+    );
+
+  const { data, error } = await (incluirArquivados ? consulta : consulta.neq("status", "arquivado"))
     .order("updated_at", { ascending: false });
 
   if (error) {
