@@ -502,7 +502,8 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       return;
     }
     registrarHistorico();
-    const doc = range.startContainer.ownerDocument;
+    const doc = range.startContainer.ownerDocument || iframeRef.current?.contentDocument;
+    if (!doc) return;
     range.deleteContents();
     const node = quebra ? doc.createElement("br") : doc.createTextNode(conteudo);
     range.insertNode(node);
