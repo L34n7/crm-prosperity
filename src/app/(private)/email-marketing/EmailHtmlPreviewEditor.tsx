@@ -2,13 +2,15 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, CheckCircle2, X, Columns2, Copy, Eye, GripVertical, Heading1, Image as ImageIcon, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Smartphone, Trash2, Type, Undo2,
+  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, CheckCircle2, X, Columns2, Copy, Eye, GripVertical, Heading1, Image as ImageIcon, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Share2, Smartphone, Trash2, Type, Undo2,
 } from "lucide-react";
 import { urlEmailSegura, type TipoBlocoEmail } from "@/lib/email-marketing/editor-visual";
 import type { VariavelCatalogo } from "@/lib/variaveis/catalogo";
+import { criarHtmlRedesSociais, urlIconeSocial, NOMES_REDES_EMAIL, REDES_EMAIL, type RedeSocialEmail } from "@/lib/email-marketing/redes-sociais";
 import styles from "./EmailHtmlPreviewEditor.module.css";
 
-export type EmailHtmlPreviewHandle = { obterHtml: () => string; inserirBloco: (tipo: TipoBlocoEmail) => void };
+type TipoComponente = TipoBlocoEmail | "redes";
+export type EmailHtmlPreviewHandle = { obterHtml: () => string; inserirBloco: (tipo: TipoComponente) => void };
 
 type EstiloCampo = "color" | "backgroundColor" | "fontSize" | "fontFamily" | "padding" | "textAlign" | "borderRadius";
 const FONTES_EMAIL = ["Arial", "Georgia", "Verdana", "Tahoma", "Trebuchet MS"] as const;
@@ -19,7 +21,10 @@ function detectarFonte(valor: string): FonteEmail {
 type PropriedadesPagina = { largura: number; fundo: string; superficie: string; fonte: FonteEmail };
 type Selecionado = {
   tag: string;
-  tipo: "imagem" | "link" | "elemento";
+  tipo: "imagem" | "link" | "elemento" | "social";
+  rede: RedeSocialEmail;
+  corIcone: string;
+  fundoFaixa: string;
   cor: string;
   fundo: string;
   tamanho: string;
@@ -113,12 +118,13 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     { tipo: "colunas", nome: "2 colunas", Icone: Columns2 },
     { tipo: "divisor", nome: "Divisor", Icone: Minus },
     { tipo: "espaco", nome: "Espaço", Icone: MoveVertical },
+    { tipo: "redes", nome: "Redes sociais", Icone: Share2 },
   ] as const;
 
-  function inserirBloco(tipo: TipoBlocoEmail, referencia?: Element | null) {
+  function inserirBloco(tipo: TipoComponente, referencia?: Element | null) {
     const doc = iframeRef.current?.contentDocument;
     if (!doc?.body) return;
-    const conteudos: Record<TipoBlocoEmail, string> = {
+    const conteudos: Record<TipoComponente, string> = {
       titulo: '<h2 style="margin:0;color:#17243d;font:800 30px/1.25 Arial,sans-serif">Seu título</h2>',
       texto: '<p style="margin:0;color:#17243d;font:16px/1.65 Arial,sans-serif">Escreva sua mensagem aqui.</p>',
       imagem: '<img alt="Clique para configurar a imagem" style="display:block;width:100%;max-width:560px;min-height:56px;border-radius:12px" />',
@@ -126,6 +132,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       colunas: '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td width="50%" style="padding:14px;color:#17243d;background:#f3f4fa;font:15px/1.5 Arial,sans-serif">Primeira coluna</td><td width="50%" style="padding:14px;color:#17243d;background:#f3f4fa;font:15px/1.5 Arial,sans-serif">Segunda coluna</td></tr></table>',
       divisor: '<div style="border-top:1px solid #dce2ec;height:1px"></div>',
       espaco: '<div style="height:32px;font-size:0;line-height:32px">&nbsp;</div>',
+      redes: criarHtmlRedesSociais(),
     };
     registrarHistorico();
     const referenciaAtual = referencia || elementoRef.current;
@@ -148,7 +155,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     }
     // Os novos elementos passam pelo mesmo preparo seguro dos modelos originais.
     prepararElemento(novo);
-    selecionar((novo.querySelector("a,img,h2,p,td,div") || novo) as HTMLElement);
+    selecionar((novo.querySelector("[data-prosperity-social],a,img,h2,p,td,div") || novo) as HTMLElement);
 
     setMensagem("Bloco inserido. Selecione seu conteúdo para personalizar.");
   }
@@ -217,9 +224,16 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     const janela = elemento.ownerDocument.defaultView;
     const computado = janela?.getComputedStyle(elemento);
     const tag = elemento.tagName.toLowerCase();
+    const redeMarcada = elemento.getAttribute("data-prosperity-social");
+    const rede = REDES_EMAIL.includes(redeMarcada as RedeSocialEmail) ? redeMarcada as RedeSocialEmail : "facebook";
+    const faixa = elemento.closest("[data-prosperity-social-group]") as HTMLElement | null;
+    const janelaFaixa = faixa ? janela?.getComputedStyle(faixa) : null;
     return {
       tag,
-      tipo: tag === "img" ? "imagem" : tag === "a" ? "link" : "elemento",
+      tipo: tag === "a" && redeMarcada ? "social" : tag === "img" ? "imagem" : tag === "a" ? "link" : "elemento",
+      rede,
+      corIcone: elemento.getAttribute("data-prosperity-icon-color") || "#ffffff",
+      fundoFaixa: paraHex(janelaFaixa?.backgroundColor || faixa?.style.backgroundColor || "", "#565091"),
       cor: paraHex(computado?.color || elemento.style.color, "#17243d"),
       fundo: paraHex(computado?.backgroundColor || elemento.style.backgroundColor, "#ffffff"),
       tamanho: String(parseInt(computado?.fontSize || elemento.style.fontSize || "16", 10) || 16),
@@ -469,7 +483,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       if (!alvo || alvo.closest("[data-prosperity-drag-handle]")) return null;
       const alvoEditavel = alvo.closest("[data-prosperity-edit-text]");
       const origem = alvoEditavel?.parentElement || alvo;
-      const destino = origem.closest("img,a,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
+      const destino = origem.closest("a[data-prosperity-social],img,a,h1,h2,h3,h4,h5,h6,p,button,td,th,li,blockquote,div,section,header,footer,table,tr");
       if (destino && destino !== doc.body) return destino as HTMLElement;
       // Textos diretamente dentro de elementos simples também devem ser selecionáveis.
       return origem !== doc.body && !origem.matches("html,head,body,style,script") ? origem as HTMLElement : null;
@@ -554,7 +568,7 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
         setArrastando(false);
         return;
       }
-      const tipo = event.dataTransfer?.getData("application/x-prosperity-email-block") as TipoBlocoEmail;
+      const tipo = event.dataTransfer?.getData("application/x-prosperity-email-block") as TipoComponente;
       if (!opcoes.some(item => item.tipo === tipo)) return;
       event.preventDefault();
       const alvo = event.target as Element | null;
@@ -601,18 +615,53 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
   function aplicarUrl(valor: string, alt?: string) {
     const el = elementoRef.current;
     if (!el || !selecionado) return;
+    if (selecionado.tipo === "social" && !valor.trim()) {
+      registrarHistorico();
+      el.removeAttribute("data-prosperity-href");
+      el.removeAttribute("href");
+      setSelecionado(lerElemento(el));
+      setMensagem("Link removido. O ícone não terá destino até você adicionar uma URL.");
+      return;
+    }
     if (!urlEmailSegura(valor, selecionado.tipo === "imagem")) {
       setMensagem("Insira um endereço HTTP/HTTPS válido" + (selecionado.tipo === "link" ? " ou mailto:." : "."));
       return;
     }
     registrarHistorico();
-    if (selecionado.tipo === "link") el.setAttribute("data-prosperity-href", valor);
+    if (selecionado.tipo === "link" || selecionado.tipo === "social") el.setAttribute("data-prosperity-href", valor);
     if (selecionado.tipo === "imagem") {
       el.setAttribute("src", valor);
       el.setAttribute("alt", alt || "");
     }
     setSelecionado(lerElemento(el));
     setMensagem("Endereço atualizado.");
+  }
+
+  function atualizarSocial(chave: "rede" | "icone" | "fundo" | "faixa", valor: string) {
+    const link = elementoRef.current;
+    if (!link || !link.hasAttribute("data-prosperity-social")) return;
+    registrarHistorico();
+    const imagem = link.querySelector<HTMLImageElement>("[data-prosperity-social-icon]");
+    const rede = chave === "rede" ? valor as RedeSocialEmail : link.getAttribute("data-prosperity-social") as RedeSocialEmail;
+    if (!REDES_EMAIL.includes(rede)) return;
+    if (chave === "rede") {
+      link.setAttribute("data-prosperity-social", rede);
+      link.setAttribute("aria-label", NOMES_REDES_EMAIL[rede]);
+    }
+    if (chave === "icone") link.setAttribute("data-prosperity-icon-color", valor);
+    if (chave === "fundo") link.style.backgroundColor = valor;
+    if (chave === "faixa") {
+      const faixa = link.closest("[data-prosperity-social-group]") as HTMLElement | null;
+      if (faixa) faixa.style.backgroundColor = valor;
+    }
+    if (imagem && (chave === "rede" || chave === "icone")) {
+      const cor = link.getAttribute("data-prosperity-icon-color") || "#ffffff";
+      imagem.src = urlIconeSocial(rede, cor);
+      imagem.setAttribute("alt", NOMES_REDES_EMAIL[rede]);
+      imagem.setAttribute("data-prosperity-social-icon", rede);
+    }
+    setSelecionado(lerElemento(link));
+    setMensagem("Rede social atualizada.");
   }
 
   // Para tabelas de e-mail, movimentamos a linha (<tr>) inteira; fora de
@@ -734,9 +783,16 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
         </div>
       ) : editando && selecionado ? (
         <div className={styles.inspector}>
-          <div className={styles.inspectorTitulo}><Type size={16}/><strong>{selecionado.tipo === "imagem" ? "Imagem" : selecionado.tipo === "link" ? "Botão / link" : "Elemento " + selecionado.tag.toUpperCase()}</strong></div>
+          <div className={styles.inspectorTitulo}><Type size={16}/><strong>{selecionado.tipo === "imagem" ? "Imagem" : selecionado.tipo === "social" ? "Rede social · " + NOMES_REDES_EMAIL[selecionado.rede] : selecionado.tipo === "link" ? "Botão / link" : "Elemento " + selecionado.tag.toUpperCase()}</strong></div>
           <div className={styles.campos}>
             {selecionado.tipo !== "imagem" ? <>
+              {selecionado.tipo === "social" ? <>
+                <label className={styles.campoUrl}><span>Rede social</span><select value={selecionado.rede} onChange={e => atualizarSocial("rede", e.target.value)}>{REDES_EMAIL.map(rede => <option key={rede} value={rede}>{NOMES_REDES_EMAIL[rede]}</option>)}</select></label>
+                <label><span>Cor do ícone</span><input type="color" value={selecionado.corIcone} onChange={e => atualizarSocial("icone", e.target.value)}/></label>
+                <label><span>Fundo do ícone</span><input type="color" value={selecionado.fundo} onChange={e => atualizarSocial("fundo", e.target.value)}/></label>
+                <label className={styles.campoUrl}><span>Fundo da faixa de redes sociais</span><input type="color" value={selecionado.fundoFaixa} onChange={e => atualizarSocial("faixa", e.target.value)}/></label>
+              </> : null}
+              {selecionado.tipo !== "social" ? <>
               <label><span>Cor do texto</span><input type="color" value={selecionado.cor} onChange={e => aplicarEstilo("color", e.target.value)} /></label>
               <label><span>Fundo</span><input type="color" value={selecionado.fundo} onChange={e => aplicarEstilo("backgroundColor", e.target.value)} /></label>
               <label><span>Tamanho</span><input type="number" min={8} max={70} value={selecionado.tamanho} onChange={e => aplicarEstilo("fontSize", e.target.value)}/></label>
@@ -746,16 +802,17 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
                   <button type="button" key={valor} title={titulo} aria-label={titulo} aria-pressed={selecionado.alinhamento === valor} className={selecionado.alinhamento === valor ? styles.alinhamentoAtivo : ""} onClick={() => aplicarEstilo("textAlign", valor)}><Icone size={17}/></button>
                 ))}
               </div></div>
+              </> : null}
             </> : null}
             <label><span>Margem interna (px)</span><input type="number" min={0} max={120} value={selecionado.espaco} onChange={e => aplicarEstilo("padding", e.target.value)}/></label>
             <label><span>Cantos (px)</span><input type="number" min={0} max={120} value={selecionado.raio} onChange={e => aplicarEstilo("borderRadius", e.target.value)}/></label>
-            {selecionado.tipo === "link" || selecionado.tipo === "imagem" ? <>
-              <label className={styles.campoUrl}><span>{selecionado.tipo === "link" ? "Link de destino" : "URL da imagem"}</span><input type="url" value={selecionado.url} onChange={e => setSelecionado({...selecionado,url:e.target.value})}/></label>
+            {selecionado.tipo === "link" || selecionado.tipo === "imagem" || selecionado.tipo === "social" ? <>
+              <label className={styles.campoUrl}><span>{selecionado.tipo === "social" ? "Link personalizado da rede" : selecionado.tipo === "link" ? "Link de destino" : "URL da imagem"}</span><input type="url" value={selecionado.url} onChange={e => setSelecionado({...selecionado,url:e.target.value})}/></label>
               {selecionado.tipo === "imagem" ? <>
                 <label className={styles.campoUrl}><span>Enviar imagem (até 3 MB)</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={enviandoImagem} onChange={e => { void enviarImagem(e.target.files?.[0]); e.target.value = ""; }}/></label>
                 <label className={styles.campoUrl}><span>Texto alternativo</span><input value={selecionado.alt} onChange={e => setSelecionado({...selecionado,alt:e.target.value})}/></label>
               </> : null}
-              <button type="button" className={styles.aplicar} onClick={() => aplicarUrl(selecionado.url,selecionado.alt)}>Aplicar link / imagem</button>
+              <button type="button" className={styles.aplicar} onClick={() => aplicarUrl(selecionado.url,selecionado.alt)}>{selecionado.tipo === "social" ? "Salvar link da rede" : "Aplicar link / imagem"}</button>
             </> : null}
           </div>
           <div className={styles.acoes}>
