@@ -48,6 +48,7 @@ export async function GET(request: Request) {
       }
       return NextResponse.json({ok:true,itens:await listarMarcasFipe(tipo)});
     }
+    if(tipo==="all")return NextResponse.json({ok:false,error:"Grupo FIPE inválido para esta consulta."},{status:400});
     if (!marca) return NextResponse.json({ok:false,error:"Selecione a marca."},{status:400});
     if (etapa==="modelos") return NextResponse.json({ok:true,itens:await listarModelosFipe(tipo,marca)});
     if (!modelo) return NextResponse.json({ok:false,error:"Selecione o modelo."},{status:400});
