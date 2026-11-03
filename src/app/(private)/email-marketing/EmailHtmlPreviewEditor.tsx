@@ -2,7 +2,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, CheckCircle2, X, Columns2, Copy, Eye, GripVertical, Heading1, Image as ImageIcon, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Share2, Smartphone, Trash2, Type, Undo2,
+  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, Bold, CaseUpper, CheckCircle2, X, Columns2, Copy, Eye, GripVertical, Heading1, Highlighter, Image as ImageIcon, Italic, Layers, Link2, Minus, Monitor, MoveVertical, Pencil, Plus, Redo2, Settings2, Share2, Smartphone, Strikethrough, Trash2, Type, Underline, Undo2,
 } from "lucide-react";
 import { urlEmailSegura, type TipoBlocoEmail } from "@/lib/email-marketing/editor-visual";
 import type { VariavelCatalogo } from "@/lib/variaveis/catalogo";
@@ -34,6 +34,15 @@ type Selecionado = {
   alinhamento: string;
   url: string;
   alt: string;
+  negrito: boolean;
+  italico: boolean;
+  sublinhado: boolean;
+  riscado: boolean;
+  grifado: boolean;
+  corGrifo: string;
+  maiusculas: boolean;
+  entrelinhas: string;
+  letras: string;
 };
 
 type Props = { html: string; variaveis?: VariavelCatalogo[]; onGerenciarVariaveis?: () => void };
@@ -228,6 +237,10 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     const rede = REDES_EMAIL.includes(redeMarcada as RedeSocialEmail) ? redeMarcada as RedeSocialEmail : "facebook";
     const faixa = elemento.closest("[data-prosperity-social-group]") as HTMLElement | null;
     const janelaFaixa = faixa ? janela?.getComputedStyle(faixa) : null;
+    const fonteNumerica = parseFloat(computado?.fontSize || "16") || 16;
+    const alturaNumerica = parseFloat(computado?.lineHeight || "");
+    const grifo = elemento.matches("[data-prosperity-text-highlight]") ? elemento : elemento.querySelector<HTMLElement>("[data-prosperity-text-highlight]");
+    const decoracao = computado?.textDecorationLine || "none";
     return {
       tag,
       tipo: tag === "a" && redeMarcada ? "social" : tag === "img" ? "imagem" : tag === "a" ? "link" : "elemento",
@@ -244,6 +257,15 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
       url: tag === "a" ? (elemento.getAttribute("data-prosperity-href") || "") :
         tag === "img" ? (elemento.getAttribute("src") || "") : "",
       alt: tag === "img" ? (elemento.getAttribute("alt") || "") : "",
+      negrito: (Number(computado?.fontWeight) || (computado?.fontWeight === "bold" ? 700 : 400)) >= 600,
+      italico: computado?.fontStyle === "italic" || computado?.fontStyle === "oblique",
+      sublinhado: decoracao.includes("underline"),
+      riscado: decoracao.includes("line-through"),
+      grifado: Boolean(grifo),
+      corGrifo: paraHex((grifo as HTMLElement | null)?.style.backgroundColor || "", "#fff59d"),
+      maiusculas: computado?.textTransform === "uppercase",
+      entrelinhas: Number.isFinite(alturaNumerica) ? String(Math.max(1, Math.min(2.5, Math.round(alturaNumerica / fonteNumerica * 10) / 10))) : "1.5",
+      letras: String(Math.round(parseFloat(computado?.letterSpacing || "0") || 0)),
     };
   }
 
@@ -590,6 +612,80 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
     setMensagem("Alteração aplicada.");
   }
 
+
+  /** Formatação aplicada ao conteúdo selecionado, inclusive botões HTML com spans internos. */
+  function aplicarFormatacaoTexto(campo: "negrito" | "italico" | "sublinhado" | "riscado" | "maiusculas" | "entrelinhas" | "letras", valor?: string) {
+    const el = elementoRef.current;
+    if (!el || !selecionado || selecionado.tipo === "imagem" || selecionado.tipo === "social") return;
+    registrarHistorico();
+    const doc = el.ownerDocument;
+    const valores = [el, ...Array.from(el.querySelectorAll<HTMLElement>("strong,em,span,p,h1,h2,h3,h4,h5,h6,a,li,blockquote"))]
+      .filter(item => !item.hasAttribute("data-prosperity-edit-text"));
+    let chave = "";
+    let novo = "";
+    if (campo === "negrito") { chave = "font-weight"; novo = selecionado.negrito ? "400" : "700"; }
+    if (campo === "italico") { chave = "font-style"; novo = selecionado.italico ? "normal" : "italic"; }
+    if (campo === "maiusculas") { chave = "text-transform"; novo = selecionado.maiusculas ? "none" : "uppercase"; }
+    if (campo === "entrelinhas") { chave = "line-height"; novo = String(Math.max(1, Math.min(2.5, Number(valor) || 1.5))); }
+    if (campo === "letras") { chave = "letter-spacing"; novo = String(Math.max(-1, Math.min(8, Number(valor) || 0))) + "px"; }
+    if (campo === "sublinhado" || campo === "riscado") {
+      chave = "text-decoration-line";
+      const decoracao = new Set((doc.defaultView?.getComputedStyle(el).textDecorationLine || "").split(/\s+/).filter(item => item && item !== "none"));
+      const atributo = campo === "sublinhado" ? "underline" : "line-through";
+      if (decoracao.has(atributo)) decoracao.delete(atributo); else decoracao.add(atributo);
+      novo = [...decoracao].join(" ") || "none";
+    }
+    for (const item of valores) item.style.setProperty(chave, novo, "important");
+    setSelecionado(lerElemento(el));
+    setMensagem("Formatação de texto atualizada.");
+  }
+
+  /** Grifa apenas o texto, preservando a cor de fundo do bloco/contêiner. */
+  function aplicarGrifo(cor: string, ativar: boolean) {
+    const el = elementoRef.current;
+    if (!el || !selecionado || selecionado.tipo === "imagem" || selecionado.tipo === "social") return;
+    registrarHistorico();
+    const doc = el.ownerDocument;
+    const textos = el.hasAttribute("data-prosperity-edit-text") ? [el] :
+      Array.from(el.querySelectorAll<HTMLElement>("[data-prosperity-edit-text]"));
+    if (textos.length) {
+      for (const texto of textos) {
+        const marca = texto.closest<HTMLElement>("[data-prosperity-text-highlight]");
+        if (ativar) {
+          if (marca) marca.style.backgroundColor = cor;
+          else {
+            const novo = doc.createElement("span");
+            novo.setAttribute("data-prosperity-text-highlight", "true");
+            novo.style.backgroundColor = cor;
+            novo.style.boxDecorationBreak = "clone";
+            texto.before(novo);
+            novo.appendChild(texto);
+          }
+        } else if (marca) {
+          marca.replaceWith(...Array.from(marca.childNodes));
+        }
+      }
+    } else {
+      // Títulos de HTML antigo podem não ter spans de edição.
+      const marca = el.querySelector<HTMLElement>("[data-prosperity-text-highlight]");
+      if (ativar) {
+        if (marca) marca.style.backgroundColor = cor;
+        else {
+          const novo = doc.createElement("span");
+          novo.setAttribute("data-prosperity-text-highlight", "true");
+          novo.style.backgroundColor = cor;
+          novo.style.boxDecorationBreak = "clone";
+          while (el.firstChild) novo.appendChild(el.firstChild);
+          el.appendChild(novo);
+        }
+      } else if (marca) {
+        marca.replaceWith(...Array.from(marca.childNodes));
+      }
+    }
+    setSelecionado(lerElemento(el));
+    setMensagem(ativar ? "Grifo aplicado ao texto." : "Grifo removido.");
+  }
+
   async function enviarImagem(arquivo?: File) {
     const elemento = elementoRef.current;
     if (!arquivo || !elemento || elemento.tagName !== "IMG") return;
@@ -802,6 +898,31 @@ function EmailHtmlPreviewEditor({ html, variaveis = [], onGerenciarVariaveis }: 
                   <button type="button" key={valor} title={titulo} aria-label={titulo} aria-pressed={selecionado.alinhamento === valor} className={selecionado.alinhamento === valor ? styles.alinhamentoAtivo : ""} onClick={() => aplicarEstilo("textAlign", valor)}><Icone size={17}/></button>
                 ))}
               </div></div>
+              <div className={styles.campoFormatacao}>
+                <span>Formatação de texto</span>
+                <div className={styles.barraFormatacao} role="group" aria-label="Formatação do elemento">
+                  {([
+                    ["negrito", Bold, "Negrito", selecionado.negrito],
+                    ["italico", Italic, "Itálico", selecionado.italico],
+                    ["sublinhado", Underline, "Sublinhado", selecionado.sublinhado],
+                    ["riscado", Strikethrough, "Tachado", selecionado.riscado],
+                    ["maiusculas", CaseUpper, "Maiúsculas", selecionado.maiusculas],
+                  ] as const).map(([campo, Icone, descricao, ativo]) => (
+                    <button key={campo} type="button" className={ativo ? styles.formatacaoAtiva : ""}
+                      aria-label={descricao} title={descricao} aria-pressed={ativo}
+                      onClick={() => aplicarFormatacaoTexto(campo)}><Icone size={17}/></button>
+                  ))}
+                  <button type="button" className={selecionado.grifado ? styles.formatacaoAtiva : ""}
+                    aria-label="Grifar texto" title="Grifar texto" aria-pressed={selecionado.grifado}
+                    onClick={() => aplicarGrifo(selecionado.corGrifo, !selecionado.grifado)}><Highlighter size={17}/></button>
+                </div>
+              </div>
+              <label className={styles.campoGrifo}><span>Cor do grifo</span><input type="color"
+                value={selecionado.corGrifo} onChange={e => aplicarGrifo(e.target.value, true)}/></label>
+              <label><span>Entrelinhas</span><input type="number" min={1} max={2.5} step={0.1} value={selecionado.entrelinhas}
+                onChange={e => aplicarFormatacaoTexto("entrelinhas", e.target.value)}/></label>
+              <label><span>Espaçamento (px)</span><input type="number" min={-1} max={8} step={1} value={selecionado.letras}
+                onChange={e => aplicarFormatacaoTexto("letras", e.target.value)}/></label>
               </> : null}
             </> : null}
             <label><span>Margem interna (px)</span><input type="number" min={0} max={120} value={selecionado.espaco} onChange={e => aplicarEstilo("padding", e.target.value)}/></label>

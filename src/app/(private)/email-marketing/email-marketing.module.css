@@ -5868,3 +5868,57 @@
  .templateStudioHeaderActions .templateStudioSwitch button{font-size:13px}
  .templateStudioHeaderActions .templateStudioGalleryButton{font-size:13px}
 }
+
+/* Edição de e-mails: metadados em uma única faixa compacta. */
+.templatePremiumModal .templateVisualMeta{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:16px;
+  align-items:center;
+  padding:8px 16px;
+}
+.templatePremiumModal .templateVisualMeta .field{
+  display:grid;
+  grid-template-columns:max-content minmax(0,1fr);
+  align-items:center;
+  min-width:0;
+  max-width:none;
+  gap:9px;
+  margin:0;
+}
+.templatePremiumModal .templateVisualMeta .field>span{
+  font-size:13px;
+  font-weight:750;
+  line-height:1.2;
+  margin:0;
+  white-space:nowrap;
+}
+.templatePremiumModal .templateVisualMeta .field input{
+  min-width:0;
+  width:100%;
+  height:36px;
+  min-height:36px;
+  font-size:13px;
+  padding:0 11px;
+  box-sizing:border-box;
+}
+.templateCardActions{display:flex;align-items:center;justify-content:flex-end;flex:0 0 auto;gap:7px}
+.templateCloneButton{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:35px;padding:0 10px;
+  border:1px solid var(--crm-border);
+  border-radius:9px;
+  background:var(--crm-surface-soft);
+  color:var(--crm-text-strong);
+  font-size:12px;font-weight:800;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.templateCloneButton:hover{background:var(--crm-primary-soft);color:var(--crm-primary-text);border-color:var(--crm-primary-border)}
+@media(max-width:900px){
+  .templatePremiumModal .templateVisualMeta{grid-template-columns:minmax(0,1fr);gap:7px;padding:9px 13px}
+  .templatePremiumModal .templateVisualMeta .field{grid-template-columns:110px minmax(0,1fr);gap:8px}
+}
+@media(max-width:420px){
+  .templateCloneButton{padding:0 8px}
+}

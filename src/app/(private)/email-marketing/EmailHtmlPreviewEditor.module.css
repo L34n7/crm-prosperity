@@ -223,3 +223,29 @@
     touch-action:pan-y;
   }
 }
+
+/* Tipografia rica para títulos, parágrafos, links e botões de e-mail. */
+.inspector .campos .campoFormatacao{
+  grid-column:1/-1;
+  display:flex;flex-direction:column;gap:7px;
+  min-width:0;
+}
+.campoFormatacao>span{font-size:13px;font-weight:750;color:var(--crm-text)}
+.barraFormatacao{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;padding:4px;border:1px solid var(--crm-border);border-radius:9px;background:var(--crm-surface-soft)}
+.barraFormatacao button{
+  min-width:0;
+  height:37px;
+  display:grid;place-items:center;
+  border:1px solid transparent;
+  border-radius:7px;
+  background:transparent;
+  color:var(--crm-text-strong);
+  cursor:pointer;
+}
+.barraFormatacao button:hover{background:var(--crm-surface);border-color:var(--crm-border)}
+.barraFormatacao .formatacaoAtiva{background:var(--crm-primary-soft);border-color:var(--crm-primary-border);color:var(--crm-primary-text)}
+.inspector .campos .campoGrifo{grid-column:span 2}
+.inspector .campos .campoGrifo input[type=color]{max-width:100%}
+@media(max-width:700px){
+  .barraFormatacao button{height:42px}
+}

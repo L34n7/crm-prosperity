@@ -16,6 +16,7 @@ import {
   MailPlus,
   MousePointerClick,
   Pencil,
+  Copy,
   RefreshCw,
   Search,
   Send,
@@ -175,6 +176,7 @@ export default function EmailMarketingPage() {
   const [templateModal, setTemplateModal] = useState(false);
   const [templateEditando, setTemplateEditando] =
     useState<EmailTemplateItem | null>(null);
+  const [templateClonando, setTemplateClonando] = useState<EmailTemplateItem | null>(null);
   const [campanhaModal, setCampanhaModal] = useState(false);
   const [campanhaDetalhes, setCampanhaDetalhes] = useState<CampanhaItem | null>(null);
   const [emailTeste, setEmailTeste] = useState("");
@@ -748,6 +750,16 @@ export default function EmailMarketingPage() {
                           <span>{template.assunto}</span>
                           <small>Atualizado em {dataHora(template.updated_at)}</small>
                         </div>
+                        <div className={styles.templateCardActions}>
+                        <button type="button" className={styles.templateCloneButton}
+                          onClick={() => {
+                            setTemplateEditando(null);
+                            setTemplateClonando(template);
+                            setTemplateModal(true);
+                          }}
+                          aria-label={"Clonar " + template.nome}
+                          title="Criar uma cópia independente deste template"
+                        ><Copy size={15} /> Clonar</button>
                         <button
                           type="button"
                           className={styles.iconButton}
@@ -759,6 +771,7 @@ export default function EmailMarketingPage() {
                         >
                           <Pencil size={16} />
                         </button>
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -1065,10 +1078,12 @@ export default function EmailMarketingPage() {
       {templateModal ? (
         <TemplateModal
           template={templateEditando}
+          clonarDe={templateClonando}
           templates={templates}
           onClose={() => {
             setTemplateModal(false);
             setTemplateEditando(null);
+            setTemplateClonando(null);
           }}
           onSaved={() => carregarDados(true)}
         />

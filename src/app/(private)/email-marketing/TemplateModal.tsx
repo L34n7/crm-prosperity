@@ -35,6 +35,7 @@ export type EmailTemplateItem = {
 
 type Props = {
   template?: EmailTemplateItem | null;
+  clonarDe?: EmailTemplateItem | null;
   templates?: EmailTemplateItem[];
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -42,6 +43,7 @@ type Props = {
 
 export default function TemplateModal({
   template,
+  clonarDe,
   templates = [],
   onClose,
   onSaved,
@@ -49,10 +51,12 @@ export default function TemplateModal({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const assuntoRef = useRef<HTMLInputElement | null>(null);
   const htmlPreviewRef = useRef<EmailHtmlPreviewHandle>(null);
-  const [nome, setNome] = useState(template?.nome || "");
-  const [assunto, setAssunto] = useState(template?.assunto || "");
+  // A clonagem usa o conteúdo do original, mas não usa seu ID no salvamento.
+  const fonteInicial = template || clonarDe;
+  const [nome, setNome] = useState(clonarDe ? ("Cópia de " + clonarDe.nome).slice(0, 160) : template?.nome || "");
+  const [assunto, setAssunto] = useState(fonteInicial?.assunto || "");
   const [html, setHtml] = useState(() =>
-    formatarHtmlParaEdicao(template?.html || gerarHtmlEmailVisual(novoDocumentoEmail()))
+    formatarHtmlParaEdicao(fonteInicial?.html || gerarHtmlEmailVisual(novoDocumentoEmail()))
   );
   const [modoEditor, setModoEditor] = useState<"visual" | "html">("visual");
   const modelosVisuais = useMemo(() => modelosVisuaisEmail(), []);
@@ -312,13 +316,13 @@ export default function TemplateModal({
           className={[styles.modalCard, styles.templateModal, styles.templatePremiumModal].join(" ")}
           role="dialog"
           aria-modal="true"
-          aria-label={template ? "Editar template de e-mail" : "Criar template de e-mail"}
+          aria-label={template ? "Editar template de e-mail" : clonarDe ? "Clonar template de e-mail" : "Criar template de e-mail"}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <div className={[styles.modalHeader, styles.templatePremiumHeader].join(" ")}>
             <div className={styles.templatePremiumHeading}>
               <span>TEMPLATE DE E-MAIL</span>
-              <h2>{template ? "Editar template" : "Criar template"}</h2>
+              <h2>{template ? "Editar template" : clonarDe ? "Clonar template" : "Criar template"}</h2>
             </div>
             <div className={styles.templateStudioHeaderActions}>
               <div className={styles.templateStudioSwitch} role="group" aria-label="Modo de criação do e-mail">
