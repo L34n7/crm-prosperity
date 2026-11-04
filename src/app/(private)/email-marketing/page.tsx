@@ -149,7 +149,7 @@ function statusLabel(status: string) {
     rascunho: "Rascunho",
     agendada: "Agendada",
     processando: "Enviando",
-    enviada: "Enviada",
+    enviada: "Envio concluído",
     pausada: "Pausada",
     cancelada: "Cancelada",
     falha: "Falha",
@@ -694,6 +694,10 @@ export default function EmailMarketingPage() {
                             </span>
                             {campanha.erro ? (
                               <small className={styles.errorText}>{campanha.erro}</small>
+                            ) : campanha.status === "enviada" &&
+                              campanha.total_enviados > 0 &&
+                              campanha.total_entregues === 0 ? (
+                              <small>Entrega ainda não confirmada</small>
                             ) : null}
                           </td>
                           <td>{campanha.total_destinatarios}</td>
@@ -1232,6 +1236,7 @@ export default function EmailMarketingPage() {
         <CampanhaDetalhesModal
           campanha={campanhaDetalhes}
           onClose={() => setCampanhaDetalhes(null)}
+          onUpdated={() => carregarDados(true)}
         />
       ) : null}
 
