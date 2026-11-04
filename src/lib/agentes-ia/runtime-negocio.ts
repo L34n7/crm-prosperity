@@ -917,19 +917,22 @@ export async function processarPendenciaNegocio(
     if (contextoOperacional) {
       inputIa.push({ role: "developer", content: contextoOperacional });
     }
-    if(existeCotacaoAnterior&&escolheuPlano){
+    if(existeCotacaoAnterior&&!querOutraCotacao&&desejaContratar&&!escolhaExplicita){
       inputIa.push({role:"developer",content:
-        "O contato escolheu um plano da cotação que JÁ foi apresentada. " +
-        "NÃO gere nem reenvie a cotação. Confirme qual plano escolheu e pergunte " +
-        "somente se deseja ser encaminhado para atendimento humano e contratação. " +
-        "Se confirmar, a próxima mensagem será transferida automaticamente."
+        "Há uma cotação anterior nesta conversa e o cliente deseja contratar. " +
+        "Nenhum plano da proposta foi escolhido inequivocamente. " +
+        "Responda naturalmente, conforme o prompt comercial, perguntando de qual " +
+        "dos planos apresentados tem interesse, sem gerar outra cotação nem concluir a venda. " +
+        "Planos existentes: "+planosCotacao.map((plano)=>plano.nome).join(", ")
       });
     }
     if(existeCotacaoAnterior&&querOutraCotacao){
-      inputIa.push({role:"developer",content:
-        "O cliente deseja uma NOVA cotação para outro veículo, mas ainda não informou " +
-        "o novo modelo e ano. NÃO reutilize os dados nem reenvie a cotação anterior. " +
-        "Pergunte qual é o novo modelo e ano para começar."
+      inputIa.push({role:"developer",content:pedidoOutraCotacaoSemDados
+        ?"O cliente quer uma NOVA cotação e ainda não informou os novos dados. " +
+          "Pergunte objetivamente modelo e ano-modelo do NOVO veículo. Não reutilize o anterior."
+        :"O cliente pediu uma NOVA cotação. Use exclusivamente os novos dados " +
+          "da solicitação atual para identificar o novo veículo; não reutilize " +
+          "modelo, motorização ou ano da proposta anterior. Se faltar dado essencial, pergunte apenas o necessário."
       });
     }
 
@@ -945,7 +948,7 @@ export async function processarPendenciaNegocio(
         reasoning: { effort: "none" },
         text: { verbosity: "low", format: FORMATO_SAIDA },
       };
-      if (tools.length) request.tools = tools;
+      if (tools.length && !ctx.cotacaoFormatada) request.tools = tools;
 
       const response: any = await openai.responses.create(request);
       tokensInput += Number(response.usage?.input_tokens || 0);
@@ -957,10 +960,19 @@ export async function processarPendenciaNegocio(
 
       if (!chamadas.length) {
         const textoSaida = String(response.output_text || "").trim();
+        let respostaInterpretada: SaidaAgente;
         try {
-          saidaFinal = normalizarSaida(JSON.parse(textoSaida), estado);
+          respostaInterpretada = normalizarSaida(JSON.parse(textoSaida), estado);
         } catch {
-          saidaFinal = normalizarSaida(null, estado, textoSaida);
+          respostaInterpretada = normalizarSaida(null, estado, textoSaida);
+        }
+        if(ctx.cotacaoFormatada){
+          // A saída desta rodada é uma continuação natural, não substitui a
+          // proposta original que o backend já preparou para o WhatsApp.
+          const convite=respostaInterpretada.mensagens[0] || "";
+          if (convite && convite.length <= 500) ctx.continuidadeCotacao=convite;
+        } else {
+          saidaFinal=respostaInterpretada;
         }
         break;
       }
@@ -1015,12 +1027,18 @@ export async function processarPendenciaNegocio(
             :[];
           if(mensagens.length){
             ctx.cotacaoFormatada=true;
+            ctx.grupoCotacaoId=String(resultado.grupo_id||"")||null;
+            const configCotacao=ferramentas.get("gerar_cotacao_veicular")||{};
+            if(configCotacao.pos_cotacao_ativo===true){
+              ctx.posCotacaoTexto=String(configCotacao.pos_cotacao_texto||"").trim().slice(0,2400)||null;
+              ctx.posCotacaoMidiaId=String(configCotacao.pos_cotacao_midia_id||"").trim()||null;
+            }
             saidaFinal={
               mensagens,
               estado:{
                 ...estado,
                 estagio:"cotação apresentada",
-                proxima_acao:"esclarecer dúvidas e verificar interesse nos opcionais",
+                proxima_acao:"esclarecer dúvidas e identificar o plano de interesse",
                 aguardando_escolha_plano:false,
                 plano_interesse_cotacao:null,
               },
@@ -1043,7 +1061,19 @@ export async function processarPendenciaNegocio(
         });
       }
 
-      if (ctx.vendaResultado?.ok === true || ctx.cotacaoFormatada) break;
+      if (ctx.vendaResultado?.ok === true) break;
+      if (ctx.cotacaoFormatada) {
+        inputIa.push({
+          role:"developer",
+          content:
+            "A ferramenta acabou de gerar uma cotação completa; o sistema enviará " +
+            "a proposta e o conteúdo complementar configurado. NÃO repita a cotação, " +
+            "valores, FIPE ou coberturas. Continue a conversa com UMA mensagem natural, " +
+            "curta e acolhedora, incentivando dúvidas ou interesse nos planos. " +
+            "Não efetive a contratação: qualquer escolha inequívoca de plano será " +
+            "encaminhada automaticamente a um atendente humano pelo backend."
+        });
+      }
     }
 
     if (tokensTotal > 0) {
@@ -1102,7 +1132,49 @@ export async function processarPendenciaNegocio(
           : "Não encontrei informação suficiente nos dados atuais. Me passe um detalhe do que você procura.",
       ];
     }
+    // Envio em sequência garantida: proposta, texto extra, mídia e a
+    // continuidade natural gerada pelo próprio modelo, quando disponível.
     await enviarMensagens(ctx, saidaFinal.mensagens);
+    if(ctx.cotacaoFormatada && ctx.grupoCotacaoId && pendencia.numero_destino){
+      if(ctx.posCotacaoTexto){
+        await enviarMensagem({
+          empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+          agenteId:agente.id,execucaoId,numeroDestino:pendencia.numero_destino,
+          texto:ctx.posCotacaoTexto,
+          grupoCotacaoId:ctx.grupoCotacaoId,etapaCotacao:"pos_texto",
+        });
+        ctx.respostaEnviada=true;
+      }
+      if(ctx.posCotacaoMidiaId){
+        try {
+          await enviarMidiaPosCotacao(ctx);
+        } catch(error){
+          console.error("[AGENTE_IA_NEGOCIO] Falha ao enviar mídia pós-cotação:",{
+            grupoCotacaoId:ctx.grupoCotacaoId,
+            erro:error instanceof Error?error.message:String(error),
+          });
+          ctx.ferramentasExecutadas.push({
+            nome:"midia_pos_cotacao",resultado:{
+              ok:false,error:error instanceof Error?error.message:String(error),
+            },
+          });
+        }
+      }
+      if(ctx.continuidadeCotacao){
+        await enviarMensagem({
+          empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+          agenteId:agente.id,execucaoId,numeroDestino:pendencia.numero_destino,
+          texto:ctx.continuidadeCotacao,
+          grupoCotacaoId:ctx.grupoCotacaoId,etapaCotacao:"continuidade",
+        });
+        ctx.respostaEnviada=true;
+      }
+    }
+    if(existeCotacaoAnterior&&desejaContratar&&!escolhaExplicita&&!querOutraCotacao){
+      saidaFinal.estado.aguardando_escolha_plano=true;
+      saidaFinal.estado.proxima_acao="identificar plano desejado e transferir para humano";
+      saidaFinal.estado.estagio="aguardando escolha do plano";
+    }
 
     await supabaseAdmin.from("agente_ia_conversa_estados").upsert(
       {
@@ -1128,7 +1200,11 @@ export async function processarPendenciaNegocio(
       .from("agente_ia_execucoes")
       .update({
         status: "concluido",
-        resposta: saidaFinal.mensagens.join("\n\n") || null,
+        resposta: [
+          ...saidaFinal.mensagens,
+          ...(ctx.cotacaoFormatada&&ctx.posCotacaoTexto?[ctx.posCotacaoTexto]:[]),
+          ...(ctx.cotacaoFormatada&&ctx.continuidadeCotacao?[ctx.continuidadeCotacao]:[]),
+        ].join("\n\n") || null,
         ferramentas_json: ctx.ferramentasExecutadas,
         tokens_input: tokensInput,
         tokens_output: tokensOutput,
@@ -1141,6 +1217,10 @@ export async function processarPendenciaNegocio(
           venda_criada: ctx.vendaResultado?.ok === true,
           documento_venda_id: ctx.vendaResultado?.documento_id || null,
           pagamento_confirmado: false,
+          grupo_cotacao_id:ctx.grupoCotacaoId,
+          pos_cotacao_texto:Boolean(ctx.posCotacaoTexto),
+          pos_cotacao_midia:Boolean(ctx.posCotacaoMidiaId),
+          continuidade_cotacao:Boolean(ctx.continuidadeCotacao),
         },
       })
       .eq("id", execucaoId);
