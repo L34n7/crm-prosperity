@@ -1510,6 +1510,38 @@ export default function ConversasPageContent() {
     selection.addRange(range);
   }
 
+  function inserirQuebraLinhaNoEditor(alvo: HTMLDivElement) {
+    // ContentEditable pode criar blocos <div> ao pressionar Enter no iOS;
+    // inserir um caractere de nova linha mantém a quebra no texto enviado.
+    const selecao = window.getSelection();
+    const intervalo =
+      selecao && selecao.rangeCount > 0
+        ? selecao.getRangeAt(0)
+        : document.createRange();
+
+    if (!alvo.contains(intervalo.commonAncestorContainer)) {
+      intervalo.selectNodeContents(alvo);
+      intervalo.collapse(false);
+    }
+
+    intervalo.deleteContents();
+    const quebra = document.createTextNode("\n");
+    intervalo.insertNode(quebra);
+    intervalo.setStartAfter(quebra);
+    intervalo.collapse(true);
+    selecao?.removeAllRanges();
+    selecao?.addRange(intervalo);
+
+    const texto = alvo.textContent || "";
+    if (arquivoEnvio) {
+      legendaArquivoRef.current = texto;
+      setLegendaArquivo(texto);
+    } else {
+      conteudoRef.current = texto;
+      setConteudo(texto);
+    }
+  }
+
   function inserirEmojiNoEditor(emoji: string) {
     const alvo = arquivoEnvio ? legendaEditorRef.current : editorRef.current;
     if (!alvo) return;
@@ -9810,25 +9842,46 @@ const templateFooterTexto = useMemo(() => {
                                       }
                                     }}
                                     onPaste={colarImagemNoComposer}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter" && !e.shiftKey) {
+                                    enterKeyHint="enter"
+                                    onBeforeInput={(e) => {
+                                      // Alguns teclados virtuais emitem apenas beforeinput.
+                                      const tipo = (e.nativeEvent as InputEvent).inputType;
+                                      if (
+                                        window.matchMedia("(max-width: 980px)").matches &&
+                                        (tipo === "insertParagraph" || tipo === "insertLineBreak")
+                                      ) {
                                         e.preventDefault();
-
-                                        if (
-                                          enviando ||
-                                          !(arquivoEnvio ? podeEnviarMidia : podeEnviarMensagem) ||
-                                          gravandoAudio
-                                        ) return;
-
-                                        if (arquivoEnvio) {
-                                          enviarMidia();
-                                          return;
-                                        }
-
-                                        if (!conteudoRef.current.trim()) return;
-
-                                        enviarMensagem();
+                                        inserirQuebraLinhaNoEditor(e.currentTarget);
                                       }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+
+                                      if (
+                                        window.matchMedia("(max-width: 980px)").matches ||
+                                        e.shiftKey
+                                      ) {
+                                        e.preventDefault();
+                                        inserirQuebraLinhaNoEditor(e.currentTarget);
+                                        return;
+                                      }
+
+                                      e.preventDefault();
+
+                                      if (
+                                        enviando ||
+                                        !(arquivoEnvio ? podeEnviarMidia : podeEnviarMensagem) ||
+                                        gravandoAudio
+                                      ) return;
+
+                                      if (arquivoEnvio) {
+                                        enviarMidia();
+                                        return;
+                                      }
+
+                                      if (!conteudoRef.current.trim()) return;
+
+                                      enviarMensagem();
                                     }}
                                     role="textbox"
                                     aria-multiline="true"
@@ -9932,7 +9985,12 @@ const templateFooterTexto = useMemo(() => {
                               </div>
 
                               <p className={styles.footerHint}>
-                                Enter envia • Shift + Enter quebra linha
+                                <span className={styles.footerHintDesktop}>
+                                  Enter envia • Shift + Enter quebra linha
+                                </span>
+                                <span className={styles.footerHintMobile}>
+                                  Enter quebra linha • Toque em Enviar para mandar
+                                </span>
                               </p>
                             </>
                           )}
