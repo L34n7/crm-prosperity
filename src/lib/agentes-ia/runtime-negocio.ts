@@ -12,6 +12,7 @@ import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,pediuNovaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
+import { clienteCorrigiuVersaoCotacao } from "./correcao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
 import {
   carregarFerramentasNegocioAtivas,
@@ -61,6 +62,8 @@ type EstadoConversa = {
   aguardando_escolha_plano: boolean;
   plano_interesse_cotacao: string | null;
   cotacao_pendente: boolean;
+  cotacao_em_correcao: boolean;
+  cotacao_pedido_mensagens: string[];
 };
 
 type SaidaAgente = {
@@ -98,6 +101,8 @@ const ESTADO_VAZIO: EstadoConversa = {
   aguardando_escolha_plano:false,
   plano_interesse_cotacao:null,
   cotacao_pendente:false,
+  cotacao_em_correcao:false,
+  cotacao_pedido_mensagens:[],
 };
 
 function textoCurto(valor: unknown, limite: number) {
@@ -132,6 +137,8 @@ function normalizarEstado(valor: unknown): EstadoConversa {
     aguardando_escolha_plano:obj.aguardando_escolha_plano===true,
     plano_interesse_cotacao:textoCurto(obj.plano_interesse_cotacao,80)||null,
     cotacao_pendente:obj.cotacao_pendente===true,
+    cotacao_em_correcao:obj.cotacao_em_correcao===true,
+    cotacao_pedido_mensagens:listaCurta(obj.cotacao_pedido_mensagens,14,220),
   };
 }
 
@@ -155,6 +162,8 @@ function aplicarDelta(estado: EstadoConversa, delta: unknown): EstadoConversa {
     aguardando_escolha_plano:estado.aguardando_escolha_plano,
     plano_interesse_cotacao:estado.plano_interesse_cotacao,
     cotacao_pendente:estado.cotacao_pendente,
+    cotacao_em_correcao:estado.cotacao_em_correcao,
+    cotacao_pedido_mensagens:estado.cotacao_pedido_mensagens,
   };
 }
 
@@ -971,6 +980,8 @@ export async function processarPendenciaNegocio(
         proxima_acao:null,
         aguardando_escolha_plano:false,
         plano_interesse_cotacao:planoSelecionadoCotacao.codigo,
+        cotacao_pendente:false,
+        cotacao_em_correcao:false,
       };
       if(mensagem)await enviarMensagens(ctx,[mensagem]);
       const {error:estadoErro}=await supabaseAdmin.from("agente_ia_conversa_estados").upsert({
@@ -1197,6 +1208,7 @@ export async function processarPendenciaNegocio(
                 aguardando_escolha_plano:false,
                 plano_interesse_cotacao:null,
                 cotacao_pendente:false,
+                cotacao_em_correcao:false,
               },
             };
           }
