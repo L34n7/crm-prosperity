@@ -840,63 +840,21 @@ export async function processarPendenciaNegocio(
       continuidadeCotacao: null,
     };
 
-    // Contratação em duas etapas: confirmar plano ANTES de transferir.
-    // A decisão usa a última cotação salva e nunca executa outra consulta FIPE.
-    if(existeCotacaoAnterior&&!querOutraCotacao&&(desejaContratar||aguardandoEscolhaPlano)){
-      const planos=await planosDaUltimaCotacaoVeicular({
-        empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
-      });
-      const planoSelecionado=planoEscolhidoNaCotacao(pendencia.conteudo_agregado,planos)
-        ||(desejaContratar&&estado.plano_interesse_cotacao
-          ?planos.find(p=>p.codigo===estado.plano_interesse_cotacao)||null:null);
-      const agora=new Date().toISOString();
-      if(!planoSelecionado){
-        const nomes=planos.map(p=>/^plano\b/i.test(p.nome)?p.nome:"Plano "+p.nome);
-        const mensagem=nomes.length
-          ?"Ótimo! 😊 Qual dos planos da cotação você deseja contratar: *"+
-            nomes.join("* ou *")+"*?"
-          :"Não consegui recuperar os planos da última cotação. Vou precisar de ajuda da equipe para continuar.";
-        const estadoEscolha:EstadoConversa={
-          ...estado,estagio:"aguardando escolha do plano",
-          proxima_acao:"aguardar seleção do plano para transferência",
-          aguardando_escolha_plano:nomes.length>0,
-          plano_interesse_cotacao:null,
-        };
-        // Não tratar erro de transferência como motivo para recalcular cotação.
-        ctx.acaoCriticaExecutada=true;
-        await enviarMensagens(ctx,[mensagem]);
-        const {error:errEstado}=await supabaseAdmin.from("agente_ia_conversa_estados").upsert({
-          empresa_id:pendencia.empresa_id,agente_id:agente.id,conversa_id:pendencia.conversa_id,
-          resumo:memoriaCompacta(estadoEscolha).slice(0,1800),
-          estado_json:{...estadoEscolha,ultima_acao_critica:false,runtime_ultima_interacao:"negocio"},
-          ultima_mensagem_id:pendencia.mensagem_ids.at(-1)||null,
-          ultima_interacao_at:agora,updated_at:agora,
-        },{onConflict:"agente_id,conversa_id"});
-        if(errEstado)throw new Error(errEstado.message);
-        const {error:errExec}=await supabaseAdmin.from("agente_ia_execucoes").update({
-          status:"concluido",resposta:mensagem,
-          ferramentas_json:[...ctx.ferramentasExecutadas,{
-            nome:"aguardar_plano_contratacao",resultado:{ok:true,planos:planos.map(p=>p.codigo)},
-          }],
-          latencia_ms:Date.now()-inicio,finished_at:agora,updated_at:agora,
-          metadata_json:{runtime:"negocio",aguardando_plano:true,nenhuma_nova_cotacao:true},
-        }).eq("id",execucaoId);
-        if(errExec)throw new Error(errExec.message);
-        await finalizarPendencia({pendencia,lockToken,status:"processado"});
-        return {tratado:true,resultado:{ok:true,processado:true,aguardandoEscolhaPlano:true}};
-      }
-
+    // Uma escolha inequívoca de plano JÁ cotado é suficiente para encaminhar.
+    // A contratação propriamente dita permanece exclusivamente humana.
+    if(existeCotacaoAnterior&&!querOutraCotacao&&escolhaExplicita&&planoSelecionadoCotacao){
       ctx.acaoCriticaExecutada=true;
+      const agora=new Date().toISOString();
       const transferencia=await transferirContratacaoCotacao({
         empresaId:pendencia.empresa_id,
         conversaId:pendencia.conversa_id,
         agenteId:agente.id,
         configuracao:agente.fallback_transferencia_json,
       });
-      const nomePlano=/^plano\b/i.test(planoSelecionado.nome)
-        ?planoSelecionado.nome:"Plano "+planoSelecionado.nome;
+      const nomePlano=/^plano\b/i.test(planoSelecionadoCotacao.nome)
+        ?planoSelecionadoCotacao.nome:"Plano "+planoSelecionadoCotacao.nome;
       const mensagem=transferencia.transferido
-        ?"Perfeito! 😊 Você escolheu *"+nomePlano+"*. Já encaminhei sua cotação para "+
+        ?"Perfeito! 😊 Você escolheu *"+nomePlano+"*. Encaminhei sua cotação para "+
           (transferencia.setorNome?"a equipe de "+transferencia.setorNome:"nossa equipe de atendimento")+
           ". Um atendente continuará a contratação por aqui."
         :"";
@@ -905,7 +863,7 @@ export async function processarPendenciaNegocio(
         estagio:"transferido para atendimento humano",
         proxima_acao:null,
         aguardando_escolha_plano:false,
-        plano_interesse_cotacao:planoSelecionado.codigo,
+        plano_interesse_cotacao:planoSelecionadoCotacao.codigo,
       };
       if(mensagem)await enviarMensagens(ctx,[mensagem]);
       const {error:estadoErro}=await supabaseAdmin.from("agente_ia_conversa_estados").upsert({
@@ -922,12 +880,11 @@ export async function processarPendenciaNegocio(
       },{onConflict:"agente_id,conversa_id"});
       if(estadoErro)throw new Error(estadoErro.message);
       const {error:execErro}=await supabaseAdmin.from("agente_ia_execucoes").update({
-        status:"concluido",
-        resposta:mensagem||null,
+        status:"concluido",resposta:mensagem||null,
         ferramentas_json:[...ctx.ferramentasExecutadas,{
           nome:"transferir_contratacao_veicular",
           resultado:{
-            ok:true,plano:planoSelecionado.codigo,plano_nome:nomePlano,
+            ok:true,plano:planoSelecionadoCotacao.codigo,plano_nome:nomePlano,
             transferido:transferencia.transferido,
             setor_id:transferencia.setorId||null,
             responsavel_id:transferencia.responsavelId||null,
@@ -937,7 +894,7 @@ export async function processarPendenciaNegocio(
         finished_at:agora,updated_at:agora,
         metadata_json:{
           runtime:"negocio",transferencia_contratacao:true,
-          plano_escolhido:planoSelecionado.codigo,
+          plano_escolhido:planoSelecionadoCotacao.codigo,
           atendimento_humano:true,nenhuma_nova_cotacao:true,
         },
       }).eq("id",execucaoId);
@@ -945,7 +902,7 @@ export async function processarPendenciaNegocio(
       await finalizarPendencia({pendencia,lockToken,status:"processado"});
       return {tratado:true,resultado:{
         ok:true,processado:true,runtime:"negocio",
-        transferenciaContratacao:true,plano:planoSelecionado.codigo,
+        transferenciaContratacao:true,plano:planoSelecionadoCotacao.codigo,
         transferido:transferencia.transferido,
       }};
     }
