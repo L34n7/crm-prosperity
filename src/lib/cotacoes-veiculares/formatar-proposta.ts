@@ -104,6 +104,9 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
     "_Proposta informativa, sujeita às condições comerciais da associação._",
     ...(!dados.planos.every(p=>p.tabela_validada)?
       ["_Valores sujeitos à validação comercial._"]:[]),
+    "",
+    "🤝 *Quer seguir com a contratação?*",
+    "Basta responder *Quero contratar* e encaminharei você para um atendente concluir o processo.",
   );
   return linhas.join("\n").trim();
 }
