@@ -832,6 +832,8 @@ function DisparosAgendadosPageContent() {
     setConfirmarCancelamentoManualId,
   ] = useState<string | null>(null);
   const [cancelandoManualId, setCancelandoManualId] = useState<string | null>(null);
+  const [confirmarCancelarCampanhaManual, setConfirmarCancelarCampanhaManual] = useState(false);
+  const [cancelandoCampanhaManual, setCancelandoCampanhaManual] = useState(false);
 
   const [disparoSelecionado, setDisparoSelecionado] =
     useState<DisparoAgendado | null>(null);
@@ -1623,6 +1625,7 @@ function DisparosAgendadosPageContent() {
     setCarregandoGrupoManual(true);
     setBuscaGrupoManual("");
     setConfirmarCancelamentoManualId(null);
+    setConfirmarCancelarCampanhaManual(false);
 
     try {
       const detalhe = await buscarGrupoManualDetalhe(grupo);
@@ -1640,7 +1643,41 @@ function DisparosAgendadosPageContent() {
     setCarregandoGrupoManual(false);
     setBuscaGrupoManual("");
     setConfirmarCancelamentoManualId(null);
+    setConfirmarCancelarCampanhaManual(false);
     setCancelandoManualId(null);
+  }
+
+  async function cancelarCampanhaGrupoManual() {
+    if (!grupoManualModal || grupoManualModal.pendentes === 0) return;
+    if (!podeRealizarDisparos) {
+      setErro("Você não tem permissão para cancelar campanhas.");
+      return;
+    }
+
+    const grupoId = grupoManualModal.id.replace(/^manual:/, "");
+    try {
+      setCancelandoCampanhaManual(true);
+      setErro("");
+      const response = await fetch(
+        `/api/disparos-agendados/campanha/${encodeURIComponent(grupoId)}/cancelar`,
+        { method: "PATCH" }
+      );
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível cancelar a campanha.");
+      }
+
+      setConfirmarCancelarCampanhaManual(false);
+      const detalheAtualizado = await buscarGrupoManualDetalhe(grupoManualModal);
+      setGrupoManualDetalhe(detalheAtualizado);
+      await carregarDisparos();
+      solicitarAtualizacaoDisparosPendentesHeader();
+      setSucesso(data.message || "Campanha cancelada com sucesso.");
+    } catch (error: any) {
+      setErro(error?.message || "Falha ao cancelar campanha.");
+    } finally {
+      setCancelandoCampanhaManual(false);
+    }
   }
 
   async function cancelarContatoGrupoManual(disparo: DisparoAgendado) {
@@ -2203,6 +2240,20 @@ function DisparosAgendadosPageContent() {
                             >
                               Ver contatos
                             </button>
+                            {grupo.pendentes > 0 && podeRealizarDisparos ? (
+                              <button
+                                type="button"
+                                className={styles.dangerButton}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void abrirGrupoManual(grupo).then(() => {
+                                    setConfirmarCancelarCampanhaManual(true);
+                                  });
+                                }}
+                              >
+                                Cancelar campanha
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       </article>
@@ -3715,6 +3766,29 @@ function DisparosAgendadosPageContent() {
                 />
               </div>
 
+              {confirmarCancelarCampanhaManual && (
+                <div className={styles.warningBox} role="alert">
+                  <strong>Cancelar todos os disparos ainda pendentes desta campanha?</strong>
+                  <p>
+                    Apenas os envios não iniciados serão cancelados. Envios já executados
+                    ou em processamento não serão interrompidos. Esta ação registra
+                    o usuário, a data e a hora na auditoria.
+                  </p>
+                  <div className={styles.groupFooterActions}>
+                    <button type="button" className={styles.secondaryButton}
+                      disabled={cancelandoCampanhaManual}
+                      onClick={() => setConfirmarCancelarCampanhaManual(false)}>
+                      Voltar
+                    </button>
+                    <button type="button" className={styles.dangerButton}
+                      disabled={cancelandoCampanhaManual}
+                      onClick={() => void cancelarCampanhaGrupoManual()}>
+                      {cancelandoCampanhaManual ? "Cancelando..." : "Confirmar cancelamento"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className={styles.manualCampaignList}>
                 {carregandoGrupoManual ? (
                   <div className={styles.manualCampaignEmpty}>
@@ -3796,10 +3870,18 @@ function DisparosAgendadosPageContent() {
                 <span className={styles.manualCampaignFooterInfo}>
                   Ordenado pelo número do contato em ordem decrescente.
                 </span>
+                {grupoManualModal.pendentes > 0 && podeRealizarDisparos && !confirmarCancelarCampanhaManual ? (
+                  <button type="button" className={styles.dangerButton}
+                    disabled={cancelandoCampanhaManual || carregandoGrupoManual}
+                    onClick={() => setConfirmarCancelarCampanhaManual(true)}>
+                    Cancelar campanha
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={styles.secondaryButton}
                   onClick={fecharGrupoManual}
+                  disabled={cancelandoCampanhaManual}
                 >
                   Fechar
                 </button>
