@@ -781,7 +781,7 @@ export async function processarPendenciaNegocio(
     );
     const escolhaExplicita=Boolean(
       planoSelecionadoCotacao &&
-      indicouEscolhaPlanoCotacao(pendencia.conteudo_agregado)
+      indicouEscolhaPlanoCotacao(pendencia.conteudo_agregado, planoSelecionadoCotacao)
     );
 
     // O interesse na proposta existente nunca permite recalcular preço, nem
