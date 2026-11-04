@@ -786,8 +786,9 @@ export async function processarPendenciaNegocio(
 
     // O interesse na proposta existente nunca permite recalcular preço, nem
     // chamar a ferramenta de venda. Uma solicitação NOVA deve continuar podendo cotar.
-    if(existeCotacaoAnterior&&!querOutraCotacao&&
-      (desejaContratar||escolheuPlano||aguardandoEscolhaPlano||planoSelecionadoCotacao)){
+    if(existeCotacaoAnterior&&!querOutraCotacao){
+      // Conversar sobre uma proposta já emitida não é autorização para
+      // gerar nova cotação só porque o histórico menciona um veículo.
       ferramentasRelevantes.delete("gerar_cotacao_veicular");
     }
     // A venda comum de estoque não deve poder finalizar uma cotação veicular.
