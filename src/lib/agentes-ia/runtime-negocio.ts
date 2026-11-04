@@ -12,7 +12,12 @@ import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,pediuNovaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
-import { clienteCorrigiuVersaoCotacao } from "./correcao-cotacao";
+import {
+  clienteCorrigiuVersaoCotacao,
+  motorizacaoCorrigidaCotacao,
+  aplicarMotorizacaoCorrigida,
+  versaoCorrigidaFoiInformada,
+} from "./correcao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
 import {
   carregarFerramentasNegocioAtivas,
@@ -1191,16 +1196,33 @@ export async function processarPendenciaNegocio(
 
         let resultado: any;
         try {
-          resultado = await executarFerramentaNegocio({
-            tipo: nome,
-            empresaId: pendencia.empresa_id,
-            agenteId: agente.id,
-            conversaId: pendencia.conversa_id,
-            argumentos,
-            produtosAutorizados: ctx.produtosAutorizados,
-            confirmacaoVenda: ctx.confirmacaoVenda,
-            mensagemIds: pendencia.mensagem_ids,
-          });
+          if(nome==="gerar_cotacao_veicular" && estado.cotacao_em_correcao) {
+            if(!versaoCorrigidaFoiInformada(estado.cotacao_pedido_mensagens)) {
+              resultado={ok:false,error:
+                "O cliente rejeitou a versão cotada. Antes de refazer a proposta, " +
+                "pergunte a versão, o motor ou o câmbio CORRETO do veículo. " +
+                "Não reutilize o modelo/motor da cotação rejeitada."};
+            } else {
+              // Se a IA tentar reutilizar 2.0 após o cliente corrigir para
+              // 1.4, o backend executará a consulta com o dado confirmado.
+              const motor=motorizacaoCorrigidaCotacao(estado.cotacao_pedido_mensagens);
+              if (motor && typeof argumentos.modelo==="string") {
+                argumentos.modelo=aplicarMotorizacaoCorrigida(argumentos.modelo,motor);
+              }
+            }
+          }
+          if (!resultado) {
+            resultado = await executarFerramentaNegocio({
+              tipo: nome,
+              empresaId: pendencia.empresa_id,
+              agenteId: agente.id,
+              conversaId: pendencia.conversa_id,
+              argumentos,
+              produtosAutorizados: ctx.produtosAutorizados,
+              confirmacaoVenda: ctx.confirmacaoVenda,
+              mensagemIds: pendencia.mensagem_ids,
+            });
+          }
         } catch (error) {
           const mensagem=error instanceof Error ? error.message : String(error);
           resultado = {
@@ -1255,6 +1277,17 @@ export async function processarPendenciaNegocio(
           call_id: chamada.call_id,
           output: JSON.stringify(resultado),
         });
+        if (nome==="gerar_cotacao_veicular" && resultado?.ok===false) {
+          inputIa.push({role:"developer",content:
+            "A ferramenta de cotação NÃO gerou proposta. Motivo validado no backend: " +
+            String(resultado.error||"Erro não especificado").slice(0,900) + ". " +
+            "Explique a incompatibilidade ou a informação faltante ao cliente " +
+            "com objetividade, sem repetir o que ele já confirmou. NÃO diga " +
+            "que a cotação foi enviada, que está consultando ou que gerará " +
+            "uma proposta em segundo plano. Não substitua motorização, câmbio " +
+            "ou ano-modelo por outra versão sem autorização do cliente."
+          });
+        }
       }
 
       if (ctx.vendaResultado?.ok === true) break;
