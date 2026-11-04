@@ -1510,6 +1510,12 @@ export default function ConversasPageContent() {
     selection.addRange(range);
   }
 
+  function editorEstaNoMobile() {
+    // Detecta teclado de toque mesmo quando o navegador está em modo desktop.
+    return window.matchMedia("(pointer: coarse)").matches ||
+      window.matchMedia("(max-width: 980px)").matches;
+  }
+
   function inserirQuebraLinhaNoEditor(alvo: HTMLDivElement) {
     // ContentEditable pode criar blocos <div> ao pressionar Enter no iOS;
     // inserir um caractere de nova linha mantém a quebra no texto enviado.
@@ -9847,7 +9853,7 @@ const templateFooterTexto = useMemo(() => {
                                       // Alguns teclados virtuais emitem apenas beforeinput.
                                       const tipo = (e.nativeEvent as InputEvent).inputType;
                                       if (
-                                        window.matchMedia("(max-width: 980px)").matches &&
+                                        editorEstaNoMobile() &&
                                         (tipo === "insertParagraph" || tipo === "insertLineBreak")
                                       ) {
                                         e.preventDefault();
@@ -9858,7 +9864,7 @@ const templateFooterTexto = useMemo(() => {
                                       if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
 
                                       if (
-                                        window.matchMedia("(max-width: 980px)").matches ||
+                                        editorEstaNoMobile() ||
                                         e.shiftKey
                                       ) {
                                         e.preventDefault();
