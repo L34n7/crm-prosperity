@@ -1638,6 +1638,20 @@
   color: var(--crm-text-muted);
 }
 
+.footerHintMobile {
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .footerHintDesktop {
+    display: none;
+  }
+
+  .footerHintMobile {
+    display: inline;
+  }
+}
+
 .rightPanel {
   width: 400px;
   min-width: 360px;
