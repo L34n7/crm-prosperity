@@ -1434,6 +1434,22 @@ export async function processarPendenciaNegocio(
       { onConflict: "agente_id,conversa_id" }
     );
 
+    const tentativasCotacao=ctx.ferramentasExecutadas
+      .filter((item)=>item.nome==="gerar_cotacao_veicular" && !item.preconsulta);
+    const ultimaTentativaCotacao=tentativasCotacao.at(-1);
+    const resultadoCotacao=ultimaTentativaCotacao?.resultado as
+      | {ok?:boolean;error?:string} | undefined;
+    const erroCotacao=String(resultadoCotacao?.error||"").slice(0,650);
+    const cotacaoStatus=ctx.cotacaoFormatada
+      ?"emitida"
+      :tentativasCotacao.length
+        ?resultadoCotacao?.ok===false
+          ?/confirme|informe|pergunte|vers[aã]o|ano.modelo|mais de uma|motoriza[cç][aã]o/i.test(erroCotacao)
+            ?"aguardando_confirmacao"
+            :"falha"
+          :"sem_proposta"
+        :cotacaoEmAndamento?"aguardando_dados":"nao_solicitada";
+
     const finalAgora = new Date().toISOString();
     await supabaseAdmin
       .from("agente_ia_execucoes")
@@ -1460,6 +1476,10 @@ export async function processarPendenciaNegocio(
           pos_cotacao_texto:Boolean(ctx.posCotacaoTexto),
           pos_cotacao_midia:Boolean(ctx.posCotacaoMidiaId),
           continuidade_cotacao:Boolean(ctx.continuidadeCotacao),
+          cotacao_status:cotacaoStatus,
+          cotacao_tentativas:tentativasCotacao.length,
+          cotacao_motivo:erroCotacao||null,
+          cotacao_versao_em_correcao:saidaFinal.estado.cotacao_em_correcao,
         },
       })
       .eq("id", execucaoId);
