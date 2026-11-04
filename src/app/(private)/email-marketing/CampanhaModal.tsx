@@ -1709,7 +1709,7 @@ export default function CampanhaModal({
                     <ShieldCheck size={21} />
                     {erroDoCampo("confirmacao")}
                   </button>
-                ) : null
+                ) : null}
 
                 <div className={styles.complianceNote}>
                   <AlertTriangle size={18} />
