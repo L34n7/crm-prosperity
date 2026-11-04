@@ -91,7 +91,10 @@ export function planoEscolhidoNaCotacao(
 /** Uma escolha inequívoca de plano permite a transferência; uma pergunta
  * sobre o plano não equivale a escolher nem contratar.
  */
-export function indicouEscolhaPlanoCotacao(mensagem: string): boolean {
+export function indicouEscolhaPlanoCotacao(
+  mensagem: string,
+  plano?: { nome: string; codigo: string } | null,
+): boolean {
   const texto = normalizar(mensagem).replace(/[.!?]+$/g, "").trim();
   if (!texto) return false;
   if (
@@ -103,7 +106,14 @@ export function indicouEscolhaPlanoCotacao(mensagem: string): boolean {
     /\b(?:quero|prefiro|escolho|escolhi|vou ficar com|fico com|vou contratar|quero contratar|quero fechar|pode encaminhar|pode transferir)\b/.test(texto);
   if (mensagem.includes("?") && !/\b(?:prefiro|escolho|escolhi|vou ficar com|fico com|vou contratar|quero contratar|quero fechar)\b/.test(texto)) return false;
   if (/^(?:qual|quais|quanto|como|porque|por que|tem|cobre|inclui|explica|me fale|me conta|o que|qual a diferenca)\b/.test(texto)) return false;
-  return escolhaClara ||
+  const nomePlano = normalizar(plano?.nome || "").replace(/^plano\s+/, "");
+  const codigoPlano = normalizar(plano?.codigo || "");
+  const referenciasPlano = [nomePlano, codigoPlano].filter(Boolean);
+  const escolhaExata = referenciasPlano.some((nome) =>
+    [nome, `plano ${nome}`, `o ${nome}`, `o plano ${nome}`,
+      `a ${nome}`, `a opcao ${nome}`].includes(texto)
+  );
+  return escolhaClara || escolhaExata ||
     /^(?:(?:o|a)\s+)?(?:plano\s+)?(?:primeir[oa]|segund[oa]|terceir[oa]|premium|completo|basico|essencial|profissional)$/.test(texto);
 }
 
