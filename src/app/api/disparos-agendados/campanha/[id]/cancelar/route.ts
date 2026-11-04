@@ -39,16 +39,14 @@ export async function PATCH(
   }
 
   const db = getSupabaseAdmin();
-  const base = () =>
-    db
-      .from("automacao_agendamentos")
-      .eq("empresa_id", usuario.empresa_id!)
-      .eq("tipo_agendamento", "disparo_template")
-      .eq("payload_json->>origem", "manual_agendado")
-      .eq("payload_json->>agendamento_grupo_id", id);
+  const tabela = () => db.from("automacao_agendamentos");
 
-  const { data: amostra, error: amostraErro } = await base()
+  const { data: amostra, error: amostraErro } = await tabela()
     .select("id,status,executar_em,payload_json")
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("tipo_agendamento", "disparo_template")
+    .eq("payload_json->>origem", "manual_agendado")
+    .eq("payload_json->>agendamento_grupo_id", id)
     .limit(1)
     .maybeSingle();
 
@@ -66,8 +64,12 @@ export async function PATCH(
     );
   }
 
-  const { count: pendentesAntes, error: contagemErro } = await base()
+  const { count: pendentesAntes, error: contagemErro } = await tabela()
     .select("id", { head: true, count: "exact" })
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("tipo_agendamento", "disparo_template")
+    .eq("payload_json->>origem", "manual_agendado")
+    .eq("payload_json->>agendamento_grupo_id", id)
     .eq("status", "pendente");
 
   if (contagemErro) {
@@ -87,8 +89,12 @@ export async function PATCH(
   const agora = new Date().toISOString();
   // Uma única atualização condicional impede que envios já em execução
   // sejam marcados como cancelados.
-  const { count: cancelados, error: cancelamentoErro } = await base()
+  const { count: cancelados, error: cancelamentoErro } = await tabela()
     .update({ status: "cancelado" }, { count: "exact" })
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("tipo_agendamento", "disparo_template")
+    .eq("payload_json->>origem", "manual_agendado")
+    .eq("payload_json->>agendamento_grupo_id", id)
     .eq("status", "pendente");
 
   if (cancelamentoErro) {
