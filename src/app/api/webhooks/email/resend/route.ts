@@ -137,28 +137,59 @@ export async function POST(request: Request) {
   let evento: ResendWebhookEvent;
 
   try {
-    // Verifica o segredo individual sem precisar enviar a API Key.
-    // Eventos tardios continuam aceitos quando o módulo é desabilitado.
+    // Um webhook com empresa_id explícito aceita SOMENTE o segredo do tenant.
+    // No endpoint legado sem empresa_id, a própria empresa pode ter uma conta
+    // Resend de E-mail Marketing separada da conta geral do sistema.
+    // Ambas assinam eventos válidos, portanto verificamos os dois segredos
+    // sem aceitar credenciais de outros tenants.
     const resend = new Resend("re_webhook_verification_only");
-    const webhookSecret =
-      !empresaIdInformada && empresaWebhook === EMAIL_MARKETING_EMPRESA_LEGADA
-        ? process.env.RESEND_EMAIL_MARKETING_WEBHOOK_SECRET?.trim() ||
-          await getEmailMarketingWebhookSecret(empresaWebhook)
-        : await getEmailMarketingWebhookSecret(empresaWebhook);
+    const webhookSecrets: string[] = [];
 
-    const eventoVerificado = await Promise.resolve(
-      resend.webhooks.verify({
-        payload,
-        headers: {
-          id: svixId,
-          timestamp: svixTimestamp,
-          signature: svixSignature,
-        },
-        webhookSecret,
-      })
-    );
+    if (empresaIdInformada) {
+      webhookSecrets.push(await getEmailMarketingWebhookSecret(empresaWebhook));
+    } else {
+      try {
+        webhookSecrets.push(await getEmailMarketingWebhookSecret(empresaWebhook));
+      } catch {
+        // Compatibilidade com a integração antiga que usava apenas a env.
+      }
 
-    evento = eventoVerificado as unknown as ResendWebhookEvent;
+      const legado = process.env.RESEND_EMAIL_MARKETING_WEBHOOK_SECRET?.trim();
+      if (legado && !webhookSecrets.includes(legado)) {
+        webhookSecrets.push(legado);
+      }
+    }
+
+    if (!webhookSecrets.length) {
+      throw new Error("Nenhum segredo de webhook configurado.");
+    }
+
+    let eventoVerificado: ResendWebhookEvent | null = null;
+
+    for (const webhookSecret of webhookSecrets) {
+      try {
+        eventoVerificado = (await Promise.resolve(
+          resend.webhooks.verify({
+            payload,
+            headers: {
+              id: svixId,
+              timestamp: svixTimestamp,
+              signature: svixSignature,
+            },
+            webhookSecret,
+          })
+        )) as unknown as ResendWebhookEvent;
+        break;
+      } catch {
+        // Falha da assinatura deste segredo; tenta o próximo, se existir.
+      }
+    }
+
+    if (!eventoVerificado) {
+      throw new Error("Nenhuma assinatura corresponde às credenciais autorizadas.");
+    }
+
+    evento = eventoVerificado;
   } catch (error) {
     console.error("[EMAIL MARKETING] Webhook Resend inválido:", error);
 
