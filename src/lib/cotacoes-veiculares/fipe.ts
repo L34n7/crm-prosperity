@@ -1,4 +1,6 @@
 import "server-only";
+import { modelosCompativeisFipe } from "./modelos-compatibilidade";
+export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
 export type TipoFipe = "cars" | "motorcycles" | "trucks";
 export type OpcaoFipe = { code: string; name: string };
@@ -54,28 +56,6 @@ function unico(itens: OpcaoFipe[], busca: string) {
       : "Não encontrei " + busca + " na consulta FIPE. Confirme marca, modelo e ano."
   );
 }
-/** Correspondência estrita: todas as palavras da versão informada precisam existir
- * no modelo da FIPE, mesmo que o fornecedor reorganize ou abrevie o nome.
- * Não escolhe versões diferentes com o mesmo nome simplificado.
- */
-export function modelosCompativeisFipe(itens:OpcaoFipe[],consulta:string):OpcaoFipe[]{
-  const nome=normalizar(consulta)
-    .replace(/\bsed\b/g,"sedan")
-    .replace(/\bdisel\b/g,"diesel");
-  if(!nome)return [];
-  const exatos=itens.filter(item=>normalizar(item.name).replace(/\bsed\b/g,"sedan")===nome
-    ||item.code===consulta.trim());
-  if(exatos.length)return exatos;
-  const tokens=nome.split(" ").filter(t=>t&&![
-    "manual","mecanico","automatico","gasolina","alcool","flex"
-  ].includes(t));
-  return itens.filter(item=>{
-    const partes=new Set(normalizar(item.name).replace(/\bsed\b/g,"sedan").split(" "));
-    return tokens.every(token=>partes.has(token)||
-      (token==="diesel"&&["diesel","dies","die"].some(x=>partes.has(x))));
-  });
-}
-
 /** "2004/2005" corresponde ao ano-modelo 2005; 2004 é fabricação. */
 export function anoModeloSolicitado(ano:string):string{
   const anos=String(ano).match(/\b(?:19|20)\d{2}\b/g);
