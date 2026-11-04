@@ -117,7 +117,7 @@ function formatarData(valor: string | null | undefined) {
 }
 
 function statusProblema(status: string) {
-  return ["falha", "bounce", "suprimido", "reclamacao", "cancelado"].includes(status);
+  return ["falha", "bounce", "suprimido", "reclamacao"].includes(status);
 }
 
 export default function CampanhaDetalhesModal({ campanha, onClose, onUpdated }: Props) {
