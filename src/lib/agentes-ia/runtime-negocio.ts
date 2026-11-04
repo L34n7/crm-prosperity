@@ -1018,6 +1018,9 @@ export async function processarPendenciaNegocio(
 
     let saidaFinal: SaidaAgente = { mensagens: [], estado };
     const tools = definicoesFerramentasNegocio(ferramentasRelevantes, preconsulta);
+    let forcarCotacaoNaProximaRodada=false;
+    let tentouForcarCotacao=false;
+    let executouFerramentaCotacao=false;
 
     for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
       const request: any = {
@@ -1029,6 +1032,12 @@ export async function processarPendenciaNegocio(
         text: { verbosity: "low", format: FORMATO_SAIDA },
       };
       if (tools.length && !ctx.cotacaoFormatada) request.tools = tools;
+      if (forcarCotacaoNaProximaRodada &&
+          tools.some((tool)=>tool.name==="gerar_cotacao_veicular")) {
+        request.tool_choice={type:"function",name:"gerar_cotacao_veicular"};
+        forcarCotacaoNaProximaRodada=false;
+        tentouForcarCotacao=true;
+      }
 
       let response: any;
       try {
@@ -1060,6 +1069,23 @@ export async function processarPendenciaNegocio(
           // proposta original que o backend já preparou para o WhatsApp.
           const convite=respostaInterpretada.mensagens[0] || "";
           if (convite && convite.length <= 500) ctx.continuidadeCotacao=convite;
+        } else if(cotacaoEmAndamento && !tentouForcarCotacao &&
+          !executouFerramentaCotacao &&
+          tools.some((tool)=>tool.name==="gerar_cotacao_veicular") &&
+          promessaDeConsultaSemFerramenta(respostaInterpretada.mensagens)) {
+          // A IA não pode responder "estou consultando" e encerrar a execução
+          // sem realmente tentar a consulta FIPE. Refaça a rodada exigindo
+          // exclusivamente a ferramenta que ela acabou de prometer usar.
+          forcarCotacaoNaProximaRodada=true;
+          inputIa.push({role:"developer",content:
+            "Você acabou de afirmar que iria consultar os preços, mas nenhuma " +
+            "ferramenta foi executada. Agora chame gerar_cotacao_veicular. " +
+            "Use EXCLUSIVAMENTE os dados do pedido mais recente; não aproveite " +
+            "a marca/modelo/ano do veículo antigo. Se algum dado estiver ausente, " +
+            "não o invente: a ferramenta validará os campos e você deverá " +
+            "pedir somente a informação que faltar após receber a resposta."
+          });
+          continue;
         } else {
           saidaFinal=respostaInterpretada;
         }
@@ -1068,6 +1094,7 @@ export async function processarPendenciaNegocio(
 
       for (const chamada of chamadas) {
         const nome = String(chamada.name || "") as TipoFerramentaNegocio;
+        if (nome === "gerar_cotacao_veicular") executouFerramentaCotacao=true;
         if (!ferramentasRelevantes.has(nome) || !FERRAMENTAS_EXECUTAVEIS.has(nome)) {
           inputIa.push({
             type: "function_call_output",
