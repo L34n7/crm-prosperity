@@ -1067,6 +1067,53 @@ export async function PATCH(request: Request) {
     let ferramentasNormalizadas: FerramentaBody[] | null = null;
     if (Array.isArray(body.ferramentas)) {
       const ferramentas = ferramentasBody(body.ferramentas);
+      for (const ferramenta of ferramentas) {
+        if (ferramenta.tipo !== "gerar_cotacao_veicular") continue;
+        const config = ferramenta.config_json;
+        const ativo = config.pos_cotacao_ativo === true;
+        const texto = String(config.pos_cotacao_texto || "").trim();
+        const midiaId = String(config.pos_cotacao_midia_id || "").trim();
+        if (texto.length > 2400) {
+          return NextResponse.json(
+            { ok: false, error: "A mensagem pós-cotação deve ter no máximo 2.400 caracteres." },
+            { status: 400 },
+          );
+        }
+        if (ativo && !texto && !midiaId) {
+          return NextResponse.json(
+            { ok: false, error: "Configure uma mensagem ou mídia para ativar o envio pós-cotação." },
+            { status: 400 },
+          );
+        }
+        if (ativo && midiaId) {
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(midiaId)) {
+            return NextResponse.json(
+              { ok: false, error: "Identificador da mídia pós-cotação inválido." },
+              { status: 400 },
+            );
+          }
+          const { data: midia, error: midiaErro } = await supabaseAdmin
+            .from("midias")
+            .select("id")
+            .eq("empresa_id", contexto.empresaId)
+            .eq("id", midiaId)
+            .in("tipo", ["imagem", "video", "audio", "arquivo"])
+            .maybeSingle();
+          if (midiaErro) throw new Error(midiaErro.message);
+          if (!midia) {
+            return NextResponse.json(
+              { ok: false, error: "A mídia pós-cotação não foi encontrada na biblioteca desta empresa." },
+              { status: 400 },
+            );
+          }
+        }
+        ferramenta.config_json = {
+          ...config,
+          pos_cotacao_ativo: ativo,
+          pos_cotacao_texto: texto,
+          pos_cotacao_midia_id: midiaId || null,
+        };
+      }
       if(ferramentas.some(item=>item.tipo==="gerar_cotacao_veicular" && item.ativo)){
         const status=await statusConfiguracaoCotacao(contexto.empresaId);
         if(!status.pronta) return NextResponse.json({
