@@ -77,6 +77,7 @@ const filtros = [
   { value: "aberto", label: "Abertos" },
   { value: "clicado", label: "Com clique" },
   { value: "falha", label: "Falhas de envio" },
+  { value: "cancelado", label: "Cancelados" },
   { value: "bounce", label: "Devolvidos (bounce)" },
   { value: "suprimido", label: "Suprimidos" },
   { value: "reclamacao", label: "Reclamações" },
@@ -92,6 +93,7 @@ const statusNomes: Record<string, string> = {
   aberto: "Aberto",
   clicado: "Clicado",
   falha: "Falha",
+  cancelado: "Cancelado",
   bounce: "Devolvido",
   suprimido: "Suprimido",
   reclamacao: "Reclamação",
@@ -115,7 +117,7 @@ function formatarData(valor: string | null | undefined) {
 }
 
 function statusProblema(status: string) {
-  return ["falha", "bounce", "suprimido", "reclamacao"].includes(status);
+  return ["falha", "bounce", "suprimido", "reclamacao", "cancelado"].includes(status);
 }
 
 export default function CampanhaDetalhesModal({ campanha, onClose, onUpdated }: Props) {
