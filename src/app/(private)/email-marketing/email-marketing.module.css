@@ -4990,6 +4990,17 @@
   flex-wrap: wrap;
 }
 
+.campaignDetailSyncFeedback {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 10px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .campaignDetailToolbar .searchBox {
   flex: 1 1 300px;
   min-width: 0;
