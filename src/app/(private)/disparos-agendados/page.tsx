@@ -320,12 +320,15 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
       ? Number(resumoGrupo.erros || 0)
       : itens.filter((item) => item.status === "erro").length;
 
+    // Uma falha isolada não deve tornar toda a campanha vermelha.
+    // Priorize envios em andamento; ao finalizar, basta existir um envio
+    // executado para a campanha ser concluída, mantendo erros no contador.
     let status: StatusGrupoDisparo = "parcial";
-    if (erros > 0) status = "erro";
-    else if (executando > 0) status = "executando";
+    if (executando > 0) status = "executando";
     else if (pendentes > 0) status = "pendente";
-    else if (executados === total) status = "executado";
-    else if (cancelados === total) status = "cancelado";
+    else if (total > 0 && erros === total) status = "erro";
+    else if (executados > 0) status = "executado";
+    else if (total > 0 && cancelados === total) status = "cancelado";
 
     const proximaExecucao = itens.find((item) =>
       ["pendente", "executando"].includes(item.status)
@@ -406,6 +409,7 @@ function criarGruposDisparos(disparos: DisparoAgendado[]): GrupoDisparos[] {
 function grupoStatusLabel(status: StatusGrupoDisparo) {
   if (status === "parcial") return "Parcial";
   if (status === "erro") return "Atenção";
+  if (status === "executado") return "Concluído";
   return statusLabel(status);
 }
 
