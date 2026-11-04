@@ -66,6 +66,7 @@ type RespostaDetalhes = {
 type Props = {
   campanha: CampanhaResumo;
   onClose: () => void;
+  onUpdated?: () => void | Promise<void>;
 };
 
 const filtros = [
@@ -86,7 +87,7 @@ const statusNomes: Record<string, string> = {
   pendente: "Pendente",
   agendado: "Agendado",
   processando: "Processando",
-  enviado: "Enviado",
+  enviado: "Aceito pelo Resend",
   entregue: "Entregue",
   aberto: "Aberto",
   clicado: "Clicado",
@@ -117,7 +118,7 @@ function statusProblema(status: string) {
   return ["falha", "bounce", "suprimido", "reclamacao"].includes(status);
 }
 
-export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
+export default function CampanhaDetalhesModal({ campanha, onClose, onUpdated }: Props) {
   const [montado, setMontado] = useState(false);
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
@@ -128,6 +129,8 @@ export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [resposta, setResposta] = useState<RespostaDetalhes | null>(null);
+  const [verificandoEntrega, setVerificandoEntrega] = useState(false);
+  const [mensagemVerificacao, setMensagemVerificacao] = useState("");
 
   useEffect(() => {
     setMontado(true);
@@ -187,6 +190,33 @@ export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
     void carregar();
     return () => controle.abort();
   }, [campanha.id, buscaAplicada, status, ordem, pagina, versao]);
+
+  async function verificarEntregaNoProvedor() {
+    setVerificandoEntrega(true);
+    setMensagemVerificacao("");
+    try {
+      const response = await fetch(
+        `/api/email-marketing/campanhas/${encodeURIComponent(campanha.id)}/verificar-entrega`,
+        { method: "POST" }
+      );
+      const data = (await response.json()) as { ok?: boolean; error?: string; message?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || data.error || "Não foi possível consultar o Resend.");
+      }
+
+      setMensagemVerificacao(
+        data.message || "Consulta concluída. Os dados foram atualizados."
+      );
+      setVersao((valor) => valor + 1);
+      await onUpdated?.();
+    } catch (error) {
+      setMensagemVerificacao(
+        error instanceof Error ? error.message : "Falha ao verificar a entrega."
+      );
+    } finally {
+      setVerificandoEntrega(false);
+    }
+  }
 
   if (!montado) return null;
 
@@ -273,7 +303,23 @@ export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
               <RefreshCw size={16} />
               Atualizar
             </button>
+            <button
+              type="button"
+              className={styles.campaignDetailReload}
+              onClick={() => void verificarEntregaNoProvedor()}
+              disabled={carregando || verificandoEntrega || resumo.total_enviados === 0}
+              title="Consultar o status diretamente no Resend sem reenviar a campanha"
+            >
+              <MailCheck size={16} />
+              {verificandoEntrega ? "Consultando..." : "Verificar entrega"}
+            </button>
           </div>
+
+          {mensagemVerificacao ? (
+            <p className={styles.campaignDetailSyncFeedback} role="status">
+              {mensagemVerificacao}
+            </p>
+          ) : null}
 
           <div className={styles.campaignDetailTableWrap}>
             <table className={styles.campaignDetailTable}>
@@ -333,7 +379,12 @@ export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
                           ? <span className={styles.campaignClickedBadge} title={`Clique: ${formatarData(item.clicado_em)}`}><MousePointerClick size={12}/> Clique</span>
                           : null}
                         {!item.entregue_em && !item.aberto_em && !item.clicado_em
-                          ? <span className={styles.campaignNoEvents}><Check size={12}/> Sem eventos adicionais</span>
+                          ? <span className={styles.campaignNoEvents}>
+                              <Clock3 size={12}/>
+                              {item.status === "enviado"
+                                ? "Entrega não confirmada"
+                                : "Sem eventos adicionais"}
+                            </span>
                           : null}
                       </div>
                     </td>
@@ -371,7 +422,7 @@ export default function CampanhaDetalhesModal({ campanha, onClose }: Props) {
           <div className={styles.campaignDetailPagination}>
             <div>
               <strong>{total}</strong> destinatário(s) encontrado(s) · 20 por página
-              <small>Aberturas são estimativas: alguns provedores carregam imagens automaticamente.</small>
+              <small>Enviado significa aceito pelo Resend; entregue significa confirmação do servidor de destino. Aberturas são estimativas.</small>
             </div>
             <div className={styles.campaignDetailPageActions}>
               <button
