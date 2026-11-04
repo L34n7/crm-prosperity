@@ -34,6 +34,7 @@ import {
   Calculator,
   UserCircle,
   HelpCircle,
+  BookOpen,
   Moon,
   Sun,
   X,
@@ -242,6 +243,11 @@ const menuItems: MenuItem[] = [
     href: "/whatsapp-web",
     icon: MessageCircle,
     permissao: PERMISSAO_VISUALIZAR_DISPAROS,
+  },
+  {
+    label: "Central de Conhecimento",
+    href: "/central-de-conhecimento",
+    icon: BookOpen,
   },
   {
     label: "Perfil WhatsApp",

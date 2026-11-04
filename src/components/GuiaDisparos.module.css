@@ -1,0 +1,155 @@
+.abaFechada {
+  position: fixed;
+  top: 132px;
+  right: 0;
+  z-index: 2780;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 50px;
+  padding: 0 11px 0 14px;
+  border: 1px solid var(--crm-border);
+  border-right: 0;
+  border-radius: 16px 0 0 16px;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  box-shadow: var(--crm-shadow-xs);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.abaFechada:hover { color: var(--crm-primary-text); background: var(--crm-primary-soft); }
+
+.drawer {
+  position: fixed;
+  top: 62px;
+  right: 0;
+  bottom: 0;
+  z-index: 2790;
+  width: min(440px, calc(100vw - 12px));
+  box-sizing: border-box;
+  background: var(--crm-surface);
+  color: var(--crm-text-strong);
+  border-left: 1px solid var(--crm-border);
+  border-radius: 26px 0 0 0;
+  box-shadow: -16px 0 48px rgba(15, 23, 42, 0.16);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(100%);
+  transition: transform 0.34s cubic-bezier(.22, 1, .36, 1), opacity .24s ease, visibility 0s linear .34s;
+}
+
+.drawerAberto {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
+
+.scroll {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 0 23px 30px;
+  box-sizing: border-box;
+}
+
+.abaRecolher {
+  position: absolute;
+  top: 48%;
+  left: -19px;
+  display: inline-grid;
+  place-items: center;
+  height: 76px;
+  width: 19px;
+  border: 1px solid var(--crm-border);
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+  background: var(--crm-surface);
+  color: var(--crm-text-muted);
+  cursor: pointer;
+}
+
+.cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -23px;
+  padding: 19px 23px 15px;
+  background: var(--crm-surface);
+  border-bottom: 1px solid var(--crm-border);
+}
+
+.sobretitulo {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--crm-text-muted);
+}
+
+.cabecalho h2 { margin: 3px 0 0; font-size: 20px; line-height: 1.24; font-weight: 800; }
+.fechar { border: 0; background: var(--crm-surface-soft); color: var(--crm-text-muted); border-radius: 10px; padding: 8px; cursor: pointer; display: grid; place-items: center; }
+.fechar:hover { color: var(--crm-text-strong); }
+.introducao { color: var(--crm-text-muted); font-size: 13px; line-height: 1.6; margin: 16px 0 19px; }
+
+.preRequisitos {
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  background: var(--crm-surface-soft);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.preRequisitos h3 { font-size: 14px; margin: 0 0 15px; }
+.preRequisito { display: flex; gap: 10px; align-items: flex-start; }
+.preRequisito + .preRequisito { border-top: 1px solid var(--crm-border); margin-top: 13px; padding-top: 13px; }
+.preRequisito > svg { flex-shrink: 0; color: var(--crm-primary-text); margin-top: 2px; }
+.preRequisito strong { font-size: 13px; }
+.preRequisito p, .resultados p { font-size: 12px; line-height: 1.55; color: var(--crm-text-muted); margin: 5px 0; }
+.preRequisito a, .passos a, .resultados a { color: var(--crm-primary-text); font-size: 12px; font-weight: 750; text-decoration: none; }
+.preRequisito a:hover, .passos a:hover, .resultados a:hover { text-decoration: underline; }
+
+.etapas { display: flex; flex-direction: column; gap: 9px; }
+.etapa { border: 1px solid var(--crm-border); border-radius: 13px; overflow: hidden; background: var(--crm-surface); }
+.etapaBotao { display: flex; align-items: center; gap: 11px; text-align: left; padding: 12px; width: 100%; background: transparent; border: 0; color: var(--crm-text-strong); cursor: pointer; font-family: inherit; }
+.etapaBotaoAtivo { background: var(--crm-surface-soft); }
+.numero { display: grid; place-items: center; flex: 0 0 27px; height: 27px; border-radius: 9px; background: var(--crm-primary-soft); color: var(--crm-primary-text); font-weight: 800; font-size: 12px; }
+.etapaNome { flex: 1; font-size: 13px; font-weight: 750; }
+.etapaBotao > svg { color: var(--crm-text-muted); transition: transform .2s ease; }
+.girar { transform: rotate(180deg); }
+.passos { padding: 2px 17px 15px 54px; margin: 0; list-style: none; }
+.passos li { margin-top: 13px; }
+.passos strong { display: block; font-size: 13px; }
+.passos p { margin: 5px 0; color: var(--crm-text-muted); line-height: 1.58; font-size: 12px; }
+.resultados { margin-top: 18px; padding: 15px; border-radius: 13px; border: 1px solid var(--crm-border); }
+.resultados strong { font-size: 13px; }
+.video { margin-top: 22px; }
+.videoTitulo { display: flex; align-items: center; gap: 8px; }
+.videoTitulo svg { color: var(--crm-primary-text); }
+.videoTitulo h3 { margin: 0; font-size: 14px; }
+.videoPlaceholder { margin-top: 10px; aspect-ratio: 16 / 9; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; background: var(--crm-surface-soft); border: 1px dashed var(--crm-border); border-radius: 14px; color: var(--crm-text-muted); text-align: center; padding: 12px; }
+.videoPlaceholder strong { color: var(--crm-text-strong); font-size: 13px; }
+.videoPlaceholder span { font-size: 12px; }
+.linkPrincipal { display: flex; align-items: center; justify-content: center; gap: 9px; text-decoration: none; border-radius: 11px; background: var(--crm-primary); color: #fff; min-height: 46px; margin-top: 18px; font-size: 13px; font-weight: 800; padding: 0 10px; }
+.linkPrincipal:hover { filter: brightness(1.07); }
+.linkPrincipal svg:last-child { margin-left: auto; }
+
+@media (max-width: 640px) {
+  .abaFechada { top: 100px; min-height: 44px; }
+  .drawer { top: 0; width: min(100vw, 440px); border-radius: 0; }
+  .scroll { padding-bottom: calc(26px + env(safe-area-inset-bottom)); }
+  .abaRecolher { display: none; }
+  .cabecalho { padding-top: calc(20px + env(safe-area-inset-top)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer, .etapaBotao > svg { transition: none; }
+}

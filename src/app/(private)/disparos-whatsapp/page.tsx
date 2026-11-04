@@ -28,6 +28,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
+import GuiaDisparos from "@/components/GuiaDisparos";
 import Header from "@/components/Header";
 import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summary/events";
 import styles from "./disparos-whatsapp.module.css";
@@ -2336,6 +2337,7 @@ export default function DisparosWhatsAppPage() {
   const contatosConsultaAtivaRef = useRef(0);
   const carregandoResultadosConclusaoRef = useRef(false);
   const [usuarioLogado, setUsuarioLogado] = useState<UsuarioLogado | null>(null);
+  const [guiaDisparosAberto, setGuiaDisparosAberto] = useState(false);
 
   const [integracoes, setIntegracoes] = useState<IntegracaoWhatsApp[]>([]);
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
@@ -6536,7 +6538,7 @@ export default function DisparosWhatsAppPage() {
     const overflowAnterior = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const fecharComEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !disparando && !modalVariaveisAberto &&
+      if (event.key === "Escape" && !guiaDisparosAberto && !disparando && !modalVariaveisAberto &&
         !modalResponsabilidadeListaFriaAberto) {
         setModalCriacaoDisparoAberto(false);
         setErro("");
@@ -6547,7 +6549,7 @@ export default function DisparosWhatsAppPage() {
       document.body.style.overflow = overflowAnterior;
       document.removeEventListener("keydown", fecharComEscape);
     };
-  }, [modalCriacaoDisparoAberto, disparando, modalVariaveisAberto, modalResponsabilidadeListaFriaAberto]);
+  }, [modalCriacaoDisparoAberto, disparando, modalVariaveisAberto, modalResponsabilidadeListaFriaAberto, guiaDisparosAberto]);
 
   useEffect(() => {
     const categoria = String(templateSelecionado?.categoria || "").toLowerCase();
@@ -6574,6 +6576,11 @@ export default function DisparosWhatsAppPage() {
     <>
       <Header title="Disparos em massa"
         subtitle="Acompanhe suas campanhas WhatsApp e consulte os resultados de cada envio." />
+      <GuiaDisparos
+        aberto={guiaDisparosAberto}
+        onAbertoChange={setGuiaDisparosAberto}
+        etapaAtual={modalCriacaoDisparoAberto ? etapaDisparo : null}
+      />
       <div className={abaAtiva === "resultados" && filtroHistoricoCampanha ? [styles.pageContent, styles.pageContentCampaignReport].join(" ") : styles.pageContent}>
         {mensagem ? <FeedbackToast success={mensagem} onSuccessDismiss={() => setMensagem("")} /> : null}
         {!modalCriacaoDisparoAberto && erro ? <div className={styles.errorAlert} role="alert">{erro}</div> : null}
