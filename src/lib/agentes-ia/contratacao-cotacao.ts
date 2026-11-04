@@ -86,3 +86,27 @@ export function planoEscolhidoNaCotacao(
   }
   return null;
 }
+
+
+/** Uma escolha inequívoca de plano permite a transferência; uma pergunta
+ * sobre o plano não equivale a escolher nem contratar.
+ */
+export function indicouEscolhaPlanoCotacao(mensagem: string): boolean {
+  const texto = normalizar(mensagem).replace(/[.!?]+$/g, "").trim();
+  if (!texto) return false;
+  if (
+    /\b(?:nova cotacao|outra cotacao|novo orcamento|outro veiculo|cotar outro|cotar outro carro|simular outro)\b/.test(texto)
+  ) return false;
+  const escolhaClara =
+    /\b(?:quero|prefiro|escolho|escolhi|vou ficar com|fico com|gostei do|gostei da|vou contratar|quero contratar|quero fechar|pode encaminhar|pode transferir)\b/.test(texto);
+  if (mensagem.includes("?") && !escolhaClara) return false;
+  if (/^(?:qual|quais|quanto|como|porque|por que|tem|cobre|inclui|explica|me fale|me conta|o que|qual a diferenca)\b/.test(texto)) return false;
+  return escolhaClara ||
+    /^(?:(?:o|a)\s+)?(?:plano\s+)?(?:primeir[oa]|segund[oa]|terceir[oa]|premium|completo|basico|essencial|profissional)$/.test(texto);
+}
+
+/** Novo veículo pode vir com os dados já na mesma mensagem do cliente. */
+export function pediuNovaCotacao(mensagem: string): boolean {
+  const texto = normalizar(mensagem);
+  return /\b(?:(?:outra|nova)\s+(?:cotacao|simulacao|proposta|orcamento)|(?:cotar|simular)\s+(?:outro|nova|um novo|uma nova)|(?:outro|novo)\s+(?:carro|veiculo|modelo))\b/.test(texto);
+}
