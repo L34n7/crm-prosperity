@@ -970,6 +970,19 @@
   cursor: wait;
 }
 
+.nichoSelectField select.nichoSelectLocked:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  background: var(--crm-surface-soft);
+}
+
+.nichoSelectNote {
+  margin: 9px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .nichoSelectError {
   margin: 8px 0 0;
   color: var(--crm-danger-text);
