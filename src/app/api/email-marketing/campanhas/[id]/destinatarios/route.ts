@@ -10,7 +10,7 @@ const UUID_VALIDO =
 
 const FILTROS_VALIDOS = new Set([
   "todos", "pendente", "enviado", "entregue", "aberto", "clicado",
-  "falha", "bounce", "reclamacao", "suprimido", "descadastrado",
+  "falha", "bounce", "reclamacao", "suprimido", "descadastrado", "cancelado",
 ]);
 
 type Contexto = { params: Promise<{ id: string }> };
