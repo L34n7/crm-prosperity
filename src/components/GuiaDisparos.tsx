@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
   CreditCard,
   FileCheck2,
   PlayCircle,
@@ -89,12 +88,11 @@ export default function GuiaDisparos({ aberto, onAbertoChange, etapaAtual }: Gui
           type="button"
           className={styles.abaFechada}
           onClick={() => onAbertoChange(true)}
-          aria-label="Abrir guia de disparos"
+          aria-label="Abrir guia de ajuda sobre disparos"
           aria-expanded={false}
           aria-controls="guia-disparos"
         >
-          <CircleHelp size={19} aria-hidden="true" />
-          <span>Guia</span>
+          <span>Ajuda</span>
           <ChevronLeft size={15} aria-hidden="true" />
         </button>
       )}

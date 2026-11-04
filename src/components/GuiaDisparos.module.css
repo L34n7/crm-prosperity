@@ -6,8 +6,8 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 50px;
-  padding: 0 11px 0 14px;
+  min-height: 52px;
+  padding: 0 12px 0 15px;
   border: 1px solid var(--crm-border);
   border-right: 0;
   border-radius: 16px 0 0 16px;
@@ -16,24 +16,26 @@
   box-shadow: var(--crm-shadow-xs);
   font: inherit;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
+  box-shadow: -8px 8px 22px rgba(15, 23, 42, 0.12);
+  transition: background .2s ease, color .2s ease, transform .2s ease;
 }
 
-.abaFechada:hover { color: var(--crm-primary-text); background: var(--crm-primary-soft); }
+.abaFechada:hover { color: var(--crm-primary-text); background: var(--crm-primary-soft); transform: translateX(-2px); }
 
 .drawer {
   position: fixed;
   top: 62px;
   right: 0;
-  bottom: 0;
+  bottom: 20px;
   z-index: 2790;
-  width: min(440px, calc(100vw - 12px));
+  width: min(450px, calc(100vw - 12px));
   box-sizing: border-box;
   background: var(--crm-surface);
   color: var(--crm-text-strong);
   border-left: 1px solid var(--crm-border);
-  border-radius: 26px 0 0 0;
+  border-radius: 30px 0 0 30px;
   box-shadow: -16px 0 48px rgba(15, 23, 42, 0.16);
   visibility: hidden;
   opacity: 0;
@@ -56,6 +58,7 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
   padding: 0 23px 30px;
+  border-radius: 30px 0 0 30px;
   box-sizing: border-box;
 }
 
@@ -144,11 +147,11 @@
 .linkPrincipal svg:last-child { margin-left: auto; }
 
 @media (max-width: 640px) {
-  .abaFechada { top: 100px; min-height: 44px; }
-  .drawer { top: 0; width: min(100vw, 440px); border-radius: 0; }
-  .scroll { padding-bottom: calc(26px + env(safe-area-inset-bottom)); }
+  .abaFechada { top: 100px; min-height: 48px; }
+  .drawer { top: 58px; bottom: max(20px, env(safe-area-inset-bottom)); width: min(450px, calc(100vw - 12px)); border-radius: 28px 0 0 28px; }
+  .scroll { border-radius: 28px 0 0 28px; padding-bottom: 30px; }
   .abaRecolher { display: none; }
-  .cabecalho { padding-top: calc(20px + env(safe-area-inset-top)); }
+  .cabecalho { padding-top: 19px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .drawer, .etapaBotao > svg { transition: none; }

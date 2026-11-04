@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
   FileCheck2,
   PlayCircle,
   X,
@@ -120,12 +119,11 @@ export default function GuiaTemplates({ aberto, onAbertoChange, etapaAtual }: Pr
           type="button"
           className={styles.abaFechada}
           onClick={() => onAbertoChange(true)}
-          aria-label="Abrir guia de Templates WhatsApp"
+          aria-label="Abrir guia de ajuda sobre Templates WhatsApp"
           aria-expanded={false}
           aria-controls="guia-templates"
         >
-          <CircleHelp size={19} aria-hidden="true" />
-          <span>Guia</span>
+          <span>Ajuda</span>
           <ChevronLeft size={15} aria-hidden="true" />
         </button>
       )}
