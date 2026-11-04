@@ -2194,6 +2194,11 @@ export default function AgentesIaPage() {
                         key={ferramenta.tipo}
                         className={`${styles.toolCard} ${
                           ferramentaAtiva(ferramenta.tipo) ? styles.toolCardActive : ""
+                        } ${
+                          ferramenta.tipo === "gerar_cotacao_veicular" &&
+                          ferramentaAtiva(ferramenta.tipo)
+                            ? styles.cotacaoFerramentaExpandida
+                            : ""
                         }`}
                       >
                         <label className={styles.toolToggle}>
