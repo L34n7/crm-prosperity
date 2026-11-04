@@ -6127,3 +6127,61 @@
  .campaignTestHeader span{font-size:13px}
  .campaignTestSuggestion{min-height:45px}
 }
+
+
+/* Campanha: busca livre por nome/e-mail e confirmação acessível sem foco no checkbox oculto. */
+.campaignWizardModal .finalConfirmation {
+  grid-template-columns: 22px minmax(0, 1fr) 21px;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: var(--crm-text-strong);
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+  touch-action: manipulation;
+}
+.campaignWizardModal .finalConfirmation[aria-checked="true"] {
+  border-color: var(--crm-primary-strong);
+  background: var(--crm-primary-soft);
+}
+.campaignWizardModal .finalConfirmation[aria-checked="true"] .finalConfirmationBox {
+  border-color: var(--crm-primary-strong);
+  background: var(--crm-primary-strong);
+}
+.campaignWizardModal .finalConfirmation:focus-visible {
+  outline: 2px solid var(--crm-primary-strong);
+  outline-offset: 3px;
+}
+.campaignWizardModal .campaignTestInputWrap input[type="search"] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+.campaignWizardModal .campaignTestInputWrap input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+@media (max-width: 700px) {
+  /* A barra de ações nunca deve desaparecer ao focar a confirmação ou rolar a prévia. */
+  .campaignWizardModal .wizardWorkspace {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+  .campaignWizardModal .wizardWorkspace > .wizardFooter {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 60;
+    order: 2;
+    width: 100%;
+    padding: 11px 14px calc(11px + env(safe-area-inset-bottom));
+    background: var(--crm-surface);
+    border-top: 1px solid var(--crm-border);
+    box-shadow: 0 -6px 18px rgb(15 23 42 / 8%);
+  }
+  .campaignWizardModal .campaignTestSuggestions {
+    max-height: min(280px, 35dvh);
+  }
+  .campaignWizardModal .finalConfirmation {
+    min-height: 60px;
+    padding: 13px;
+  }
+}

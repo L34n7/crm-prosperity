@@ -916,6 +916,7 @@ export default function CampanhaModal({
 
           <form
             className={styles.modalBody}
+            noValidate
             onSubmit={(event) => event.preventDefault()}
           >
             <div className={styles.wizardScrollArea}>
@@ -1484,7 +1485,7 @@ export default function CampanhaModal({
                       <label htmlFor="campanha-email-teste">Destinatário do teste</label>
                       <div className={styles.campaignTestInputWrap}>
                         <Search size={17} aria-hidden="true"/>
-                        <input id="campanha-email-teste" type="email" autoComplete="off"
+                        <input id="campanha-email-teste" type="search" inputMode="search" autoComplete="off" autoCapitalize="none" spellCheck={false}
                           aria-autocomplete="list" aria-controls="campanha-email-teste-resultados"
                           aria-expanded={mostrarSugestoesTeste && buscaEmailTeste.trim().length >= 2}
                           placeholder="Digite o e-mail cadastrado no CRM"
@@ -1676,16 +1677,20 @@ export default function CampanhaModal({
                 </div>
 
                 {modoEnvio ? (
-                  <label className={styles.finalConfirmation} data-campanha-campo="confirmacao" data-campanha-invalido={campoComErro === "confirmacao"} data-campanha-destaque={campoAnimando === "confirmacao"}>
-                    <input
-                      type="checkbox"
-                      checked={confirmacaoFinal}
-                      onChange={(event) => {
-                        setConfirmacaoFinal(event.target.checked);
-                        if (event.target.checked) limparDestaque("confirmacao");
-                      }}
-                    />
-                    <span className={styles.finalConfirmationBox}>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={confirmacaoFinal}
+                    className={styles.finalConfirmation}
+                    data-campanha-campo="confirmacao"
+                    data-campanha-invalido={campoComErro === "confirmacao"}
+                    data-campanha-destaque={campoAnimando === "confirmacao"}
+                    onClick={() => {
+                      setConfirmacaoFinal(atual => !atual);
+                      if (!confirmacaoFinal) limparDestaque("confirmacao");
+                    }}
+                  >
+                    <span className={styles.finalConfirmationBox} aria-hidden="true">
                       {confirmacaoFinal ? <Check size={14} /> : null}
                     </span>
                     <span className={styles.finalConfirmationText}>
@@ -1703,8 +1708,8 @@ export default function CampanhaModal({
                     </span>
                     <ShieldCheck size={21} />
                     {erroDoCampo("confirmacao")}
-                  </label>
-                ) : null}
+                  </button>
+                ) : null
 
                 <div className={styles.complianceNote}>
                   <AlertTriangle size={18} />
