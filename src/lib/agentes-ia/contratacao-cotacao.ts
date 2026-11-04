@@ -110,5 +110,7 @@ export function indicouEscolhaPlanoCotacao(mensagem: string): boolean {
 /** Novo veículo pode vir com os dados já na mesma mensagem do cliente. */
 export function pediuNovaCotacao(mensagem: string): boolean {
   const texto = normalizar(mensagem);
-  return /\b(?:(?:outra|nova)\s+(?:cotacao|simulacao|proposta|orcamento)|(?:cotar|simular)\s+(?:outro|nova|um novo|uma nova)|(?:outro|novo)\s+(?:carro|veiculo|modelo))\b/.test(texto);
+  return /\b(?:(?:outra|nova)\s+(?:cotacao|simulacao|proposta|orcamento)|(?:cotar|simular)\s+(?:outro|nova|um novo|uma nova)|(?:outro|novo)\s+(?:carro|veiculo|modelo))\b/.test(texto)
+    || (/\b(?:cotar|cotacao|simular|simulacao|orcamento)\b/.test(texto)
+      && /\b(?:19|20)\d{2}\b/.test(texto));
 }
