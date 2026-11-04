@@ -319,8 +319,14 @@ export async function preconsultarNegocio(params: {
   const sinalOfertaGenerica = /\b(voces tem|voce tem|tem algum|tem alguma|voces fazem|voce faz|oferece|oferecem)\b/.test(texto);
   const mencionaCotacao = (conteudo: string) =>
     /\b(cotacao|cotar|cote|simulacao|seguro|protecao veicular|plano premium|plano completo|fipe|veiculo)\b/.test(normalizarTextoNegocio(conteudo));
+  const ultimoAgente=[...historico].reverse().find(item=>item.role==="assistant");
+  const respostaModelo=/\b(?:diesel|disel|gasolina|flex|hibrido|eletrico|limited|xl|xls|xlt|4x4|4x2|cd|200[0-9]|confirmo|confirmado|isso|sim)\b/.test(texto)
+    && /\b(?:fipe|ano.modelo|versao|modelo|motorizacao|combustivel|tracao|ranger|cabine)\b/
+      .test(normalizarTextoNegocio(ultimoAgente?.content||""));
   const sinalCotacao = params.ferramentas.has("gerar_cotacao_veicular") &&
-    (mencionaCotacao(params.mensagem) || historico.slice(-16).some((item) => mencionaCotacao(item.content)));
+    (mencionaCotacao(params.mensagem) ||
+      historico.slice(-16).some((item) => mencionaCotacao(item.content)) ||
+      respostaModelo);
 
   const blocos: string[] = [];
   const resultados: PreconsultaNegocio["resultados"] = [];
@@ -354,7 +360,7 @@ export async function preconsultarNegocio(params: {
 
   if (sinalCotacao) {
     resultados.push({ ferramenta: "gerar_cotacao_veicular", dados: [] });
-    blocos.push("COTAÇÃO VEICULAR: identifique o modelo e o ano a partir do histórico da conversa. Não solicite ao cliente foto, documento ou tabela FIPE: a ferramenta consulta automaticamente a fonte. Não pergunte marca se puder ser inferida pelo modelo, nem motorização/combustível: a ferramenta identifica na FIPE. Pergunte finalidade de uso apenas se ainda não estiver clara; a versão exata só se a FIPE apontar ambiguidade. Opcionais podem ficar vazios. A categoria comercial é interna e a ferramenta calcula todos os planos. Use-a assim que tiver modelo, ano e uso; nunca invente preços.");
+    blocos.push("COTAÇÃO VEICULAR: use o ano-MODELO na FIPE (2004/2005 = ano-modelo 2005). Se o cliente já informou motorização/versão (ex.: 2.5 ou Limited), preserve essa informação na busca e NÃO troque 2.5 por 3.0 sem confirmar. Identifique o modelo e o ano a partir do histórico da conversa. Não solicite ao cliente foto, documento ou tabela FIPE: a ferramenta consulta automaticamente a fonte. Não pergunte marca se puder ser inferida pelo modelo, nem motorização/combustível: a ferramenta identifica na FIPE. Pergunte finalidade de uso apenas se ainda não estiver clara; a versão exata só se a FIPE apontar ambiguidade. Opcionais podem ficar vazios. A categoria comercial é interna e a ferramenta calcula todos os planos. Use-a assim que tiver modelo, ano e uso; nunca invente preços.");
   }
 
   const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
@@ -420,11 +426,14 @@ export async function executarFerramentaNegocio(params: {
       const anoInvalido=erros.find(e=>e.includes("Nenhuma versão localizada para o ano"));
       const indisponivel=erros.find(e=>e.includes("Consulta FIPE indisponível"));
       const naoEncontrado=erros.find(e=>e.includes("Não encontrei esta descrição"));
+      const motorIncompativel=erros.find(e=>e.includes("A versão/motorização informada não consta")||e.includes("A motorização/versão informada não existe"));
+      const alternativas=erros.find(e=>e.includes("versão localizada para o ano-modelo"));
+      const revisarVersao=erros.find(e=>e.includes("versão ou a motorização"));
       return {ok:false,error:ambiguidade
         ?"A FIPE encontrou mais de uma versão. Informe ao cliente as opções cadastradas e pergunte SOMENTE o detalhe que as distingue: "+
           ambiguidade.split(":").slice(1).join(":").trim()
-        :variasOpcoesAno||anoInvalido||indisponivel||naoEncontrado||
-          "Não localizei esta combinação na FIPE. Verifique apenas a versão ou ano do veículo; não peça tabela ou documento."};
+        :motorIncompativel||variasOpcoesAno||anoInvalido||alternativas||revisarVersao||indisponivel||naoEncontrado||
+          "Não localizei esta combinação no ano-modelo informado. Confirme somente a versão e a motorização correta, sem pedir documento."};
     }
     if(encontrados.length!==1)return {ok:false,error:
       "O modelo existe em mais de um tipo de veículo na FIPE. Ele é automóvel, motocicleta ou caminhão?"};
@@ -569,7 +578,7 @@ export function definicoesFerramentasNegocio(
   if (ferramentas.has("gerar_cotacao_veicular")) {
     defs.push({
       type:"function",name:"gerar_cotacao_veicular",
-      description:"Cota TODOS os planos ativos cadastrados pela empresa. Use o MODELO e ANO já ditos na conversa, e finalidade de uso. MARCA é opcional: informe a marca se for inequívoca ou estiver no texto; caso contrário passe null, pois o servidor tenta identificá-la pelo modelo e catálogo FIPE. NÃO pergunte motorização ou combustível, pois o servidor identifica na FIPE. Não peça para escolher plano ou opcionais se não quiser; opcionais_por_plano pode ser []. Se o modelo for ambíguo, a ferramenta retornará as versões possíveis. Nunca invente valores.",
+      description:"Cota TODOS os planos ativos cadastrados pela empresa. Use o MODELO e ANO já ditos na conversa, e finalidade de uso. MARCA é opcional: informe a marca se for inequívoca ou estiver no texto; caso contrário passe null, pois o servidor tenta identificá-la pelo modelo e catálogo FIPE. NÃO pergunte motorização ou combustível, pois o servidor identifica na FIPE. Não peça para escolher plano ou opcionais se não quiser; opcionais_por_plano pode ser []. Se o modelo for ambíguo, a ferramenta retornará somente versões compatíveis com o ano-modelo. Preserve o motor informado, mesmo se conflitar com o catálogo, e peça apenas confirmação do motor correto. Ano 2004/2005 significa ano-modelo 2005. Nunca invente valores.",
       strict:true,
       parameters:{
         type:"object",

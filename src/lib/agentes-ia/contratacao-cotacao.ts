@@ -51,3 +51,38 @@ export function pediuNovaCotacaoSemDados(mensagem:string):boolean{
   const texto=normalizar(mensagem).replace(/[.!?]+$/g,"").trim();
   return /^(?:quero (?:fazer )?(?:outra|uma nova)(?: cotacao)?|quero (?:cotar|simular) outro veiculo|pode fazer outra cotacao|fazer outra cotacao|nova cotacao|outra cotacao|quero fazer outra)$/.test(texto);
 }
+
+export type PlanoParaEscolha={codigo:string;nome:string};
+
+/** Só confirma a escolha se corresponder a um plano presente na última cotação.
+ * "A segunda" segue a ordem real de apresentação dos planos.
+ */
+export function planoEscolhidoNaCotacao(
+  mensagem:string,
+  planos:PlanoParaEscolha[],
+):PlanoParaEscolha|null{
+  const texto=normalizar(mensagem).replace(/[.!?]+$/g,"").trim();
+  if(!texto||!planos.length)return null;
+  const tokens=" "+texto.replace(/[^a-z0-9]+/g," ").trim()+" ";
+  const matches=planos.filter(p=>{
+    const nome=normalizar(p.nome).replace(/^plano /,"").replace(/[^a-z0-9]+/g," ").trim();
+    const codigo=normalizar(p.codigo).replace(/[^a-z0-9]+/g," ").trim();
+    return Boolean((nome&&tokens.includes(" "+nome+" "))||
+      (codigo&&tokens.includes(" "+codigo+" ")));
+  });
+  if(matches.length===1)return matches[0];
+  if(matches.length>1)return null;
+
+  const ordinais=[
+    /\b(?:primeir[oa]|1|1o|1a)\b/,
+    /\b(?:segund[oa]|2|2o|2a)\b/,
+    /\b(?:terceir[oa]|3|3o|3a)\b/,
+  ];
+  for(let i=0;i<Math.min(planos.length,ordinais.length);i++){
+    if(ordinais[i].test(texto)&&(
+      /\b(?:plano|primeir|segund|terceir|quero|prefiro|escolho|fico|contratar|opcao|opcoes)\b/.test(texto)
+      ||/^(?:[123]|a |o )/.test(texto)
+    ))return planos[i];
+  }
+  return null;
+}

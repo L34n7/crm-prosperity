@@ -2,8 +2,40 @@ import "server-only";
 
 import {getSupabaseAdmin} from "@/lib/supabase/admin";
 import {resolverAtribuicaoTransferencia} from "@/lib/conversas/resolver-atribuicao-transferencia";
+import {listarPlanosEmpresa} from "@/lib/cotacoes-veiculares/configuracao";
 
 const admin=getSupabaseAdmin();
+
+export type PlanoInteresseCotacao={codigo:string;nome:string};
+
+/** Apenas os planos que fizeram parte da proposta mais recente desta conversa.
+ * O ordenamento acompanha o comparativo efetivamente exibido ao cliente.
+ */
+export async function planosDaUltimaCotacaoVeicular(params:{
+  empresaId:string;conversaId:string;
+}):Promise<PlanoInteresseCotacao[]>{
+  const {data:ultima,error:erroUltima}=await admin.from("cotacao_veicular_cotacoes")
+    .select("id,grupo_id").eq("empresa_id",params.empresaId)
+    .eq("conversa_id",params.conversaId).eq("origem","agente_ia")
+    .order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if(erroUltima)throw new Error(erroUltima.message);
+  if(!ultima)return [];
+  const consulta=admin.from("cotacao_veicular_cotacoes").select("plano,plano_nome")
+    .eq("empresa_id",params.empresaId).eq("conversa_id",params.conversaId);
+  const {data:linhas,error:erroPlanos}=await (ultima.grupo_id
+    ?consulta.eq("grupo_id",ultima.grupo_id)
+    :consulta.eq("id",ultima.id));
+  if(erroPlanos)throw new Error(erroPlanos.message);
+  const atual=new Map((linhas||[]).map(l=>[String(l.plano||""),{
+    codigo:String(l.plano||""),nome:String(l.plano_nome||l.plano||""),
+  }]));
+  const ordenacao=await listarPlanosEmpresa(params.empresaId);
+  const resultado=ordenacao.filter(plano=>atual.has(plano.codigo))
+    .map(plano=>atual.get(plano.codigo)!);
+  for(const plano of atual.values())
+    if(!resultado.some(x=>x.codigo===plano.codigo))resultado.push(plano);
+  return resultado;
+}
 
 /** Impede transferir um interesse genérico em contratar quando não houve
  * cotação veicular nesta conversa. Não modifica nem duplica cotações.

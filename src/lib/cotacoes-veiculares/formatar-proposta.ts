@@ -106,7 +106,7 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
       ["_Valores sujeitos à validação comercial._"]:[]),
     "",
     "🤝 *Quer seguir com a contratação?*",
-    "Basta responder *Quero contratar* e encaminharei você para um atendente concluir o processo.",
+    "Responda *Quero contratar*. Vou perguntar qual plano você prefere e encaminhar sua escolha para nossa equipe.",
   );
   return linhas.join("\n").trim();
 }
