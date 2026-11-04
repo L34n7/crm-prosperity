@@ -690,16 +690,19 @@ export default function AgentesIaPage() {
   }
 
   function atualizarConfigFerramenta(tipo: string, chave: string, valor: unknown) {
-    if (!editor || !ferramentaPermitidaParaNicho(tipo, nichoEmpresa)) return;
-    const existe = editor.ferramentas.find((item) => item.tipo === tipo);
-    const proxima = existe
-      ? editor.ferramentas.map((item) =>
-          item.tipo === tipo
-            ? { ...item, config_json: { ...(item.config_json || {}), [chave]: valor } }
-            : item
-        )
-      : [...editor.ferramentas, { tipo, ativo: true, config_json: { [chave]: valor } }];
-    setEditor({ ...editor, ferramentas: proxima });
+    if (!ferramentaPermitidaParaNicho(tipo, nichoEmpresa)) return;
+    setEditor((atual) => {
+      if (!atual) return atual;
+      const existe = atual.ferramentas.find((item) => item.tipo === tipo);
+      const proxima = existe
+        ? atual.ferramentas.map((item) =>
+            item.tipo === tipo
+              ? { ...item, config_json: { ...(item.config_json || {}), [chave]: valor } }
+              : item
+          )
+        : [...atual.ferramentas, { tipo, ativo: true, config_json: { [chave]: valor } }];
+      return { ...atual, ferramentas: proxima };
+    });
   }
 
   function atualizarOrigemAgendaFerramentas(valor: string) {
