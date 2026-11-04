@@ -2304,6 +2304,43 @@
 
 .manualCampaignModal {
   max-width: 940px;
+  max-height: calc(100dvh - 32px);
+}
+
+.manualCampaignModal .manualCampaignList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.manualCampaignModal .modalFooter {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .manualCampaignModal {
+    max-height: calc(100dvh - 48px);
+    border-radius: 17px;
+  }
+
+  .manualCampaignModal .modalHeader,
+  .manualCampaignModal .manualCampaignToolbar,
+  .manualCampaignModal .modalFooter {
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+
+  .manualCampaignModal .manualCampaignList {
+    padding: 10px 13px 14px;
+  }
+
+  .manualCampaignModal .modalFooter .manualCampaignFooterInfo {
+    width: 100%;
+    margin: 0;
+  }
 }
 
 .manualCampaignToolbar {
