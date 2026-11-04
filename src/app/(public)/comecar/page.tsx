@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./comecar.module.css";
-import { TEXTO_ACEITE_LGPD } from "@/lib/lgpd/termos";
 import {
   SEGMENTOS_EMPRESA,
   type SegmentoCodigo,
@@ -175,7 +174,7 @@ export default function ComecarPage() {
 
     if (!aceiteContrato) {
       setErro(
-        "Para continuar, confirme que leu e aceitou os Termos dos Programas e Uso do CRM, a Política de Privacidade e a Política de Mensageria e Uso Aceitável."
+        "Para continuar, aceite os Termos de Uso, a Política de Privacidade e a Política de Mensageria."
       );
       return;
     }
@@ -451,31 +450,28 @@ export default function ComecarPage() {
                 className={styles.checkbox}
               />
               <span>
-                {TEXTO_ACEITE_LGPD}
-                <span style={{ display: "block", marginTop: 8 }}>
-                  Consulte os documentos:{" "}
-                  <Link
-                    href="/termos-de-servico"
-                    onClick={(event) => abrirDocumentoLegal(event, "termos")}
-                  >
-                    Termos dos Programas e Uso do CRM
-                  </Link>
-                  ,{" "}
-                  <Link
-                    href="/politica-de-privacidade"
-                    onClick={(event) => abrirDocumentoLegal(event, "privacidade")}
-                  >
-                    Política de Privacidade
-                  </Link>
-                  {" "}e{" "}
-                  <Link
-                    href="/politica-de-mensageria"
-                    onClick={(event) => abrirDocumentoLegal(event, "mensageria")}
-                  >
-                    Política de Mensageria e Uso Aceitável
-                  </Link>
-                  .
-                </span>
+                Li e aceito os{" "}
+                <Link
+                  href="/termos-de-servico"
+                  onClick={(event) => abrirDocumentoLegal(event, "termos")}
+                >
+                  Termos de Uso
+                </Link>
+                , a{" "}
+                <Link
+                  href="/politica-de-privacidade"
+                  onClick={(event) => abrirDocumentoLegal(event, "privacidade")}
+                >
+                  Política de Privacidade
+                </Link>
+                {" "}e a{" "}
+                <Link
+                  href="/politica-de-mensageria"
+                  onClick={(event) => abrirDocumentoLegal(event, "mensageria")}
+                >
+                  Política de Mensageria
+                </Link>
+                .
               </span>
             </label>
 
