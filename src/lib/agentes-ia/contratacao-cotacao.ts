@@ -97,9 +97,11 @@ export function indicouEscolhaPlanoCotacao(mensagem: string): boolean {
   if (
     /\b(?:nova cotacao|outra cotacao|novo orcamento|outro veiculo|cotar outro|cotar outro carro|simular outro)\b/.test(texto)
   ) return false;
+  if (/\bquero\s+(?:saber|entender|conhecer|comparar|ver|informacoes)\b/.test(texto)) return false;
+  if (/\b(?:quero|pode)\s+(?:(?:uma?|nova)\s+)?(?:cotacao|cotar|simular)\b/.test(texto)) return false;
   const escolhaClara =
-    /\b(?:quero|prefiro|escolho|escolhi|vou ficar com|fico com|gostei do|gostei da|vou contratar|quero contratar|quero fechar|pode encaminhar|pode transferir)\b/.test(texto);
-  if (mensagem.includes("?") && !escolhaClara) return false;
+    /\b(?:quero|prefiro|escolho|escolhi|vou ficar com|fico com|vou contratar|quero contratar|quero fechar|pode encaminhar|pode transferir)\b/.test(texto);
+  if (mensagem.includes("?") && !/\b(?:prefiro|escolho|escolhi|vou ficar com|fico com|vou contratar|quero contratar|quero fechar)\b/.test(texto)) return false;
   if (/^(?:qual|quais|quanto|como|porque|por que|tem|cobre|inclui|explica|me fale|me conta|o que|qual a diferenca)\b/.test(texto)) return false;
   return escolhaClara ||
     /^(?:(?:o|a)\s+)?(?:plano\s+)?(?:primeir[oa]|segund[oa]|terceir[oa]|premium|completo|basico|essencial|profissional)$/.test(texto);
