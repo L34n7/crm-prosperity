@@ -789,6 +789,12 @@ export async function processarPendenciaNegocio(
     if(existeCotacaoAnterior&&!querOutraCotacao&&
       (desejaContratar||escolheuPlano||aguardandoEscolhaPlano||planoSelecionadoCotacao)){
       ferramentasRelevantes.delete("gerar_cotacao_veicular");
+    }
+    // A venda comum de estoque não deve poder finalizar uma cotação veicular.
+    // Isso vale inclusive na primeira cotação, antes de existir proposta salva.
+    if (ferramentas.has("gerar_cotacao_veicular") &&
+      (existeCotacaoAnterior ||
+       preconsulta.resultados.some((item)=>item.ferramenta==="gerar_cotacao_veicular"))) {
       ferramentasRelevantes.delete("realizar_venda");
     }
     if(querOutraCotacao){
@@ -950,7 +956,16 @@ export async function processarPendenciaNegocio(
       };
       if (tools.length && !ctx.cotacaoFormatada) request.tools = tools;
 
-      const response: any = await openai.responses.create(request);
+      let response: any;
+      try {
+        response = await openai.responses.create(request);
+      } catch (error) {
+        if (!ctx.cotacaoFormatada) throw error;
+        // A proposta já foi gerada; indisponibilidade ao compor uma fala
+        // complementar não pode impedir o envio da cotação e do anexo.
+        console.error("[AGENTE_IA_NEGOCIO] Falha na continuação pós-cotação:", error);
+        break;
+      }
       tokensInput += Number(response.usage?.input_tokens || 0);
       tokensOutput += Number(response.usage?.output_tokens || 0);
       tokensTotal += Number(response.usage?.total_tokens || 0);
@@ -1127,9 +1142,11 @@ export async function processarPendenciaNegocio(
 
     if (!saidaFinal.mensagens.length) {
       saidaFinal.mensagens = [
-        ctx.acaoCriticaExecutada
-          ? "Pronto, o pedido foi criado."
-          : "Não encontrei informação suficiente nos dados atuais. Me passe um detalhe do que você procura.",
+        ctx.cotacaoFormatada
+          ? "Sua cotação foi preparada. Se desejar, posso esclarecer dúvidas sobre os planos."
+          : ctx.vendaResultado?.ok
+            ? "Pronto, o pedido foi criado."
+            : "Não encontrei informação suficiente nos dados atuais. Me passe um detalhe do que você procura.",
       ];
     }
     // Envio em sequência garantida: proposta, texto extra, mídia e a
