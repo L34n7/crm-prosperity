@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import GuiaModulo from "@/components/GuiaModulo";
+import { GUIA_PERFIL_WHATSAPP } from "@/lib/central-de-conhecimento/guias";
 import styles from "./whatsapp-perfil.module.css";
 
 type Integracao = {
@@ -277,6 +279,7 @@ export default function WhatsappPerfilPage() {
     Record<string, string>
   >({});
   const [cropAberto, setCropAberto] = useState(false);
+  const [ajudaPerfilAberta, setAjudaPerfilAberta] = useState(false);
   const [imagemOriginal, setImagemOriginal] = useState("");
   const [zoom, setZoom] = useState(1);
   const [posX, setPosX] = useState(0);
@@ -1212,6 +1215,18 @@ export default function WhatsappPerfilPage() {
       <Header
         title="Perfil do WhatsApp"
         subtitle="Configure como sua empresa aparece para o cliente no WhatsApp."
+      />
+      <GuiaModulo
+        guia={GUIA_PERFIL_WHATSAPP}
+        aberto={ajudaPerfilAberta}
+        onAbertoChange={setAjudaPerfilAberta}
+        etapaAtual={
+          cropAberto || modalNomeAberto
+            ? 2
+            : modalDesconectarAberto || modalEscolherDesconexaoAberto || modalUpgradeAberto
+              ? 4
+              : null
+        }
       />
 
       <main className={styles.pageContent}>

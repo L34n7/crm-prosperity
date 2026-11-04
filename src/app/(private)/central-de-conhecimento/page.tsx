@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, BookOpen, FileCheck2, MessageCircle, Search, Send } from "lucide-react";
+import { ArrowRight, BookOpen, ContactRound, FileCheck2, MessageCircle, Search, Send } from "lucide-react";
 import Header from "@/components/Header";
 import styles from "./central-de-conhecimento.module.css";
 
@@ -18,6 +18,18 @@ const artigos = [
     descricao: "Crie modelos de mensagem, configure imagens, variáveis e botões e acompanhe a aprovação da Meta.",
     caminho: "/central-de-conhecimento/templates",
     assuntos: ["Imagem", "Cabeçalho", "Corpo", "Variáveis", "Rodapé", "Botões", "Categorias", "Aprovação", "Sincronização"],
+  },
+  {
+    titulo: "Contatos",
+    descricao: "Cadastre e importe contatos, utilize filtros, organize listas e confira os dados de atendimento e consentimento.",
+    caminho: "/central-de-conhecimento/contatos",
+    assuntos: ["Cadastro", "Filtros", "Importação", "E-mails", "Listas", "Opt-in", "Revisão"],
+  },
+  {
+    titulo: "Perfil WhatsApp",
+    descricao: "Configure dados comerciais, foto, nome de exibição e acompanhe a saúde das integrações conectadas.",
+    caminho: "/central-de-conhecimento/perfil-whatsapp",
+    assuntos: ["Foto", "Nome", "Categoria", "Qualidade", "Coexistência", "Meta", "Desconexão"],
   },
 ];
 
@@ -68,7 +80,12 @@ export default function CentralDeConhecimentoPage() {
           <div className={styles.gradeArtigos}>
             {artigosFiltrados.map((artigo) => (
               <Link key={artigo.caminho} href={artigo.caminho} className={styles.cardArtigo}>
-                <span className={styles.cardIcone}>{artigo.caminho.endsWith("/templates") ? <FileCheck2 size={23} /> : <Send size={23} />}</span>
+                <span className={styles.cardIcone}>
+                  {artigo.caminho.endsWith("/templates") ? <FileCheck2 size={23} /> :
+                   artigo.caminho.endsWith("/contatos") ? <ContactRound size={23} /> :
+                   artigo.caminho.endsWith("/perfil-whatsapp") ? <MessageCircle size={23} /> :
+                   <Send size={23} />}
+                </span>
                 <span className={styles.cardEtiqueta}>Guia completo</span>
                 <h3>{artigo.titulo}</h3>
                 <p>{artigo.descricao}</p>
@@ -87,16 +104,6 @@ export default function CentralDeConhecimentoPage() {
           )}
         </section>
 
-        <section className={styles.proximos} aria-labelledby="titulo-proximos">
-          <div>
-            <span className={styles.rotulo}>Em preparação</span>
-            <h2 id="titulo-proximos">Próximas documentações</h2>
-            <p>Novos guias serão adicionados gradualmente à Central.</p>
-          </div>
-          <div className={styles.proximosCards}>
-            <div><MessageCircle size={20} /><strong>Perfil WhatsApp</strong><span>Em breve</span></div>
-          </div>
-        </section>
       </main>
     </>
   );

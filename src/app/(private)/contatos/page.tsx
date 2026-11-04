@@ -5,6 +5,8 @@ import FeedbackToast from "@/components/FeedbackToast";
 import InteressesIdentificadosIa from "@/components/InteressesIdentificadosIa";
 import type { InteresseIdentificadoIa } from "@/lib/agentes-ia/interesses-identificados";
 import Header from "@/components/Header";
+import GuiaModulo from "@/components/GuiaModulo";
+import { GUIA_CONTATOS } from "@/lib/central-de-conhecimento/guias";
 import ExclusaoContatosEmMassa from "./ExclusaoContatosEmMassa";
 import GerenciarListaContatosModal from "./GerenciarListaContatosModal";
 
@@ -299,6 +301,7 @@ export default function ContatosPage() {
   const [erroModal, setErroModal] = useState("");
 
   const [modalCriarAberto, setModalCriarAberto] = useState(false);
+  const [ajudaContatosAberta, setAjudaContatosAberta] = useState(false);
   const buscaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const selecionarTodosRef = useRef<HTMLInputElement | null>(null);
 
@@ -1608,6 +1611,12 @@ export default function ContatosPage() {
       <Header
         title="Contatos"
         subtitle="Gerencie contatos, origem dos leads, campanhas e status de atendimento."
+      />
+      <GuiaModulo
+        guia={GUIA_CONTATOS}
+        aberto={ajudaContatosAberta}
+        onAbertoChange={setAjudaContatosAberta}
+        etapaAtual={modalCriarAberto ? 2 : modalImportarAberto ? 3 : null}
       />
 
       <div className={styles.pageContent}>
