@@ -13,6 +13,12 @@ const artigos = [
     caminho: "/central-de-conhecimento/disparos",
     assuntos: ["Integração", "Templates", "Capacidade", "Contatos", "Agendamentos", "Custos", "Falhas"],
   },
+  {
+    titulo: "Templates WhatsApp",
+    descricao: "Crie modelos de mensagem, configure imagens, variáveis e botões e acompanhe a aprovação da Meta.",
+    caminho: "/central-de-conhecimento/templates",
+    assuntos: ["Imagem", "Cabeçalho", "Corpo", "Variáveis", "Rodapé", "Botões", "Categorias", "Aprovação", "Sincronização"],
+  },
 ];
 
 export default function CentralDeConhecimentoPage() {
@@ -62,7 +68,7 @@ export default function CentralDeConhecimentoPage() {
           <div className={styles.gradeArtigos}>
             {artigosFiltrados.map((artigo) => (
               <Link key={artigo.caminho} href={artigo.caminho} className={styles.cardArtigo}>
-                <span className={styles.cardIcone}><Send size={23} /></span>
+                <span className={styles.cardIcone}>{artigo.caminho.endsWith("/templates") ? <FileCheck2 size={23} /> : <Send size={23} />}</span>
                 <span className={styles.cardEtiqueta}>Guia completo</span>
                 <h3>{artigo.titulo}</h3>
                 <p>{artigo.descricao}</p>
@@ -88,7 +94,6 @@ export default function CentralDeConhecimentoPage() {
             <p>Novos guias serão adicionados gradualmente à Central.</p>
           </div>
           <div className={styles.proximosCards}>
-            <div><FileCheck2 size={20} /><strong>Templates WhatsApp</strong><span>Em breve</span></div>
             <div><MessageCircle size={20} /><strong>Perfil WhatsApp</strong><span>Em breve</span></div>
           </div>
         </section>

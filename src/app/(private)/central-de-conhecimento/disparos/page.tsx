@@ -17,7 +17,7 @@ import Header from "@/components/Header";
 import styles from "../central-de-conhecimento.module.css";
 
 const indice = [
-  { id: "preparacao", titulo: "Antes de começar" },
+  { id: "preparacao", titulo: "Etapas obrigatórias para disparar" },
   { id: "mensagem", titulo: "1. Mensagem e variáveis" },
   { id: "planejamento", titulo: "2. Capacidade e horário" },
   { id: "destinatarios", titulo: "3. Contatos e reservas" },
@@ -72,7 +72,7 @@ export default function DocumentacaoDisparosPage() {
 
             <section id="preparacao" className={styles.artigoBloco}>
               <span className={styles.artigoEtiqueta}>Pré-requisitos</span>
-              <h2>Antes de começar</h2>
+              <h2>Etapas obrigatórias para disparar</h2>
               <p>Para realizar a campanha, tenha uma integração WhatsApp ativa, um template aprovado e a cobrança da Meta corretamente configurada.</p>
 
               <div id="templates" className={styles.subtopico}>

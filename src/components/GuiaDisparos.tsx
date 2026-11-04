@@ -134,7 +134,7 @@ export default function GuiaDisparos({ aberto, onAbertoChange, etapaAtual }: Gui
           <p className={styles.introducao}>Consulte cada campo enquanto prepara sua campanha.</p>
 
           <section className={styles.preRequisitos} aria-labelledby="disparos-requisitos">
-            <h3 id="disparos-requisitos">Antes de começar</h3>
+            <h3 id="disparos-requisitos">Etapas obrigatórias para disparar</h3>
             <div className={styles.preRequisito}>
               <FileCheck2 size={19} aria-hidden="true" />
               <div>

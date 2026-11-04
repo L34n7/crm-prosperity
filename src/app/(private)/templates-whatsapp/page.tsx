@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import GuiaTemplates from "@/components/GuiaTemplates";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./templates-whatsapp.module.css";
 import { obterFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
@@ -388,6 +389,7 @@ export default function TemplatesWhatsAppPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [modalCriacaoAberto, setModalCriacaoAberto] = useState(false);
+  const [guiaTemplatesAberto, setGuiaTemplatesAberto] = useState(false);
   const criacaoModalRef = useRef<HTMLElement>(null);
   const [etapaCriacao, setEtapaCriacao] = useState<1 | 2 | 3>(1);
   const [sincronizando, setSincronizando] = useState(false);
@@ -462,7 +464,7 @@ export default function TemplatesWhatsAppPage() {
     const overflowOriginal = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const fecharComEsc = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !submitting) {
+      if (event.key === "Escape" && !submitting && !guiaTemplatesAberto) {
         setModalCriacaoAberto(false);
         setErro("");
       }
@@ -472,7 +474,7 @@ export default function TemplatesWhatsAppPage() {
       document.body.style.overflow = overflowOriginal;
       document.removeEventListener("keydown", fecharComEsc);
     };
-  }, [modalCriacaoAberto, submitting]);
+  }, [modalCriacaoAberto, submitting, guiaTemplatesAberto]);
 
   function abrirCriacaoTemplate() {
     setErro("");
@@ -1126,6 +1128,11 @@ export default function TemplatesWhatsAppPage() {
       <Header
         title="Templates WhatsApp"
         subtitle="Crie, visualize e acompanhe templates enviados para aprovação da Meta."
+      />
+      <GuiaTemplates
+        aberto={guiaTemplatesAberto}
+        onAbertoChange={setGuiaTemplatesAberto}
+        etapaAtual={modalCriacaoAberto ? etapaCriacao : null}
       />
 
       <div className={styles.pageContent}>

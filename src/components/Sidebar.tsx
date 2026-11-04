@@ -245,11 +245,6 @@ const menuItems: MenuItem[] = [
     permissao: PERMISSAO_VISUALIZAR_DISPAROS,
   },
   {
-    label: "Central de Conhecimento",
-    href: "/central-de-conhecimento",
-    icon: BookOpen,
-  },
-  {
     label: "Perfil WhatsApp",
     href: "/perfil-whatsapp",
     icon: Settings2,
@@ -993,6 +988,14 @@ export default function Sidebar({
               >
                 <UserCircle size={18} strokeWidth={2.2} />
                 <span>Perfil</span>
+              </Link>
+              <Link
+                href="/central-de-conhecimento"
+                className={styles.mobileProfileAction}
+                onClick={() => setMobileMoreOpen(false)}
+              >
+                <BookOpen size={18} strokeWidth={2.2} />
+                <span>Central de Conhecimento</span>
               </Link>
               <a
                 href={AJUDA_WHATSAPP_URL}

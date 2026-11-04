@@ -2311,6 +2311,14 @@ export default function Header({
                 </Link>
               ) : null}
 
+              <Link
+                href="/central-de-conhecimento"
+                className={styles.dropdownItem}
+                onClick={closeMenu}
+              >
+                Central de Conhecimento
+              </Link>
+
               <a
                 href={AJUDA_WHATSAPP_URL}
                 className={styles.dropdownItem}
