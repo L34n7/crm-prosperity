@@ -380,6 +380,112 @@ async function enviarMensagem(params: {
     .eq("id", params.conversaId);
 }
 
+async function enviarMidiaPosCotacao(ctx: ContextoRuntime) {
+  const grupoId = ctx.grupoCotacaoId;
+  const midiaId = ctx.posCotacaoMidiaId;
+  if (!grupoId || !midiaId || !ctx.pendencia.numero_destino) return;
+
+  const { data: jaEnviada, error: erroJaEnviada } = await supabaseAdmin
+    .from("mensagens")
+    .select("id")
+    .eq("empresa_id", ctx.pendencia.empresa_id)
+    .eq("conversa_id", ctx.pendencia.conversa_id)
+    .eq("status_envio", "enviada")
+    .contains("metadata_json", {
+      origem: "agente_ia_negocio",
+      grupo_cotacao_id: grupoId,
+      etapa_cotacao: "pos_midia",
+    })
+    .limit(1)
+    .maybeSingle();
+  if (erroJaEnviada) throw new Error(erroJaEnviada.message);
+  if (jaEnviada) return;
+
+  const [{ data: midia, error: erroMidia }, { data: conversa, error: erroConversa }] =
+    await Promise.all([
+      supabaseAdmin.from("midias")
+        .select("id,nome,tipo,url,mime_type")
+        .eq("empresa_id",ctx.pendencia.empresa_id)
+        .eq("id",midiaId).maybeSingle(),
+      supabaseAdmin.from("conversas")
+        .select("integracao_whatsapp_id")
+        .eq("empresa_id",ctx.pendencia.empresa_id)
+        .eq("id",ctx.pendencia.conversa_id).maybeSingle(),
+    ]);
+  if (erroMidia || erroConversa) throw new Error(
+    erroMidia?.message || erroConversa?.message || "Falha ao consultar mídia."
+  );
+  if (!midia?.url) throw new Error("A mídia pós-cotação foi removida da biblioteca.");
+  if (!conversa?.integracao_whatsapp_id) throw new Error("Conversa sem integração WhatsApp.");
+  const { data: integracao, error: integracaoErro } = await supabaseAdmin
+    .from("integracoes_whatsapp")
+    .select("id,phone_number_id,token_ref,config_json")
+    .eq("empresa_id",ctx.pendencia.empresa_id)
+    .eq("id",conversa.integracao_whatsapp_id)
+    .maybeSingle();
+  if (integracaoErro || !integracao?.phone_number_id) {
+    throw new Error(integracaoErro?.message || "Integração WhatsApp indisponível.");
+  }
+  const accessToken = getWhatsAppAccessToken(integracao);
+  if (!accessToken) throw new Error("Token WhatsApp indisponível.");
+  const tipo = midia.tipo === "arquivo" ? "documento" : midia.tipo;
+  if (!["imagem","video","audio","documento"].includes(tipo)) {
+    throw new Error("Formato de mídia pós-cotação não suportado.");
+  }
+
+  const envio = await sendWhatsAppMediaMessage({
+    phoneNumberId: integracao.phone_number_id,
+    accessToken,
+    to: ctx.pendencia.numero_destino,
+    tipoMensagem: tipo as "imagem"|"video"|"audio"|"documento",
+    mediaUrl: midia.url,
+    fileName: tipo === "documento" ? midia.nome : null,
+  });
+  const { data: protocolo } = await supabaseAdmin
+    .from("conversa_protocolos")
+    .select("id")
+    .eq("empresa_id", ctx.pendencia.empresa_id)
+    .eq("conversa_id", ctx.pendencia.conversa_id)
+    .eq("ativo", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const agora = new Date().toISOString();
+  const { error: mensagemErro } = await supabaseAdmin.from("mensagens").insert({
+    empresa_id: ctx.pendencia.empresa_id,
+    conversa_id: ctx.pendencia.conversa_id,
+    conversa_protocolo_id: protocolo?.id || null,
+    remetente_tipo: "bot",
+    remetente_id: null,
+    conteudo: midia.nome || "Arquivo complementar da cotação",
+    tipo_mensagem: tipo,
+    origem: "automatica",
+    status_envio: envio.ok ? "enviada" : "falha",
+    mensagem_externa_id: envio.messageId,
+    metadata_json: {
+      origem: "agente_ia_negocio",
+      agente_id: ctx.agente.id,
+      agente_execucao_id: ctx.execucaoId,
+      grupo_cotacao_id: grupoId,
+      etapa_cotacao: "pos_midia",
+      media_id: midia.id,
+      media_nome: midia.nome,
+      media_url: midia.url,
+      mime_type: midia.mime_type,
+      meta_status: envio.status,
+      meta_error: envio.error,
+    },
+    created_at: agora,
+    updated_at: agora,
+  });
+  if (mensagemErro) throw new Error(mensagemErro.message);
+  if (!envio.ok) throw new Error(envio.error || "Falha no envio da mídia pós-cotação.");
+  await supabaseAdmin.from("conversas")
+    .update({ last_message_at: agora, updated_at: agora })
+    .eq("empresa_id", ctx.pendencia.empresa_id)
+    .eq("id", ctx.pendencia.conversa_id);
+}
+
 async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
   if (!ctx.pendencia.numero_destino) return;
   const limpas = ctx.cotacaoFormatada
