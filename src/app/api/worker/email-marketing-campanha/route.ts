@@ -253,7 +253,8 @@ async function finalizarSeConcluida(campanhaId: string) {
           : null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", campanhaId);
+    .eq("id", campanhaId)
+    .in("status", ["agendada", "processando"]);
 
   return true;
 }
@@ -361,7 +362,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await supabaseAdmin
+    const { data: iniciada, error: inicioErro } = await supabaseAdmin
       .from("email_campanhas")
       .update({
         status: "processando",
@@ -369,7 +370,15 @@ export async function POST(request: Request) {
         erro: null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", campanha.id);
+      .eq("id", campanha.id)
+      .in("status", ["agendada", "processando"])
+      .select("id")
+      .maybeSingle();
+
+    if (inicioErro) throw new Error(inicioErro.message);
+    if (!iniciada) {
+      return NextResponse.json({ ok: true, ignorada: "campanha_ja_cancelada" });
+    }
 
     const agoraIso = new Date().toISOString();
     const { data: lote, error: loteError } = await supabaseAdmin
@@ -494,13 +503,14 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (estadoErro) throw new Error(estadoErro.message);
-      if (!estadoCampanha || estadoCampanha.status === "cancelada") {
+      if (!estadoCampanha || !["agendada", "processando"].includes(estadoCampanha.status)) {
+        const cancelada = !estadoCampanha || estadoCampanha.status === "cancelada";
         await supabaseAdmin
           .from("email_campanha_destinatarios")
           .update({
-            status: "cancelado",
+            status: cancelada ? "cancelado" : "pendente",
             next_attempt_at: null,
-            erro: "Campanha cancelada antes do envio.",
+            erro: cancelada ? "Campanha cancelada antes do envio." : null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", destinatario.id)
