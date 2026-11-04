@@ -60,6 +60,7 @@ type EstadoConversa = {
   fatos_confirmados: string[];
   aguardando_escolha_plano: boolean;
   plano_interesse_cotacao: string | null;
+  cotacao_pendente: boolean;
 };
 
 type SaidaAgente = {
@@ -96,6 +97,7 @@ const ESTADO_VAZIO: EstadoConversa = {
   fatos_confirmados: [],
   aguardando_escolha_plano:false,
   plano_interesse_cotacao:null,
+  cotacao_pendente:false,
 };
 
 function textoCurto(valor: unknown, limite: number) {
@@ -129,6 +131,7 @@ function normalizarEstado(valor: unknown): EstadoConversa {
     fatos_confirmados: listaCurta(obj.fatos_confirmados, 8, 140),
     aguardando_escolha_plano:obj.aguardando_escolha_plano===true,
     plano_interesse_cotacao:textoCurto(obj.plano_interesse_cotacao,80)||null,
+    cotacao_pendente:obj.cotacao_pendente===true,
   };
 }
 
@@ -151,6 +154,7 @@ function aplicarDelta(estado: EstadoConversa, delta: unknown): EstadoConversa {
     fatos_confirmados: unir(estado.fatos_confirmados, obj.fatos, 8, 140),
     aguardando_escolha_plano:estado.aguardando_escolha_plano,
     plano_interesse_cotacao:estado.plano_interesse_cotacao,
+    cotacao_pendente:estado.cotacao_pendente,
   };
 }
 
@@ -655,7 +659,8 @@ async function preflight(pendenciaId: string) {
   );
   return {
     relevante: preconsulta.relevante||aceiteCotacao||
-      (ferramentas.has("gerar_cotacao_veicular")&&estado.aguardando_escolha_plano),
+      (ferramentas.has("gerar_cotacao_veicular")&&
+        (estado.aguardando_escolha_plano||estado.cotacao_pendente)),
     pendencia: pendencia as PendenciaRow,
   };
 }
