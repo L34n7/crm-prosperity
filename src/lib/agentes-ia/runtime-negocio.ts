@@ -394,7 +394,7 @@ async function enviarMidiaPosCotacao(ctx: ContextoRuntime) {
     .select("id")
     .eq("empresa_id", ctx.pendencia.empresa_id)
     .eq("conversa_id", ctx.pendencia.conversa_id)
-    .eq("status_envio", "enviada")
+    .in("status_envio", ["enviada", "entregue", "lida"])
     .contains("metadata_json", {
       origem: "agente_ia_negocio",
       grupo_cotacao_id: grupoId,
@@ -488,6 +488,45 @@ async function enviarMidiaPosCotacao(ctx: ContextoRuntime) {
     .update({ last_message_at: agora, updated_at: agora })
     .eq("empresa_id", ctx.pendencia.empresa_id)
     .eq("id", ctx.pendencia.conversa_id);
+}
+
+/**
+ * O WhatsApp aceita a mídia antes de tê-la distribuído ao destinatário.
+ * Mensagens de texto logo após o aceite da API podem chegar ANTES da imagem.
+ * Aguarda o webhook de entrega da mídia para manter o convite comercial
+ * posterior à imagem, com limite de tempo para não travar o worker.
+ */
+async function aguardarEntregaMidiaPosCotacao(ctx: ContextoRuntime) {
+  if (!ctx.grupoCotacaoId) return "ausente" as const;
+
+  const limite = Date.now() + 15_000;
+  do {
+    const { data, error } = await supabaseAdmin
+      .from("mensagens")
+      .select("status_envio")
+      .eq("empresa_id", ctx.pendencia.empresa_id)
+      .eq("conversa_id", ctx.pendencia.conversa_id)
+      .contains("metadata_json", {
+        origem: "agente_ia_negocio",
+        grupo_cotacao_id: ctx.grupoCotacaoId,
+        etapa_cotacao: "pos_midia",
+      })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (data?.status_envio === "entregue" || data?.status_envio === "lida") {
+      return "entregue" as const;
+    }
+    if (data?.status_envio === "falha") {
+      return "falha" as const;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 850));
+  } while (Date.now() < limite);
+
+  return "sem_confirmacao" as const;
 }
 
 async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
@@ -1251,22 +1290,21 @@ export async function processarPendenciaNegocio(
             : "Não encontrei informação suficiente nos dados atuais. Me passe um detalhe do que você procura.",
       ];
     }
-    // Envio em sequência garantida: proposta, texto extra, mídia e a
-    // continuidade natural gerada pelo próprio modelo, quando disponível.
+    // Sequência da cotação: proposta -> mídia -> texto complementar ->
+    // continuação natural da IA. A confirmação de entrega da mídia evita que
+    // o WhatsApp mostre o convite comercial antes da imagem.
     await enviarMensagens(ctx, saidaFinal.mensagens);
     if(ctx.cotacaoFormatada && ctx.grupoCotacaoId && pendencia.numero_destino){
-      if(ctx.posCotacaoTexto){
-        await enviarMensagem({
-          empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
-          agenteId:agente.id,execucaoId,numeroDestino:pendencia.numero_destino,
-          texto:ctx.posCotacaoTexto,
-          grupoCotacaoId:ctx.grupoCotacaoId,etapaCotacao:"pos_texto",
-        });
-        ctx.respostaEnviada=true;
-      }
       if(ctx.posCotacaoMidiaId){
         try {
           await enviarMidiaPosCotacao(ctx);
+          const entrega = await aguardarEntregaMidiaPosCotacao(ctx);
+          if (entrega !== "entregue") {
+            console.warn("[AGENTE_IA_NEGOCIO] Mídia pós-cotação sem entrega confirmada:",{
+              grupoCotacaoId:ctx.grupoCotacaoId,
+              status:entrega,
+            });
+          }
         } catch(error){
           console.error("[AGENTE_IA_NEGOCIO] Falha ao enviar mídia pós-cotação:",{
             grupoCotacaoId:ctx.grupoCotacaoId,
@@ -1278,6 +1316,15 @@ export async function processarPendenciaNegocio(
             },
           });
         }
+      }
+      if(ctx.posCotacaoTexto){
+        await enviarMensagem({
+          empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+          agenteId:agente.id,execucaoId,numeroDestino:pendencia.numero_destino,
+          texto:ctx.posCotacaoTexto,
+          grupoCotacaoId:ctx.grupoCotacaoId,etapaCotacao:"pos_texto",
+        });
+        ctx.respostaEnviada=true;
       }
       if(ctx.continuidadeCotacao){
         await enviarMensagem({
