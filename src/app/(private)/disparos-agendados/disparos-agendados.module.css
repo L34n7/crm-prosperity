@@ -2558,3 +2558,39 @@
     gap: 3px;
   }
 }
+
+
+/* Campanhas de E-mail Marketing na agenda, seguindo o card de disparo WhatsApp. */
+.emailCampaignCard .groupIcon {
+  background: color-mix(in srgb, var(--crm-primary-strong) 13%, var(--crm-surface));
+  color: var(--crm-primary-text);
+}
+.emailCampaignCard .groupTitle,
+.emailCampaignCard .groupMeta,
+.emailCampaignCard .groupSchedule strong {
+  overflow-wrap: anywhere;
+}
+.emailCampaignCard .groupFooterActions {
+  justify-content: space-between;
+}
+.emailCampaignCard .groupFooterActions > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.emailCampaignError {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--crm-danger-border, #f3b8b8);
+  border-radius: 9px;
+  color: var(--crm-danger-text, #ad2b2b);
+  background: var(--crm-danger-soft, #fff4f3);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .emailCampaignCard .groupFooterActions > a {
+    min-height: 42px;
+  }
+}

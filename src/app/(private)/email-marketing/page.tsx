@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -189,6 +190,7 @@ export default function EmailMarketingPage() {
   const [templateClonando, setTemplateClonando] = useState<EmailTemplateItem | null>(null);
   const [campanhaModal, setCampanhaModal] = useState(false);
   const [campanhaDetalhes, setCampanhaDetalhes] = useState<CampanhaItem | null>(null);
+  const linkCampanhaAbertoRef = useRef(false);
   const [emailTeste, setEmailTeste] = useState("");
   const [enviandoTeste, setEnviandoTeste] = useState(false);
   const [feedbackTeste, setFeedbackTeste] = useState<{
@@ -270,6 +272,19 @@ export default function EmailMarketingPage() {
   useEffect(() => {
     void carregarDados();
   }, [carregarDados]);
+
+  // Abre diretamente os detalhes ao chegar pelo card de Disparos agendados.
+  useEffect(() => {
+    if (linkCampanhaAbertoRef.current || !campanhas.length) return;
+    const id = new URLSearchParams(window.location.search).get("campanha");
+    if (!id) return;
+    const selecionada = campanhas.find(campanha => campanha.id === id);
+    if (!selecionada) return;
+    linkCampanhaAbertoRef.current = true;
+    setAba("campanhas");
+    setCampanhaDetalhes(selecionada);
+  }, [campanhas]);
+
 
   function confirmarAcaoArquivado(tipo: "restaurar" | "excluir", template: EmailTemplateItem) {
     setErroAcaoArquivado("");

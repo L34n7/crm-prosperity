@@ -5,6 +5,7 @@ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
 import { normalizarTimezoneEmpresa } from "@/lib/datetime/timezone";
+import { emailMarketingHabilitado } from "@/lib/email-marketing/admin";
 
 function traduzirErroMetaWhatsApp(
   codigo?: number | string | null,
@@ -708,7 +709,92 @@ export async function GET(request: NextRequest) {
       envio_erro_amigavel: null,
     }));
 
+    // Campanhas programadas de E-mail Marketing usam sua própria fila
+    // (email_campanhas/QStash), não automacao_agendamentos.
+    // Expor apenas a quem também possui permissão de visualizar E-mail Marketing.
+    const agendamentosEmail: any[] = [];
+    if (usuario.permissoes.includes("email_marketing.visualizar")) {
+      let habilitado = false;
+      try {
+        habilitado = await emailMarketingHabilitado(usuario.empresa_id);
+      } catch (erroIntegracao) {
+        console.warn("[DISPAROS AGENDADOS] Falha ao verificar E-mail Marketing:", erroIntegracao);
+      }
+
+      if (habilitado) {
+        const { data: campanhasEmail, error: erroEmail } = await supabase
+          .from("email_campanhas")
+          .select(
+            "id, empresa_id, nome, assunto, status, agendada_para, iniciada_em, finalizada_em, total_destinatarios, total_enviados, total_entregues, erro, created_at, email_remetentes(nome,email), email_templates(nome)"
+          )
+          .eq("empresa_id", usuario.empresa_id)
+          .not("agendada_para", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(250);
+
+        if (erroEmail) {
+          console.warn("[DISPAROS AGENDADOS] Erro na listagem de campanhas de e-mail:", erroEmail.message);
+        } else {
+          for (const campanha of campanhasEmail || []) {
+            const inicio = new Date(campanha.created_at).getTime();
+            const programado = new Date(campanha.agendada_para).getTime();
+            // Exclui disparos imediatos, que também gravam agendada_para.
+            if (!Number.isFinite(inicio) || !Number.isFinite(programado) || programado - inicio < 10_000) continue;
+
+            const remetente = one(campanha.email_remetentes);
+            const template = one(campanha.email_templates);
+            const statusOriginal = String(campanha.status || "");
+            const statusNormalizado =
+              statusOriginal === "enviada" ? "executado" :
+              statusOriginal === "processando" ? "executando" :
+              statusOriginal === "cancelada" ? "cancelado" :
+              statusOriginal === "falha" ? "erro" : "pendente";
+
+            agendamentosEmail.push({
+              id: "email-" + campanha.id,
+              empresa_id: campanha.empresa_id,
+              execucao_id: null,
+              fluxo_id: null,
+              no_id: null,
+              tipo_agendamento: "email_marketing_campanha",
+              executar_em: campanha.agendada_para,
+              status: statusNormalizado,
+              created_at: campanha.created_at,
+              executed_at: campanha.finalizada_em || campanha.iniciada_em || null,
+              origem_disparo: "email_marketing",
+              automacao_fluxos: null,
+              automacao_nos: null,
+              payload_json: {
+                origem: "email_marketing",
+                origem_disparo: "manual",
+                canal_agenda: "email",
+                email_campanha_id: campanha.id,
+                grupo_id: "email_campanha:" + campanha.id,
+                nome_campanha: campanha.nome,
+                assunto: campanha.assunto,
+                remetente_nome: remetente?.nome || "",
+                remetente_email: remetente?.email || "",
+                template_nome: template?.nome || "",
+                status_email_original: statusOriginal,
+                total_destinatarios: Number(campanha.total_destinatarios || 0),
+                total_enviados: Number(campanha.total_enviados || 0),
+                total_entregues: Number(campanha.total_entregues || 0),
+                erro_email: campanha.erro || null,
+              },
+              envio_status: statusNormalizado === "erro" ? "falha" : statusNormalizado === "executado" ? "sucesso" : null,
+              envio_label: statusNormalizado === "executado" ? "Campanha enviada" : null,
+              envio_message_id: null,
+              envio_erro_codigo_meta: null,
+              envio_erro_tecnico: campanha.erro || null,
+              envio_erro_amigavel: campanha.erro || null,
+            });
+          }
+        }
+      }
+    }
+
     let disparos = [
+      ...agendamentosEmail,
       ...resumosManuaisNormalizados,
       ...normalizadosFluxo,
       ...normalizadosAgenda,
@@ -720,6 +806,10 @@ export async function GET(request: NextRequest) {
         const payload = item.payload_json || {};
         return [
           payload.template_nome,
+          payload.nome_campanha,
+          payload.assunto,
+          payload.remetente_nome,
+          payload.remetente_email,
           payload.numero_destino,
           payload.contato_nome,
           payload.agenda_nome,

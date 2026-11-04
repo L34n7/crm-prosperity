@@ -417,6 +417,7 @@ function origemFiltroDisparo(
   disparo: DisparoAgendado
 ): Exclude<FiltroOrigemDisparo, "todos"> | "outros" {
   const payload = disparo.payload_json || {};
+  if (disparo.tipo_agendamento === "email_marketing_campanha") return "manual";
   const origem = String(payload.origem || "").trim().toLowerCase();
   const origemNormalizada = String(payload.origem_disparo || "")
     .trim()
@@ -1853,7 +1854,7 @@ function DisparosAgendadosPageContent() {
         mobileBackHref={mobileDetailActive ? "/disparos-agendados" : undefined}
         mobileBackLabel="Voltar para disparos"
         title="Disparos agendados"
-        subtitle="Acompanhe, gerencie e cancele disparos de templates WhatsApp criados pelos fluxos de automação."
+        subtitle="Acompanhe disparos programados de WhatsApp, e-mail e automações."
       />
 
       <main
@@ -1864,10 +1865,10 @@ function DisparosAgendadosPageContent() {
         <section className={styles.mainPanel}>
           <header className={styles.editorHeader}>
             <div>
-              <p className={styles.eyebrow}>Agenda de templates</p>
+              <p className={styles.eyebrow}>Agenda de envios</p>
               <h2 className={styles.editorTitle}>Disparos agendados</h2>
               <p className={styles.editorSubtitle}>
-                Visualize disparos criados pelos blocos de automação.
+                Acompanhe campanhas de WhatsApp, e-mail e automações programadas.
               </p>
             </div>
 
@@ -1941,7 +1942,7 @@ function DisparosAgendadosPageContent() {
               aria-label="Filtrar por origem do agendamento"
             >
               <option value="todos">Todas as origens</option>
-              <option value="manual">Disparos Agendados</option>
+              <option value="manual">Campanhas programadas</option>
               <option value="agenda">Agendamentos</option>
               <option value="fluxo">Fluxo</option>
             </select>
@@ -1963,7 +1964,7 @@ function DisparosAgendadosPageContent() {
               }`}
               onClick={() => setFiltroStatus("todos")}
             >
-              <span>Total de automações</span>
+              <span>Total de disparos</span>
               <strong>{metricas.total}</strong>
             </button>
 
@@ -2017,7 +2018,7 @@ function DisparosAgendadosPageContent() {
               {gruposFiltrados.length}{" "}
               {gruposFiltrados.length === 1 ? "grupo visual" : "grupos visuais"}
             </span>
-            <span>As métricas acima continuam contabilizando cada automação.</span>
+            <span>Inclui campanhas de e-mail, disparos WhatsApp e automações.</span>
           </div>
 
           <div className={styles.listArea}>
@@ -2034,6 +2035,85 @@ function DisparosAgendadosPageContent() {
                   const canais = (["whatsapp", "email", "sistema", "fluxo"] as CanalDisparo[])
                     .filter((canal) => grupo.canais[canal] > 0);
                   const grupoManual = grupoEhDisparoManual(grupo);
+
+                  if (grupo.itens.length === 1 && grupo.itens[0].tipo_agendamento === "email_marketing_campanha") {
+                    const email = grupo.itens[0];
+                    const payload = email.payload_json || {};
+                    const campanhaId = String(payload.email_campanha_id || "");
+                    const total = Number(payload.total_destinatarios || 0);
+                    const enviados = Number(payload.total_enviados || 0);
+                    const entregues = Number(payload.total_entregues || 0);
+                    const statusEmail = String(payload.status_email_original || "");
+                    const statusTexto = statusEmail === "agendada" ? "Agendada" :
+                      statusEmail === "processando" ? "Enviando" :
+                      statusEmail === "enviada" ? "Enviada" :
+                      statusEmail === "pausada" ? "Pausada" :
+                      statusEmail === "cancelada" ? "Cancelada" :
+                      statusEmail === "falha" ? "Falha" : grupoStatusLabel(grupo.status);
+
+                    return (
+                      <article
+                        key={grupo.id}
+                        className={[
+                          styles.groupCard,
+                          styles.manualCampaignCard,
+                          styles.emailCampaignCard,
+                          grupoCardAccentClass(grupo.status),
+                        ].filter(Boolean).join(" ")}
+                      >
+                        <div className={styles.groupHeader}>
+                          <div className={styles.groupIdentity}>
+                            <div className={styles.groupTitleRow}>
+                              <div className={styles.groupIcon}>✉️</div>
+                              <div>
+                                <strong className={styles.groupTitle}>
+                                  {String(payload.nome_campanha || "Campanha de e-mail")}
+                                </strong>
+                                <p className={styles.groupMeta}>
+                                  {payload.remetente_nome || "Remetente"}{payload.remetente_email ? " · " + payload.remetente_email : ""}
+                                  {payload.template_nome ? " · Template: " + payload.template_nome : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <span className={grupoStatusClass(grupo.status)}>{statusTexto}</span>
+                          </div>
+
+                          <div className={styles.groupStats}>
+                            <span><strong>{total.toLocaleString("pt-BR")}</strong> destinatários</span>
+                            {enviados > 0 ? <span>{enviados.toLocaleString("pt-BR")} enviados</span> : null}
+                            {entregues > 0 ? <span>{entregues.toLocaleString("pt-BR")} entregues</span> : null}
+                          </div>
+
+                          <div className={styles.groupScheduleGrid}>
+                            <div className={styles.groupSchedule}>
+                              <span>Execução programada</span>
+                              <strong>{formatarData(email.executar_em)}</strong>
+                            </div>
+                            <div className={styles.groupSchedule}>
+                              <span>Assunto do e-mail</span>
+                              <strong>{String(payload.assunto || "—")}</strong>
+                            </div>
+                          </div>
+
+                          {payload.erro_email ? (
+                            <p className={styles.emailCampaignError} role="status">
+                              {String(payload.erro_email)}
+                            </p>
+                          ) : null}
+
+                          <div className={styles.groupFooterActions}>
+                            <span className={styles.channelChip}>✉️ E-mail Marketing</span>
+                            <Link
+                              href={"/email-marketing?campanha=" + encodeURIComponent(campanhaId)}
+                              className={styles.secondaryButton}
+                            >
+                              Ver campanha
+                            </Link>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  }
 
                   if (grupoManual) {
                     const primeiro = grupo.itens[0];
