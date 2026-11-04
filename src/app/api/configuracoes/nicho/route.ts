@@ -179,18 +179,6 @@ export async function PUT(request: Request) {
     }
 
     const contextoAtual = await carregarContextoNicho(empresaId);
-
-    if (contextoAtual.empresa.white_label_id) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "O nicho das empresas White Label é fixo em Comercial e não pode ser alterado.",
-        },
-        { status: 403 }
-      );
-    }
-
     const nichoAtual = contextoAtual.empresa.nicho;
     const novoNicho =
       contextoAtual.nichos.find((nicho) => nicho.id === nichoId) ?? null;
@@ -202,12 +190,26 @@ export async function PUT(request: Request) {
       );
     }
 
+    // Um envio idempotente não altera o nicho da empresa. Permita confirmar
+    // o nicho já atribuído, inclusive no onboarding de empresas White Label.
     if (contextoAtual.empresa.nicho_id === novoNicho.id) {
       return NextResponse.json({
         ok: true,
-        message: "Este nicho já está ativo.",
+        message: "Este segmento já está configurado.",
         empresa: contextoAtual.empresa,
       });
+    }
+
+    // White Label mantém seu nicho contratado: mudanças efetivas continuam
+    // proibidas, mesmo que o cliente envie outro ID diretamente à API.
+    if (contextoAtual.empresa.white_label_id) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "O segmento desta empresa White Label é fixo e não pode ser alterado.",
+        },
+        { status: 403 }
+      );
     }
 
     const { error: updateError } = await supabase
