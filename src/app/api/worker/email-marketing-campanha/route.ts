@@ -183,13 +183,23 @@ async function agendarProximaExecucao(
 }
 
 async function finalizarSeConcluida(campanhaId: string) {
-  const [{ count: pendentes }, { count: enviados }, { count: falhas }] =
-    await Promise.all([
+  const [
+    { count: pendentes },
+    { count: emProcessamento },
+    { count: enviados },
+    { count: falhas },
+    { count: cancelados },
+  ] = await Promise.all([
       supabaseAdmin
         .from("email_campanha_destinatarios")
         .select("id", { count: "exact", head: true })
         .eq("campanha_id", campanhaId)
         .eq("status", "pendente"),
+      supabaseAdmin
+        .from("email_campanha_destinatarios")
+        .select("id", { count: "exact", head: true })
+        .eq("campanha_id", campanhaId)
+        .eq("status", "processando"),
       supabaseAdmin
         .from("email_campanha_destinatarios")
         .select("id", { count: "exact", head: true })
@@ -200,21 +210,42 @@ async function finalizarSeConcluida(campanhaId: string) {
         .select("id", { count: "exact", head: true })
         .eq("campanha_id", campanhaId)
         .eq("status", "falha"),
+      supabaseAdmin
+        .from("email_campanha_destinatarios")
+        .select("id", { count: "exact", head: true })
+        .eq("campanha_id", campanhaId)
+        .eq("status", "cancelado"),
     ]);
 
-  if (Number(pendentes || 0) > 0) {
+  if (Number(pendentes || 0) > 0 || Number(emProcessamento || 0) > 0) {
     return false;
+  }
+
+  const { data: campanhaAtual } = await supabaseAdmin
+    .from("email_campanhas")
+    .select("status")
+    .eq("id", campanhaId)
+    .maybeSingle();
+
+  if (campanhaAtual?.status === "cancelada") {
+    await recalcularMetricasCampanhaEmail(campanhaId);
+    return true;
   }
 
   await recalcularMetricasCampanhaEmail(campanhaId);
 
   const totalEnviados = Number(enviados || 0);
   const totalFalhas = Number(falhas || 0);
+  const totalCancelados = Number(cancelados || 0);
 
   await supabaseAdmin
     .from("email_campanhas")
     .update({
-      status: totalEnviados > 0 || totalFalhas === 0 ? "enviada" : "falha",
+      status: totalEnviados > 0
+        ? "enviada"
+        : totalCancelados > 0 && totalFalhas === 0
+          ? "cancelada"
+          : "falha",
       finalizada_em: new Date().toISOString(),
       erro:
         totalFalhas > 0
@@ -438,6 +469,45 @@ export async function POST(request: Request) {
     const basePublica = urlPublicaEmailMarketing();
 
     for (const destinatario of destinatarios) {
+      // Reserva condicional: cancelamentos só atingem destinatários ainda
+      // pendentes. O worker nunca envia um registro já cancelado.
+      const { data: reservado, error: reservaErro } = await supabaseAdmin
+        .from("email_campanha_destinatarios")
+        .update({
+          status: "processando",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", destinatario.id)
+        .eq("campanha_id", campanha.id)
+        .eq("status", "pendente")
+        .is("provider_message_id", null)
+        .select("id")
+        .maybeSingle();
+
+      if (reservaErro) throw new Error(reservaErro.message);
+      if (!reservado) continue;
+
+      const { data: estadoCampanha, error: estadoErro } = await supabaseAdmin
+        .from("email_campanhas")
+        .select("status")
+        .eq("id", campanha.id)
+        .maybeSingle();
+
+      if (estadoErro) throw new Error(estadoErro.message);
+      if (!estadoCampanha || estadoCampanha.status === "cancelada") {
+        await supabaseAdmin
+          .from("email_campanha_destinatarios")
+          .update({
+            status: "cancelado",
+            next_attempt_at: null,
+            erro: "Campanha cancelada antes do envio.",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", destinatario.id)
+          .eq("status", "processando");
+        continue;
+      }
+
       const email = destinatario.email.trim().toLowerCase();
 
       if (suprimidos.has(email)) {
@@ -576,13 +646,23 @@ export async function POST(request: Request) {
         const mensagem =
           error instanceof Error ? error.message : "Falha ao enviar e-mail.";
         const esgotou = tentativa >= Number(destinatario.max_tentativas || 3);
+        const { data: estadoAposFalha } = await supabaseAdmin
+          .from("email_campanhas")
+          .select("status")
+          .eq("id", campanha.id)
+          .maybeSingle();
+        const foiCancelada = estadoAposFalha?.status === "cancelada";
 
         await supabaseAdmin
           .from("email_campanha_destinatarios")
           .update({
-            status: esgotou ? "falha" : "pendente",
+            status: foiCancelada
+              ? "cancelado"
+              : esgotou
+                ? "falha"
+                : "pendente",
             tentativas: tentativa,
-            next_attempt_at: esgotou ? null : dataRetry(tentativa),
+            next_attempt_at: esgotou || foiCancelada ? null : dataRetry(tentativa),
             erro: mensagem.slice(0, 1000),
             updated_at: new Date().toISOString(),
           })
