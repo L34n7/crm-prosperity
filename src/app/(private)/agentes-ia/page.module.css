@@ -410,6 +410,66 @@
 .toolToggle input:checked + .toggleVisual::after { transform: translateX(12px); }
 .inlineSelect { margin-top: 9px; font-size: 13px; }
 
+.cotacaoFerramentaExpandida {
+  grid-column: span 2;
+}
+
+.cotacaoPosEnvio {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--crm-border-soft);
+  min-width: 0;
+}
+
+.cotacaoPosEnvio .checkRow strong {
+  padding-right: 0;
+}
+
+.cotacaoPosEnvioConteudo {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.cotacaoPosEnvioConteudo .field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.cotacaoPosEnvioUpload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 240px;
+  padding: 10px 12px;
+  border: 1px solid var(--crm-primary-border);
+  border-radius: 10px;
+  background: var(--crm-primary-soft);
+  color: var(--crm-primary-text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cotacaoPosEnvioUpload input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.cotacaoPosEnvioErro {
+  color: var(--crm-danger-text);
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .cotacaoFerramentaExpandida {
+    grid-column: 1 / -1;
+  }
+}
+
 .knowledgeForm { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
 .knowledgeForm textarea { grid-column: 1 / -1; }
 .knowledgeForm .secondaryButton { grid-column: 1 / -1; justify-self: start; }
