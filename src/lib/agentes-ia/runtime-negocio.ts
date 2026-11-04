@@ -8,9 +8,10 @@ import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import { registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
+import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
-import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
+import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,pediuNovaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
 import {
   carregarFerramentasNegocioAtivas,
@@ -79,6 +80,10 @@ type ContextoRuntime = {
   respostaEnviada: boolean;
   vendaResultado: any | null;
   cotacaoFormatada: boolean;
+  grupoCotacaoId: string | null;
+  posCotacaoTexto: string | null;
+  posCotacaoMidiaId: string | null;
+  continuidadeCotacao: string | null;
 };
 
 const ESTADO_VAZIO: EstadoConversa = {
@@ -275,7 +280,27 @@ async function enviarMensagem(params: {
   execucaoId: string;
   numeroDestino: string;
   texto: string;
+  grupoCotacaoId?: string | null;
+  etapaCotacao?: string | null;
 }) {
+  if (params.grupoCotacaoId && params.etapaCotacao) {
+    const { data: anterior, error: erroAnterior } = await supabaseAdmin
+      .from("mensagens")
+      .select("id")
+      .eq("empresa_id", params.empresaId)
+      .eq("conversa_id", params.conversaId)
+      .eq("status_envio", "enviada")
+      .contains("metadata_json", {
+        origem: "agente_ia_negocio",
+        grupo_cotacao_id: params.grupoCotacaoId,
+        etapa_cotacao: params.etapaCotacao,
+      })
+      .limit(1)
+      .maybeSingle();
+    if (erroAnterior) throw new Error(erroAnterior.message);
+    if (anterior?.id) return;
+  }
+
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select("integracao_whatsapp_id")
@@ -331,6 +356,12 @@ async function enviarMensagem(params: {
       origem: "agente_ia_negocio",
       agente_id: params.agenteId,
       agente_execucao_id: params.execucaoId,
+      ...(params.grupoCotacaoId && params.etapaCotacao
+        ? {
+            grupo_cotacao_id: params.grupoCotacaoId,
+            etapa_cotacao: params.etapaCotacao,
+          }
+        : {}),
       meta_status: envio.status,
       meta_error: envio.error,
     },
@@ -368,6 +399,8 @@ async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
       execucaoId: ctx.execucaoId,
       numeroDestino: ctx.pendencia.numero_destino,
       texto: limpas[indice],
+      grupoCotacaoId: ctx.grupoCotacaoId,
+      etapaCotacao: ctx.grupoCotacaoId ? `proposta_${indice}` : null,
     });
     ctx.respostaEnviada = true;
   }
@@ -688,6 +721,10 @@ export async function processarPendenciaNegocio(
       respostaEnviada: false,
       vendaResultado: null,
       cotacaoFormatada: false,
+      grupoCotacaoId: null,
+      posCotacaoTexto: null,
+      posCotacaoMidiaId: null,
+      continuidadeCotacao: null,
     };
 
     // Contratação em duas etapas: confirmar plano ANTES de transferir.
