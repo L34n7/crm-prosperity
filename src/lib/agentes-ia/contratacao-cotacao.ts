@@ -80,7 +80,7 @@ export function planoEscolhidoNaCotacao(
   ];
   for(let i=0;i<Math.min(planos.length,ordinais.length);i++){
     if(ordinais[i].test(texto)&&(
-      /\b(?:plano|primeir|segund|terceir|quero|prefiro|escolho|fico|contratar|opcao|opcoes)\b/.test(texto)
+      /\b(?:plano|primeir|segund|terceir|quero|prefiro|escolho|fico|vou com|contratar|opcao|opcoes)\b/.test(texto)
       ||/^(?:[123]|a |o )/.test(texto)
     ))return planos[i];
   }
@@ -103,8 +103,8 @@ export function indicouEscolhaPlanoCotacao(
   if (/\bquero\s+(?:saber|entender|conhecer|comparar|ver|informacoes)\b/.test(texto)) return false;
   if (/\b(?:quero|pode)\s+(?:(?:uma?|nova)\s+)?(?:cotacao|cotar|simular)\b/.test(texto)) return false;
   const escolhaClara =
-    /\b(?:quero|prefiro|escolho|escolhi|vou ficar com|fico com|vou contratar|quero contratar|quero fechar|pode encaminhar|pode transferir)\b/.test(texto);
-  if (mensagem.includes("?") && !/\b(?:prefiro|escolho|escolhi|vou ficar com|fico com|vou contratar|quero contratar|quero fechar)\b/.test(texto)) return false;
+    /\b(?:quero|prefiro|escolho|escolhi|vou ficar com|vou com|fico com|vou contratar|quero contratar|quero fechar|pode encaminhar|pode transferir)\b/.test(texto);
+  if (mensagem.includes("?") && !/\b(?:prefiro|escolho|escolhi|vou ficar com|vou com|fico com|vou contratar|quero contratar|quero fechar)\b/.test(texto)) return false;
   if (/^(?:qual|quais|quanto|como|porque|por que|tem|cobre|inclui|explica|me fale|me conta|o que|qual a diferenca)\b/.test(texto)) return false;
   const nomePlano = normalizar(plano?.nome || "").replace(/^plano\s+/, "");
   const codigoPlano = normalizar(plano?.codigo || "");
