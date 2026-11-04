@@ -13,6 +13,7 @@ import {
   normalizarTimezoneEmpresa,
 } from "@/lib/datetime/timezone";
 import styles from "./disparos-agendados.module.css";
+import EmailAgendamentoModal from "./EmailAgendamentoModal";
 
 type StatusDisparo = "todos" | "pendente" | "executado" | "cancelado" | "erro";
 type FiltroOrigemDisparo = "todos" | "manual" | "agenda" | "fluxo";
@@ -823,6 +824,7 @@ function DisparosAgendadosPageContent() {
   const [grupoSelecionado, setGrupoSelecionado] = useState<GrupoDisparos | null>(null);
   const [grupoParaCancelar, setGrupoParaCancelar] = useState<GrupoDisparos | null>(null);
   const [grupoManualModalId, setGrupoManualModalId] = useState<string | null>(null);
+  const [emailModal, setEmailModal] = useState<{ id: string; nome: string } | null>(null);
   const [grupoManualDetalhe, setGrupoManualDetalhe] =
     useState<GrupoDisparos | null>(null);
   const [carregandoGrupoManual, setCarregandoGrupoManual] = useState(false);
@@ -2140,6 +2142,17 @@ function DisparosAgendadosPageContent() {
 
                           <div className={styles.groupFooterActions}>
                             <span className={styles.channelChip}>✉️ E-mail Marketing</span>
+                            <button
+                              type="button"
+                              className={styles.secondaryButton}
+                              onClick={() => setEmailModal({
+                                id: campanhaId,
+                                nome: String(payload.nome_campanha || "Campanha de e-mail"),
+                              })}
+                              disabled={!campanhaId}
+                            >
+                              Ver destinatários
+                            </button>
                             <Link
                               href={"/email-marketing?campanha=" + encodeURIComponent(campanhaId)}
                               className={styles.secondaryButton}
@@ -3694,6 +3707,18 @@ function DisparosAgendadosPageContent() {
               </div>
             </div>
           </div>
+        ) : null}
+
+        {emailModal ? (
+          <EmailAgendamentoModal
+            campanhaId={emailModal.id}
+            titulo={emailModal.nome}
+            onClose={() => setEmailModal(null)}
+            onUpdated={async () => {
+              await carregarDisparos();
+              solicitarAtualizacaoDisparosPendentesHeader();
+            }}
+          />
         ) : null}
 
         {grupoManualModal ? (
