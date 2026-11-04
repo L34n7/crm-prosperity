@@ -32,6 +32,7 @@ import AgenteTesteModal from "./components/AgenteTesteModal";
 import ConhecimentoEditorModal from "./components/ConhecimentoEditorModal";
 import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerramentaSelect";
 import FollowupInatividadeEditor from "./components/FollowupInatividadeEditor";
+import CotacaoPosCotacaoEditor from "./components/CotacaoPosCotacaoEditor";
 import {
   erroValidacaoFollowupInatividade,
   normalizarFollowupInatividade,
@@ -2225,6 +2226,17 @@ export default function AgentesIaPage() {
                                   tipoId
                                 )
                               }
+                            />
+                          )}
+                        {ferramenta.tipo === "gerar_cotacao_veicular" &&
+                          ferramentaAtiva(ferramenta.tipo) && (
+                            <CotacaoPosCotacaoEditor
+                              config={configFerramenta(ferramenta.tipo)}
+                              onChange={(chave, valor) =>
+                                atualizarConfigFerramenta(ferramenta.tipo, chave, valor)
+                              }
+                              onError={setErro}
+                              onSuccess={setSucesso}
                             />
                           )}
                         {ferramenta.tipo === "transferir_humano" &&
