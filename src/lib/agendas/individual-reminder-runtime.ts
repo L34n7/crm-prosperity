@@ -344,6 +344,11 @@ async function sendIndividualEmail(built: Awaited<ReturnType<typeof buildContext
     contactName: String(
       built.originalAppointment.nome_cliente || built.originalContact?.nome || "Cliente"
     ),
+    contactPhone: String(
+      built.originalAppointment.telefone_cliente ||
+        built.originalContact?.telefone ||
+        ""
+    ),
     appointmentTitle: appointmentTitle(context),
     dateLabel: dateLabel(
       built.originalAppointment.inicio_at,

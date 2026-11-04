@@ -40,6 +40,7 @@ export async function sendEmail(context: Context) {
     to: recipient,
     recipientName: isResponsible ? context.responsible?.nome : contactName(context),
     contactName: contactName(context),
+    contactPhone: customerPhone(context),
     appointmentTitle: appointmentTitle(context),
     dateLabel: dateLabel(context.appointment.inicio_at, context.agenda.timezone),
     timeLabel: timeLabel(context.appointment.inicio_at, context.agenda.timezone),

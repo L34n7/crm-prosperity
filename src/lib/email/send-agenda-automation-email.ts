@@ -22,6 +22,7 @@ type SendAgendaAutomationEmailParams = {
   to: string;
   recipientName?: string | null;
   contactName?: string | null;
+  contactPhone?: string | null;
   appointmentTitle: string;
   dateLabel: string;
   timeLabel: string;
@@ -50,6 +51,23 @@ function safeHeader(value: unknown) {
     .replace(/[\r\n<>]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function formatContactPhone(value?: string | null) {
+  const original = String(value || "").trim();
+  const digits = original.replace(/\D/g, "");
+  const national =
+    digits.startsWith("55") && (digits.length === 12 || digits.length === 13)
+      ? digits.slice(2)
+      : digits;
+
+  if (national.length === 11) {
+    return `(${national.slice(0, 2)}) ${national.slice(2, 7)}-${national.slice(7)}`;
+  }
+  if (national.length === 10) {
+    return `(${national.slice(0, 2)}) ${national.slice(2, 6)}-${national.slice(6)}`;
+  }
+  return original || "Não informado";
 }
 
 async function companyName(empresaId: string) {
@@ -133,9 +151,36 @@ export async function sendAgendaAutomationEmail(
   const agendaUrl = `${appUrl}/agendas?agenda=${encodeURIComponent(
     params.agendaId
   )}&agendamento=${encodeURIComponent(params.appointmentId)}`;
-  const locationRow = content.location
-    ? `<tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;border-top:1px solid #dce7e4;">Local</td><td style="color:#17322f;font-weight:700;padding:14px;border-top:1px solid #dce7e4;">${escapeHtml(content.location)}</td></tr>`
-    : "";
+  const showClientInfo = params.kind === "aviso_responsavel";
+  const clientName = String(params.contactName || "").trim() || "Não informado";
+  const clientPhone = formatContactPhone(params.contactPhone);
+  const brandLabel =
+    company.trim().toLocaleLowerCase("pt-BR") ===
+    emailBranding.nomeProduto.trim().toLocaleLowerCase("pt-BR")
+      ? emailBranding.nomeProduto
+      : `${emailBranding.nomeProduto} · ${company}`;
+  const detailRows = [
+    { label: "Compromisso", value: params.appointmentTitle, emphasis: true },
+    ...(showClientInfo
+      ? [
+          { label: "Com", value: clientName, emphasis: false },
+          { label: "Número", value: clientPhone, emphasis: false },
+        ]
+      : []),
+    { label: "Data", value: params.dateLabel, emphasis: false },
+    { label: "Horário", value: params.timeLabel, emphasis: false },
+    ...(content.location
+      ? [{ label: "Local", value: content.location, emphasis: false }]
+      : []),
+  ]
+    .map((item, index) => {
+      const separator = index > 0 ? "border-top:1px solid #dce7e4;" : "";
+      return `<tr>
+        <td style="width:96px;background:#f6f9f8;color:#68827d;font-size:13px;padding:13px 14px;${separator}">${item.label}</td>
+        <td style="color:#17322f;font-size:14px;line-height:1.5;font-weight:${item.emphasis ? 800 : 700};padding:13px 14px;word-break:break-word;${separator}">${escapeHtml(item.value)}</td>
+      </tr>`;
+    })
+    .join("");
   const shouldAttachInvite = ["confirmacao", "lembrete"].includes(params.kind);
   const calendarInvite = shouldAttachInvite
     ? buildCalendarInvite({
@@ -176,6 +221,7 @@ export async function sendAgendaAutomationEmail(
       `Olá, ${content.name}.`,
       content.intro,
       `Compromisso: ${params.appointmentTitle}`,
+      ...(showClientInfo ? [`Com: ${clientName}`, `Número: ${clientPhone}`] : []),
       `Data: ${params.dateLabel}`,
       `Horário: ${params.timeLabel}`,
       content.location ? `Local: ${content.location}` : "",
@@ -194,7 +240,7 @@ export async function sendAgendaAutomationEmail(
               <tr><td style="padding:28px 32px;background:linear-gradient(135deg,#20b486,#07131a);color:#fff;">
                 <table width="100%" cellpadding="0" cellspacing="0" role="presentation"><tr>
                   <td style="padding:0;vertical-align:middle;">
-                    <div style="font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;opacity:.86;">${escapeHtml(emailBranding.nomeProduto)} · ${escapeHtml(company)}</div>
+                    <div style="font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;opacity:.86;">${escapeHtml(brandLabel)}</div>
                     <h1 style="margin:10px 0 0;font-size:24px;line-height:1.25;font-weight:800;">${escapeHtml(content.headline)}</h1>
                     <p style="margin:8px 0 0;font-size:14px;line-height:1.5;opacity:.92;">${escapeHtml(content.subtitle)}</p>
                   </td>
@@ -207,10 +253,7 @@ export async function sendAgendaAutomationEmail(
                 <p style="margin:0;">Olá, ${escapeHtml(content.name)}.</p>
                 <p style="margin:10px 0 18px;">${escapeHtml(content.intro)}</p>
                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #dce7e4;border-radius:13px;overflow:hidden;border-collapse:separate;border-spacing:0;">
-                  <tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;">Compromisso</td><td style="color:#17322f;font-weight:800;padding:14px;">${escapeHtml(params.appointmentTitle)}</td></tr>
-                  <tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;border-top:1px solid #dce7e4;">Data</td><td style="color:#17322f;font-weight:700;padding:14px;border-top:1px solid #dce7e4;">${escapeHtml(params.dateLabel)}</td></tr>
-                  <tr><td style="width:100px;background:#f6f9f8;color:#68827d;padding:14px;border-top:1px solid #dce7e4;">Horário</td><td style="color:#17322f;font-weight:700;padding:14px;border-top:1px solid #dce7e4;">${escapeHtml(params.timeLabel)}</td></tr>
-                  ${locationRow}
+                  ${detailRows}
                 </table>
                 ${calendarInvite ? '<p style="display:inline-block;margin:18px 0 0;padding:9px 12px;color:#20b486;background:#edf8f4;border:1px solid #cde8df;border-radius:999px;font-size:13px;font-weight:700;line-height:1.2;">Convite de calendário anexado</p>' : ""}
                 <p style="margin:20px 0 0;color:#68827d;font-size:13px;">${escapeHtml(content.closing)}</p>
