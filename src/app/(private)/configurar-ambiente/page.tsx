@@ -476,6 +476,7 @@ export default function ConfigurarAmbientePage() {
   const [etapaQuiz, setEtapaQuiz] = useState(0);
   const [nichos, setNichos] = useState<Nicho[]>([]);
   const [nichoSelecionadoId, setNichoSelecionadoId] = useState("");
+  const [nichoFixoWhiteLabel, setNichoFixoWhiteLabel] = useState(false);
   const [carregandoNichos, setCarregandoNichos] = useState(true);
   const [salvandoNicho, setSalvandoNicho] = useState(false);
   const [erroNicho, setErroNicho] = useState("");
@@ -1482,6 +1483,11 @@ async function carregarNichos() {
     }
 
     setNichos(data.nichos || []);
+    setNichoFixoWhiteLabel(Boolean(data.empresa?.white_label_id));
+    const nichoAtualId = String(data.empresa?.nicho_id || "").trim();
+    if (nichoAtualId) {
+      setNichoSelecionadoId(nichoAtualId);
+    }
   } catch (error) {
     setErroNicho(
       error instanceof Error
@@ -1513,7 +1519,11 @@ async function salvarNichoEAvancar() {
       throw new Error(data.error || "Erro ao salvar o segmento.");
     }
 
-    mostrarSucessoToast("Segmento configurado com sucesso.");
+    mostrarSucessoToast(
+      nichoFixoWhiteLabel
+        ? "Segmento mantido. Continue a configuração do WhatsApp."
+        : "Segmento configurado com sucesso."
+    );
     setEtapaQuiz(2);
     router.refresh();
   } catch (error) {
@@ -2005,12 +2015,13 @@ return (
                     <label htmlFor="nicho-onboarding">Segmento de atuação</label>
                     <select
                       id="nicho-onboarding"
+                      className={nichoFixoWhiteLabel ? styles.nichoSelectLocked : undefined}
                       value={nichoSelecionadoId}
                       onChange={(event) => {
                         setNichoSelecionadoId(event.target.value);
                         setErroNicho("");
                       }}
-                      disabled={carregandoNichos || salvandoNicho}
+                      disabled={carregandoNichos || salvandoNicho || nichoFixoWhiteLabel}
                     >
                       <option value="">
                         {carregandoNichos
@@ -2023,6 +2034,13 @@ return (
                         </option>
                       ))}
                     </select>
+
+                    {nichoFixoWhiteLabel && !carregandoNichos && (
+                      <p className={styles.nichoSelectNote}>
+                        O segmento desta empresa já está definido pelo White Label.
+                        Ele será mantido; clique em Avançar para continuar a configuração do WhatsApp.
+                      </p>
+                    )}
 
                     {erroNicho && (
                       <p className={styles.nichoSelectError}>{erroNicho}</p>
