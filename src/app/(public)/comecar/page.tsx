@@ -450,6 +450,7 @@ export default function ComecarPage() {
                 className={styles.checkbox}
               />
               <span>
+                Estou ciente das condições de uso do CRM e das responsabilidades sobre contatos, autorizações e envio de mensagens.{" "}
                 Li e aceito os{" "}
                 <Link
                   href="/termos-de-servico"
