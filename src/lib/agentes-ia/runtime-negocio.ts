@@ -864,7 +864,10 @@ export async function processarPendenciaNegocio(
       && escolheuPlanoDaCotacao(pendencia.conteudo_agregado);
     const pedidoOutraCotacaoSemDados=ferramentas.has("gerar_cotacao_veicular")
       && pediuNovaCotacaoSemDados(pendencia.conteudo_agregado);
+    const continuidadeCotacaoSolicitada=estado.cotacao_pendente
+      && confirmouProsseguirCotacao(pendencia.conteudo_agregado);
     const querOutraCotacao=ferramentas.has("gerar_cotacao_veicular")
+      && !continuidadeCotacaoSolicitada
       && clientePediuCotacaoVeicular(pendencia.conteudo_agregado);
     const contextoPedidoAtual=ferramentas.has("gerar_cotacao_veicular")
       ?historicoDoPedidoAtual(historico):[];
