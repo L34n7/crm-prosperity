@@ -1165,6 +1165,7 @@ export async function processarPendenciaNegocio(
     let forcarCotacaoNaProximaRodada=false;
     let tentouForcarCotacao=false;
     let executouFerramentaCotacao=false;
+    let incompatibilidadeContadaNestaMensagem=false;
 
     for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
       const request: any = {
@@ -1316,9 +1317,14 @@ export async function processarPendenciaNegocio(
           (resultado.code==="FIPE_VERSAO_INCOMPATIVEL" ||
            resultado.code==="FIPE_VERSAO_AMBIGUA")) {
           const opcoes=listaCurta(resultado.opcoes_fipe,4,160);
-          if(resultado.code==="FIPE_VERSAO_INCOMPATIVEL")
-            estado.cotacao_incompatibilidades+=1;
-          else estado.cotacao_incompatibilidades=0;
+          if(resultado.code==="FIPE_VERSAO_INCOMPATIVEL") {
+            if(!incompatibilidadeContadaNestaMensagem) {
+              estado.cotacao_incompatibilidades+=1;
+              incompatibilidadeContadaNestaMensagem=true;
+            }
+          } else {
+            estado.cotacao_incompatibilidades=0;
+          }
           estado.cotacao_opcoes_fipe=opcoes;
           estado.cotacao_pendente=true;
           estado.cotacao_verificacao_humana=false;
