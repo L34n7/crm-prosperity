@@ -6,6 +6,9 @@ import {
   motorizacaoCorrigidaCotacao,
   aplicarMotorizacaoCorrigida,
   versaoCorrigidaFoiInformada,
+  cambioInformadoCotacao,
+  aplicarCambioInformado,
+  mensagemSocialSemDadosCotacao,
 } from "../src/lib/agentes-ia/correcao-cotacao.ts";
 
 const onix = [
@@ -69,4 +72,63 @@ test("rejeicao sem versao corrigida nao permite cotacao presumida", () => {
   assert.equal(versaoCorrigidaFoiInformada(["Tiguan 2016","Não é esse modelo"]),false);
   assert.equal(clienteCorrigiuVersaoCotacao("Qual a diferença do Premium?"),false);
   assert.equal(clienteCorrigiuVersaoCotacao("Quero contratar o Completo"),false);
+});
+
+
+test("Vectra GLS Challenge 2.2 manual 2000 encontra nome FIPE sem câmbio explícito", () => {
+  const vectra=[
+    {code:"gl-milenium", name:"Vectra GL 2.2 MPFI Milenium"},
+    {code:"gls-challenge",name:"Vectra GLS/ Challenge 2.2 MPFI 16V"},
+    {code:"gls-express",name:"Vectra GLS/Expres.2.2/ 2.0 e 2.0 CD 8V"},
+  ];
+  assert.deepEqual(
+    modelosCompativeisFipe(vectra,"Vectra GLS/Challenge 2.2 manual").map((v)=>v.code),
+    ["gls-challenge"],
+  );
+  assert.deepEqual(
+    modelosCompativeisFipe(vectra,"Vectra GLS Challenge 2.2 automático").map((v)=>v.code),
+    ["gls-challenge"],
+  );
+  // Descrição FIPE omissa quanto ao câmbio não comprova qual é o câmbio.
+  assert.deepEqual(
+    modelosCompativeisFipe(vectra,"Vectra GLS Challenge 2.0 manual"),
+    [],
+  );
+});
+
+test("quando há opção explícita de câmbio, ela prevalece sobre a opção sem informação", () => {
+  const variantes=[
+    {code:"aut",name:"ONIX LTZ 1.4 Aut."},
+    {code:"mec",name:"ONIX LTZ 1.4 Mec."},
+    {code:"sem",name:"ONIX LTZ 1.4"},
+  ];
+  assert.deepEqual(modelosCompativeisFipe(variantes,"Onix LTZ 1.4 automático").map((v)=>v.code),["aut"]);
+  assert.deepEqual(modelosCompativeisFipe(variantes,"Onix LTZ 1.4 manual").map((v)=>v.code),["mec"]);
+});
+
+test("última correção de câmbio do cliente prevalece na nova consulta", () => {
+  const mensagens=[
+    "Vou fazer outra cotação", "Vectra", "Ops é 2000",
+    "Não é esse modelo", "Challenge", "Automático", "Manual",
+    "2.2 uai", "Gls/challenge 2.2",
+  ];
+  assert.equal(cambioInformadoCotacao(mensagens),"manual");
+  assert.equal(aplicarCambioInformado("Vectra GLS/Challenge 2.2 automático","manual"),
+    "Vectra GLS/Challenge 2.2 manual");
+  assert.equal(versaoCorrigidaFoiInformada(mensagens),true);
+  assert.equal(motorizacaoCorrigidaCotacao(mensagens),"2.2");
+  assert.equal(aplicarMotorizacaoCorrigida("Vectra GLS Challenge 2.0","2.2"),
+    "Vectra GLS Challenge 2.2");
+});
+
+test("saudação sem dados não reativa cotação pendente", () => {
+  for (const mensagem of ["Oii", "Oi!", "Olá", "Bom dia 😊", "Tudo bem?", "Obrigado", "Ok"]) {
+    assert.equal(mensagemSocialSemDadosCotacao(mensagem),true,mensagem);
+  }
+  for (const mensagem of [
+    "Quero cotar outro Vectra", "Gls/challenge 2.2", "Manual",
+    "É o 2.2", "Pode enviar a cotação", "Não é esse modelo",
+  ]) {
+    assert.equal(mensagemSocialSemDadosCotacao(mensagem),false,mensagem);
+  }
 });
