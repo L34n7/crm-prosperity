@@ -12,6 +12,7 @@ import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,pediuNovaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
+import { classificarFalhaCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import {
   clienteCorrigiuVersaoCotacao,
   motorizacaoCorrigidaCotacao,
@@ -1235,6 +1236,12 @@ export async function processarPendenciaNegocio(
           };
         }
 
+        // A auditoria preserva integralmente o diagnóstico do backend.
+        // A IA recebe somente a versão apropriada ao cliente, sem tabela,
+        // faixa, valor FIPE ou detalhes de configuração comercial.
+        const falhaCotacao = nome === "gerar_cotacao_veicular" && resultado?.ok === false
+          ? classificarFalhaCotacao(String(resultado.error || ""))
+          : null;
         ctx.ferramentasExecutadas.push({ nome, argumentos, resultado });
         if (nome === "gerar_cotacao_veicular" && resultado?.ok === true) {
           ctx.acaoCriticaExecutada = true;
@@ -1275,17 +1282,20 @@ export async function processarPendenciaNegocio(
         inputIa.push({
           type: "function_call_output",
           call_id: chamada.call_id,
-          output: JSON.stringify(resultado),
+          output: JSON.stringify(falhaCotacao
+            ? { ok: false, code: falhaCotacao.codigo,
+                error: falhaCotacao.orientacaoAgente }
+            : resultado),
         });
-        if (nome==="gerar_cotacao_veicular" && resultado?.ok===false) {
+        if (falhaCotacao) {
           inputIa.push({role:"developer",content:
-            "A ferramenta de cotação NÃO gerou proposta. Motivo validado no backend: " +
-            String(resultado.error||"Erro não especificado").slice(0,900) + ". " +
-            "Explique a incompatibilidade ou a informação faltante ao cliente " +
-            "com objetividade, sem repetir o que ele já confirmou. NÃO diga " +
-            "que a cotação foi enviada, que está consultando ou que gerará " +
-            "uma proposta em segundo plano. Não substitua motorização, câmbio " +
-            "ou ano-modelo por outra versão sem autorização do cliente."
+            "A ferramenta de cotação NÃO gerou proposta. " +
+            falhaCotacao.orientacaoAgente + " " +
+            "Nunca informe limites de faixa, preços FIPE, tabelas de preços, " +
+            "categoria interna, alterações de cadastro nem configurações do CRM. " +
+            "Não diga que uma proposta foi enviada e não invente valores. " +
+            "Para bloqueio comercial ou erro operacional, a resposta final " +
+            "será padronizada pelo backend."
           });
         }
       }
@@ -1362,6 +1372,27 @@ export async function processarPendenciaNegocio(
             ? "Pronto, o pedido foi criado."
             : "Não encontrei informação suficiente nos dados atuais. Me passe um detalhe do que você procura.",
       ];
+    }
+    const ultimaFalhaCotacao = [...ctx.ferramentasExecutadas].reverse().find(
+      (item) => item.nome === "gerar_cotacao_veicular" &&
+        !item.preconsulta &&
+        (item.resultado as {ok?: boolean} | undefined)?.ok === false
+    );
+    if (ultimaFalhaCotacao && !ctx.cotacaoFormatada) {
+      const mensagemInterna = String(
+        (ultimaFalhaCotacao.resultado as {error?: string} | undefined)?.error || ""
+      );
+      const classificacao = classificarFalhaCotacao(mensagemInterna);
+      saidaFinal.mensagens = respostaSeguraFalhaCotacao(
+        mensagemInterna, saidaFinal.mensagens
+      );
+      // Uma limitação comercial não deve manter a cotação pendente,
+      // provocando consultas idênticas a cada nova mensagem do contato.
+      if (classificacao.tipo === "comercial" || classificacao.tipo === "inesperada") {
+        saidaFinal.estado.cotacao_pendente = false;
+        saidaFinal.estado.cotacao_em_correcao = false;
+        saidaFinal.estado.proxima_acao = "oferecer ajuda da equipe para avaliação comercial";
+      }
     }
     // Sequência da cotação: proposta -> mídia -> texto complementar ->
     // continuação natural da IA. A confirmação de entrega da mídia evita que
