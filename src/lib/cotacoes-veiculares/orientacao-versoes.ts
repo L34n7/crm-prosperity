@@ -107,3 +107,28 @@ export function ordenarAlternativasFipe(
       (familiaNome(item.name)===familia?2:0)};
   }).sort((a,b)=>b.nota-a.nota).map(v=>v.item).slice(0,limite);
 }
+
+/** Só retoma uma cotação em impasse quando a resposta acrescenta um
+ * atributo que realmente diferencia as opções verificadas na FIPE.
+ */
+export function respostaTrazDistincaoFipe(
+  resposta:string,
+  opcoesFipe:string[],
+):boolean{
+  if(opcoesFipe.length<2)return false;
+  const texto=normalizar(resposta);
+  const tokens=texto.split(" ").filter(t=>t.length>=3);
+  const motores=opcoesFipe.map(motorDoNome);
+  const motorCliente=motorDoNome(resposta);
+  if(motorCliente&&motores.some(m=>m===motorCliente)&&
+    motores.some(m=>m!==motorCliente))return true;
+  const cambios=opcoesFipe.map(cambioDoNome);
+  const cambioCliente=cambioDoNome(resposta);
+  if(cambioCliente&&cambios.some(c=>c===cambioCliente)&&
+    cambios.some(c=>c!==cambioCliente))return true;
+  const nomes=opcoesFipe.map(normalizar);
+  return tokens.some(token=>
+    nomes.some(nome=>nome.split(" ").includes(token))&&
+    nomes.some(nome=>!nome.split(" ").includes(token))
+  );
+}
