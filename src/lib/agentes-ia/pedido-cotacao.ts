@@ -11,8 +11,9 @@ export function clientePediuCotacaoVeicular(mensagem:string):boolean{
   const t=normalizar(mensagem);
   if(!t)return false;
   if(/\b(?:cotar|simular|orcamento|cotacao|simulacao)\b/.test(t)
-    && /\b(?:quero|gostaria|preciso|pode|poderia|vou|vamos|solicito|fazer|gerar|receber|outra|novo|outra|mais|carro|veiculo|moto|seguro|protecao)\b/.test(t))return true;
-  if(/\b(?:quanto fica|quanto custa|qual o valor|qual o preco|valor|preco)\b/.test(t)
+    && /\b(?:quero|gostaria|preciso|pode|poderia|vou|vamos|solicito|fazer|gerar|receber|outra|novo|mais)\b/.test(t)
+    && !/\b(?:quero|gostaria)\s+(?:saber|entender|revisar|comparar|ver)\b/.test(t))return true;
+  if(/\b(?:quanto fica|quanto custa|qual o valor|qual o preco|quanto sai|preco do seguro|valor do seguro)\b/.test(t)
     && /\b(?:seguro|protecao|veiculo|carro|moto)\b/.test(t))return true;
   if(/\b(?:quero outro|quero outra|outro veiculo|outro carro|nova proposta|novo orcamento|outra proposta|mais uma cotacao)\b/.test(t))return true;
   return /\b(?:faz|faca|gere|gera|calcule|calcula)\s+(?:uma?\s+)?(?:cotacao|simulacao|orcamento)\b/.test(t);
