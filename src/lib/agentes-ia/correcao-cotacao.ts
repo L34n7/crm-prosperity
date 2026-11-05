@@ -52,7 +52,7 @@ export function versaoCorrigidaFoiInformada(mensagens: string[]): boolean {
   );
   return novas.some((texto) =>
     /\b[1-9][.,][0-9]\b/.test(texto) ||
-    /\b(?:automatico|automatica|manual|mecanico|mecanica|cvt|tiptronic|dsg|ltz|lxs|lx|ex|exl|xlt|xls|xl|limited|comfortline|highline|trendline|sportline|r.line)\b/.test(texto) ||
+    /\b(?:automatico|automatica|manual|mecanico|mecanica|cvt|tiptronic|dsg|ltz|lxs|lx|ex|exl|xlt|xls|xl|limited|comfortline|highline|trendline|sportline|r.line|gls|gl|cd|challenge|milenium|milenio|millennium|express)\b/.test(texto) ||
     /\b(?:versao|modelo)\s+(?:certo|correto|certa|correta|e|eh)\s+\S+/.test(texto)
   );
 }
