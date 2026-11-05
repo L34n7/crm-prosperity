@@ -181,9 +181,12 @@ export async function encontrarVeiculoFipe(params: {
       " com a descrição informada. Confirme somente a versão.");
   }
   if(compativeis.length>1){
-    throw new Error("Informe uma versão mais específica para o ano-modelo "+anoModelo+": "+
-      alternativasAno(compativeis)+
-      ". Pergunte somente o detalhe que diferencia essas versões.");
+    const alternativas=compativeis.map(item=>item.modelo);
+    throw new ErroIdentificacaoVersaoFipe(
+      "FIPE_VERSAO_AMBIGUA",alternativas,
+      perguntaUnicaVersoesFipe(alternativas,anoModelo,"ambiguidade"),
+      "Existem "+alternativas.length+" versões desse veículo para "+anoModelo+"."
+    );
   }
   const {modelo,anos}=compativeis[0];
   if(anos.length!==1){
