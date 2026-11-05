@@ -1654,15 +1654,20 @@ export async function processarPendenciaNegocio(
       .filter((item)=>item.nome==="gerar_cotacao_veicular" && !item.preconsulta);
     const ultimaTentativaCotacao=tentativasCotacao.at(-1);
     const resultadoCotacao=ultimaTentativaCotacao?.resultado as
-      | {ok?:boolean;error?:string} | undefined;
+      | {ok?:boolean;error?:string;code?:string} | undefined;
     const erroCotacao=String(resultadoCotacao?.error||"").slice(0,650);
     const cotacaoStatus=ctx.cotacaoFormatada
       ?"emitida"
       :tentativasCotacao.length
         ?resultadoCotacao?.ok===false
-          ?/confirme|informe|pergunte|vers[aã]o|ano.modelo|mais de uma|motoriza[cç][aã]o/i.test(erroCotacao)
-            ?"aguardando_confirmacao"
-            :"falha"
+          ?resultadoCotacao?.code==="COTACAO_DADOS_NOVOS_INCOMPLETOS"
+            ?"aguardando_dados"
+            :resultadoCotacao?.code==="FIPE_VERSAO_AMBIGUA" ||
+             resultadoCotacao?.code==="FIPE_VERSAO_INCOMPATIVEL"
+              ?"aguardando_confirmacao"
+              :/confirme|informe|pergunte|vers[aã]o|ano.modelo|mais de uma|motoriza[cç][aã]o/i.test(erroCotacao)
+                ?"aguardando_confirmacao"
+                :"falha"
           :"sem_proposta"
         :cotacaoEmAndamento?"aguardando_dados":"nao_solicitada";
 
