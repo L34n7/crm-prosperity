@@ -629,6 +629,8 @@ function clientePediuCotacaoVeicular(mensagem: string) {
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/\s+/g, " ").trim();
   if (pediuNovaCotacaoSemDados(mensagem) || pediuNovaCotacao(mensagem)) return true;
+  if (/\b(?:quanto (?:fica|custa)|qual (?:o )?(?:valor|preco)|preco|valor)\b/.test(texto)
+    && /\b(?:seguro|protecao|veiculo|carro|moto)\b/.test(texto)) return true;
   return /\b(?:quero|gostaria|preciso|pode|poderia|vamos)\s+(?:(?:fazer|gerar|solicitar|pedir|receber)\s+)?(?:(?:uma|um|nova|novo|outra|outro)\s+)?(?:cotacao|orcamento|simulacao)\b/.test(texto);
 }
 
@@ -902,16 +904,32 @@ export async function processarPendenciaNegocio(
     const saudacaoSemDados=mensagemSocialSemDadosCotacao(
       pendencia.conteudo_agregado
     );
+    const novoDetalheAposImpasse=estado.cotacao_verificacao_humana
+      && respostaTrazDistincaoFipe(
+        pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
+      );
+    const cotacaoBloqueada=estado.cotacao_verificacao_humana
+      && !querOutraCotacao && !corrigiuVeiculo && !novoDetalheAposImpasse;
     const cotacaoEmAndamento=ferramentas.has("gerar_cotacao_veicular")
-      && !saudacaoSemDados &&
-      (querOutraCotacao||corrigiuVeiculo||
+      && !saudacaoSemDados && !cotacaoBloqueada
+      && (querOutraCotacao||corrigiuVeiculo||novoDetalheAposImpasse||
         estado.cotacao_pendente||promessaAntigaPendente);
+    if (cotacaoBloqueada) {
+      // Confirmar a mesma combinação não autoriza repetir indefinidamente
+      // a consulta nem perguntar atributos que a FIPE já descartou.
+      ferramentasRelevantes.delete("gerar_cotacao_veicular");
+    }
     if (saudacaoSemDados) {
       // A cotação pendente continua salva para a próxima resposta útil,
       // mas saudações/agradecimentos não acionam a FIPE.
       ferramentasRelevantes.delete("gerar_cotacao_veicular");
     }
     if (cotacaoEmAndamento) {
+      if (querOutraCotacao || novoDetalheAposImpasse) {
+        estado.cotacao_incompatibilidades=0;
+        estado.cotacao_verificacao_humana=false;
+        estado.cotacao_opcoes_fipe=[];
+      }
       if (querOutraCotacao) {
         // Um veículo novo começa do zero: nunca aproveitar motor, ano ou
         // opcionais de uma cotação anterior, ainda que estivesse em correção.
@@ -1097,6 +1115,15 @@ export async function processarPendenciaNegocio(
         "Responda naturalmente, conforme o prompt comercial, perguntando de qual " +
         "dos planos apresentados tem interesse, sem gerar outra cotação nem concluir a venda. " +
         "Planos existentes: "+planosCotacao.map((plano)=>plano.nome).join(", ")
+      });
+    }
+    if(cotacaoBloqueada) {
+      inputIa.push({role:"developer",content:
+        "A cotação deste veículo já foi interrompida por incompatibilidade " +
+        "repetida dos dados informados com as versões verificadas. " +
+        "Não consulte a FIPE novamente nem repita perguntas. " +
+        "Se o cliente não trouxe um novo detalhe distintivo, explique que " +
+        "a equipe pode conferir a versão e ajudar com a proposta."
       });
     }
     if(saudacaoSemDados && estado.cotacao_pendente) {
