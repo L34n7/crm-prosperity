@@ -144,3 +144,13 @@ test("modelo numérico confirmado não se confunde com ano FIPE",()=>{
   assert.equal(modeloComDadosConfirmados(
     ["Quero cotar Peugeot 2008","2021","Particular"],"Peugeot 2008"),"Peugeot 2008");
 });
+
+
+test("Astra 2000 não incorpora atributos que não pertencem à identificação FIPE",()=>{
+  const mensagens=["Quero cotar","Astra 2000","particular","GLS","16v","manual","sedan","nacional"];
+  assert.equal(modeloComDadosConfirmados(
+    mensagens,"Astra GLS Sedan 16V manual nacional injeção eletrônica"),
+    "Astra GLS Sedan 16V manual");
+  assert.equal(modeloComDadosConfirmados(
+    mensagens,"Astra GLS 2.0 16V manual"),"Astra GLS 16V manual");
+});

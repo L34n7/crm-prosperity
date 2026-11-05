@@ -405,8 +405,12 @@ export async function executarFerramentaNegocio(params: {
     const identificacao=await identificarMarcaFipe({
       empresaId:params.empresaId,marca:args.marca,modelo,
     });
-    if(!identificacao)return {ok:false,error:
-      "Não consegui identificar a marca desse modelo com segurança. Qual é a marca? Não é necessário informar a motorização."};
+    if(!identificacao)return {
+      ok:false,
+      code:"FIPE_MARCA_NAO_IDENTIFICADA",
+      error:"Não consegui identificar com segurança a marca do modelo informado.",
+      pergunta_cliente:"Qual é a marca do veículo?",
+    };
 
     const tipos:TipoFipe[]=identificacao.tipoPreferencial
       ?[identificacao.tipoPreferencial]:["cars","motorcycles","trucks"];

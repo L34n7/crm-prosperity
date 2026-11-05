@@ -103,6 +103,10 @@ export function contemDetalheInternoCotacao(texto: string): boolean {
 export function respostaSeguraFalhaCotacao(erro: string, mensagens: string[]) {
   const classificada = classificarFalhaCotacao(erro);
   if (classificada.respostaFixa) return [classificada.respostaFixa];
+  // Sem código FIPE estruturado e sem alternativas verificadas, não permitir
+  // perguntas improvisadas como "nacional ou importado" ou "carburador".
+  if (classificada.tipo === "versao" || classificada.tipo === "dados")
+    return [RESPOSTA_GENERICA];
   if (mensagens.some((texto) => contemDetalheInternoCotacao(texto))) {
     return [
       "Preciso confirmar um detalhe para concluir a cotação desse veículo. " +

@@ -113,6 +113,9 @@ export function modeloComDadosConfirmados(mensagens:string[], modeloIa:string):s
       const termo=normalizar(parte);
       const valor=termo.replace(/[^a-z0-9]/g,"");
       if(!valor)return false;
+      // Atributos não usados pela FIPE não devem refinar a versão.
+      if(/^(?:nacional|importado|importada|carburador|carburado|injecao|eletronica)$/.test(termo))
+        return false;
       if(/^[1-9][.,][0-9]$/.test(parte)){
         const motor=parte.replace(".", "[.,]");
         return new RegExp("(^|[^0-9])"+motor+"([^0-9]|$)").test(mensagensBrutas);

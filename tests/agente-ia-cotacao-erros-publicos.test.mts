@@ -42,11 +42,13 @@ test("falha comercial não inventa mensalidade nem divulga preço FIPE", () => {
   assert.doesNotMatch(resposta, /R\$|mensalidade|2.400.000|faixa/i);
 });
 
-test("pergunta de versão continua possível quando não há erro comercial", () => {
+test("erro de versão sem alternativas FIPE não autoriza perguntas inventadas", () => {
   const erro="Não encontrei esta descrição exata nos modelos FIPE. Confirme somente a versão ou motorização.";
-  const resposta="Pode me informar a motorização exata do Vectra? 😊";
+  const resposta="O Astra é nacional ou importado? Possui carburador?";
   assert.equal(classificarFalhaCotacao(erro).tipo,"versao");
-  assert.deepEqual(respostaSeguraFalhaCotacao(erro,[resposta]),[resposta]);
+  const final=respostaSeguraFalhaCotacao(erro,[resposta]).join(" ");
+  assert.match(final,/Nossa equipe pode ajudar/i);
+  assert.doesNotMatch(final,/nacional|importado|carburador|manual|automático/i);
 });
 
 test("falha na consulta recebe mensagem amigável e não detalhes do provedor", () => {
@@ -66,4 +68,14 @@ test("bloqueia vazamentos de texto técnico mesmo em consulta ambígua", () => {
     ["A tabela de outros precisa ser atualizada para gerar o preço."],
   ).join(" ");
   assert.doesNotMatch(resposta,/tabela|preço|categoria/i);
+});
+
+
+test("falha de identificação de marca sem opções não vira formulário de acessórios",()=>{
+  const erro="Não consegui identificar a marca desse modelo com segurança. Qual é a marca?";
+  const final=respostaSeguraFalhaCotacao(erro,[
+    "Qual o câmbio, se é nacional ou importado e se tem injeção?"
+  ]).join(" ");
+  assert.match(final,/Nossa equipe pode ajudar/i);
+  assert.doesNotMatch(final,/câmbio|nacional|importado|injeção/i);
 });

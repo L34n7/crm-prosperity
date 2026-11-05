@@ -52,7 +52,7 @@ const modelosConhecidos:Array<{regex:RegExp;marca:string;tipo?:TipoFipe}>=[
  {regex:/^(a3|a4|a5|a6|a7|a8|q3|q5|q7|q8|rs3|rs4|s3|tt)(?:\b|$)/,marca:"Audi",tipo:"cars"},
  {regex:/^(gol|golf|polo|virtus|nivus|t cross|t-cross|taos|tiguan|saveiro|voyage|amarok|up|fox|jetta|parati|santana|kombi)(?:\b|$)/,marca:"Volkswagen",tipo:"cars"},
  {regex:/^(uno|mobi|argo|cronos|toro|strada|pulse|fastback|palio|punto|siena|ducato|fiorino)(?:\b|$)/,marca:"Fiat",tipo:"cars"},
- {regex:/^(onix|tracker|prisma|cruze|celta|cobalt|spin|montana|s10|s 10|classic|blazer|equinox|camaro)(?:\b|$)/,marca:"Chevrolet",tipo:"cars"},
+ {regex:/^(onix|tracker|prisma|cruze|celta|cobalt|spin|montana|s10|s 10|classic|blazer|equinox|camaro|astra|vectra|corsa|meriva|zafira|omega|kadett|monza)(?:\b|$)/,marca:"Chevrolet",tipo:"cars"},
  {regex:/^(corolla|hilux|etios|yaris|rav4|rav 4|sw4|sw 4|prius|camry)(?:\b|$)/,marca:"Toyota",tipo:"cars"},
  {regex:/^(civic|fit|city|hr v|hr-v|wr v|wr-v|cr v|cr-v|accord)(?:\b|$)/,marca:"Honda",tipo:"cars"},
  {regex:/^(cg|biz|pop 110|pcx|xre|cb 300|nrx)(?:\b|$)/,marca:"Honda",tipo:"motorcycles"},
