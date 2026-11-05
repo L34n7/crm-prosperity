@@ -86,7 +86,7 @@ export function aplicarCambioInformado(
 ): string {
   if (!cambio) return modelo;
   const semCambio = String(modelo || "")
-    .replace(/\b(?:automatic[oa]|aut|manual|mecanic[oa]|mec|tiptronic|dsg|cvt)\b\.?/gi, " ")
+    .replace(/\b(?:autom[aá]tic[oa]|aut|manual|mec[aâ]nic[oa]|mec|tiptronic|dsg|cvt)\b\.?/gi, " ")
     .replace(/\s+/g, " ").trim();
   return (semCambio + (cambio === "automatico" ? " automático" : " manual")).trim();
 }
