@@ -14,7 +14,7 @@ function motorDoNome(nome:string):string|null{
 }
 function cambioDoNome(nome:string):"automático"|"manual"|null{
   const texto=normalizar(nome);
-  if(/\b(?:aut|automatico|automatica|cvt|tiptronic|dsg)\b/.test(texto))return "automático";
+  if(/\b(?:aut|auto|automatico|automatica|cvt|tiptronic|dsg)\b/.test(texto))return "automático";
   if(/\b(?:mec|manual|mecanico|mecanica)\b/.test(texto))return "manual";
   return null;
 }
@@ -59,6 +59,11 @@ export function perguntaUnicaVersoesFipe(
     ?"Os dados informados não coincidem com as versões disponíveis"
     :"Encontrei mais de uma versão";
   const contexto=" para o ano-modelo "+anoModelo+". ";
+  if(motivo==="ambiguidade"&&prefixos.length>1&&prefixos.length<=4){
+    const nomes=[...new Set(unicas.map(v=>nomeVersao(v.name)))];
+    return "Para o ano-modelo "+anoModelo+
+      ", qual é a versão: "+nomes.join(" ou ")+"?";
+  }
   if(motivo==="ambiguidade"&&prefixos.length===1&&motores.length===1&&
     cambios.length===2&&cambios.every(Boolean)){
     return "Para o "+opcoes[0].replace(/\s+(?:automático|manual)$/,"")+
@@ -93,7 +98,7 @@ export function ordenarAlternativasFipe(
   const cambio=cambioDoNome(consulta);
   const palavras=texto.split(" ").filter(t=>t.length>=2&&![
     "sedan","sed","hatch","coupe","flex","gasolina","manual",
-    "automatico","automatica","mecanico","mecanica","aut","mec",
+    "automatico","automatica","auto","mecanico","mecanica","aut","mec",
     "tiptronic","dsg","cvt",
   ].includes(t));
   const familia=familiaNome(consulta);
