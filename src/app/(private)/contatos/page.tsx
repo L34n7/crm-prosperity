@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, ArrowRight, Check, LoaderCircle } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
 import InteressesIdentificadosIa from "@/components/InteressesIdentificadosIa";
 import type { InteresseIdentificadoIa } from "@/lib/agentes-ia/interesses-identificados";
@@ -13,6 +14,21 @@ import GerenciarListaContatosModal from "./GerenciarListaContatosModal";
 import CentralRevisaoTelefones from "./CentralRevisaoTelefones";
 import ListasPersonalizadasModal, { type ListaCompartilhadaContato } from "./ListasPersonalizadasModal";
 import styles from "./contatos.module.css";
+
+type StatusImportacaoContatos = "pendente" | "processando" | "concluida" | "erro";
+
+type ImportacaoContatosEmAndamento = {
+  id: string;
+  listaId: string | null;
+  nomeLista: string;
+  status: StatusImportacaoContatos;
+  total: number;
+  processados: number;
+  importados: number;
+  vinculados: number;
+  ignorados: number;
+  erro: string | null;
+};
 
 type ClassificacaoContato =
   | "novo"
@@ -327,7 +343,8 @@ export default function ContatosPage() {
   const [importandoPreview, setImportandoPreview] = useState(false);
   const [confirmandoImportacao, setConfirmandoImportacao] = useState(false);
   const [erroImportacao, setErroImportacao] = useState("");
-  const [mensagemImportacao, setMensagemImportacao] = useState("");
+  const [importacaoEmAndamento, setImportacaoEmAndamento] = useState<ImportacaoContatosEmAndamento | null>(null);
+  const [erroConsultaImportacao, setErroConsultaImportacao] = useState("");
   const [nomeListaImportacao, setNomeListaImportacao] = useState("");
   const [permitirContatosExistentes, setPermitirContatosExistentes] = useState(false);
 
@@ -670,7 +687,6 @@ export default function ContatosPage() {
     }
 
     setErroImportacao("");
-    setMensagemImportacao("");
     setImportandoPreview(true);
     setPreviewImportacao(null);
     setAbaPreviewImportacao("alertas");
@@ -760,7 +776,6 @@ export default function ContatosPage() {
     }
 
     setErroImportacao("");
-    setMensagemImportacao("");
     setConfirmandoImportacao(true);
 
     try {
@@ -795,16 +810,28 @@ export default function ContatosPage() {
         return;
       }
 
-      setMensagemImportacao(
-        data.message || `Lista "${nomeLista}" registrada com sucesso.`
-      );
+      if (!data.queued || !data.importacao_id) {
+        setErroImportacao("Não foi possível confirmar o início do processamento da lista.");
+        return;
+      }
 
+      setImportacaoEmAndamento({
+        id: String(data.importacao_id),
+        listaId: data.lista_id ? String(data.lista_id) : null,
+        nomeLista: String(data.nome_lista || nomeLista),
+        status: "pendente",
+        total: Number(data.total || 0),
+        processados: 0,
+        importados: 0,
+        vinculados: 0,
+        ignorados: 0,
+        erro: null,
+      });
+      setErroConsultaImportacao("");
       setArquivoImportacao(null);
       setPreviewImportacao(null);
       setNomeListaImportacao("");
       setPermitirContatosExistentes(false);
-      await carregarContatos();
-      await carregarOpcoesFiltros();
     } catch {
       setErroImportacao("Erro ao importar contatos.");
     } finally {
@@ -947,8 +974,13 @@ export default function ContatosPage() {
   }
 
   function abrirModalImportacao() {
+    if (importacaoEmAndamento?.status === "pendente" || importacaoEmAndamento?.status === "processando") {
+      setModalImportarAberto(true);
+      return;
+    }
+    setImportacaoEmAndamento(null);
+    setErroConsultaImportacao("");
     setErroImportacao("");
-    setMensagemImportacao("");
     setArquivoImportacao(null);
     setNomeListaImportacao("");
     setPermitirContatosExistentes(false);
@@ -960,8 +992,13 @@ export default function ContatosPage() {
 
   function fecharModalImportacao() {
     setModalImportarAberto(false);
+    if (importacaoEmAndamento?.status === "pendente" || importacaoEmAndamento?.status === "processando") {
+      // O worker continua processando; o acompanhamento será mantido em segundo plano.
+      return;
+    }
+    setImportacaoEmAndamento(null);
+    setErroConsultaImportacao("");
     setErroImportacao("");
-    setMensagemImportacao("");
     setArquivoImportacao(null);
     setNomeListaImportacao("");
     setPermitirContatosExistentes(false);
@@ -1512,6 +1549,80 @@ export default function ContatosPage() {
         : [...atual, valor]
     );
   }
+
+  useEffect(() => {
+    const importacaoId = importacaoEmAndamento?.id;
+    if (
+      !importacaoId ||
+      importacaoEmAndamento.status === "concluida" ||
+      importacaoEmAndamento.status === "erro"
+    ) {
+      return;
+    }
+
+    let ativo = true;
+    let consultando = false;
+
+    async function consultarAndamento() {
+      if (consultando) return;
+      consultando = true;
+      try {
+        const response = await fetch(
+          `/api/contatos/importar/confirmar?importacao_id=${encodeURIComponent(importacaoId!)}`,
+          { cache: "no-store" }
+        );
+        const data = await response.json();
+        if (!ativo) return;
+        if (!response.ok || data.ok !== true) {
+          setErroConsultaImportacao(data.error || "Não foi possível atualizar o andamento. Uma nova tentativa será feita.");
+          return;
+        }
+
+        setErroConsultaImportacao("");
+        const status: StatusImportacaoContatos =
+          data.status === "concluida" || data.status === "erro" || data.status === "processando"
+            ? data.status
+            : "pendente";
+        setImportacaoEmAndamento((atual) =>
+          atual?.id === importacaoId
+            ? {
+                ...atual,
+                status,
+                total: Number(data.total ?? atual.total),
+                processados: Number(data.processados ?? atual.processados),
+                importados: Number(data.importados ?? atual.importados),
+                vinculados: Number(data.vinculados ?? atual.vinculados),
+                ignorados: Number(data.ignorados ?? atual.ignorados),
+                erro: data.erro ? String(data.erro) : null,
+              }
+            : atual
+        );
+        if (status === "concluida") {
+          void carregarContatos();
+          void carregarOpcoesFiltros();
+        }
+        if (status === "concluida" || status === "erro") {
+          setModalImportarAberto(true);
+        }
+      } catch {
+        if (ativo) {
+          setErroConsultaImportacao("Sem conexão para consultar o andamento. Tentaremos novamente automaticamente.");
+        }
+      } finally {
+        consultando = false;
+      }
+    }
+
+    void consultarAndamento();
+    const interval = window.setInterval(() => { void consultarAndamento(); }, 2500);
+    return () => {
+      ativo = false;
+      window.clearInterval(interval);
+    };
+  // Mantém a consulta vinculada ao ID e ao status da importação; as funções de recarga
+  // só são executadas após o backend confirmar a conclusão real.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importacaoEmAndamento?.id, importacaoEmAndamento?.status]);
 
   useEffect(() => {
     if (buscaTimeoutRef.current) {
@@ -3278,13 +3389,141 @@ export default function ContatosPage() {
           onClick={fecharModalImportacao}
         >
           <div
-            className={styles.modalCard}
+            className={`${styles.modalCard} ${importacaoEmAndamento ? styles.importStatusModal : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={importacaoEmAndamento ? "importacao-status-titulo" : "importacao-formulario-titulo"}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className={styles.modalHeader}>
-              <div>
-                <p className={styles.eyebrow}>Importação</p>
-                <h2 className={styles.modalTitle}>Importar contatos</h2>
+            {importacaoEmAndamento ? (
+              <div className={styles.importStatusContent} aria-live="polite">
+                <div
+                  className={`${styles.importStatusIcon} ${
+                    importacaoEmAndamento.status === "concluida"
+                      ? styles.importStatusIconDone
+                      : importacaoEmAndamento.status === "erro"
+                        ? styles.importStatusIconError
+                        : styles.importStatusIconRunning
+                  }`}
+                  aria-hidden="true"
+                >
+                  {importacaoEmAndamento.status === "concluida" ? (
+                    <Check size={35} strokeWidth={2.5} />
+                  ) : importacaoEmAndamento.status === "erro" ? (
+                    <AlertCircle size={34} strokeWidth={2} />
+                  ) : (
+                    <LoaderCircle size={34} strokeWidth={2} className={styles.importStatusSpinner} />
+                  )}
+                </div>
+                <span className={styles.importStatusEyebrow}>
+                  {importacaoEmAndamento.status === "concluida"
+                    ? "Etapa concluída"
+                    : importacaoEmAndamento.status === "erro"
+                      ? "Importação interrompida"
+                      : "Importação em andamento"}
+                </span>
+                <h2 id="importacao-status-titulo" className={styles.importStatusTitle}>
+                  {importacaoEmAndamento.status === "concluida"
+                    ? "Lista importada com sucesso!"
+                    : importacaoEmAndamento.status === "erro"
+                      ? "Não foi possível concluir a importação"
+                      : "Estamos preparando sua lista"}
+                </h2>
+                <p className={styles.importStatusDescription}>
+                  {importacaoEmAndamento.status === "concluida" ? (
+                    <>A lista <strong>“{importacaoEmAndamento.nomeLista}”</strong> foi importada com sucesso. O processamento foi concluído.</>
+                  ) : importacaoEmAndamento.status === "erro" ? (
+                    <>O processamento da lista <strong>“{importacaoEmAndamento.nomeLista}”</strong> foi interrompido. Os registros já processados podem ter sido preservados.</>
+                  ) : (
+                    <>A lista <strong>“{importacaoEmAndamento.nomeLista}”</strong> foi recebida e está sendo processada. A confirmação aparecerá aqui quando terminar.</>
+                  )}
+                </p>
+
+                {importacaoEmAndamento.status === "pendente" || importacaoEmAndamento.status === "processando" ? (
+                  <div className={styles.importStatusProgress}>
+                    <div className={styles.importStatusProgressHeader}>
+                      <span>Processando contatos</span>
+                      <strong>{importacaoEmAndamento.total > 0
+                        ? `${Math.min(100, Math.round((importacaoEmAndamento.processados / importacaoEmAndamento.total) * 100))}%`
+                        : "0%"}</strong>
+                    </div>
+                    <div
+                      className={styles.importStatusProgressTrack}
+                      role="progressbar"
+                      aria-label="Progresso da importação"
+                      aria-valuemin={0}
+                      aria-valuemax={importacaoEmAndamento.total || 1}
+                      aria-valuenow={importacaoEmAndamento.processados}
+                    >
+                      <div
+                        className={styles.importStatusProgressFill}
+                        style={{ width: `${importacaoEmAndamento.total > 0
+                          ? Math.min(100, (importacaoEmAndamento.processados / importacaoEmAndamento.total) * 100)
+                          : 0}%` }}
+                      />
+                    </div>
+                    <p>{importacaoEmAndamento.processados.toLocaleString("pt-BR")} de {importacaoEmAndamento.total.toLocaleString("pt-BR")} registros processados</p>
+                  </div>
+                ) : null}
+
+                {importacaoEmAndamento.status === "concluida" ? (
+                  <div className={styles.importStatusMetrics}>
+                    <div><strong>{importacaoEmAndamento.processados.toLocaleString("pt-BR")}</strong><span>Processados</span></div>
+                    <div><strong>{importacaoEmAndamento.importados.toLocaleString("pt-BR")}</strong><span>Novos contatos</span></div>
+                    <div><strong>{importacaoEmAndamento.vinculados.toLocaleString("pt-BR")}</strong><span>Na lista</span></div>
+                  </div>
+                ) : null}
+
+                {importacaoEmAndamento.status === "concluida" && importacaoEmAndamento.ignorados > 0 ? (
+                  <p className={styles.importStatusNote}>{importacaoEmAndamento.ignorados.toLocaleString("pt-BR")} registro(s) ignorado(s) durante o processamento.</p>
+                ) : null}
+                {importacaoEmAndamento.status === "erro" && importacaoEmAndamento.erro ? (
+                  <p className={styles.importStatusFailure}>{importacaoEmAndamento.erro}</p>
+                ) : null}
+                {erroConsultaImportacao ? (
+                  <p className={styles.importStatusFailure}>{erroConsultaImportacao}</p>
+                ) : null}
+                <div className={styles.importStatusActions}>
+                  {importacaoEmAndamento.status === "concluida" ? (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.primaryButton}
+                        onClick={() => {
+                          if (importacaoEmAndamento.listaId && importacaoEmAndamento.vinculados > 0) {
+                            setFiltroOrigem(`lista:${importacaoEmAndamento.listaId}`);
+                            setPaginaAtual(1);
+                          }
+                          fecharModalImportacao();
+                        }}
+                      >
+                        {importacaoEmAndamento.listaId && importacaoEmAndamento.vinculados > 0 ? "Ver lista" : "Ver contatos"}
+                        <ArrowRight size={17} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => {
+                          setImportacaoEmAndamento(null);
+                          setErroConsultaImportacao("");
+                        }}
+                      >
+                        Importar outra lista
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className={styles.secondaryButton} onClick={fecharModalImportacao}>
+                      {importacaoEmAndamento.status === "erro" ? "Fechar" : "Continuar em segundo plano"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className={styles.modalHeader}>
+                  <div>
+                    <p className={styles.eyebrow}>Importação</p>
+                <h2 id="importacao-formulario-titulo" className={styles.modalTitle}>Importar contatos</h2>
                 <p className={styles.cardDescription}>
                   Importe contatos com telefone, e-mail ou ambos. Colunas como "Contato (e-mail)" são reconhecidas automaticamente.
                   E-mails ausentes de contatos existentes podem ser recuperados pelo telefone, sem sobrescrever os e-mails já cadastrados.
@@ -3301,13 +3540,6 @@ export default function ContatosPage() {
               </button>
             </div>
 
-            {mensagemImportacao && (
-              <FeedbackToast
-                success={mensagemImportacao}
-                onSuccessDismiss={() => setMensagemImportacao("")}
-              />
-            )}
-
             <div className={`${styles.formGrid} ${styles.importFormGrid}`}>
               <div className={`${styles.field} ${styles.importFileField}`}>
                 <label className={styles.label}>Arquivo CSV ou Excel (telefone ou e-mail)</label>
@@ -3320,8 +3552,7 @@ export default function ContatosPage() {
                     setArquivoImportacao(file);
                     setNomeListaImportacao(getNomeListaPadrao(file));
                     setErroImportacao("");
-                    setMensagemImportacao("");
-                    setPreviewImportacao(null);
+                                    setPreviewImportacao(null);
                   }}
                 />
               </div>
@@ -3685,6 +3916,8 @@ export default function ContatosPage() {
                   </div>
                 </div>
               </div>
+            )}
+              </>
             )}
           </div>
         </div>

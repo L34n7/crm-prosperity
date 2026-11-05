@@ -7122,9 +7122,9 @@ export default function DisparosWhatsAppPage() {
                     <div>
                       <div className={styles.contactsFilterTitle}>
                         <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />
-                        <h3>Filtrar contatos</h3>
+                        <h3>Filtrar contatos — Selecione quem receberá o disparo</h3>
                       </div>
-                      <p>Selecione quem receberá o disparo.</p>
+                      <p>Utilize os filtros para identificar e selecionar os contatos que receberão a mensagem.</p>
                     </div>
 
                     <div className={styles.contactsFilterActions}>

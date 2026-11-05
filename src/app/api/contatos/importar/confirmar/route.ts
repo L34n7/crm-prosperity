@@ -576,6 +576,58 @@ async function enfileirarImportacaoUsuario(request: Request, bodyText: string) {
   );
 }
 
+export async function GET(request: Request) {
+  const resultado = await getUsuarioContexto();
+  if (!resultado.ok) {
+    return NextResponse.json({ ok: false, error: resultado.error }, { status: resultado.status });
+  }
+
+  const { usuario } = resultado;
+  const bloqueio = bloquearSemPermissao(
+    usuario,
+    "contatos.importar",
+    "Sem permissão para acompanhar importações de contatos"
+  );
+  if (bloqueio) return bloqueio;
+
+  if (!usuario.empresa_id) {
+    return NextResponse.json({ ok: false, error: "Usuário sem empresa vinculada." }, { status: 400 });
+  }
+
+  const importacaoId = new URL(request.url).searchParams.get("importacao_id") || "";
+  if (!UUID_REGEX.test(importacaoId)) {
+    return NextResponse.json({ ok: false, error: "Importação inválida." }, { status: 400 });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("contatos_importacoes")
+    .select("id, status, total, processados, importados, membros_vinculados, ignorados, erro, nome_lista")
+    .eq("id", importacaoId)
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("usuario_id", usuario.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[IMPORTAÇÃO CONTATOS] Erro ao consultar andamento:", error);
+    return NextResponse.json({ ok: false, error: "Não foi possível consultar o andamento da importação." }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ ok: false, error: "Importação não encontrada." }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    status: data.status,
+    total: data.total,
+    processados: data.processados,
+    importados: data.importados,
+    vinculados: data.membros_vinculados,
+    ignorados: data.ignorados,
+    erro: data.erro,
+    nome_lista: data.nome_lista,
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const bodyText = await request.text();

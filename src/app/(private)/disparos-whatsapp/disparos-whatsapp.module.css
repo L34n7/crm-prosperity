@@ -7918,3 +7918,19 @@
     font-size: 14px;
   }
 }
+
+/* Título longo de seleção de destinatários: permite quebra sem sobrepor ações. */
+.disparoWizardStage .contactsFilterHeader {
+  flex-wrap: wrap;
+}
+.disparoWizardStage .contactsFilterHeader > div:first-child {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+.disparoWizardStage .contactsFilterTitle {
+  align-items: flex-start;
+}
+.disparoWizardStage .contactsFilterTitle h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
