@@ -4549,6 +4549,11 @@ export default function DisparosWhatsAppPage() {
         )
       : null;
 
+  const contatosSelecionadosPorId = useMemo(
+    () => new Map(contatosSelecionados.map((contato) => [contato.id, contato])),
+    [contatosSelecionados]
+  );
+
   const gruposConflitoAtivos = useMemo(() => {
     const idsSelecionados = new Set(contatosSelecionados.map((item) => item.id));
 
@@ -4737,17 +4742,20 @@ export default function DisparosWhatsAppPage() {
     ]
   );
 
-  const totalContatosComConflitoSelecionados = useMemo(() => {
-    const ids = new Set<string>();
+  const totalContatosComConflitoPendentes = useMemo(() => {
+    const idsPendentes = new Set<string>();
 
-    for (const grupo of gruposConflitoAtivos) {
+    for (const grupo of gruposConflitoPendentes) {
+      const idsDecididos = new Set(
+        decisoesConflitoDisparo[grupo.campanha_id]?.contatoIds || []
+      );
       for (const contatoId of grupo.contatos_ids) {
-        ids.add(contatoId);
+        if (!idsDecididos.has(contatoId)) idsPendentes.add(contatoId);
       }
     }
 
-    return ids.size;
-  }, [gruposConflitoAtivos]);
+    return idsPendentes.size;
+  }, [gruposConflitoPendentes, decisoesConflitoDisparo]);
 
   const campanhaHistoricoSelecionada = useMemo(
     () =>
@@ -5297,42 +5305,19 @@ export default function DisparosWhatsAppPage() {
   function removerGrupoConflitoDoEnvio(grupo: GrupoConflitoDisparo) {
     const scrollXAntes = window.scrollX;
     const scrollYAntes = window.scrollY;
+    const idsSelecionados = new Set(contatosSelecionados.map((contato) => contato.id));
     const contatoIdsGrupo = grupo.contatos_ids.filter((contatoId) =>
-      contatosSelecionados.some((contato) => contato.id === contatoId)
+      idsSelecionados.has(contatoId)
     );
-    const contatoIdsParaRemover = new Set<string>();
+    if (contatoIdsGrupo.length === 0) return;
 
-    for (const contatoId of contatoIdsGrupo) {
-      const outrosGrupos = gruposConflitoAtivos.filter(
-        (outroGrupo) =>
-          outroGrupo.campanha_id !== grupo.campanha_id &&
-          outroGrupo.contatos_ids.includes(contatoId)
-      );
-      const manterPorOutroGrupo = outrosGrupos.some((outroGrupo) => {
-        const decisao = decisoesConflitoDisparo[outroGrupo.campanha_id];
-        const contatoJaDecidido = decisao?.contatoIds?.includes(contatoId);
-
-        return decisao?.acao === "incluir" || !contatoJaDecidido;
-      });
-
-      if (!manterPorOutroGrupo) {
-        contatoIdsParaRemover.add(contatoId);
-      }
-    }
-
-    setDecisoesConflitoDisparo((prev) => ({
-      ...prev,
-      [grupo.campanha_id]: {
-        acao: "remover",
-        contatoIds: contatoIdsGrupo,
-      },
-    }));
-
-    if (contatoIdsParaRemover.size > 0) {
-      setContatosSelecionados((prev) =>
-        prev.filter((contato) => !contatoIdsParaRemover.has(contato.id))
-      );
-    }
+    // "Remover" atua sempre sobre a seleção desta nova campanha, mesmo
+    // quando o contato aparece em várias campanhas anteriores.
+    const contatoIdsParaRemover = new Set(contatoIdsGrupo);
+    setContatosSelecionados((prev) =>
+      prev.filter((contato) => !contatoIdsParaRemover.has(contato.id))
+    );
+    invalidarDecisoesConflitoParaContatos(contatoIdsGrupo);
 
     const restaurarScroll = () => {
       window.scrollTo({
@@ -7752,11 +7737,16 @@ export default function DisparosWhatsAppPage() {
                         </span>
                         <strong>
                           {loadingConflitos
-                            ? "Verificando contatos dos ultimos 7 dias..."
+                            ? "Verificando contatos dos últimos 7 dias..."
                             : temConflitosPendentes
-                            ? `${totalContatosComConflitoSelecionados} contato(s) precisam de decisão`
+                            ? `${totalContatosComConflitoPendentes} ${totalContatosComConflitoPendentes === 1 ? "contato precisa" : "contatos precisam"} de decisão`
                             : "Contatos repetidos resolvidos"}
                         </strong>
+                        <p className={styles.conflictDescription}>
+                          {temConflitosPendentes || loadingConflitos
+                            ? "Identificamos contatos selecionados que receberam mensagens de outras campanhas nos últimos 7 dias. Para evitar envios repetidos, escolha remover ou manter esses contatos na nova campanha."
+                            : "Os contatos repetidos foram avaliados. Você já pode continuar com a seleção atual."}
+                        </p>
                       </div>
 
                       <span
@@ -7778,6 +7768,12 @@ export default function DisparosWhatsAppPage() {
                     {!loadingConflitos && gruposConflitoAtivos.length > 0 ? (
                       <div className={styles.conflictGroups}>
                         {gruposConflitoAtivos.map((grupo) => {
+                          const contatosRepetidos = grupo.contatos_ids
+                            .map((contatoId) => contatosSelecionadosPorId.get(contatoId))
+                            .filter((contato): contato is ContatoOpcao => Boolean(contato));
+                          const nomeCampanhaAnterior = grupo.campanha_nome.startsWith("Disparo em massa - ")
+                            ? grupo.campanha_nome.replace(/ - \d+ contatos?$/i, "")
+                            : grupo.campanha_nome;
                           const decisao =
                             decisoesConflitoDisparo[grupo.campanha_id];
                             const decisaoTexto =
@@ -7800,16 +7796,26 @@ export default function DisparosWhatsAppPage() {
                               className={styles.conflictGroup}
                             >
                               <div className={styles.conflictGroupMain}>
-                                <strong>{grupo.campanha_nome}</strong>
-                                <span>
-                                  {grupo.contatos_ids.length} contato(s) ja
-                                  receberam este disparo
+                                <strong>{nomeCampanhaAnterior}</strong>
+                                <span className={styles.conflictGroupSummary}>
+                                  <b>{contatosRepetidos.length} ${contatosRepetidos.length === 1 ? "contato da sua seleção já recebeu" : "contatos da sua seleção já receberam"}</b>{" "}
+                                  mensagem de outra campanha de disparo.
                                   {grupo.ultimo_envio_em
-                                    ? ` em ${formatarDataHora(
-                                        grupo.ultimo_envio_em
-                                      )}`
+                                    ? ` Último envio: ${formatarDataHora(grupo.ultimo_envio_em)}.`
                                     : ""}
                                 </span>
+                                <ul className={styles.conflictContactList} aria-label="Contatos repetidos nesta campanha anterior">
+                                  {contatosRepetidos.map((contato) => (
+                                    <li key={contato.id} className={styles.conflictContactItem}>
+                                      <span className={styles.conflictContactName}>
+                                        {contato.nome?.trim() || contato.whatsapp_profile_name?.trim() || "Sem nome"}
+                                      </span>
+                                      <span className={styles.conflictContactPhone}>
+                                        {formatarTelefone(contato.telefone)}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
                               </div>
 
                               <span className={`${styles.conflictDecision} ${decisaoClasse}`}>
@@ -7825,7 +7831,7 @@ export default function DisparosWhatsAppPage() {
                                     removerGrupoConflitoDoEnvio(grupo)
                                   }
                                 >
-                                  Remover do envio
+                                  Remover esses contatos dessa campanha
                                 </button>
 
                                 <button
@@ -7835,7 +7841,7 @@ export default function DisparosWhatsAppPage() {
                                     marcarGrupoConflitoComoIncluido(grupo)
                                   }
                                 >
-                                  Manter
+                                  Manter esses contatos nesta campanha
                                 </button>
                               </div>
                             </div>

@@ -7934,3 +7934,116 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Disparos: decisões de contatos repetidos, com destinatários identificados. */
+.conflictDescription {
+  max-width: 760px;
+  margin: 9px 0 0;
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.conflictGroup {
+  grid-template-columns: minmax(0, 1fr) auto minmax(235px, 290px);
+  align-items: start;
+}
+
+.conflictGroupMain {
+  gap: 9px;
+}
+
+.conflictGroupMain strong {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+.conflictGroupSummary {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.conflictGroupSummary b {
+  color: var(--crm-text-strong);
+  font-weight: 800;
+}
+
+.conflictContactList {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 2px 0 0;
+  list-style: none;
+  border: 1px solid var(--crm-border);
+  border-radius: 11px;
+  background: var(--crm-surface);
+  overflow: hidden;
+}
+
+.conflictContactItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  min-width: 0;
+  padding: 9px 11px;
+}
+
+.conflictContactItem + .conflictContactItem {
+  border-top: 1px solid var(--crm-border);
+}
+
+.conflictContactName {
+  min-width: 0;
+  color: var(--crm-text-strong) !important;
+  font-size: 12px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.conflictContactPhone {
+  color: var(--crm-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.conflictActions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.conflictActions > button {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.conflictGroup > .conflictDecision {
+  margin-top: 7px;
+}
+
+@media (max-width: 1100px) {
+  .conflictGroup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .conflictGroup > .conflictDecision {
+    justify-self: start;
+    margin-top: 0;
+  }
+  .conflictActions {
+    justify-self: stretch;
+  }
+}
