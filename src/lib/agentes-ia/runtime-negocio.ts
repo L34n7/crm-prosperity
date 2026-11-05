@@ -1494,7 +1494,13 @@ export async function processarPendenciaNegocio(
       const resultadoFalha=ultimaFalhaCotacao.resultado as {
         code?:string;pergunta_cliente?:string;opcoes_fipe?:string[];
       };
-      if (resultadoFalha.code==="FIPE_VERSAO_INCOMPATIVEL" ||
+      if(resultadoFalha.code==="COTACAO_DADOS_NOVOS_INCOMPLETOS") {
+        saidaFinal.mensagens=[
+          String(resultadoFalha.pergunta_cliente||mensagemInterna).slice(0,300)
+        ];
+        saidaFinal.estado.cotacao_pendente=true;
+        saidaFinal.estado.proxima_acao="coletar somente o dado faltante do novo veículo";
+      } else if (resultadoFalha.code==="FIPE_VERSAO_INCOMPATIVEL" ||
           resultadoFalha.code==="FIPE_VERSAO_AMBIGUA") {
         const incompatibilidades=saidaFinal.estado.cotacao_incompatibilidades;
         if (resultadoFalha.code==="FIPE_VERSAO_INCOMPATIVEL" &&
@@ -1528,7 +1534,8 @@ export async function processarPendenciaNegocio(
       }
       // Uma limitação comercial não deve manter a cotação pendente,
       // provocando consultas idênticas a cada nova mensagem do contato.
-      if (resultadoFalha.code!=="FIPE_VERSAO_INCOMPATIVEL" &&
+      if (resultadoFalha.code!=="COTACAO_DADOS_NOVOS_INCOMPLETOS" &&
+          resultadoFalha.code!=="FIPE_VERSAO_INCOMPATIVEL" &&
           resultadoFalha.code!=="FIPE_VERSAO_AMBIGUA" &&
           (classificacao.tipo === "comercial" || classificacao.tipo === "inesperada")) {
         saidaFinal.estado.cotacao_pendente = false;
