@@ -113,7 +113,11 @@ async function alternativasProximasFipe(params:{
 }):Promise<{opcoes:OpcaoFipe[];erros:number}>{
   const motor=params.consulta.match(/\b[1-9][.,][0-9]\b/)?.[0]||"";
   const familia=params.consulta.trim().split(/\s+/)[0]||"";
-  const semMotor=params.consulta.replace(/\b[1-9][.,][0-9]\b/g," ")
+  const semMotor=params.consulta
+    .replace(/\b[1-9][.,][0-9]\b/g," ")
+    // Potência informada pelo cliente pode não constar do título FIPE.
+    // Remover APENAS na pesquisa de alternativas, nunca no match final.
+    .replace(/\b\d{2,4}\s*cv\b/gi," ")
     .replace(/\s+/g," ").trim();
   const consultas=[semMotor];
   if(motor&&familia)consultas.push(familia+" "+motor);
