@@ -90,3 +90,14 @@ export function aplicarCambioInformado(
     .replace(/\s+/g, " ").trim();
   return (semCambio + (cambio === "automatico" ? " automático" : " manual")).trim();
 }
+
+/** Cumprimentos e confirmações genéricas não são dados suficientes para
+ * repetir uma chamada FIPE pendente. O pedido segue salvo até o próximo
+ * detalhe relevante do veículo ou pedido explícito do cliente.
+ */
+export function mensagemSocialSemDadosCotacao(mensagem: string): boolean {
+  const texto = String(mensagem || "").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[.!?,;:🙂😊👋]+/gu, " ").replace(/\s+/g, " ").trim();
+  return /^(?:oi+|ola+|opa|e ai|bom dia|boa tarde|boa noite|tudo bem|tudo certo|como vai|como voce esta|obrigad[oa]|muito obrigad[oa]|valeu|ate mais|tchau|ok|okay|entendi|beleza|certo|show)$/.test(texto);
+}
