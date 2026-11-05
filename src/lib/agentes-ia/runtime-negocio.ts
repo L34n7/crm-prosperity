@@ -1505,7 +1505,9 @@ export async function processarPendenciaNegocio(
       }
       // Uma limitação comercial não deve manter a cotação pendente,
       // provocando consultas idênticas a cada nova mensagem do contato.
-      if (classificacao.tipo === "comercial" || classificacao.tipo === "inesperada") {
+      if (resultadoFalha.code!=="FIPE_VERSAO_INCOMPATIVEL" &&
+          resultadoFalha.code!=="FIPE_VERSAO_AMBIGUA" &&
+          (classificacao.tipo === "comercial" || classificacao.tipo === "inesperada")) {
         saidaFinal.estado.cotacao_pendente = false;
         saidaFinal.estado.cotacao_em_correcao = false;
         saidaFinal.estado.proxima_acao = "oferecer ajuda da equipe para avaliação comercial";
