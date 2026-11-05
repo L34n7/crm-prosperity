@@ -16,6 +16,7 @@ import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFal
 import { respostaTrazDistincaoFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {
   clientePediuCotacaoVeicular, confirmouProsseguirCotacao, validarDadosNovosCotacao,
+  modeloComDadosConfirmados,
 } from "./pedido-cotacao";
 import {
   clienteCorrigiuVersaoCotacao,
@@ -1289,6 +1290,16 @@ export async function processarPendenciaNegocio(
           }
           if (!resultado && nome==="gerar_cotacao_veicular" &&
               cotacaoEmAndamento && !estado.cotacao_em_correcao) {
+            // Jamais permitir que o modelo invente acabamento, motor ou câmbio.
+            // Use os atributos efetivamente presentes no pedido atual.
+            argumentos.modelo=modeloComDadosConfirmados(
+              estado.cotacao_pedido_mensagens,String(argumentos.modelo||"")
+            );
+            const textoCliente=estado.cotacao_pedido_mensagens.join(" ")
+              .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+            const marca=String(argumentos.marca||"").normalize("NFD")
+              .replace(/[\u0300-\u036f]/g,"").toLowerCase();
+            if(!marca||!textoCliente.includes(marca)) argumentos.marca=null;
             const erroDadosNovos=validarDadosNovosCotacao(
               estado.cotacao_pedido_mensagens,
               String(argumentos.modelo||""),
