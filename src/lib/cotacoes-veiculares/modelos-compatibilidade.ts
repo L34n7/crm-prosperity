@@ -1,7 +1,8 @@
 /**
  * Seleção estrita de modelos FIPE. "Automático" e "manual" são atributos
- * obrigatórios quando especificados pelo cliente, inclusive nas abreviações
- * "Aut." e "Mec." usadas no catálogo FIPE.
+ * usados como filtro quando a FIPE identifica explicitamente a transmissão,
+ * inclusive nas abreviações "Aut." e "Mec.". Quando a própria descrição FIPE
+ * omite o câmbio, a versão não pode ser descartada apenas por essa ausência.
  *
  * Módulo puro para ser exercitado por testes sem acessar a API FIPE.
  */
@@ -50,15 +51,26 @@ export function modelosCompativeisFipe(
   const cambioSolicitado = cambioExplicito(nome);
   const tokens = nome.split(" ").filter((token) => token && !termosAtributos.has(token));
 
-  return itens.filter((item) => {
+  const compativeis = itens.filter((item) => {
     const partes = new Set(
       normalizar(item.name).replace(/\bsed\b/g, "sedan").split(" "),
     );
-    const modeloCompativel = tokens.every((token) =>
+    return tokens.every((token) =>
       partes.has(token) ||
       (token === "diesel" && ["diesel", "dies", "die"].some((v) => partes.has(v)))
     );
-    return modeloCompativel &&
-      (!cambioSolicitado || cambioExplicito(item.name) === cambioSolicitado);
   });
+
+  if (!cambioSolicitado) return compativeis;
+  const cambioIdentificado = compativeis.filter(
+    (item) => cambioExplicito(item.name) === cambioSolicitado
+  );
+  // Uma indicação explícita da FIPE é preferível a modelos sem câmbio
+  // documentado. Nunca misturar Aut. e Mec. na mesma escolha.
+  if (cambioIdentificado.length) return cambioIdentificado;
+  // Há veículos antigos (ex.: Vectra GLS/Challenge 2000) cujo catálogo
+  // não registra o câmbio na descrição. Isso não significa câmbio oposto.
+  // Mantemos SOMENTE as versões sem câmbio identificado; a seleção por
+  // motor, acabamento e ano-modelo permanece rigorosa.
+  return compativeis.filter((item) => cambioExplicito(item.name) === null);
 }
