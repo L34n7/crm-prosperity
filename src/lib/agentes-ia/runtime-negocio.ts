@@ -1468,9 +1468,41 @@ export async function processarPendenciaNegocio(
         (ultimaFalhaCotacao.resultado as {error?: string} | undefined)?.error || ""
       );
       const classificacao = classificarFalhaCotacao(mensagemInterna);
-      saidaFinal.mensagens = respostaSeguraFalhaCotacao(
-        mensagemInterna, saidaFinal.mensagens
-      );
+      const resultadoFalha=ultimaFalhaCotacao.resultado as {
+        code?:string;pergunta_cliente?:string;opcoes_fipe?:string[];
+      };
+      if (resultadoFalha.code==="FIPE_VERSAO_INCOMPATIVEL" ||
+          resultadoFalha.code==="FIPE_VERSAO_AMBIGUA") {
+        const incompatibilidades=saidaFinal.estado.cotacao_incompatibilidades;
+        if (resultadoFalha.code==="FIPE_VERSAO_INCOMPATIVEL" &&
+            incompatibilidades>=2) {
+          // Duas confirmações incompatíveis bastam. Não perguntar câmbio,
+          // combustível, carroceria ou potência para "tentar" encaixar.
+          saidaFinal.mensagens=[
+            "Os dados informados não coincidem com as versões disponíveis " +
+            "para esse ano. Para evitar novas perguntas ou uma cotação " +
+            "incorreta, nossa equipe pode conferir a versão e te ajudar. 😊",
+          ];
+          saidaFinal.estado.cotacao_pendente=false;
+          saidaFinal.estado.cotacao_em_correcao=false;
+          saidaFinal.estado.cotacao_verificacao_humana=true;
+          saidaFinal.estado.proxima_acao="aguardar novo dado de versão ou atendimento humano";
+        } else {
+          // Pergunta determinada pelas alternativas REAIS devolvidas pela
+          // FIPE. O modelo não pode inventar motorização/câmbio/potência.
+          const pergunta=String(resultadoFalha.pergunta_cliente||"").trim();
+          saidaFinal.mensagens=[
+            pergunta||"Preciso confirmar a versão do veículo para calcular a cotação corretamente.",
+          ];
+          saidaFinal.estado.cotacao_pendente=true;
+          saidaFinal.estado.cotacao_verificacao_humana=false;
+          saidaFinal.estado.proxima_acao="confirmar versão com opções FIPE válidas";
+        }
+      } else {
+        saidaFinal.mensagens = respostaSeguraFalhaCotacao(
+          mensagemInterna, saidaFinal.mensagens
+        );
+      }
       // Uma limitação comercial não deve manter a cotação pendente,
       // provocando consultas idênticas a cada nova mensagem do contato.
       if (classificacao.tipo === "comercial" || classificacao.tipo === "inesperada") {
