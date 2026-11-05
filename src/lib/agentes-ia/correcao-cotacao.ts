@@ -56,3 +56,37 @@ export function versaoCorrigidaFoiInformada(mensagens: string[]): boolean {
     /\b(?:versao|modelo)\s+(?:certo|correto|certa|correta|e|eh)\s+\S+/.test(texto)
   );
 }
+
+/** Seleção do câmbio mais recente do CLIENTE no pedido corrente.
+ * Se a pessoa disse "automático" e depois "manual", vale o último.
+ */
+export function cambioInformadoCotacao(
+  mensagens: string[],
+): "automatico" | "manual" | null {
+  for (let i = mensagens.length - 1; i >= 0; i--) {
+    const texto = String(mensagens[i] || "").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const opcoes = [...texto.matchAll(
+      /\b(automatic[oa]|aut\.?|tiptronic|dsg|cvt|manual|mecanic[oa]|mec\.?)\b/g
+    )].map((m) => m[1]);
+    if (opcoes.length) {
+      const ultima = opcoes.at(-1) || "";
+      return /^(manual|mec)/.test(ultima) ? "manual" : "automatico";
+    }
+  }
+  return null;
+}
+
+/** Garante que o modelo consultado não contradiga o câmbio confirmado.
+ * O nome da versão ainda será validado pela FIPE: não autoriza escolher
+ * um motor/acabamento diferente nem inferir preço.
+ */
+export function aplicarCambioInformado(
+  modelo: string, cambio: "automatico" | "manual" | null,
+): string {
+  if (!cambio) return modelo;
+  const semCambio = String(modelo || "")
+    .replace(/\b(?:automatic[oa]|aut|manual|mecanic[oa]|mec|tiptronic|dsg|cvt)\b\.?/gi, " ")
+    .replace(/\s+/g, " ").trim();
+  return (semCambio + (cambio === "automatico" ? " automático" : " manual")).trim();
+}
