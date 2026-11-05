@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import type { GuiaModuloConfig } from "@/lib/central-de-conhecimento/guias";
 import styles from "./GuiaDisparos.module.css";
+import VideoTutoriais from "@/components/VideoTutoriais";
+import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
 
 type Props = {
   guia: GuiaModuloConfig;
@@ -169,13 +171,13 @@ export default function GuiaModulo({
 
           <section className={styles.video}>
             <div className={styles.videoTitulo}>
-              <PlayCircle size={19} aria-hidden="true" /><h3>Vídeo tutorial</h3>
+              <PlayCircle size={19} aria-hidden="true" /><h3>Vídeos tutoriais</h3>
             </div>
-            <div className={styles.videoPlaceholder}>
-              <PlayCircle size={30} strokeWidth={1.5} aria-hidden="true" />
-              <strong>{guia.videoTitulo}</strong>
-              <span>Vídeo demonstrativo em preparação.</span>
-            </div>
+            <VideoTutoriais
+              videos={obterVideosDoModulo(guia.id)}
+              tituloPendente={guia.videoTitulo}
+              compacto
+            />
           </section>
 
           <Link

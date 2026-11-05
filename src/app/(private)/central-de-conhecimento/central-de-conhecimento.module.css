@@ -125,7 +125,7 @@
 .faq summary { font-size: 13px; font-weight: 750; cursor: pointer; line-height: 1.5; }
 .faq p { margin: 10px 0 0; font-size: 13px; }
 
-.videoArtigo { display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px dashed var(--crm-border); border-radius: 19px; padding: 28px; background: var(--crm-surface-soft); }
+.videoArtigo { display: flex; flex-direction: column; align-items: stretch; gap: 18px; border: 1px solid var(--crm-border); border-radius: 19px; padding: 28px; background: var(--crm-surface); scroll-margin-top: 90px; }
 .videoArtigo h2 { margin: 8px 0; font-size: 20px; }
 .videoArtigo p { margin: 0; max-width: 600px; color: var(--crm-text-muted); font-size: 13px; line-height: 1.7; }
 .videoEmBreve { white-space: nowrap; color: var(--crm-text-muted); background: var(--crm-surface); border: 1px solid var(--crm-border); border-radius: 12px; padding: 14px; font-size: 12px; font-weight: 750; }

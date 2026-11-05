@@ -6,6 +6,8 @@ import styles from "./configurar-ambiente.module.css";
 import { t } from "@/i18n";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import VideoTutoriais from "@/components/VideoTutoriais";
+import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
 import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
@@ -3006,6 +3008,17 @@ return (
                 </strong>
               </div>
           </div>
+
+          <section className={styles.metaGuideVideos} aria-label="Vídeos sobre a integração WhatsApp">
+            <div className={styles.metaGuideVideosHeading}>
+              <strong>Vídeos de ajuda</strong>
+              <p>Orientações para problemas comuns de conexão.</p>
+            </div>
+            <VideoTutoriais videos={obterVideosDoModulo("configurar-ambiente")} compacto />
+            <Link href="/central-de-conhecimento/perfil-whatsapp#videos" className={styles.metaGuideVideosLink}>
+              Ver outros detalhes sobre a integração
+            </Link>
+          </section>
 
           <a
             href={AJUDA_PERMISSOES_META_URL}

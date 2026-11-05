@@ -4,6 +4,8 @@ import {
   CheckCircle2, CreditCard, Info, MessageCircle, RefreshCw, ShieldCheck, Smartphone,
 } from "lucide-react";
 import Header from "@/components/Header";
+import VideoTutoriais from "@/components/VideoTutoriais";
+import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
 import styles from "../central-de-conhecimento.module.css";
 
 const indice = [
@@ -13,6 +15,7 @@ const indice = [
   { id: "salvar", titulo: "3. Salvar e acompanhar" },
   { id: "adicionar", titulo: "4. Gerenciar integrações" },
   { id: "duvidas", titulo: "Perguntas frequentes" },
+  { id: "videos", titulo: "Vídeos tutoriais" },
 ];
 
 export default function DocumentacaoPerfilWhatsappPage() {
@@ -133,7 +136,7 @@ export default function DocumentacaoPerfilWhatsappPage() {
               <div id="diagnosticos" className={styles.subtopico}>
                 <h3>Diagnósticos e avisos da Meta</h3>
                 <p>Se o CRM identificar um problema de configuração ou atualização do perfil, ele pode exibir um aviso com a descrição do problema, a ação recomendada e, quando disponível, um código de retorno da Meta.</p>
-                <p>Siga a orientação apresentada na tela antes de repetir tentativas. Em caso de onboarding incompleto, conclua primeiro a configuração do número.</p>
+                <p>Siga a orientação apresentada na tela antes de repetir tentativas. Em caso de onboarding incompleto, conclua primeiro a configuração do número. Para orientações em vídeo sobre integração desconectada, consulte a seção <a href="#videos">Vídeos tutoriais</a>.</p>
               </div>
               <div id="meta" className={styles.subtopico}>
                 <h3><RefreshCw size={21} /> Atualizar a prévia e ajustar na Meta</h3>
@@ -189,13 +192,13 @@ export default function DocumentacaoPerfilWhatsappPage() {
               </div>
             </section>
 
-            <section className={styles.videoArtigo} aria-label="Vídeo tutorial do Perfil WhatsApp">
+            <section id="videos" className={styles.videoArtigo} aria-label="Tutoriais em vídeo">
               <div>
                 <span className={styles.artigoEtiqueta}>Aprenda na prática</span>
-                <h2>Vídeo demonstrativo</h2>
-                <p>O tutorial de edição e gerenciamento do Perfil WhatsApp será disponibilizado aqui. Enquanto isso, siga as orientações da documentação ou abra a ajuda lateral do módulo.</p>
+                <h2>Vídeos de Perfil WhatsApp</h2>
+                <p>Consulte vídeos sobre problemas comuns de integração e orientações do Perfil WhatsApp. A biblioteca aceita novos tutoriais conforme forem produzidos.</p>
               </div>
-              <span className={styles.videoEmBreve}>Vídeo em preparação</span>
+              <VideoTutoriais videos={obterVideosDoModulo("perfil-whatsapp")} tituloPendente="Como configurar o Perfil WhatsApp" />
             </section>
 
             <div className={styles.artigoFim}>

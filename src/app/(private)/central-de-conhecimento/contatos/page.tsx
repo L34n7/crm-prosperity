@@ -4,6 +4,8 @@ import {
   ContactRound, FileSpreadsheet, Filter, Info, ListChecks, Search, ShieldCheck, Upload,
 } from "lucide-react";
 import Header from "@/components/Header";
+import VideoTutoriais from "@/components/VideoTutoriais";
+import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
 import styles from "../central-de-conhecimento.module.css";
 
 const indice = [
@@ -15,6 +17,7 @@ const indice = [
   { id: "massa", titulo: "5. Ações em massa e revisão" },
   { id: "exportacao", titulo: "6. Exportar e excluir" },
   { id: "duvidas", titulo: "Perguntas frequentes" },
+  { id: "videos", titulo: "Vídeos tutoriais" },
 ];
 
 export default function DocumentacaoContatosPage() {
@@ -124,7 +127,7 @@ export default function DocumentacaoContatosPage() {
               </div>
               <div id="preview" className={styles.subtopico}>
                 <h3>2. Analisar a prévia da importação</h3>
-                <p>Antes de importar, use a ação de análise do arquivo. O CRM separa os registros em categorias e apresenta contagens para ajudar a identificar problemas:</p>
+                <p>Antes de importar, use a ação de análise do arquivo. O CRM separa os registros em categorias e apresenta contagens para ajudar a identificar problemas: Assista também ao vídeo <a href="#videos">Importar lista de contatos</a>.</p>
                 <div className={styles.tabelaFalhas}>
                   <div><strong><CheckCircle2 size={16} /> Válidos</strong><p>Registros identificados como aptos à importação.</p></div>
                   <div><strong>Alertas</strong><p>Dados que merecem atenção antes da confirmação.</p></div>
@@ -210,13 +213,13 @@ export default function DocumentacaoContatosPage() {
               </div>
             </section>
 
-            <section className={styles.videoArtigo} aria-label="Vídeo tutorial de Contatos">
+            <section id="videos" className={styles.videoArtigo} aria-label="Tutoriais em vídeo">
               <div>
                 <span className={styles.artigoEtiqueta}>Aprenda na prática</span>
-                <h2>Vídeo demonstrativo</h2>
-                <p>O tutorial de cadastro, importação e organização de contatos será disponibilizado nesta seção. Enquanto isso, utilize a documentação e a ajuda lateral do módulo.</p>
+                <h2>Vídeos de Contatos</h2>
+                <p>Assista aos tutoriais disponíveis sobre gestão de contatos e importação de listas. Novos vídeos poderão ser adicionados a esta biblioteca.</p>
               </div>
-              <span className={styles.videoEmBreve}>Vídeo em preparação</span>
+              <VideoTutoriais videos={obterVideosDoModulo("contatos")} tituloPendente="Como cadastrar e organizar contatos" />
             </section>
             <div className={styles.artigoFim}>
               <Link href="/central-de-conhecimento"><ArrowLeft size={17} /> Voltar à Central</Link>

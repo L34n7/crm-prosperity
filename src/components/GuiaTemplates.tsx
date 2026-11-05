@@ -12,6 +12,8 @@ import {
   X,
 } from "lucide-react";
 import styles from "./GuiaDisparos.module.css";
+import VideoTutoriais from "@/components/VideoTutoriais";
+import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
 
 type Passo = { titulo: string; descricao: string; ancora?: string };
 
@@ -226,12 +228,8 @@ export default function GuiaTemplates({ aberto, onAbertoChange, etapaAtual }: Pr
           </section>
 
           <section className={styles.video}>
-            <div className={styles.videoTitulo}><PlayCircle size={19} /><h3>Vídeo tutorial</h3></div>
-            <div className={styles.videoPlaceholder}>
-              <PlayCircle size={30} strokeWidth={1.5} aria-hidden="true" />
-              <strong>Como criar um template</strong>
-              <span>Vídeo demonstrativo em preparação.</span>
-            </div>
+            <div className={styles.videoTitulo}><PlayCircle size={19} /><h3>Vídeos tutoriais</h3></div>
+            <VideoTutoriais videos={obterVideosDoModulo("templates")} tituloPendente="Como criar um template" compacto />
           </section>
 
           <Link href="/central-de-conhecimento/templates" className={styles.linkPrincipal} onClick={() => onAbertoChange(false)}>

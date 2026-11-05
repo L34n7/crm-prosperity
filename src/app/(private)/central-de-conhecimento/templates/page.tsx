@@ -15,6 +15,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Header from "@/components/Header";
+import VideoTutoriais from "@/components/VideoTutoriais";
+import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
 import styles from "../central-de-conhecimento.module.css";
 
 const indice = [
@@ -25,6 +27,7 @@ const indice = [
   { id: "aprovacao", titulo: "Enviar para análise" },
   { id: "status", titulo: "Status e sincronização" },
   { id: "duvidas", titulo: "Dúvidas frequentes" },
+  { id: "videos", titulo: "Vídeos tutoriais" },
 ];
 
 export default function DocumentacaoTemplatesPage() {
@@ -201,13 +204,13 @@ export default function DocumentacaoTemplatesPage() {
               </div>
             </section>
 
-            <section className={styles.videoArtigo} aria-label="Vídeo tutorial de Templates">
+            <section id="videos" className={styles.videoArtigo} aria-label="Tutoriais em vídeo">
               <div>
                 <span className={styles.artigoEtiqueta}>Aprenda na prática</span>
-                <h2>Vídeo demonstrativo</h2>
-                <p>O vídeo sobre criação e aprovação de templates será disponibilizado aqui. Por enquanto, siga o tutorial acima ou consulte o guia lateral durante o preenchimento.</p>
+                <h2>Vídeos de Templates</h2>
+                <p>Os tutoriais de Templates serão publicados nesta área, incluindo criação, variáveis e aprovação de modelos.</p>
               </div>
-              <span className={styles.videoEmBreve}>Vídeo em preparação</span>
+              <VideoTutoriais videos={obterVideosDoModulo("templates")} tituloPendente="Como criar um template" />
             </section>
 
             <div className={styles.artigoFim}>

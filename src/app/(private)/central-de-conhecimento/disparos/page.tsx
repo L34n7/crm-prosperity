@@ -14,6 +14,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Header from "@/components/Header";
+import VideoTutoriais from "@/components/VideoTutoriais";
+import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
 import styles from "../central-de-conhecimento.module.css";
 
 const indice = [
@@ -24,6 +26,7 @@ const indice = [
   { id: "revisao", titulo: "4. Revisão e envio" },
   { id: "acompanhamento", titulo: "Resultados e cancelamentos" },
   { id: "problemas", titulo: "Falhas e dúvidas frequentes" },
+  { id: "videos", titulo: "Vídeos tutoriais" },
 ];
 
 export default function DocumentacaoDisparosPage() {
@@ -242,9 +245,13 @@ export default function DocumentacaoDisparosPage() {
               </div>
             </section>
 
-            <section className={styles.videoArtigo} aria-label="Vídeo tutorial de Disparos">
-              <div><span className={styles.artigoEtiqueta}>Aprenda na prática</span><h2>Vídeo demonstrativo</h2><p>O tutorial em vídeo será disponibilizado nesta seção. Enquanto isso, utilize o passo a passo acima e o guia lateral dentro do módulo.</p></div>
-              <span className={styles.videoEmBreve}>Vídeo em preparação</span>
+            <section id="videos" className={styles.videoArtigo} aria-label="Tutoriais em vídeo">
+              <div>
+                <span className={styles.artigoEtiqueta}>Aprenda na prática</span>
+                <h2>Vídeos de Disparos</h2>
+                <p>Os tutoriais de Disparos serão publicados nesta área, incluindo operação, agendamentos e solução de problemas.</p>
+              </div>
+              <VideoTutoriais videos={obterVideosDoModulo("disparos")} tituloPendente="Como realizar um disparo" />
             </section>
 
             <div className={styles.artigoFim}>
