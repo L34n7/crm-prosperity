@@ -84,3 +84,24 @@ export function validarDadosNovosCotacao(
   }
   return null;
 }
+
+/** Consultar a FIPE apenas com especificações realmente dadas neste pedido.
+ * Versões e motores sugeridos pela IA não são confirmações do cliente.
+ */
+export function modeloComDadosConfirmados(mensagens:string[], modeloIa:string):string{
+  const texto=normalizar(mensagens.join(" "));
+  const compacto=texto.replace(/[^a-z0-9]/g,"");
+  return String(modeloIa||"").trim().split(/\s+/).filter(Boolean)
+    .filter(parte=>{
+      const termo=normalizar(parte);
+      const valor=termo.replace(/[^a-z0-9]/g,"");
+      if(!valor)return false;
+      if(/^[1-9][.,][0-9]$/.test(parte)){
+        const motor=parte.replace(".", "[.,]");
+        return new RegExp("(^|[^0-9])"+motor+"([^0-9]|$)").test(texto);
+      }
+      if(/^(?:19|20)\d{2}$/.test(parte))return false;
+      if(valor.length<=2)return texto.split(" ").includes(valor);
+      return compacto.includes(valor);
+    }).join(" ").trim();
+}
