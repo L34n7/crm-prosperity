@@ -1,5 +1,6 @@
 import "server-only";
 import { modelosCompativeisFipe } from "./modelos-compatibilidade";
+import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
 export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
 export type TipoFipe = "cars" | "motorcycles" | "trucks";
@@ -69,6 +70,14 @@ function correspondeAnoFipe(anos:OpcaoFipe[],consulta:string){
   return ano?anos.filter(i=>i.code.startsWith(ano+"-")||i.name.startsWith(ano+" ")): [];
 }
 
+export class ErroIdentificacaoVersaoFipe extends Error {
+  constructor(
+    public readonly codigo:"FIPE_VERSAO_INCOMPATIVEL"|"FIPE_VERSAO_AMBIGUA",
+    public readonly opcoes:VersaoFipe[],
+    public readonly perguntaCliente:string,
+    detalhe:string,
+  ){super(detalhe);this.name="ErroIdentificacaoVersaoFipe";}
+}
 type ModeloComAno={modelo:OpcaoFipe;anos:OpcaoFipe[]};
 async function consultarCandidatosPorAno(params:{
   tipo:TipoFipe;marca:string;candidatos:OpcaoFipe[];ano:string;
