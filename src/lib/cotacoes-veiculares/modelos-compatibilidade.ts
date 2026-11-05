@@ -17,7 +17,7 @@ function normalizar(valor: string) {
 
 function cambioExplicito(valor: string): CambioFipe | null {
   const tokens = new Set(normalizar(valor).split(" "));
-  const automatico = ["automatico", "automatica", "aut", "cvt", "tiptronic", "dsg"].some(
+  const automatico = ["automatico", "automatica", "aut", "auto", "cvt", "tiptronic", "dsg"].some(
     (token) => tokens.has(token),
   );
   const manual = ["manual", "mecanico", "mecanica", "mec"].some(
@@ -29,7 +29,7 @@ function cambioExplicito(valor: string): CambioFipe | null {
 
 const termosAtributos = new Set([
   "manual", "mecanico", "mecanica", "mec",
-  "automatico", "automatica", "aut", "cvt", "tiptronic", "dsg",
+  "automatico", "automatica", "aut", "auto", "cvt", "tiptronic", "dsg",
   "gasolina", "alcool", "flex",
 ]);
 
@@ -38,12 +38,12 @@ export function modelosCompativeisFipe(
   consulta: string,
 ): OpcaoModeloFipe[] {
   const nome = normalizar(consulta)
-    .replace(/\bsed\b/g, "sedan")
+    .replace(/\b(?:sed|seda)\b/g, "sedan")
     .replace(/\bdisel\b/g, "diesel");
   if (!nome) return [];
 
   const exatos = itens.filter((item) =>
-    normalizar(item.name).replace(/\bsed\b/g, "sedan") === nome ||
+    normalizar(item.name).replace(/\b(?:sed|seda)\b/g, "sedan") === nome ||
     item.code === consulta.trim()
   );
   if (exatos.length) return exatos;
@@ -53,7 +53,7 @@ export function modelosCompativeisFipe(
 
   const compativeis = itens.filter((item) => {
     const partes = new Set(
-      normalizar(item.name).replace(/\bsed\b/g, "sedan").split(" "),
+      normalizar(item.name).replace(/\b(?:sed|seda)\b/g, "sedan").split(" "),
     );
     return tokens.every((token) =>
       partes.has(token) ||
