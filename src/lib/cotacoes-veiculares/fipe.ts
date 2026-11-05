@@ -143,24 +143,17 @@ export async function encontrarVeiculoFipe(params: {
 
   const candidatos=modelosCompativeisFipe(listaModelos,params.modelo);
   if(!candidatos.length){
-    const semMotor=params.modelo.replace(/\b[1-9][.,][0-9]\b/g," ")
-      .replace(/\s+/g," ").trim();
-    if(semMotor!==params.modelo.trim()){
-      const alternativas=modelosCompativeisFipe(listaModelos,semMotor);
-      if(alternativas.length&&alternativas.length<=40){
-        const sugestoes=await consultarCandidatosPorAno({
-          tipo:params.tipo,marca:marca.code,candidatos:alternativas,ano:anoModelo,
-        });
-        if(sugestoes.validos.length)throw new Error(
-          "A motorização/versão informada não existe para o ano-modelo "+anoModelo+
-          ". A FIPE apresenta: "+alternativasAno(sugestoes.validos)+
-          ". Confirme somente a versão/motor. Não envie documentos.");
-        if(sugestoes.erros)throw new Error(
-          "Consulta FIPE indisponível ao conferir modelos alternativos. Tente novamente.");
-      }
-    }
-    throw new Error("Não encontrei esta descrição exata nos modelos FIPE. "+
-      "Confirme somente a versão, a motorização ou a sigla da cabine; não solicite documentos.");
+    const sugestoes=await alternativasProximasFipe({
+      tipo:params.tipo,marca:marca.code,listaModelos,
+      consulta:params.modelo,anoModelo,
+    });
+    if(sugestoes.opcoes.length)throw new ErroIdentificacaoVersaoFipe(
+      "FIPE_VERSAO_INCOMPATIVEL",sugestoes.opcoes,
+      perguntaUnicaVersoesFipe(sugestoes.opcoes,anoModelo,"incompatibilidade"),
+      "Combinação informada não corresponde às versões FIPE do ano-modelo "+anoModelo+"."
+    );
+    if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir alternativas.");
+    throw new Error("Não encontrei esta descrição exata nos modelos FIPE. Confirme a versão correta.");
   }
   // Consultar os anos antes de sugerir opções. Evita oferecer versões que
   // não existem no ano selecionado (ocorria com a Ranger).
