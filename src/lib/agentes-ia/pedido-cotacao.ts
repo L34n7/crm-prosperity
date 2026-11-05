@@ -37,21 +37,6 @@ export function validarDadosNovosCotacao(
   const recentes=mensagens.map(normalizar).filter(Boolean);
   const combinado=recentes.join(" ");
   const compacto=combinado.replace(/[^a-z0-9]/g,"");
-  if(!/\b(?:19|20)\d{2}\b/.test(combinado) ||
-      !/^(?:19|20)\d{2}$/.test(String(ano||"").trim()) ||
-      !combinado.includes(String(ano).trim())) {
-    return "Qual é o ano-modelo do novo veículo?";
-  }
-  const usoConfirmado={
-    particular:/\b(?:particular|pessoal|proprio)\b/,
-    aplicativo:/\b(?:aplicativo|uber|99)\b/,
-    taxi:/\b(?:taxi)\b/,
-    comercial:/\b(?:comercial|trabalho|empresa)\b/,
-  } as const;
-  if(!(uso in usoConfirmado)||
-     !usoConfirmado[uso as keyof typeof usoConfirmado].test(combinado)){
-    return "Qual é a finalidade de uso do novo veículo: particular, aplicativo, táxi ou comercial?";
-  }
   const palavras=normalizar(modelo).split(" ").filter(v=>v.length>0);
   const genericas=new Set([
     "honda","volkswagen","vw","ford","chevrolet","gm","fiat",
@@ -80,6 +65,21 @@ export function validarDadosNovosCotacao(
   if(!tokens.length||!tokens.some(t=>new RegExp("(^| )"+t+"( |$)").test(combinado)
      ||compacto.includes(t))){
     return "Qual é o modelo do novo veículo?";
+  }
+  const anoArgumento=String(ano||"").match(/\b(?:19|20)\d{2}\b/g)?.at(-1)||"";
+  const anoCliente=combinado.match(/\b(?:19|20)\d{2}\b/g)?.at(-1)||"";
+  if(!anoArgumento||anoArgumento!==anoCliente){
+    return "Qual é o ano-modelo do novo veículo?";
+  }
+  const usoConfirmado={
+    particular:/\b(?:particular|pessoal|proprio)\b/,
+    aplicativo:/\b(?:aplicativo|uber|99)\b/,
+    taxi:/\b(?:taxi)\b/,
+    comercial:/\b(?:comercial|trabalho|empresa)\b/,
+  } as const;
+  if(!(uso in usoConfirmado)||
+     !usoConfirmado[uso as keyof typeof usoConfirmado].test(combinado)){
+    return "Qual é a finalidade de uso do novo veículo: particular, aplicativo, táxi ou comercial?";
   }
   return null;
 }
