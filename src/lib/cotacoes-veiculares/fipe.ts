@@ -167,27 +167,18 @@ export async function encontrarVeiculoFipe(params: {
   if(!compativeis.length){
     if(consulta.erros)throw new Error(
       "A consulta de anos FIPE ficou temporariamente indisponível. Tente novamente sem solicitar documentos.");
-    // Quando o motor indicado não consta para aquele ano, oferecer apenas
-    // alternativas FIPE reais no mesmo ano, sem trocar o motor silenciosamente.
-    const semMotor=params.modelo.replace(/\b[1-9][.,][0-9]\b/g," ")
-      .replace(/\s+/g," ").trim();
-    if(semMotor!==params.modelo.trim()){
-      const outras=modelosCompativeisFipe(listaModelos,semMotor)
-        .filter(v=>!candidatos.some(c=>c.code===v.code));
-      if(outras.length&&outras.length<=40){
-        const alternativas=await consultarCandidatosPorAno({
-          tipo:params.tipo,marca:marca.code,candidatos:outras,ano:anoModelo,
-        });
-        if(alternativas.validos.length)
-          throw new Error("A versão/motorização informada não consta para o ano-modelo "+
-            anoModelo+". A FIPE apresenta para esse ano: "+
-            alternativasAno(alternativas.validos)+
-            ". Confirme apenas a motorização/versão correta; não solicite documento.");
-        if(alternativas.erros)throw new Error("Consulta FIPE indisponível ao conferir as versões. Tente novamente.");
-      }
-    }
+    const sugestoes=await alternativasProximasFipe({
+      tipo:params.tipo,marca:marca.code,listaModelos,
+      consulta:params.modelo,anoModelo,excluir:candidatos,
+    });
+    if(sugestoes.opcoes.length)throw new ErroIdentificacaoVersaoFipe(
+      "FIPE_VERSAO_INCOMPATIVEL",sugestoes.opcoes,
+      perguntaUnicaVersoesFipe(sugestoes.opcoes,anoModelo,"incompatibilidade"),
+      "Combinação não encontrada para o ano-modelo "+anoModelo+"."
+    );
+    if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir as versões.");
     throw new Error("Nenhuma versão localizada para o ano-modelo "+anoModelo+
-      " com a descrição informada. Confirme somente a versão ou a motorização; não peça documentos.");
+      " com a descrição informada. Confirme somente a versão.");
   }
   if(compativeis.length>1){
     throw new Error("Informe uma versão mais específica para o ano-modelo "+anoModelo+": "+
