@@ -15,6 +15,9 @@ import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,p
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import { respostaTrazDistincaoFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {
+  clientePediuCotacaoVeicular, confirmouProsseguirCotacao, validarDadosNovosCotacao,
+} from "./pedido-cotacao";
+import {
   clienteCorrigiuVersaoCotacao,
   motorizacaoCorrigidaCotacao,
   aplicarMotorizacaoCorrigida,
@@ -623,17 +626,6 @@ function montarFerramentasRelevantes(
   return relevantes;
 }
 
-/** Pedido explícito de outra proposta, inclusive "quero fazer uma cotação". */
-function clientePediuCotacaoVeicular(mensagem: string) {
-  const texto = String(mensagem || "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/\s+/g, " ").trim();
-  if (pediuNovaCotacaoSemDados(mensagem) || pediuNovaCotacao(mensagem)) return true;
-  if (/\b(?:quanto (?:fica|custa)|qual (?:o )?(?:valor|preco)|preco|valor)\b/.test(texto)
-    && /\b(?:seguro|protecao|veiculo|carro|moto)\b/.test(texto)) return true;
-  return /\b(?:quero|gostaria|preciso|pode|poderia|vamos)\s+(?:(?:fazer|gerar|solicitar|pedir|receber)\s+)?(?:(?:uma|um|nova|novo|outra|outro)\s+)?(?:cotacao|orcamento|simulacao)\b/.test(texto);
-}
-
 /** Ignora veículos e cotações ANTERIORES ao pedido de nova proposta. */
 function historicoDoPedidoAtual(historico: HistoricoNegocio[]) {
   let inicio = -1;
@@ -651,7 +643,7 @@ function promessaDeConsultaSemFerramenta(mensagens: string[]) {
     const texto = mensagem.normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "").toLowerCase();
     return /\b(?:cotacao|orcamento|simulacao|preco|valores)\b/.test(texto)
-      && /\b(?:vou|irei|estou|vamos|ja estou)\s+(?:(?:agora|ja|so)\s+)?(?:consultar|verificar|gerar|calcular|preparar|buscando|consultando|verificando)\b/.test(texto);
+      && /\b(?:vou|irei|estou|vamos|ja estou)\s+(?:(?:agora|ja|so)\s+)?(?:consultar|verificar|gerar|calcular|preparar|prosseguir|enviar|buscando|consultando|verificando)\b/.test(texto);
   });
 }
 
