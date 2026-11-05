@@ -13,6 +13,7 @@ import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,pediuNovaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
+import { respostaTrazDistincaoFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {
   clienteCorrigiuVersaoCotacao,
   motorizacaoCorrigidaCotacao,
@@ -73,6 +74,9 @@ type EstadoConversa = {
   cotacao_pendente: boolean;
   cotacao_em_correcao: boolean;
   cotacao_pedido_mensagens: string[];
+  cotacao_incompatibilidades: number;
+  cotacao_opcoes_fipe: string[];
+  cotacao_verificacao_humana: boolean;
 };
 
 type SaidaAgente = {
@@ -112,6 +116,9 @@ const ESTADO_VAZIO: EstadoConversa = {
   cotacao_pendente:false,
   cotacao_em_correcao:false,
   cotacao_pedido_mensagens:[],
+  cotacao_incompatibilidades:0,
+  cotacao_opcoes_fipe:[],
+  cotacao_verificacao_humana:false,
 };
 
 function textoCurto(valor: unknown, limite: number) {
@@ -148,6 +155,9 @@ function normalizarEstado(valor: unknown): EstadoConversa {
     cotacao_pendente:obj.cotacao_pendente===true,
     cotacao_em_correcao:obj.cotacao_em_correcao===true,
     cotacao_pedido_mensagens:listaCurta(obj.cotacao_pedido_mensagens,14,220),
+    cotacao_incompatibilidades:Math.max(0,Math.min(6,Number(obj.cotacao_incompatibilidades)||0)),
+    cotacao_opcoes_fipe:listaCurta(obj.cotacao_opcoes_fipe,4,160),
+    cotacao_verificacao_humana:obj.cotacao_verificacao_humana===true,
   };
 }
 
@@ -173,6 +183,9 @@ function aplicarDelta(estado: EstadoConversa, delta: unknown): EstadoConversa {
     cotacao_pendente:estado.cotacao_pendente,
     cotacao_em_correcao:estado.cotacao_em_correcao,
     cotacao_pedido_mensagens:estado.cotacao_pedido_mensagens,
+    cotacao_incompatibilidades:estado.cotacao_incompatibilidades,
+    cotacao_opcoes_fipe:estado.cotacao_opcoes_fipe,
+    cotacao_verificacao_humana:estado.cotacao_verificacao_humana,
   };
 }
 
@@ -1295,6 +1308,9 @@ export async function processarPendenciaNegocio(
                 plano_interesse_cotacao:null,
                 cotacao_pendente:false,
                 cotacao_em_correcao:false,
+                cotacao_incompatibilidades:0,
+                cotacao_opcoes_fipe:[],
+                cotacao_verificacao_humana:false,
               },
             };
           }
