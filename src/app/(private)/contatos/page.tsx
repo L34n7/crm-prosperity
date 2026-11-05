@@ -1584,7 +1584,7 @@ export default function ContatosPage() {
             ? data.status
             : "pendente";
         setImportacaoEmAndamento((atual) =>
-          atual?.id === importacaoId
+          atual !== null && atual.id === importacaoId
             ? {
                 ...atual,
                 status,
