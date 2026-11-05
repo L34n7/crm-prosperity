@@ -893,9 +893,12 @@ export async function processarPendenciaNegocio(
     const corrigiuVeiculo=ferramentas.has("gerar_cotacao_veicular")
       && existeCotacaoAnterior
       && clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado);
+    const confirmacaoCotacaoPrometida=estado.cotacao_pendente
+      && confirmouProsseguirCotacao(pendencia.conteudo_agregado)
+      && promessaDeConsultaSemFerramenta([ultimaRespostaAgente]);
     const saudacaoSemDados=mensagemSocialSemDadosCotacao(
       pendencia.conteudo_agregado
-    );
+    ) && !confirmacaoCotacaoPrometida;
     const novoDetalheAposImpasse=estado.cotacao_verificacao_humana
       && respostaTrazDistincaoFipe(
         pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
