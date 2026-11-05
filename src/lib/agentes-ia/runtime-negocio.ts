@@ -18,6 +18,9 @@ import {
   motorizacaoCorrigidaCotacao,
   aplicarMotorizacaoCorrigida,
   versaoCorrigidaFoiInformada,
+  cambioInformadoCotacao,
+  aplicarCambioInformado,
+  mensagemSocialSemDadosCotacao,
 } from "./correcao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
 import {
@@ -883,9 +886,18 @@ export async function processarPendenciaNegocio(
     const corrigiuVeiculo=ferramentas.has("gerar_cotacao_veicular")
       && existeCotacaoAnterior
       && clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado);
+    const saudacaoSemDados=mensagemSocialSemDadosCotacao(
+      pendencia.conteudo_agregado
+    );
     const cotacaoEmAndamento=ferramentas.has("gerar_cotacao_veicular")
-      && (querOutraCotacao||corrigiuVeiculo||
+      && !saudacaoSemDados &&
+      (querOutraCotacao||corrigiuVeiculo||
         estado.cotacao_pendente||promessaAntigaPendente);
+    if (saudacaoSemDados) {
+      // A cotação pendente continua salva para a próxima resposta útil,
+      // mas saudações/agradecimentos não acionam a FIPE.
+      ferramentasRelevantes.delete("gerar_cotacao_veicular");
+    }
     if (cotacaoEmAndamento) {
       if (querOutraCotacao) {
         // Um veículo novo começa do zero: nunca aproveitar motor, ano ou
@@ -1074,6 +1086,14 @@ export async function processarPendenciaNegocio(
         "Planos existentes: "+planosCotacao.map((plano)=>plano.nome).join(", ")
       });
     }
+    if(saudacaoSemDados && estado.cotacao_pendente) {
+      inputIa.push({role:"developer",content:
+        "A última mensagem do cliente é apenas saudação ou confirmação genérica. " +
+        "Responda naturalmente sem consultar a FIPE, repetir versões ou retomar " +
+        "perguntas de cotação. O pedido continua salvo para quando o cliente " +
+        "trouxer mais informações ou pedir para prosseguir."
+      });
+    }
     if(cotacaoEmAndamento){
       const mensagensPedido=estado.cotacao_pedido_mensagens.slice(-14);
       inputIa.push({role:"developer",content:
@@ -1211,6 +1231,15 @@ export async function processarPendenciaNegocio(
                 argumentos.modelo=aplicarMotorizacaoCorrigida(argumentos.modelo,motor);
               }
             }
+          }
+          if (nome==="gerar_cotacao_veicular" && !resultado &&
+              cotacaoEmAndamento && typeof argumentos.modelo==="string") {
+            const cambioConfirmado=cambioInformadoCotacao(
+              estado.cotacao_pedido_mensagens
+            );
+            argumentos.modelo=aplicarCambioInformado(
+              argumentos.modelo,cambioConfirmado
+            );
           }
           if (!resultado) {
             resultado = await executarFerramentaNegocio({
