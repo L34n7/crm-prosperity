@@ -67,7 +67,7 @@ export function cambioInformadoCotacao(
     const texto = String(mensagens[i] || "").normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const opcoes = [...texto.matchAll(
-      /\b(automatic[oa]|aut\.?|tiptronic|dsg|cvt|manual|mecanic[oa]|mec\.?)\b/g
+      /\b(automatic[oa]|auto|aut\.?|tiptronic|dsg|cvt|manual|mecanic[oa]|mec\.?)\b/g
     )].map((m) => m[1]);
     if (opcoes.length) {
       const ultima = opcoes.at(-1) || "";
@@ -86,7 +86,7 @@ export function aplicarCambioInformado(
 ): string {
   if (!cambio) return modelo;
   const semCambio = String(modelo || "")
-    .replace(/\b(?:autom[aá]tic[oa]|aut|manual|mec[aâ]nic[oa]|mec|tiptronic|dsg|cvt)\b\.?/gi, " ")
+    .replace(/\b(?:autom[aá]tic[oa]|auto|aut|manual|mec[aâ]nic[oa]|mec|tiptronic|dsg|cvt)\b\.?/gi, " ")
     .replace(/\s+/g, " ").trim();
   return (semCambio + (cambio === "automatico" ? " automático" : " manual")).trim();
 }
