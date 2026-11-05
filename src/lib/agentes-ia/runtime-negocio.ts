@@ -1284,6 +1284,21 @@ export async function processarPendenciaNegocio(
               argumentos.modelo,cambioConfirmado
             );
           }
+          if (!resultado && nome==="gerar_cotacao_veicular" &&
+              cotacaoEmAndamento && !estado.cotacao_em_correcao) {
+            const erroDadosNovos=validarDadosNovosCotacao(
+              estado.cotacao_pedido_mensagens,
+              String(argumentos.modelo||""),
+              String(argumentos.ano||""),
+              String(argumentos.uso||"")
+            );
+            if(erroDadosNovos) resultado={
+              ok:false,
+              code:"COTACAO_DADOS_NOVOS_INCOMPLETOS",
+              error:erroDadosNovos,
+              pergunta_cliente:erroDadosNovos,
+            };
+          }
           if (!resultado) {
             resultado = await executarFerramentaNegocio({
               tipo: nome,
