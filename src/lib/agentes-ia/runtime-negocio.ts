@@ -12,7 +12,7 @@ import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,pediuNovaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
-import { classificarFalhaCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
+import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import {
   clienteCorrigiuVersaoCotacao,
   motorizacaoCorrigidaCotacao,
@@ -1393,6 +1393,18 @@ export async function processarPendenciaNegocio(
         saidaFinal.estado.cotacao_em_correcao = false;
         saidaFinal.estado.proxima_acao = "oferecer ajuda da equipe para avaliação comercial";
       }
+    }
+    // Proteção permanente: mesmo sem uma nova chamada da ferramenta,
+    // a IA pode reutilizar do histórico uma explicação operacional antiga.
+    // Nunca exponha detalhes da precificação ou configuração ao cliente.
+    if (!ctx.cotacaoFormatada &&
+      ferramentas.has("gerar_cotacao_veicular") &&
+      saidaFinal.mensagens.some((texto) => contemDetalheInternoCotacao(texto))) {
+      saidaFinal.mensagens = [
+        "Não consegui finalizar sua cotação automaticamente para esse veículo. " +
+        "Nossa equipe pode verificar as opções disponíveis e ajudar você " +
+        "a encontrar a melhor alternativa. 😊",
+      ];
     }
     // Sequência da cotação: proposta -> mídia -> texto complementar ->
     // continuação natural da IA. A confirmação de entrega da mídia evita que
