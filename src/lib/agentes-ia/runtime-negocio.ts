@@ -1546,6 +1546,16 @@ export async function processarPendenciaNegocio(
         saidaFinal.estado.proxima_acao = "oferecer ajuda da equipe para avaliação comercial";
       }
     }
+    // Somente a chamada real à ferramenta autoriza prometer uma proposta.
+    if(!ctx.cotacaoFormatada && !executouFerramentaCotacao &&
+       ferramentas.has("gerar_cotacao_veicular") &&
+       promessaDeConsultaSemFerramenta(saidaFinal.mensagens)) {
+      saidaFinal.mensagens=cotacaoEmAndamento
+        ? ["Não consegui concluir essa cotação nesta tentativa. Nossa equipe pode conferir os dados e ajudar você. 😊"]
+        : saudacaoSemDados
+          ? ["Olá! Posso ajudar com uma cotação ou esclarecer alguma dúvida? 😊"]
+          : ["Para preparar a cotação, me informe o modelo, ano-modelo e finalidade de uso do veículo. 😊"];
+    }
     // Proteção permanente: mesmo sem uma nova chamada da ferramenta,
     // a IA pode reutilizar do histórico uma explicação operacional antiga.
     // Nunca exponha detalhes da precificação ou configuração ao cliente.
