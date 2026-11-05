@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
-import { encontrarVeiculoFipe,type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
+import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
@@ -419,6 +419,18 @@ export async function executarFerramentaNegocio(params: {
       tipo:TipoFipe;fipe:Awaited<ReturnType<typeof encontrarVeiculoFipe>>;
     }>=>r.status==="fulfilled").map(r=>r.value);
     if(!encontrados.length){
+      const divergencia=buscas.find((item):item is PromiseRejectedResult=>
+        item.status==="rejected" && item.reason instanceof ErroIdentificacaoVersaoFipe
+      );
+      if(divergencia){
+        const falha=divergencia.reason as ErroIdentificacaoVersaoFipe;
+        return {
+          ok:false,code:falha.codigo,
+          error:falha.message,
+          pergunta_cliente:falha.perguntaCliente,
+          opcoes_fipe:falha.opcoes.map(v=>v.name).slice(0,4),
+        };
+      }
       const erros=buscas.filter((r):r is PromiseRejectedResult=>r.status==="rejected")
         .map(r=>r.reason instanceof Error?r.reason.message:String(r.reason));
       const ambiguidade=erros.find(e=>e.includes("Informe uma versão mais específica"));
