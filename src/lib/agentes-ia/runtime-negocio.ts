@@ -11,12 +11,16 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
-import {desejaContratarCotacao,escolheuPlanoDaCotacao,pediuNovaCotacaoSemDados,pediuNovaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
+import {desejaContratarCotacao,escolheuPlanoDaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import { respostaTrazDistincaoFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {
   clientePediuCotacaoVeicular, confirmouProsseguirCotacao, validarDadosNovosCotacao,
   modeloComDadosConfirmados,
+  clientePediuNovoVeiculoCotacao, clientePediuRetomarCotacao,
+  consolidarDadosCotacao, normalizarDadosCotacao,
+  dadosEssenciaisCotacaoConfirmados, DADOS_COTACAO_VAZIOS,
+  type DadosCotacaoConfirmados,
 } from "./pedido-cotacao";
 import {
   clienteCorrigiuVersaoCotacao,
@@ -78,6 +82,7 @@ type EstadoConversa = {
   cotacao_pendente: boolean;
   cotacao_em_correcao: boolean;
   cotacao_pedido_mensagens: string[];
+  cotacao_dados: DadosCotacaoConfirmados;
   cotacao_incompatibilidades: number;
   cotacao_opcoes_fipe: string[];
   cotacao_verificacao_humana: boolean;
@@ -120,6 +125,7 @@ const ESTADO_VAZIO: EstadoConversa = {
   cotacao_pendente:false,
   cotacao_em_correcao:false,
   cotacao_pedido_mensagens:[],
+  cotacao_dados:{...DADOS_COTACAO_VAZIOS},
   cotacao_incompatibilidades:0,
   cotacao_opcoes_fipe:[],
   cotacao_verificacao_humana:false,
@@ -159,6 +165,7 @@ function normalizarEstado(valor: unknown): EstadoConversa {
     cotacao_pendente:obj.cotacao_pendente===true,
     cotacao_em_correcao:obj.cotacao_em_correcao===true,
     cotacao_pedido_mensagens:listaCurta(obj.cotacao_pedido_mensagens,14,220),
+    cotacao_dados:normalizarDadosCotacao(obj.cotacao_dados),
     cotacao_incompatibilidades:Math.max(0,Math.min(6,Number(obj.cotacao_incompatibilidades)||0)),
     cotacao_opcoes_fipe:listaCurta(obj.cotacao_opcoes_fipe,4,160),
     cotacao_verificacao_humana:obj.cotacao_verificacao_humana===true,
@@ -187,6 +194,7 @@ function aplicarDelta(estado: EstadoConversa, delta: unknown): EstadoConversa {
     cotacao_pendente:estado.cotacao_pendente,
     cotacao_em_correcao:estado.cotacao_em_correcao,
     cotacao_pedido_mensagens:estado.cotacao_pedido_mensagens,
+    cotacao_dados:estado.cotacao_dados,
     cotacao_incompatibilidades:estado.cotacao_incompatibilidades,
     cotacao_opcoes_fipe:estado.cotacao_opcoes_fipe,
     cotacao_verificacao_humana:estado.cotacao_verificacao_humana,
@@ -863,13 +871,21 @@ export async function processarPendenciaNegocio(
       && desejaContratarCotacao(pendencia.conteudo_agregado,ultimaRespostaAgente);
     const escolheuPlano=ferramentas.has("gerar_cotacao_veicular")
       && escolheuPlanoDaCotacao(pendencia.conteudo_agregado);
-    const pedidoOutraCotacaoSemDados=ferramentas.has("gerar_cotacao_veicular")
-      && pediuNovaCotacaoSemDados(pendencia.conteudo_agregado);
+    const pedidoNovoExplicito=clientePediuNovoVeiculoCotacao(
+      pendencia.conteudo_agregado
+    );
     const continuidadeCotacaoSolicitada=estado.cotacao_pendente
       && confirmouProsseguirCotacao(pendencia.conteudo_agregado);
+    // Pedido em curso não deve ser apagado por "pode gerar a cotação?".
     const querOutraCotacao=ferramentas.has("gerar_cotacao_veicular")
       && !continuidadeCotacaoSolicitada
-      && clientePediuCotacaoVeicular(pendencia.conteudo_agregado);
+      && clientePediuCotacaoVeicular(pendencia.conteudo_agregado)
+      && (!estado.cotacao_pendente || pedidoNovoExplicito);
+    const retomarCotacao=ferramentas.has("gerar_cotacao_veicular")
+      && !estado.cotacao_pendente && !querOutraCotacao
+      && estado.cotacao_pedido_mensagens.length>0
+      && /cota[çc][aã]o|cotacao|comercial/i.test(estado.proxima_acao||"")
+      && clientePediuRetomarCotacao(pendencia.conteudo_agregado);
     const contextoPedidoAtual=ferramentas.has("gerar_cotacao_veicular")
       ?historicoDoPedidoAtual(historico):[];
     const aguardandoEscolhaPlano=ferramentas.has("gerar_cotacao_veicular")
@@ -912,7 +928,7 @@ export async function processarPendenciaNegocio(
     const cotacaoEmAndamento=ferramentas.has("gerar_cotacao_veicular")
       && !saudacaoSemDados && !cotacaoBloqueada
       && (querOutraCotacao||corrigiuVeiculo||novoDetalheAposImpasse||
-        estado.cotacao_pendente||promessaAntigaPendente);
+        retomarCotacao||estado.cotacao_pendente||promessaAntigaPendente);
     if (cotacaoBloqueada) {
       // Confirmar a mesma combinação não autoriza repetir indefinidamente
       // a consulta nem perguntar atributos que a FIPE já descartou.
@@ -924,6 +940,18 @@ export async function processarPendenciaNegocio(
       ferramentasRelevantes.delete("gerar_cotacao_veicular");
     }
     if (cotacaoEmAndamento) {
+      if (!estado.cotacao_pendente && !querOutraCotacao &&
+          (retomarCotacao || promessaAntigaPendente)) {
+        // Recuperação de sessões antigas: nunca aproveitar o veículo de uma
+        // proposta anterior ao pedido aberto, mesmo se o estado estiver obsoleto.
+        const pedidoMaisRecente=ultimoPedidoHistorico>ultimaPropostaHistorico
+          && ultimoPedidoHistorico>=0;
+        estado.cotacao_pedido_mensagens=pedidoMaisRecente
+          ?listaCurta(contextoPedidoAtual.filter(item=>item.role==="user")
+            .map(item=>item.content).slice(-14),14,220)
+          :[];
+        estado.cotacao_dados={...DADOS_COTACAO_VAZIOS};
+      }
       if (querOutraCotacao || novoDetalheAposImpasse) {
         estado.cotacao_incompatibilidades=0;
         estado.cotacao_verificacao_humana=false;
@@ -933,6 +961,7 @@ export async function processarPendenciaNegocio(
         // Um veículo novo começa do zero: nunca aproveitar motor, ano ou
         // opcionais de uma cotação anterior, ainda que estivesse em correção.
         estado.cotacao_pedido_mensagens=[];
+        estado.cotacao_dados={...DADOS_COTACAO_VAZIOS};
         estado.cotacao_em_correcao=false;
       } else if (corrigiuVeiculo && !estado.cotacao_pedido_mensagens.length) {
         // Compatibilidade com conversas anteriores a esta atualização:
@@ -947,7 +976,10 @@ export async function processarPendenciaNegocio(
       estado.cotacao_pedido_mensagens=listaCurta([
         ...estado.cotacao_pedido_mensagens,
         pendencia.conteudo_agregado,
-      ],14,220);
+      ].slice(-14),14,220);
+      estado.cotacao_dados=consolidarDadosCotacao(
+        estado.cotacao_pedido_mensagens,estado.cotacao_dados
+      );
       ferramentasRelevantes.set(
         "gerar_cotacao_veicular",
         ferramentas.get("gerar_cotacao_veicular")||{}
@@ -1168,6 +1200,15 @@ export async function processarPendenciaNegocio(
 
     let saidaFinal: SaidaAgente = { mensagens: [], estado };
     const tools = definicoesFerramentasNegocio(ferramentasRelevantes, preconsulta);
+    const dadosCotacaoCompletos=cotacaoEmAndamento &&
+      dadosEssenciaisCotacaoConfirmados(estado.cotacao_dados);
+    const forcarCotacaoComDadosConfirmados=dadosCotacaoCompletos &&
+      (!estado.cotacao_em_correcao ||
+        versaoCorrigidaFoiInformada(estado.cotacao_pedido_mensagens)) &&
+      (!estado.cotacao_opcoes_fipe.length ||
+        respostaTrazDistincaoFipe(
+          pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
+        ));
     let forcarCotacaoNaProximaRodada=false;
     let tentouForcarCotacao=false;
     let executouFerramentaCotacao=false;
@@ -1183,7 +1224,8 @@ export async function processarPendenciaNegocio(
         text: { verbosity: "low", format: FORMATO_SAIDA },
       };
       if (tools.length && !ctx.cotacaoFormatada) request.tools = tools;
-      if (forcarCotacaoNaProximaRodada &&
+      if ((forcarCotacaoNaProximaRodada ||
+           (rodada===0 && forcarCotacaoComDadosConfirmados)) &&
           tools.some((tool)=>tool.name==="gerar_cotacao_veicular")) {
         request.tool_choice={type:"function",name:"gerar_cotacao_veicular"};
         forcarCotacaoNaProximaRodada=false;
@@ -1669,7 +1711,9 @@ export async function processarPendenciaNegocio(
                 ?"aguardando_confirmacao"
                 :"falha"
           :"sem_proposta"
-        :cotacaoEmAndamento?"aguardando_dados":"nao_solicitada";
+        :cotacaoEmAndamento
+          ?dadosCotacaoCompletos?"sem_execucao":"aguardando_dados"
+          :"nao_solicitada";
 
     const finalAgora = new Date().toISOString();
     await supabaseAdmin
@@ -1699,6 +1743,10 @@ export async function processarPendenciaNegocio(
           continuidade_cotacao:Boolean(ctx.continuidadeCotacao),
           cotacao_status:cotacaoStatus,
           cotacao_tentativas:tentativasCotacao.length,
+          cotacao_dados_completos:Boolean(dadosCotacaoCompletos),
+          cotacao_ferramenta_habilitada:tools.some(
+            (tool)=>tool.name==="gerar_cotacao_veicular"
+          ),
           cotacao_motivo:erroCotacao||null,
           cotacao_versao_em_correcao:saidaFinal.estado.cotacao_em_correcao,
         },

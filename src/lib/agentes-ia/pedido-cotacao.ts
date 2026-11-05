@@ -10,6 +10,7 @@ function normalizar(value:string):string{
 export function clientePediuCotacaoVeicular(mensagem:string):boolean{
   const t=normalizar(mensagem);
   if(!t)return false;
+  if (clientePediuNovoVeiculoCotacao(mensagem)) return true;
   if(/\b(?:cotar|simular|orcamento|cotacao|simulacao)\b/.test(t)
     && /\b(?:quero|gostaria|preciso|pode|poderia|vou|vamos|solicito|fazer|gerar|receber|outra|novo|mais)\b/.test(t)
     && !/\b(?:quero|gostaria)\s+(?:saber|entender|revisar|comparar|ver)\b/.test(t))return true;
@@ -63,13 +64,27 @@ export function validarDadosNovosCotacao(
   const tokens=[...new Set([...nominais,...grupos])]
     .filter(t=>t.length>=2&&!genericas.has(t)&&
       !/^(?:19|20)\d{2}$/.test(t));
-  if(!tokens.length||!tokens.some(t=>new RegExp("(^| )"+t+"( |$)").test(combinado)
-     ||compacto.includes(t))){
+  // Modelos numéricos (ex.: 208 ou 2008) exigem referência explícita.
+  // O ano sozinho ("Vectra 2000") não vira nome de outro veículo.
+  const modeloNumero=palavras.find((parte,i)=>/^\d{3,4}$/.test(parte) &&
+    (palavras.length===1 || (i>0 && MARCAS_VEICULARES.has(palavras[i-1]))));
+  const modeloNumerico=Boolean(modeloNumero);
+  const numeroNomeado=modeloNumerico && recentes.some((mensagem)=>{
+    const partes=mensagem.split(" ");
+    return partes.some((parte,i)=>parte===modeloNumero &&
+      ((i>0 && MARCAS_VEICULARES.has(partes[i-1])) ||
+       (i>0 && partes[i-1]==="modelo")));
+  });
+  if((!tokens.length&&!numeroNomeado) ||
+    (tokens.length>0&&!tokens.some(t=>new RegExp("(^| )"+t+"( |$)").test(combinado)
+     ||compacto.includes(t)))){
     return "Qual é o modelo do novo veículo?";
   }
   const anoArgumento=String(ano||"").match(/\b(?:19|20)\d{2}\b/g)?.at(-1)||"";
-  const anoCliente=combinado.match(/\b(?:19|20)\d{2}\b/g)?.at(-1)||"";
-  if(!anoArgumento||anoArgumento!==anoCliente){
+  const anosCliente=combinado.match(/\b(?:19|20)\d{2}\b/g)||[];
+  const anoCliente=anosCliente.at(-1)||"";
+  if(!anoArgumento||anoArgumento!==anoCliente ||
+     (modeloNumerico && anosCliente.length===1 && anoCliente===modeloNumero)){
     return "Qual é o ano-modelo do novo veículo?";
   }
   const usoConfirmado={
@@ -102,8 +117,138 @@ export function modeloComDadosConfirmados(mensagens:string[], modeloIa:string):s
         const motor=parte.replace(".", "[.,]");
         return new RegExp("(^|[^0-9])"+motor+"([^0-9]|$)").test(mensagensBrutas);
       }
-      if(/^(?:19|20)\d{2}$/.test(parte))return false;
+      if(/^(?:19|20)\d{2}$/.test(parte)){
+        return mensagens.some((mensagem)=>{
+          const partes=normalizar(mensagem).split(" ");
+          return partes.some((item,i)=>item===termo &&
+            i>0 && (MARCAS_VEICULARES.has(partes[i-1]) || partes[i-1]==="modelo"));
+        });
+      }
       if(valor.length<=2)return texto.split(" ").includes(valor);
       return compacto.includes(valor);
     }).join(" ").trim();
+}
+
+
+/** Um novo veículo é um pedido distinto; "quero outro plano" NÃO é cotação. */
+export function clientePediuNovoVeiculoCotacao(mensagem: string): boolean {
+  const texto = normalizar(mensagem);
+  if (!texto) return false;
+  if (/\b(?:outro plano|outro opcional|outra cobertura|outra forma de pagamento)\b/.test(texto))
+    return false;
+  if (/^(?:(?:vamos|bora|quero|faz|faca|gera|gere|pode|agora)\s+)?(?:outro|outra|proximo|proxima)(?:\s+(?:veiculo|carro|moto|cotacao|orcamento|proposta))?$/.test(texto))
+    return true;
+  if (/^(?:qual|quais|quanto|como|porque|por que|me explica)\b/.test(texto))
+    return false;
+  const mencionaOutro = /\b(?:outro|outra|novo|nova|proximo|proxima|mais um|mais uma)\b/.test(texto);
+  const mencionaVeiculoOuCotacao = /\b(?:veiculo|carro|moto|cotacao|cotar|simulacao|simular|orcamento|proposta)\b/.test(texto);
+  const pedidoExplicito = /^(?:quero|gostaria|preciso|vamos|bora|pode|poderia|faz|faca|fazer|gera|gere|vou|agora)\b/.test(texto);
+  return mencionaOutro && (mencionaVeiculoOuCotacao || pedidoExplicito) &&
+    !/\b(?:outra vez|mais uma vez|de novo)\b/.test(texto);
+}
+
+/** Reabrir somente sob pedido explícito; nunca refazer uma proposta concluída. */
+export function clientePediuRetomarCotacao(mensagem: string): boolean {
+  const texto = normalizar(mensagem);
+  return /^(?:consegue|pode|poderia|vamos|tenta|tente)\s+(?:(?:me\s+)?(?:gerar|cotar|calcular|refazer|retomar|continuar|tentar)(?:\s+(?:a|uma|essa|esta))?(?:\s+cotacao)?(?:\s+(?:agora|novamente|de novo))?|(?:tentar|fazer)\s+(?:de novo|novamente)(?:\s+a cotacao)?)(?:\s+agora)?$/.test(texto)
+    || /^(?:gera|gere|retoma|retome|continua|continue)\s+(?:(?:a|essa|esta)\s+)?cotacao(?:\s+agora)?$/.test(texto);
+}
+
+export type UsoCotacaoConfirmado = "particular" | "aplicativo" | "taxi" | "comercial";
+export type DadosCotacaoConfirmados = {
+  modelo: string | null;
+  ano_modelo: string | null;
+  uso: UsoCotacaoConfirmado | null;
+};
+export const DADOS_COTACAO_VAZIOS: DadosCotacaoConfirmados = {
+  modelo: null, ano_modelo: null, uso: null,
+};
+
+const PALAVRAS_GERAIS_COTACAO = new Set(
+  ("a o as os e de da do das dos um uma meu minha seus seu do meu do seu carro carros veiculo veiculos moto motos " +
+  "quero gostaria preciso posso pode poderia podemos faz faca fazer fazermos vamos bora agora depois novo nova outra outro " +
+  "proximo proxima cotar cote cotacao cotacoes orcamento proposta propostas simular simulacao gerar gere gera " +
+  "para por com sem em no na uso finalidade ano modelo marca marca e eh ser sera foi tem tenho esta esse essa isso " +
+  "tio tia pai mae irmao irma amigo amiga cliente pessoa dono terceiro mesmo mesma mais novamente novo " +
+  "particular pessoal proprio aplicativo uber taxi comercial trabalho empresa flex diesel gasolina hibrido eletrico " +
+  "manual automatico automatica mecanico mecanica motor motorizacao cambio sedan hatch suv pickup camionete cabine " +
+  "dupla simples tracao cd 4x4 4x2 gls lxs ex exl lx ltz lt xlt xls xl limited challenge premium completo " +
+  "confirmo confirmado correto certa certo verdade sim nao ok obrigado obrigada obrigado por favor voces conseguem " +
+  "consegue tentar tente tentei outra vez fazer de novo quero saber qual qual e meu por que quanto fica quanto custa"
+    ).split(/\s+/).filter(Boolean)
+);
+const MARCAS_VEICULARES = new Set(
+  ("honda volkswagen vw ford chevrolet gm fiat toyota hyundai renault nissan bmw audi jeep " +
+  "mercedes benz mitsubishi peugeot citroen kia land rover suzuki byd chery volvo porsche " +
+  "mazda jac subaru mini lexus ram dodge peugeot"
+    ).split(/\s+/)
+);
+
+/** Apenas indicativo de que o cliente nomeou um veículo; a FIPE faz a seleção final.
+ * Nunca usar esse campo como versão FIPE, motorização ou preço confirmado.
+ */
+function modeloMencionadoCotacao(mensagem: string): string | null {
+  const palavras = normalizar(mensagem).split(" ").filter(Boolean);
+  const candidatas = palavras.filter((palavra) =>
+    !PALAVRAS_GERAIS_COTACAO.has(palavra) &&
+    !MARCAS_VEICULARES.has(palavra) &&
+    !/^(?:19|20)\d{2}$/.test(palavra) &&
+    !/^\d$/.test(palavra) &&
+    !/^\d{2}$/.test(palavra) &&
+    !/^\d+(?:cv|v|p)$/.test(palavra) &&
+    !/^\d+x\d+$/.test(palavra)
+  );
+  if (candidatas.length) return candidatas.join(" ").slice(0, 150);
+  // Ex.: Peugeot 2008: o nome do modelo também parece um ano. Não presumir ano-modelo.
+  const anos = palavras.filter((palavra) => /^(?:19|20)\d{2}$/.test(palavra));
+  if (palavras.some((palavra) => MARCAS_VEICULARES.has(palavra)) &&
+      (anos.length === 1 ||
+       (anos.length > 1 && Number(anos.at(-1)) - Number(anos[0]) >= 3)))
+    return anos[0];
+  return null;
+}
+
+/** Normaliza o estado persistido sem confiar em JSON arbitrário. */
+export function normalizarDadosCotacao(valor: unknown): DadosCotacaoConfirmados {
+  const obj = valor && typeof valor === "object" ? valor as Record<string, unknown> : {};
+  const modelo = typeof obj.modelo === "string" ? obj.modelo.trim().slice(0, 150) : "";
+  const ano = typeof obj.ano_modelo === "string" ? obj.ano_modelo : "";
+  const uso = String(obj.uso || "");
+  return {
+    modelo: modelo || null,
+    ano_modelo: /^(?:19|20)\d{2}$/.test(ano) ? ano : null,
+    uso: ["particular", "aplicativo", "taxi", "comercial"].includes(uso)
+      ? uso as UsoCotacaoConfirmado : null,
+  };
+}
+
+/** Consolida dados apenas das mensagens do pedido ATUAL; preserva o que já
+ * foi confirmado mesmo quando a janela recente do chat for paginada.
+ * A interpretação detalhada da marca/versão continua sendo feita pela IA/FIPE.
+ */
+export function consolidarDadosCotacao(
+  mensagens: string[],
+  anterior: DadosCotacaoConfirmados = DADOS_COTACAO_VAZIOS,
+): DadosCotacaoConfirmados {
+  const dados = { ...normalizarDadosCotacao(anterior) };
+  for (const mensagem of mensagens) {
+    const texto = normalizar(mensagem);
+    if (!dados.modelo) dados.modelo = modeloMencionadoCotacao(mensagem);
+    const anos = [...texto.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => m[0]);
+    const unicoAnoTambemModelo = anos.length === 1 &&
+      dados.modelo === anos[0] &&
+      texto.split(" ").some((palavra)=>MARCAS_VEICULARES.has(palavra));
+    if (anos.length && !unicoAnoTambemModelo) dados.ano_modelo = anos.at(-1) || null;
+    if (/\b(?:particular|pessoal|proprio)\b/.test(texto) &&
+        !/\bnao\s+(?:e|sera|uso)\s+(?:particular|pessoal|proprio)\b/.test(texto))
+      dados.uso = "particular";
+    else if (/\b(?:aplicativo|uber)\b/.test(texto)) dados.uso = "aplicativo";
+    else if (/\btaxi\b/.test(texto)) dados.uso = "taxi";
+    else if (/\b(?:comercial|uso profissional)\b/.test(texto)) dados.uso = "comercial";
+  }
+  return dados;
+}
+
+export function dadosEssenciaisCotacaoConfirmados(dados: DadosCotacaoConfirmados): boolean {
+  return Boolean(dados.modelo && dados.ano_modelo && dados.uso);
 }
