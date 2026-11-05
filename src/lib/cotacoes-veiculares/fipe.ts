@@ -104,6 +104,35 @@ function alternativasAno(versoes:ModeloComAno[],limite=8){
   return versoes.slice(0,limite).map(v=>v.modelo.name).join("; ");
 }
 
+/** Busca alternativas FIPE reais do MESMO ano que preservem o acabamento
+ * ou a motorização informada, sem escolher uma delas automaticamente.
+ */
+async function alternativasProximasFipe(params:{
+  tipo:TipoFipe;marca:string;listaModelos:OpcaoFipe[];
+  consulta:string;anoModelo:string;excluir?:OpcaoFipe[];
+}):Promise<{opcoes:OpcaoFipe[];erros:number}>{
+  const motor=params.consulta.match(/\b[1-9][.,][0-9]\b/)?.[0]||"";
+  const familia=params.consulta.trim().split(/\s+/)[0]||"";
+  const semMotor=params.consulta.replace(/\b[1-9][.,][0-9]\b/g," ")
+    .replace(/\s+/g," ").trim();
+  const consultas=[semMotor];
+  if(motor&&familia)consultas.push(familia+" "+motor);
+  const excluidos=new Set((params.excluir||[]).map(v=>v.code));
+  const unicos=new Map<string,OpcaoFipe>();
+  for(const consulta of consultas)
+    for(const item of modelosCompativeisFipe(params.listaModelos,consulta))
+      if(!excluidos.has(item.code))unicos.set(item.code,item);
+  const candidatos=[...unicos.values()];
+  if(!candidatos.length||candidatos.length>45)return {opcoes:[],erros:0};
+  const resultado=await consultarCandidatosPorAno({
+    tipo:params.tipo,marca:params.marca,candidatos,ano:params.anoModelo,
+  });
+  return {
+    opcoes:ordenarAlternativasFipe(params.consulta,resultado.validos.map(v=>v.modelo),4),
+    erros:resultado.erros,
+  };
+}
+
 export async function encontrarVeiculoFipe(params: {
   tipo: TipoFipe; marca: string; modelo: string; ano: string;
 }) {
