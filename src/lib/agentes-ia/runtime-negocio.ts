@@ -1312,6 +1312,17 @@ export async function processarPendenciaNegocio(
           ? classificarFalhaCotacao(String(resultado.error || ""))
           : null;
         ctx.ferramentasExecutadas.push({ nome, argumentos, resultado });
+        if (nome==="gerar_cotacao_veicular" && resultado?.ok===false &&
+          (resultado.code==="FIPE_VERSAO_INCOMPATIVEL" ||
+           resultado.code==="FIPE_VERSAO_AMBIGUA")) {
+          const opcoes=listaCurta(resultado.opcoes_fipe,4,160);
+          if(resultado.code==="FIPE_VERSAO_INCOMPATIVEL")
+            estado.cotacao_incompatibilidades+=1;
+          else estado.cotacao_incompatibilidades=0;
+          estado.cotacao_opcoes_fipe=opcoes;
+          estado.cotacao_pendente=true;
+          estado.cotacao_verificacao_humana=false;
+        }
         if (nome === "gerar_cotacao_veicular" && resultado?.ok === true) {
           ctx.acaoCriticaExecutada = true;
           const mensagens=Array.isArray(resultado.mensagens_cliente)
@@ -1355,8 +1366,10 @@ export async function processarPendenciaNegocio(
           type: "function_call_output",
           call_id: chamada.call_id,
           output: JSON.stringify(falhaCotacao
-            ? { ok: false, code: falhaCotacao.codigo,
-                error: falhaCotacao.orientacaoAgente }
+            ? { ok: false, code: resultado.code || falhaCotacao.codigo,
+                error: falhaCotacao.orientacaoAgente,
+                pergunta_cliente: typeof resultado.pergunta_cliente === "string"
+                  ? resultado.pergunta_cliente : undefined }
             : resultado),
         });
         if (falhaCotacao) {
