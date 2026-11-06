@@ -24,7 +24,7 @@ import {cotacoesDoGrupo} from "./comparacao-fonte";
 import {
   clientePediuCotacaoVeicular, clienteCancelouCotacao,
   confirmouProsseguirCotacao, validarDadosNovosCotacao,
-  modeloComDadosConfirmados,
+  preservarModeloCotacaoConfirmado,
   clientePediuNovoVeiculoCotacao, clientePediuRetomarCotacao,
   consolidarDadosCotacao, normalizarDadosCotacao,
   dadosEssenciaisCotacaoConfirmados, DADOS_COTACAO_VAZIOS,
@@ -1599,8 +1599,12 @@ export async function processarPendenciaNegocio(
                   :modeloDaIa
             );
             if(modeloCorrigidoForaDaLista)delete argumentos.marca;
-            argumentos.modelo=modeloComDadosConfirmados(
-              mensagensConfirmadas,modeloSolicitado
+            // O argumento da IA pode vir vazio ou em grafia ligeiramente
+            // diferente ("Corola" / "Corolla"). O modelo já confirmado
+            // pelo cliente não pode desaparecer na filtragem. Apenas nomes
+            // comprovados neste pedido podem chegar à consulta FIPE.
+            argumentos.modelo=preservarModeloCotacaoConfirmado(
+              mensagensConfirmadas,modeloSolicitado,modeloAtualConfirmado
             );
             // A marca deduzida a partir do modelo é somente uma hipótese.
             // Não a descarte porque o cliente disse "Astra" sem "Chevrolet":

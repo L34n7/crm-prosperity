@@ -151,3 +151,22 @@ test("Dolphin Mini 2026: GS e GL são acabamentos curtos inequívocos",()=>{
  assert.equal(interpretarRespostaOpcoesFipe("GL",v).versaoSelecionada,v[0]);
  assert.equal(interpretarRespostaOpcoesFipe("Dolphin Mini",v).versaoSelecionada,null);
 });
+
+
+test("erro de uma letra na família procura alternativas FIPE sem inventar versões",()=>{
+  const itens=[
+    {code:"corolla-gli",name:"Corolla GLi 1.8 Flex 16V Aut."},
+    {code:"corolla-xei",name:"Corolla XEi 2.0 Flex 16V Aut."},
+    {code:"corona",name:"Corona 2.0 Mec."},
+    {code:"yaris",name:"Yaris XL 1.5 Aut."},
+  ];
+  assert.deepEqual(modelosCompativeisFipe(itens,"Corola").map(x=>x.code),
+    ["corolla-gli","corolla-xei","corona"]);
+  // A ambiguidade real continua para validação pelo ano na FIPE.
+  assert.deepEqual(modelosCompativeisFipe(itens,"Corola GLi").map(x=>x.code),
+    ["corolla-gli"]);
+  assert.deepEqual(modelosCompativeisFipe(itens,"Corola XEi 2.0").map(x=>x.code),
+    ["corolla-xei"]);
+  assert.deepEqual(modelosCompativeisFipe(itens,"Corola XEi 3.0"),[]);
+  assert.deepEqual(modelosCompativeisFipe(itens,"Gol"),[]);
+});

@@ -7,6 +7,30 @@ function normalizar(value:string):string{
   return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
     .toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
 }
+/** Tolerância mínima a erros de escrita na IDENTIFICAÇÃO do modelo.
+ * Só compara palavras com pelo menos cinco caracteres, admitindo uma
+ * inserção, remoção ou substituição. Não escolhe a versão FIPE: isso
+ * continua sujeito à consulta oficial e à confirmação de ambiguidades.
+ */
+function umaEdicaoModelo(a:string,b:string):boolean{
+  if(a===b)return true;
+  if(Math.min(a.length,b.length)<5||Math.abs(a.length-b.length)>1)return false;
+  let i=0,j=0,erros=0;
+  while(i<a.length&&j<b.length){
+    if(a[i]===b[j]){i++;j++;continue;}
+    if(++erros>1)return false;
+    if(a.length>b.length)i++;
+    else if(b.length>a.length)j++;
+    else {i++;j++;}
+  }
+  return erros+(a.length-i)+(b.length-j)<=1;
+}
+function termoModeloPresente(token:string,mensagens:string[]):boolean{
+  if(token.length<5)return false;
+  return mensagens.some(m=>normalizar(m).split(" ").some(p=>
+    umaEdicaoModelo(token,p)));
+}
+
 /** Desistência explícita encerra a seleção de versões; não é correção do carro. */
 export function clienteCancelouCotacao(mensagem:string):boolean{
   const t=normalizar(mensagem);
@@ -95,7 +119,7 @@ export function validarDadosNovosCotacao(
     return "Qual é o modelo do novo veículo?";
   if((!tokens.length&&!numeroNomeado) ||
     (tokens.length>0&&!tokens.some(t=>new RegExp("(^| )"+t+"( |$)").test(combinado)
-     ||compacto.includes(t)))){
+     ||compacto.includes(t)||termoModeloPresente(t,recentes)))){
     return "Qual é o modelo do novo veículo?";
   }
   const anoArgumento=String(ano||"").match(/\b(?:19|20)\d{2}\b/g)?.at(-1)||"";
@@ -146,10 +170,30 @@ export function modeloComDadosConfirmados(mensagens:string[], modeloIa:string):s
         });
       }
       if(valor.length<=2)return texto.split(" ").includes(valor);
-      return compacto.includes(valor);
+      return compacto.includes(valor)||termoModeloPresente(valor,[texto]);
     }).join(" ").trim();
 }
 
+
+/** A IA pode omitir o modelo ou alterar sua grafia. Recupere a família
+ * confirmada no pedido corrente somente se aparecer nas mensagens do
+ * próprio cliente. Não reaproveita carro de cotação anterior.
+ */
+export function preservarModeloCotacaoConfirmado(
+  mensagens:string[],modeloIa:string,modeloEstado:string,
+):string{
+  const proposta=modeloComDadosConfirmados(mensagens,modeloIa);
+  const validacaoModelo=proposta
+    ?validarDadosNovosCotacao(mensagens,proposta,"","")
+    :"Qual é o modelo do novo veículo?";
+  if(proposta&&validacaoModelo!=="Qual é o modelo do novo veículo?")return proposta;
+  const guardado=modeloComDadosConfirmados(mensagens,modeloEstado);
+  const validacaoGuardado=guardado
+    ?validarDadosNovosCotacao(mensagens,guardado,"","")
+    :"Qual é o modelo do novo veículo?";
+  return guardado&&validacaoGuardado!=="Qual é o modelo do novo veículo?"
+    ?guardado:"";
+}
 
 /** Um novo veículo é um pedido distinto; "quero outro plano" NÃO é cotação. */
 export function clientePediuNovoVeiculoCotacao(mensagem: string): boolean {

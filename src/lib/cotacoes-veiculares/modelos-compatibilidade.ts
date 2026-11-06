@@ -30,6 +30,22 @@ function cambioExplicito(valor: string): CambioFipe | null {
   return automatico ? "automatico" : "manual";
 }
 
+/** Tolerância de UMA letra apenas na família de modelo FIPE.
+ * Versões, câmbio, motores e anos continuam sujeitos à consulta real. */
+function nomeComUmErro(a:string,b:string):boolean{
+  if(a===b||Math.min(a.length,b.length)<5||
+    Math.abs(a.length-b.length)>1)return false;
+  let i=0,j=0,erros=0;
+  while(i<a.length&&j<b.length){
+    if(a[i]===b[j]){i++;j++;continue;}
+    if(++erros>1)return false;
+    if(a.length>b.length)i++;
+    else if(b.length>a.length)j++;
+    else {i++;j++;}
+  }
+  return erros+(a.length-i)+(b.length-j)===1;
+}
+
 const termosAtributos = new Set([
   "manual", "mecanico", "mecanica", "mec",
   "automatico", "automatica", "aut", "auto", "cvt", "tiptronic", "dsg",
@@ -64,8 +80,24 @@ export function modelosCompativeisFipe(
     );
   });
 
-  if (!cambioSolicitado) return compativeis;
-  const cambioIdentificado = compativeis.filter(
+  // Corrigir somente quando não há correspondência exata. A grafia
+  // sugerida deve diferir em UMA letra no primeiro token do veículo;
+  // detalhes restantes precisam coincidir. Depois, a FIPE valida o ano
+  // e exige escolha caso múltiplas versões permaneçam.
+  const familiaInformada=tokens[0]||"";
+  const candidatos=compativeis.length||!familiaInformada
+    ?compativeis
+    :itens.filter((item)=>{
+      const partes=normalizar(item.name)
+        .replace(/\b(?:sed|seda)\b/g,"sedan").split(" ");
+      return nomeComUmErro(familiaInformada,partes[0]||"") &&
+        tokens.slice(1).every(token=>
+          partes.includes(token) ||
+          (token==="diesel"&&["diesel","dies","die"].some(v=>partes.includes(v))));
+    });
+
+  if (!cambioSolicitado) return candidatos;
+  const cambioIdentificado = candidatos.filter(
     (item) => cambioExplicito(item.name) === cambioSolicitado
   );
   // Uma indicação explícita da FIPE é preferível a modelos sem câmbio
@@ -75,5 +107,5 @@ export function modelosCompativeisFipe(
   // não registra o câmbio na descrição. Isso não significa câmbio oposto.
   // Mantemos SOMENTE as versões sem câmbio identificado; a seleção por
   // motor, acabamento e ano-modelo permanece rigorosa.
-  return compativeis.filter((item) => cambioExplicito(item.name) === null);
+  return candidatos.filter((item) => cambioExplicito(item.name) === null);
 }

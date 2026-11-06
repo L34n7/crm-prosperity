@@ -7,7 +7,7 @@ import {
   modeloComDadosConfirmados,
   clientePediuNovoVeiculoCotacao, clientePediuRetomarCotacao,
   consolidarDadosCotacao, dadosEssenciaisCotacaoConfirmados,
-  DADOS_COTACAO_VAZIOS,
+  DADOS_COTACAO_VAZIOS, preservarModeloCotacaoConfirmado,
 } from "../src/lib/agentes-ia/pedido-cotacao.ts";
 
 test("reconhece cotação solicitada para o carro de outra pessoa",()=>{
@@ -153,4 +153,33 @@ test("Astra 2000 não incorpora atributos que não pertencem à identificação 
     "Astra GLS Sedan 16V manual");
   assert.equal(modeloComDadosConfirmados(
     mensagens,"Astra GLS 2.0 16V manual"),"Astra GLS 16V manual");
+});
+
+
+test("grafia próxima do modelo confirmado não perde o nome antes da FIPE",()=>{
+  const mensagens=["Outro","Corola 2018","Particular"];
+  assert.equal(modeloComDadosConfirmados(mensagens,"Toyota Corolla"),"Corolla");
+  assert.equal(modeloComDadosConfirmados([...mensagens,"Toyota corola"],"Toyota Corolla"),
+    "Toyota Corolla");
+  assert.equal(validarDadosNovosCotacao(mensagens,"Corolla","2018","particular"),null);
+  assert.equal(preservarModeloCotacaoConfirmado(mensagens,"Toyota Corolla","corola"),"Corolla");
+  assert.equal(preservarModeloCotacaoConfirmado(mensagens,"Toyota","corola"),"corola");
+  assert.equal(preservarModeloCotacaoConfirmado(mensagens,"","corola"),"corola");
+});
+
+test("correção de uma letra não pode autorizar carro diferente nem motor inventado",()=>{
+  const mensagens=["Quero outro","Cruze 2020","Particular"];
+  assert.equal(preservarModeloCotacaoConfirmado(mensagens,"Onix LTZ 1.0","cruze"),"cruze");
+  assert.equal(preservarModeloCotacaoConfirmado(["Quero outra cotação","2020","Particular"],
+    "Corolla",""),"");
+  assert.equal(preservarModeloCotacaoConfirmado(mensagens,"Cruze 2.0","cruze"),"Cruze");
+  assert.equal(validarDadosNovosCotacao(mensagens,"Onix","2020","particular"),
+    "Qual é o modelo do novo veículo?");
+});
+
+test("nome curto de veículo precisa corresponder exatamente, sem adivinhar",()=>{
+  assert.equal(validarDadosNovosCotacao(["Gol 2018","Particular"],
+    "Fox","2018","particular"),"Qual é o modelo do novo veículo?");
+  assert.equal(preservarModeloCotacaoConfirmado(["Gol 2018","Particular"],
+    "Fox","gol"),"gol");
 });
