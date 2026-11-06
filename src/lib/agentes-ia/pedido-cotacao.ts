@@ -10,7 +10,7 @@ function normalizar(value:string):string{
 /** Desistência explícita encerra a seleção de versões; não é correção do carro. */
 export function clienteCancelouCotacao(mensagem:string):boolean{
   const t=normalizar(mensagem);
-  return /\b(?:deixa(?: isso)? (?:pra|para) la|deixa quieto|desisto(?: da cotacao| do seguro)?|nao quero mais (?:cotar|a cotacao|essa cotacao|esse seguro)|cancela(?:r)? (?:a |essa )?cotacao|pode cancelar (?:a |essa )?cotacao)\b/.test(t);
+  return /\b(?:deixa(?: isso)? (?:pra|para) la|deixa quieto|desisto(?: da cotacao| do seguro)?|nao quero mais(?: (?:cotar|a cotacao|essa cotacao|esse seguro))?|cancela(?:r)? (?:a |essa )?cotacao|pode cancelar (?:a |essa )?cotacao)\b/.test(t);
 }
 
 export function clientePediuCotacaoVeicular(mensagem:string):boolean{
@@ -86,6 +86,11 @@ export function validarDadosNovosCotacao(
       ((i>0 && MARCAS_VEICULARES.has(partes[i-1])) ||
        (i>0 && partes[i-1]==="modelo")));
   });
+  // Acabamento isolado (LTZ, GLS, XLT...) não é modelo: são
+  // características compartilhadas por diversas famílias e marcas.
+  if(palavras.length>0 && palavras.every(p=>
+      PALAVRAS_GERAIS_COTACAO.has(p)||MARCAS_VEICULARES.has(p)))
+    return "Qual é o modelo do novo veículo?";
   if((!tokens.length&&!numeroNomeado) ||
     (tokens.length>0&&!tokens.some(t=>new RegExp("(^| )"+t+"( |$)").test(combinado)
      ||compacto.includes(t)))){
@@ -187,7 +192,7 @@ const PALAVRAS_GERAIS_COTACAO = new Set(
   "particular pessoal proprio aplicativo uber taxi comercial trabalho empresa flex diesel gasolina hibrido eletrico " +
   "manual automatico automatica mecanico mecanica motor motorizacao cambio sedan hatch suv pickup camionete cabine " +
   "dupla simples tracao cd 4x4 4x2 gls lxs ex exl lx ltz lt xlt xls xl limited challenge premium completo " +
-  "confirmo confirmado correto certa certo verdade sim nao ok obrigado obrigada obrigado por favor voces conseguem " +
+  "confirmo confirmado correto certa certo verdade sim nao ok obrigado obrigada obrigado por favor voces conseguem dia dias diario familia casa caro uai neh ne ta beleza belezaaa entendi vou usar usando dia a dia uso para trabalhar dirigindo rodar quero nao mais " +
   "consegue tentar tente tentei outra vez fazer de novo quero saber qual qual e meu por que quanto fica quanto custa"
     ).split(/\s+/).filter(Boolean)
 );
@@ -197,6 +202,16 @@ const MARCAS_VEICULARES = new Set(
   "mazda jac subaru mini lexus ram dodge peugeot"
     ).split(/\s+/)
 );
+
+/** Um acabamento curto (LTZ, GLS, LX etc.) não nomeia um veículo.
+ * Só pode complementar a família do modelo explicitamente informada.
+ */
+export function acabamentoIsoladoCotacao(texto:string):boolean{
+  const t=normalizar(texto);
+  return new Set(("lt ltz gl gls gs gsi lx lxs lxr ex exl xl xls xlt " +
+    "limited challenge express advantage titanium comfortline highline " +
+    "trendline premier touring sport").split(" ")).has(t);
+}
 
 /** Apenas indicativo de que o cliente nomeou um veículo; a FIPE faz a seleção final.
  * Nunca usar esse campo como versão FIPE, motorização ou preço confirmado.
@@ -247,7 +262,11 @@ export function consolidarDadosCotacao(
   const dados = { ...normalizarDadosCotacao(anterior) };
   for (const mensagem of mensagens) {
     const texto = normalizar(mensagem);
-    if (!dados.modelo) dados.modelo = modeloMencionadoCotacao(mensagem);
+    // Falas de finalidade de uso (ex.: "dia a dia") não são modelos.
+    // Se um estado antigo guardou palavras genéricas, corrige ao receber
+    // uma identificação real sem exigir reiniciar a conversa.
+    if (!dados.modelo || !modeloMencionadoCotacao(dados.modelo))
+      dados.modelo = modeloMencionadoCotacao(mensagem) || null;
     const anos = [...texto.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => m[0]);
     const unicoAnoTambemModelo = anos.length === 1 &&
       dados.modelo === anos[0] &&
