@@ -16,7 +16,7 @@ import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFal
 import { respostaTrazDistincaoFipe, perguntaUnicaVersoesFipe, interpretarRespostaOpcoesFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,textoWhatsappComQuebras} from "./resposta-estruturada";
 import {modeloSugeridoConfirmadoCotacao} from "./modelo-sugerido-cotacao";
-import {querCompararPlanos,querCompararUso} from "./comparacao-intencao";
+import {querCompararPlanos,usoComparativoNoContexto,citouVeiculoDiferente} from "./comparacao-intencao";
 import {compararValoresPlanos} from "./comparacao-planos";
 import {compararValoresUso} from "./comparacao-uso";
 import {cotacoesDoGrupo} from "./comparacao-fonte";
@@ -765,15 +765,15 @@ async function preflight(pendenciaId: string) {
     && await conversaPossuiCotacaoVeicular({
       empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
     });
-  const desejaComparacao=ferramentas.has("gerar_cotacao_veicular")
-    && (querCompararPlanos(pendencia.conteudo_agregado)||
-        Boolean(querCompararUso(pendencia.conteudo_agregado,ultimaResposta)))
-    && await conversaPossuiCotacaoVeicular({
-      empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
-    });
   const estado=await carregarEstado(
     pendencia.empresa_id,pendencia.agente_id,pendencia.conversa_id
   );
+  const desejaComparacao=ferramentas.has("gerar_cotacao_veicular")
+    && (querCompararPlanos(pendencia.conteudo_agregado)||
+        Boolean(usoComparativoNoContexto(pendencia.conteudo_agregado,historico,estado.proxima_acao)))
+    && await conversaPossuiCotacaoVeicular({
+      empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+    });
   return {
     relevante: preconsulta.relevante||aceiteCotacao||desejaComparacao||
       (ferramentas.has("gerar_cotacao_veicular")&&
@@ -893,7 +893,7 @@ export async function processarPendenciaNegocio(
     const continuidadeCotacaoSolicitada=estado.cotacao_pendente
       && confirmouProsseguirCotacao(pendencia.conteudo_agregado);
     const compararMesmoVeiculo=ferramentas.has("gerar_cotacao_veicular")
-      && Boolean(querCompararUso(pendencia.conteudo_agregado,ultimaRespostaAgente))
+      && Boolean(usoComparativoNoContexto(pendencia.conteudo_agregado,historico,estado.proxima_acao))
       && await conversaPossuiCotacaoVeicular({
         empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
       });
@@ -904,7 +904,7 @@ export async function processarPendenciaNegocio(
       && !compararMesmoVeiculo
       && (!estado.cotacao_pendente || pedidoNovoExplicito);
     const retomarCotacao=ferramentas.has("gerar_cotacao_veicular")
-      && !estado.cotacao_pendente && !querOutraCotacao
+      && !estado.cotacao_pendente && !querOutraCotacao && !compararMesmoVeiculo
       && estado.cotacao_pedido_mensagens.length>0
       && /cota[çc][aã]o|cotacao|comercial/i.test(estado.proxima_acao||"")
       && clientePediuRetomarCotacao(pendencia.conteudo_agregado);
@@ -955,7 +955,7 @@ export async function processarPendenciaNegocio(
     const cotacaoBloqueada=estado.cotacao_verificacao_humana
       && !querOutraCotacao && !corrigiuVeiculo && !novoDetalheAposImpasse;
     const cotacaoEmAndamento=ferramentas.has("gerar_cotacao_veicular")
-      && !cancelouCotacao && !saudacaoSemDados && !cotacaoBloqueada
+      && !compararMesmoVeiculo && !cancelouCotacao && !saudacaoSemDados && !cotacaoBloqueada
       && (querOutraCotacao||corrigiuVeiculo||novoDetalheAposImpasse||
         retomarCotacao||estado.cotacao_pendente||promessaAntigaPendente);
     if(cancelouCotacao){
@@ -1124,7 +1124,7 @@ export async function processarPendenciaNegocio(
     // Perguntas de comparação usam cotações realmente salvas, não a janela
     // resumida de mensagens da IA. Um novo uso aproveita o veículo FIPE
     // exatamente como ele foi cotado, sem pedir novamente modelo e ano.
-    const comparacaoUso=querCompararUso(pendencia.conteudo_agregado,ultimaRespostaAgente);
+    const comparacaoUso=usoComparativoNoContexto(pendencia.conteudo_agregado,historico,estado.proxima_acao);
     const comparacaoPlanos=querCompararPlanos(pendencia.conteudo_agregado);
     if(existeCotacaoAnterior&&!cotacaoEmAndamento&&!querOutraCotacao&&
        (comparacaoUso||comparacaoPlanos)){
@@ -1141,7 +1141,14 @@ export async function processarPendenciaNegocio(
         let mensagemComparacao="";
         let grupoComparado:string|null=null;
         let diagnosticoComparacao:Record<string,unknown>|null=null;
-        if(comparacaoUso){
+        if(comparacaoUso &&
+           /\b(?:19|20)\d{2}\b/.test(pendencia.conteudo_agregado) &&
+           citouVeiculoDiferente(pendencia.conteudo_agregado,
+             primeira.veiculo,primeira.ano_modelo)){
+          mensagemComparacao="O veículo informado não corresponde à última proposta. "+
+            "Para não comparar preços de carros diferentes, confirme se deseja "+
+            "iniciar uma nova cotação para o veículo que acabou de informar.";
+        }else if(comparacaoUso){
           const usoBase=primeira.uso;
           if(usoBase===comparacaoUso){
             mensagemComparacao="A última cotação deste veículo já considera uso "+
