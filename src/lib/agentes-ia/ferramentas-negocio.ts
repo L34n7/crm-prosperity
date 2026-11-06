@@ -322,7 +322,7 @@ export async function preconsultarNegocio(params: {
     /\b(cotacao|cotar|cote|simulacao|seguro|protecao veicular|plano premium|plano completo|fipe|veiculo)\b/.test(normalizarTextoNegocio(conteudo));
   const ultimoAgente=[...historico].reverse().find(item=>item.role==="assistant");
   const respostaModelo=/\b(?:diesel|disel|gasolina|flex|hibrido|eletrico|limited|xl|xls|xlt|4x4|4x2|cd|200[0-9]|confirmo|confirmado|isso|sim)\b/.test(texto)
-    && /\b(?:fipe|ano.modelo|versao|modelo|motorizacao|combustivel|tracao|ranger|cabine)\b/
+    && /\b(?:fipe|ano.modelo|versao|modelo|motorizacao|combustivel|tracao|cabine)\b/
       .test(normalizarTextoNegocio(ultimoAgente?.content||""));
   const sinalCotacao = params.ferramentas.has("gerar_cotacao_veicular") &&
     (mencionaCotacao(params.mensagem) ||
