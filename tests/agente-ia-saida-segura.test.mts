@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  textoWhatsappComQuebras,recuperarRespostaEstruturada,textoPareceEstruturaInterna,
+  textoWhatsappComQuebras,recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida,
 } from "../src/lib/agentes-ia/resposta-estruturada.ts";
 
 test("lista FIPE com quebras de linha chega intacta ao texto do WhatsApp",()=>{
@@ -27,4 +27,36 @@ test("JSON malformado jamais deve ir para o cliente como fallback",()=>{
   assert.equal(recuperarRespostaEstruturada(texto),null);
   assert.equal(textoPareceEstruturaInterna(texto),true);
   assert.equal(textoPareceEstruturaInterna("Perfeito, qual é o ano?"),false);
+});
+
+
+test("SaverCar: dois objetos JSON concatenados viram apenas as duas mensagens formatadas",()=>{
+  const output={
+    mensagens:[
+      "Eu sou Andreia, assistência inteligente da Bia, uma ajuda extra enquanto ela não chega ☺️",
+      "Não consigo consultar descontos aplicados a uma proposta específica. A equipe poderá verificar essa informação.",
+    ],
+    memoria_delta:{tipo_negocio:null,estagio:null,proxima_acao:null,
+      dores:[],interesses:[],objecoes:[],fatos:[]},
+  };
+  const texto=JSON.stringify(output)+JSON.stringify(output);
+  assert.deepEqual(protegerMensagensSaida([texto]),output.mensagens);
+  assert.deepEqual(recuperarRespostaEstruturada(texto),output);
+});
+test("a proteção de saída também funciona se outro caminho passar JSON inteiro como mensagem",()=>{
+  const payload=JSON.stringify({mensagens:["Primeira mensagem","Segunda mensagem"],memoria_delta:{}});
+  assert.deepEqual(protegerMensagensSaida([payload]),["Primeira mensagem","Segunda mensagem"]);
+  assert.deepEqual(protegerMensagensSaida(["Resposta normal.","Outra resposta."]),
+    ["Resposta normal.","Outra resposta."]);
+});
+test("payload truncado jamais vai ao WhatsApp",()=>{
+  const truncado='{"mensagens":["Bom dia"],"memoria_delta":{';
+  const resultado=protegerMensagensSaida([truncado]);
+  assert.equal(resultado.length,1);
+  assert.doesNotMatch(resultado[0],/memoria_delta|mensagens/);
+  assert.match(resultado[0],/repetir a última pergunta/i);
+});
+test("o teto de mensagens se aplica mesmo a um payload concatenado",()=>{
+  const json=JSON.stringify({mensagens:["A","B","C","D"],memoria_delta:{}});
+  assert.deepEqual(protegerMensagensSaida([json],2),["A","B"]);
 });

@@ -28,6 +28,7 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
+import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida} from "./resposta-estruturada";
 import {
   agendarFollowupAgenteIa,
   cancelarFollowupsPendentesAgenteIa,
@@ -1881,7 +1882,8 @@ async function enviarMensagemAgente(params: {
   if (await automacoesEmpresaEstaoBloqueadas(params.empresaId)) {
     throw new Error("assinatura_bloqueada");
   }
-  const envio = await sendWhatsAppTextMessage({ phoneNumberId: integracao.phone_number_id, accessToken, to: params.numeroDestino, body: params.texto });
+  const textoSeguro=protegerMensagensSaida([params.texto],1)[0]||"Não consegui preparar minha resposta. Pode repetir a pergunta?";
+  const envio = await sendWhatsAppTextMessage({ phoneNumberId: integracao.phone_number_id, accessToken, to: params.numeroDestino, body: textoSeguro });
   const agora = new Date().toISOString();
   const { data: protocolo } = await supabaseAdmin
     .from("conversa_protocolos").select("id").eq("empresa_id", params.empresaId).eq("conversa_id", params.conversaId).eq("ativo", true)
@@ -1893,7 +1895,7 @@ async function enviarMensagemAgente(params: {
     conversa_protocolo_id: protocolo?.id || null,
     remetente_tipo: "bot",
     remetente_id: null,
-    conteudo: params.texto,
+    conteudo: textoSeguro,
     tipo_mensagem: "texto",
     origem: "automatica",
     status_envio: envio.ok ? "enviada" : "falha",
@@ -1922,7 +1924,7 @@ async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[])
   if (!ctx.pendencia.numero_destino) {
     return { supersedido: false, mensagensEnviadas: 0 };
   }
-  const limpas = mensagens.map((m) => m.trim()).filter(Boolean).slice(0, MAX_MENSAGENS_SAIDA);
+  const limpas = protegerMensagensSaida(mensagens,MAX_MENSAGENS_SAIDA);
   let mensagensEnviadas = 0;
   for (let indice = 0; indice < limpas.length; indice++) {
     if (indice > 0) {
@@ -3822,12 +3824,15 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       inputIa.push(...(response.output || []));
       if (!chamadas.length) {
         const textoSaida = String(response.output_text || "").trim();
-        let candidata: SaidaAgente;
-        try {
-          candidata = normalizarSaida(JSON.parse(textoSaida), contexto.estado);
-        } catch {
-          candidata = normalizarSaida(null, contexto.estado, textoSaida);
-        }
+        // Respostas estruturadas duplicadas podem vir concatenadas pelo
+        // modelo. Nunca repassar JSON interno ao WhatsApp em caso de parse.
+        const respostaRecuperada=recuperarRespostaEstruturada(textoSaida);
+        const fallbackSeguro=textoPareceEstruturaInterna(textoSaida)
+          ?"Não consegui organizar minha resposta. Pode repetir a última pergunta?"
+          :textoSaida;
+        const candidata:SaidaAgente=normalizarSaida(
+          respostaRecuperada,contexto.estado,fallbackSeguro
+        );
 
         const promessaPendente = promessaOperacionalNaoExecutada(candidata.mensagens, ctx);
         if (promessaPendente && rodada < MAX_RODADAS_FERRAMENTAS - 1) {
@@ -3982,6 +3987,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
             : "Me conta um pouco mais para eu te ajudar por aqui.",
         ];
       }
+      // Auditoria e envio compartilham as mesmas mensagens, sempre sem payload.
+      saidaFinal.mensagens=protegerMensagensSaida(saidaFinal.mensagens,MAX_MENSAGENS_SAIDA);
       const resultadoEnvio = await enviarMensagensAgente(ctx, saidaFinal.mensagens);
       if (resultadoEnvio.supersedido) {
         const finalAgora = new Date().toISOString();

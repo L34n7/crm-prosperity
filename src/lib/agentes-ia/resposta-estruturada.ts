@@ -66,3 +66,29 @@ export function textoPareceEstruturaInterna(resposta:string):boolean{
   return /^\s*(?:[{\[]|[\`]{3}\s*json\b)/i.test(resposta)||
     /["'](?:mensagens|memoria_delta)["']\s*:/.test(resposta);
 }
+
+
+/** Última barreira antes do WhatsApp: nenhum caminho deve enviar o
+ * JSON interno da IA, mesmo que a normalização anterior seja ignorada.
+ * Recupera as mensagens de um objeto válido ou concatenado sem duplicá-las.
+ */
+export function protegerMensagensSaida(
+  mensagens:unknown[],limite=3,
+):string[]{
+  const seguras:string[]=[];
+  for(const item of mensagens){
+    const texto=String(item??"").trim();
+    if(!texto)continue;
+    if(textoPareceEstruturaInterna(texto)){
+      const recuperada=recuperarRespostaEstruturada(texto);
+      if(recuperada){
+        seguras.push(...recuperada.mensagens
+          .map(m=>textoWhatsappComQuebras(m,3500)).filter(Boolean));
+      }else{
+        seguras.push("Não consegui organizar minha resposta. Pode repetir a última pergunta?");
+      }
+    }else seguras.push(texto);
+    if(seguras.length>=limite)break;
+  }
+  return seguras.slice(0,limite);
+}
