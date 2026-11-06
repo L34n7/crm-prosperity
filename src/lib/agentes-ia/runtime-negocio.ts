@@ -16,6 +16,10 @@ import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFal
 import { respostaTrazDistincaoFipe, perguntaUnicaVersoesFipe, interpretarRespostaOpcoesFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,textoWhatsappComQuebras} from "./resposta-estruturada";
 import {modeloSugeridoConfirmadoCotacao} from "./modelo-sugerido-cotacao";
+import {querCompararPlanos,querCompararUso} from "./comparacao-intencao";
+import {compararValoresPlanos} from "./comparacao-planos";
+import {compararValoresUso} from "./comparacao-uso";
+import {cotacoesDoGrupo} from "./comparacao-fonte";
 import {
   clientePediuCotacaoVeicular, clienteCancelouCotacao,
   confirmouProsseguirCotacao, validarDadosNovosCotacao,
@@ -761,11 +765,17 @@ async function preflight(pendenciaId: string) {
     && await conversaPossuiCotacaoVeicular({
       empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
     });
+  const desejaComparacao=ferramentas.has("gerar_cotacao_veicular")
+    && (querCompararPlanos(pendencia.conteudo_agregado)||
+        Boolean(querCompararUso(pendencia.conteudo_agregado,ultimaResposta)))
+    && await conversaPossuiCotacaoVeicular({
+      empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+    });
   const estado=await carregarEstado(
     pendencia.empresa_id,pendencia.agente_id,pendencia.conversa_id
   );
   return {
-    relevante: preconsulta.relevante||aceiteCotacao||
+    relevante: preconsulta.relevante||aceiteCotacao||desejaComparacao||
       (ferramentas.has("gerar_cotacao_veicular")&&
         (estado.aguardando_escolha_plano||estado.cotacao_pendente)),
     pendencia: pendencia as PendenciaRow,
@@ -882,10 +892,16 @@ export async function processarPendenciaNegocio(
       && clienteCancelouCotacao(pendencia.conteudo_agregado);
     const continuidadeCotacaoSolicitada=estado.cotacao_pendente
       && confirmouProsseguirCotacao(pendencia.conteudo_agregado);
+    const compararMesmoVeiculo=ferramentas.has("gerar_cotacao_veicular")
+      && Boolean(querCompararUso(pendencia.conteudo_agregado,ultimaRespostaAgente))
+      && await conversaPossuiCotacaoVeicular({
+        empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+      });
     // Pedido em curso não deve ser apagado por "pode gerar a cotação?".
     const querOutraCotacao=ferramentas.has("gerar_cotacao_veicular")
       && !continuidadeCotacaoSolicitada
       && clientePediuCotacaoVeicular(pendencia.conteudo_agregado)
+      && !compararMesmoVeiculo
       && (!estado.cotacao_pendente || pedidoNovoExplicito);
     const retomarCotacao=ferramentas.has("gerar_cotacao_veicular")
       && !estado.cotacao_pendente && !querOutraCotacao
@@ -1104,6 +1120,118 @@ export async function processarPendenciaNegocio(
       posCotacaoMidiaId: null,
       continuidadeCotacao: null,
     };
+
+    // Perguntas de comparação usam cotações realmente salvas, não a janela
+    // resumida de mensagens da IA. Um novo uso aproveita o veículo FIPE
+    // exatamente como ele foi cotado, sem pedir novamente modelo e ano.
+    const comparacaoUso=querCompararUso(pendencia.conteudo_agregado,ultimaRespostaAgente);
+    const comparacaoPlanos=querCompararPlanos(pendencia.conteudo_agregado);
+    if(existeCotacaoAnterior&&!cotacaoEmAndamento&&!querOutraCotacao&&
+       (comparacaoUso||comparacaoPlanos)){
+      const {data:ultima,error:erroUltima}=await supabaseAdmin
+        .from("cotacao_veicular_cotacoes").select("grupo_id")
+        .eq("empresa_id",pendencia.empresa_id).eq("conversa_id",pendencia.conversa_id)
+        .eq("origem","agente_ia").order("created_at",{ascending:false})
+        .limit(1).maybeSingle();
+      if(erroUltima)throw new Error(erroUltima.message);
+      const base=ultima?.grupo_id
+        ?await cotacoesDoGrupo(pendencia.empresa_id,pendencia.conversa_id,ultima.grupo_id):[];
+      const primeira=base[0];
+      if(primeira&&primeira.veiculo&&primeira.ano_modelo){
+        let mensagemComparacao="";
+        let grupoComparado:string|null=null;
+        let diagnosticoComparacao:Record<string,unknown>|null=null;
+        if(comparacaoUso){
+          const usoBase=primeira.uso;
+          if(usoBase===comparacaoUso){
+            mensagemComparacao="A última cotação deste veículo já considera uso "+
+              comparacaoUso+".\n\n"+
+              compararValoresPlanos(primeira.veiculo,primeira.ano_modelo,usoBase,base);
+          }else if(usoBase==="particular"||usoBase==="aplicativo"){
+            // Cota exclusivamente o MESMO veículo armazenado, com novo uso.
+            const argumentos={marca:null,modelo:primeira.veiculo,
+              ano:String(primeira.ano_modelo),uso:comparacaoUso,opcionais_por_plano:[]};
+            let resultado:{ok:boolean;grupo_id?:string;error?:string};
+            try{
+              resultado=await executarFerramentaNegocio({
+              tipo:"gerar_cotacao_veicular",empresaId:pendencia.empresa_id,
+              agenteId:agente.id,conversaId:pendencia.conversa_id,
+              argumentos,produtosAutorizados:ctx.produtosAutorizados,
+              confirmacaoVenda:false,mensagemIds:pendencia.mensagem_ids,
+              }) as {ok:boolean;grupo_id?:string;error?:string};
+            }catch(error){
+              resultado={ok:false,error:error instanceof Error?error.message:String(error)};
+            }
+            ctx.ferramentasExecutadas.push({
+              nome:"gerar_cotacao_veicular",argumentos,resultado,
+              comparacao_uso:true,
+            });
+            if(resultado.ok&&resultado.grupo_id){
+              const novos=await cotacoesDoGrupo(
+                pendencia.empresa_id,pendencia.conversa_id,resultado.grupo_id
+              );
+              mensagemComparacao=compararValoresUso(primeira.veiculo,
+                primeira.ano_modelo,usoBase,base,comparacaoUso,novos);
+              grupoComparado=resultado.grupo_id;
+            }else{
+              diagnosticoComparacao={motivo:resultado.error||"Sem cotação alternativa"};
+              mensagemComparacao="Não consegui obter um valor confirmado para uso "+
+                comparacaoUso+" deste veículo. A cotação anterior continua válida. "+
+                "Nossa equipe pode verificar se existe proposta para essa finalidade.";
+            }
+          }
+        }else if(comparacaoPlanos){
+          mensagemComparacao=compararValoresPlanos(primeira.veiculo,
+            primeira.ano_modelo,primeira.uso||"informado",base);
+        }
+        if(mensagemComparacao){
+          ctx.acaoCriticaExecutada=Boolean(grupoComparado);
+          await enviarMensagens(ctx,[mensagemComparacao]);
+          const agora=new Date().toISOString();
+          const estadoComparado:EstadoConversa={
+            ...estado,cotacao_pendente:false,cotacao_opcoes_fipe:[],
+            cotacao_verificacao_humana:false,cotacao_em_correcao:false,
+            aguardando_escolha_plano:false,
+            proxima_acao:"esclarecer diferenças entre propostas e planos",
+          };
+          if(grupoComparado){
+            estadoComparado.cotacao_dados={
+              modelo:primeira.veiculo,ano_modelo:String(primeira.ano_modelo),
+              uso:comparacaoUso,
+            };
+            estadoComparado.cotacao_pedido_mensagens=[];
+            estadoComparado.estagio="cotação comparativa apresentada";
+          }
+          const {error:estadoErro}=await supabaseAdmin.from("agente_ia_conversa_estados")
+            .upsert({
+              empresa_id:pendencia.empresa_id,agente_id:agente.id,
+              conversa_id:pendencia.conversa_id,
+              resumo:memoriaCompacta(estadoComparado).slice(0,1800),
+              estado_json:{...estadoComparado,runtime_ultima_interacao:"negocio",
+                ultima_acao_critica:Boolean(grupoComparado)},
+              ultima_mensagem_id:pendencia.mensagem_ids.at(-1)||null,
+              ultima_interacao_at:agora,updated_at:agora,
+            },{onConflict:"agente_id,conversa_id"});
+          if(estadoErro)throw new Error(estadoErro.message);
+          const {error:erroExecucao}=await supabaseAdmin
+            .from("agente_ia_execucoes").update({
+              status:"concluido",resposta:mensagemComparacao,
+              ferramentas_json:ctx.ferramentasExecutadas,
+              latencia_ms:Date.now()-inicio,finished_at:agora,updated_at:agora,
+              metadata_json:{runtime:"negocio",comparacao_cotacao:true,
+                tipo:comparacaoUso?"finalidade_uso":"planos",
+                cotacao_status:grupoComparado?"emitida":"consulta",
+                grupo_original:ultima?.grupo_id||null,grupo_comparado:grupoComparado,
+                diagnostico:diagnosticoComparacao},
+            }).eq("id",execucaoId);
+          if(erroExecucao)throw new Error(erroExecucao.message);
+          await finalizarPendencia({pendencia,lockToken,status:"processado"});
+          return {tratado:true,resultado:{ok:true,processado:true,
+            runtime:"negocio",comparacaoCotacao:true,
+            grupoComparado:grupoComparado||null}};
+        }
+      }
+    }
 
     // Uma escolha inequívoca de plano JÁ cotado é suficiente para encaminhar.
     // A contratação propriamente dita permanece exclusivamente humana.
