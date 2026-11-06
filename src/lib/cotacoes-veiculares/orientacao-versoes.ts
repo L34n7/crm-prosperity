@@ -47,57 +47,117 @@ export function opcoesFipeDistintas(versoes:VersaoFipe[],limite=4):string[]{
   }
   return [...unicas.values()].slice(0,limite);
 }
+
+/** Uma descrição FIPE pode conter nomes equivalentes separados por barras.
+ * Expomos esses nomes como escolhas, mas todos mantêm o MESMO código de origem.
+ * Não dividir descrições com motorização/câmbio distintos em opções fictícias.
+ */
+function rotulosEscolhaFipe(nome:string):string[]{
+  const legivel=descricaoLegivelFipe(nome);
+  const alias=legivel.match(/^(.+?)\s+([1-9][.,][0-9]\s+[A-Za-z0-9.]+)\s*\/\s*([A-Za-z0-9.]+)\s*\/\s*([A-Za-z0-9.]+)\s+([2-5])p$/i);
+  if(!alias)return [legivel];
+  return [alias[2],alias[3],alias[4]].map(versao=>versao+" "+alias[5]+"p");
+}
+export type EscolhaNumeradaFipe={numero:number;rotulo:string;nomeFipe:string};
+const MAX_ESCOLHAS_FIPE=18;
+
+/** Numeração reproduzível a partir das opções salvas na conversa.
+ * Somente opções exibidas aceitam seleção pelo número. */
+export function escolhasNumeradasFipe(
+  nomes:string[],limite=MAX_ESCOLHAS_FIPE,
+):EscolhaNumeradaFipe[]{
+  const escolhas:EscolhaNumeradaFipe[]=[];
+  for(const nomeFipe of [...new Set(nomes.map(v=>String(v||"").trim()).filter(Boolean))]){
+    for(const rotulo of rotulosEscolhaFipe(nomeFipe)){
+      if(escolhas.length>=limite)return escolhas;
+      escolhas.push({numero:escolhas.length+1,rotulo,nomeFipe});
+    }
+  }
+  return escolhas;
+}
+
+export type ResultadoEscolhaFipe={
+  versaoSelecionada:string|null;
+  opcoesRestantes:string[];
+  filtrou:boolean;
+};
+
+/** Filtra progressivamente opções REAIS da FIPE conforme o cliente responde.
+ * "2" seleciona a opção numerada. "2 portas" é um atributo, nunca opção 2.
+ * Respostas que não distinguem modelos não autorizam escolha automática. */
+export function interpretarRespostaOpcoesFipe(
+  resposta:string,opcoesFipe:string[],
+):ResultadoEscolhaFipe{
+  const opcoes=[...new Set(opcoesFipe.map(v=>String(v||"").trim()).filter(Boolean))];
+  const base={versaoSelecionada:null,opcoesRestantes:opcoes,filtrou:false};
+  if(!opcoes.length)return base;
+  const texto=normalizar(resposta);
+  const indice=texto.match(/^(?:(?:opcao|numero|alternativa|versao)\s+)?(\d{1,2})$/);
+  if(indice){
+    const escolha=escolhasNumeradasFipe(opcoes).find(item=>item.numero===Number(indice[1]));
+    if(escolha)return {versaoSelecionada:escolha.nomeFipe,opcoesRestantes:[escolha.nomeFipe],filtrou:true};
+    return base;
+  }
+  const portas=texto.match(/(?:^|\s)([2-5])\s*(?:portas?|p)(?:\s|$)/)?.[1];
+  const motor=motorDoNome(resposta);
+  const cambio=cambioDoNome(resposta);
+  let filtradas=opcoes;
+  const aplicar=(predicado:(nome:string)=>boolean)=>{
+    const proximas=filtradas.filter(predicado);
+    if(proximas.length)filtradas=proximas;
+  };
+  if(portas){
+    const n=Number(portas);
+    const portasValidas=n===2?[2,3]:n===4?[4,5]:[n];
+    const existentes=filtradas.filter(nome=>{
+      const codigo=nome.match(/\b([2-5])p\b/i)?.[1];
+      return codigo&&portasValidas.includes(Number(codigo));
+    });
+    if(existentes.length)filtradas=existentes;
+  }
+  if(motor&&filtradas.some(nome=>motorDoNome(nome)===motor))
+    aplicar(nome=>motorDoNome(nome)===motor);
+  if(cambio&&filtradas.some(nome=>cambioDoNome(nome)===cambio))
+    aplicar(nome=>cambioDoNome(nome)===cambio);
+  const ignorar=new Set([
+    "quero","essa","esse","dessa","desse","opcao","numero","alternativa",
+    "versao","modelo","veiculo","carro","nome","a","o","as","os","da",
+    "de","do","é","e","aqui","sera","sim","mesmo","qual","sao","por",
+    "portas","porta","automático","automatico","manual","auto",
+  ]);
+  const tokens=texto.split(" ").filter(t=>t.length>=3&&!ignorar.has(t)&&
+    !/^\d+$/.test(t)&&!/^\d+[.,]\d+$/.test(t));
+  for(const token of tokens){
+    const contem=(nome:string)=>rotulosEscolhaFipe(nome)
+      .some(rotulo=>normalizar(rotulo).split(" ").includes(token))||
+      normalizar(nome).split(" ").includes(token);
+    if(filtradas.some(contem)&&filtradas.some(nome=>!contem(nome)))
+      aplicar(contem);
+  }
+  const filtrou=filtradas.length<opcoes.length;
+  return {versaoSelecionada:filtradas.length===1 && filtrou?filtradas[0]:null,
+    opcoesRestantes:filtradas,filtrou};
+}
+
 export function perguntaUnicaVersoesFipe(
   versoes:VersaoFipe[],
   anoModelo:string,
   motivo:"ambiguidade"|"incompatibilidade",
 ):string{
-  const unicas=[...new Map(versoes.map(v=>[v.code,v])).values()];
-  const opcoes=opcoesFipeDistintas(unicas);
-  if(!opcoes.length){
-    return "Não consegui identificar com segurança a versão desse veículo. " +
-      "Pode confirmar o modelo e a motorização?";
-  }
-  const prefixos=[...new Set(unicas.map(v=>normalizar(nomeVersao(v.name))))];
-  const motores=[...new Set(unicas.map(v=>motorDoNome(v.name)||""))];
-  const cambios=[...new Set(unicas.map(v=>cambioDoNome(v.name)||""))];
+  const escolhas=escolhasNumeradasFipe(versoes.map(v=>v.name));
+  if(!escolhas.length)return "Não consegui identificar a versão desse veículo. Pode informar o modelo e a motorização?";
   const inicio=motivo==="incompatibilidade"
     ?"Os dados informados não coincidem com as versões disponíveis"
     :"Encontrei mais de uma versão";
-  const contexto=" para o ano-modelo "+anoModelo+". ";
-  if(motivo==="ambiguidade"&&prefixos.length>1&&prefixos.length<=4){
-    const nomes=[...new Map(unicas.map(v=>{
-      const prefixo=nomeVersao(v.name);
-      const portas=v.name.match(/\b([2-5])p\b/i)?.[1];
-      return [normalizar(prefixo),prefixo+(portas?" ("+portas+" portas)":"")];
-    })).values()];
-    return "Para o ano-modelo "+anoModelo+
-      ", qual é a versão: "+nomes.join(" ou ")+"?";
-  }
-  if(motivo==="ambiguidade"&&prefixos.length===1&&motores.length===1&&
-    cambios.length===2&&cambios.every(Boolean)){
-    return "Para o "+opcoes[0].replace(/\s+(?:automático|manual)$/,"")+
-      ", o câmbio é automático ou manual?";
-  }
-  // Mais de quatro versões: perguntar um único atributo que possa
-  // reduzir o conjunto, sem enumerar uma lista enorme ao cliente.
-  if(unicas.length>4){
-    const nomes=[...new Map(unicas.map(v=>[
-      normalizar(nomeVersao(v.name)),nomeVersao(v.name)
-    ])).values()].slice(0,5);
-    if(nomes.length>1&&nomes.length<=5){
-      return inicio+contexto+"Qual é a versão: "+nomes.join(", ")+"?";
-    }
-    return inicio+contexto+"Pode informar o acabamento ou a motorização?";
-  }
-  if(motivo==="ambiguidade"&&prefixos.length===1&&motores.length>1){
-    return inicio+contexto+"Qual é a motorização: "+
-      motores.filter(Boolean).join(" ou ")+"?";
-  }
-  return inicio+contexto+"As opções verificadas são: "+
-    opcoes.map((opcao,i)=>(i+1)+") "+opcao).join("; ")+
-    ". Qual delas corresponde ao veículo?";
+  const complemento=escolhas.length>=MAX_ESCOLHAS_FIPE
+    ?"\n\nSe não encontrar seu veículo na lista, informe um detalhe como acabamento, motor ou quantidade de portas."
+    :"";
+  return inicio+" para o ano-modelo "+anoModelo+". As opções verificadas são:\n\n"+
+    escolhas.map(item=>item.numero+" - "+item.rotulo).join("\n")+
+    "\n\nQual delas corresponde ao veículo? Você pode responder com o número ou o nome."+
+    complemento;
 }
+
 /** Ordena opções reais que correspondem ao acabamento OU à motorização,
  * priorizando versões que preservam mais dados do cliente.
  */
@@ -129,24 +189,7 @@ export function ordenarAlternativasFipe(
 /** Só retoma uma cotação em impasse quando a resposta acrescenta um
  * atributo que realmente diferencia as opções verificadas na FIPE.
  */
-export function respostaTrazDistincaoFipe(
-  resposta:string,
-  opcoesFipe:string[],
-):boolean{
+export function respostaTrazDistincaoFipe(resposta:string,opcoesFipe:string[]):boolean{
   if(opcoesFipe.length<2)return false;
-  const texto=normalizar(resposta);
-  const tokens=texto.split(" ").filter(t=>t.length>=3);
-  const motores=opcoesFipe.map(motorDoNome);
-  const motorCliente=motorDoNome(resposta);
-  if(motorCliente&&motores.some(m=>m===motorCliente)&&
-    motores.some(m=>m!==motorCliente))return true;
-  const cambios=opcoesFipe.map(cambioDoNome);
-  const cambioCliente=cambioDoNome(resposta);
-  if(cambioCliente&&cambios.some(c=>c===cambioCliente)&&
-    cambios.some(c=>c!==cambioCliente))return true;
-  const nomes=opcoesFipe.map(normalizar);
-  return tokens.some(token=>
-    nomes.some(nome=>nome.split(" ").includes(token))&&
-    nomes.some(nome=>!nome.split(" ").includes(token))
-  );
+  return interpretarRespostaOpcoesFipe(resposta,opcoesFipe).filtrou;
 }
