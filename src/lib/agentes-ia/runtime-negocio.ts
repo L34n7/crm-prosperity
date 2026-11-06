@@ -14,6 +14,8 @@ import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import { respostaTrazDistincaoFipe, perguntaUnicaVersoesFipe, interpretarRespostaOpcoesFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
+import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,textoWhatsappComQuebras} from "./resposta-estruturada";
+import {modeloSugeridoConfirmadoCotacao} from "./modelo-sugerido-cotacao";
 import {
   clientePediuCotacaoVeicular, confirmouProsseguirCotacao, validarDadosNovosCotacao,
   modeloComDadosConfirmados,
@@ -205,11 +207,11 @@ function normalizarSaida(valor: unknown, estado: EstadoConversa, fallback = ""):
   const obj = valor && typeof valor === "object" ? (valor as Record<string, unknown>) : {};
   const mensagens = Array.isArray(obj.mensagens)
     ? obj.mensagens
-        .map((item) => textoCurto(item, 900))
+        .map((item) => textoWhatsappComQuebras(item, 900))
         .filter(Boolean)
         .slice(0, MAX_MENSAGENS_SAIDA)
     : [];
-  if (!mensagens.length && fallback.trim()) mensagens.push(textoCurto(fallback, 900));
+  if (!mensagens.length && fallback.trim()) mensagens.push(textoWhatsappComQuebras(fallback, 900));
   return {
     mensagens,
     estado: aplicarDelta(estado, obj.memoria_delta),
@@ -576,7 +578,7 @@ async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
   if (!ctx.pendencia.numero_destino) return;
   const limpas = ctx.cotacaoFormatada
     ? mensagens.map(item=>String(item||"").trim()).filter(Boolean).slice(0,12)
-    : mensagens.map(item=>textoCurto(item,900)).filter(Boolean).slice(0,3);
+    : mensagens.map(item=>textoWhatsappComQuebras(item,3500)).filter(Boolean).slice(0,3);
   if(ctx.cotacaoFormatada&&limpas.some(texto=>texto.length>4000))
     throw new Error("Mensagem de cotação excedeu o limite seguro de caracteres do WhatsApp.");
   for (let indice = 0; indice < limpas.length; indice++) {
@@ -923,6 +925,13 @@ export async function processarPendenciaNegocio(
       && respostaTrazDistincaoFipe(
         pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
       );
+    // Aceitação contextual de uma correção ortográfica recente sugerida
+    // pelo próprio agente. Não exige reescrever o modelo ao responder ano/uso.
+    const modeloCorrigidoPeloContexto=!querOutraCotacao
+      ?modeloSugeridoConfirmadoCotacao(
+        historico,pendencia.conteudo_agregado
+      )
+      :null;
     const cotacaoBloqueada=estado.cotacao_verificacao_humana
       && !querOutraCotacao && !corrigiuVeiculo && !novoDetalheAposImpasse;
     const cotacaoEmAndamento=ferramentas.has("gerar_cotacao_veicular")
@@ -980,6 +989,9 @@ export async function processarPendenciaNegocio(
       estado.cotacao_dados=consolidarDadosCotacao(
         estado.cotacao_pedido_mensagens,estado.cotacao_dados
       );
+      if(modeloCorrigidoPeloContexto){
+        estado.cotacao_dados.modelo=modeloCorrigidoPeloContexto;
+      }
       ferramentasRelevantes.set(
         "gerar_cotacao_veicular",
         ferramentas.get("gerar_cotacao_veicular")||{}
@@ -1270,12 +1282,17 @@ export async function processarPendenciaNegocio(
 
       if (!chamadas.length) {
         const textoSaida = String(response.output_text || "").trim();
-        let respostaInterpretada: SaidaAgente;
-        try {
-          respostaInterpretada = normalizarSaida(JSON.parse(textoSaida), estado);
-        } catch {
-          respostaInterpretada = normalizarSaida(null, estado, textoSaida);
-        }
+        // Nunca usar o JSON bruto como fallback. Algumas respostas do
+        // modelo trazem dois objetos consecutivos (mensagens/memoria_delta).
+        // Recuperar a primeira mensagem estruturada e, se for impossível,
+        // enviar uma frase segura em vez de expor a estrutura interna.
+        const respostaRecuperada=recuperarRespostaEstruturada(textoSaida);
+        const fallbackSeguro=textoPareceEstruturaInterna(textoSaida)
+          ?"Não consegui organizar minha resposta. Pode repetir a última informação do veículo?"
+          :textoSaida;
+        const respostaInterpretada:SaidaAgente=respostaRecuperada
+          ?normalizarSaida(respostaRecuperada,estado)
+          :normalizarSaida(null,estado,fallbackSeguro);
         if(ctx.cotacaoFormatada){
           // A saída desta rodada é uma continuação natural, não substitui a
           // proposta original que o backend já preparou para o WhatsApp.
@@ -1352,17 +1369,24 @@ export async function processarPendenciaNegocio(
           }
           if (!resultado && nome==="gerar_cotacao_veicular" &&
               cotacaoEmAndamento && !estado.cotacao_em_correcao) {
-            // Jamais permitir que o modelo invente acabamento, motor ou câmbio.
-            // Use os atributos efetivamente presentes no pedido atual.
+            // A sugestão ortográfica só entra após o cliente aceitar
+            // implicitamente respondendo ano/uso. O nome validado permanece
+            // sujeito à consulta FIPE real; não reaproveita veículos antigos.
+            const mensagensConfirmadas=modeloCorrigidoPeloContexto
+              ?[...estado.cotacao_pedido_mensagens,modeloCorrigidoPeloContexto]
+              :estado.cotacao_pedido_mensagens;
+            const modeloSolicitado=String(
+              modeloCorrigidoPeloContexto||argumentos.modelo||""
+            );
             argumentos.modelo=modeloComDadosConfirmados(
-              estado.cotacao_pedido_mensagens,String(argumentos.modelo||"")
+              mensagensConfirmadas,modeloSolicitado
             );
             // A marca deduzida a partir do modelo é somente uma hipótese.
             // Não a descarte porque o cliente disse "Astra" sem "Chevrolet":
             // identificarMarcaFipe/encontrarVeiculoFipe validam na FIPE real.
             // Motor, acabamento e câmbio continuam restritos ao que o cliente confirmou.
             const erroDadosNovos=validarDadosNovosCotacao(
-              estado.cotacao_pedido_mensagens,
+              mensagensConfirmadas,
               String(argumentos.modelo||""),
               String(argumentos.ano||""),
               String(argumentos.uso||"")
