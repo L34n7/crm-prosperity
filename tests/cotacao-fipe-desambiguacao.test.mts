@@ -127,3 +127,27 @@ test("com mais de uma versão 2p, filtro remove 4p e reapresenta somente candida
   assert.doesNotMatch(pergunta,/4p/);
   assert.equal(interpretarRespostaOpcoesFipe("2",filtrada.opcoesRestantes).versaoSelecionada,opcoes[1]);
 });
+
+test("Astra GLS 2000: 16 válvulas distingue 8V de 16V sem repetir pergunta",()=>{
+ const v=["Astra Sedan 2.0/CD/ Expres.GLS 2.0 8V 4p",
+ "Astra Sedan 2.0/CD/ GLS/ Adv. 2.0 16V 4p"];
+ assert.equal(interpretarRespostaOpcoesFipe("GLS",v).versaoSelecionada,null);
+ for(const m of ["GLS 16 válvula, 2.0, quatro portas","16 válvulas","16v"])
+  assert.equal(interpretarRespostaOpcoesFipe(m,v).versaoSelecionada,v[1]);
+ assert.equal(interpretarRespostaOpcoesFipe("8 válvulas",v).versaoSelecionada,v[0]);
+});
+
+test("número ordinal de versão serve para selecionar opção exibida",()=>{
+ const v=["Astra Sedan 2.0/CD/ Expres.GLS 2.0 8V 4p",
+ "Astra Sedan 2.0/CD/ GLS/ Adv. 2.0 16V 4p"];
+ assert.equal(interpretarRespostaOpcoesFipe("Segunda opção, segunda opção, Rio 2.",v).versaoSelecionada,v[1]);
+ assert.equal(interpretarRespostaOpcoesFipe("primeira opção",v).versaoSelecionada,v[0]);
+ assert.equal(interpretarRespostaOpcoesFipe("2 portas",v).versaoSelecionada,null);
+});
+test("Dolphin Mini 2026: GS e GL são acabamentos curtos inequívocos",()=>{
+ const v=["Dolphin Mini GL","Dolphin Mini GS (Elétrico)"];
+ for(const m of ["Gs","GS","Mini gs","Dolphin mini gs"])
+  assert.equal(interpretarRespostaOpcoesFipe(m,v).versaoSelecionada,v[1],m);
+ assert.equal(interpretarRespostaOpcoesFipe("GL",v).versaoSelecionada,v[0]);
+ assert.equal(interpretarRespostaOpcoesFipe("Dolphin Mini",v).versaoSelecionada,null);
+});

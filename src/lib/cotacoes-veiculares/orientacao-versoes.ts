@@ -21,6 +21,11 @@ function normalizar(valor:string){
 function motorDoNome(nome:string):string|null{
   return nome.match(/\b[1-9][.,][0-9]\b/)?.[0].replace(",",".")||null;
 }
+function valvulasDoNome(nome:string):number|null{
+  const texto=normalizar(nome);
+  const valor=texto.match(/\b(8|12|16|20|24|32)\s*(?:v|valvulas?|valvulas?)\b/)?.[1];
+  return valor?Number(valor):null;
+}
 function cambioDoNome(nome:string):"automático"|"manual"|null{
   const texto=normalizar(nome);
   if(/\b(?:aut|auto|automatico|automatica|cvt|tiptronic|dsg)\b/.test(texto))return "automático";
@@ -98,9 +103,20 @@ export function interpretarRespostaOpcoesFipe(
     if(escolha)return {versaoSelecionada:escolha.nomeFipe,opcoesRestantes:[escolha.nomeFipe],filtrou:true};
     return base;
   }
-  const portas=texto.match(/(?:^|\s)([2-5])\s*(?:portas?|p)(?:\s|$)/)?.[1];
+  const ordinal=texto.match(/\b(primeir[ao]|segund[ao]|terceir[ao]|quart[ao]|quint[ao]|sext[ao])\s+(?:opcao|alternativa|versao)\b/);
+  if(ordinal){
+    const ordem=["primeir","segund","terceir","quart","quint","sext"]
+      .findIndex(p=>ordinal[1].startsWith(p))+1;
+    const escolha=escolhasNumeradasFipe(opcoes).find(v=>v.numero===ordem);
+    if(escolha)return {versaoSelecionada:escolha.nomeFipe,
+      opcoesRestantes:[escolha.nomeFipe],filtrou:true};
+  }
+  const portas=texto.match(/(?:^|\s)([2-5])\s*(?:portas?|p)(?:\s|$)/)?.[1] ||
+    texto.match(/\b(duas|tres|quatro|cinco)\s+portas?\b/)?.[1]
+      ?.replace(/^(duas|tres|quatro|cinco)$/,(v)=>({duas:"2",tres:"3",quatro:"4",cinco:"5"} as Record<string,string>)[v]);
   const motor=motorDoNome(resposta);
   const cambio=cambioDoNome(resposta);
+  const valvulas=valvulasDoNome(resposta);
   let filtradas=opcoes;
   const aplicar=(predicado:(nome:string)=>boolean)=>{
     const proximas=filtradas.filter(predicado);
@@ -119,13 +135,16 @@ export function interpretarRespostaOpcoesFipe(
     aplicar(nome=>motorDoNome(nome)===motor);
   if(cambio&&filtradas.some(nome=>cambioDoNome(nome)===cambio))
     aplicar(nome=>cambioDoNome(nome)===cambio);
+  if(valvulas&&filtradas.some(nome=>valvulasDoNome(nome)===valvulas))
+    aplicar(nome=>valvulasDoNome(nome)===valvulas);
   const ignorar=new Set([
     "quero","essa","esse","dessa","desse","opcao","numero","alternativa",
     "versao","modelo","veiculo","carro","nome","a","o","as","os","da",
     "de","do","é","e","aqui","sera","sim","mesmo","qual","sao","por",
-    "portas","porta","automático","automatico","manual","auto",
+    "portas","porta","automatico","automatica","manual","auto",
+    "em","um","uma","eu","no","na","nos","nas","ou","me","se","so","pra","pro",
   ]);
-  const tokens=texto.split(" ").filter(t=>t.length>=3&&!ignorar.has(t)&&
+  const tokens=texto.split(" ").filter(t=>t.length>=2&&!ignorar.has(t)&&
     !/^\d+$/.test(t)&&!/^\d+[.,]\d+$/.test(t));
   for(const token of tokens){
     const contem=(nome:string)=>rotulosEscolhaFipe(nome)
