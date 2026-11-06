@@ -13,7 +13,7 @@ import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
-import { respostaTrazDistincaoFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
+import { respostaTrazDistincaoFipe, perguntaUnicaVersoesFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {
   clientePediuCotacaoVeicular, confirmouProsseguirCotacao, validarDadosNovosCotacao,
   modeloComDadosConfirmados,
@@ -167,7 +167,7 @@ function normalizarEstado(valor: unknown): EstadoConversa {
     cotacao_pedido_mensagens:listaCurta(obj.cotacao_pedido_mensagens,14,220),
     cotacao_dados:normalizarDadosCotacao(obj.cotacao_dados),
     cotacao_incompatibilidades:Math.max(0,Math.min(6,Number(obj.cotacao_incompatibilidades)||0)),
-    cotacao_opcoes_fipe:listaCurta(obj.cotacao_opcoes_fipe,4,160),
+    cotacao_opcoes_fipe:listaCurta(obj.cotacao_opcoes_fipe,40,160),
     cotacao_verificacao_humana:obj.cotacao_verificacao_humana===true,
   };
 }
@@ -1388,7 +1388,7 @@ export async function processarPendenciaNegocio(
         if (nome==="gerar_cotacao_veicular" && resultado?.ok===false &&
           (resultado.code==="FIPE_VERSAO_INCOMPATIVEL" ||
            resultado.code==="FIPE_VERSAO_AMBIGUA")) {
-          const opcoes=listaCurta(resultado.opcoes_fipe,4,160);
+          const opcoes=listaCurta(resultado.opcoes_fipe,40,160);
           if(resultado.code==="FIPE_VERSAO_INCOMPATIVEL") {
             if(!incompatibilidadeContadaNestaMensagem) {
               estado.cotacao_incompatibilidades+=1;
@@ -1610,6 +1610,18 @@ export async function processarPendenciaNegocio(
         saidaFinal.estado.cotacao_opcoes_fipe = [];
         saidaFinal.estado.proxima_acao = "oferecer ajuda da equipe para conferência do veículo";
       }
+    }
+    // Quando a resposta do cliente não distingue versões verificadas, não
+    // repetir uma pergunta resumida que esconda o único atributo distintivo.
+    if (!ultimaFalhaCotacao && !ctx.cotacaoFormatada &&
+        cotacaoEmAndamento && estado.cotacao_opcoes_fipe.length>1 &&
+        !respostaTrazDistincaoFipe(
+          pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
+        )) {
+      saidaFinal.mensagens=[perguntaUnicaVersoesFipe(
+        estado.cotacao_opcoes_fipe.map((name,i)=>({name,code:String(i)})),
+        estado.cotacao_dados.ano_modelo||"informado","ambiguidade"
+      )];
     }
     // Somente a chamada real à ferramenta autoriza prometer uma proposta.
     if(!ctx.cotacaoFormatada && !executouFerramentaCotacao &&

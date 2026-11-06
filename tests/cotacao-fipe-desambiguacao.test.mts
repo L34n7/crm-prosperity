@@ -37,3 +37,36 @@ test("reconhecer sedã e Auto genericamente",()=>{
   const opcoes=[{code:"a",name:"Exemplo Sedan GL 1.6 Aut. 4p"},{code:"m",name:"Exemplo Sedan GL 1.6 Mec. 4p"}];
   assert.deepEqual(modelosCompativeisFipe(opcoes,"Exemplo sedã GL 1.6 auto").map(x=>x.code),["a"]);
 });
+
+
+test("Astra 2010 apresenta Advantage como acabamento e distingue carroceria",()=>{
+  const itens=[
+    {code:"h-aut",name:"Astra Advant. 2.0 MPFI 8V FlexP. 5p Aut."},
+    {code:"h",name:"Astra Advantage 2.0 MPFI 8V FlexPower 5p"},
+    {code:"s",name:"Astra Sed. Advant. 2.0 8V MPFI FlexP. 4p"},
+    {code:"s-aut",name:"Astra Sed.Advan. 2.0 8V MPFI FlexP. Aut."},
+  ];
+  const pergunta=perguntaUnicaVersoesFipe(itens,"2010","ambiguidade");
+  assert.match(pergunta,/Astra Advantage/);
+  assert.match(pergunta,/Astra Sedan Advantage/);
+  assert.doesNotMatch(pergunta,/Advant\.|Advan\./);
+  assert.equal((pergunta.match(/\?/g)||[]).length,1);
+  assert.equal(respostaTrazDistincaoFipe("sedan",itens.map(i=>i.name)),true);
+});
+
+test("Fusion Titanium 2019 preserva Híbrido e AWD como alternativas distintas",()=>{
+  const itens=[
+    {code:"hybrid",name:"Fusion Titanium 2.0 145cv Aut. (Híbrido)"},
+    {code:"awd",name:"Fusion Titanium 2.0 GTDI Eco. Awd Aut."},
+  ];
+  const nomes=itens.map(v=>v.name);
+  const pergunta=perguntaUnicaVersoesFipe(itens,"2019","ambiguidade");
+  assert.match(pergunta,/Híbrido/);
+  assert.match(pergunta,/AWD/);
+  assert.equal((pergunta.match(/\?/g)||[]).length,1);
+  assert.equal(respostaTrazDistincaoFipe("hibrido",nomes),true);
+  assert.equal(respostaTrazDistincaoFipe("AWD",nomes),true);
+  for(const comum of ["Titanium 2.0","automático","Fusion Titanium 2.0 automático","é essa mesma"]){
+    assert.equal(respostaTrazDistincaoFipe(comum,nomes),false,comum);
+  }
+});

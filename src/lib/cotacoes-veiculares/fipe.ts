@@ -1,5 +1,6 @@
 import "server-only";
 import { modelosCompativeisFipe } from "./modelos-compatibilidade";
+import {agruparModelosPorAnoFipe} from "./modelos-ano";
 import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
 export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
@@ -30,6 +31,14 @@ export async function listarMarcasFipe(tipo: TipoFipe) {
 }
 export async function listarModelosFipe(tipo: TipoFipe, marca: string) {
   return solicitarFipe<OpcaoFipe[]>(tipo, "/brands/" + encodeURIComponent(marca) + "/models");
+}
+/** Consulta FIPE alternativa por marca e ano: evita varrer dezenas de modelos. */
+export async function listarAnosMarcaFipe(tipo:TipoFipe,marca:string){
+  return solicitarFipe<OpcaoFipe[]>(tipo,"/brands/"+encodeURIComponent(marca)+"/years");
+}
+export async function listarModelosMarcaAnoFipe(tipo:TipoFipe,marca:string,anoCodigo:string){
+  return solicitarFipe<OpcaoFipe[]>(tipo,
+    "/brands/"+encodeURIComponent(marca)+"/years/"+encodeURIComponent(anoCodigo)+"/models");
 }
 export async function listarAnosFipe(tipo: TipoFipe, marca: string, modelo: string) {
   return solicitarFipe<OpcaoFipe[]>(tipo, "/brands/" + encodeURIComponent(marca) + "/models/" + encodeURIComponent(modelo) + "/years");
@@ -79,9 +88,29 @@ export class ErroIdentificacaoVersaoFipe extends Error {
   ){super(detalhe);this.name="ErroIdentificacaoVersaoFipe";}
 }
 type ModeloComAno={modelo:OpcaoFipe;anos:OpcaoFipe[]};
+/** Filtragem por ano sem limite arbitrário de versões do modelo.
+ * FIPE oferece marca/ano/modelos; cada combinação de combustível é consultada
+ * e uma resposta parcial não pode ser usada para gerar preço errado.
+ */
+async function consultarCandidatosMarcaAno(params:{
+  tipo:TipoFipe;marca:string;candidatos:OpcaoFipe[];ano:string;
+}):Promise<{validos:ModeloComAno[];erros:number}>{
+  const anos=correspondeAnoFipe(await listarAnosMarcaFipe(params.tipo,params.marca),params.ano);
+  if(!anos.length)return {validos:[],erros:0};
+  const respostas=await Promise.allSettled(anos.map(async ano=>({
+    ano,modelos:await listarModelosMarcaAnoFipe(params.tipo,params.marca,ano.code),
+  })));
+  if(respostas.some(item=>item.status==="rejected"))
+    throw new Error("Consulta FIPE indisponível ao conferir os modelos do ano.");
+  const consultas=respostas.flatMap(resposta=>
+    resposta.status==="fulfilled"?[resposta.value]:[]
+  );
+  return {validos:agruparModelosPorAnoFipe(params.candidatos,consultas),erros:0};
+}
 async function consultarCandidatosPorAno(params:{
   tipo:TipoFipe;marca:string;candidatos:OpcaoFipe[];ano:string;
 }):Promise<{validos:ModeloComAno[];erros:number}>{
+  if(params.candidatos.length>12)return consultarCandidatosMarcaAno(params);
   const validos:ModeloComAno[]=[];
   let erros=0;
   // Evita rajadas sem limite de consultas na API da FIPE.
@@ -127,7 +156,7 @@ async function alternativasProximasFipe(params:{
     for(const item of modelosCompativeisFipe(params.listaModelos,consulta))
       if(!excluidos.has(item.code))unicos.set(item.code,item);
   const candidatos=[...unicos.values()];
-  if(!candidatos.length||candidatos.length>45)return {opcoes:[],erros:0};
+  if(!candidatos.length)return {opcoes:[],erros:0};
   const resultado=await consultarCandidatosPorAno({
     tipo:params.tipo,marca:params.marca,candidatos,ano:params.anoModelo,
   });
@@ -161,9 +190,7 @@ export async function encontrarVeiculoFipe(params: {
   }
   // Consultar os anos antes de sugerir opções. Evita oferecer versões que
   // não existem no ano selecionado (ocorria com a Ranger).
-  if(candidatos.length>50)
-    throw new Error("Há muitas versões desse modelo. Confirme a versão ou a motorização "+
-      "para identificar uma opção FIPE sem solicitar documento.");
+  // Disponibilidade por ano validada na FIPE, inclusive para famílias grandes.
   const consulta=await consultarCandidatosPorAno({
     tipo:params.tipo,marca:marca.code,candidatos,ano:anoModelo,
   });

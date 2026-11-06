@@ -1,3 +1,4 @@
+import {descricaoLegivelFipe} from "./orientacao-versoes";
 /**
  * Proposta comercial compartilhada entre o agente IA e "Copiar comparativo".
  * A FIPE e a tabela de origem continuam no cálculo interno, nunca no texto do cliente.
@@ -49,7 +50,7 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
     "",
     "📋 *DADOS DO VEÍCULO*",
     ...(dados.interessado?.trim()?["• Interessado: "+dados.interessado.trim()]:[]),
-    "• Veículo: "+dados.veiculo,
+    "• Veículo: "+descricaoLegivelFipe(dados.veiculo),
     ...(dados.anoModelo?["• Ano/modelo: "+dados.anoModelo]:[]),
     "• Uso: "+dados.uso,
   ];

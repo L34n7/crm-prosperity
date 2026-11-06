@@ -132,3 +132,16 @@ test("saudação sem dados não reativa cotação pendente", () => {
     assert.equal(mensagemSocialSemDadosCotacao(mensagem),false,mensagem);
   }
 });
+
+
+test("abreviações FIPE Advantage são equivalentes sem presumir câmbio",()=>{
+  const itens=[
+    {code:"h-aut",name:"Astra Advant. 2.0 MPFI 8V FlexP. 5p Aut."},
+    {code:"h",name:"Astra Advantage 2.0 MPFI 8V FlexPower 5p"},
+    {code:"s",name:"Astra Sed. Advant. 2.0 8V MPFI FlexP. 4p"},
+    {code:"s-aut",name:"Astra Sed.Advan. 2.0 8V MPFI FlexP. Aut."},
+  ];
+  assert.deepEqual(modelosCompativeisFipe(itens,"Astra Sedan Advantage").map(v=>v.code),["s","s-aut"]);
+  assert.deepEqual(modelosCompativeisFipe(itens,"Astra Advantage").map(v=>v.code),["h-aut","h","s","s-aut"]);
+  assert.deepEqual(modelosCompativeisFipe(itens,"Astra Sedan Advantage automático").map(v=>v.code),["s-aut"]);
+});

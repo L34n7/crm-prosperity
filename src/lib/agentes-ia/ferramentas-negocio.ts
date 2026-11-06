@@ -4,6 +4,7 @@ import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes
 import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
+import {descricaoLegivelFipe} from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import {formatarPropostaVeicular,dividirPropostaWhatsApp} from "@/lib/cotacoes-veiculares/formatar-proposta";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -432,7 +433,7 @@ export async function executarFerramentaNegocio(params: {
           ok:false,code:falha.codigo,
           error:falha.message,
           pergunta_cliente:falha.perguntaCliente,
-          opcoes_fipe:falha.opcoes.map(v=>v.name).slice(0,4),
+          opcoes_fipe:falha.opcoes.map(v=>v.name).slice(0,40),
         };
       }
       const erros=buscas.filter((r):r is PromiseRejectedResult=>r.status==="rejected")
@@ -492,7 +493,7 @@ export async function executarFerramentaNegocio(params: {
     });
     return {
       ok:true,grupo_id,cotacao_ids:cotacoes.map(i=>i.id),
-      veiculo:fipe.brand+" "+fipe.model,ano:fipe.modelYear,
+      veiculo:fipe.brand+" "+descricaoLegivelFipe(fipe.model),ano:fipe.modelYear,
       categoria,uso,energia,
       // A FIPE continua sendo registrada para cálculo, mas não compõe a resposta ao cliente.
       mensagens_cliente:dividirPropostaWhatsApp(textoCliente),

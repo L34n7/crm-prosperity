@@ -12,7 +12,10 @@ type CambioFipe = "automatico" | "manual";
 function normalizar(valor: string) {
   return String(valor || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ")
+    .replace(/\bsed\b/g,"sedan")
+    .replace(/\b(?:advant|advan)\b/g,"advantage")
+    .replace(/\s+/g," ").trim();
 }
 
 function cambioExplicito(valor: string): CambioFipe | null {

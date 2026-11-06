@@ -4,8 +4,17 @@
  */
 export type VersaoFipe = {name:string;code:string};
 
+export function descricaoLegivelFipe(nome:string):string{
+  return String(nome||"")
+    .replace(/\bsed\.\s*/gi,"Sedan ")
+    .replace(/\b(?:advant|advan)\.?(?=\s|$)/gi,"Advantage")
+    .replace(/\baut\.(?=\s|$)/gi,"automático")
+    .replace(/\bmec\.(?=\s|$)/gi,"manual")
+    .replace(/\bawd\b/gi,"AWD")
+    .replace(/\s+/g," ").trim();
+}
 function normalizar(valor:string){
-  return String(valor||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  return descricaoLegivelFipe(valor).normalize("NFD").replace(/[\u0300-\u036f]/g,"")
     .toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 }
 
@@ -19,7 +28,7 @@ function cambioDoNome(nome:string):"automático"|"manual"|null{
   return null;
 }
 function nomeVersao(nome:string){
-  const bruto=String(nome||"").split(/\b[1-9][.,][0-9]\b/)[0]
+  const bruto=descricaoLegivelFipe(nome).split(/\b[1-9][.,][0-9]\b/)[0]
     .replace(/\s+/g," ").replace(/\/\s+/g,"/").trim();
   return bruto||String(nome||"").slice(0,85);
 }
@@ -27,10 +36,7 @@ function familiaNome(nome:string){
   return normalizar(nome).split(" ")[0]||"";
 }
 function resumoVersao(nome:string){
-  const prefixo=nomeVersao(nome);
-  const motor=motorDoNome(nome);
-  const cambio=cambioDoNome(nome);
-  return [prefixo,motor,cambio].filter(Boolean).join(" ").slice(0,115);
+  return descricaoLegivelFipe(nome).slice(0,145);
 }
 export function opcoesFipeDistintas(versoes:VersaoFipe[],limite=4):string[]{
   const unicas=new Map<string,string>();
@@ -60,7 +66,11 @@ export function perguntaUnicaVersoesFipe(
     :"Encontrei mais de uma versão";
   const contexto=" para o ano-modelo "+anoModelo+". ";
   if(motivo==="ambiguidade"&&prefixos.length>1&&prefixos.length<=4){
-    const nomes=[...new Set(unicas.map(v=>nomeVersao(v.name)))];
+    const nomes=[...new Map(unicas.map(v=>{
+      const prefixo=nomeVersao(v.name);
+      const portas=v.name.match(/\b([2-5])p\b/i)?.[1];
+      return [normalizar(prefixo),prefixo+(portas?" ("+portas+" portas)":"")];
+    })).values()];
     return "Para o ano-modelo "+anoModelo+
       ", qual é a versão: "+nomes.join(" ou ")+"?";
   }
@@ -72,7 +82,9 @@ export function perguntaUnicaVersoesFipe(
   // Mais de quatro versões: perguntar um único atributo que possa
   // reduzir o conjunto, sem enumerar uma lista enorme ao cliente.
   if(unicas.length>4){
-    const nomes=[...new Set(unicas.map(v=>nomeVersao(v.name)))].slice(0,5);
+    const nomes=[...new Map(unicas.map(v=>[
+      normalizar(nomeVersao(v.name)),nomeVersao(v.name)
+    ])).values()].slice(0,5);
     if(nomes.length>1&&nomes.length<=5){
       return inicio+contexto+"Qual é a versão: "+nomes.join(", ")+"?";
     }
@@ -82,8 +94,9 @@ export function perguntaUnicaVersoesFipe(
     return inicio+contexto+"Qual é a motorização: "+
       motores.filter(Boolean).join(" ou ")+"?";
   }
-  return inicio+contexto+"Encontrei "+opcoes.join(" ou ")+
-    ". Qual dessas versões corresponde ao veículo?";
+  return inicio+contexto+"As opções verificadas são: "+
+    opcoes.map((opcao,i)=>(i+1)+") "+opcao).join("; ")+
+    ". Qual delas corresponde ao veículo?";
 }
 /** Ordena opções reais que correspondem ao acabamento OU à motorização,
  * priorizando versões que preservam mais dados do cliente.
