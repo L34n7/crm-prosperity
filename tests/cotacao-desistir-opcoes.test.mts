@@ -64,4 +64,8 @@ test("LTZ sozinho não autoriza cotar um Chevrolet diferente",()=>{
   null,
  );
 });
-\ntest("acabamento só complementa a família do carro explicitamente citada",()=>{\n for(const v of ["LTZ","GLS","XLT","LX"])assert.equal(acabamentoIsoladoCotacao(v),true,v);\n for(const v of ["Cruze","dia a dia","Particular","2020"])assert.equal(acabamentoIsoladoCotacao(v),false,v);\n});\n
+
+test("acabamento só complementa a família do carro explicitamente citada",()=>{
+ for(const v of ["LTZ","GLS","XLT","LX"])assert.equal(acabamentoIsoladoCotacao(v),true,v);
+ for(const v of ["Cruze","dia a dia","Particular","2020"])assert.equal(acabamentoIsoladoCotacao(v),false,v);
+});
