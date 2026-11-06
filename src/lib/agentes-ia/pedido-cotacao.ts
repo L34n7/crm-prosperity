@@ -7,10 +7,21 @@ function normalizar(value:string):string{
   return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
     .toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
 }
+/** Desistência explícita encerra a seleção de versões; não é correção do carro. */
+export function clienteCancelouCotacao(mensagem:string):boolean{
+  const t=normalizar(mensagem);
+  return /\b(?:deixa(?: isso)? (?:pra|para) la|deixa quieto|desisto(?: da cotacao| do seguro)?|nao quero mais (?:cotar|a cotacao|essa cotacao|esse seguro)|cancela(?:r)? (?:a |essa )?cotacao|pode cancelar (?:a |essa )?cotacao)\b/.test(t);
+}
+
 export function clientePediuCotacaoVeicular(mensagem:string):boolean{
   const t=normalizar(mensagem);
   if(!t)return false;
+  if (clienteCancelouCotacao(mensagem)) return false;
   if (clientePediuNovoVeiculoCotacao(mensagem)) return true;
+  // No contexto de um agente de cotação, "eu tenho um Vectra 2002" inicia
+  // a coleta; uma resposta subsequente "Particular" deve completá-la.
+  if(/^(?:eu\s+)?tenho\s+(?:um|uma)\s+.{2,70}\b(?:19|20)\d{2}\b/.test(t))
+    return true;
   if(/\b(?:cotar|simular|orcamento|cotacao|simulacao)\b/.test(t)
     && /\b(?:quero|gostaria|preciso|pode|poderia|vou|vamos|solicito|fazer|gerar|receber|outra|novo|mais)\b/.test(t)
     && !/\b(?:quero|gostaria)\s+(?:saber|entender|revisar|comparar|ver)\b/.test(t))return true;
@@ -168,7 +179,7 @@ export const DADOS_COTACAO_VAZIOS: DadosCotacaoConfirmados = {
 };
 
 const PALAVRAS_GERAIS_COTACAO = new Set(
-  ("a o as os e de da do das dos um uma meu minha seus seu do meu do seu carro carros veiculo veiculos moto motos " +
+  ("a o as os e eu de da do das dos um uma meu minha seus seu do meu do seu carro carros veiculo veiculos moto motos " +
   "quero gostaria preciso posso pode poderia podemos faz faca fazer fazermos vamos bora agora depois novo nova outra outro " +
   "proximo proxima cotar cote cotacao cotacoes orcamento proposta propostas simular simulacao gerar gere gera " +
   "para por com sem em no na uso finalidade ano modelo marca marca e eh ser sera foi tem tenho esta esse essa isso " +

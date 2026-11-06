@@ -446,6 +446,14 @@ export async function executarFerramentaNegocio(params: {
       const motorIncompativel=erros.find(e=>e.includes("A versão/motorização informada não consta")||e.includes("A motorização/versão informada não existe"));
       const alternativas=erros.find(e=>e.includes("versão localizada para o ano-modelo"));
       const revisarVersao=erros.find(e=>e.includes("versão ou a motorização"));
+      if(anoInvalido&&!indisponivel){
+        return {ok:false,code:"FIPE_ANO_MODELO_NAO_ENCONTRADO",
+          error:anoInvalido,
+          pergunta_cliente:"Não encontrei "+textoCurto(identificacao.modelo,90)+
+            " para o ano-modelo "+textoCurto(ano,12)+
+            " nas versões disponíveis na FIPE. Pode confirmar o ano-modelo?",
+        };
+      }
       return {ok:false,error:ambiguidade
         ?"A FIPE encontrou mais de uma versão. Informe ao cliente as opções cadastradas e pergunte SOMENTE o detalhe que as distingue: "+
           ambiguidade.split(":").slice(1).join(":").trim()
