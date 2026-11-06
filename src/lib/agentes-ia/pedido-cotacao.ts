@@ -10,6 +10,8 @@ function normalizar(value:string):string{
 /** Desistência explícita encerra a seleção de versões; não é correção do carro. */
 export function clienteCancelouCotacao(mensagem:string):boolean{
   const t=normalizar(mensagem);
+  // Aceita comandos curtos de cancelamento e uma transcrição comum do áudio.
+  if(/^(?:cancela|cancelar|canela|pare|pode parar|desisti)$/.test(t))return true;
   return /\b(?:deixa(?: isso)? (?:pra|para) la|deixa quieto|desisto(?: da cotacao| do seguro)?|nao quero mais(?: (?:cotar|a cotacao|essa cotacao|esse seguro))?|cancela(?:r)? (?:a |essa )?cotacao|pode cancelar (?:a |essa )?cotacao)\b/.test(t);
 }
 

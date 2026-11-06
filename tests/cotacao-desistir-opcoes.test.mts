@@ -32,6 +32,9 @@ test("identificação explícita de outro modelo permite sair da lista errada",(
 test("desistir é diferente de rejeitar opções; não reabrir automaticamente",()=>{
   assert.equal(clienteCancelouCotacao("Não quero mais"),true);
   assert.equal(clienteCancelouCotacao("Desisto"),true);
+  assert.equal(clienteCancelouCotacao("Cancela"),true);
+  assert.equal(clienteCancelouCotacao("Canela"),true);
+  assert.equal(clienteCancelouCotacao("Canela 2020"),false);
   assert.equal(clienteCancelouCotacao("Não quero esse"),false);
 });
 test("uso no dia a dia não pode virar nome de modelo; modelo informado depois prevalece",()=>{
