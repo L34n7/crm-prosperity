@@ -74,3 +74,17 @@ test("não inventa intenção de correção em consulta comum",()=>{
    assert.equal(identificarAjusteCotacao(frase,false),null,frase);
  }
 });
+
+test("troca de versão sem nome do campo em ambos os sentidos",()=>{
+  for(const frase of ["Não é MPI, é GLS","É GLS, não MPI","Não é essa"]){
+    assert.equal(identificarAjusteCotacao(frase,true)?.acao,"versao",frase);
+  }
+  assert.equal(textoPositivoDaCorrecao("não é a versão MPI, é GLS"),"gls");
+  assert.equal(textoPositivoDaCorrecao("é 1.8, não é o motor 2.0"),"1.8");
+  assert.equal(textoPositivoDaCorrecao("não é o câmbio automático"),"");
+});
+test("rejeição comercial não é correção FIPE mesmo com opções anteriores",()=>{
+  for(const frase of ["não é esse plano","não é esse valor","mas ficou caro","errei a opção do plano"]){
+    assert.equal(identificarAjusteCotacao(frase,true),null,frase);
+  }
+});
