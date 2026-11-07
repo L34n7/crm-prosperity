@@ -1140,7 +1140,7 @@ export async function processarPendenciaNegocio(
       && !respostaRejeitouOpcoes && !compararMesmoVeiculo && !cancelouCotacao && !saudacaoSemDados && !cotacaoBloqueada
       && (querOutraCotacao||corrigiuVeiculo||novoDetalheAposImpasse||
         retomarCotacao||estado.cotacao_pendente||promessaAntigaPendente||
-        Boolean(ajusteEfetivo&&ajusteEfetivo.acao!=="atendente"));
+        Boolean(ajusteEfetivo));
     if(cancelouCotacao){
       // A desistência anula pendências de cotação e a lista de escolhas
       // antes que qualquer resposta consiga reativar o funil antigo.
