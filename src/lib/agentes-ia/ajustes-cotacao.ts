@@ -62,12 +62,19 @@ export function identificarAjusteCotacao(mensagem:string,temOpcoes=false):Ajuste
   if((/\b(?:tracao|eixos?)\b/.test(t)&&isCorrecao(t))||
      (isCorrecao(t)&&/\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(t)))
     return fazer("tracao",textoPositivoDaCorrecao(mensagem));
-  if(/\b(?:respondi errado|respondi errada|errei a resposta|errei a opcao|escolhi errado|marquei errado|voltar as opcoes|(?:mostrar|ver|rever) (?:as )?opcoes|voltar a lista|me enganei na resposta)\b/.test(t))
+  // "Não é esse plano" ou "mas está caro" após uma proposta não é uma
+  // correção FIPE, mesmo que a última lista de versões esteja armazenada.
+  const trataDeCondicoesComerciais=/\b(?:plano|preco|valor|mensalidade|cobertura|franquia|desconto|pagamento|parcela|adesao|contratacao)\b/.test(t)
+    && !/\b(?:versao|modelo|motor|motorizacao|cambio|tracao|ano|veiculo|carro)\b/.test(t);
+  if(!trataDeCondicoesComerciais&&/\b(?:respondi errado|respondi errada|errei a resposta|errei a opcao|escolhi errado|marquei errado|voltar as opcoes|(?:mostrar|ver|rever) (?:as )?opcoes|voltar a lista|me enganei na resposta)\b/.test(t))
     return fazer("voltar_opcoes",textoPositivoDaCorrecao(mensagem));
-  if(/\b(?:versao|opcao|acabamento)\b/.test(t)&&isCorrecao(t)||
-     // "Não é MPI, é GLS" deve recuperar a lista original mesmo sem
-     // o cliente escrever "versão" ou "opção".
-     (temOpcoes&&/\b(?:na verdade|confundi|errei|mas|o correto e|a correta e|o certo e|a certa e|nao|nao e|nao era|nao foi|nem|e sim)\b/.test(t)))
+  if(!trataDeCondicoesComerciais&&(
+     (/\b(?:versao|opcao|acabamento)\b/.test(t)&&isCorrecao(t))||
+     // "Não é MPI, é GLS" e "É GLS, não MPI" recuperam a lista,
+     // sem interpretar rejeição comercial como correção de versão.
+     (temOpcoes&&(/\b(?:na verdade|confundi|errei|o correto e|a correta e|o certo e|a certa e|nao e|nao era|nao foi|nem|e sim)\b/.test(t)||
+       /\b(?:e|eh|era)\s+[\w.-]{2,}\s*,?\s+nao\s+[\w.-]{2,}\b/.test(t)||
+       /\bmas\s+(?:e|eh|era|na verdade)\b/.test(t)))))
     return fazer("versao",textoPositivoDaCorrecao(mensagem));
   return null;
 }
