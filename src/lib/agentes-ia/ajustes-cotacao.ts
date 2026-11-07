@@ -67,7 +67,7 @@ export function identificarAjusteCotacao(mensagem:string,temOpcoes=false):Ajuste
   if(/\b(?:versao|opcao|acabamento)\b/.test(t)&&isCorrecao(t)||
      // "Não é MPI, é GLS" deve recuperar a lista original mesmo sem
      // o cliente escrever "versão" ou "opção".
-     (temOpcoes&&/\b(?:na verdade|confundi|errei|mas|o correto e|a correta e|o certo e|a certa e|nao e|nao era|nao foi|nem|e sim)\b/.test(t)))
+     (temOpcoes&&/\b(?:na verdade|confundi|errei|mas|o correto e|a correta e|o certo e|a certa e|nao|nao e|nao era|nao foi|nem|e sim)\b/.test(t)))
     return fazer("versao",textoPositivoDaCorrecao(mensagem));
   return null;
 }
