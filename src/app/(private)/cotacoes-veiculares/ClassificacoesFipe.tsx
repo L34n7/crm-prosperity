@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useState} from "react";
 import {CheckCircle2,ClipboardList,Loader2,Save} from "lucide-react";
 import {CATEGORIAS_COTACAO,type CategoriaCotacao} from "@/lib/cotacoes-veiculares/catalogo";
+import {tracaoIndicadaNaFipe} from "@/lib/cotacoes-veiculares/classificacao-caminhoes";
 import styles from "./page.module.css";
 type Registro={
  tipo_fipe:"cars"|"motorcycles"|"trucks";codigo_fipe:string;modelo:string;
@@ -21,7 +22,7 @@ export default function ClassificacoesFipe({podeConfigurar}:{
  const [carregando,setCarregando]=useState(true);
  const [salvando,setSalvando]=useState<string|null>(null);
  const [erro,setErro]=useState(""),[sucesso,setSucesso]=useState("");
- const [somentePendentes,setSomentePendentes]=useState(true);
+ const [somentePendentes,setSomentePendentes]=useState(false);
  const carregar=useCallback(async()=>{
   setCarregando(true);
   try{
@@ -57,7 +58,7 @@ export default function ClassificacoesFipe({podeConfigurar}:{
  return <section className={styles.panel}>
   <div className={styles.sectionHeading}>
    <h2>Classificações FIPE</h2>
-   <p>Esta área é utilizada somente quando algum veículo precisa de revisão. Automóveis e motos comuns já recebem categoria automaticamente: não é necessário cadastrá-los novamente.</p>
+   <p>A categoria é atribuída automaticamente na consulta FIPE. Caminhões usam a tabela de pesados por padrão; escolha Caminhão leve ou Agregado aqui quando a regra comercial da empresa exigir. Alterações manuais têm prioridade nas próximas cotações.</p>
   </div>
   <div className={styles.classificationToolbar}>
    <span><strong>{pendentes}</strong> pendente(s) de classificação</span>
@@ -78,7 +79,9 @@ export default function ClassificacoesFipe({podeConfigurar}:{
        <span className={styles.classificationIcon}><ClipboardList size={18}/></span>
        <div className={styles.classificationText}><strong>{item.modelo}</strong>
          <small>{nomesTipo[item.tipo_fipe]} · FIPE {item.codigo_fipe}
-          {item.origem==="manual"?" · Personalizada":""}</small>
+          {item.tipo_fipe==="trucks"&&tracaoIndicadaNaFipe(item.modelo)
+             ? " · Tração "+tracaoIndicadaNaFipe(item.modelo):""}
+          {item.origem==="manual"?" · Personalizada":" · Automática"}</small>
        </div>
        <label className={styles.classificationSelector}>
          <span>Categoria interna</span>
@@ -96,6 +99,6 @@ export default function ClassificacoesFipe({podeConfigurar}:{
       </div>;
      })}
     </div>}
-  <p className={styles.smallNote}>Se houver um caminhão ou outro modelo sem categoria definida, ele aparecerá aqui para revisão. A classificação é salva pelo código FIPE e reaproveitada nas próximas cotações.</p>
+  <p className={styles.smallNote}>As classificações são salvas por empresa e código FIPE. Tração e eixos ajudam a distinguir versões, mas não substituem o peso bruto total para definir porte. Escolhas manuais permanecem válidas nas próximas consultas.</p>
  </section>;
 }

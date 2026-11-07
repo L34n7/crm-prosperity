@@ -1,17 +1,16 @@
-/**
- * Classificação conservadora de caminhões: o número de eixos indicado
- * explicitamente na descrição da FIPE é suficiente apenas para reconhecer
- * configurações multieixo pesadas. Não inferir classe por fabricante,
- * nome comercial, valor FIPE, potência ou número do modelo.
- *
- * Nos demais casos a classificação comercial permanece pendente para
- * decisão do administrador da empresa.
+/** A FIPE entrega o TIPO "trucks", não a subcategoria contratual.
+ * Padrão comercial do CRM Prosperity: todo caminhão -> pesado.
+ * "Leve" e "agregado" são exceções comerciais por empresa/código FIPE.
+ * Tração 4x2/6x2/8x4 descreve eixos, NÃO peso bruto total (PBT).
  */
+export function tracaoIndicadaNaFipe(descricao:string):string|null{
+  const nome=String(descricao||"").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/×/g,"X");
+  const match=nome.match(/(?:^|[^A-Z0-9])((?:4|6|8|10|12)\s*X\s*(?:2|4|6|8))(?![A-Z0-9])/);
+  return match?match[1].replace(/\s+/g,""):null;
+}
 export function categoriaAutomaticaCaminhao(
-  descricaoFipe:string,
-):"caminhao_pesado"|null{
-  const texto=String(descricaoFipe||"").toUpperCase()
-    .replace(/[×]/g,"X").replace(/\s+/g," ");
-  return /(?:^|[^A-Z0-9])(?:8\s*X\s*[246]|10\s*X\s*[468]|12\s*X\s*[468])(?:[^A-Z0-9]|$)/.test(texto)
-    ?"caminhao_pesado":null;
+  _descricaoFipe:string,
+):"caminhao_pesado"{
+  return "caminhao_pesado";
 }

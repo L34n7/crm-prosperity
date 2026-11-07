@@ -3,22 +3,13 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { CATEGORIAS_COTACAO,type CategoriaCotacao } from "./catalogo";
 import { precoFipeCentavos,type TipoFipe,type DetalheFipe } from "./fipe";
 import {motorizacaoDaFipe,type UsoVeiculo} from "./comercial";
-import {categoriaAutomaticaCaminhao} from "./classificacao-caminhoes";
+import {categoriaAutomaticaPorFipe,categoriaBaseEfetivaFipe} from "./classificacao-automatica";
 
 export type ClassificacaoFipe={
  categoria:CategoriaCotacao|null;categoria_base:CategoriaCotacao|null;
  origem:"automatica"|"manual";pendente:boolean;
 };
 const admin=getSupabaseAdmin();
-function categoriaInicial(tipo:TipoFipe,modelo:string):CategoriaCotacao|null{
-  if(tipo==="motorcycles")return "motocicleta";
-  if(tipo==="trucks")return categoriaAutomaticaCaminhao(modelo); // Somente descrição FIPE inequívoca.
-  const nome=modelo.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
-  // Somente modelos inequivocamente de vans; demais carros ficam em automóveis leves.
-  if(/\b(SPRINTER|DUCATO|MASTER|TRANSIT|JUMPER|BOXER|IVECO DAILY)\b/.test(nome))
-    return "van_utilitario";
-  return "auto_leves";
-}
 export async function classificarVeiculoFipe(params:{
  empresaId:string;tipo:TipoFipe;codigoFipe:string;modelo:string;uso:UsoVeiculo;
 }):Promise<ClassificacaoFipe>{
@@ -35,7 +26,7 @@ export async function classificarVeiculoFipe(params:{
   // recebem uma categoria caso uma regra conservadora tenha evidência
   // suficiente. Nunca altera classificação manual do administrador.
   if(existente&&!base&&existente.origem!=="manual"){
-    const novaCategoria=categoriaInicial(params.tipo,params.modelo);
+    const novaCategoria=categoriaAutomaticaPorFipe(params.tipo,params.modelo);
     if(novaCategoria){
       const {error:erroAtualizacao}=await admin
         .from("cotacao_veicular_classificacoes_fipe")
@@ -51,7 +42,7 @@ export async function classificarVeiculoFipe(params:{
     }
   }
   if(!existente){
-    base=categoriaInicial(params.tipo,params.modelo);
+    base=categoriaAutomaticaPorFipe(params.tipo,params.modelo);
     const {error:erroInsert}=await admin.from("cotacao_veicular_classificacoes_fipe")
       .upsert({...chave,modelo:params.modelo.slice(0,240),categoria:base,origem:"automatica"},
         {onConflict:"empresa_id,tipo_fipe,codigo_fipe",ignoreDuplicates:true});
@@ -91,7 +82,11 @@ export async function registrarConsultaFipe(params:{
  ]);
  if(consulta.error)throw new Error(consulta.error.message);
  const categoriaExistente=consulta.data?.categoria as CategoriaCotacao|null|undefined;
- const categoriaBase=categoriaExistente??classificacao.categoria_base;
+ const categoriaBase=categoriaBaseEfetivaFipe({
+   categoriaClassificacao:classificacao.categoria_base,
+   origemClassificacao:classificacao.origem,
+   categoriaCatalogo:categoriaExistente,
+ });
  const categoria=categoriaBase==="auto_leves"&&(uso==="aplicativo"||uso==="taxi")
    ?"app_taxi":categoriaBase;
  const valores={
@@ -102,11 +97,16 @@ export async function registrarConsultaFipe(params:{
    consultado_em:new Date().toISOString(),
  };
  if(consulta.data){
-   // Não altera a categoria já definida pelo administrador; preenche
-   // somente categorias anteriores ainda vazias e agora identificadas.
-   const preencherCategoria=categoriaExistente===null&&Boolean(categoriaBase);
+   // Uma edição manual na classificação prevalece sobre o catálogo
+   // por ano, que pode conter uma categoria automática anterior.
+   // Sem edição manual, apenas preenche categorias pendentes.
+   const sincronizarCategoria=Boolean(categoriaBase)&&(
+     categoriaExistente===null||
+     (classificacao.origem==="manual"&&categoriaExistente!==categoriaBase)
+   );
    const {error}=await admin.from("cotacao_veicular_catalogo_fipe")
-     .update({...valores,...(preencherCategoria?{categoria:categoriaBase}:{})}).match(chave);
+     .update({...valores,...(sincronizarCategoria?{categoria:categoriaBase}:{})})
+     .match(chave);
    if(error)throw new Error("Falha ao atualizar FIPE: "+error.message);
  }else{
    const {error}=await admin.from("cotacao_veicular_catalogo_fipe")
