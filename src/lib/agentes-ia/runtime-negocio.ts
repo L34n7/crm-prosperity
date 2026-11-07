@@ -1432,6 +1432,11 @@ export async function processarPendenciaNegocio(
           ?"O contato SELECIONOU esta descrição FIPE EXATA: " +
             JSON.stringify(versaoFipeEscolhida) + ". Cotar essa versão. "
           :"") +
+        "Quando MODELO e ANO estiverem informados, CHAME gerar_cotacao_veicular " +
+        "mesmo sem finalidade de uso: passe uso=null. O BACKEND consulta o tipo FIPE " +
+        "e infere comercial para caminhões e vans de carga, perguntando apenas " +
+        "quando for ambíguo. Se o cliente informou uso particular, PRESERVE-O. " +
+        "Não presuma particular/comercial por conta própria. " +
         "Se os dados essenciais E a versão corrigida estiverem confirmados, " +
         "CHAME gerar_cotacao_veicular AGORA antes de anunciar o envio. " +
         "Nunca omita uma motorização ou um câmbio explicitamente informados " +
@@ -1447,8 +1452,11 @@ export async function processarPendenciaNegocio(
     // Sem versão inequívoca, nenhuma ferramenta deve assumir a escolha.
     const tools = aguardandoRefinamentoFipe
       ? [] : definicoesFerramentasNegocio(ferramentasRelevantes, preconsulta);
+    // Basta modelo + ano para consultar a FIPE. A finalidade será
+    // inferida pelo servidor quando segura; senão, perguntar UMA vez.
     const dadosCotacaoCompletos=cotacaoEmAndamento &&
-      dadosEssenciaisCotacaoConfirmados(estado.cotacao_dados);
+      (dadosEssenciaisCotacaoConfirmados(estado.cotacao_dados)||
+       Boolean(estado.cotacao_dados.modelo&&estado.cotacao_dados.ano_modelo));
     const forcarCotacaoComDadosConfirmados=dadosCotacaoCompletos &&
       (Boolean(versaoFipeEscolhida)||!estado.cotacao_em_correcao ||
         versaoCorrigidaFoiInformada(estado.cotacao_pedido_mensagens)) &&
@@ -1619,7 +1627,8 @@ export async function processarPendenciaNegocio(
               mensagensConfirmadas,
               String(argumentos.modelo||""),
               String(argumentos.ano||""),
-              String(argumentos.uso||"")
+              String(estado.cotacao_dados.uso||""),
+              true
             );
             if(erroDadosNovos) resultado={
               ok:false,
@@ -1636,6 +1645,12 @@ export async function processarPendenciaNegocio(
               argumentos.ano=estado.cotacao_dados.ano_modelo;
             if(estado.cotacao_dados.uso)
               argumentos.uso=estado.cotacao_dados.uso;
+          }
+          if (!resultado&&nome==="gerar_cotacao_veicular"&&cotacaoEmAndamento){
+            // Não aceitar finalidade inventada no argumento da IA.
+            // A ausência é resolvida com o tipo REAL retornado pela FIPE.
+            argumentos.uso=estado.cotacao_dados.uso||null;
+            argumentos._mensagens_pedido=estado.cotacao_pedido_mensagens.slice(-14);
           }
           if (!resultado) {
             resultado = await executarFerramentaNegocio({
@@ -1874,7 +1889,15 @@ export async function processarPendenciaNegocio(
       const resultadoFalha=ultimaFalhaCotacao.resultado as {
         code?:string;pergunta_cliente?:string;opcoes_fipe?:string[];
       };
-      if(resultadoFalha.code==="COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE"){
+      if(resultadoFalha.code==="COTACAO_USO_PENDENTE"){
+        saidaFinal.mensagens=[
+          String(resultadoFalha.pergunta_cliente||
+            "O veículo será utilizado de forma particular ou comercial?").slice(0,260)
+        ];
+        saidaFinal.estado.cotacao_pendente=true;
+        saidaFinal.estado.cotacao_verificacao_humana=false;
+        saidaFinal.estado.proxima_acao="confirmar somente a finalidade de uso do veículo";
+      }else if(resultadoFalha.code==="COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE"){
         // Categoria interna depende de aprovação comercial da empresa.
         // Nunca pedir ao cliente escolher uma tabela sem essa confirmação.
         saidaFinal.mensagens=[
@@ -1943,7 +1966,8 @@ export async function processarPendenciaNegocio(
       }
       // Uma limitação comercial não deve manter a cotação pendente,
       // provocando consultas idênticas a cada nova mensagem do contato.
-      if (resultadoFalha.code!=="COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE" &&
+      if (resultadoFalha.code!=="COTACAO_USO_PENDENTE" &&
+          resultadoFalha.code!=="COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE" &&
           resultadoFalha.code!=="FIPE_MARCA_NAO_IDENTIFICADA" &&
           resultadoFalha.code!=="COTACAO_DADOS_NOVOS_INCOMPLETOS" &&
           resultadoFalha.code!=="FIPE_ANO_MODELO_NAO_ENCONTRADO" &&

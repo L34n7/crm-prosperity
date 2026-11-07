@@ -205,3 +205,30 @@ test("não deduz caminhão por números avulsos sem código de modelo confirmado
  assert.equal(validarDadosNovosCotacao(["Quero gerar outra","2018","Comercial"],
    "11.180","2018","comercial"),"Qual é o modelo do novo veículo?");
 });
+
+
+test("FIPE pode ser consultada sem uso, mas nunca sem modelo e ano comprovados",()=>{
+ const caminhão=["Quero cotar meu caminhão","11.180","2018"];
+ assert.equal(validarDadosNovosCotacao(caminhão,"11.180","2018","",true),null);
+ assert.equal(validarDadosNovosCotacao(caminhão,"11.180","2018",""),
+   "Qual é a finalidade de uso do novo veículo: particular, aplicativo, táxi ou comercial?");
+ assert.equal(validarDadosNovosCotacao(["Quero outro","2018"],"11.180","2018","",true),
+   "Qual é o modelo do novo veículo?");
+ assert.equal(validarDadosNovosCotacao(["Quero outro","11.180"],"11.180","2018","",true),
+   "Qual é o ano-modelo do novo veículo?");
+ assert.equal(validarDadosNovosCotacao(["Quero outro","11.180","2018"],
+   "FH 540","2018","",true),"Qual é o modelo do novo veículo?");
+});
+test("uso particular declarado continua válido mesmo em caminhão",()=>{
+ const mensagens=["Quero cotar meu caminhão","FH 540","2021","uso particular"];
+ const dados=consolidarDadosCotacao(mensagens);
+ assert.equal(dados.uso,"particular");
+ assert.equal(validarDadosNovosCotacao(mensagens,"FH 540","2021","particular"),null);
+});
+
+test("somente dizer caminhão ou van não é informar modelo FIPE",()=>{
+ for(const palavra of ["caminhão","van","utilitário","furgão","agregado"]){
+   assert.equal(validarDadosNovosCotacao(["Quero cotar "+palavra+" 2021"],
+     palavra,"2021","",true),"Qual é o modelo do novo veículo?",palavra);
+ }
+});

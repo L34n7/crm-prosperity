@@ -3,6 +3,7 @@ import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuraca
 import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
+import {usoComercialInferivelFipe} from "@/lib/cotacoes-veiculares/uso-automatico";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
 import {descricaoLegivelFipe} from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
@@ -361,7 +362,7 @@ export async function preconsultarNegocio(params: {
 
   if (sinalCotacao) {
     resultados.push({ ferramenta: "gerar_cotacao_veicular", dados: [] });
-    blocos.push("COTAÇÃO VEICULAR: use o ano-MODELO na FIPE (2004/2005 = ano-modelo 2005). Se o cliente já informou motorização/versão (ex.: 2.5 ou Limited), preserve essa informação na busca e NÃO troque 2.5 por 3.0 sem confirmar. Identifique o modelo e o ano a partir do histórico da conversa. Não solicite ao cliente foto, documento ou tabela FIPE: a ferramenta consulta automaticamente a fonte. Não pergunte marca se puder ser inferida pelo modelo, nem motorização/combustível: a ferramenta identifica na FIPE. Pergunte finalidade de uso apenas se ainda não estiver clara; a versão exata só se a FIPE apontar ambiguidade. Opcionais podem ficar vazios. A categoria comercial é interna e a ferramenta calcula todos os planos. Use-a assim que tiver modelo, ano e uso; nunca invente preços.");
+    blocos.push("COTAÇÃO VEICULAR: use o ano-MODELO na FIPE (2004/2005 = ano-modelo 2005). Se o cliente já informou motorização/versão (ex.: 2.5 ou Limited), preserve essa informação na busca e NÃO troque 2.5 por 3.0 sem confirmar. Identifique o modelo e o ano a partir do histórico da conversa. Não solicite ao cliente foto, documento ou tabela FIPE: a ferramenta consulta automaticamente a fonte. Não pergunte marca se puder ser inferida pelo modelo, nem motorização/combustível: a ferramenta identifica na FIPE. Quando o cliente disser modelo e ano, use a ferramenta mesmo sem finalidade: envie uso=null. O backend verifica a categoria FIPE e infere comercial em caminhões e vans de carga; pergunta somente nos casos ambíguos. Preserve uso particular explicitamente informado. A versão exata só se a FIPE apontar ambiguidade. Opcionais podem ficar vazios. Nunca invente valores.");
   }
 
   const vendaRelevante = params.ferramentas.has("realizar_venda") && (confirmacaoVenda || possuiIntencaoDiretaVenda(params.mensagem));
@@ -396,9 +397,11 @@ export async function executarFerramentaNegocio(params: {
       :modeloBruto;
     if(!modelo||!ano)return {ok:false,error:
       "Para consultar a FIPE preciso somente do modelo e ano ainda não informados."};
-    const uso=String(args.uso||"") as UsoVeiculo;
-    if(!Object.hasOwn(USOS_VEICULO,uso))
-      return {ok:false,error:"Confirme somente a finalidade de uso: particular, aplicativo, táxi ou comercial."};
+    // A finalidade pode estar ausente até consultar a FIPE. A API retorna
+    // o tipo real; jamais aceitar finalidade inventada pela IA como fato.
+    const usoBruto=String(args.uso||"");
+    const usoDeclarado=Object.hasOwn(USOS_VEICULO,usoBruto)
+      ?usoBruto as UsoVeiculo:null;
 
     // O cliente pode dizer "BMW 320i 2007" ou apenas "320i 2007".
     // Identifica a marca no próprio nome, no catálogo da empresa ou pela pista
@@ -467,7 +470,10 @@ export async function executarFerramentaNegocio(params: {
     if(!energia)return {ok:false,error:
       "A FIPE não identificou a motorização deste veículo. A equipe deve conferir o cadastro; não é necessário pedir que o cliente adivinhe."};
     const classificacao=await registrarConsultaFipe({
-      empresaId:params.empresaId,tipo,anoCodigo:fipe.anoCodigo,veiculo:fipe,uso,
+      empresaId:params.empresaId,tipo,anoCodigo:fipe.anoCodigo,veiculo:fipe,
+      // Uso provisório SÓ para classificar (não gera cotação).
+      // A finalidade final é resolvida abaixo e validada comercialmente.
+      uso:usoDeclarado||"particular",
     });
     if(!classificacao.categoria)return {
       ok:false,code:"COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE",
@@ -476,6 +482,18 @@ export async function executarFerramentaNegocio(params: {
       pergunta_cliente:"Para concluir a cotação desse caminhão, nossa equipe precisa confirmar as condições disponíveis. Posso encaminhar você para atendimento?",
     };
     const categoria=classificacao.categoria;
+    const uso=usoDeclarado||usoComercialInferivelFipe({
+      tipo,categoria:classificacao.categoria_base,descricaoFipe:fipe.model,
+      mensagensPedido:Array.isArray(args._mensagens_pedido)
+        ?args._mensagens_pedido.filter((v:unknown)=>typeof v==="string").slice(-14):[],
+    });
+    if(!uso)return {
+      ok:false,code:"COTACAO_USO_PENDENTE",
+      error:"A finalidade de uso ainda não foi informada e não pode ser presumida pela FIPE.",
+      pergunta_cliente:categoria==="van_utilitario"
+        ?"Essa van será utilizada para uso particular ou comercial?"
+        :"Qual será a finalidade de uso: particular, aplicativo, táxi ou comercial?",
+    };
     // A classificação especial é feita dentro do cálculo, individualmente por plano.
     const opcionaisPorPlano:Record<string,string[]>={};
     const extras=Array.isArray(args.opcionais_por_plano)?args.opcionais_por_plano:[];
@@ -607,7 +625,7 @@ export function definicoesFerramentasNegocio(
   if (ferramentas.has("gerar_cotacao_veicular")) {
     defs.push({
       type:"function",name:"gerar_cotacao_veicular",
-      description:"Cota TODOS os planos ativos cadastrados pela empresa. Use o MODELO e ANO já ditos na conversa, e finalidade de uso. MARCA é opcional: informe a marca se for inequívoca ou estiver no texto; caso contrário passe null, pois o servidor tenta identificá-la pelo modelo e catálogo FIPE. NÃO pergunte motorização ou combustível, pois o servidor identifica na FIPE. Não peça para escolher plano ou opcionais se não quiser; opcionais_por_plano pode ser []. Se o modelo for ambíguo, a ferramenta retornará somente versões compatíveis com o ano-modelo. Preserve o motor informado, mesmo se conflitar com o catálogo, e peça apenas confirmação do motor correto. Ano 2004/2005 significa ano-modelo 2005. Nunca invente valores.",
+      description:"Cota TODOS os planos ativos. Quando o cliente informou modelo e ano, CHAME A FERRAMENTA mesmo sem finalidade de uso: envie uso=null para o backend identificar pelo tipo FIPE. Se FIPE identificar caminhão ou van de CARGA, o backend presume comercial; vans de passageiros e utilitários de uso misto exigem confirmação. NUNCA invente uso particular nem comercial. Se o cliente declarou finalidade, preserve exatamente. MARCA é opcional: informe a marca se for inequívoca ou estiver no texto; caso contrário passe null, pois o servidor tenta identificá-la pelo modelo e catálogo FIPE. NÃO pergunte motorização ou combustível, pois o servidor identifica na FIPE. Não peça para escolher plano ou opcionais se não quiser; opcionais_por_plano pode ser []. Se o modelo for ambíguo, a ferramenta retornará somente versões compatíveis com o ano-modelo. Preserve o motor informado, mesmo se conflitar com o catálogo, e peça apenas confirmação do motor correto. Ano 2004/2005 significa ano-modelo 2005. Nunca invente valores.",
       strict:true,
       parameters:{
         type:"object",
@@ -615,7 +633,7 @@ export function definicoesFerramentasNegocio(
           marca:{anyOf:[{type:"string",maxLength:90},{type:"null"}]},
           modelo:{type:"string",maxLength:150},
           ano:{type:"string",maxLength:30},
-          uso:{type:"string",enum:["particular","aplicativo","taxi","comercial"]},
+          uso:{anyOf:[{type:"string",enum:["particular","aplicativo","taxi","comercial"]},{type:"null"}]},
           opcionais_por_plano:{
             type:"array",
             items:{

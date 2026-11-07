@@ -72,6 +72,7 @@ export function validarDadosNovosCotacao(
   modelo:string,
   ano:string,
   uso:string,
+  permitirUsoPendente=false,
 ):string|null{
   const recentes=mensagens.map(normalizar).filter(Boolean);
   const combinado=recentes.join(" ");
@@ -83,6 +84,8 @@ export function validarDadosNovosCotacao(
     "mercedes","benz","mitsubishi","peugeot","citroen","kia",
     "land","rover","suzuki","byd","chery","volvo","porsche",
     "carro","veiculo","automovel","sedan","sed","hatch","coupe","flex",
+    "caminhao","caminhoes","van","vans","utilitario","utilitarios","furgao",
+    "passageiro","passageiros","carga","cargas","agregado",
     "total","gasolina","diesel","motor","mpfi","manual","automatico",
     "automatica","aut","mec","i","motion","particular","comercial",
   ]);
@@ -141,8 +144,8 @@ export function validarDadosNovosCotacao(
     taxi:/\b(?:taxi)\b/,
     comercial:/\b(?:comercial|trabalho|empresa)\b/,
   } as const;
-  if(!(uso in usoConfirmado)||
-     !usoConfirmado[uso as keyof typeof usoConfirmado].test(combinado)){
+  if(!permitirUsoPendente&&(!(uso in usoConfirmado)||
+     !usoConfirmado[uso as keyof typeof usoConfirmado].test(combinado))){
     return "Qual é a finalidade de uso do novo veículo: particular, aplicativo, táxi ou comercial?";
   }
   return null;
@@ -244,6 +247,7 @@ const PALAVRAS_GERAIS_COTACAO = new Set(
   "particular pessoal proprio aplicativo uber taxi comercial trabalho empresa flex diesel gasolina hibrido eletrico " +
   "manual automatico automatica mecanico mecanica motor motorizacao cambio sedan hatch suv pickup camionete cabine " +
   "dupla simples tracao cd 4x4 4x2 gls lxs ex exl lx ltz lt xlt xls xl limited challenge premium completo " +
+  "caminhao caminhoes van vans utilitario utilitarios furgao passageiro passageiros carga cargas agregado " +
   "confirmo confirmado correto certa certo verdade sim nao ok obrigado obrigada obrigado por favor voces conseguem dia dias diario familia casa caro uai neh ne ta beleza belezaaa entendi vou usar usando dia a dia uso para trabalhar dirigindo rodar quero nao mais " +
   "consegue tentar tente tentei outra vez fazer de novo quero saber qual qual e meu por que quanto fica quanto custa cancela cancelar canela"
     ).split(/\s+/).filter(Boolean)
