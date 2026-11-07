@@ -12,7 +12,115 @@ export function clienteCorrigiuVersaoCotacao(mensagem: string): boolean {
     /\b(?:modelo|versao|motor|motorizacao|cambio|veiculo|carro)\b.{0,35}\b(?:errado|errada|incorreto|incorreta|diferente|correto e|correta e|e na verdade|na verdade e)\b/.test(texto) ||
     /\b(?:corrigir|corrija|correcao|refazer|refaca|recalcular|ajustar)\b.{0,50}\b(?:cotacao|versao|modelo|motor|motorizacao|veiculo)\b/.test(texto) ||
     /\b(?:na verdade|nao|o correto e|a correta e)\b.{0,25}\b(?:e|eh|tem|possui)\s+\d[.,]\d\b/.test(texto) ||
-    /\b(?:motor|motorizacao|versao|modelo|cambio)\s+(?:correto\s+|correta\s+)?(?:e|eh)\s+\d[.,]\d\b/.test(texto);
+    /\b(?:motor|motorizacao|versao|modelo|cambio)\s+(?:correto\s+|correta\s+)?(?:e|eh)\s+\d[.,]\d\b/.test(texto) ||
+    // Correções da tração/eixos, sem presumir que "4x2" seja motor 4.2.
+    (/\b(?:confundi|errei|corrig|troquei|enganei|na verdade|corret[oa]|cert[oa]|tracao|nao e|nao era|nao foi|mas e|era)\b/.test(texto) &&
+     /\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(texto)) ||
+    /\bnao\s+(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(texto);
+}
+
+/** Última tração POSITIVAMENTE corrigida pelo cliente, não pela IA.
+ * Descarta trechos negados: "não é 4x2, é 8x2" -> 8x2;
+ * "é 8x2, não 4x2" -> 8x2; "não é 4x2" -> sem versão suficiente.
+ */
+export function tracaoCorrigidaCotacao(mensagens:string[]):string|null{
+  const inicio=mensagens.findLastIndex(clienteCorrigiuVersaoCotacao);
+  if(inicio<0)return null;
+  const correcoes=mensagens.slice(inicio).map(mensagem=>
+    String(mensagem||"").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"").toLowerCase()
+      .replace(/×/g,"x")
+      .replace(/\b(4|6|8|10|12)\s*x\s*([2468])\b/g,"$1x$2")
+  );
+  const padraoTracao=/\b(?:4|6|8|10|12)x(?:2|4|6|8)\b/g;
+  for(let i=correcoes.length-1;i>=0;i--){
+    const semNegacoes=correcoes[i]
+      .replace(/\b(?:nao\s+(?:e|era|foi|seria)|nem)\s+(?:a\s+|o\s+)?(?:4|6|8|10|12)x(?:2|4|6|8)\b/g," ")
+      .replace(/\bnao\s+(?:4|6|8|10|12)x(?:2|4|6|8)\b/g," ");
+    const tracoes=[...semNegacoes.matchAll(padraoTracao)].map(m=>m[0]);
+    if(tracoes.length)return tracoes.at(-1)||null;
+  }
+  return null;
+}
+
+/** Remove qualquer tração antiga do modelo antes de aplicar a correção.
+ * Não toca motor decimal (2.0), potência (460), câmbio ou carroceria.
+ */
+export function aplicarTracaoCorrigidaCotacao(modelo:string,tracao:string|null):string{
+  if(!tracao)return String(modelo||"").trim();
+  const atual=String(modelo||"").trim();
+  const antiga=/\b(?:4|6|8|10|12)\s*[x×]\s*(?:2|4|6|8)\b/i;
+  if(antiga.test(atual))return atual.replace(antiga,tracao)
+    .replace(/\s+/g," ").trim();
+  return [atual,tracao].filter(Boolean).join(" ");
+}
+
+/** Recuperar a versão FIPE ANTERIOR só quando o cliente corrigiu
+ * exclusivamente a tração; preserva carroceria, diesel e acabamento
+ * confirmados na proposta salva, mas exige mesmo modelo e ano.
+ */
+export function versaoAnteriorComTracaoCorrigida(params:{
+  veiculoAnterior:string;anoAnterior:number|null;
+  modeloConfirmado:string;anoConfirmado:string;tracao:string;
+  mensagemCorrecao:string;
+}):string|null{
+  const normalizar=(texto:string)=>String(texto||"").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").toLowerCase()
+    .replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
+  const texto=normalizar(params.mensagemCorrecao)
+    .replace(/\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/g," ");
+  const comuns=new Set(("confundi confusao errei erro errado errada desculpe foi mal " +
+    "nao e era eh foi mas correto correta certo certa o a de do da apenas so " +
+    "tracao eixo eixos configuracao verdade na por para agora mudou trocar troquei " +
+    "sim simples anteriormente falei falei errado isso mesma mesmo").split(" "));
+  const palavrasAdicionais=texto.split(" ").filter(p=>p&&!comuns.has(p));
+  if(palavrasAdicionais.length||Number(params.anoAnterior)!==Number(params.anoConfirmado))
+    return null;
+  const modelo=normalizar(params.modeloConfirmado);
+  const anterior=normalizar(params.veiculoAnterior);
+  const tokens=modelo.split(" ").filter(p=>p.length>=2);
+  if(!modelo||!anterior||!tokens.length||
+     !tokens.every(t=>anterior.split(" ").includes(t))||
+     !/\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/i.test(params.veiculoAnterior))
+    return null;
+  return aplicarTracaoCorrigidaCotacao(params.veiculoAnterior,params.tracao);
+}
+
+/** Uma promessa de recalcular NÃO é uma cotação emitida.
+ * Identifica inclusive "vou recalcular para o Volvo" sem dizer "cotação".
+ */
+export function promessaCotacaoSemFerramenta(mensagens:string[]):boolean{
+  return mensagens.some(mensagem=>{
+    const texto=String(mensagem||"").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"").toLowerCase();
+    const acao=/\b(?:vou|irei|estou|vamos|ja estou|ja vamos)\s+(?:(?:agora|ja|so)\s+)?(?:consultar|verificar|gerar|calcular|recalcular|refazer|preparar|prosseguir|enviar|buscando|consultando|recalculando|verificando|revisar|atualizar)\b/.test(texto);
+    return acao&&( /\b(?:cotacao|orcamento|simulacao|preco|valores|proposta)\b/.test(texto)||
+      /\b(?:recalcular|recalculando|refazer|refazendo)\b/.test(texto));
+  });
+}
+
+/** Retoma APENAS quando uma correção ocorreu depois da última proposta
+ * e o agente prometeu recalcular sem executar. Não recota por "ok" comum.
+ */
+export function recalculoPrometidoAposCorrecao(params:{
+  mensagensAposProposta:Array<{role:"user"|"assistant";content:string}>;
+  ultimaRespostaAgente:string;
+  mensagemAtual:string;
+}):boolean{
+  return params.mensagensAposProposta.some(item=>
+    item.role==="user"&&clienteCorrigiuVersaoCotacao(item.content)
+  )&&promessaCotacaoSemFerramenta([params.ultimaRespostaAgente])
+    &&clienteCobraRecalculoPrometido(params.mensagemAtual);
+}
+
+/** Uma confirmação curta após promessa de recálculo não pode virar
+ * somente mais uma mensagem prometendo o mesmo resultado.
+ */
+export function clienteCobraRecalculoPrometido(mensagem:string):boolean{
+  const texto=String(mensagem||"").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").toLowerCase()
+    .replace(/[.!?,;:]/g," ").replace(/\s+/g," ").trim();
+  return /^(?:ok|okay|sim|isso|pode|pode sim|pode gerar|pode recalcular|pode fazer|confirmo|confirmado|certo|estou aguardando|continuo aguardando|aguardando|aguardo|ainda estou aguardando|e a cotacao|cade a cotacao|ja gerou|ja ficou pronta|pode enviar)$/.test(texto);
 }
 
 /**
@@ -50,7 +158,7 @@ export function versaoCorrigidaFoiInformada(mensagens: string[]): boolean {
     String(item || "").normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "").toLowerCase()
   );
-  return novas.some((texto) =>
+  return Boolean(tracaoCorrigidaCotacao(mensagens))||novas.some((texto) =>
     /\b[1-9][.,][0-9]\b/.test(texto) ||
     /\b(?:automatico|automatica|manual|mecanico|mecanica|cvt|tiptronic|dsg|ltz|lxs|lx|ex|exl|xlt|xls|xl|limited|comfortline|highline|trendline|sportline|r.line|gls|gl|cd|challenge|milenium|milenio|millennium|express)\b/.test(texto) ||
     /\b(?:versao|modelo)\s+(?:certo|correto|certa|correta|e|eh)\s+\S+/.test(texto)

@@ -39,6 +39,9 @@ import {
   cambioInformadoCotacao,
   aplicarCambioInformado,
   mensagemSocialSemDadosCotacao,
+  tracaoCorrigidaCotacao, aplicarTracaoCorrigidaCotacao,
+  versaoAnteriorComTracaoCorrigida,
+  promessaCotacaoSemFerramenta, recalculoPrometidoAposCorrecao,
 } from "./correcao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
 import {
@@ -656,15 +659,6 @@ function historicoDoPedidoAtual(historico: HistoricoNegocio[]) {
   return inicio >= 0 ? historico.slice(inicio) : [];
 }
 
-function promessaDeConsultaSemFerramenta(mensagens: string[]) {
-  return mensagens.some((mensagem) => {
-    const texto = mensagem.normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    return /\b(?:cotacao|orcamento|simulacao|preco|valores)\b/.test(texto)
-      && /\b(?:vou|irei|estou|vamos|ja estou)\s+(?:(?:agora|ja|so)\s+)?(?:consultar|verificar|gerar|calcular|preparar|prosseguir|enviar|buscando|consultando|verificando)\b/.test(texto);
-  });
-}
-
 function instrucoesAgente(agente: any, estado: EstadoConversa) {
   return [
     `Você é ${agente.nome}, assistente do CRM Prosperity.`,
@@ -925,7 +919,7 @@ export async function processarPendenciaNegocio(
         empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
       });
     // Pedido em curso não deve ser apagado por "pode gerar a cotação?".
-    const querOutraCotacao=ferramentas.has("gerar_cotacao_veicular")
+    let querOutraCotacao=ferramentas.has("gerar_cotacao_veicular")
       && !continuidadeCotacaoSolicitada
       && clientePediuCotacaoVeicular(pendencia.conteudo_agregado)
       && !compararMesmoVeiculo
@@ -957,17 +951,36 @@ export async function processarPendenciaNegocio(
       && /(?:consultar|gerar|preparar|verificar).*cota[çc][aã]o/i.test(
         estado.proxima_acao||""
       );
-    // "Não é esse modelo" ou "o motor correto é 1.4" significa corrigir
-    // uma proposta existente, não conversar sobre os planos daquela proposta.
+    // Depois de emitir uma proposta, uma correção de versão exige
+    // recálculo REAL. Recupera ainda sessões anteriores em que a IA
+    // prometeu recalcular, mas nunca invocou a ferramenta.
+    const aposUltimaProposta=ultimaPropostaHistorico>=0
+      ?historico.slice(ultimaPropostaHistorico+1):[];
+    const correcoesAposProposta=aposUltimaProposta
+      .filter(item=>item.role==="user"&&clienteCorrigiuVersaoCotacao(item.content))
+      .map(item=>item.content);
+    const recalculoPrometidoPendente=ferramentas.has("gerar_cotacao_veicular")
+      && existeCotacaoAnterior && !estado.cotacao_pendente
+      && recalculoPrometidoAposCorrecao({
+        mensagensAposProposta:aposUltimaProposta,
+        ultimaRespostaAgente,
+        mensagemAtual:pendencia.conteudo_agregado,
+      });
+    // Corrigir uma proposta já emitida não é iniciar nova cotação:
+    // "pode gerar" depois de prometer recálculo mantém modelo/ano/uso.
+    if(existeCotacaoAnterior && (recalculoPrometidoPendente||
+      clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado)))
+      querOutraCotacao=false;
     const corrigiuVeiculo=ferramentas.has("gerar_cotacao_veicular")
       && existeCotacaoAnterior
-      && clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado);
+      && (clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado)||
+        recalculoPrometidoPendente);
     const confirmacaoCotacaoPrometida=estado.cotacao_pendente
       && confirmouProsseguirCotacao(pendencia.conteudo_agregado)
-      && promessaDeConsultaSemFerramenta([ultimaRespostaAgente]);
+      && promessaCotacaoSemFerramenta([ultimaRespostaAgente]);
     const saudacaoSemDados=mensagemSocialSemDadosCotacao(
       pendencia.conteudo_agregado
-    ) && !confirmacaoCotacaoPrometida;
+    ) && !confirmacaoCotacaoPrometida && !recalculoPrometidoPendente;
     const novoDetalheAposImpasse=estado.cotacao_verificacao_humana
       && respostaTrazDistincaoFipe(
         pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
@@ -1017,6 +1030,7 @@ export async function processarPendenciaNegocio(
     }
     if (cotacaoEmAndamento) {
       if (!estado.cotacao_pendente && !querOutraCotacao &&
+          !recalculoPrometidoPendente &&
           (retomarCotacao || promessaAntigaPendente)) {
         // Recuperação de sessões antigas: nunca aproveitar o veículo de uma
         // proposta anterior ao pedido aberto, mesmo se o estado estiver obsoleto.
@@ -1047,7 +1061,15 @@ export async function processarPendenciaNegocio(
             .map((item)=>item.content),14,220
         );
       }
-      if (corrigiuVeiculo) estado.cotacao_em_correcao=true;
+      if (corrigiuVeiculo){
+        estado.cotacao_em_correcao=true;
+        // Preserve correções que passaram pelo runtime geral nas sessões
+        // antigas. Nunca usar descrições de versões inventadas pela IA.
+        estado.cotacao_pedido_mensagens=listaCurta([
+          ...estado.cotacao_pedido_mensagens,
+          ...correcoesAposProposta,
+        ],14,220);
+      }
       estado.cotacao_pendente=true;
       // Outras mensagens do mesmo pedido podem ter passado pelo runtime
       // geral entre duas ativações do motor de negócio. Recuperar os dados
@@ -1412,7 +1434,7 @@ export async function processarPendenciaNegocio(
       const mensagensPedido=estado.cotacao_pedido_mensagens.slice(-14);
       inputIa.push({role:"developer",content:
         (estado.cotacao_em_correcao
-          ?"O cliente está CORRIGINDO a versão/motorização de uma proposta. " +
+          ?"O cliente está CORRIGINDO a versão, tração ou motorização de uma proposta. " +
             "A versão que você cotou antes foi REJEITADA; não reutilize o motor, " +
             "câmbio ou versão rejeitados. Preserve somente marca/família do " +
             "veículo, ano-modelo e finalidade de uso previamente confirmados. " +
@@ -1525,7 +1547,7 @@ export async function processarPendenciaNegocio(
         } else if(cotacaoEmAndamento && !tentouForcarCotacao &&
           !executouFerramentaCotacao &&
           tools.some((tool)=>tool.name==="gerar_cotacao_veicular") &&
-          promessaDeConsultaSemFerramenta(respostaInterpretada.mensagens)) {
+          promessaCotacaoSemFerramenta(respostaInterpretada.mensagens)) {
           // A IA não pode responder "estou consultando" e encerrar a execução
           // sem realmente tentar a consulta FIPE. Refaça a rodada exigindo
           // exclusivamente a ferramenta que ela acabou de prometer usar.
@@ -1580,6 +1602,48 @@ export async function processarPendenciaNegocio(
               if (motor && typeof argumentos.modelo==="string") {
                 argumentos.modelo=aplicarMotorizacaoCorrigida(argumentos.modelo,motor);
               }
+              const tracao=tracaoCorrigidaCotacao(estado.cotacao_pedido_mensagens);
+              if(tracao){
+                // Reaproveita somente família/versão confirmada pelo cliente.
+                // Uma tração antiga na proposta/IA não pode sobrepor a
+                // correção mais recente (ex.: 4x2 -> 8x2).
+                const modeloConfirmado=preservarModeloCotacaoConfirmado(
+                  estado.cotacao_pedido_mensagens,
+                  String(argumentos.modelo||""),
+                  String(estado.cotacao_dados.modelo||"")
+                );
+                // Apenas se a correção alterou SOMENTE a tração, reaproveita
+                // a versão FIPE que já foi confirmada e cotada: acabamento,
+                // cabine e combustível não devem se perder nem ser reinventados.
+                const ultimaCorrecao=[...estado.cotacao_pedido_mensagens]
+                  .reverse().find(clienteCorrigiuVersaoCotacao)||"";
+                let modeloAnteriorCorrigido:string|null=null;
+                if(ultimaCorrecao&&estado.cotacao_dados.modelo&&
+                   estado.cotacao_dados.ano_modelo){
+                  const {data:cotacaoAnterior}=await supabaseAdmin
+                    .from("cotacao_veicular_cotacoes")
+                    .select("veiculo,ano_modelo")
+                    .eq("empresa_id",pendencia.empresa_id)
+                    .eq("conversa_id",pendencia.conversa_id)
+                    .eq("origem","agente_ia")
+                    .order("created_at",{ascending:false})
+                    .limit(1).maybeSingle();
+                  if(cotacaoAnterior)
+                    modeloAnteriorCorrigido=versaoAnteriorComTracaoCorrigida({
+                      veiculoAnterior:String(cotacaoAnterior.veiculo||""),
+                      anoAnterior:Number(cotacaoAnterior.ano_modelo)||null,
+                      modeloConfirmado:String(estado.cotacao_dados.modelo),
+                      anoConfirmado:String(estado.cotacao_dados.ano_modelo),
+                      tracao,mensagemCorrecao:ultimaCorrecao,
+                    });
+                }
+                argumentos.modelo=modeloAnteriorCorrigido||
+                  aplicarTracaoCorrigidaCotacao(
+                    modeloConfirmado||String(estado.cotacao_dados.modelo||""),tracao
+                  );
+              }
+              if(estado.cotacao_dados.ano_modelo)
+                argumentos.ano=estado.cotacao_dados.ano_modelo;
             }
           }
           if (nome==="gerar_cotacao_veicular" && !resultado &&
@@ -1994,9 +2058,10 @@ export async function processarPendenciaNegocio(
       saidaFinal.estado.proxima_acao="aguardar escolha por numero, nome ou detalhe do veiculo";
     }
     // Somente a chamada real à ferramenta autoriza prometer uma proposta.
+    // Também reconhece "vou recalcular [veículo]" sem a palavra cotação.
     if(!ctx.cotacaoFormatada && !executouFerramentaCotacao &&
        ferramentas.has("gerar_cotacao_veicular") &&
-       promessaDeConsultaSemFerramenta(saidaFinal.mensagens)) {
+       promessaCotacaoSemFerramenta(saidaFinal.mensagens)) {
       saidaFinal.mensagens=cotacaoEmAndamento
         ? ["Não consegui concluir essa cotação nesta tentativa. Nossa equipe pode conferir os dados e ajudar você. 😊"]
         : saudacaoSemDados
