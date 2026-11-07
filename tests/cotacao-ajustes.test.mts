@@ -88,3 +88,13 @@ test("rejeição comercial não é correção FIPE mesmo com opções anteriores
     assert.equal(identificarAjusteCotacao(frase,true),null,frase);
   }
 });
+
+test("motor, câmbio e tração são classificados mesmo com negação ao final",()=>{
+  const exemplos=[
+    ["é 1.8, não 2.0","motor"],
+    ["é manual, não automático","cambio"],
+    ["é 8x2, não 4x2","tracao"],
+  ] as const;
+  for(const [frase,acao] of exemplos)
+    assert.equal(identificarAjusteCotacao(frase,true)?.acao,acao,frase);
+});
