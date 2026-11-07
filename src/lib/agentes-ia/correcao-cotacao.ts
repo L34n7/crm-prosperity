@@ -1,4 +1,4 @@
-import {identificarAjusteCotacao, textoPositivoDaCorrecao} from "./ajustes-cotacao";
+import {identificarAjusteCotacao, textoPositivoDaCorrecao} from "./ajustes-cotacao.ts";
 
 /**
  * Detecta correção de veículo/versão após cotação sem tratá-la como
