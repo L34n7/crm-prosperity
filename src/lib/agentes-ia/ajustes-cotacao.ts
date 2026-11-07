@@ -54,13 +54,16 @@ export function identificarAjusteCotacao(mensagem:string,temOpcoes=false):Ajuste
      /\b(?:era|e|eh)\s+(?:19|20)\d{2}\s*(?:nao|ao inves)/.test(t))
     return fazer("ano");
   if(/\b(?:cambio|marcha|transmissao)\b/.test(t)&&isCorrecao(t)||
-     /\bnao\s+(?:e|era)\s+(?:automatic[oa]|manual|mecanic[oa])\b/.test(t))
+     /\bnao\s+(?:e|era)\s+(?:automatic[oa]|manual|mecanic[oa])\b/.test(t)||
+     /\b(?:e|eh|era)\s+(?:automatic[oa]|manual|mecanic[oa])\s*,?\s+nao\s+(?:automatic[oa]|manual|mecanic[oa])\b/.test(t))
     return fazer("cambio",textoPositivoDaCorrecao(mensagem));
   if(/\b(?:motor|motorizacao)\b/.test(t)&&isCorrecao(t)||
-     /\bnao\s+(?:e|era)\s+\d[.,]\d\b/.test(t))
+     /\bnao\s+(?:e|era)\s+\d[.,]\d\b/.test(t)||
+     /\b(?:e|eh|era)\s+\d[.,]\d\s*,?\s+nao\s+\d[.,]\d\b/.test(t))
     return fazer("motor",textoPositivoDaCorrecao(mensagem));
   if((/\b(?:tracao|eixos?)\b/.test(t)&&isCorrecao(t))||
-     (isCorrecao(t)&&/\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(t)))
+     (isCorrecao(t)&&/\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(t))||
+     /\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b.*\bnao\b.*\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(t))
     return fazer("tracao",textoPositivoDaCorrecao(mensagem));
   // "Não é esse plano" ou "mas está caro" após uma proposta não é uma
   // correção FIPE, mesmo que a última lista de versões esteja armazenada.
