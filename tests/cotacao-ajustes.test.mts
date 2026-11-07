@@ -21,6 +21,10 @@ test("MPI filtra duas versões, mas correção GLS recupera a lista original",()
   assert.deepEqual(correto.opcoes,[opcoesAstra[0]]);
   const direto=recuperarOpcoesFipe(opcoesAstra,"respondi errado, é GLS");
   assert.equal(direto.selecionada,opcoesAstra[0]);
+  assert.equal(recuperarOpcoesFipe(opcoesAstra,
+    "Não é a versão MPI, é GLS").selecionada,opcoesAstra[0]);
+  assert.equal(recuperarOpcoesFipe(opcoesAstra,
+    "É GLS, não MPI").selecionada,opcoesAstra[0]);
 });
 test("resposta errada volta às opções anteriores, não fica presa ao filtro",()=>{
   const resposta=recuperarOpcoesFipe(opcoesAstra,"respondi errado");
