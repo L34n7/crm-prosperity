@@ -1,3 +1,5 @@
+import {identificarAjusteCotacao, textoPositivoDaCorrecao} from "./ajustes-cotacao.ts";
+
 /**
  * Detecta correção de veículo/versão após cotação sem tratá-la como
  * aceite comercial. A presença de uma proposta anterior deve ser
@@ -8,6 +10,7 @@ export function clienteCorrigiuVersaoCotacao(mensagem: string): boolean {
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/\s+/g, " ").trim();
 
+  const ajuste=identificarAjusteCotacao(mensagem,true);
   return /\b(?:nao e|nao foi|nao corresponde|nao esta correto|esta errado|ficou errado|veio errado)\b.{0,55}\b(?:modelo|versao|motor|motorizacao|cambio|veiculo|carro)\b/.test(texto) ||
     /\b(?:modelo|versao|motor|motorizacao|cambio|veiculo|carro)\b.{0,35}\b(?:errado|errada|incorreto|incorreta|diferente|correto e|correta e|e na verdade|na verdade e)\b/.test(texto) ||
     /\b(?:corrigir|corrija|correcao|refazer|refaca|recalcular|ajustar)\b.{0,50}\b(?:cotacao|versao|modelo|motor|motorizacao|veiculo)\b/.test(texto) ||
@@ -16,7 +19,10 @@ export function clienteCorrigiuVersaoCotacao(mensagem: string): boolean {
     // Correções da tração/eixos, sem presumir que "4x2" seja motor 4.2.
     (/\b(?:confundi|errei|corrig|troquei|enganei|na verdade|corret[oa]|cert[oa]|tracao|nao e|nao era|nao foi|mas e|era)\b/.test(texto) &&
      /\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(texto)) ||
-    /\bnao\s+(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(texto);
+    /\bnao\s+(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(texto) ||
+    // Corrigir ano, modelo, câmbio ou uma seleção anterior também exige
+    // retomar um recálculo prometido (não apenas correções de tração).
+    Boolean(ajuste && ajuste.acao!=="atendente");
 }
 
 /** Última tração POSITIVAMENTE corrigida pelo cliente, não pela IA.
@@ -34,9 +40,7 @@ export function tracaoCorrigidaCotacao(mensagens:string[]):string|null{
   );
   const padraoTracao=/\b(?:4|6|8|10|12)x(?:2|4|6|8)\b/g;
   for(let i=correcoes.length-1;i>=0;i--){
-    const semNegacoes=correcoes[i]
-      .replace(/\b(?:nao\s+(?:e|era|foi|seria)|nem)\s+(?:a\s+|o\s+)?(?:4|6|8|10|12)x(?:2|4|6|8)\b/g," ")
-      .replace(/\bnao\s+(?:4|6|8|10|12)x(?:2|4|6|8)\b/g," ");
+    const semNegacoes=textoPositivoDaCorrecao(correcoes[i]);
     const tracoes=[...semNegacoes.matchAll(padraoTracao)].map(m=>m[0]);
     if(tracoes.length)return tracoes.at(-1)||null;
   }
@@ -134,7 +138,7 @@ export function motorizacaoCorrigidaCotacao(mensagens: string[]): string | null 
   if (ultimaCorrecao < 0) return null;
   const mensagensDaCorrecao = mensagens.slice(ultimaCorrecao);
   const motores = mensagensDaCorrecao.flatMap((texto) =>
-    [...texto.matchAll(/\b([1-9][.,][0-9])\b/g)].map((m) =>
+    [...textoPositivoDaCorrecao(texto).matchAll(/\b([1-9][.,][0-9])\b/g)].map((m) =>
       m[1].replace(",", ".")
     )
   );
@@ -154,10 +158,7 @@ export function versaoCorrigidaFoiInformada(mensagens: string[]): boolean {
     clienteCorrigiuVersaoCotacao(item)
   );
   if (ultimaCorrecao < 0) return true;
-  const novas = mensagens.slice(ultimaCorrecao).map((item) =>
-    String(item || "").normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "").toLowerCase()
-  );
+  const novas = mensagens.slice(ultimaCorrecao).map(textoPositivoDaCorrecao);
   return Boolean(tracaoCorrigidaCotacao(mensagens))||novas.some((texto) =>
     /\b[1-9][.,][0-9]\b/.test(texto) ||
     /\b(?:automatico|automatica|manual|mecanico|mecanica|cvt|tiptronic|dsg|ltz|lxs|lx|ex|exl|xlt|xls|xl|limited|comfortline|highline|trendline|sportline|r.line|gls|gl|cd|challenge|milenium|milenio|millennium|express)\b/.test(texto) ||
@@ -172,8 +173,8 @@ export function cambioInformadoCotacao(
   mensagens: string[],
 ): "automatico" | "manual" | null {
   for (let i = mensagens.length - 1; i >= 0; i--) {
-    const texto = String(mensagens[i] || "").normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const mensagem=String(mensagens[i]||"");
+    const texto=textoPositivoDaCorrecao(mensagem);
     const opcoes = [...texto.matchAll(
       /\b(automatic[oa]|auto|aut\.?|tiptronic|dsg|cvt|manual|mecanic[oa]|mec\.?)\b/g
     )].map((m) => m[1]);
@@ -181,6 +182,9 @@ export function cambioInformadoCotacao(
       const ultima = opcoes.at(-1) || "";
       return /^(manual|mec)/.test(ultima) ? "manual" : "automatico";
     }
+    // "Não é automático" NÃO confirma automático nem autoriza reusar
+    // o câmbio de mensagens mais antigas.
+    if(identificarAjusteCotacao(mensagem)?.acao==="cambio")return null;
   }
   return null;
 }

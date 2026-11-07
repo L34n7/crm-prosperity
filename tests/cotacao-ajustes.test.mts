@@ -21,6 +21,10 @@ test("MPI filtra duas versões, mas correção GLS recupera a lista original",()
   assert.deepEqual(correto.opcoes,[opcoesAstra[0]]);
   const direto=recuperarOpcoesFipe(opcoesAstra,"respondi errado, é GLS");
   assert.equal(direto.selecionada,opcoesAstra[0]);
+  assert.equal(recuperarOpcoesFipe(opcoesAstra,
+    "Não é a versão MPI, é GLS").selecionada,opcoesAstra[0]);
+  assert.equal(recuperarOpcoesFipe(opcoesAstra,
+    "É GLS, não MPI").selecionada,opcoesAstra[0]);
 });
 test("resposta errada volta às opções anteriores, não fica presa ao filtro",()=>{
   const resposta=recuperarOpcoesFipe(opcoesAstra,"respondi errado");
@@ -69,4 +73,28 @@ test("não inventa intenção de correção em consulta comum",()=>{
  for(const frase of ["MPI","Astra GLS 2.0","2001","ok","qual o plano premium?","vou pensar","não quero contratar"]){
    assert.equal(identificarAjusteCotacao(frase,false),null,frase);
  }
+});
+
+test("troca de versão sem nome do campo em ambos os sentidos",()=>{
+  for(const frase of ["Não é MPI, é GLS","É GLS, não MPI","Não é essa"]){
+    assert.equal(identificarAjusteCotacao(frase,true)?.acao,"versao",frase);
+  }
+  assert.equal(textoPositivoDaCorrecao("não é a versão MPI, é GLS"),"gls");
+  assert.equal(textoPositivoDaCorrecao("é 1.8, não é o motor 2.0"),"1.8");
+  assert.equal(textoPositivoDaCorrecao("não é o câmbio automático"),"");
+});
+test("rejeição comercial não é correção FIPE mesmo com opções anteriores",()=>{
+  for(const frase of ["não é esse plano","não é esse valor","mas ficou caro","errei a opção do plano"]){
+    assert.equal(identificarAjusteCotacao(frase,true),null,frase);
+  }
+});
+
+test("motor, câmbio e tração são classificados mesmo com negação ao final",()=>{
+  const exemplos=[
+    ["é 1.8, não 2.0","motor"],
+    ["é manual, não automático","cambio"],
+    ["é 8x2, não 4x2","tracao"],
+  ] as const;
+  for(const [frase,acao] of exemplos)
+    assert.equal(identificarAjusteCotacao(frase,true)?.acao,acao,frase);
 });

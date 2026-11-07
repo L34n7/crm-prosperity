@@ -9,6 +9,8 @@ import {
   clienteCobraRecalculoPrometido,
   recalculoPrometidoAposCorrecao,
   versaoAnteriorComTracaoCorrigida,
+  motorizacaoCorrigidaCotacao,
+  cambioInformadoCotacao,
 } from "../src/lib/agentes-ia/correcao-cotacao.ts";
 
 test("correções de tração após proposta são reconhecidas de forma genérica",()=>{
@@ -111,4 +113,60 @@ test("preserva a versão FIPE previamente confirmada quando só a tração muda"
     anoConfirmado:"2016",tracao:"8x2",
     mensagemCorrecao:"não é 4x2, é 8x2 Globetrotter",
   }),null);
+});
+
+test("negações não reaproveitam motor, câmbio ou tração antigos",()=>{
+  assert.equal(motorizacaoCorrigidaCotacao([
+    "Astra MPI 2.0","não é 2.0, é 1.8",
+  ]),"1.8");
+  assert.equal(motorizacaoCorrigidaCotacao([
+    "Astra MPI 2.0","é 1.8, não 2.0",
+  ]),"1.8");
+  assert.equal(motorizacaoCorrigidaCotacao([
+    "Astra MPI 2.0","não é o motor 2.0",
+  ]),null);
+  assert.equal(cambioInformadoCotacao([
+    "automático","é manual, não automático",
+  ]),"manual");
+  assert.equal(cambioInformadoCotacao([
+    "manual","não é manual, é automático",
+  ]),"automatico");
+  assert.equal(cambioInformadoCotacao([
+    "automático","não é automático",
+  ]),null);
+  assert.equal(tracaoCorrigidaCotacao([
+    "4x2","não é a tração 4x2, é 8x2",
+  ]),"8x2");
+  assert.equal(tracaoCorrigidaCotacao([
+    "4x2","não é a tração 4x2",
+  ]),null);
+});
+
+test("correções no meio das opções e depois da proposta permitem retomar",()=>{
+  for(const frase of [
+    "respondi errado",
+    "não é MPI, é GLS",
+    "é outro ano",
+    "não é 2000, é 2001",
+    "não é esse modelo",
+    "não é a versão",
+  ])assert.equal(clienteCorrigiuVersaoCotacao(frase),true,frase);
+
+  assert.equal(versaoCorrigidaFoiInformada([
+    "Astra MPI 2.0","não é a versão MPI",
+  ]),false);
+  assert.equal(versaoCorrigidaFoiInformada([
+    "Astra MPI 2.0","não é 2.0",
+  ]),false);
+  assert.equal(versaoCorrigidaFoiInformada([
+    "Astra MPI 2.0","não é 2.0, é 1.8",
+  ]),true);
+  assert.equal(recalculoPrometidoAposCorrecao({
+    mensagensAposProposta:[
+      {role:"user",content:"não é 2000, é 2001"},
+      {role:"assistant",content:"Vou recalcular a cotação agora."},
+    ],
+    ultimaRespostaAgente:"Vou recalcular a cotação agora.",
+    mensagemAtual:"ok",
+  }),true);
 });

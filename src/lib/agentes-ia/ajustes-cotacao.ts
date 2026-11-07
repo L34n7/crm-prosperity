@@ -15,7 +15,13 @@ function isCorrecao(t:string){return marcadoresCorrecao.test(t);}
 
 /** O último valor afirmado prevalece, excluindo o que foi explicitamente negado. */
 export function textoPositivoDaCorrecao(resposta:string):string{
-  const t=norm(resposta).replace(/\b(?:nao\s+(?:(?:e|era|foi|seria)\s+)?|nem\s+|em vez de\s+|ao inves de\s+)(?:(?:o|a)\s+)?(?:\d{4}|\d{1,2}\s*x\s*\d|[\w.-]+)\b/g," ");
+  // Desconsidera o valor NEGADO, inclusive quando há um nome de campo entre
+  // "não é" e o valor: "não é a versão MPI, é GLS".
+  // Não basta usar o último número/palavra: "é 1.8, não 2.0" confirmaria 2.0.
+  const t=norm(resposta).replace(
+    /\b(?:nao\s+(?:(?:e|eh|era|foi|seria)\s+)?|nem\s+|em vez de\s+|ao inves de\s+)(?:(?:o|a|esse|essa|este|esta|modelo|versao|opcao|motor|motorizacao|cambio|tracao|ano)\s+){0,3}(?:\d{4}|\d{1,2}\s*x\s*\d|\d[.,]\d|[a-z][\w.-]*)\b/g,
+    " "
+  );
   const segmentos=t.split(/[,;]|\b(?:mas|na verdade|so que)\b/g).map(x=>x.trim())
     .filter(Boolean);
   const positivos=segmentos.filter(s=>!/^nao\b/.test(s));
@@ -48,18 +54,30 @@ export function identificarAjusteCotacao(mensagem:string,temOpcoes=false):Ajuste
      /\b(?:era|e|eh)\s+(?:19|20)\d{2}\s*(?:nao|ao inves)/.test(t))
     return fazer("ano");
   if(/\b(?:cambio|marcha|transmissao)\b/.test(t)&&isCorrecao(t)||
-     /\bnao\s+(?:e|era)\s+(?:automatic[oa]|manual|mecanic[oa])\b/.test(t))
+     /\bnao\s+(?:e|era)\s+(?:automatic[oa]|manual|mecanic[oa])\b/.test(t)||
+     /\b(?:e|eh|era)\s+(?:automatic[oa]|manual|mecanic[oa])\s*,?\s+nao\s+(?:automatic[oa]|manual|mecanic[oa])\b/.test(t))
     return fazer("cambio",textoPositivoDaCorrecao(mensagem));
   if(/\b(?:motor|motorizacao)\b/.test(t)&&isCorrecao(t)||
-     /\bnao\s+(?:e|era)\s+\d[.,]\d\b/.test(t))
+     /\bnao\s+(?:e|era)\s+\d[.,]\d\b/.test(t)||
+     /\b(?:e|eh|era)\s+\d[.,]\d\s*,?\s+nao\s+\d[.,]\d\b/.test(t))
     return fazer("motor",textoPositivoDaCorrecao(mensagem));
   if((/\b(?:tracao|eixos?)\b/.test(t)&&isCorrecao(t))||
-     (isCorrecao(t)&&/\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(t)))
+     (isCorrecao(t)&&/\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(t))||
+     /\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b.*\bnao\b.*\b(?:4|6|8|10|12)\s*x\s*(?:2|4|6|8)\b/.test(t))
     return fazer("tracao",textoPositivoDaCorrecao(mensagem));
-  if(/\b(?:respondi errado|respondi errada|errei a resposta|errei a opcao|escolhi errado|marquei errado|voltar as opcoes|(?:mostrar|ver|rever) (?:as )?opcoes|voltar a lista|me enganei na resposta)\b/.test(t))
+  // "Não é esse plano" ou "mas está caro" após uma proposta não é uma
+  // correção FIPE, mesmo que a última lista de versões esteja armazenada.
+  const trataDeCondicoesComerciais=/\b(?:plano|preco|valor|mensalidade|cobertura|franquia|desconto|pagamento|parcela|adesao|contratacao)\b/.test(t)
+    && !/\b(?:versao|modelo|motor|motorizacao|cambio|tracao|ano|veiculo|carro)\b/.test(t);
+  if(!trataDeCondicoesComerciais&&/\b(?:respondi errado|respondi errada|errei a resposta|errei a opcao|escolhi errado|marquei errado|voltar as opcoes|(?:mostrar|ver|rever) (?:as )?opcoes|voltar a lista|me enganei na resposta)\b/.test(t))
     return fazer("voltar_opcoes",textoPositivoDaCorrecao(mensagem));
-  if(/\b(?:versao|opcao|acabamento)\b/.test(t)&&isCorrecao(t)||
-     (temOpcoes&&/\b(?:na verdade|confundi|errei|mas|o correto e|a correta e)\b/.test(t)))
+  if(!trataDeCondicoesComerciais&&(
+     (/\b(?:versao|opcao|acabamento)\b/.test(t)&&isCorrecao(t))||
+     // "Não é MPI, é GLS" e "É GLS, não MPI" recuperam a lista,
+     // sem interpretar rejeição comercial como correção de versão.
+     (temOpcoes&&(/\b(?:na verdade|confundi|errei|o correto e|a correta e|o certo e|a certa e|nao e|nao era|nao foi|nem|e sim)\b/.test(t)||
+       /\b(?:e|eh|era)\s+[\w.-]{2,}\s*,?\s+nao\s+[\w.-]{2,}\b/.test(t)||
+       /\bmas\s+(?:e|eh|era|na verdade)\b/.test(t)))))
     return fazer("versao",textoPositivoDaCorrecao(mensagem));
   return null;
 }
