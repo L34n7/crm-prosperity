@@ -469,8 +469,12 @@ export async function executarFerramentaNegocio(params: {
     const classificacao=await registrarConsultaFipe({
       empresaId:params.empresaId,tipo,anoCodigo:fipe.anoCodigo,veiculo:fipe,uso,
     });
-    if(!classificacao.categoria)return {ok:false,error:
-      "Este veículo precisa de classificação comercial interna. Encaminhe à equipe para configurá-lo diretamente no banco de dados."};
+    if(!classificacao.categoria)return {
+      ok:false,code:"COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE",
+      // Diagnóstico fica na execução, nunca no texto do WhatsApp.
+      error:"Classificação comercial de caminhão pendente para este código FIPE.",
+      pergunta_cliente:"Para concluir a cotação desse caminhão, nossa equipe precisa confirmar as condições disponíveis. Posso encaminhar você para atendimento?",
+    };
     const categoria=classificacao.categoria;
     // A classificação especial é feita dentro do cálculo, individualmente por plano.
     const opcionaisPorPlano:Record<string,string[]>={};

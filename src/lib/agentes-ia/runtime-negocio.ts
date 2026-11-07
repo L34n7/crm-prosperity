@@ -1057,14 +1057,19 @@ export async function processarPendenciaNegocio(
         item.role==="assistant" &&
         /COTAÇÃO DE PROTEÇÃO VEICULAR|COTACAO DE PROTECAO VEICULAR/i.test(item.content));
       const aposProposta=historico.slice(indiceUltimaProposta+1);
-      const inicioDoNovoPedido=aposProposta.findIndex(item=>
+      // Iniciar sempre no pedido NOVO mais recente; nunca recuperar
+      // veículo da cotação cancelada ou anterior.
+      const inicioPedidoRecente=aposProposta.findLastIndex(item=>
+        item.role==="user"&&clientePediuNovoVeiculoCotacao(item.content));
+      const inicioPedidoFallback=aposProposta.findIndex(item=>
         item.role==="user"&&clientePediuCotacaoVeicular(item.content));
-      const mensagensPedidoNoHistorico=inicioDoNovoPedido>=0
-        ?aposProposta.slice(inicioDoNovoPedido)
+      const inicioPedido=inicioPedidoRecente>=0?inicioPedidoRecente:inicioPedidoFallback;
+      const mensagensPedidoNoHistorico=inicioPedido>=0
+        ?aposProposta.slice(inicioPedido)
           .filter(item=>item.role==="user").map(item=>item.content)
         :[];
       estado.cotacao_pedido_mensagens=listaCurta([
-        ...mensagensPedidoNoHistorico,
+        ...(querOutraCotacao?[]:mensagensPedidoNoHistorico),
         ...estado.cotacao_pedido_mensagens,
         pendencia.conteudo_agregado,
       ].slice(-18),14,220);
@@ -1869,7 +1874,19 @@ export async function processarPendenciaNegocio(
       const resultadoFalha=ultimaFalhaCotacao.resultado as {
         code?:string;pergunta_cliente?:string;opcoes_fipe?:string[];
       };
-      if(resultadoFalha.code==="FIPE_MARCA_NAO_IDENTIFICADA") {
+      if(resultadoFalha.code==="COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE"){
+        // Categoria interna depende de aprovação comercial da empresa.
+        // Nunca pedir ao cliente escolher uma tabela sem essa confirmação.
+        saidaFinal.mensagens=[
+          String(resultadoFalha.pergunta_cliente||
+            "Nossa equipe precisa verificar as condições desse caminhão antes da proposta. Posso encaminhar você?").slice(0,300)
+        ];
+        saidaFinal.estado.cotacao_pendente=false;
+        saidaFinal.estado.cotacao_em_correcao=false;
+        saidaFinal.estado.cotacao_opcoes_fipe=[];
+        saidaFinal.estado.cotacao_verificacao_humana=true;
+        saidaFinal.estado.proxima_acao="oferecer atendimento humano para conferir cotação do caminhão";
+      } else if(resultadoFalha.code==="FIPE_MARCA_NAO_IDENTIFICADA") {
         // Apenas a marca está pendente. Não permitir que o modelo pergunte
         // motorização, câmbio, origem ou alimentação como substitutos.
         saidaFinal.mensagens=[
@@ -1926,7 +1943,8 @@ export async function processarPendenciaNegocio(
       }
       // Uma limitação comercial não deve manter a cotação pendente,
       // provocando consultas idênticas a cada nova mensagem do contato.
-      if (resultadoFalha.code!=="FIPE_MARCA_NAO_IDENTIFICADA" &&
+      if (resultadoFalha.code!=="COTACAO_CLASSIFICACAO_CAMINHAO_PENDENTE" &&
+          resultadoFalha.code!=="FIPE_MARCA_NAO_IDENTIFICADA" &&
           resultadoFalha.code!=="COTACAO_DADOS_NOVOS_INCOMPLETOS" &&
           resultadoFalha.code!=="FIPE_ANO_MODELO_NAO_ENCONTRADO" &&
           resultadoFalha.code!=="FIPE_VERSAO_INCOMPATIVEL" &&

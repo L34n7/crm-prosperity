@@ -183,3 +183,25 @@ test("nome curto de veículo precisa corresponder exatamente, sem adivinhar",()=
   assert.equal(preservarModeloCotacaoConfirmado(["Gol 2018","Particular"],
     "Fox","gol"),"gol");
 });
+
+
+test("modelo de caminhão com código composto é reconhecido como veículo, não como ano",()=>{
+ const mensagens=["Quero gerar outra","11.180","2018","Comercial","Volkswagen"];
+ const dados=consolidarDadosCotacao(mensagens);
+ assert.deepEqual(dados,{modelo:"11.180",ano_modelo:"2018",uso:"comercial"});
+ assert.equal(validarDadosNovosCotacao(mensagens,"11.180","2018","comercial"),null);
+ assert.equal(modeloComDadosConfirmados(mensagens,"11.180"),"11.180");
+ assert.equal(preservarModeloCotacaoConfirmado(mensagens,"","11.180"),"11.180");
+});
+test("desistência anterior não contamina modelo do novo pedido",()=>{
+ const mensagens=["Cancela","Quero gerar outra","11.180","2018","Comercial"];
+ const dados=consolidarDadosCotacao(mensagens);
+ assert.equal(dados.modelo,"11.180");
+ assert.equal(dados.ano_modelo,"2018");
+ assert.equal(dados.uso,"comercial");
+ assert.equal(validarDadosNovosCotacao(mensagens,"11.180","2018","comercial"),null);
+});
+test("não deduz caminhão por números avulsos sem código de modelo confirmado",()=>{
+ assert.equal(validarDadosNovosCotacao(["Quero gerar outra","2018","Comercial"],
+   "11.180","2018","comercial"),"Qual é o modelo do novo veículo?");
+});

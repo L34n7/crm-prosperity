@@ -105,6 +105,12 @@ export function validarDadosNovosCotacao(
   // O ano sozinho ("Vectra 2000") não vira nome de outro veículo.
   const modeloNumero=palavras.find((parte,i)=>/^\d{3,4}$/.test(parte) &&
     (palavras.length===1 || (i>0 && MARCAS_VEICULARES.has(palavras[i-1]))));
+  // Modelos de caminhão com código composto (NN.NNN/NN-NNN) também
+  // são nomes. Nunca interpretá-los como categoria ou ano.
+  const codigoComposto=normalizar(modelo).match(/(?:^| )\d{1,2} \d{3}(?: |$)/)?.[0].trim()||"";
+  const codigoConfirmado=Boolean(codigoComposto)&&recentes.some(texto=>
+    (" "+texto+" ").includes(" "+codigoComposto+" ")
+  );
   const modeloNumerico=Boolean(modeloNumero);
   const numeroNomeado=modeloNumerico && recentes.some((mensagem)=>{
     const partes=mensagem.split(" ");
@@ -117,8 +123,8 @@ export function validarDadosNovosCotacao(
   if(palavras.length>0 && palavras.every(p=>
       PALAVRAS_GERAIS_COTACAO.has(p)||MARCAS_VEICULARES.has(p)))
     return "Qual é o modelo do novo veículo?";
-  if((!tokens.length&&!numeroNomeado) ||
-    (tokens.length>0&&!tokens.some(t=>new RegExp("(^| )"+t+"( |$)").test(combinado)
+  if((!tokens.length&&!numeroNomeado&&!codigoConfirmado) ||
+    (tokens.length>0&&!codigoConfirmado&&!tokens.some(t=>new RegExp("(^| )"+t+"( |$)").test(combinado)
      ||compacto.includes(t)||termoModeloPresente(t,recentes)))){
     return "Qual é o modelo do novo veículo?";
   }
@@ -239,7 +245,7 @@ const PALAVRAS_GERAIS_COTACAO = new Set(
   "manual automatico automatica mecanico mecanica motor motorizacao cambio sedan hatch suv pickup camionete cabine " +
   "dupla simples tracao cd 4x4 4x2 gls lxs ex exl lx ltz lt xlt xls xl limited challenge premium completo " +
   "confirmo confirmado correto certa certo verdade sim nao ok obrigado obrigada obrigado por favor voces conseguem dia dias diario familia casa caro uai neh ne ta beleza belezaaa entendi vou usar usando dia a dia uso para trabalhar dirigindo rodar quero nao mais " +
-  "consegue tentar tente tentei outra vez fazer de novo quero saber qual qual e meu por que quanto fica quanto custa"
+  "consegue tentar tente tentei outra vez fazer de novo quero saber qual qual e meu por que quanto fica quanto custa cancela cancelar canela"
     ).split(/\s+/).filter(Boolean)
 );
 const MARCAS_VEICULARES = new Set(
@@ -263,6 +269,10 @@ export function acabamentoIsoladoCotacao(texto:string):boolean{
  * Nunca usar esse campo como versão FIPE, motorização ou preço confirmado.
  */
 function modeloMencionadoCotacao(mensagem: string): string | null {
+  const textoOriginal=String(mensagem||"").trim();
+  // Código do modelo dito isoladamente; a FIPE validará marca e versão.
+  const codigo=textoOriginal.match(/^\d{1,2}[.\-\s]\d{3}$/);
+  if(codigo)return codigo[0].replace(/[\s-]/g,".");
   const palavras = normalizar(mensagem).split(" ").filter(Boolean);
   const candidatas = palavras.filter((palavra) =>
     !PALAVRAS_GERAIS_COTACAO.has(palavra) &&
