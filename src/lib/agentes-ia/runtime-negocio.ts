@@ -989,7 +989,6 @@ export async function processarPendenciaNegocio(
     ].filter((v):v is string=>Boolean(v));
     if(ajusteEfetivo&&ajusteEfetivo.acao!=="atendente"){
       const tipo=ajusteEfetivo.acao;
-      const eraCotada=existeCotacaoAnterior&&!estado.cotacao_pendente;
       if(tipo==="outro_veiculo"){
         invalidarVersoes();
         estado.cotacao_dados={...DADOS_COTACAO_VAZIOS};
@@ -1031,7 +1030,8 @@ export async function processarPendenciaNegocio(
         if(ajusteDeVersao&&exigeValor){
           estado.cotacao_ignorar_historico=true;
           estado.cotacao_pendente=true;
-          estado.cotacao_em_correcao=eraCotada;
+          // A correção durante a seleção FIPE também invalida o atributo antigo.
+          estado.cotacao_em_correcao=true;
           estado.cotacao_opcoes_fipe=original;
           respostaDiretaCotacao=tipo==="tracao"?"Qual é a tração correta do veículo?":
             tipo==="motor"?"Qual é a motorização correta?":
@@ -1042,16 +1042,18 @@ export async function processarPendenciaNegocio(
           estado.cotacao_pendente=true;
           estado.cotacao_verificacao_humana=false;
           estado.cotacao_incompatibilidades=0;
-          estado.cotacao_em_correcao=eraCotada||estado.cotacao_em_correcao;
+          estado.cotacao_em_correcao=true;
           estado.cotacao_pedido_mensagens=mensagensConfirmadas(
             pendencia.conteudo_agregado
           );
           if(original.length){
             estado.cotacao_opcoes_fipe_origem=original;
             const revisao=recuperarOpcoesFipe(original,pendencia.conteudo_agregado);
-            if(revisao.selecionada)
+            if(revisao.selecionada){
               versaoAjustadaFipe=revisao.selecionada;
-            else {
+              // A escolha corrigida substitui o filtro anterior (MPI -> GLS).
+              estado.cotacao_opcoes_fipe=[revisao.selecionada];
+            }else {
               estado.cotacao_opcoes_fipe=revisao.opcoes;
               respostaDiretaCotacao=perguntaUnicaVersoesFipe(
                 revisao.opcoes.map((name,i)=>({name,code:String(i)})),
@@ -1359,22 +1361,27 @@ export async function processarPendenciaNegocio(
           (transferencia.setorNome?"a equipe de "+transferencia.setorNome:
             "nossa equipe")+
           ". Um atendente continuará a conversa por aqui."
-        :"";
-      if(mensagem)await enviarMensagens(ctx,[mensagem]);
+        :transferencia.jaEstavaComHumano
+          ?"Seu atendimento já está com nossa equipe. Um atendente continuará a conversa por aqui."
+          :"Não consegui concluir a transferência automática. Posso tentar novamente se desejar.";
+      await enviarMensagens(ctx,[mensagem]);
       const agora=new Date().toISOString();
-      const estadoHumano:EstadoConversa={
-        ...estado,estagio:"transferido para atendimento humano",
-        proxima_acao:null,aguardando_escolha_plano:false,
-        cotacao_pendente:false,cotacao_em_correcao:false,
-        cotacao_opcoes_fipe:[],cotacao_opcoes_fipe_origem:[],
-      };
+      const estadoHumano:EstadoConversa=transferencia.transferido||
+        transferencia.jaEstavaComHumano
+        ?{...estado,estagio:"transferido para atendimento humano",
+          proxima_acao:null,aguardando_escolha_plano:false,
+          cotacao_pendente:false,cotacao_em_correcao:false,
+          cotacao_opcoes_fipe:[],cotacao_opcoes_fipe_origem:[]}
+        :{...estado,proxima_acao:"tentar transferência para atendimento humano"};
       const {error:erroEstado}=await supabaseAdmin.from("agente_ia_conversa_estados")
         .upsert({
           empresa_id:pendencia.empresa_id,agente_id:agente.id,
           conversa_id:pendencia.conversa_id,
           resumo:memoriaCompacta(estadoHumano).slice(0,1800),
-          estado_json:{...estadoHumano,transferido_humano:true,
-            ultima_acao_critica:true,runtime_ultima_interacao:"negocio"},
+          estado_json:{...estadoHumano,
+            transferido_humano:Boolean(transferencia.transferido||transferencia.jaEstavaComHumano),
+            ultima_acao_critica:Boolean(transferencia.transferido),
+            runtime_ultima_interacao:"negocio"},
           ultima_mensagem_id:pendencia.mensagem_ids.at(-1)||null,
           ultima_interacao_at:agora,updated_at:agora,
         },{onConflict:"agente_id,conversa_id"});
