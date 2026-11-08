@@ -71,6 +71,7 @@ test("nomes de motos com espaços, letras e cilindradas mantêm identidade",()=>
 test("não misturar cilindradas ou versões contraditórias",()=>{
   const catalogo=[
     {code:"a",name:"X-ADV 150"},
+    {code:"a50",name:"X-ADV 50"},
     {code:"b",name:"ADV 750"},
     {code:"c",name:"CBR 650 F"},
     {code:"d",name:"GL 1500 Gold Wing"},
