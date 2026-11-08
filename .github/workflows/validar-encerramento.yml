@@ -31,4 +31,4 @@ jobs:
       - name: Testar apresentação de interesses identificados pela IA
         run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/interesses-identificados-ia.test.mts
       - name: Validar correções contextuais de cotação FIPE
-        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/cotacao-ajustes.test.mts tests/cotacao-correcao-tracao.test.mts tests/cotacao-referencias-fipe.test.mts
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/cotacao-ajustes.test.mts tests/cotacao-correcao-tracao.test.mts tests/cotacao-referencias-fipe.test.mts tests/cotacao-modelos-abreviados.test.mts
