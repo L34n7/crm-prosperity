@@ -1,4 +1,5 @@
 import {interpretarRespostaOpcoesFipe} from "../cotacoes-veiculares/orientacao-versoes.ts";
+import {clientePediuNovoVeiculoCotacao} from "./pedido-cotacao.ts";
 
 export type AcaoAjusteCotacao=
   "atendente"|"outro_veiculo"|"modelo"|"ano"|"versao"|
@@ -97,4 +98,15 @@ export function recuperarOpcoesFipe(
   return {selecionada:escolha.versaoSelecionada,
     opcoes:escolha.filtrou?escolha.opcoesRestantes:originais,
     filtrou:escolha.filtrou};
+}
+
+/** Pedido NOVO prevalece sobre qualquer filtro de versão de veículo antigo.
+ * A intenção de falar com atendente continua prioritária mesmo nesse caso.
+ */
+export function ajusteCotacaoNoPedidoAtual(
+  mensagem:string,temOpcoes=false,
+):AjusteCotacao|null{
+  const ajuste=identificarAjusteCotacao(mensagem,temOpcoes);
+  return clientePediuNovoVeiculoCotacao(mensagem)&&
+    ajuste?.acao!=="atendente"?null:ajuste;
 }
