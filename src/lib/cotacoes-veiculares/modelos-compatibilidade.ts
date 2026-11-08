@@ -105,6 +105,18 @@ function familiaSemCilindradaCompativel(consulta:string[],opcao:string):boolean{
     Number(token)>=50);
 }
 
+/** Alternativas para CONFIRMAÇÃO, nunca para escolher uma versão.
+ * Somente nomes da mesma família textual (CBR, GL, XADV etc.). O ano
+ * precisa ser validado na FIPE antes de apresentar qualquer alternativa.
+ */
+export function modelosDaMesmaFamiliaFipe(
+  itens:OpcaoModeloFipe[],consulta:string,
+):OpcaoModeloFipe[]{
+  const familia=tokensIdentidadeModelo(consulta)[0]||"";
+  if(!/^[a-z]{2,}$/.test(familia))return [];
+  return itens.filter(item=>tokensIdentidadeModelo(item.name)[0]===familia);
+}
+
 const termosAtributos = new Set([
   "manual", "mecanico", "mecanica", "mec",
   "automatico", "automatica", "aut", "auto", "cvt", "tiptronic", "dsg",
