@@ -71,7 +71,7 @@ function tokensIdentidadeModelo(valor:string):string[]{
   for(let i=0;i<partes.length;i++){
     const atual=partes[i];
     const proximo=partes[i+1]||"";
-    if(/^[a-z]$/.test(atual)&&/^[a-z]{2,}$/.test(proximo)){
+    if(i===0&&/^[a-z]$/.test(atual)&&/^[a-z]{2,}$/.test(proximo)){
       normalizados.push(atual+proximo);
       i++;
     }else{
