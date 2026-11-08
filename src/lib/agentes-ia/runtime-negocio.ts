@@ -44,7 +44,7 @@ import {
   promessaCotacaoSemFerramenta, recalculoPrometidoAposCorrecao,
 } from "./correcao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
-import {identificarAjusteCotacao, recuperarOpcoesFipe, type AjusteCotacao} from "./ajustes-cotacao";
+import {ajusteCotacaoNoPedidoAtual, recuperarOpcoesFipe, type AjusteCotacao} from "./ajustes-cotacao";
 import {normalizarReferenciasFipe,referenciaDaVersaoFipe,versaoConfirmadaNestePedido,type ReferenciaVersaoFipe} from "./referencias-fipe";
 import {
   carregarFerramentasNegocioAtivas,
@@ -910,7 +910,7 @@ export async function processarPendenciaNegocio(
       pendencia.conteudo_agregado
     );
     const ajustePedido=ferramentas.has("gerar_cotacao_veicular")
-      ?identificarAjusteCotacao(pendencia.conteudo_agregado,
+      ?ajusteCotacaoNoPedidoAtual(pendencia.conteudo_agregado,
         estado.cotacao_opcoes_fipe.length>0||
         estado.cotacao_opcoes_fipe_origem.length>0):null;
     const opcoesAntesDaResposta=[...estado.cotacao_opcoes_fipe];
