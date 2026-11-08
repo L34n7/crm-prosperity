@@ -58,6 +58,22 @@ function nomeNumericoAbreviado(consulta:string,catalogo:string):boolean{
     (!prefixo[2]||sufixo.startsWith(prefixo[2]));
 }
 
+/** Permite a mesma identificação quando o catálogo agrupa letras e
+ * cilindrada em um token (GL1800) e o cliente digita separado (GL 1800).
+ * Não altera números nem supõe versões ausentes do catálogo.
+ */
+function tokensCatalogo(nome:string):Set<string>{
+  const partes=new Set(normalizar(nome).split(" ").filter(Boolean));
+  for(const token of [...partes]){
+    const siglaComNumero=token.match(/^([a-z]{1,5})(\d{2,4})$/);
+    if(siglaComNumero){
+      partes.add(siglaComNumero[1]);
+      partes.add(siglaComNumero[2]);
+    }
+  }
+  return partes;
+}
+
 const termosAtributos = new Set([
   "manual", "mecanico", "mecanica", "mec",
   "automatico", "automatica", "aut", "auto", "cvt", "tiptronic", "dsg",
@@ -83,9 +99,7 @@ export function modelosCompativeisFipe(
   const tokens = nome.split(" ").filter((token) => token && !termosAtributos.has(token));
 
   const compativeis = itens.filter((item) => {
-    const partes = new Set(
-      normalizar(item.name).replace(/\b(?:sed|seda)\b/g, "sedan").split(" "),
-    );
+    const partes = tokensCatalogo(item.name);
     return tokens.every((token) =>
       partes.has(token) ||
       (token === "diesel" && ["diesel", "dies", "die"].some((v) => partes.has(v)))
