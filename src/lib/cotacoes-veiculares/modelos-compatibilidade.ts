@@ -71,7 +71,10 @@ function tokensIdentidadeModelo(valor:string):string[]{
   for(let i=0;i<partes.length;i++){
     const atual=partes[i];
     const proximo=partes[i+1]||"";
-    if(i===0&&/^[a-z]$/.test(atual)&&/^[a-z]{2,}$/.test(proximo)){
+    // A3, A1, Q5 e séries semelhantes são famílias DIFERENTES.
+    // Já X-ADV junta X + ADV; não perder o identificador do modelo.
+    if(i===0&&/^[a-z]$/.test(atual)&&
+       (/^[a-z]{2,}$/.test(proximo)||/^\d{1,2}$/.test(proximo))){
       normalizados.push(atual+proximo);
       i++;
     }else{
@@ -113,7 +116,7 @@ export function modelosDaMesmaFamiliaFipe(
   itens:OpcaoModeloFipe[],consulta:string,
 ):OpcaoModeloFipe[]{
   const familia=tokensIdentidadeModelo(consulta)[0]||"";
-  if(!/^[a-z]{2,}$/.test(familia))return [];
+  if(!/^(?:[a-z]{2,}|[a-z]\d{1,2})$/.test(familia))return [];
   return itens.filter(item=>tokensIdentidadeModelo(item.name)[0]===familia);
 }
 
