@@ -46,6 +46,18 @@ function nomeComUmErro(a:string,b:string):boolean{
   return erros+(a.length-i)+(b.length-j)===1;
 }
 
+/** Abreviações numéricas somente identificam possíveis versões FIPE;
+ * o ano e o código real serão confirmados posteriormente.
+ * 320 pode localizar 320iA, mas nunca 3200 ou 321i.
+ */
+function nomeNumericoAbreviado(consulta:string,catalogo:string):boolean{
+  const prefixo=consulta.match(/^(\d{3,4})([a-z]{0,2})$/);
+  if(!prefixo||!catalogo.startsWith(consulta))return false;
+  const sufixo=catalogo.slice(prefixo[1].length);
+  return /^[a-z]{1,3}$/.test(sufixo) &&
+    (!prefixo[2]||sufixo.startsWith(prefixo[2]));
+}
+
 const termosAtributos = new Set([
   "manual", "mecanico", "mecanica", "mec",
   "automatico", "automatica", "aut", "auto", "cvt", "tiptronic", "dsg",
@@ -90,7 +102,8 @@ export function modelosCompativeisFipe(
     :itens.filter((item)=>{
       const partes=normalizar(item.name)
         .replace(/\b(?:sed|seda)\b/g,"sedan").split(" ");
-      return nomeComUmErro(familiaInformada,partes[0]||"") &&
+      return (nomeComUmErro(familiaInformada,partes[0]||"") ||
+        nomeNumericoAbreviado(familiaInformada,partes[0]||"")) &&
         tokens.slice(1).every(token=>
           partes.includes(token) ||
           (token==="diesel"&&["diesel","dies","die"].some(v=>partes.includes(v))));
