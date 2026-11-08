@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, ErroConsultaFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
+import {ErroIdentificacaoModeloFipe} from "@/lib/cotacoes-veiculares/erros-identificacao";
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {usoComercialInferivelFipe} from "@/lib/cotacoes-veiculares/uso-automatico";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
@@ -455,6 +456,22 @@ export async function executarFerramentaNegocio(params: {
       );
       if(falhaTecnica)return {ok:false,code:"FIPE_CONSULTA_INDISPONIVEL",
         error:(falhaTecnica.reason as ErroConsultaFipe).message};
+      const errosIdentificacao=buscas
+        .filter((item):item is PromiseRejectedResult=>
+          item.status==="rejected" &&
+          item.reason instanceof ErroIdentificacaoModeloFipe)
+        .map(item=>item.reason as ErroIdentificacaoModeloFipe);
+      // Modelo encontrado em alguma categoria, mas não no ano solicitado,
+      // prevalece sobre "modelo ausente" de outras categorias.
+      const diagnostico=errosIdentificacao.find(item=>
+        item.codigo==="FIPE_ANO_MODELO_NAO_ENCONTRADO")||
+        errosIdentificacao.find(item=>
+          item.codigo==="FIPE_MODELO_NAO_ENCONTRADO");
+      if(diagnostico)return {
+        ok:false,code:diagnostico.codigo,
+        error:diagnostico.message,
+        pergunta_cliente:diagnostico.perguntaCliente,
+      };
       const erros=buscas.filter((r):r is PromiseRejectedResult=>r.status==="rejected")
         .map(r=>r.reason instanceof Error?r.reason.message:String(r.reason));
       const ambiguidade=erros.find(e=>e.includes("Informe uma versão mais específica"));
