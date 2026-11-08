@@ -58,20 +58,50 @@ function nomeNumericoAbreviado(consulta:string,catalogo:string):boolean{
     (!prefixo[2]||sufixo.startsWith(prefixo[2]));
 }
 
-/** Permite a mesma identificação quando o catálogo agrupa letras e
- * cilindrada em um token (GL1800) e o cliente digita separado (GL 1800).
- * Não altera números nem supõe versões ausentes do catálogo.
+/** Normaliza códigos de modelo sem presumir características:
+ * GL1800 = GL 1800; CBR650R = CBR 650 R; X-ADV = XADV.
+ * Números distintos (650 e 500, 750 e 150) NUNCA são equivalentes.
+ * Agrupar uma letra inicial com a palavra seguinte evita misturar
+ * X-ADV com ADV, sem cadastrar nomes de veículos no algoritmo.
  */
-function tokensCatalogo(nome:string):Set<string>{
-  const partes=new Set(normalizar(nome).split(" ").filter(Boolean));
-  for(const token of [...partes]){
-    const siglaComNumero=token.match(/^([a-z]{1,5})(\d{2,4})$/);
-    if(siglaComNumero){
-      partes.add(siglaComNumero[1]);
-      partes.add(siglaComNumero[2]);
+function tokensIdentidadeModelo(valor:string):string[]{
+  const brutos=normalizar(valor).split(" ").filter(Boolean);
+  const partes=brutos.flatMap(token=>token.match(/[a-z]+|\d+/g)||[]);
+  const normalizados:string[]=[];
+  for(let i=0;i<partes.length;i++){
+    const atual=partes[i];
+    const proximo=partes[i+1]||"";
+    if(/^[a-z]$/.test(atual)&&/^[a-z]{2,}$/.test(proximo)){
+      normalizados.push(atual+proximo);
+      i++;
+    }else{
+      normalizados.push(atual);
     }
   }
-  return partes;
+  return normalizados;
+}
+
+function tokensCatalogo(nome:string):Set<string>{
+  return new Set(tokensIdentidadeModelo(nome));
+}
+
+/** Quando a descrição FIPE omite uma cilindrada, localizar a família sem
+ * desprezar esse dado se o catálogo trouxer um número contraditório.
+ * Apenas números típicos de cilindrada (100–1999), acompanhados de
+ * uma família de letras identificável, podem ser omitidos na busca.
+ * A versão resultante ainda é validada pelo ano e, se ambígua, confirmada.
+ */
+function familiaSemCilindradaCompativel(consulta:string[],opcao:string):boolean{
+  const cilindradas=consulta.filter(token=>
+    /^\d{3,4}$/.test(token)&&Number(token)>=100&&Number(token)<=1999);
+  if(cilindradas.length!==1)return false;
+  const cilindrada=cilindradas[0];
+  const familia=consulta.filter(token=>token!==cilindrada);
+  if(!familia.some(token=>/^[a-z]{3,}$/.test(token)))return false;
+  const nome=tokensCatalogo(opcao);
+  if(!familia.every(token=>nome.has(token)))return false;
+  // Aceitar apenas descrição SEM cilindrada; jamais usar 150 para 750.
+  return ![...nome].some(token=>/^\d{3,4}$/.test(token));
 }
 
 const termosAtributos = new Set([
@@ -96,7 +126,8 @@ export function modelosCompativeisFipe(
   if (exatos.length) return exatos;
 
   const cambioSolicitado = cambioExplicito(nome);
-  const tokens = nome.split(" ").filter((token) => token && !termosAtributos.has(token));
+  const tokens = tokensIdentidadeModelo(nome)
+    .filter(token=>token&&!termosAtributos.has(token));
 
   const compativeis = itens.filter((item) => {
     const partes = tokensCatalogo(item.name);
@@ -110,18 +141,21 @@ export function modelosCompativeisFipe(
   // sugerida deve diferir em UMA letra no primeiro token do veículo;
   // detalhes restantes precisam coincidir. Depois, a FIPE valida o ano
   // e exige escolha caso múltiplas versões permaneçam.
-  const familiaInformada=tokens[0]||"";
-  const candidatos=compativeis.length||!familiaInformada
+  const termosBrutos=nome.split(" ").filter(token=>
+    token&&!termosAtributos.has(token));
+  const familiaInformada=termosBrutos[0]||"";
+  const aproximados=compativeis.length||!familiaInformada
     ?compativeis
-    :itens.filter((item)=>{
-      const partes=normalizar(item.name)
-        .replace(/\b(?:sed|seda)\b/g,"sedan").split(" ");
-      return (nomeComUmErro(familiaInformada,partes[0]||"") ||
-        nomeNumericoAbreviado(familiaInformada,partes[0]||"")) &&
-        tokens.slice(1).every(token=>
-          partes.includes(token) ||
-          (token==="diesel"&&["diesel","dies","die"].some(v=>partes.includes(v))));
+    :itens.filter(item=>{
+      const partesBrutas=normalizar(item.name).split(" ");
+      const partes=tokensCatalogo(item.name);
+      return (nomeComUmErro(familiaInformada,partesBrutas[0]||"")||
+        nomeNumericoAbreviado(familiaInformada,partesBrutas[0]||""))&&
+        termosBrutos.slice(1).every(token=>partes.has(token)||
+          (token==="diesel"&&["diesel","dies","die"].some(v=>partes.has(v))));
     });
+  const candidatos=aproximados.length?aproximados:
+    itens.filter(item=>familiaSemCilindradaCompativel(tokens,item.name));
 
   if (!cambioSolicitado) return candidatos;
   const cambioIdentificado = candidatos.filter(
