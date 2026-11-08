@@ -28,9 +28,13 @@ test("modelos de moto pouco comuns não se confundem com outros códigos",()=>{
     {code:"b",name:"GL 1500 Gold Wing"},
     {code:"c",name:"X-ADV 750"},
     {code:"d",name:"ADV 150"},
+    {code:"e",name:"GL1800 Gold Wing"},
   ];
   assert.deepEqual(modelosCompativeisFipe(catalogo,"GL 1800 Gold Wing")
-    .map(x=>x.code),["a"]);
+    .map(x=>x.code),["a","e"]);
+  assert.deepEqual(modelosCompativeisFipe(
+    [{code:"e",name:"GL1800 Gold Wing"}],"GL 1800 Gold Wing"
+  ).map(x=>x.code),["e"]);
   assert.deepEqual(modelosCompativeisFipe(catalogo,"X adv 750")
     .map(x=>x.code),["c"]);
   assert.deepEqual(modelosCompativeisFipe(catalogo,"X-ADV 2018")
