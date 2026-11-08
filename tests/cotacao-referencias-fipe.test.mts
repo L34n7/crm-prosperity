@@ -26,3 +26,17 @@ test("acabamento isolado não identifica um veículo novo",()=>{
   assert.equal(validarDadosNovosCotacao(["2000","2.0 gl"],
     "2.0 GL","2000","",true),"Qual é o modelo do novo veículo?");
 });
+
+test("falha técnica FIPE difere de ano sem versão",async()=>{
+  const {classificarFalhaCotacao}=await import(
+    "../src/lib/agentes-ia/cotacao-erros-publicos.ts"
+  );
+  for(const erro of [
+    "Consulta FIPE indisponível: HTTP 429 (cars/brands).",
+    "Consulta FIPE indisponível: timeout",
+    "Consulta de anos FIPE ficou temporariamente indisponível",
+  ])assert.equal(classificarFalhaCotacao(erro).tipo,"consulta",erro);
+  assert.equal(classificarFalhaCotacao(
+    "Nenhuma versão localizada para o ano-modelo 2010"
+  ).tipo,"versao");
+});
