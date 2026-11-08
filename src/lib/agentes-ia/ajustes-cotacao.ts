@@ -11,7 +11,7 @@ function norm(valor:string):string{
     .replace(/[\u0300-\u036f]/g,"").toLowerCase()
     .replace(/×/g,"x").replace(/\s+/g," ").trim();
 }
-const marcadoresCorrecao=/\b(?:nao e|nao era|nao foi|nao corresponde|errei|errado|errada|corrigir|corrija|correto|correta|na verdade|confundi|respondi errado|me enganei|outro|outra|troquei|o certo|a certa|me equivoquei)\b/;
+const marcadoresCorrecao=/\b(?:nao e|nao era|nao foi|nao corresponde|errei|errado|errada|corrigir|corrija|corrigi|corrigiu|corrigido|corrigida|corrigindo|correto|correta|na verdade|confundi|respondi errado|me enganei|outro|outra|troquei|o certo|a certa|me equivoquei)\b/;
 function isCorrecao(t:string){return marcadoresCorrecao.test(t);}
 
 /** O último valor afirmado prevalece, excluindo o que foi explicitamente negado. */
