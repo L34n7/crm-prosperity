@@ -11,6 +11,26 @@ export function regrasGeraisBackend():string[]{
   ];
 }
 
+/** Políticas textuais apenas para ferramentas padrão habilitadas.
+ * O roteador e as validações de agenda/transferência continuam no backend.
+ */
+export function regrasPorFerramentaGeral(ferramentas:ReadonlySet<string>):string[]{
+  const regras:string[]=[];
+  if(["consultar_agenda","criar_agendamento","remarcar_agendamento",
+      "cancelar_agendamento"].some(nome=>ferramentas.has(nome))){
+    regras.push("- Agenda: use data/hora LOCAL, consulte disponibilidade antes de criar/remarcar e só confirme ação após ok=true.");
+    regras.push("- COMUNICAÇÃO DE REUNIÕES: informe somente a DATA e o HORÁRIO DE INÍCIO, inclusive em opções de agenda, confirmação, remarcação e cancelamento. NUNCA informe horário final, intervalo de reserva ou duração estimada. O bloqueio interno do calendário não representa a duração efetiva da reunião.");
+    regras.push("- Depois de criar/remarcar com sucesso, respostas como 'ok', 'obrigado', 'perfeito' ou equivalentes não devem executar a criação novamente.");
+    regras.push("- Nunca diga que algo ficou agendado, marcado, reservado ou confirmado sem sucesso real de criar_agendamento/remarcar_agendamento.");
+    regras.push("- Em reagendamento use remarcar_agendamento; não crie outro. Cancelar/remarcar usam o compromisso ativo do backend, sem UUID inventado.");
+    regras.push("- Se o ESTADO OPERACIONAL mostrar agendamento ativo e o cliente pedir outro dia/horário ou escolher uma nova opção de data/hora, trate como reagendamento mesmo que ele não repita as palavras 'remarcar' ou 'reagendar'.");
+  }
+  if(ferramentas.has("transferir_humano")){
+    regras.push("- Transferência usa o destino configurado. mensagem_cliente é enviada ao cliente; nunca use esse campo como anotação interna nem para repetir a pergunta dele.");
+  }
+  return regras;
+}
+
 export const REGRA_COTACAO_VEICULAR_BACKEND="- Cotação de proteção veicular: use todas as informações JÁ confirmadas no histórico. Peça apenas modelo, ano-modelo e finalidade de uso se ainda faltarem. A marca deve ser identificada pelo modelo ou comprovada na FIPE. Quando o cliente disser 2004/2005, use ANO-MODELO 2005, sem perguntar 2004 ou 2005 outra vez. Nunca substitua silenciosamente uma motorização informada (ex.: Ranger 2.5 por Limited 3.0): se não existir para o ano-modelo, apresente somente alternativas do próprio ano retornadas pela FIPE e confirme o motor correto. NUNCA peça que o cliente envie tabela FIPE atualizada, foto de documento, código FIPE ou placa para obter preço: a consulta FIPE e as tabelas comerciais estão integradas ao sistema. NÃO pergunte motorização ou combustível antes de consultar: o backend identifica a motorização pela FIPE. Só pergunte combustível se a própria FIPE devolver duas opções possíveis. Tente gerar a cotação assim que tiver os dados básicos. Se o backend encontrar várias versões, apresente SOMENTE as alternativas efetivamente devolvidas pela FIPE e pergunte SOMENTE a diferença relevante; após a resposta, consulte novamente sem repetir o cadastro. Nunca pergunte origem nacional/importado, carburador/injeção, carroceria ou transmissão por conjectura: somente se a FIPE devolveu alternativas verificadas que realmente exijam a distinção. Se a ferramenta não estiver disponível ou retornar erro, nunca invente preço nem diga que precisa de tabela nova: explique a falha específica e encaminhe para atendimento humano se necessário. Gere todos os planos, sem obrigar escolha de plano nem opcionais. Após enviar a cotação e o eventual conteúdo complementar configurado, continue a conversa naturalmente conforme as instruções comerciais do agente: esclareça dúvidas, compare benefícios e identifique interesse, sem exigir uma pergunta fixa. Se o cliente quiser contratar mas ainda não escolher um plano, pergunte qual plano da proposta o interessa. Quando o cliente ESCOLHER claramente um plano já cotado, o backend encaminhará para um atendente humano, sem finalizar a venda nem executar pedido. Não repita a cotação ao discutir ou escolher planos. Quando o cliente solicitar uma NOVA cotação, conduza outra consulta com os dados do novo veículo; se modelo e ano já estiverem na mensagem atual, utilize-os sem perguntar novamente e não reutilize o veículo anterior. Ao apresentar a cotação, NUNCA revele o valor FIPE ao contato: ele é interno. Use a mensalidade BASE sem opcionais, com coberturas e benefícios em seções, e opcionais disponíveis listados separadamente com os valores adicionais mensais, sem somá-los à mensalidade informada. Nunca confirme contratação.";
 
 export function regrasPorFerramentaNegocio(
