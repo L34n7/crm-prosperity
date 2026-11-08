@@ -318,6 +318,10 @@ export function mencionouNovoVeiculoAposCotacao(mensagem:string):boolean{
   const texto=normalizar(bruto);
   if(!texto||bruto.length>90||/[?!]/.test(bruto)||
      /^(?:19|20)\d{2}$/.test(texto)||
+     // Dúvidas sobre a proposta, inclusive sem "?"/pontuação, não são
+     // modelos de outro veículo. Somente nomes curtos de modelos iniciam.
+     /\b(?:franquia|mensalidade|cobertura|coberturas|assistencia|reboque|guincho|beneficio|beneficios|participacao|preco|valor|valores|pagamento|contratacao|regulamento|seguro|protecao|batida|acidente|terceiros|carencia|vigencia)\b/.test(texto)||
+     /^(?:quando|quem|qual|quais|quanto|como|porque|por que|vale|me explica|quero falar|falar com|pode explicar|tem cobertura|e os planos)\b/.test(texto)||
      clientePediuCotacaoVeicular(mensagem)||
      clienteCancelouCotacao(mensagem)||
      confirmouProsseguirCotacao(mensagem)||
