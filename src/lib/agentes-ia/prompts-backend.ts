@@ -46,6 +46,7 @@ export function regrasPorFerramentaNegocio(
     );
   }
   if(ferramentas.has("gerar_cotacao_veicular")&&cotacaoContextual){
+    regras.push("- Se a cotação estiver em andamento, mantenha o pedido entre mensagens curtas do cliente e ignore os dados de veículos anteriores. Nunca diga que vai consultar ou que está consultando se não chamou realmente gerar_cotacao_veicular nesta execução. Sem dados suficientes, pergunte somente o que falta.");
     regras.push(REGRA_COTACAO_VEICULAR_BACKEND);
   }
   if(ferramentas.has("consultar_produtos_estoque")||
