@@ -1,6 +1,7 @@
 import "server-only";
 import { modelosCompativeisFipe } from "./modelos-compatibilidade";
 import {agruparModelosPorAnoFipe} from "./modelos-ano";
+import {diagnosticarIdentificacaoFipe} from "./erros-identificacao";
 import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
 export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
@@ -200,8 +201,9 @@ export async function encontrarVeiculoFipe(params: {
       throw new Error("Código de modelo FIPE inválido.");
     const anos=correspondeAnoFipe(
       await listarAnosFipe(params.tipo,marca.code,params.codigoModelo),params.ano);
-    if(!anos.length)throw new Error("Nenhuma versão localizada para o ano-modelo "+
-      anoModelo+" com a descrição informada. Confirme o ano-modelo.");
+    if(!anos.length)throw diagnosticarIdentificacaoFipe({
+      modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+    });
     if(anos.length!==1)throw new Error("A FIPE tem mais de uma opção para o ano-modelo "+
       anoModelo+". Confirme o combustível.");
     const detalhe=await detalharVeiculoFipe(
@@ -222,7 +224,9 @@ export async function encontrarVeiculoFipe(params: {
       "Combinação informada não corresponde às versões FIPE do ano-modelo "+anoModelo+"."
     );
     if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir alternativas.");
-    throw new Error("Não encontrei esta descrição exata nos modelos FIPE. Confirme a versão correta.");
+    throw diagnosticarIdentificacaoFipe({
+      modelo:params.modelo,anoModelo,possuiModeloNaMarca:false,
+    });
   }
   // Consultar os anos antes de sugerir opções. Evita oferecer versões que
   // não existem no ano selecionado (ocorria com a Ranger).
@@ -244,8 +248,9 @@ export async function encontrarVeiculoFipe(params: {
       "Combinação não encontrada para o ano-modelo "+anoModelo+"."
     );
     if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir as versões.");
-    throw new Error("Nenhuma versão localizada para o ano-modelo "+anoModelo+
-      " com a descrição informada. Confirme somente a versão.");
+    throw diagnosticarIdentificacaoFipe({
+      modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+    });
   }
   if(compativeis.length>1){
     const alternativas=compativeis.map(item=>item.modelo);
