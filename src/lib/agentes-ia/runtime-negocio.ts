@@ -795,8 +795,15 @@ async function preflight(pendenciaId: string) {
     && await conversaPossuiCotacaoVeicular({
       empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
     });
+  const modeloNovoDepoisDeCotacao=ferramentas.has("gerar_cotacao_veicular")
+    && !estado.cotacao_pendente
+    && mencionouNovoVeiculoAposCotacao(pendencia.conteudo_agregado)
+    && await conversaPossuiCotacaoVeicular({
+      empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+    });
   return {
-    relevante: preconsulta.relevante||aceiteCotacao||desejaComparacao||ajusteAtivo||
+    relevante: preconsulta.relevante||aceiteCotacao||desejaComparacao||
+      modeloNovoDepoisDeCotacao||ajusteAtivo||
       (ferramentas.has("gerar_cotacao_veicular")&&
         (estado.aguardando_escolha_plano||estado.cotacao_pendente)),
     pendencia: pendencia as PendenciaRow,
