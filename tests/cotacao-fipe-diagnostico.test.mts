@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {modelosCompativeisFipe}
+import {modelosCompativeisFipe,modelosDaMesmaFamiliaFipe}
   from "../src/lib/cotacoes-veiculares/modelos-compatibilidade.ts";
 import {agruparModelosPorAnoFipe}
   from "../src/lib/cotacoes-veiculares/modelos-ano.ts";
@@ -58,4 +58,33 @@ test("modelo não localizado tem erro próprio e não aciona falha técnica",()=
   assert.equal(falha.codigo,"FIPE_MODELO_NAO_ENCONTRADO");
   assert.match(falha.perguntaCliente,/modelo/i);
   assert.doesNotMatch(falha.message,/indisponivel|timeout/i);
+});
+
+test("alternativas similares só podem ser oferecidas após validar o mesmo ano",()=>{
+  const catalogo=[
+    {code:"x",name:"X-ADV"},
+    {code:"adv",name:"ADV 150"},
+    {code:"cbrf",name:"CBR 650F ABS"},
+    {code:"gl1500",name:"GL 1500 Gold Wing"},
+  ];
+  assert.deepEqual(modelosDaMesmaFamiliaFipe(catalogo,"XADV750")
+    .map(x=>x.code),["x"]);
+  assert.deepEqual(modelosDaMesmaFamiliaFipe(catalogo,"CBR650R")
+    .map(x=>x.code),["cbrf"]);
+  const candidatos=modelosDaMesmaFamiliaFipe(
+    catalogo,"GL 1800 Gold Wing",
+  );
+  assert.deepEqual(candidatos.map(x=>x.code),["gl1500"]);
+  assert.deepEqual(modelosCompativeisFipe(
+    catalogo,"GL 1800 Gold Wing",
+  ),[]);
+  const alternativas1988=agruparModelosPorAnoFipe(candidatos,[{
+    ano:{code:"1988-1",name:"1988 Gasolina"},
+    modelos:[catalogo[3]],
+  }]);
+  assert.deepEqual(alternativas1988.map(x=>x.modelo.code),["gl1500"]);
+  const alternativas2018=agruparModelosPorAnoFipe(candidatos,[{
+    ano:{code:"2018-1",name:"2018 Gasolina"},modelos:[],
+  }]);
+  assert.deepEqual(alternativas2018,[]);
 });
