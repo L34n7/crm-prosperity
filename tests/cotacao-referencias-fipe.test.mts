@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {normalizarReferenciasFipe,referenciaDaVersaoFipe}
+import {normalizarReferenciasFipe,referenciaDaVersaoFipe,versaoConfirmadaNestePedido}
   from "../src/lib/agentes-ia/referencias-fipe.ts";
 import {consolidarDadosCotacao,validarDadosNovosCotacao}
   from "../src/lib/agentes-ia/pedido-cotacao.ts";
@@ -39,4 +39,15 @@ test("falha técnica FIPE difere de ano sem versão",async()=>{
   assert.equal(classificarFalhaCotacao(
     "Nenhuma versão localizada para o ano-modelo 2010"
   ).tipo,"versao");
+});
+
+test("escolha de versão permanece confirmada ao solicitar uso",()=>{
+  const opcoes=["DUSTER OUTDOOR 1.6 Mec.","DUSTER DYNAMIQUE 2.0 Aut."];
+  assert.equal(versaoConfirmadaNestePedido(opcoes[0],opcoes,opcoes),
+    opcoes[0]);
+  assert.equal(versaoConfirmadaNestePedido(opcoes[0],opcoes,[]),
+    opcoes[0]);
+  assert.equal(versaoConfirmadaNestePedido("VERSAO REJEITADA",opcoes,opcoes),
+    null);
+  assert.equal(versaoConfirmadaNestePedido(null,opcoes,opcoes),null);
 });
