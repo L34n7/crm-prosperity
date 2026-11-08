@@ -98,3 +98,16 @@ test("motor, câmbio e tração são classificados mesmo com negação ao final"
   for(const [frase,acao] of exemplos)
     assert.equal(identificarAjusteCotacao(frase,true)?.acao,acao,frase);
 });
+
+test("ano corrigido na seleção de versões prevalece sobre lista antiga",()=>{
+  for(const frase of [
+    "Na verdade é 1997","Ops errei 2005","Digitei errado é 2001",
+    "Não é 2000, é 2003","2005",
+  ]){
+    assert.equal(identificarAjusteCotacao(frase,true)?.acao,"ano",frase);
+    assert.ok(identificarAjusteCotacao(frase,true)?.ano,frase);
+  }
+  assert.equal(identificarAjusteCotacao("2005",false),null);
+  assert.equal(identificarAjusteCotacao("Não é 1999",true)?.acao,"ano");
+  assert.equal(identificarAjusteCotacao("Não é 1999",true)?.ano,null);
+});

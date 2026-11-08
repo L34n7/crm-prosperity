@@ -15,15 +15,30 @@ function normalizar(valor: string) {
   return valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+/** Diagnóstico interno preserva status HTTP e endpoint da falha. */
+export class ErroConsultaFipe extends Error {
+  constructor(public readonly statusHttp:number|null,public readonly recurso:string,causa:string){
+    super("Consulta FIPE indisponível: "+causa+" ("+recurso+").");
+    this.name="ErroConsultaFipe";
+  }
+}
 async function solicitarFipe<T>(tipo: TipoFipe, caminho: string): Promise<T> {
   const url = "https://fipe.parallelum.com.br/api/v2/" + tipo + caminho;
-  const resposta = await fetch(url, {
+  let resposta:Response;
+  try {
+    resposta = await fetch(url, {
     headers: process.env.FIPE_API_TOKEN ? { "X-Subscription-Token": process.env.FIPE_API_TOKEN } : {},
     next: { revalidate: 86400 },
     signal: AbortSignal.timeout(12000),
   });
-  if (!resposta.ok) throw new Error("Consulta FIPE indisponível no momento (" + resposta.status + ").");
-  return await resposta.json() as T;
+  }catch(erro){
+    throw new ErroConsultaFipe(null,tipo+caminho,
+      erro instanceof Error?erro.message:String(erro));
+  }
+  if(!resposta.ok)throw new ErroConsultaFipe(
+    resposta.status,tipo+caminho,"HTTP "+resposta.status);
+  try{return await resposta.json() as T;}
+  catch{throw new ErroConsultaFipe(null,tipo+caminho,"resposta inválida");}
 }
 
 export async function listarMarcasFipe(tipo: TipoFipe) {
@@ -100,8 +115,10 @@ async function consultarCandidatosMarcaAno(params:{
   const respostas=await Promise.allSettled(anos.map(async ano=>({
     ano,modelos:await listarModelosMarcaAnoFipe(params.tipo,params.marca,ano.code),
   })));
-  if(respostas.some(item=>item.status==="rejected"))
-    throw new Error("Consulta FIPE indisponível ao conferir os modelos do ano.");
+  const falha=respostas.find(item=>item.status==="rejected" &&
+    !(item.reason instanceof ErroConsultaFipe && item.reason.statusHttp===404));
+  if(falha?.status==="rejected")throw falha.reason;
+  // Combinações não existentes (404) não anulam os anos válidos da marca.
   const consultas=respostas.flatMap(resposta=>
     resposta.status==="fulfilled"?[resposta.value]:[]
   );
@@ -113,6 +130,7 @@ async function consultarCandidatosPorAno(params:{
   if(params.candidatos.length>12)return consultarCandidatosMarcaAno(params);
   const validos:ModeloComAno[]=[];
   let erros=0;
+  let primeiraFalha:unknown=null;
   // Evita rajadas sem limite de consultas na API da FIPE.
   for(let inicio=0;inicio<params.candidatos.length;inicio+=10){
     const lote=params.candidatos.slice(inicio,inicio+10);
@@ -122,11 +140,14 @@ async function consultarCandidatosPorAno(params:{
         await listarAnosFipe(params.tipo,params.marca,modelo.code),params.ano),
     })));
     for(const item of respostas){
-      if(item.status==="rejected"){erros++;continue;}
+      if(item.status==="rejected"){erros++;primeiraFalha ??= item.reason;continue;}
       if(item.value.anos.length)validos.push(item.value);
     }
   }
-  return {validos,erros};
+  // Não aceitar uma lista incompleta que poderia eliminar uma versão válida.
+  if(erros)throw primeiraFalha instanceof Error?primeiraFalha:
+    new ErroConsultaFipe(null,params.tipo+"/models","consulta incompleta");
+  return {validos,erros:0};
 }
 
 function alternativasAno(versoes:ModeloComAno[],limite=8){
@@ -168,12 +189,27 @@ async function alternativasProximasFipe(params:{
 
 export async function encontrarVeiculoFipe(params: {
   tipo: TipoFipe; marca: string; modelo: string; ano: string;
+  codigoModelo?:string|null;
 }) {
   const marca=unico(await listarMarcasFipe(params.tipo),params.marca);
-  const listaModelos=await listarModelosFipe(params.tipo,marca.code);
   const anoModelo=anoModeloSolicitado(params.ano);
   if(!anoModelo)throw new Error("Informe somente o ano-modelo, por exemplo 2005.");
-
+  if(params.codigoModelo){
+    // Código recuperado da lista real FIPE no pedido, não inferido pela IA.
+    if(!/^\d{1,12}$/.test(params.codigoModelo))
+      throw new Error("Código de modelo FIPE inválido.");
+    const anos=correspondeAnoFipe(
+      await listarAnosFipe(params.tipo,marca.code,params.codigoModelo),params.ano);
+    if(!anos.length)throw new Error("Nenhuma versão localizada para o ano-modelo "+
+      anoModelo+" com a descrição informada. Confirme o ano-modelo.");
+    if(anos.length!==1)throw new Error("A FIPE tem mais de uma opção para o ano-modelo "+
+      anoModelo+". Confirme o combustível.");
+    const detalhe=await detalharVeiculoFipe(
+      params.tipo,marca.code,params.codigoModelo,anos[0].code);
+    return {...detalhe,anoCodigo:anos[0].code,
+      valorCentavos:precoFipeCentavos(detalhe.price)};
+  }
+  const listaModelos=await listarModelosFipe(params.tipo,marca.code);
   const candidatos=modelosCompativeisFipe(listaModelos,params.modelo);
   if(!candidatos.length){
     const sugestoes=await alternativasProximasFipe({

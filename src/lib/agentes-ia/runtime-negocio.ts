@@ -45,6 +45,7 @@ import {
 } from "./correcao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
 import {identificarAjusteCotacao, recuperarOpcoesFipe, type AjusteCotacao} from "./ajustes-cotacao";
+import {normalizarReferenciasFipe,referenciaDaVersaoFipe,type ReferenciaVersaoFipe} from "./referencias-fipe";
 import {
   carregarFerramentasNegocioAtivas,
   contextoPreconsultadoNegocio,
@@ -99,6 +100,7 @@ type EstadoConversa = {
   cotacao_incompatibilidades: number;
   cotacao_opcoes_fipe: string[];
   cotacao_opcoes_fipe_origem: string[];
+  cotacao_referencias_fipe: ReferenciaVersaoFipe[];
   cotacao_ignorar_historico: boolean;
   cotacao_verificacao_humana: boolean;
 };
@@ -144,6 +146,7 @@ const ESTADO_VAZIO: EstadoConversa = {
   cotacao_incompatibilidades:0,
   cotacao_opcoes_fipe:[],
   cotacao_opcoes_fipe_origem:[],
+  cotacao_referencias_fipe:[],
   cotacao_ignorar_historico:false,
   cotacao_verificacao_humana:false,
 };
@@ -186,6 +189,7 @@ function normalizarEstado(valor: unknown): EstadoConversa {
     cotacao_incompatibilidades:Math.max(0,Math.min(6,Number(obj.cotacao_incompatibilidades)||0)),
     cotacao_opcoes_fipe:listaCurta(obj.cotacao_opcoes_fipe,40,160),
     cotacao_opcoes_fipe_origem:listaCurta(obj.cotacao_opcoes_fipe_origem,40,160),
+    cotacao_referencias_fipe:normalizarReferenciasFipe(obj.cotacao_referencias_fipe),
     cotacao_ignorar_historico:obj.cotacao_ignorar_historico===true,
     cotacao_verificacao_humana:obj.cotacao_verificacao_humana===true,
   };
@@ -217,6 +221,7 @@ function aplicarDelta(estado: EstadoConversa, delta: unknown): EstadoConversa {
     cotacao_incompatibilidades:estado.cotacao_incompatibilidades,
     cotacao_opcoes_fipe:estado.cotacao_opcoes_fipe,
     cotacao_opcoes_fipe_origem:estado.cotacao_opcoes_fipe_origem,
+    cotacao_referencias_fipe:estado.cotacao_referencias_fipe,
     cotacao_ignorar_historico:estado.cotacao_ignorar_historico,
     cotacao_verificacao_humana:estado.cotacao_verificacao_humana,
   };
@@ -926,6 +931,7 @@ export async function processarPendenciaNegocio(
       ].filter(Boolean).join(" ");
       estado.cotacao_opcoes_fipe=[];
       estado.cotacao_opcoes_fipe_origem=[];
+      estado.cotacao_referencias_fipe=[];
       estado.cotacao_verificacao_humana=false;
       estado.cotacao_em_correcao=false;
       estado.cotacao_incompatibilidades=0;
@@ -974,6 +980,7 @@ export async function processarPendenciaNegocio(
     const invalidarVersoes=()=>{
       estado.cotacao_opcoes_fipe=[];
       estado.cotacao_opcoes_fipe_origem=[];
+      estado.cotacao_referencias_fipe=[];
       estado.cotacao_incompatibilidades=0;
       estado.cotacao_verificacao_humana=false;
       estado.aguardando_escolha_plano=false;
@@ -1150,6 +1157,7 @@ export async function processarPendenciaNegocio(
       estado.cotacao_em_correcao=false;
       estado.cotacao_opcoes_fipe=[];
       estado.cotacao_opcoes_fipe_origem=[];
+      estado.cotacao_referencias_fipe=[];
       estado.cotacao_ignorar_historico=false;
       estado.cotacao_pedido_mensagens=[];
       estado.cotacao_dados={...DADOS_COTACAO_VAZIOS};
@@ -1162,6 +1170,8 @@ export async function processarPendenciaNegocio(
     if(respostaRejeitouOpcoes){
       ferramentasRelevantes.delete("gerar_cotacao_veicular");
       estado.cotacao_opcoes_fipe=[];
+      estado.cotacao_opcoes_fipe_origem=[];
+      estado.cotacao_referencias_fipe=[];
       estado.cotacao_pendente=true;
       estado.cotacao_dados.modelo=null;
     }
@@ -1195,6 +1205,7 @@ export async function processarPendenciaNegocio(
         estado.cotacao_verificacao_humana=false;
         estado.cotacao_opcoes_fipe=[];
         estado.cotacao_opcoes_fipe_origem=[];
+      estado.cotacao_referencias_fipe=[];
       }
       if (querOutraCotacao) {
         // Um veículo novo começa do zero: nunca aproveitar motor, ano ou
@@ -1371,7 +1382,7 @@ export async function processarPendenciaNegocio(
         ?{...estado,estagio:"transferido para atendimento humano",
           proxima_acao:null,aguardando_escolha_plano:false,
           cotacao_pendente:false,cotacao_em_correcao:false,
-          cotacao_opcoes_fipe:[],cotacao_opcoes_fipe_origem:[]}
+          cotacao_opcoes_fipe:[],cotacao_opcoes_fipe_origem:[],cotacao_referencias_fipe:[]}
         :{...estado,proxima_acao:"tentar transferência para atendimento humano"};
       const {error:erroEstado}=await supabaseAdmin.from("agente_ia_conversa_estados")
         .upsert({
@@ -1451,6 +1462,7 @@ export async function processarPendenciaNegocio(
       const primeira=base[0];
       if(primeira&&primeira.veiculo&&primeira.ano_modelo){
         let mensagemComparacao="";
+        let falhaComparativaEncaminhada=false;
         let grupoComparado:string|null=null;
         let diagnosticoComparacao:Record<string,unknown>|null=null;
         if(comparacaoUso &&
@@ -1494,9 +1506,38 @@ export async function processarPendenciaNegocio(
               grupoComparado=resultado.grupo_id;
             }else{
               diagnosticoComparacao={motivo:resultado.error||"Sem cotação alternativa"};
-              mensagemComparacao="Não consegui obter um valor confirmado para uso "+
-                comparacaoUso+" deste veículo. A cotação anterior continua válida. "+
-                "Nossa equipe pode verificar se existe proposta para essa finalidade.";
+              if(classificarFalhaCotacao(String(resultado.error||"")).tipo==="consulta"){
+                try{
+                  const transferencia=await transferirContratacaoCotacao({
+                    empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+                    agenteId:agente.id,configuracao:agente.fallback_transferencia_json,
+                  });
+                  ctx.ferramentasExecutadas.push({
+                    nome:"transferir_atendimento_cotacao",motivo:"falha_consulta_fipe",
+                    resultado:transferencia,
+                  });
+                  falhaComparativaEncaminhada=Boolean(
+                    transferencia.transferido||transferencia.jaEstavaComHumano
+                  );
+                  if(falhaComparativaEncaminhada)ctx.acaoCriticaExecutada=true;
+                }catch(error){
+                  ctx.ferramentasExecutadas.push({
+                    nome:"transferir_atendimento_cotacao",motivo:"falha_consulta_fipe",
+                    resultado:{transferido:false,error:error instanceof Error?error.message:String(error)},
+                  });
+                }
+                mensagemComparacao=falhaComparativaEncaminhada
+                  ?"Ocorreu uma falha ao gerar sua cotação automaticamente. "+
+                    "Encaminhei seu atendimento para nossa equipe consultar os dados "+
+                    "e você receberá a resposta por aqui assim que estiver disponível."
+                  :"Ocorreu uma falha ao gerar sua cotação automaticamente, "+
+                    "mas não consegui encaminhar o atendimento neste momento. "+
+                    "Por favor, solicite atendimento humano novamente.";
+              }else{
+                mensagemComparacao="Não consegui obter um valor confirmado para uso "+
+                  comparacaoUso+" deste veículo. A cotação anterior continua válida. "+
+                  "Nossa equipe pode verificar se existe proposta para essa finalidade.";
+              }
             }
           }
         }else if(comparacaoPlanos){
@@ -1504,14 +1545,17 @@ export async function processarPendenciaNegocio(
             primeira.ano_modelo,primeira.uso||"informado",base);
         }
         if(mensagemComparacao){
-          ctx.acaoCriticaExecutada=Boolean(grupoComparado);
+          ctx.acaoCriticaExecutada ||= Boolean(grupoComparado);
           await enviarMensagens(ctx,[mensagemComparacao]);
           const agora=new Date().toISOString();
           const estadoComparado:EstadoConversa={
             ...estado,cotacao_pendente:false,cotacao_opcoes_fipe:[],
-            cotacao_verificacao_humana:false,cotacao_em_correcao:false,
-            aguardando_escolha_plano:false,
-            proxima_acao:"esclarecer diferenças entre propostas e planos",
+            cotacao_verificacao_humana:falhaComparativaEncaminhada,
+            cotacao_em_correcao:false,aguardando_escolha_plano:false,
+            proxima_acao:falhaComparativaEncaminhada
+              ?null:"esclarecer diferenças entre propostas e planos",
+            estagio:falhaComparativaEncaminhada
+              ?"transferido para atendimento humano":estado.estagio,
           };
           if(grupoComparado){
             estadoComparado.cotacao_dados={
@@ -1540,6 +1584,10 @@ export async function processarPendenciaNegocio(
               metadata_json:{runtime:"negocio",comparacao_cotacao:true,
                 tipo:comparacaoUso?"finalidade_uso":"planos",
                 cotacao_status:grupoComparado?"emitida":"consulta",
+                transferencia_automatica_fipe:ctx.ferramentasExecutadas.some(item=>
+                  item.nome==="transferir_atendimento_cotacao" &&
+                  item.motivo==="falha_consulta_fipe"),
+                transferido_humano_fipe:falhaComparativaEncaminhada,
                 grupo_original:ultima?.grupo_id||null,grupo_comparado:grupoComparado,
                 diagnostico:diagnosticoComparacao},
             }).eq("id",execucaoId);
@@ -1826,6 +1874,12 @@ export async function processarPendenciaNegocio(
 
         let resultado: any;
         try {
+          if(nome==="gerar_cotacao_veicular"){
+            // A IA não pode enviar referências FIPE por conta própria.
+            // Só o runtime pode injetar o código realmente escolhido.
+            delete argumentos._codigo_modelo_fipe;
+            delete argumentos._tipo_fipe;
+          }
           if(nome==="gerar_cotacao_veicular" && estado.cotacao_em_correcao) {
             if(!versaoFipeEscolhida && !modeloAjustadoParaBusca &&
                 !versaoCorrigidaFoiInformada(estado.cotacao_pedido_mensagens)) {
@@ -1957,6 +2011,16 @@ export async function processarPendenciaNegocio(
             // A seleção foi feita a partir do cadastro FIPE real e
             // prevalece sobre um nome de versão inventado pela IA.
             argumentos.modelo=versaoFipeEscolhida;
+            // Somente código da versão FIPE persistido no pedido atual.
+            delete argumentos._codigo_modelo_fipe;
+            delete argumentos._tipo_fipe;
+            const ref=referenciaDaVersaoFipe(
+              estado.cotacao_referencias_fipe,versaoFipeEscolhida
+            );
+            if(ref){
+              argumentos._codigo_modelo_fipe=ref.code;
+              argumentos._tipo_fipe=ref.tipo;
+            }
             if(estado.cotacao_dados.ano_modelo)
               argumentos.ano=estado.cotacao_dados.ano_modelo;
             if(estado.cotacao_dados.uso)
@@ -2013,6 +2077,9 @@ export async function processarPendenciaNegocio(
           }
           estado.cotacao_opcoes_fipe=opcoes;
           estado.cotacao_opcoes_fipe_origem=[...opcoes];
+          estado.cotacao_referencias_fipe=normalizarReferenciasFipe(
+            resultado.opcoes_fipe_referencias
+          );
           estado.cotacao_pendente=true;
           estado.cotacao_verificacao_humana=false;
         }
@@ -2041,6 +2108,8 @@ export async function processarPendenciaNegocio(
                 cotacao_em_correcao:false,
                 cotacao_incompatibilidades:0,
                 cotacao_opcoes_fipe:[],
+                cotacao_opcoes_fipe_origem:[],
+                cotacao_referencias_fipe:[],
                 cotacao_ignorar_historico:false,
                 cotacao_verificacao_humana:false,
               },
@@ -2164,6 +2233,8 @@ export async function processarPendenciaNegocio(
         cotacao_pendente:true,
         cotacao_em_correcao:false,
         cotacao_opcoes_fipe:[],
+        cotacao_opcoes_fipe_origem:[],
+        cotacao_referencias_fipe:[],
         cotacao_dados:{...estado.cotacao_dados,modelo:null},
         // Mantém somente ano e uso já confirmados; o próximo modelo não
         // pode ser contaminado por nomes e versões rejeitados.
@@ -2186,6 +2257,8 @@ export async function processarPendenciaNegocio(
         cotacao_pendente:false,
         cotacao_em_correcao:false,
         cotacao_opcoes_fipe:[],
+        cotacao_opcoes_fipe_origem:[],
+        cotacao_referencias_fipe:[],
         cotacao_pedido_mensagens:[],
         cotacao_dados:{...DADOS_COTACAO_VAZIOS},
         cotacao_incompatibilidades:0,
@@ -2282,6 +2355,55 @@ export async function processarPendenciaNegocio(
           mensagemInterna, saidaFinal.mensagens
         );
       }
+      if(classificacao.tipo==="consulta" ||
+         resultadoFalha.code==="FIPE_CONSULTA_INDISPONIVEL"){
+        // Reutiliza a transferência nativa de setores e filas, sem inventar
+        // sucesso quando a conversa não foi efetivamente encaminhada.
+        try{
+          const transferencia=await transferirContratacaoCotacao({
+            empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+            agenteId:agente.id,configuracao:agente.fallback_transferencia_json,
+          });
+          ctx.ferramentasExecutadas.push({
+            nome:"transferir_atendimento_cotacao",
+            motivo:"falha_consulta_fipe",resultado:transferencia,
+          });
+          if(transferencia.transferido||transferencia.jaEstavaComHumano){
+            saidaFinal.mensagens=[
+              "Ocorreu uma falha ao gerar sua cotação automaticamente. " +
+              "Encaminhei seu atendimento para nossa equipe consultar os dados " +
+              "e você receberá a resposta por aqui assim que estiver disponível."
+            ];
+            ctx.acaoCriticaExecutada=true;
+            saidaFinal.estado.estagio="transferido para atendimento humano";
+            saidaFinal.estado.proxima_acao=null;
+          }else{
+            saidaFinal.mensagens=[
+              "Ocorreu uma falha ao gerar sua cotação automaticamente, " +
+              "mas não consegui encaminhar o atendimento neste momento. " +
+              "Por favor, solicite atendimento humano novamente."
+            ];
+          }
+        }catch(error){
+          const descricao=error instanceof Error?error.message:String(error);
+          console.error("[AGENTE_IA_NEGOCIO] Falha na transferência após consulta FIPE:",descricao);
+          ctx.ferramentasExecutadas.push({
+            nome:"transferir_atendimento_cotacao",
+            motivo:"falha_consulta_fipe",resultado:{transferido:false,error:descricao},
+          });
+          saidaFinal.mensagens=[
+            "Ocorreu uma falha ao gerar sua cotação automaticamente, " +
+            "mas não consegui encaminhar o atendimento neste momento. " +
+            "Por favor, solicite atendimento humano novamente."
+          ];
+        }
+        saidaFinal.estado.cotacao_pendente=false;
+        saidaFinal.estado.cotacao_em_correcao=false;
+        saidaFinal.estado.cotacao_opcoes_fipe=[];
+        saidaFinal.estado.cotacao_opcoes_fipe_origem=[];
+        saidaFinal.estado.cotacao_referencias_fipe=[];
+        saidaFinal.estado.cotacao_verificacao_humana=true;
+      }
       // Uma limitação comercial não deve manter a cotação pendente,
       // provocando consultas idênticas a cada nova mensagem do contato.
       if (resultadoFalha.code!=="COTACAO_USO_PENDENTE" &&
@@ -2297,7 +2419,9 @@ export async function processarPendenciaNegocio(
         saidaFinal.estado.cotacao_em_correcao = false;
         saidaFinal.estado.cotacao_verificacao_humana = true;
         saidaFinal.estado.cotacao_opcoes_fipe = [];
-        saidaFinal.estado.proxima_acao = "oferecer ajuda da equipe para conferência do veículo";
+        if(classificacao.tipo!=="consulta" &&
+           resultadoFalha.code!=="FIPE_CONSULTA_INDISPONIVEL")
+          saidaFinal.estado.proxima_acao = "oferecer ajuda da equipe para conferência do veículo";
       }
     }
     // Quando a resposta do cliente não distingue versões verificadas, não
@@ -2463,6 +2587,14 @@ export async function processarPendenciaNegocio(
           cotacao_dados_completos:Boolean(dadosCotacaoCompletos),
           cotacao_ferramenta_habilitada:ferramentas.has("gerar_cotacao_veicular"),
           cotacao_motivo:erroCotacao||null,
+          transferencia_automatica_fipe:ctx.ferramentasExecutadas.some(item=>
+            item.nome==="transferir_atendimento_cotacao" &&
+            item.motivo==="falha_consulta_fipe"),
+          transferido_humano_fipe:ctx.ferramentasExecutadas.some(item=>
+            item.nome==="transferir_atendimento_cotacao" &&
+            item.motivo==="falha_consulta_fipe" &&
+            ((item.resultado as {transferido?:boolean;jaEstavaComHumano?:boolean}|undefined)?.transferido===true||
+             (item.resultado as {transferido?:boolean;jaEstavaComHumano?:boolean}|undefined)?.jaEstavaComHumano===true)),
           cotacao_versao_em_correcao:saidaFinal.estado.cotacao_em_correcao,
         },
       })

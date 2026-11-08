@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
-import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
+import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, ErroConsultaFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {usoComercialInferivelFipe} from "@/lib/cotacoes-veiculares/uso-automatico";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
@@ -416,20 +416,28 @@ export async function executarFerramentaNegocio(params: {
       pergunta_cliente:"Qual é a marca do veículo?",
     };
 
-    const tipos:TipoFipe[]=identificacao.tipoPreferencial
-      ?[identificacao.tipoPreferencial]:["cars","motorcycles","trucks"];
+    const tipoReferencia=["cars","motorcycles","trucks"].includes(String(args._tipo_fipe||""))
+      ?String(args._tipo_fipe) as TipoFipe:null;
+    const codigoReferencia=tipoReferencia&&/^\d{1,12}$/.test(String(args._codigo_modelo_fipe||""))
+      ?String(args._codigo_modelo_fipe):null;
+    const tipos:TipoFipe[]=tipoReferencia?[tipoReferencia]:
+      identificacao.tipoPreferencial?[identificacao.tipoPreferencial]:
+      ["cars","motorcycles","trucks"];
     const buscas=await Promise.allSettled(tipos.map(async tipo=>({
       tipo,fipe:await encontrarVeiculoFipe({
         tipo,marca:identificacao.marca,modelo:identificacao.modelo,ano,
+        codigoModelo:codigoReferencia,
       }),
     })));
     const encontrados=buscas.filter((r):r is PromiseFulfilledResult<{
       tipo:TipoFipe;fipe:Awaited<ReturnType<typeof encontrarVeiculoFipe>>;
     }>=>r.status==="fulfilled").map(r=>r.value);
     if(!encontrados.length){
-      const divergencia=buscas.find((item):item is PromiseRejectedResult=>
+      const indiceDivergencia=buscas.findIndex(item=>
         item.status==="rejected" && item.reason instanceof ErroIdentificacaoVersaoFipe
       );
+      const divergencia=indiceDivergencia>=0
+        ?buscas[indiceDivergencia] as PromiseRejectedResult:null;
       if(divergencia){
         const falha=divergencia.reason as ErroIdentificacaoVersaoFipe;
         return {
@@ -437,8 +445,16 @@ export async function executarFerramentaNegocio(params: {
           error:falha.message,
           pergunta_cliente:falha.perguntaCliente,
           opcoes_fipe:falha.opcoes.map(v=>v.name).slice(0,40),
+          opcoes_fipe_referencias:falha.opcoes.slice(0,40).map(v=>({
+            name:v.name,code:v.code,tipo:tipos[indiceDivergencia],
+          })),
         };
       }
+      const falhaTecnica=buscas.find((item):item is PromiseRejectedResult=>
+        item.status==="rejected" && item.reason instanceof ErroConsultaFipe
+      );
+      if(falhaTecnica)return {ok:false,code:"FIPE_CONSULTA_INDISPONIVEL",
+        error:(falhaTecnica.reason as ErroConsultaFipe).message};
       const erros=buscas.filter((r):r is PromiseRejectedResult=>r.status==="rejected")
         .map(r=>r.reason instanceof Error?r.reason.message:String(r.reason));
       const ambiguidade=erros.find(e=>e.includes("Informe uma versão mais específica"));
@@ -457,7 +473,8 @@ export async function executarFerramentaNegocio(params: {
             " nas versões disponíveis na FIPE. Pode confirmar o ano-modelo?",
         };
       }
-      return {ok:false,error:ambiguidade
+      return {ok:false,code:indisponivel?"FIPE_CONSULTA_INDISPONIVEL":undefined,
+        error:ambiguidade
         ?"A FIPE encontrou mais de uma versão. Informe ao cliente as opções cadastradas e pergunte SOMENTE o detalhe que as distingue: "+
           ambiguidade.split(":").slice(1).join(":").trim()
         :motorIncompativel||variasOpcoesAno||anoInvalido||alternativas||revisarVersao||indisponivel||naoEncontrado||

@@ -49,7 +49,9 @@ export function identificarAjusteCotacao(mensagem:string,temOpcoes=false):Ajuste
     return fazer("outro_veiculo");
   if(/\b(?:outro modelo|modelo\s+(?:esta\s+|ta\s+|foi\s+)?(?:errado|incorreto)|modelo\s+(?:e|eh|era)\s+outro|nao\s+(?:e|era|foi)\s+(?:esse|este|o)?\s*modelo|o\s+modelo\s+(?:correto|certo)\s+(?:e|eh)|troquei\s+o\s+modelo)\b/.test(t))
     return fazer("modelo");
-  if((/\b(?:ano|ano.modelo)\b/.test(t)&&isCorrecao(t))||
+  if((temOpcoes && /^(?:19|20)\d{2}$/.test(t))||
+     (temOpcoes && isCorrecao(t) && Boolean(anoCorrigidoCotacao(mensagem)))||
+     (/\b(?:ano|ano.modelo)\b/.test(t)&&isCorrecao(t))||
      /\b(?:nao\s+(?:e|era|foi)\s+)(?:19|20)\d{2}\b/.test(t)||
      /\b(?:era|e|eh)\s+(?:19|20)\d{2}\s*(?:nao|ao inves)/.test(t))
     return fazer("ano");
