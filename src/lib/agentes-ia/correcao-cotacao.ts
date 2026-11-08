@@ -1,4 +1,5 @@
 import {identificarAjusteCotacao, textoPositivoDaCorrecao} from "./ajustes-cotacao.ts";
+import {clientePediuNovoVeiculoCotacao} from "./pedido-cotacao.ts";
 
 /**
  * Detecta correção de veículo/versão após cotação sem tratá-la como
@@ -10,6 +11,10 @@ export function clienteCorrigiuVersaoCotacao(mensagem: string): boolean {
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/\s+/g, " ").trim();
 
+  // Ano isolado é resposta ao pedido atual, não rejeição da cotação
+  // anterior. Um pedido novo também jamais é correção de versão.
+  if(/^(?:19|20)\d{2}$/.test(texto) ||
+     clientePediuNovoVeiculoCotacao(mensagem))return false;
   const ajuste=identificarAjusteCotacao(mensagem,true);
   return /\b(?:nao e|nao foi|nao corresponde|nao esta correto|esta errado|ficou errado|veio errado)\b.{0,55}\b(?:modelo|versao|motor|motorizacao|cambio|veiculo|carro)\b/.test(texto) ||
     /\b(?:modelo|versao|motor|motorizacao|cambio|veiculo|carro)\b.{0,35}\b(?:errado|errada|incorreto|incorreta|diferente|correto e|correta e|e na verdade|na verdade e)\b/.test(texto) ||
