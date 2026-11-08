@@ -36,6 +36,7 @@ export const REGRA_COTACAO_VEICULAR_BACKEND="- Cotação de proteção veicular:
 export function regrasPorFerramentaNegocio(
   ferramentas:ReadonlySet<string>,
   cotacaoContextual:boolean,
+  acompanhamentoCotacao=false,
 ):string[]{
   const regras:string[]=[];
   if(ferramentas.has("consultar_produtos_estoque")||
@@ -68,6 +69,12 @@ export function regrasPorFerramentaNegocio(
   if(ferramentas.has("gerar_cotacao_veicular")&&cotacaoContextual){
     regras.push("- Se a cotação estiver em andamento, mantenha o pedido entre mensagens curtas do cliente e ignore os dados de veículos anteriores. Nunca diga que vai consultar ou que está consultando se não chamou realmente gerar_cotacao_veicular nesta execução. Sem dados suficientes, pergunte somente o que falta.");
     regras.push(REGRA_COTACAO_VEICULAR_BACKEND);
+  }
+  if(ferramentas.has("gerar_cotacao_veicular")&&
+     !cotacaoContextual&&acompanhamentoCotacao){
+    regras.push(
+      "- A cotação anterior foi apresentada. Ao esclarecer dúvidas, utilize apenas os valores e as coberturas reais da proposta registrada; nunca invente condições, revele o valor FIPE, recalcule sem pedido ou confirme contratação. Se o cliente escolher um plano, o backend fará o encaminhamento humano.",
+    );
   }
   if(ferramentas.has("consultar_produtos_estoque")||
      ferramentas.has("informar_valor_produto")||
