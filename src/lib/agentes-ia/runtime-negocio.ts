@@ -45,7 +45,7 @@ import {
 } from "./correcao-cotacao";
 import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirContratacaoCotacao} from "./transferencia-cotacao";
 import {identificarAjusteCotacao, recuperarOpcoesFipe, type AjusteCotacao} from "./ajustes-cotacao";
-import {normalizarReferenciasFipe,referenciaDaVersaoFipe,type ReferenciaVersaoFipe} from "./referencias-fipe";
+import {normalizarReferenciasFipe,referenciaDaVersaoFipe,versaoConfirmadaNestePedido,type ReferenciaVersaoFipe} from "./referencias-fipe";
 import {
   carregarFerramentasNegocioAtivas,
   contextoPreconsultadoNegocio,
@@ -1291,12 +1291,12 @@ export async function processarPendenciaNegocio(
     // FIPE realmente apresentadas no pedido corrente.
     // Versão selecionada pertence ao pedido atual e continua confirmada
     // enquanto o sistema coleta somente a finalidade de uso.
-    const confirmada=estado.cotacao_versao_fipe_confirmada;
     let versaoFipeEscolhida:string|null=versaoAjustadaFipe||
-      (confirmada &&
-       (estado.cotacao_opcoes_fipe_origem.includes(confirmada)||
-        estado.cotacao_opcoes_fipe.includes(confirmada))
-        ?confirmada:null);
+      versaoConfirmadaNestePedido(
+        estado.cotacao_versao_fipe_confirmada,
+        estado.cotacao_opcoes_fipe_origem,
+        estado.cotacao_opcoes_fipe,
+      );
     let aguardandoRefinamentoFipe=false;
     if(cotacaoEmAndamento&&!querOutraCotacao&&!versaoFipeEscolhida
       &&!respostaDiretaCotacao&&estado.cotacao_opcoes_fipe.length){
