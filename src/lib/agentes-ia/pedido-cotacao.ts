@@ -391,10 +391,14 @@ export function consolidarDadosCotacao(
     // Uma grafia corrigida na mesma família substitui a inicial ("Soortage"
     // -> "Sportage") sem reiniciar modelo/ano/uso. Modelos realmente
     // diferentes continuam exigindo um novo pedido explícito.
-    const atual=normalizar(dados.modelo||"").split(" ")[0]||"";
+    const termosAtuais=normalizar(dados.modelo||"").split(" ").filter(Boolean);
+    const atual=termosAtuais[0]||"";
     const novo=normalizar(mencionado||"").split(" ")[0]||"";
+    const identificadorCompartilhado=novo.length>=2&&
+      termosAtuais.includes(novo)&&novo!==atual;
     if (!dados.modelo || !modeloMencionadoCotacao(dados.modelo) ||
-        (mencionado&&atual&&novo&&umaEdicaoModelo(atual,novo)))
+        (mencionado&&atual&&novo&&
+          (umaEdicaoModelo(atual,novo)||identificadorCompartilhado)))
       dados.modelo = mencionado || dados.modelo || null;
     const anos = [...texto.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => m[0]);
     const unicoAnoTambemModelo = anos.length === 1 &&
