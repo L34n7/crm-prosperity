@@ -43,6 +43,8 @@ test("apos proposta, modelo isolado abre um novo pedido sem frase explicita",()=
   for(const mensagem of [
     "2015","Particular","Comercial","Ok","Já disse","Legal","Sport",
     "Qual o valor da franquia?","Quanto custa o seguro?",
+    "Franquia","Quando começa a valer","Vale para qualquer batida",
+    "E os planos","Quero falar com atendente",
     "Legal, agora quero fazer outra cotação",
     "Quero saber como funciona o seguro",
   ])assert.equal(mencionouNovoVeiculoAposCotacao(mensagem),false,mensagem);
