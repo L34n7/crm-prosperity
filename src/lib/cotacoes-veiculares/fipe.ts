@@ -1,6 +1,7 @@
 import "server-only";
-import { modelosCompativeisFipe } from "./modelos-compatibilidade";
+import { modelosCompativeisFipe, modelosDaMesmaFamiliaFipe } from "./modelos-compatibilidade";
 import {agruparModelosPorAnoFipe} from "./modelos-ano";
+import {diagnosticarIdentificacaoFipe} from "./erros-identificacao";
 import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
 export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
@@ -134,11 +135,19 @@ async function consultarCandidatosPorAno(params:{
   // Evita rajadas sem limite de consultas na API da FIPE.
   for(let inicio=0;inicio<params.candidatos.length;inicio+=10){
     const lote=params.candidatos.slice(inicio,inicio+10);
-    const respostas=await Promise.allSettled(lote.map(async modelo=>({
-      modelo,
-      anos:correspondeAnoFipe(
-        await listarAnosFipe(params.tipo,params.marca,modelo.code),params.ano),
-    })));
+    const respostas=await Promise.allSettled(lote.map(async modelo=>{
+      try{
+        return {modelo,anos:correspondeAnoFipe(
+          await listarAnosFipe(params.tipo,params.marca,modelo.code),params.ano,
+        )};
+      }catch(erro){
+        // Modelo/código fora do catálogo retorna 404 e não significa
+        // indisponibilidade temporária da API nem autoriza transferência.
+        if(erro instanceof ErroConsultaFipe&&erro.statusHttp===404)
+          return {modelo,anos:[] as OpcaoFipe[]};
+        throw erro;
+      }
+    }));
     for(const item of respostas){
       if(item.status==="rejected"){erros++;primeiraFalha ??= item.reason;continue;}
       if(item.value.anos.length)validos.push(item.value);
@@ -176,6 +185,16 @@ async function alternativasProximasFipe(params:{
   for(const consulta of consultas)
     for(const item of modelosCompativeisFipe(params.listaModelos,consulta))
       if(!excluidos.has(item.code))unicos.set(item.code,item);
+  // Só depois das buscas estritas, considerar versões da mesma família.
+  // A lista é validada pelo ano real da FIPE e usada EXCLUSIVAMENTE como
+  // pergunta para confirmar versão, nunca como substituição automática.
+  if(!unicos.size){
+    for(const item of modelosDaMesmaFamiliaFipe(
+      params.listaModelos,params.consulta,
+    )){
+      if(!excluidos.has(item.code))unicos.set(item.code,item);
+    }
+  }
   const candidatos=[...unicos.values()];
   if(!candidatos.length)return {opcoes:[],erros:0};
   const resultado=await consultarCandidatosPorAno({
@@ -200,8 +219,9 @@ export async function encontrarVeiculoFipe(params: {
       throw new Error("Código de modelo FIPE inválido.");
     const anos=correspondeAnoFipe(
       await listarAnosFipe(params.tipo,marca.code,params.codigoModelo),params.ano);
-    if(!anos.length)throw new Error("Nenhuma versão localizada para o ano-modelo "+
-      anoModelo+" com a descrição informada. Confirme o ano-modelo.");
+    if(!anos.length)throw diagnosticarIdentificacaoFipe({
+      modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+    });
     if(anos.length!==1)throw new Error("A FIPE tem mais de uma opção para o ano-modelo "+
       anoModelo+". Confirme o combustível.");
     const detalhe=await detalharVeiculoFipe(
@@ -222,7 +242,9 @@ export async function encontrarVeiculoFipe(params: {
       "Combinação informada não corresponde às versões FIPE do ano-modelo "+anoModelo+"."
     );
     if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir alternativas.");
-    throw new Error("Não encontrei esta descrição exata nos modelos FIPE. Confirme a versão correta.");
+    throw diagnosticarIdentificacaoFipe({
+      modelo:params.modelo,anoModelo,possuiModeloNaMarca:false,
+    });
   }
   // Consultar os anos antes de sugerir opções. Evita oferecer versões que
   // não existem no ano selecionado (ocorria com a Ranger).
@@ -244,8 +266,9 @@ export async function encontrarVeiculoFipe(params: {
       "Combinação não encontrada para o ano-modelo "+anoModelo+"."
     );
     if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir as versões.");
-    throw new Error("Nenhuma versão localizada para o ano-modelo "+anoModelo+
-      " com a descrição informada. Confirme somente a versão.");
+    throw diagnosticarIdentificacaoFipe({
+      modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+    });
   }
   if(compativeis.length>1){
     const alternativas=compativeis.map(item=>item.modelo);
