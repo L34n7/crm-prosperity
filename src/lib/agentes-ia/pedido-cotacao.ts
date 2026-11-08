@@ -328,7 +328,7 @@ export function mencionouNovoVeiculoAposCotacao(mensagem:string):boolean{
   const modelo=modeloMencionadoCotacao(mensagem);
   return Boolean(modelo&&!acabamentoIsoladoCotacao(modelo)&&
     modelo.split(" ").some(token=>/[a-z]{2,}/.test(token)||
-      /^\d{3,4}$/.test(token)));
+      /^[a-z]\d{1,3}$/.test(token) || /^\d{3,4}$/.test(token)));
 }
 
 /** Normaliza o estado persistido sem confiar em JSON arbitrário. */
