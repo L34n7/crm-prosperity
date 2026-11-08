@@ -1,5 +1,5 @@
 import "server-only";
-import { modelosCompativeisFipe } from "./modelos-compatibilidade";
+import { modelosCompativeisFipe, modelosDaMesmaFamiliaFipe } from "./modelos-compatibilidade";
 import {agruparModelosPorAnoFipe} from "./modelos-ano";
 import {diagnosticarIdentificacaoFipe} from "./erros-identificacao";
 import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
@@ -135,11 +135,19 @@ async function consultarCandidatosPorAno(params:{
   // Evita rajadas sem limite de consultas na API da FIPE.
   for(let inicio=0;inicio<params.candidatos.length;inicio+=10){
     const lote=params.candidatos.slice(inicio,inicio+10);
-    const respostas=await Promise.allSettled(lote.map(async modelo=>({
-      modelo,
-      anos:correspondeAnoFipe(
-        await listarAnosFipe(params.tipo,params.marca,modelo.code),params.ano),
-    })));
+    const respostas=await Promise.allSettled(lote.map(async modelo=>{
+      try{
+        return {modelo,anos:correspondeAnoFipe(
+          await listarAnosFipe(params.tipo,params.marca,modelo.code),params.ano,
+        )};
+      }catch(erro){
+        // Modelo/código fora do catálogo retorna 404 e não significa
+        // indisponibilidade temporária da API nem autoriza transferência.
+        if(erro instanceof ErroConsultaFipe&&erro.statusHttp===404)
+          return {modelo,anos:[] as OpcaoFipe[]};
+        throw erro;
+      }
+    }));
     for(const item of respostas){
       if(item.status==="rejected"){erros++;primeiraFalha ??= item.reason;continue;}
       if(item.value.anos.length)validos.push(item.value);
@@ -177,6 +185,16 @@ async function alternativasProximasFipe(params:{
   for(const consulta of consultas)
     for(const item of modelosCompativeisFipe(params.listaModelos,consulta))
       if(!excluidos.has(item.code))unicos.set(item.code,item);
+  // Só depois das buscas estritas, considerar versões da mesma família.
+  // A lista é validada pelo ano real da FIPE e usada EXCLUSIVAMENTE como
+  // pergunta para confirmar versão, nunca como substituição automática.
+  if(!unicos.size){
+    for(const item of modelosDaMesmaFamiliaFipe(
+      params.listaModelos,params.consulta,
+    )){
+      if(!excluidos.has(item.code))unicos.set(item.code,item);
+    }
+  }
   const candidatos=[...unicos.values()];
   if(!candidatos.length)return {opcoes:[],erros:0};
   const resultado=await consultarCandidatosPorAno({
