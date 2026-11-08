@@ -2343,15 +2343,35 @@ export async function processarPendenciaNegocio(
         ];
         saidaFinal.estado.cotacao_pendente=true;
         saidaFinal.estado.proxima_acao="coletar somente o dado faltante do novo veículo";
-      } else if(resultadoFalha.code==="FIPE_ANO_MODELO_NAO_ENCONTRADO"){
-        saidaFinal.estado.cotacao_versao_fipe_confirmada=null;
+      } else if(resultadoFalha.code==="FIPE_MODELO_NAO_ENCONTRADO"){
+        // A marca foi reconhecida, mas a descrição não casou com a FIPE.
+        // Corrigir o nome ou adicionar a versão não deve criar novo pedido.
         saidaFinal.mensagens=[
-          String(resultadoFalha.pergunta_cliente||"Pode confirmar o ano-modelo do veículo?").slice(0,260)
+          String(resultadoFalha.pergunta_cliente||
+            "Pode confirmar o modelo e a versão do veículo?").slice(0,300)
+        ];
+        saidaFinal.estado.cotacao_pendente=true;
+        saidaFinal.estado.cotacao_em_correcao=false;
+        saidaFinal.estado.cotacao_verificacao_humana=false;
+        saidaFinal.estado.cotacao_opcoes_fipe=[];
+        saidaFinal.estado.cotacao_opcoes_fipe_origem=[];
+        saidaFinal.estado.cotacao_referencias_fipe=[];
+        saidaFinal.estado.cotacao_versao_fipe_confirmada=null;
+        saidaFinal.estado.proxima_acao="confirmar modelo ou versão para nova busca FIPE";
+      } else if(resultadoFalha.code==="FIPE_ANO_MODELO_NAO_ENCONTRADO"){
+        // A descrição existe, mas não para o ano solicitado. O contato
+        // pode corrigir apenas o ano, sem perder marca, modelo nem uso.
+        saidaFinal.mensagens=[
+          String(resultadoFalha.pergunta_cliente||
+            "Pode confirmar o ano-modelo ou a versão do veículo?").slice(0,300)
         ];
         saidaFinal.estado.cotacao_pendente=true;
         saidaFinal.estado.cotacao_verificacao_humana=false;
         saidaFinal.estado.cotacao_opcoes_fipe=[];
-        saidaFinal.estado.proxima_acao="confirmar ano-modelo para consultar a FIPE";
+        saidaFinal.estado.cotacao_opcoes_fipe_origem=[];
+        saidaFinal.estado.cotacao_referencias_fipe=[];
+        saidaFinal.estado.cotacao_versao_fipe_confirmada=null;
+        saidaFinal.estado.proxima_acao="confirmar ano-modelo ou versão para consultar a FIPE";
       } else if (resultadoFalha.code==="FIPE_VERSAO_INCOMPATIVEL" ||
           resultadoFalha.code==="FIPE_VERSAO_AMBIGUA") {
         const incompatibilidades=saidaFinal.estado.cotacao_incompatibilidades;
@@ -2441,6 +2461,7 @@ export async function processarPendenciaNegocio(
           resultadoFalha.code!=="FIPE_MARCA_NAO_IDENTIFICADA" &&
           resultadoFalha.code!=="COTACAO_DADOS_NOVOS_INCOMPLETOS" &&
           resultadoFalha.code!=="FIPE_ANO_MODELO_NAO_ENCONTRADO" &&
+          resultadoFalha.code!=="FIPE_MODELO_NAO_ENCONTRADO" &&
           resultadoFalha.code!=="FIPE_VERSAO_INCOMPATIVEL" &&
           resultadoFalha.code!=="FIPE_VERSAO_AMBIGUA") {
         // Um erro sem opções FIPE verificadas não autoriza perguntas sucessivas.
