@@ -782,7 +782,7 @@ async function preflight(pendenciaId: string) {
     pendencia.empresa_id,pendencia.agente_id,pendencia.conversa_id
   );
   const ajusteAtivo=ferramentas.has("gerar_cotacao_veicular")
-    && Boolean(identificarAjusteCotacao(pendencia.conteudo_agregado,
+    && Boolean(ajusteCotacaoNoPedidoAtual(pendencia.conteudo_agregado,
       estado.cotacao_opcoes_fipe.length>0||
       estado.cotacao_opcoes_fipe_origem.length>0))
     && (estado.cotacao_pendente||estado.cotacao_opcoes_fipe.length>0||
