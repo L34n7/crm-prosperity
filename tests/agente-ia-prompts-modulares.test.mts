@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  regrasGeraisBackend,regrasPorFerramentaNegocio,
+  regrasGeraisBackend,regrasPorFerramentaNegocio,regrasPorFerramentaGeral,
 } from "../src/lib/agentes-ia/prompts-backend.ts";
 import {
   mencionouNovoVeiculoAposCotacao,consolidarDadosCotacao,
@@ -93,4 +93,21 @@ test("a familia A3 nao pode oferecer A1, A6 nem A7",()=>{
     .map(v=>v.code),["a1"]);
   assert.deepEqual(modelosCompativeisFipe(catalogo,"Q5")
     .map(v=>v.code),["q5"]);
+});
+
+test("regras de agenda e transferencia so entram com ferramenta ativa",()=>{
+  assert.deepEqual(regrasPorFerramentaGeral(new Set()),[]);
+  assert.deepEqual(regrasPorFerramentaGeral(
+    new Set(["consultar_conhecimento","consultar_contato"])
+  ),[]);
+  const agenda=regrasPorFerramentaGeral(
+    new Set(["consultar_agenda","criar_agendamento"])
+  ).join(" ");
+  assert.match(agenda,/Agenda|agendamento|reagendamento/i);
+  assert.doesNotMatch(agenda,/Transferência usa o destino configurado/i);
+  const transferencia=regrasPorFerramentaGeral(
+    new Set(["transferir_humano"])
+  ).join(" ");
+  assert.match(transferencia,/Transferência/i);
+  assert.doesNotMatch(transferencia,/agendamento|horário final/i);
 });
