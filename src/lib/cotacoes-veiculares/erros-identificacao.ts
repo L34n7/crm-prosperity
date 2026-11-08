@@ -5,13 +5,13 @@ export type CodigoIdentificacaoFipe=
   "FIPE_MODELO_NAO_ENCONTRADO"|"FIPE_ANO_MODELO_NAO_ENCONTRADO";
 
 export class ErroIdentificacaoModeloFipe extends Error{
-  constructor(
-    public readonly codigo:CodigoIdentificacaoFipe,
-    public readonly perguntaCliente:string,
-    detalhe:string,
-  ){
+  readonly codigo:CodigoIdentificacaoFipe;
+  readonly perguntaCliente:string;
+  constructor(codigo:CodigoIdentificacaoFipe,perguntaCliente:string,detalhe:string){
     super(detalhe);
     this.name="ErroIdentificacaoModeloFipe";
+    this.codigo=codigo;
+    this.perguntaCliente=perguntaCliente;
   }
 }
 
