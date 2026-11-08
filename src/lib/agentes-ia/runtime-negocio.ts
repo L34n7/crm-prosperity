@@ -1460,6 +1460,7 @@ export async function processarPendenciaNegocio(
       const primeira=base[0];
       if(primeira&&primeira.veiculo&&primeira.ano_modelo){
         let mensagemComparacao="";
+        let falhaComparativaEncaminhada=false;
         let grupoComparado:string|null=null;
         let diagnosticoComparacao:Record<string,unknown>|null=null;
         if(comparacaoUso &&
@@ -1503,9 +1504,38 @@ export async function processarPendenciaNegocio(
               grupoComparado=resultado.grupo_id;
             }else{
               diagnosticoComparacao={motivo:resultado.error||"Sem cotação alternativa"};
-              mensagemComparacao="Não consegui obter um valor confirmado para uso "+
-                comparacaoUso+" deste veículo. A cotação anterior continua válida. "+
-                "Nossa equipe pode verificar se existe proposta para essa finalidade.";
+              if(classificarFalhaCotacao(String(resultado.error||"")).tipo==="consulta"){
+                try{
+                  const transferencia=await transferirContratacaoCotacao({
+                    empresaId:pendencia.empresa_id,conversaId:pendencia.conversa_id,
+                    agenteId:agente.id,configuracao:agente.fallback_transferencia_json,
+                  });
+                  ctx.ferramentasExecutadas.push({
+                    nome:"transferir_atendimento_cotacao",motivo:"falha_consulta_fipe",
+                    resultado:transferencia,
+                  });
+                  falhaComparativaEncaminhada=Boolean(
+                    transferencia.transferido||transferencia.jaEstavaComHumano
+                  );
+                  if(falhaComparativaEncaminhada)ctx.acaoCriticaExecutada=true;
+                }catch(error){
+                  ctx.ferramentasExecutadas.push({
+                    nome:"transferir_atendimento_cotacao",motivo:"falha_consulta_fipe",
+                    resultado:{transferido:false,error:error instanceof Error?error.message:String(error)},
+                  });
+                }
+                mensagemComparacao=falhaComparativaEncaminhada
+                  ?"Ocorreu uma falha ao gerar sua cotação automaticamente. "+
+                    "Encaminhei seu atendimento para nossa equipe consultar os dados "+
+                    "e você receberá a resposta por aqui assim que estiver disponível."
+                  :"Ocorreu uma falha ao gerar sua cotação automaticamente, "+
+                    "mas não consegui encaminhar o atendimento neste momento. "+
+                    "Por favor, solicite atendimento humano novamente.";
+              }else{
+                mensagemComparacao="Não consegui obter um valor confirmado para uso "+
+                  comparacaoUso+" deste veículo. A cotação anterior continua válida. "+
+                  "Nossa equipe pode verificar se existe proposta para essa finalidade.";
+              }
             }
           }
         }else if(comparacaoPlanos){
@@ -1513,14 +1543,17 @@ export async function processarPendenciaNegocio(
             primeira.ano_modelo,primeira.uso||"informado",base);
         }
         if(mensagemComparacao){
-          ctx.acaoCriticaExecutada=Boolean(grupoComparado);
+          ctx.acaoCriticaExecutada ||= Boolean(grupoComparado);
           await enviarMensagens(ctx,[mensagemComparacao]);
           const agora=new Date().toISOString();
           const estadoComparado:EstadoConversa={
             ...estado,cotacao_pendente:false,cotacao_opcoes_fipe:[],
-            cotacao_verificacao_humana:false,cotacao_em_correcao:false,
-            aguardando_escolha_plano:false,
-            proxima_acao:"esclarecer diferenças entre propostas e planos",
+            cotacao_verificacao_humana:falhaComparativaEncaminhada,
+            cotacao_em_correcao:false,aguardando_escolha_plano:false,
+            proxima_acao:falhaComparativaEncaminhada
+              ?null:"esclarecer diferenças entre propostas e planos",
+            estagio:falhaComparativaEncaminhada
+              ?"transferido para atendimento humano":estado.estagio,
           };
           if(grupoComparado){
             estadoComparado.cotacao_dados={
@@ -1549,6 +1582,10 @@ export async function processarPendenciaNegocio(
               metadata_json:{runtime:"negocio",comparacao_cotacao:true,
                 tipo:comparacaoUso?"finalidade_uso":"planos",
                 cotacao_status:grupoComparado?"emitida":"consulta",
+                transferencia_automatica_fipe:ctx.ferramentasExecutadas.some(item=>
+                  item.nome==="transferir_atendimento_cotacao" &&
+                  item.motivo==="falha_consulta_fipe"),
+                transferido_humano_fipe:falhaComparativaEncaminhada,
                 grupo_original:ultima?.grupo_id||null,grupo_comparado:grupoComparado,
                 diagnostico:diagnosticoComparacao},
             }).eq("id",execucaoId);
