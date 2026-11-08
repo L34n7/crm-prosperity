@@ -1110,11 +1110,18 @@ export async function processarPendenciaNegocio(
     // prometeu recalcular, mas nunca invocou a ferramenta.
     const aposUltimaProposta=ultimaPropostaHistorico>=0
       ?historico.slice(ultimaPropostaHistorico+1):[];
-    const correcoesAposProposta=aposUltimaProposta
-      .filter(item=>item.role==="user"&&clienteCorrigiuVersaoCotacao(item.content))
-      .map(item=>item.content);
+    // Após um pedido NOVO, correções da proposta anterior não fazem parte
+    // da solicitação corrente nem podem alterar o ano/modelo recém-informados.
+    const houveNovoPedidoAposProposta=aposUltimaProposta.some(item=>
+      item.role==="user"&&clientePediuNovoVeiculoCotacao(item.content)
+    );
+    const correcoesAposProposta=houveNovoPedidoAposProposta?[]:
+      aposUltimaProposta
+        .filter(item=>item.role==="user"&&clienteCorrigiuVersaoCotacao(item.content))
+        .map(item=>item.content);
     const recalculoPrometidoPendente=ferramentas.has("gerar_cotacao_veicular")
-      && existeCotacaoAnterior && !estado.cotacao_pendente
+      && existeCotacaoAnterior && !houveNovoPedidoAposProposta
+      && !estado.cotacao_pendente
       && recalculoPrometidoAposCorrecao({
         mensagensAposProposta:aposUltimaProposta,
         ultimaRespostaAgente,
@@ -1122,12 +1129,13 @@ export async function processarPendenciaNegocio(
       });
     // Corrigir uma proposta já emitida não é iniciar nova cotação:
     // "pode gerar" depois de prometer recálculo mantém modelo/ano/uso.
-    if(ajusteEfetivo || (existeCotacaoAnterior &&
-      (recalculoPrometidoPendente||
-       clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado))))
+    if((ajusteEfetivo&&ajusteEfetivo.acao!=="outro_veiculo") ||
+       (!pedidoNovoExplicito&&existeCotacaoAnterior&&
+        (recalculoPrometidoPendente||
+         clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado))))
       querOutraCotacao=false;
     const corrigiuVeiculo=ferramentas.has("gerar_cotacao_veicular")
-      && existeCotacaoAnterior
+      && !pedidoNovoExplicito && existeCotacaoAnterior
       && (Boolean(ajusteEfetivo&&ajusteEfetivo.acao!=="atendente"&&
           ajusteEfetivo.acao!=="outro_veiculo"&&
           ajusteEfetivo.acao!=="modelo")||
