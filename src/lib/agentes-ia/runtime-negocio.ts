@@ -1835,6 +1835,12 @@ export async function processarPendenciaNegocio(
 
         let resultado: any;
         try {
+          if(nome==="gerar_cotacao_veicular"){
+            // A IA não pode enviar referências FIPE por conta própria.
+            // Só o runtime pode injetar o código realmente escolhido.
+            delete argumentos._codigo_modelo_fipe;
+            delete argumentos._tipo_fipe;
+          }
           if(nome==="gerar_cotacao_veicular" && estado.cotacao_em_correcao) {
             if(!versaoFipeEscolhida && !modeloAjustadoParaBusca &&
                 !versaoCorrigidaFoiInformada(estado.cotacao_pedido_mensagens)) {
