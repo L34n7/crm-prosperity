@@ -244,6 +244,7 @@ const PALAVRAS_GERAIS_COTACAO = new Set(
   "quero gostaria preciso posso pode poderia podemos faz faca fazer fazermos vamos bora agora depois novo nova outra outro " +
   "como funciona funcionar funcionamento seguro seguros protecao explica explicar entendi ja disse falei informe informei " +
   "boa tarde bom dia boa noite oi ola oii tudo bem saudacao duvida duvidas " +
+  "legal show perfeito maravilha combinado tranquilo blz beleza obrigado valeu " +
   "proximo proxima cotar cote cotacao cotacoes orcamento proposta propostas simular simulacao gerar gere gera " +
   "para por com sem em no na uso finalidade ano modelo marca marca e eh ser sera foi tem tenho esta esse essa isso " +
   "tio tia pai mae irmao irma amigo amiga cliente pessoa dono terceiro mesmo mesma mais novamente novo " +
@@ -306,6 +307,30 @@ function modeloMencionadoCotacao(mensagem: string): string | null {
   return null;
 }
 
+/** Após uma proposta concluída, uma mensagem curta que identifique um
+ * NOVO modelo pode iniciar a coleta, sem exigir que o contato escreva
+ * "quero outra cotação". Nunca confundir respostas sociais, dúvidas,
+ * acabamento isolado ou ano isolado com nome de veículo.
+ * A FIPE ainda valida o modelo e todas as versões do ano.
+ */
+export function mencionouNovoVeiculoAposCotacao(mensagem:string):boolean{
+  const bruto=String(mensagem||"").trim();
+  const texto=normalizar(bruto);
+  if(!texto||bruto.length>90||/[?!]/.test(bruto)||
+     /^(?:19|20)\d{2}$/.test(texto)||
+     clientePediuCotacaoVeicular(mensagem)||
+     clienteCancelouCotacao(mensagem)||
+     confirmouProsseguirCotacao(mensagem)||
+     /^(?:quero|gostaria|preciso|posso|pode|qual|como|quanto|por que|porque|me explica|na verdade|errei|ops|nao e|nao era|obrigad)/.test(texto))
+    return false;
+  const palavras=texto.split(" ").filter(Boolean);
+  if(palavras.length>5)return false;
+  const modelo=modeloMencionadoCotacao(mensagem);
+  return Boolean(modelo&&!acabamentoIsoladoCotacao(modelo)&&
+    modelo.split(" ").some(token=>/[a-z]{2,}/.test(token)||
+      /^\d{3,4}$/.test(token)));
+}
+
 /** Normaliza o estado persistido sem confiar em JSON arbitrário. */
 export function normalizarDadosCotacao(valor: unknown): DadosCotacaoConfirmados {
   const obj = valor && typeof valor === "object" ? valor as Record<string, unknown> : {};
@@ -362,8 +387,15 @@ export function consolidarDadosCotacao(
     // Falas de finalidade de uso (ex.: "dia a dia") não são modelos.
     // Se um estado antigo guardou palavras genéricas, corrige ao receber
     // uma identificação real sem exigir reiniciar a conversa.
-    if (!dados.modelo || !modeloMencionadoCotacao(dados.modelo))
-      dados.modelo = modeloMencionadoCotacao(mensagem) || null;
+    const mencionado=modeloMencionadoCotacao(mensagem);
+    // Uma grafia corrigida na mesma família substitui a inicial ("Soortage"
+    // -> "Sportage") sem reiniciar modelo/ano/uso. Modelos realmente
+    // diferentes continuam exigindo um novo pedido explícito.
+    const atual=normalizar(dados.modelo||"").split(" ")[0]||"";
+    const novo=normalizar(mencionado||"").split(" ")[0]||"";
+    if (!dados.modelo || !modeloMencionadoCotacao(dados.modelo) ||
+        (mencionado&&atual&&novo&&umaEdicaoModelo(atual,novo)))
+      dados.modelo = mencionado || dados.modelo || null;
     const anos = [...texto.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => m[0]);
     const unicoAnoTambemModelo = anos.length === 1 &&
       dados.modelo === anos[0] &&
