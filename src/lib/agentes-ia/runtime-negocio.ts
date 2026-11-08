@@ -26,7 +26,7 @@ import {
   confirmouProsseguirCotacao, validarDadosNovosCotacao,
   preservarModeloCotacaoConfirmado,
   clientePediuNovoVeiculoCotacao, clientePediuRetomarCotacao,
-  consolidarDadosCotacao, normalizarDadosCotacao,
+  consolidarDadosCotacao, normalizarDadosCotacao, mensagensDoPedidoCotacao,
   dadosEssenciaisCotacaoConfirmados, DADOS_COTACAO_VAZIOS,
   acabamentoIsoladoCotacao,
   type DadosCotacaoConfirmados,
@@ -1263,21 +1263,31 @@ export async function processarPendenciaNegocio(
       // veículo da cotação cancelada ou anterior.
       const inicioPedidoRecente=aposProposta.findLastIndex(item=>
         item.role==="user"&&clientePediuNovoVeiculoCotacao(item.content));
-      const inicioPedidoFallback=aposProposta.findIndex(item=>
+      const inicioPedidoFallback=aposProposta.findLastIndex(item=>
         item.role==="user"&&clientePediuCotacaoVeicular(item.content));
-      const inicioPedido=inicioPedidoRecente>=0?inicioPedidoRecente:inicioPedidoFallback;
+      const inicioPedido=Math.max(inicioPedidoRecente,inicioPedidoFallback);
       const mensagensPedidoNoHistorico=inicioPedido>=0
         ?aposProposta.slice(inicioPedido)
           .filter(item=>item.role==="user").map(item=>item.content)
         :[];
-      estado.cotacao_pedido_mensagens=listaCurta([
-        ...(querOutraCotacao||estado.cotacao_ignorar_historico
-          ?[]:mensagensPedidoNoHistorico),
-        ...estado.cotacao_pedido_mensagens,
-        pendencia.conteudo_agregado,
-      ].slice(-18),14,220);
+      // Reconstruir o pedido usando a ordem real do histórico, não uma
+      // mistura de mensagens antigas + estado + mensagem atual. Essa
+      // mistura colocava "2020" depois do ano 2010 confirmado e fazia
+      // validarDadosNovosCotacao perguntar o ano indefinidamente.
+      const historicoPedidoConfiavel=!querOutraCotacao &&
+        !estado.cotacao_ignorar_historico &&
+        mensagensPedidoNoHistorico.length>0;
+      estado.cotacao_pedido_mensagens=mensagensDoPedidoCotacao({
+        historico:historicoPedidoConfiavel?mensagensPedidoNoHistorico:[],
+        persistidas:estado.cotacao_pedido_mensagens,
+        atual:pendencia.conteudo_agregado,
+      });
+      // Quando o histórico do pedido atual está disponível, recalcular
+      // os dados SOMENTE dele, sem ressuscitar anos/modelos persistidos
+      // de outros pedidos. Na paginação, preservar o estado confirmado.
       estado.cotacao_dados=consolidarDadosCotacao(
-        estado.cotacao_pedido_mensagens,estado.cotacao_dados
+        estado.cotacao_pedido_mensagens,
+        historicoPedidoConfiavel?DADOS_COTACAO_VAZIOS:estado.cotacao_dados
       );
       if(modeloCorrigidoPeloContexto){
         estado.cotacao_dados.modelo=modeloCorrigidoPeloContexto;

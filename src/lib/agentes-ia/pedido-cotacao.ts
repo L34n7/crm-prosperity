@@ -242,6 +242,8 @@ export const DADOS_COTACAO_VAZIOS: DadosCotacaoConfirmados = {
 const PALAVRAS_GERAIS_COTACAO = new Set(
   ("a o as os e eu de da do das dos um uma meu minha seus seu do meu do seu carro carros veiculo veiculos moto motos " +
   "quero gostaria preciso posso pode poderia podemos faz faca fazer fazermos vamos bora agora depois novo nova outra outro " +
+  "como funciona funcionar funcionamento seguro seguros protecao explica explicar entendi ja disse falei informe informei " +
+  "boa tarde bom dia boa noite oi ola oii tudo bem saudacao duvida duvidas " +
   "proximo proxima cotar cote cotacao cotacoes orcamento proposta propostas simular simulacao gerar gere gera " +
   "para por com sem em no na uso finalidade ano modelo marca marca e eh ser sera foi tem tenho esta esse essa isso " +
   "tio tia pai mae irmao irma amigo amiga cliente pessoa dono terceiro mesmo mesma mais novamente novo " +
@@ -276,6 +278,11 @@ export function acabamentoIsoladoCotacao(texto:string):boolean{
  */
 function modeloMencionadoCotacao(mensagem: string): string | null {
   const textoOriginal=String(mensagem||"").trim();
+  // Perguntas de atendimento, mensagens de confirmação e reclamações
+  // sobre repetição não são nomes de veículos para o estado de cotação.
+  const frase=normalizar(textoOriginal);
+  if(/^(?:como funciona|como e|qual e|quais sao|por que|porque|ja disse|ja falei|ja informei|eu ja disse|eu ja falei)(?:\b|$)/.test(frase))
+    return null;
   // Código do modelo dito isoladamente; a FIPE validará marca e versão.
   const codigo=textoOriginal.match(/^\d{1,2}[.\-\s]\d{3}$/);
   if(codigo)return codigo[0].replace(/[\s-]/g,".");
@@ -311,6 +318,34 @@ export function normalizarDadosCotacao(valor: unknown): DadosCotacaoConfirmados 
     uso: ["particular", "aplicativo", "taxi", "comercial"].includes(uso)
       ? uso as UsoCotacaoConfirmado : null,
   };
+}
+
+/** Reconstrói um pedido apenas a partir das mensagens do pedido ATUAL,
+ * em ordem cronológica, sem misturar dados persistidos de pedidos antigos.
+ * Quando o histórico foi paginado/omitido, usa as mensagens persistidas.
+ * A repetição da mesma resposta atualiza sua posição (mais recente vence).
+ */
+export function mensagensDoPedidoCotacao(params:{
+  historico:string[];
+  persistidas:string[];
+  atual:string;
+  limite?:number;
+}):string[]{
+  const max=Math.max(1,Math.min(params.limite||14,40));
+  const origem=params.historico.length?params.historico:params.persistidas;
+  const mensagens=[...origem,params.atual]
+    .map(item=>String(item||"").trim().replace(/\s+/g," ").slice(0,220))
+    .filter(Boolean);
+  const vistos=new Set<string>();
+  const unicas:string[]=[];
+  for(let i=mensagens.length-1;i>=0;i--){
+    const chave=normalizar(mensagens[i]);
+    if(!chave||vistos.has(chave))continue;
+    vistos.add(chave);
+    unicas.push(mensagens[i]);
+    if(unicas.length>=max)break;
+  }
+  return unicas.reverse();
 }
 
 /** Consolida dados apenas das mensagens do pedido ATUAL; preserva o que já
