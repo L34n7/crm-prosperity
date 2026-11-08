@@ -101,7 +101,8 @@ function familiaSemCilindradaCompativel(consulta:string[],opcao:string):boolean{
   const nome=tokensCatalogo(opcao);
   if(!familia.every(token=>nome.has(token)))return false;
   // Aceitar apenas descrição SEM cilindrada; jamais usar 150 para 750.
-  return ![...nome].some(token=>/^\d{3,4}$/.test(token));
+  return ![...nome].some(token=>/^\d+$/.test(token) &&
+    Number(token)>=50);
 }
 
 const termosAtributos = new Set([
