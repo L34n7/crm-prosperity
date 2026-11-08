@@ -1170,6 +1170,8 @@ export async function processarPendenciaNegocio(
     if(respostaRejeitouOpcoes){
       ferramentasRelevantes.delete("gerar_cotacao_veicular");
       estado.cotacao_opcoes_fipe=[];
+      estado.cotacao_opcoes_fipe_origem=[];
+      estado.cotacao_referencias_fipe=[];
       estado.cotacao_pendente=true;
       estado.cotacao_dados.modelo=null;
     }
@@ -2231,6 +2233,8 @@ export async function processarPendenciaNegocio(
         cotacao_pendente:true,
         cotacao_em_correcao:false,
         cotacao_opcoes_fipe:[],
+        cotacao_opcoes_fipe_origem:[],
+        cotacao_referencias_fipe:[],
         cotacao_dados:{...estado.cotacao_dados,modelo:null},
         // Mantém somente ano e uso já confirmados; o próximo modelo não
         // pode ser contaminado por nomes e versões rejeitados.
