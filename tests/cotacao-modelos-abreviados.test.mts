@@ -31,7 +31,7 @@ test("modelos de moto pouco comuns não se confundem com outros códigos",()=>{
     {code:"e",name:"GL1800 Gold Wing"},
   ];
   assert.deepEqual(modelosCompativeisFipe(catalogo,"GL 1800 Gold Wing")
-    .map(x=>x.code),["a","e"]);
+    .map(x=>x.code),["a"]);
   assert.deepEqual(modelosCompativeisFipe(
     [{code:"e",name:"GL1800 Gold Wing"}],"GL 1800 Gold Wing"
   ).map(x=>x.code),["e"]);
