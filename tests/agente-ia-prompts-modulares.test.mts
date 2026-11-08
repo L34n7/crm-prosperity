@@ -111,3 +111,16 @@ test("regras de agenda e transferencia so entram com ferramenta ativa",()=>{
   assert.match(transferencia,/Transferência/i);
   assert.doesNotMatch(transferencia,/agendamento|horário final/i);
 });
+
+test("apos emitir proposta, somente o acompanhamento recebe regras comerciais de cotacao",()=>{
+  const semAcompanhamento=regrasPorFerramentaNegocio(
+    new Set(["gerar_cotacao_veicular"]),false,false
+  ).join(" ");
+  const comAcompanhamento=regrasPorFerramentaNegocio(
+    new Set(["gerar_cotacao_veicular"]),false,true
+  ).join(" ");
+  assert.equal(semAcompanhamento,"");
+  assert.match(comAcompanhamento,/cotação anterior|proposta registrada/i);
+  assert.match(comAcompanhamento,/não.*recalcule/i);
+  assert.doesNotMatch(comAcompanhamento,/quando o cliente informou modelo e ano/i);
+});
