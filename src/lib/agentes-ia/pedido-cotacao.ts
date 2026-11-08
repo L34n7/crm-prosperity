@@ -87,6 +87,7 @@ export function validarDadosNovosCotacao(
     "caminhao","caminhoes","van","vans","utilitario","utilitarios","furgao",
     "passageiro","passageiros","carga","cargas","agregado",
     "total","gasolina","diesel","motor","mpfi","manual","automatico",
+    "gl","gs","gsi","cd","sed",
     "automatica","aut","mec","i","motion","particular","comercial",
   ]);
   const nominais=palavras.filter(p=>p.length>=2 &&
@@ -248,6 +249,7 @@ const PALAVRAS_GERAIS_COTACAO = new Set(
   "manual automatico automatica mecanico mecanica motor motorizacao cambio sedan hatch suv pickup camionete cabine " +
   "dupla simples tracao cd 4x4 4x2 gls lxs ex exl lx ltz lt xlt xls xl limited challenge premium completo " +
   "caminhao caminhoes van vans utilitario utilitarios furgao passageiro passageiros carga cargas agregado " +
+  "gl gs gsi gi cd sed advantage express " +
   "confirmo confirmado correto certa certo verdade sim nao ok obrigado obrigada obrigado por favor voces conseguem dia dias diario familia casa caro uai neh ne ta beleza belezaaa entendi vou usar usando dia a dia uso para trabalhar dirigindo rodar quero nao mais " +
   "consegue tentar tente tentei outra vez fazer de novo quero saber qual qual e meu por que quanto fica quanto custa cancela cancelar canela"
     ).split(/\s+/).filter(Boolean)
