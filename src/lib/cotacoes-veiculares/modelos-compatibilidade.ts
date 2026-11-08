@@ -46,6 +46,34 @@ function nomeComUmErro(a:string,b:string):boolean{
   return erros+(a.length-i)+(b.length-j)===1;
 }
 
+/** Abreviações numéricas somente identificam possíveis versões FIPE;
+ * o ano e o código real serão confirmados posteriormente.
+ * 320 pode localizar 320iA, mas nunca 3200 ou 321i.
+ */
+function nomeNumericoAbreviado(consulta:string,catalogo:string):boolean{
+  const prefixo=consulta.match(/^(\d{3,4})([a-z]{0,2})$/);
+  if(!prefixo||!catalogo.startsWith(consulta))return false;
+  const sufixo=catalogo.slice(prefixo[1].length);
+  return /^[a-z]{1,3}$/.test(sufixo) &&
+    (!prefixo[2]||sufixo.startsWith(prefixo[2]));
+}
+
+/** Permite a mesma identificação quando o catálogo agrupa letras e
+ * cilindrada em um token (GL1800) e o cliente digita separado (GL 1800).
+ * Não altera números nem supõe versões ausentes do catálogo.
+ */
+function tokensCatalogo(nome:string):Set<string>{
+  const partes=new Set(normalizar(nome).split(" ").filter(Boolean));
+  for(const token of [...partes]){
+    const siglaComNumero=token.match(/^([a-z]{1,5})(\d{2,4})$/);
+    if(siglaComNumero){
+      partes.add(siglaComNumero[1]);
+      partes.add(siglaComNumero[2]);
+    }
+  }
+  return partes;
+}
+
 const termosAtributos = new Set([
   "manual", "mecanico", "mecanica", "mec",
   "automatico", "automatica", "aut", "auto", "cvt", "tiptronic", "dsg",
@@ -71,9 +99,7 @@ export function modelosCompativeisFipe(
   const tokens = nome.split(" ").filter((token) => token && !termosAtributos.has(token));
 
   const compativeis = itens.filter((item) => {
-    const partes = new Set(
-      normalizar(item.name).replace(/\b(?:sed|seda)\b/g, "sedan").split(" "),
-    );
+    const partes = tokensCatalogo(item.name);
     return tokens.every((token) =>
       partes.has(token) ||
       (token === "diesel" && ["diesel", "dies", "die"].some((v) => partes.has(v)))
@@ -90,7 +116,8 @@ export function modelosCompativeisFipe(
     :itens.filter((item)=>{
       const partes=normalizar(item.name)
         .replace(/\b(?:sed|seda)\b/g,"sedan").split(" ");
-      return nomeComUmErro(familiaInformada,partes[0]||"") &&
+      return (nomeComUmErro(familiaInformada,partes[0]||"") ||
+        nomeNumericoAbreviado(familiaInformada,partes[0]||"")) &&
         tokens.slice(1).every(token=>
           partes.includes(token) ||
           (token==="diesel"&&["diesel","dies","die"].some(v=>partes.includes(v))));

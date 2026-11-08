@@ -170,3 +170,17 @@ test("correções no meio das opções e depois da proposta permitem retomar",()
     mensagemAtual:"ok",
   }),true);
 });
+
+test("novo pedido e ano isolado não reabrem correção da proposta anterior",()=>{
+  for(const texto of [
+    "2015","1988","2018","2026",
+    "Outra cotação","Outra","Quero gerar outra cotação",
+    "Vamos tentar outro veículo","Outra moto",
+  ])assert.equal(clienteCorrigiuVersaoCotacao(texto),false,texto);
+  for(const texto of [
+    "Não é 2015, é 2018",
+    "Corrigi o ano, é 2018",
+    "Não é MPI, é GLS",
+    "respondi errado",
+  ])assert.equal(clienteCorrigiuVersaoCotacao(texto),true,texto);
+});

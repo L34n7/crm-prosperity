@@ -1,4 +1,5 @@
 import {interpretarRespostaOpcoesFipe} from "../cotacoes-veiculares/orientacao-versoes.ts";
+import {clientePediuNovoVeiculoCotacao} from "./pedido-cotacao.ts";
 
 export type AcaoAjusteCotacao=
   "atendente"|"outro_veiculo"|"modelo"|"ano"|"versao"|
@@ -10,7 +11,7 @@ function norm(valor:string):string{
     .replace(/[\u0300-\u036f]/g,"").toLowerCase()
     .replace(/×/g,"x").replace(/\s+/g," ").trim();
 }
-const marcadoresCorrecao=/\b(?:nao e|nao era|nao foi|nao corresponde|errei|errado|errada|corrigir|corrija|correto|correta|na verdade|confundi|respondi errado|me enganei|outro|outra|troquei|o certo|a certa|me equivoquei)\b/;
+const marcadoresCorrecao=/\b(?:nao e|nao era|nao foi|nao corresponde|errei|errado|errada|corrigir|corrija|corrigi|corrigiu|corrigido|corrigida|corrigindo|correto|correta|na verdade|confundi|respondi errado|me enganei|outro|outra|troquei|o certo|a certa|me equivoquei)\b/;
 function isCorrecao(t:string){return marcadoresCorrecao.test(t);}
 
 /** O último valor afirmado prevalece, excluindo o que foi explicitamente negado. */
@@ -97,4 +98,15 @@ export function recuperarOpcoesFipe(
   return {selecionada:escolha.versaoSelecionada,
     opcoes:escolha.filtrou?escolha.opcoesRestantes:originais,
     filtrou:escolha.filtrou};
+}
+
+/** Pedido NOVO prevalece sobre qualquer filtro de versão de veículo antigo.
+ * A intenção de falar com atendente continua prioritária mesmo nesse caso.
+ */
+export function ajusteCotacaoNoPedidoAtual(
+  mensagem:string,temOpcoes=false,
+):AjusteCotacao|null{
+  const ajuste=identificarAjusteCotacao(mensagem,temOpcoes);
+  return clientePediuNovoVeiculoCotacao(mensagem)&&
+    ajuste?.acao!=="atendente"?null:ajuste;
 }

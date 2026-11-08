@@ -29,3 +29,16 @@ export function referenciaDaVersaoFipe(
 ):ReferenciaVersaoFipe|null{
   return referencias.find(ref=>ref.name.trim()===String(versao||"").trim())||null;
 }
+
+/** Conserva escolha confirmada ao pedir uso ou outro dado não relacionado à
+ * versão; nunca aproveita uma descrição que não pertence às opções atuais.
+ */
+export function versaoConfirmadaNestePedido(
+  confirmada:string|null,
+  origem:string[],
+  filtradas:string[],
+):string|null{
+  const nome=String(confirmada||"").trim();
+  return nome&&(origem.includes(nome)||filtradas.includes(nome))
+    ?nome:null;
+}

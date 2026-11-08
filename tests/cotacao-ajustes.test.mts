@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  identificarAjusteCotacao,recuperarOpcoesFipe,
+  identificarAjusteCotacao,ajusteCotacaoNoPedidoAtual,recuperarOpcoesFipe,
   anoCorrigidoCotacao,textoPositivoDaCorrecao,
 } from "../src/lib/agentes-ia/ajustes-cotacao.ts";
 import {interpretarRespostaOpcoesFipe}
@@ -110,4 +110,15 @@ test("ano corrigido na seleção de versões prevalece sobre lista antiga",()=>{
   assert.equal(identificarAjusteCotacao("2005",false),null);
   assert.equal(identificarAjusteCotacao("Não é 1999",true)?.acao,"ano");
   assert.equal(identificarAjusteCotacao("Não é 1999",true)?.ano,null);
+});
+
+test("nova cotação prevalece sobre lista antiga mesmo quando há opções FIPE",()=>{
+  for(const mensagem of [
+    "Outra cotação","Outra","Vamos tentar outro veículo",
+    "Quero cotar outra moto","Quero gerar outra cotação",
+  ])assert.equal(ajusteCotacaoNoPedidoAtual(mensagem,true),null,mensagem);
+  assert.equal(ajusteCotacaoNoPedidoAtual(
+    "Não é 2000, é 2001",true)?.acao,"ano");
+  assert.equal(ajusteCotacaoNoPedidoAtual(
+    "Quero falar com atendente",true)?.acao,"atendente");
 });
