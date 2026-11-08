@@ -23,8 +23,8 @@ const RESPOSTA_COMERCIAL =
   "a melhor alternativa. 😊";
 
 const RESPOSTA_CONSULTA =
-  "Não consegui consultar os dados desse veículo neste momento. " +
-  "Podemos tentar novamente ou contar com a ajuda da nossa equipe. 😊";
+  "Ocorreu uma falha ao gerar sua cotação automaticamente. " +
+  "Não foi possível concluir a consulta neste momento.";
 
 const RESPOSTA_GENERICA =
   "Não consegui concluir sua cotação neste momento. " +
@@ -60,7 +60,8 @@ export function classificarFalhaCotacao(erro: string): FalhaCotacaoPublica {
       codigo: "COTACAO_CONSULTA_INDISPONIVEL",
       orientacaoAgente:
         "A consulta do veículo não foi concluída agora. Não exponha o provedor " +
-        "de dados nem motivos técnicos; ofereça nova tentativa ou ajuda da equipe.",
+        "de dados nem motivos técnicos. O backend tentará encaminhar " +
+        "a conversa para atendimento humano antes de confirmar a transferência.",
       respostaFixa: RESPOSTA_CONSULTA,
     };
   }
