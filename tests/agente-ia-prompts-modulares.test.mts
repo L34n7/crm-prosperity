@@ -121,6 +121,6 @@ test("apos emitir proposta, somente o acompanhamento recebe regras comerciais de
   ).join(" ");
   assert.equal(semAcompanhamento,"");
   assert.match(comAcompanhamento,/cotação anterior|proposta registrada/i);
-  assert.match(comAcompanhamento,/não.*recalcule/i);
+  assert.match(comAcompanhamento,/nunca.*recalcule/i);
   assert.doesNotMatch(comAcompanhamento,/quando o cliente informou modelo e ano/i);
 });
