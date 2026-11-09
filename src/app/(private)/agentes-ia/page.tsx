@@ -2224,7 +2224,8 @@ export default function AgentesIaPage() {
                           <p>{ferramenta.descricao}</p>
                           {ferramenta.tipo==="gerar_cotacao_veicular" && !cotacaoConfigurada&&(
                             <p style={{marginTop:8,fontSize:12,lineHeight:1.5}}>
-                              Existem planos comerciais com configuração pendente. Você pode selecionar somente os planos já configurados; o sistema validará a seleção ao salvar.
+                              {cotacaoPendencias.slice(0,1).join(" ") || "Existem planos comerciais com configuração pendente."}
+                              {" "}Você pode selecionar somente os planos já configurados; o sistema validará a seleção ao salvar.
                               {" "}<Link href="/cotacoes-veiculares">Configurar cotação</Link>
                             </p>
                           )}
