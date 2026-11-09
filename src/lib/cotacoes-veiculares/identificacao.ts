@@ -32,10 +32,11 @@ const marcasConhecidas:Array<{marcas:string[];marca:string;tipo?:TipoFipe}>=[
   {marcas:["jeep"],marca:"Jeep"},
   {marcas:["kia"],marca:"Kia"},
   {marcas:["byd"],marca:"BYD"},
-  {marcas:["gwm","great wall motors"],marca:"GWM"},
+  {marcas:["gwm","great wall motors","haval"],marca:"GWM"},
   {marcas:["ram"],marca:"RAM"},
   {marcas:["omoda"],marca:"Omoda"},
   {marcas:["jaecoo"],marca:"Jaecoo"},
+  {marcas:["jac","jac motors"],marca:"JAC"},
   {marcas:["chery","caoa chery"],marca:"Chery"},
   {marcas:["suzuki"],marca:"Suzuki"},
   {marcas:["volvo"],marca:"Volvo"},
@@ -113,9 +114,26 @@ export async function identificarMarcaFipe(params:{
       break;
     }
   }
-  if(marcaInformada)return {
-    marca:marcaInformada,modelo,tipoPreferencial:null,origem:"informada",
-  };
+  if(marcaInformada){
+    const oficial=marcasConhecidas.find(item=>
+      item.marcas.some(alias=>normalizar(alias)===normalizar(marcaInformada)));
+    if(oficial)return {
+      marca:oficial.marca,modelo,
+      tipoPreferencial:oficial.tipo??null,origem:"informada",
+    };
+    // Fabricante informal/submarca (ex.: denominação comercial não usada
+    // pela FIPE): preferir pista de família reconhecida, mas a consulta
+    // oficial ainda validará o veículo/modelo/ano. Um erro ortográfico
+    // simples da marca é tratado pela lista REAL da FIPE, não por aqui.
+    const modeloConhecido=modelosConhecidos.find(v=>v.regex.test(normalizar(modelo)));
+    if(modeloConhecido)return {
+      marca:modeloConhecido.marca,modelo,
+      tipoPreferencial:modeloConhecido.tipo??null,origem:"modelo_conhecido",
+    };
+    return {
+      marca:marcaInformada,modelo,tipoPreferencial:null,origem:"informada",
+    };
+  }
 
   // Modelos já consultados são o primeiro recurso de inferência na empresa.
   const termo=normalizar(modelo).split(" ").filter(Boolean)[0]||"";

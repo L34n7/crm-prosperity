@@ -6,6 +6,7 @@ import {ErroIdentificacaoModeloFipe} from "@/lib/cotacoes-veiculares/erros-ident
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {usoComercialInferivelFipe} from "@/lib/cotacoes-veiculares/uso-automatico";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
+import {marcaDeclaradaNoPedido,ErroMarcaNaoEncontradaFipe} from "@/lib/cotacoes-veiculares/resolver-marca";
 import {descricaoLegivelFipe} from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import {formatarPropostaVeicular,dividirPropostaWhatsApp} from "@/lib/cotacoes-veiculares/formatar-proposta";
@@ -407,8 +408,21 @@ export async function executarFerramentaNegocio(params: {
     // O cliente pode dizer "BMW 320i 2007" ou apenas "320i 2007".
     // Identifica a marca no próprio nome, no catálogo da empresa ou pela pista
     // de modelos conhecidos, mas SEM assumir preço ou motorização pela pista.
+    const mensagensDoPedido=Array.isArray(args._mensagens_pedido)
+      ?args._mensagens_pedido.filter((v:unknown):v is string=>typeof v==="string").slice(-20):[];
+    const marcaArgumento=textoCurto(args.marca,100);
+    const codigoVerificado=/^\d{1,12}$/.test(String(args._codigo_modelo_fipe||""));
+    // Marca fornecida pelo modelo NÃO é confirmação do cliente. Ela só
+    // passa adiante quando aparece neste pedido, ou quando a versão FIPE
+    // já foi escolhida pelo código oficial persistido no backend.
+    // Impede que "JAC" da cotação anterior seja usado para "XJ6".
+    const marcaDaSolicitacao=marcaArgumento&&(
+      !mensagensDoPedido.length||
+      marcaDeclaradaNoPedido(marcaArgumento,mensagensDoPedido)||
+      codigoVerificado)
+      ?marcaArgumento:null;
     const identificacao=await identificarMarcaFipe({
-      empresaId:params.empresaId,marca:args.marca,modelo,
+      empresaId:params.empresaId,marca:marcaDaSolicitacao,modelo,
     });
     if(!identificacao)return {
       ok:false,
@@ -471,6 +485,18 @@ export async function executarFerramentaNegocio(params: {
         ok:false,code:diagnostico.codigo,
         error:diagnostico.message,
         pergunta_cliente:diagnostico.perguntaCliente,
+      };
+      // Outras categorias podem não conter a fabricante (ex.: BMW sem
+      // categoria de caminhões). O erro de MODELO/ANO encontrado em uma
+      // categoria válida sempre prevalece sobre marcas ausentes nas demais.
+      const marcaInexistente=buscas.find((item):item is PromiseRejectedResult=>
+        item.status==="rejected"&&item.reason instanceof ErroMarcaNaoEncontradaFipe
+      );
+      if(marcaInexistente)return {
+        ok:false,code:"FIPE_MARCA_NAO_IDENTIFICADA",
+        error:(marcaInexistente.reason as ErroMarcaNaoEncontradaFipe).message,
+        pergunta_cliente:"Não encontrei essa fabricante no cadastro FIPE. "+
+          "Qual é a marca oficial do veículo?",
       };
       const erros=buscas.filter((r):r is PromiseRejectedResult=>r.status==="rejected")
         .map(r=>r.reason instanceof Error?r.reason.message:String(r.reason));

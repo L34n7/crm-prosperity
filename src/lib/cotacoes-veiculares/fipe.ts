@@ -2,6 +2,7 @@ import "server-only";
 import { modelosCompativeisFipe, modelosDaMesmaFamiliaFipe } from "./modelos-compatibilidade";
 import {agruparModelosPorAnoFipe} from "./modelos-ano";
 import {diagnosticarIdentificacaoFipe} from "./erros-identificacao";
+import {resolverMarcaCatalogoFipe,ErroMarcaNaoEncontradaFipe} from "./resolver-marca";
 import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
 export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
@@ -70,17 +71,11 @@ export function precoFipeCentavos(preco: string) {
   return Math.round(numero * 100);
 }
 function unico(itens: OpcaoFipe[], busca: string) {
-  const chave = normalizar(busca);
-  const exatos = itens.filter((item) => normalizar(item.name) === chave || item.code === busca);
-  if (exatos.length === 1) return exatos[0];
-  const parciais = itens.filter((item) => normalizar(item.name).includes(chave));
-  if (parciais.length === 1) return parciais[0];
-  const sugestoes = (exatos.length ? exatos : parciais).slice(0, 6).map((item) => item.name);
-  throw new Error(
-    sugestoes.length
-      ? "Informe uma versão mais específica: " + sugestoes.join("; ")
-      : "Não encontrei " + busca + " na consulta FIPE. Confirme marca, modelo e ano."
-  );
+  // A grafia informada (Jaecoo/Jaecco) só é corrigida quando houver
+  // exatamente uma marca oficial compatível com UMA edição.
+  const resolvida=resolverMarcaCatalogoFipe(itens,busca);
+  if(resolvida)return resolvida.marca;
+  throw new ErroMarcaNaoEncontradaFipe(busca);
 }
 /** "2004/2005" corresponde ao ano-modelo 2005; 2004 é fabricação. */
 export function anoModeloSolicitado(ano:string):string{
@@ -159,6 +154,27 @@ async function consultarCandidatosPorAno(params:{
   return {validos,erros:0};
 }
 
+/** Anos oficiais encontrados para os mesmos códigos de modelo. Não
+ * adivinha datas e não muda automaticamente o ano pedido pelo cliente.
+ */
+async function anosDisponiveisDaFamilia(params:{
+  tipo:TipoFipe;marca:string;candidatos:OpcaoFipe[];
+}):Promise<string[]>{
+  const respostas=await Promise.allSettled(
+    params.candidatos.slice(0,6).map(modelo=>
+      listarAnosFipe(params.tipo,params.marca,modelo.code))
+  );
+  const anos=new Set<string>();
+  for(const resposta of respostas){
+    if(resposta.status!=="fulfilled")continue;
+    for(const item of resposta.value){
+      const ano=anoModeloSolicitado(item.name)||anoModeloSolicitado(item.code);
+      if(ano)anos.add(ano);
+    }
+  }
+  return [...anos].sort((a,b)=>Number(a)-Number(b)).slice(0,7);
+}
+
 function alternativasAno(versoes:ModeloComAno[],limite=8){
   return versoes.slice(0,limite).map(v=>v.modelo.name).join("; ");
 }
@@ -221,6 +237,10 @@ export async function encontrarVeiculoFipe(params: {
       await listarAnosFipe(params.tipo,marca.code,params.codigoModelo),params.ano);
     if(!anos.length)throw diagnosticarIdentificacaoFipe({
       modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+      anosDisponiveis:await anosDisponiveisDaFamilia({
+        tipo:params.tipo,marca:marca.code,
+        candidatos:[{code:params.codigoModelo,name:params.modelo}],
+      }),
     });
     if(anos.length!==1)throw new Error("A FIPE tem mais de uma opção para o ano-modelo "+
       anoModelo+". Confirme o combustível.");
@@ -268,6 +288,9 @@ export async function encontrarVeiculoFipe(params: {
     if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir as versões.");
     throw diagnosticarIdentificacaoFipe({
       modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+      anosDisponiveis:await anosDisponiveisDaFamilia({
+        tipo:params.tipo,marca:marca.code,candidatos,
+      }),
     });
   }
   if(compativeis.length>1){
