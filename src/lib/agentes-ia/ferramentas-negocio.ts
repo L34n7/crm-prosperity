@@ -6,7 +6,7 @@ import {ErroIdentificacaoModeloFipe} from "@/lib/cotacoes-veiculares/erros-ident
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {usoComercialInferivelFipe} from "@/lib/cotacoes-veiculares/uso-automatico";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
-import {marcaDeclaradaNoPedido} from "@/lib/cotacoes-veiculares/resolver-marca";
+import {marcaDeclaradaNoPedido,ErroMarcaNaoEncontradaFipe} from "@/lib/cotacoes-veiculares/resolver-marca";
 import {descricaoLegivelFipe} from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import {formatarPropostaVeicular,dividirPropostaWhatsApp} from "@/lib/cotacoes-veiculares/formatar-proposta";
@@ -470,6 +470,15 @@ export async function executarFerramentaNegocio(params: {
       );
       if(falhaTecnica)return {ok:false,code:"FIPE_CONSULTA_INDISPONIVEL",
         error:(falhaTecnica.reason as ErroConsultaFipe).message};
+      const marcaInexistente=buscas.find((item):item is PromiseRejectedResult=>
+        item.status==="rejected"&&item.reason instanceof ErroMarcaNaoEncontradaFipe
+      );
+      if(marcaInexistente)return {
+        ok:false,code:"FIPE_MARCA_NAO_IDENTIFICADA",
+        error:(marcaInexistente.reason as ErroMarcaNaoEncontradaFipe).message,
+        pergunta_cliente:"Não encontrei essa fabricante no cadastro FIPE. "+
+          "Qual é a marca oficial do veículo?",
+      };
       const errosIdentificacao=buscas
         .filter((item):item is PromiseRejectedResult=>
           item.status==="rejected" &&
