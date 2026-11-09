@@ -47,6 +47,7 @@ import {conversaPossuiCotacaoVeicular,planosDaUltimaCotacaoVeicular,transferirCo
 import {ajusteCotacaoNoPedidoAtual, recuperarOpcoesFipe, type AjusteCotacao} from "./ajustes-cotacao";
 import {normalizarReferenciasFipe,referenciaDaVersaoFipe,versaoConfirmadaNestePedido,type ReferenciaVersaoFipe} from "./referencias-fipe";
 import {regrasGeraisBackend,regrasPorFerramentaNegocio} from "./prompts-backend";
+import {sugestaoUnicaTracaoFipe} from "./sugestao-versao-fipe";
 import {
   normalizarPropostaCotacao,propostaEmitidaCotacao,
   dadosDaPropostaParaCorrecao,
@@ -110,6 +111,7 @@ type EstadoConversa = {
   cotacao_opcoes_fipe_origem: string[];
   cotacao_referencias_fipe: ReferenciaVersaoFipe[];
   cotacao_versao_fipe_confirmada: string | null;
+  cotacao_sugestao_versao: string | null;
   cotacao_ignorar_historico: boolean;
   cotacao_verificacao_humana: boolean;
 };
@@ -158,6 +160,7 @@ const ESTADO_VAZIO: EstadoConversa = {
   cotacao_opcoes_fipe:[],
   cotacao_opcoes_fipe_origem:[],
   cotacao_referencias_fipe:[],cotacao_versao_fipe_confirmada:null,
+  cotacao_sugestao_versao:null,
   cotacao_ignorar_historico:false,
   cotacao_verificacao_humana:false,
 };
@@ -204,6 +207,7 @@ function normalizarEstado(valor: unknown): EstadoConversa {
     cotacao_opcoes_fipe_origem:listaCurta(obj.cotacao_opcoes_fipe_origem,40,160),
     cotacao_referencias_fipe:normalizarReferenciasFipe(obj.cotacao_referencias_fipe),
     cotacao_versao_fipe_confirmada:textoCurto(obj.cotacao_versao_fipe_confirmada,160)||null,
+    cotacao_sugestao_versao:textoCurto(obj.cotacao_sugestao_versao,160)||null,
     cotacao_ignorar_historico:obj.cotacao_ignorar_historico===true,
     cotacao_verificacao_humana:obj.cotacao_verificacao_humana===true,
   };
@@ -239,6 +243,7 @@ function aplicarDelta(estado: EstadoConversa, delta: unknown): EstadoConversa {
     cotacao_opcoes_fipe_origem:estado.cotacao_opcoes_fipe_origem,
     cotacao_referencias_fipe:estado.cotacao_referencias_fipe,
     cotacao_versao_fipe_confirmada:estado.cotacao_versao_fipe_confirmada,
+    cotacao_sugestao_versao:estado.cotacao_sugestao_versao,
     cotacao_ignorar_historico:estado.cotacao_ignorar_historico,
     cotacao_verificacao_humana:estado.cotacao_verificacao_humana,
   };
@@ -1016,6 +1021,7 @@ export async function processarPendenciaNegocio(
     let versaoAjustadaFipe:string|null=null;
     let modeloAjustadoParaBusca:string|null=null;
     const invalidarVersoes=()=>{
+      estado.cotacao_sugestao_versao=null;
       estado.cotacao_opcoes_fipe=[];
       estado.cotacao_opcoes_fipe_origem=[];
       estado.cotacao_referencias_fipe=[];
@@ -1367,15 +1373,41 @@ export async function processarPendenciaNegocio(
     let aguardandoRefinamentoFipe=false;
     if(cotacaoEmAndamento&&!querOutraCotacao&&!versaoFipeEscolhida
       &&!respostaDiretaCotacao&&estado.cotacao_opcoes_fipe.length){
+      const confirmouSugestao=estado.cotacao_sugestao_versao &&
+        confirmouProsseguirCotacao(pendencia.conteudo_agregado) &&
+        estado.cotacao_opcoes_fipe.includes(estado.cotacao_sugestao_versao);
+      const recusouSugestao=estado.cotacao_sugestao_versao &&
+        /^(?:nao|não|nao e|não é|outro|outra)$/.test(
+          pendencia.conteudo_agregado.trim().toLowerCase());
       const escolha=interpretarRespostaOpcoesFipe(
-        pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
+        confirmouSugestao?String(estado.cotacao_sugestao_versao):
+          pendencia.conteudo_agregado,
+        estado.cotacao_opcoes_fipe
       );
       if(escolha.versaoSelecionada){
         versaoFipeEscolhida=escolha.versaoSelecionada;
         estado.cotacao_versao_fipe_confirmada=escolha.versaoSelecionada;
+        estado.cotacao_sugestao_versao=null;
+      }else if(recusouSugestao){
+        estado.cotacao_sugestao_versao=null;
+        respostaDiretaCotacao=perguntaUnicaVersoesFipe(
+          estado.cotacao_opcoes_fipe.map((name,i)=>({name,code:String(i)})),
+          estado.cotacao_dados.ano_modelo||"informado","ambiguidade",
+        );
       }else{
-        if(escolha.filtrou)estado.cotacao_opcoes_fipe=escolha.opcoesRestantes;
-        aguardandoRefinamentoFipe=estado.cotacao_opcoes_fipe.length>1;
+        const sugestao=sugestaoUnicaTracaoFipe(
+          pendencia.conteudo_agregado,estado.cotacao_opcoes_fipe
+        );
+        if(sugestao){
+          estado.cotacao_sugestao_versao=sugestao.versao;
+          respostaDiretaCotacao="Não encontrei a tração "+sugestao.informada+
+            " nas versões FIPE desse ano. Você quis dizer "+
+            sugestao.sugerida+"?";
+        }else{
+          estado.cotacao_sugestao_versao=null;
+          if(escolha.filtrou)estado.cotacao_opcoes_fipe=escolha.opcoesRestantes;
+          aguardandoRefinamentoFipe=estado.cotacao_opcoes_fipe.length>1;
+        }
       }
     }
     const planosCotacao=existeCotacaoAnterior&&!cotacaoEmAndamento
