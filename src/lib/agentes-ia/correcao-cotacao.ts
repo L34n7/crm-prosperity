@@ -164,7 +164,18 @@ export function versaoCorrigidaFoiInformada(mensagens: string[]): boolean {
   );
   if (ultimaCorrecao < 0) return true;
   const novas = mensagens.slice(ultimaCorrecao).map(textoPositivoDaCorrecao);
-  return Boolean(tracaoCorrigidaCotacao(mensagens))||novas.some((texto) =>
+  // Depois de rejeitar a versão, uma descrição nova de família e
+  // cilindrada ("Fazer 250 YS gasolina") é suficiente para consultar
+  // novamente a FIPE, não para escolher automaticamente a versão.
+  // Não exige frases como "o motor correto é" quando o cliente já
+  // informou um identificador completo com características adicionais.
+  const descricaoNova=novas.slice(1).some(texto=>{
+    const normalizado=String(texto||"").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"").toLowerCase();
+    return /\b[a-z]{3,}\s+\d{2,4}\b/.test(normalizado)||
+      /\b\d{2,4}\s+[a-z]{2,}\b/.test(normalizado);
+  });
+  return descricaoNova||Boolean(tracaoCorrigidaCotacao(mensagens))||novas.some((texto) =>
     /\b[1-9][.,][0-9]\b/.test(texto) ||
     /\b(?:automatico|automatica|manual|mecanico|mecanica|cvt|tiptronic|dsg|ltz|lxs|lx|ex|exl|xlt|xls|xl|limited|comfortline|highline|trendline|sportline|r.line|gls|gl|cd|challenge|milenium|milenio|millennium|express)\b/.test(texto) ||
     /\b(?:versao|modelo)\s+(?:certo|correto|certa|correta|e|eh)\s+\S+/.test(texto)
