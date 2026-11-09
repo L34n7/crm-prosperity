@@ -1033,6 +1033,31 @@ export async function processarPendenciaNegocio(
       estado.cotacao_ignorar_historico=true;
       estado.cotacao_pendente=true;
     };
+    // Compatibilidade com propostas emitidas ANTES desta atualização:
+    // recuperar o último veículo direto do registro FIPE da empresa,
+    // sem reconstruir marca/modelo a partir da conversa antiga.
+    if(ajusteEfetivo && !estado.cotacao_pendente &&
+       !estado.cotacao_ultima_proposta && existeCotacaoAnterior &&
+       ajusteEfetivo.acao!=="outro_veiculo" &&
+       ajusteEfetivo.acao!=="atendente"){
+      const {data:anterior}=await supabaseAdmin
+        .from("cotacao_veicular_cotacoes")
+        .select("veiculo,ano_modelo,uso")
+        .eq("empresa_id",pendencia.empresa_id)
+        .eq("conversa_id",pendencia.conversa_id)
+        .eq("origem","agente_ia")
+        .order("created_at",{ascending:false})
+        .limit(1).maybeSingle();
+      if(anterior){
+        estado.cotacao_ultima_proposta=propostaEmitidaCotacao({
+          pedidoId:crypto.randomUUID(),
+          modeloConsultado:String(anterior.veiculo||""),
+          veiculoFipe:String(anterior.veiculo||""),
+          ano:Number(anterior.ano_modelo)||"",
+          uso:String(anterior.uso||""),
+        });
+      }
+    }
     // Após cotação emitida, correções de ano/versão partem do snapshot
     // verificado pela ferramenta, jamais de um modelo antigo do histórico.
     if(ajusteEfetivo && !estado.cotacao_pendente &&
