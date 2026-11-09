@@ -2,6 +2,7 @@ import "server-only";
 import { modelosCompativeisFipe, modelosDaMesmaFamiliaFipe } from "./modelos-compatibilidade";
 import {agruparModelosPorAnoFipe} from "./modelos-ano";
 import {diagnosticarIdentificacaoFipe} from "./erros-identificacao";
+import {resolverMarcaCatalogoFipe} from "./resolver-marca";
 import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
 export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
@@ -70,16 +71,13 @@ export function precoFipeCentavos(preco: string) {
   return Math.round(numero * 100);
 }
 function unico(itens: OpcaoFipe[], busca: string) {
-  const chave = normalizar(busca);
-  const exatos = itens.filter((item) => normalizar(item.name) === chave || item.code === busca);
-  if (exatos.length === 1) return exatos[0];
-  const parciais = itens.filter((item) => normalizar(item.name).includes(chave));
-  if (parciais.length === 1) return parciais[0];
-  const sugestoes = (exatos.length ? exatos : parciais).slice(0, 6).map((item) => item.name);
+  // A grafia informada (Jaecoo/Jaecco) só é corrigida quando houver
+  // exatamente uma marca oficial compatível com UMA edição.
+  const resolvida=resolverMarcaCatalogoFipe(itens,busca);
+  if(resolvida)return resolvida.marca;
   throw new Error(
-    sugestoes.length
-      ? "Informe uma versão mais específica: " + sugestoes.join("; ")
-      : "Não encontrei " + busca + " na consulta FIPE. Confirme marca, modelo e ano."
+    "Marca não localizada de forma inequívoca no catálogo FIPE. "+
+    "Confirme a fabricante antes de consultar o modelo."
   );
 }
 /** "2004/2005" corresponde ao ano-modelo 2005; 2004 é fabricação. */
