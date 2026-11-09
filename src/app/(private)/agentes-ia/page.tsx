@@ -668,10 +668,6 @@ export default function AgentesIaPage() {
     if (!editor || !ferramentaPermitidaParaNicho(tipo, nichoEmpresa)) return;
     const existe = editor.ferramentas.find((item) => item.tipo === tipo);
     const ativando = !existe || !existe.ativo;
-    if(tipo==="gerar_cotacao_veicular" && ativando && !cotacaoConfigurada){
-      setErro("Finalize primeiro a configuração comercial no módulo Cotação.");
-      return;
-    }
     const configAgenda =
       ativando && FERRAMENTAS_AGENDA.has(tipo) && origemAgendaConfigurada
         ? {
@@ -2218,7 +2214,7 @@ export default function AgentesIaPage() {
                           <input
                             type="checkbox"
                             checked={ferramentaAtiva(ferramenta.tipo)}
-                            disabled={ferramenta.tipo==="gerar_cotacao_veicular" && !cotacaoConfigurada}
+
                             onChange={() => alternarFerramenta(ferramenta.tipo)}
                           />
                           <span className={styles.toggleVisual} />
@@ -2228,7 +2224,7 @@ export default function AgentesIaPage() {
                           <p>{ferramenta.descricao}</p>
                           {ferramenta.tipo==="gerar_cotacao_veicular" && !cotacaoConfigurada&&(
                             <p style={{marginTop:8,fontSize:12,lineHeight:1.5}}>
-                              {cotacaoPendencias.slice(0,2).join(" ") || "Configuração comercial pendente."}
+                              Existem planos comerciais com configuração pendente. Você pode selecionar somente os planos já configurados; o sistema validará a seleção ao salvar.
                               {" "}<Link href="/cotacoes-veiculares">Configurar cotação</Link>
                             </p>
                           )}
