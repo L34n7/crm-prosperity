@@ -47,7 +47,9 @@ export async function consultarRegraComercial(empresaId:string,categoria:Categor
   return {regra,opcionais:extras};
 }
 export type StatusConfiguracaoCotacao={pronta:boolean;pendencias:string[];categorias:CategoriaCotacao[];faixas:number;regras:number};
-export async function statusConfiguracaoCotacao(empresaId:string):Promise<StatusConfiguracaoCotacao>{
+export async function statusConfiguracaoCotacao(
+ empresaId:string,planosPermitidos?:readonly string[]|null
+):Promise<StatusConfiguracaoCotacao>{
  const [arquivosResp,planosResp,faixasResp,regrasResp,opcionaisResp,especiaisResp]=await Promise.all([
   admin.from("cotacao_veicular_planos_arquivos").select("*").eq("empresa_id",empresaId),
   admin.from("cotacao_veicular_planos").select("codigo,nome,ativo").eq("empresa_id",empresaId),
@@ -59,16 +61,25 @@ export async function statusConfiguracaoCotacao(empresaId:string):Promise<Status
  for(const response of [arquivosResp,planosResp,faixasResp,regrasResp,opcionaisResp,especiaisResp]){
    if(response.error)throw new Error(response.error.message);
  }
+ const filtro=planosPermitidos?new Set(planosPermitidos):null;
  const arquivos=(arquivosResp.data||[]) as ArquivoPlano[];
- const planos=(planosResp.data||[]).filter(p=>p.ativo);
- const faixas=faixasResp.data||[];
- const regras=((regrasResp.data||[]) as RegraComercialPlano[]).map(regraNumerica);
- const opcionais=(opcionaisResp.data||[]) as OpcionalDaEmpresa[];
- const especiais=especiaisResp.data||[];
+ const ativos=(planosResp.data||[]).filter(p=>p.ativo);
+ const planos=ativos.filter(p=>!filtro||filtro.has(p.codigo));
+ const faixas=(faixasResp.data||[]).filter(f=>!filtro||filtro.has(f.plano));
+ const regras=(((regrasResp.data||[]) as RegraComercialPlano[]).map(regraNumerica))
+   .filter(r=>!filtro||filtro.has(r.plano));
+ const opcionais=((opcionaisResp.data||[]) as OpcionalDaEmpresa[])
+   .filter(o=>!filtro||filtro.has(o.plano));
+ const especiais=(especiaisResp.data||[]).filter(e=>!filtro||filtro.has(e.plano));
  const pendencias:string[]=[];
  const categorias=[...new Set(faixas.map(f=>f.categoria))]
   .filter((cat):cat is CategoriaCotacao=>Object.hasOwn(CATEGORIAS_COTACAO,cat));
- if(!planos.length)pendencias.push("Crie seu primeiro plano na aba Planos.");
+ if(!planos.length)pendencias.push(
+   filtro?"Nenhum dos planos selecionados está ativo. Atualize a ferramenta do agente."
+     :"Crie seu primeiro plano na aba Planos."
+ );
+ if(filtro&&[...filtro].some(codigo=>!ativos.some(plano=>plano.codigo===codigo)))
+   pendencias.push("A ferramenta contém planos inativos ou excluídos.");
  for(const plano of planos){
    const meta=arquivos.find(a=>a.plano===plano.codigo);
    const precos=faixas.filter(f=>f.plano===plano.codigo);

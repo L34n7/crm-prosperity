@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { CATEGORIAS_COTACAO,type CategoriaCotacao,type PlanoCotacao } from "./catalogo";
 import { type EnergiaVeiculo,type UsoVeiculo } from "./comercial";
 import { consultarRegraComercial, listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } from "./configuracao";
+import {planosPermitidosFerramentaCotacao} from "./planos-ferramenta";
 export { CATEGORIAS_COTACAO };
 export type { CategoriaCotacao, PlanoCotacao };
 const admin=getSupabaseAdmin();
@@ -53,23 +54,33 @@ export type ParametrosCotacao={
   uso:UsoVeiculo;energia:EnergiaVeiculo;origem:"manual"|"agente_ia";
   veiculo?:string;modeloFipe?:string;codigoFipe?:string;
   opcionaisPorPlano?:Record<string,string[]>;
+  /** Restrição interna para cotações automáticas; null/ausente = todos os planos ativos. */
+  planosPermitidos?:string[]|null;
 };
 export async function calcularCotacaoPlanos(p:ParametrosCotacao){
   if(!categoriaValida(p.categoria)||!Number.isSafeInteger(p.valorFipeCentavos)||
     p.valorFipeCentavos<=0||p.valorFipeCentavos>2000000000)
     throw new Error("Informe uma categoria e valor FIPE válidos.");
   const [status,planos,faixas,faixasEspeciais,arquivos]=await Promise.all([
-    statusConfiguracaoCotacao(p.empresaId),listarPlanosEmpresa(p.empresaId,true),
+    statusConfiguracaoCotacao(
+      p.empresaId,p.origem==="agente_ia"?p.planosPermitidos:null
+    ),listarPlanosEmpresa(p.empresaId,true),
     consultarFaixas(p.empresaId,p.categoria),
     p.categoria==="especiais" ? Promise.resolve([]) : consultarFaixas(p.empresaId,"especiais"),
     listarArquivosPlano(p.empresaId),
   ]);
   if(!planos.length)throw new Error("Crie ao menos um plano antes de cotar.");
+  const planosDaCotacao=planosPermitidosFerramentaCotacao(
+    planos,p.origem==="agente_ia"?p.planosPermitidos??null:null,
+  );
+  if(!planosDaCotacao.length)throw new Error(
+    "Selecione ao menos um plano ativo para gerar a cotação."
+  );
   if(p.origem==="agente_ia"&&!status.pronta)
     throw new Error("Configuração comercial pendente: "+status.pendencias.slice(0,2).join(" "));
   const resultados=[];
   const tetosFipe:number[]=[];
-  for(const plano of planos){
+  for(const plano of planosDaCotacao){
     const meta=arquivos.find(a=>a.plano===plano.codigo);
     const modeloConsulta=p.modeloFipe||p.veiculo||"";
     const especial=Boolean(modeloConsulta) && await verificarEspecialEmpresa(
