@@ -247,7 +247,7 @@ const PALAVRAS_GERAIS_COTACAO = new Set(
   "quero gostaria preciso posso pode poderia podemos faz faca fazer fazermos vamos bora agora depois novo nova outra outro " +
   "como funciona funcionar funcionamento seguro seguros protecao explica explicar entendi ja disse falei informe informei ver vejo veja olhar olhe procurar pesquisar quero ver " +
   "boa tarde bom dia boa noite oi ola oii tudo bem saudacao duvida duvidas " +
-  "legal show perfeito maravilha combinado tranquilo blz beleza obrigado valeu " +
+  "legal show perfeito maravilha combinado tranquilo blz beleza obrigado valeu respondi resposta errado errada errei confundi verdade disse corrigi corrigir enganei " +
   "proximo proxima cotar cote cotacao cotacoes orcamento proposta propostas simular simulacao gerar gere gera " +
   "para por com sem em no na uso finalidade ano modelo marca marca e eh ser sera foi tem tenho esta esse essa isso " +
   "tio tia pai mae irmao irma amigo amiga cliente pessoa dono terceiro mesmo mesma mais novamente novo " +
