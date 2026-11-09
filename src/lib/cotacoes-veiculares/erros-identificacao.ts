@@ -23,6 +23,7 @@ export function diagnosticarIdentificacaoFipe(params:{
 }):ErroIdentificacaoModeloFipe{
   const nome=String(params.modelo||"").trim().slice(0,120);
   const ano=String(params.anoModelo||"").trim().slice(0,12);
+  const pareceCodigoGeracao=/^[a-z]{1,2}\d{2,3}$/i.test(nome);
   const anos=(params.anosDisponiveis||[])
     .filter(valor=>/^(?:19|20)\d{2}$/.test(valor)).slice(0,7);
   const sugestao=anos.length
@@ -39,8 +40,12 @@ export function diagnosticarIdentificacaoFipe(params:{
     )
     :new ErroIdentificacaoModeloFipe(
       "FIPE_MODELO_NAO_ENCONTRADO",
-      "Não localizei esse nome nas versões FIPE consultadas. "+
-        "Pode confirmar o modelo e a versão do veículo?",
+      pareceCodigoGeracao
+        ?"Não encontrei o código "+nome+
+          " como nome de modelo FIPE. Qual é o nome comercial do veículo? "+
+          "Assim posso consultar as versões reais do ano informado."
+        :"Não localizei esse nome nas versões FIPE consultadas. "+
+          "Pode confirmar o modelo e a versão do veículo?",
       "Não houve correspondência para "+nome+
         " nos modelos da marca e categoria consultadas.",
     );
