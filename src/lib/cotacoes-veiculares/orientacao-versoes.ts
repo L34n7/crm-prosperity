@@ -103,6 +103,23 @@ export function interpretarRespostaOpcoesFipe(
     if(escolha)return {versaoSelecionada:escolha.nomeFipe,opcoesRestantes:[escolha.nomeFipe],filtrou:true};
     return base;
   }
+  // Primeiro, uma descrição COMPLETA e inequívoca da própria lista.
+  // Remove separadores para aceitar "Xj 6 f" e "XJ6-F" como "XJ6 F",
+  // mas nunca adivinha versões inexistentes ou diferentes da FIPE.
+  // Motor declarado explicitamente precisa continuar igual.
+  const compacto=(valor:string)=>normalizar(valor).replace(/[^a-z0-9]/g,"");
+  if(texto.length>=2){
+    const descricao=texto.replace(/^(?:(?:e|eh|a|o|versao|modelo|opcao)\s+)+/,"");
+    const exatas=opcoes.filter(nome=>
+      rotulosEscolhaFipe(nome).some(rotulo=>
+        compacto(rotulo)===compacto(descricao) &&
+        (!motorDoNome(resposta)||motorDoNome(rotulo)===motorDoNome(resposta))
+      )
+    );
+    if(exatas.length===1)return {
+      versaoSelecionada:exatas[0],opcoesRestantes:[exatas[0]],filtrou:true,
+    };
+  }
   const ordinal=texto.match(/\b(primeir[ao]|segund[ao]|terceir[ao]|quart[ao]|quint[ao]|sext[ao])\s+(?:opcao|alternativa|versao)\b/);
   if(ordinal){
     const ordem=["primeir","segund","terceir","quart","quint","sext"]
@@ -144,12 +161,19 @@ export function interpretarRespostaOpcoesFipe(
     "portas","porta","automatico","automatica","manual","auto",
     "em","um","uma","eu","no","na","nos","nas","ou","me","se","so","pra","pro",
   ]);
-  const tokens=texto.split(" ").filter(t=>t.length>=2&&!ignorar.has(t)&&
+  // Letras isoladas também podem ser um acabamento REAL, como F/N,
+  // desde que não sejam artigos/conectivos e distingam uma única opção.
+  // Não usar substring ("F" não é "Flex" nem "FS").
+  const tokens=texto.split(" ").filter(t=>
+    (t.length>=2||/^[a-z]$/.test(t))&&!ignorar.has(t)&&
     !/^\d+$/.test(t)&&!/^\d+[.,]\d+$/.test(t));
   for(const token of tokens){
     const contem=(nome:string)=>rotulosEscolhaFipe(nome)
       .some(rotulo=>normalizar(rotulo).split(" ").includes(token))||
       normalizar(nome).split(" ").includes(token);
+    // Se a resposta menciona características que apontam para opções
+    // diferentes, não escolher a primeira delas por acidente.
+    if(opcoes.some(contem)&&!filtradas.some(contem))return base;
     if(filtradas.some(contem)&&filtradas.some(nome=>!contem(nome)))
       aplicar(contem);
   }
