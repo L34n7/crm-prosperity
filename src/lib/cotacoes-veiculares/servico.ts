@@ -5,6 +5,8 @@ import { CATEGORIAS_COTACAO,type CategoriaCotacao,type PlanoCotacao } from "./ca
 import { type EnergiaVeiculo,type UsoVeiculo } from "./comercial";
 import { consultarRegraComercial, listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } from "./configuracao";
 import {planosPermitidosFerramentaCotacao} from "./planos-ferramenta";
+import {calcularTaxasContratacao} from "./condicoes-contratacao";
+import {carregarCondicoesContratacao,condicoesEfetivasPlano} from "./condicoes-servidor";
 export { CATEGORIAS_COTACAO };
 export type { CategoriaCotacao, PlanoCotacao };
 const admin=getSupabaseAdmin();
@@ -54,6 +56,7 @@ export type ParametrosCotacao={
   uso:UsoVeiculo;energia:EnergiaVeiculo;origem:"manual"|"agente_ia";
   veiculo?:string;modeloFipe?:string;codigoFipe?:string;
   opcionaisPorPlano?:Record<string,string[]>;
+  tipoFipe?:"cars"|"motorcycles"|"trucks"|null;
   /** Restrição interna para cotações automáticas; null/ausente = todos os planos ativos. */
   planosPermitidos?:string[]|null;
 };
@@ -61,13 +64,14 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
   if(!categoriaValida(p.categoria)||!Number.isSafeInteger(p.valorFipeCentavos)||
     p.valorFipeCentavos<=0||p.valorFipeCentavos>2000000000)
     throw new Error("Informe uma categoria e valor FIPE válidos.");
-  const [status,planos,faixas,faixasEspeciais,arquivos]=await Promise.all([
+  const [status,planos,faixas,faixasEspeciais,arquivos,configTaxas]=await Promise.all([
     statusConfiguracaoCotacao(
       p.empresaId,p.origem==="agente_ia"?p.planosPermitidos:null
     ),listarPlanosEmpresa(p.empresaId,true),
     consultarFaixas(p.empresaId,p.categoria),
     p.categoria==="especiais" ? Promise.resolve([]) : consultarFaixas(p.empresaId,"especiais"),
     listarArquivosPlano(p.empresaId),
+    carregarCondicoesContratacao(p.empresaId),
   ]);
   if(!planos.length)throw new Error("Crie ao menos um plano antes de cotar.");
   const planosDaCotacao=planosPermitidosFerramentaCotacao(
@@ -110,6 +114,12 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
     if(grupos.length!==new Set(grupos).size)
       throw new Error("Existem opcionais incompatíveis em "+plano.nome+".");
     const base=Number(faixa.valor_centavos);
+    const taxas=calcularTaxasContratacao({
+      condicoes:condicoesEfetivasPlano(configTaxas,plano.codigo),
+      valorFipeCentavos:p.valorFipeCentavos,
+      categoria:p.categoria,
+      tipoFipe:p.tipoFipe,
+    });
     resultados.push({
       plano:plano.codigo,plano_nome:plano.nome,categoria:categoriaPlano,
       codigo_produto:faixa.codigo_produto,mensalidade_base_centavos:base,
@@ -118,7 +128,9 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
         codigo:o.codigo,nome:o.nome,centavos:Number(o.valor_centavos),
         grupo_exclusivo:o.grupo_exclusivo||"",
       })),
-      total_centavos:base+extras.reduce((total,item)=>total+Number(item.valor_centavos),0),
+      total_centavos:base+extras.reduce((total,item)=>total+Number(item.valor_centavos),0)
+        +taxas.rastreador_mensalidade_adicional_centavos,
+      ...taxas,
       cota_participacao_centavos:Math.max(
         Math.round(p.valorFipeCentavos*Number(regra.participacao_percentual)/100),
         Number(regra.participacao_min_centavos)),

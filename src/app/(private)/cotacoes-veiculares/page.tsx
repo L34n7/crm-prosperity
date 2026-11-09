@@ -14,6 +14,7 @@ import { ENERGIAS_VEICULO, USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo, typ
 import PlanosCotacao, {type ArquivoPlano} from "./PlanosCotacao";
 import SeletorFipe from "./SeletorFipe";
 import {formatarPropostaVeicular} from "@/lib/cotacoes-veiculares/formatar-proposta";
+import type {TaxasDaCotacao} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
 import styles from "./page.module.css";
 
 type Faixa = {
@@ -29,7 +30,7 @@ type Calculo = {
   categoria:CategoriaCotacao;
   opcionais:Array<{codigo:string;nome:string;centavos:number}>;
   opcionais_disponiveis?:Array<{codigo:string;nome:string;centavos:number;grupo_exclusivo:string}>;
-};
+} & Partial<TaxasDaCotacao>;
 type Calculos = {planos:Calculo[]};
 type Cotacao = {
   id:string; grupo_id:string|null; nome_contato:string|null; veiculo:string;
@@ -243,7 +244,9 @@ export default function CotacoesVeicularesPage() {
       :restantes;
     const escolhidos=ativar?[...semIncompativeis,{codigo:alvo.codigo,nome:alvo.nome,centavos:alvo.centavos}]:semIncompativeis;
     return {...c,opcionais:escolhidos,
-      total_centavos:c.mensalidade_base_centavos+escolhidos.reduce((total,e)=>total+e.centavos,0)};
+      total_centavos:c.mensalidade_base_centavos+
+        escolhidos.reduce((total,e)=>total+e.centavos,0)+
+        Number(c.rastreador_mensalidade_adicional_centavos||0)};
   }
   async function atualizarOpcionalSalvo(id:string,codigos:string[]):Promise<CotacaoDetalhe>{
     const res=await fetch("/api/cotacoes-veiculares",{
@@ -536,6 +539,13 @@ export default function CotacoesVeicularesPage() {
                   <strong className={styles.planPrice}>{moeda(c.total_centavos)}<small> / mês</small></strong>
                   <dl className={styles.detail}>
                     <div><dt>Mensalidade base</dt><dd>{moeda(c.mensalidade_base_centavos)}</dd></div>
+                    {c.adesao_ativa&&<div><dt>Adesão (única)</dt>
+                      <dd>{c.adesao_centavos==null?"A confirmar":moeda(c.adesao_centavos)}</dd></div>}
+                    {c.rastreador_obrigatorio&&<>
+                      <div><dt>Rastreador</dt><dd>Obrigatório</dd></div>
+                      <div><dt>Instalação (única)</dt><dd>{moeda(c.rastreador_instalacao_centavos||0)}</dd></div>
+                      <div><dt>Mensalidade do rastreador</dt><dd>{c.rastreador_mensalidade_inclusa?"Inclusa na mensalidade":moeda(c.rastreador_mensalidade_adicional_centavos||0)+"/mês"}</dd></div>
+                    </>}
                     <div><dt>Cota de participação</dt><dd>{moeda(c.cota_participacao_centavos)}</dd></div>
                     <div><dt>Terceiros</dt><dd>{c.terceiros_limite_centavos?moeda(c.terceiros_limite_centavos):"Não disponível"}</dd></div>
                     <div><dt>Assistência 24h</dt><dd>{c.assistencia_km_total} km · {c.assistencias_ano} acionamentos/ano</dd></div>
@@ -650,6 +660,14 @@ export default function CotacoesVeicularesPage() {
                       </div>
                       <dl className={styles.detail}>
                         <div><dt>Mensalidade base</dt><dd>{moeda(item.mensalidade_base_centavos)}</dd></div>
+                        {snap?.adesao_ativa&&<div><dt>Adesão (única)</dt>
+                          <dd>{snap.adesao_centavos==null?"A confirmar":moeda(snap.adesao_centavos)}</dd></div>}
+                        {snap?.rastreador_obrigatorio&&<>
+                          <div><dt>Rastreador</dt><dd>Obrigatório</dd></div>
+                          <div><dt>Instalação (única)</dt><dd>{moeda(snap.rastreador_instalacao_centavos||0)}</dd></div>
+                          <div><dt>Mensalidade do rastreador</dt>
+                            <dd>{snap.rastreador_mensalidade_inclusa?"Inclusa":moeda(snap.rastreador_mensalidade_adicional_centavos||0)+"/mês"}</dd></div>
+                        </>}
                         <div><dt>Categoria</dt><dd>{CATEGORIAS_COTACAO[item.categoria as CategoriaCotacao]||item.categoria}</dd></div>
                         <div><dt>Código do produto</dt><dd>{item.codigo_produto}</dd></div>
                         <div><dt>Cota de participação</dt><dd>{moeda(item.cota_participacao_centavos)}</dd></div>
