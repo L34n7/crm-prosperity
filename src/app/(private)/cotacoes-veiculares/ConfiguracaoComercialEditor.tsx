@@ -7,6 +7,7 @@ import { ENERGIAS_VEICULO,USOS_VEICULO,regraVazia,validarRegraComercial,
 } from "@/lib/cotacoes-veiculares/comercial";
 import styles from "./page.module.css";
 import CondicoesContratacaoEditor from "./CondicoesContratacaoEditor";
+import CampoMoeda from "./CampoMoeda";
 import {
   CONDICOES_CONTRATACAO_PADRAO,
   validarCondicoesContratacao,
@@ -24,8 +25,6 @@ type Props={
  podeConfigurar:boolean;onSaved:()=>Promise<void>;
  rascunho?:boolean; nomeRascunho?:string;
 };
-const reais=(centavos:number)=>Number((Number(centavos||0)/100).toFixed(2));
-const centavos=(v:string)=>Math.round(Number(v||0)*100);
 const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function ConfiguracaoComercialEditor({
  categoria,planos,regras,opcionais,podeConfigurar,onSaved,rascunho=false,nomeRascunho,
 },ref){
@@ -273,12 +272,18 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
      <div className={styles.fields}>
       <label key={"participacao_percentual-"+(campoInvalido("participacao_percentual")?tentativa:0)} className={campoInvalido("participacao_percentual")?styles.requiredFieldInvalid:undefined}>Participação (%)<input aria-invalid={campoInvalido("participacao_percentual")} type="number" min="0" max="100" step=".001" disabled={!podeConfigurar}
        value={campoValor(cod,"participacao_percentual",regra.participacao_percentual)} onChange={e=>alterar(cod,"participacao_percentual",e.target.value===""?0:Number(e.target.value),e.target.value!=="")}/>{campoErro("participacao_percentual")}</label>
-      <label key={"participacao_min_centavos-"+(campoInvalido("participacao_min_centavos")?tentativa:0)} className={campoInvalido("participacao_min_centavos")?styles.requiredFieldInvalid:undefined}>Participação mínima (R$)<input aria-invalid={campoInvalido("participacao_min_centavos")} type="number" min="0" step=".01" disabled={!podeConfigurar}
-       value={campoValor(cod,"participacao_min_centavos",reais(regra.participacao_min_centavos))}
-       onChange={e=>alterar(cod,"participacao_min_centavos",centavos(e.target.value),e.target.value!=="")}/>{campoErro("participacao_min_centavos")}</label>
-      <label key={"terceiros_limite_centavos-"+(campoInvalido("terceiros_limite_centavos")?tentativa:0)} className={campoInvalido("terceiros_limite_centavos")?styles.requiredFieldInvalid:undefined}>Terceiros (R$)<input aria-invalid={campoInvalido("terceiros_limite_centavos")} type="number" min="0" step=".01" disabled={!podeConfigurar}
-       value={campoValor(cod,"terceiros_limite_centavos",reais(regra.terceiros_limite_centavos))}
-       onChange={e=>alterar(cod,"terceiros_limite_centavos",centavos(e.target.value),e.target.value!=="")}/>{campoErro("terceiros_limite_centavos")}</label>
+      <label key={"participacao_min_centavos-"+(campoInvalido("participacao_min_centavos")?tentativa:0)} className={campoInvalido("participacao_min_centavos")?styles.requiredFieldInvalid:undefined}>Participação mínima (R$)<CampoMoeda aria-invalid={campoInvalido("participacao_min_centavos")}
+       disabled={!podeConfigurar} permitirVazio
+       maximoCentavos={Number.MAX_SAFE_INTEGER}
+       centavos={(camposPreenchidos[cod]||[]).includes("participacao_min_centavos")
+         ?regra.participacao_min_centavos:null}
+       onChange={v=>alterar(cod,"participacao_min_centavos",v??0,v!==null)}/>{campoErro("participacao_min_centavos")}</label>
+      <label key={"terceiros_limite_centavos-"+(campoInvalido("terceiros_limite_centavos")?tentativa:0)} className={campoInvalido("terceiros_limite_centavos")?styles.requiredFieldInvalid:undefined}>Terceiros (R$)<CampoMoeda aria-invalid={campoInvalido("terceiros_limite_centavos")}
+       disabled={!podeConfigurar} permitirVazio
+       maximoCentavos={Number.MAX_SAFE_INTEGER}
+       centavos={(camposPreenchidos[cod]||[]).includes("terceiros_limite_centavos")
+         ?regra.terceiros_limite_centavos:null}
+       onChange={v=>alterar(cod,"terceiros_limite_centavos",v??0,v!==null)}/>{campoErro("terceiros_limite_centavos")}</label>
       <label key={"assistencia_km_total-"+(campoInvalido("assistencia_km_total")?tentativa:0)} className={campoInvalido("assistencia_km_total")?styles.requiredFieldInvalid:undefined}>Assistência (km totais)<input aria-invalid={campoInvalido("assistencia_km_total")} type="number" min="0" step="1" disabled={!podeConfigurar}
        value={campoValor(cod,"assistencia_km_total",regra.assistencia_km_total)}
        onChange={e=>alterar(cod,"assistencia_km_total",e.target.value===""?0:Number(e.target.value),e.target.value!=="")}/>{campoErro("assistencia_km_total")}</label>
@@ -336,9 +341,10 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
        className={campoInvalido("extra_codigo_"+i)?styles.requiredFieldInvalid:undefined}>Código<input aria-invalid={campoInvalido("extra_codigo_"+i)} disabled={!podeConfigurar} value={item.codigo}
         onChange={e=>mudarExtra(cod,i,"codigo",e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,""))}/>{campoErro("extra_codigo_"+i)}</label>
        <label key={"extra_valor_"+i+"-"+(campoInvalido("extra_valor_"+i)?tentativa:0)}
-       className={campoInvalido("extra_valor_"+i)?styles.requiredFieldInvalid:undefined}>Valor mensal (R$)<input aria-invalid={campoInvalido("extra_valor_"+i)} type="number" step=".01" min="0" disabled={!podeConfigurar}
-        value={reais(item.valor_centavos)}
-        onChange={e=>mudarExtra(cod,i,"valor_centavos",centavos(e.target.value))}/>{campoErro("extra_valor_"+i)}</label>
+       className={campoInvalido("extra_valor_"+i)?styles.requiredFieldInvalid:undefined}>Valor mensal (R$)<CampoMoeda aria-invalid={campoInvalido("extra_valor_"+i)}
+        disabled={!podeConfigurar} maximoCentavos={Number.MAX_SAFE_INTEGER}
+        centavos={item.valor_centavos}
+        onChange={v=>mudarExtra(cod,i,"valor_centavos",v??0)}/>{campoErro("extra_valor_"+i)}</label>
        <label>Grupo exclusivo<input disabled={!podeConfigurar} value={item.grupo_exclusivo}
         onChange={e=>mudarExtra(cod,i,"grupo_exclusivo",e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,""))}/></label>
       </div>
