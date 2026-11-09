@@ -17,6 +17,13 @@ export type PlanoProposta={
   opcionais_disponiveis?:OpcionalProposta[];
   observacoes:string;
   tabela_validada:boolean;
+  adesao_ativa?:boolean;
+  adesao_centavos?:number|null;
+  rastreador_obrigatorio?:boolean;
+  rastreador_instalacao_centavos?:number;
+  rastreador_mensalidade_inclusa?:boolean;
+  rastreador_mensalidade_adicional_centavos?:number;
+  taxas_unicas_centavos?:number|null;
 };
 export type DadosProposta={
   veiculo:string;
@@ -59,6 +66,7 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
     dados.planos.every(p=>p.observacoes?.trim()===dados.planos[0].observacoes?.trim());
 
   for(const plano of dados.planos){
+    const adicionalRastreador=Number(plano.rastreador_mensalidade_adicional_centavos||0);
     linhas.push(
       "",
       "━━━━━━━━━━━━━━━━━━",
@@ -67,6 +75,11 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
       "",
       "💰 *Mensalidade: "+moeda(plano.mensalidade_base_centavos)+"/mês*",
       "_Valor do plano, sem opcionais._",
+      ...(plano.rastreador_obrigatorio&&adicionalRastreador>0?[
+        "• Rastreador: + "+moeda(adicionalRastreador)+"/mês",
+        "💰 *Mensalidade com rastreador: "+
+          moeda(plano.mensalidade_base_centavos+adicionalRastreador)+"/mês*",
+      ]:[]),
       "",
       "📌 *BENEFÍCIOS DO PLANO*",
       "• Cota de participação: "+moeda(plano.cota_participacao_centavos),
@@ -91,6 +104,31 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
         opcionais.map(o=>"• "+o.nome+" — + "+moeda(o.centavos)+"/mês"):
         ["• Nenhum opcional disponível para este plano."]),
     );
+    if(plano.adesao_ativa||plano.rastreador_obrigatorio){
+      linhas.push("","🧾 *TAXAS DE CONTRATAÇÃO*");
+      if(plano.adesao_ativa){
+        linhas.push("• Adesão: "+(plano.adesao_centavos===null||
+          plano.adesao_centavos===undefined
+          ?"valor a confirmar com a equipe"
+          :moeda(plano.adesao_centavos)+" (pagamento único)"));
+      }
+      if(plano.rastreador_obrigatorio){
+        linhas.push(
+          "• Rastreador obrigatório para esta faixa de veículo",
+          "• Instalação: "+moeda(plano.rastreador_instalacao_centavos||0)+
+            " (pagamento único)",
+          plano.rastreador_mensalidade_inclusa
+            ?"• Mensalidade do rastreador já incluída no preço informado"
+            :"• Mensalidade adicional do rastreador: "+
+              moeda(adicionalRastreador)+"/mês",
+        );
+      }
+      if(plano.taxas_unicas_centavos!==null&&
+         plano.taxas_unicas_centavos!==undefined)
+        linhas.push("• Total das taxas únicas: "+moeda(plano.taxas_unicas_centavos));
+      else if(plano.adesao_ativa)
+        linhas.push("• Total das taxas únicas: a confirmar após definir a adesão");
+    }
     if(!observacoesComuns&&plano.observacoes?.trim()){
       linhas.push("","📝 *CONDIÇÕES DO "+tituloPlano(plano.plano_nome).toLocaleUpperCase("pt-BR")+"*",
         plano.observacoes.trim());
