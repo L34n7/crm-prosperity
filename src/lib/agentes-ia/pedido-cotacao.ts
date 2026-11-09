@@ -213,11 +213,7 @@ export function clientePediuNovoVeiculoCotacao(mensagem: string): boolean {
     return false;
   // Mudança explícita de categoria também inicia novo pedido: "quero
   // ver uma moto" não é uma dúvida sobre a proposta do carro anterior.
-  if(/^(?:quero|gostaria|vou|vamos|bora|pode|posso|agora)\s+
-      (?:ver|cotar|simular|consultar|olhar|pesquisar)\s+
-      (?:(?:um|uma|outro|outra|novo|nova|mais um|mais uma)\s+)?
-      (?:carro|moto|motocicleta|caminhao|veiculo|automovel)\b/x
-    .test(texto))return true;
+  if(/^(?:quero|gostaria|vou|vamos|bora|pode|posso|agora)\s+(?:ver|cotar|simular|consultar|olhar|pesquisar)\s+(?:(?:um|uma|outro|outra|novo|nova|mais um|mais uma)\s+)?(?:carro|moto|motocicleta|caminhao|veiculo|automovel)\b/.test(texto))return true;
   if (/^(?:(?:vamos|bora|quero|faz|faca|gera|gere|pode|agora)\s+)?(?:outro|outra|proximo|proxima)(?:\s+(?:veiculo|carro|moto|cotacao|orcamento|proposta))?$/.test(texto))
     return true;
   if (/^(?:qual|quais|quanto|como|porque|por que|me explica)\b/.test(texto))
