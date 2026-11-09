@@ -259,15 +259,6 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
    <p>Configure as condições para a categoria selecionada. Quando forem iguais, aplique-as a outras categorias sem preencher tudo novamente.</p></div>
   {erro&&<p role="alert" className={styles.error}>{erro}</p>}
   {sucesso&&<p role="status" className={styles.success}>{sucesso}</p>}
-  {codigoCondicoes&&(
-    <CondicoesContratacaoEditor
-      value={condicoes}
-      onChange={setCondicoes}
-      podeConfigurar={podeConfigurar}
-      carregando={condicoesCarregando}
-      erro={condicoesErro}
-    />
-  )}
   {!ativos.length&&<p className={styles.smallNote}>Crie um plano para começar a configurar suas regras.</p>}
   <div className={styles.commercialGrid}>
    {ativos.map(p=>{
@@ -385,6 +376,15 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
     </article>;
    })}
   </div>
+  {codigoCondicoes&&(
+    <CondicoesContratacaoEditor
+      value={condicoes}
+      onChange={setCondicoes}
+      podeConfigurar={podeConfigurar}
+      carregando={condicoesCarregando}
+      erro={condicoesErro}
+    />
+  )}
  </section>;
 });
 export default ConfiguracaoComercialEditor;
