@@ -5,10 +5,12 @@
 export type MarcaFipeCatalogo={name:string;code:string};
 
 export class ErroMarcaNaoEncontradaFipe extends Error{
-  constructor(public readonly marcaInformada:string){
+  readonly marcaInformada:string;
+  constructor(marcaInformada:string){
     super("A marca "+String(marcaInformada||"").slice(0,100)+
       " não corresponde de forma inequívoca aos fabricantes cadastrados na FIPE.");
     this.name="ErroMarcaNaoEncontradaFipe";
+    this.marcaInformada=marcaInformada;
   }
 }
 const normalizar=(valor:string)=>String(valor||"").normalize("NFD")
