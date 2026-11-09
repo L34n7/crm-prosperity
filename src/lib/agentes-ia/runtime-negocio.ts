@@ -2715,13 +2715,20 @@ export async function processarPendenciaNegocio(
         ?resultadoCotacao?.ok===false
           ?resultadoCotacao?.code==="FIPE_MARCA_NAO_IDENTIFICADA"
             ?"aguardando_marca"
-            :resultadoCotacao?.code==="COTACAO_DADOS_NOVOS_INCOMPLETOS" ||
-             resultadoCotacao?.code==="FIPE_ANO_MODELO_NAO_ENCONTRADO"
-              ?"aguardando_dados"
-              :resultadoCotacao?.code==="FIPE_VERSAO_AMBIGUA" ||
-               resultadoCotacao?.code==="FIPE_VERSAO_INCOMPATIVEL"
-                ?"aguardando_confirmacao"
-                :"falha"
+            :resultadoCotacao?.code==="COTACAO_USO_PENDENTE"
+              ?"aguardando_uso"
+              :resultadoCotacao?.code==="FIPE_MODELO_NAO_ENCONTRADO"
+                ?"aguardando_modelo"
+                :resultadoCotacao?.code==="FIPE_ANO_MODELO_NAO_ENCONTRADO"
+                  ?"aguardando_ano"
+                  :resultadoCotacao?.code==="COTACAO_DADOS_NOVOS_INCOMPLETOS"
+                    ?"aguardando_dados"
+                    :resultadoCotacao?.code==="FIPE_VERSAO_AMBIGUA" ||
+                     resultadoCotacao?.code==="FIPE_VERSAO_INCOMPATIVEL"
+                      ?"aguardando_confirmacao"
+                      :resultadoCotacao?.code==="FIPE_CONSULTA_INDISPONIVEL"
+                        ?"erro_tecnico"
+                        :"falha"
           :"sem_proposta"
         :cotacaoEmAndamento
           ?aguardandoRefinamentoFipe?"aguardando_confirmacao"
@@ -2760,6 +2767,8 @@ export async function processarPendenciaNegocio(
           cotacao_dados_completos:Boolean(dadosCotacaoCompletos),
           cotacao_ferramenta_habilitada:ferramentas.has("gerar_cotacao_veicular"),
           cotacao_motivo:erroCotacao||null,
+          cotacao_erro_codigo:resultadoCotacao?.code||null,
+          cotacao_versao_sugerida_pendente:saidaFinal.estado.cotacao_sugestao_versao!==null,
           transferencia_automatica_fipe:ctx.ferramentasExecutadas.some(item=>
             item.nome==="transferir_atendimento_cotacao" &&
             item.motivo==="falha_consulta_fipe"),
