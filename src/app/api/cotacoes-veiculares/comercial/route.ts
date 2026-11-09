@@ -6,6 +6,7 @@ import {
   categoriaValida, configuracaoCotacao,
 } from "@/lib/cotacoes-veiculares/servico";
 import { listarRegrasComerciais, listarPlanosEmpresa, statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import {validarCondicoesContratacao} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
 import {
   regraVazia, type OpcionalComercial, type RegraComercialPlano, validarRegraComercial,
   USOS_VEICULO, ENERGIAS_VEICULO,
@@ -130,9 +131,13 @@ export async function POST(req:Request) {
         new Set(selecionadas).size!==selecionadas.length ||
         !selecionadas.includes(regra.categoria))
         throw new Error("Selecione categorias válidas, incluindo a categoria atual.");
-      const {error}=await getSupabaseAdmin().rpc("cotacao_veicular_salvar_regras_multiplas",{
+      const condicoes=validarCondicoesContratacao(body.condicoes);
+      // Uma única transação no banco: se condições ou regras falharem,
+      // nenhuma alteração parcial é confirmada.
+      const {error}=await getSupabaseAdmin().rpc("cotacao_veicular_salvar_regras_com_taxas",{
         p_empresa_id:auth.empresaId,p_plano:regra.plano,
         p_categorias:selecionadas,p_regra:regra,p_opcionais:opcionais,
+        p_condicoes:condicoes,
       });
       if(error)throw error;
     }else throw new Error("Ação inválida.");
