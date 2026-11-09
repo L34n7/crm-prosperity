@@ -8,7 +8,7 @@ function norm(texto:string){
 }
 export function clienteRejeitouVersoesFipe(mensagem:string):boolean{
   const t=norm(mensagem);
-  return /\b(?:nenhum(?:a)? (?:dessas|desses|deles|delas|das opcoes)|nenhuma dessas|nenhuma delas|nao tem ai|nao esta ai|nao aparece|nao encontrei|nao corresponde|nao e nenhuma|nao quero (?:esse|essa|esses|essas)|essas opcoes estao erradas|nao e esse modelo|nao e essa versao)\b/.test(t);
+  return /\b(?:nenhum(?:a)? (?:dessas|desses|deles|delas|das opcoes)|nenhuma dessas|nenhuma delas|nao tem ai|nao esta ai|nao aparece|nao encontrei|nao corresponde|nao e nenhuma|nao quero (?:esse|essa|esses|essas)|essas opcoes estao erradas|nao e esse modelo|nao e essa versao|nao e essa|nao e esse|nenhuma|nenhum)\b/.test(t);
 }
 /** Modelo dito explicitamente que não pertence à família de NENHUMA
  * descrição exibida: descartar lista antiga e refazer a consulta por modelo.
