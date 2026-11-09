@@ -2,6 +2,7 @@ import "server-only";
 import {getSupabaseAdmin} from "@/lib/supabase/admin";
 import {
   normalizarCondicoesContratacao,
+  condicoesExclusivasDoPlano,
   type CondicoesContratacao,
 } from "./condicoes-contratacao";
 
@@ -27,5 +28,5 @@ export function condicoesEfetivasPlano(
   configuracao:{porPlano:Record<string,CondicoesContratacao>},
   plano:string,
 ):CondicoesContratacao{
-  return configuracao.porPlano[plano]||normalizarCondicoesContratacao(null);
+  return condicoesExclusivasDoPlano(configuracao.porPlano,plano);
 }
