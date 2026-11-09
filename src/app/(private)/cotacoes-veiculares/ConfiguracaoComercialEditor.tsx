@@ -6,6 +6,12 @@ import { ENERGIAS_VEICULO,USOS_VEICULO,regraVazia,validarRegraComercial,
  type OpcionalComercial,type RegraComercialPlano,type EnergiaVeiculo,type UsoVeiculo,
 } from "@/lib/cotacoes-veiculares/comercial";
 import styles from "./page.module.css";
+import CondicoesContratacaoEditor from "./CondicoesContratacaoEditor";
+import {
+  CONDICOES_CONTRATACAO_PADRAO,
+  validarCondicoesContratacao,
+  type CondicoesContratacao,
+} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
 type RegraBanco=RegraComercialPlano;
 type OpcionalBanco=OpcionalComercial&{plano:string;categoria:string};
 export type EditorHandle={
@@ -33,6 +39,43 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
  const [copiarPara,setCopiarPara]=useState<Record<string,CategoriaCotacao[]>>({});
  const [salvando,setSalvando]=useState<string|null>(null);
  const [erro,setErro]=useState(""),[sucesso,setSucesso]=useState("");
+ const [condicoes,setCondicoes]=useState<CondicoesContratacao>({
+  ...CONDICOES_CONTRATACAO_PADRAO,
+ });
+ const [condicoesCarregando,setCondicoesCarregando]=useState(true);
+ const [condicoesErro,setCondicoesErro]=useState("");
+ const codigoCondicoes=planos.find(plano=>plano.ativo)?.codigo||null;
+ useEffect(()=>{
+  let ativo=true;
+  if(!codigoCondicoes||rascunho){
+    setCondicoes({...CONDICOES_CONTRATACAO_PADRAO});
+    setCondicoesCarregando(false);
+    setCondicoesErro("");
+    return;
+  }
+  setCondicoesCarregando(true);setCondicoesErro("");
+  void (async()=>{
+    try{
+      const res=await fetch(
+        "/api/cotacoes-veiculares/condicoes?plano="+encodeURIComponent(codigoCondicoes),
+        {cache:"no-store"},
+      );
+      const json=await res.json() as {
+        ok:boolean;error?:string;condicoes?:CondicoesContratacao;
+      };
+      if(!res.ok||!json.ok||!json.condicoes)
+        throw new Error(json.error||"Não foi possível carregar as taxas deste plano.");
+      const recebidas=validarCondicoesContratacao(json.condicoes);
+      if(ativo)setCondicoes(recebidas);
+    }catch(e){
+      if(ativo)setCondicoesErro(
+        e instanceof Error?e.message:"Falha ao carregar condições.");
+    }finally{
+      if(ativo)setCondicoesCarregando(false);
+    }
+  })();
+  return ()=>{ativo=false;};
+ },[codigoCondicoes,rascunho]);
  useEffect(()=>{
   const r:Record<string,RegraComercialPlano>={},o:Record<string,OpcionalComercial[]>={};
   for(const plano of planos.filter(p=>p.ativo)){
@@ -125,6 +168,15 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
  function validarCampos(codigo:string):boolean {
   const regra=rascunhos[codigo],items=extras[codigo]||[];
   if(!regra)return false;
+  if(condicoesCarregando||condicoesErro){
+    setErro(condicoesErro||"Aguarde o carregamento das condições deste plano.");
+    return false;
+  }
+  try{validarCondicoesContratacao(condicoes);}
+  catch(e){
+    setErro(e instanceof Error?e.message:"Revise as taxas e o rastreador.");
+    return false;
+  }
   const invalidos:Record<string,string>={};
   for(const [campo,nome] of numericos){
     if(!(camposPreenchidos[codigo]||[]).includes(campo))
@@ -169,7 +221,10 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
    const categorias=[categoria,...(copiarPara[codigo]||[]).filter(c=>c!==categoria)];
    const res=await fetch("/api/cotacoes-veiculares/comercial",{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({acao:"regra",regra:{...regra,plano:persistedCodigo},opcionais:items,categorias}),
+    body:JSON.stringify({
+      acao:"regra",regra:{...regra,plano:persistedCodigo},
+      opcionais:items,categorias,condicoes,
+    }),
    });
    const json=await res.json();
    if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar as regras.");
@@ -204,6 +259,15 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
    <p>Configure as condições para a categoria selecionada. Quando forem iguais, aplique-as a outras categorias sem preencher tudo novamente.</p></div>
   {erro&&<p role="alert" className={styles.error}>{erro}</p>}
   {sucesso&&<p role="status" className={styles.success}>{sucesso}</p>}
+  {codigoCondicoes&&(
+    <CondicoesContratacaoEditor
+      value={condicoes}
+      onChange={setCondicoes}
+      podeConfigurar={podeConfigurar}
+      carregando={condicoesCarregando}
+      erro={condicoesErro}
+    />
+  )}
   {!ativos.length&&<p className={styles.smallNote}>Crie um plano para começar a configurar suas regras.</p>}
   <div className={styles.commercialGrid}>
    {ativos.map(p=>{
