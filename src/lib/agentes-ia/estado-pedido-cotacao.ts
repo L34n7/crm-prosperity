@@ -41,7 +41,10 @@ export function propostaEmitidaCotacao(params:{
 }):PropostaCotacaoConfirmada|null{
   return normalizarPropostaCotacao({
     pedido_id:params.pedidoId,
-    modelo:params.modeloConsultado||params.veiculoFipe,
+    // A descrição FIPE da proposta EMITIDA inclui a marca realmente
+    // validada. Usar apenas o texto enviado pela IA faria a marca sumir
+    // numa correção posterior de ano (ex.: BMW G 310 GS 2020 -> 2018).
+    modelo:params.veiculoFipe||params.modeloConsultado,
     ano_modelo:String(params.ano||""),
     uso:params.uso,
     veiculo_fipe:params.veiculoFipe,
