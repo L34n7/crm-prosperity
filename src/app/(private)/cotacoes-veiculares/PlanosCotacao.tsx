@@ -9,7 +9,6 @@ import {
 import {CATEGORIAS_COTACAO,type CategoriaCotacao,type PlanoEmpresa} from "@/lib/cotacoes-veiculares/catalogo";
 import type {RegraComercialPlano,OpcionalComercial} from "@/lib/cotacoes-veiculares/comercial";
 import ConfiguracaoComercialEditor, {type EditorHandle} from "./ConfiguracaoComercialEditor";
-import CondicoesContratacaoEditor from "./CondicoesContratacaoEditor";
 import styles from "./page.module.css";
 
 export type ArquivoPlano={
@@ -372,23 +371,11 @@ export default function PlanosCotacao({
                   podeConfigurar={podeConfigurar} onSaved={onUpdated}/>
               </div>
               :<p className={styles.smallNote}>Ative o plano para continuar a configuração.</p>}
-            {plano&&plano.ativo&&(
-              <CondicoesContratacaoEditor
-                key={plano.codigo} plano={plano.codigo} nomePlano={plano.nome}
-                podeConfigurar={podeConfigurar}
-              />
-            )}
           </div>}
           {modal.passo===2&&plano&&<div className={styles.planStepContent}>
             <span className={styles.planStepEyebrow}>02 / ARQUIVOS E VALORES</span>
             <h3>Arquivos e mensalidades</h3>
             <p>Importe os preços deste plano e, se necessário, sua lista de veículos especiais. Os demais planos não são alterados.</p>
-            {plano.ativo&&(
-              <CondicoesContratacaoEditor
-                key={plano.codigo} plano={plano.codigo} nomePlano={plano.nome}
-                podeConfigurar={podeConfigurar}
-              />
-            )}
             <div className={styles.planUploadGrid}>
               {(["precos","especiais"] as const).map(tipo=>{
                 const atual=tipo==="precos"?meta?.arquivo_precos_nome:meta?.arquivo_especiais_nome;

@@ -74,6 +74,15 @@ export function normalizarCondicoesContratacao(valor:unknown):CondicoesContratac
   });
 }
 
+/** Somente o registro do plano solicitado. Não existe herança da empresa
+ * nem compartilhamento automático de regras com outros planos. */
+export function condicoesExclusivasDoPlano(
+  porPlano:Record<string,CondicoesContratacao>,
+  plano:string,
+):CondicoesContratacao{
+  return porPlano[plano]||normalizarCondicoesContratacao(null);
+}
+
 export type TaxasDaCotacao={
   adesao_ativa:boolean;
   adesao_centavos:number|null;
