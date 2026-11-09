@@ -470,15 +470,6 @@ export async function executarFerramentaNegocio(params: {
       );
       if(falhaTecnica)return {ok:false,code:"FIPE_CONSULTA_INDISPONIVEL",
         error:(falhaTecnica.reason as ErroConsultaFipe).message};
-      const marcaInexistente=buscas.find((item):item is PromiseRejectedResult=>
-        item.status==="rejected"&&item.reason instanceof ErroMarcaNaoEncontradaFipe
-      );
-      if(marcaInexistente)return {
-        ok:false,code:"FIPE_MARCA_NAO_IDENTIFICADA",
-        error:(marcaInexistente.reason as ErroMarcaNaoEncontradaFipe).message,
-        pergunta_cliente:"Não encontrei essa fabricante no cadastro FIPE. "+
-          "Qual é a marca oficial do veículo?",
-      };
       const errosIdentificacao=buscas
         .filter((item):item is PromiseRejectedResult=>
           item.status==="rejected" &&
@@ -494,6 +485,18 @@ export async function executarFerramentaNegocio(params: {
         ok:false,code:diagnostico.codigo,
         error:diagnostico.message,
         pergunta_cliente:diagnostico.perguntaCliente,
+      };
+      // Outras categorias podem não conter a fabricante (ex.: BMW sem
+      // categoria de caminhões). O erro de MODELO/ANO encontrado em uma
+      // categoria válida sempre prevalece sobre marcas ausentes nas demais.
+      const marcaInexistente=buscas.find((item):item is PromiseRejectedResult=>
+        item.status==="rejected"&&item.reason instanceof ErroMarcaNaoEncontradaFipe
+      );
+      if(marcaInexistente)return {
+        ok:false,code:"FIPE_MARCA_NAO_IDENTIFICADA",
+        error:(marcaInexistente.reason as ErroMarcaNaoEncontradaFipe).message,
+        pergunta_cliente:"Não encontrei essa fabricante no cadastro FIPE. "+
+          "Qual é a marca oficial do veículo?",
       };
       const erros=buscas.filter((r):r is PromiseRejectedResult=>r.status==="rejected")
         .map(r=>r.reason instanceof Error?r.reason.message:String(r.reason));
