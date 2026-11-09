@@ -948,14 +948,7 @@ export async function processarPendenciaNegocio(
       // Uma resposta de modelo novo invalida toda lista de OUTROS veículos.
       // Preserva um acabamento curto já confirmado (ex.: LTZ), nunca a marca
       // da lista descartada nem um preço de cotação anterior.
-      const acabamento=[...estado.cotacao_pedido_mensagens].reverse()
-        .map(texto=>String(texto||"").trim().toLowerCase())
-        .find(texto=>/^[a-z]{2,5}$/.test(texto)&&
-          opcoesAntesDaResposta.some(nome=>
-            nome.toLowerCase().split(/[^a-z0-9]+/).includes(texto)));
-      estado.cotacao_dados.modelo=[
-        modeloCorrigidoForaDaLista,acabamento||"",
-      ].filter(Boolean).join(" ");
+      estado.cotacao_dados.modelo=modeloCorrigidoForaDaLista;
       // Os itens da lista rejeitada não são origem confiável para uma
       // nova família. Mantenha somente ano/uso e o novo nome confirmado.
       estado.cotacao_pedido_mensagens=[
