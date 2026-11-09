@@ -95,11 +95,15 @@ export function calcularTaxasContratacao(p:{
   tipoFipe?:"cars"|"motorcycles"|"trucks"|null;
 }):TaxasDaCotacao{
   const c=p.condicoes;
-  const categoriaVeiculo=p.tipoFipe==="motorcycles"?"moto":
-    p.tipoFipe==="trucks"?"outros":
-    p.tipoFipe==="cars"?"carro":
+  // Categoria comercial prevalece para vans e caminhões: mesmo que
+  // classificados como 'cars' na FIPE, não herdam a regra de automóveis.
+  // 'especiais' utiliza o tipo FIPE verdadeiro para distinguir moto/carro.
+  const categoriaVeiculo=["van_utilitario","caminhao_leve","caminhao_pesado",
+    "agregado"].includes(p.categoria)?"outros":
     p.categoria==="motocicleta"?"moto":
-    (p.categoria==="auto_leves"||p.categoria==="app_taxi")?"carro":"outros";
+    (p.categoria==="auto_leves"||p.categoria==="app_taxi")?"carro":
+    p.tipoFipe==="motorcycles"?"moto":
+    p.tipoFipe==="cars"?"carro":"outros";
   const limite=categoriaVeiculo==="carro"?c.rastreador_carro_acima_centavos:
     categoriaVeiculo==="moto"?c.rastreador_moto_acima_centavos:null;
   const obrigatorio=c.rastreador_ativo&&limite!==null&&
