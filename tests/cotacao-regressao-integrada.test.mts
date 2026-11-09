@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   resolverMarcaCatalogoFipe,marcaDeclaradaNoPedido,
+  ErroMarcaNaoEncontradaFipe,
 } from "../src/lib/cotacoes-veiculares/resolver-marca.ts";
 import {
   clientePediuNovoVeiculoCotacao,consolidarDadosCotacao,
@@ -141,4 +142,19 @@ test("ano incompatível pode indicar datas reais sem especulação",()=>{
    modelo:"Modelo desconhecido",anoModelo:"2005",possuiModeloNaMarca:false,
  });
  assert.equal(desconhecido.codigo,"FIPE_MODELO_NAO_ENCONTRADO");
+});
+
+test("fabricante desconhecido retorna erro especifico e recuperavel",()=>{
+ const erro=new ErroMarcaNaoEncontradaFipe("Fabricante desconhecido");
+ assert.equal(erro.name,"ErroMarcaNaoEncontradaFipe");
+ assert.match(erro.message,/FIPE/);
+ assert.ok(erro instanceof Error);
+});
+
+test("codigo de geracao nao conhecido solicita modelo comercial sem inventar alias",()=>{
+ const falha=diagnosticarIdentificacaoFipe({
+  modelo:"G29",anoModelo:"2020",possuiModeloNaMarca:false,
+ });
+ assert.equal(falha.codigo,"FIPE_MODELO_NAO_ENCONTRADO");
+ assert.match(falha.perguntaCliente,/nome comercial/i);
 });
