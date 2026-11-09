@@ -1342,7 +1342,9 @@ export async function processarPendenciaNegocio(
       // de outros pedidos. Na paginação, preservar o estado confirmado.
       estado.cotacao_dados=consolidarDadosCotacao(
         estado.cotacao_pedido_mensagens,
-        historicoPedidoConfiavel?DADOS_COTACAO_VAZIOS:estado.cotacao_dados
+        historicoPedidoConfiavel?DADOS_COTACAO_VAZIOS:estado.cotacao_dados,
+        /confirmar modelo ou versão para nova busca FIPE|receber modelo do cliente/i
+          .test(estado.proxima_acao||"")
       );
       if(modeloCorrigidoPeloContexto){
         estado.cotacao_dados.modelo=modeloCorrigidoPeloContexto;
