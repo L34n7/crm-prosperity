@@ -25,6 +25,8 @@ import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribu
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
+import { enviarMaterialDoAgente } from "./enviar-material";
+import { normalizarMateriais } from "./materiais-config";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
@@ -53,6 +55,7 @@ const TIPOS_FERRAMENTAS = [
   "cancelar_agendamento",
   "consultar_contato",
   "transferir_humano",
+  "enviar_material",
 ] as const;
 const FERRAMENTAS_AGENDA = new Set<string>([
   "consultar_agenda",
@@ -65,6 +68,7 @@ const FERRAMENTAS_CRITICAS = new Set<string>([
   "remarcar_agendamento",
   "cancelar_agendamento",
   "transferir_humano",
+  "enviar_material",
 ]);
 
 type TipoFerramenta = (typeof TIPOS_FERRAMENTAS)[number];
@@ -932,6 +936,28 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
       parameters: { type: "object", properties: { consulta: { type: "string" } }, required: ["consulta"], additionalProperties: false },
     });
   }
+  if (ativas.has("enviar_material")) {
+    const materiais = normalizarMateriais(ativas.get("enviar_material")?.materiais);
+    const diretos = materiais.map((item) =>
+      item.midia_id + ": " + item.quando_enviar
+    ).join(" | ");
+    defs.push({
+      type: "function",
+      name: "enviar_material",
+      description: "Envia pelo WhatsApp um arquivo já autorizado no CRM, somente quando realmente relevante. " +
+        "Materiais diretos (ID e condição): " + (diretos || "nenhum") +
+        ". Materiais vinculados ao conhecimento exigem consultar_conhecimento antes de enviar. " +
+        "Use apenas um ID efetivamente disponibilizado; nunca invente IDs nem confirme envio sem ok=true. " +
+        "Não envie arquivos de forma repetitiva ou sem motivo.",
+      strict: true,
+      parameters: {
+        type: "object",
+        properties: { midia_id: { type: "string", description: "UUID do material autorizado." } },
+        required: ["midia_id"],
+        additionalProperties: false,
+      },
+    });
+  }
   if (ativas.has("consultar_agenda")) {
     defs.push({
       type: "function",
@@ -1628,6 +1654,13 @@ function selecionarFerramentasParaModelo(params: {
     adicionar("transferir_humano");
   }
   if (querContato) adicionar("consultar_contato");
+  // A ferramenta só vê materiais explicitamente autorizados para este agente.
+  if (ativas.has("enviar_material")) {
+    adicionar("enviar_material");
+    // A consulta também deve estar disponível se o cliente pedir um material
+    // vinculado à base mesmo sem formular a solicitação como pergunta.
+    adicionar("consultar_conhecimento");
+  }
 
   if (querCancelar) {
     adicionar("cancelar_agendamento");
@@ -2186,12 +2219,62 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       p_limite: MAX_RESULTADOS_CONHECIMENTO,
     });
     if (error) throw new Error(error.message);
-    const resultados = (data || []).slice(0, MAX_RESULTADOS_CONHECIMENTO).map((item: any) => ({
+    const encontrados = (data || []).slice(0, MAX_RESULTADOS_CONHECIMENTO);
+    let materiaisPorConhecimento = new Map<string, unknown>();
+    if (ctx.ferramentasAtivas.has("enviar_material") && encontrados.length) {
+      const { data: vinculos, error: erroVinculos } = await supabaseAdmin
+        .from("agente_ia_conhecimentos")
+        .select("id,materiais_json")
+        .eq("empresa_id", empresaId)
+        .eq("agente_id", ctx.agente.id)
+        .eq("ativo", true)
+        .in("id", encontrados.map((item: any) => String(item.id)));
+      if (erroVinculos) throw new Error(erroVinculos.message);
+      materiaisPorConhecimento = new Map(
+        (vinculos || []).map((item) => [String(item.id), item.materiais_json]),
+      );
+    }
+    const resultados = encontrados.map((item: any) => ({
+      id: String(item.id),
       titulo: item.titulo,
       categoria: item.categoria,
       trecho: String(item.trecho || "").slice(0, MAX_CARACTERES_TRECHO_CONHECIMENTO),
+      materiais: normalizarMateriais(materiaisPorConhecimento.get(String(item.id))),
     }));
     return { ok: true, consulta, resultados };
+  }
+
+  if (nome === "enviar_material") {
+    const midiaId = String(args.midia_id || "").trim();
+    const diretos = normalizarMateriais(
+      ctx.ferramentasAtivas.get("enviar_material")?.materiais,
+    );
+    const consultados = ctx.ferramentasExecutadas
+      .filter((item) => item.nome === "consultar_conhecimento" && item.resultado?.ok === true)
+      .flatMap((item) => Array.isArray(item.resultado.resultados) ? item.resultado.resultados : [])
+      .flatMap((item: any) => normalizarMateriais(item.materiais));
+    if (!midiaId || ![...diretos, ...consultados].some((item) => item.midia_id === midiaId)) {
+      return { ok: false, error: "Material não autorizado ou conhecimento ainda não consultado." };
+    }
+    if (!ctx.pendencia.numero_destino) {
+      return { ok: false, error: "Contato sem telefone para receber o material." };
+    }
+    const texto = normalizarTextoIntencao(ctx.pendencia.conteudo_agregado);
+    const reenviar = /\b(?:reenviar|reenvia|enviar novamente|manda de novo|mandar de novo|envia de novo|nao chegou|nao abriu)\b/.test(texto);
+    const resultado = await enviarMaterialDoAgente({
+      empresaId,
+      agenteId: ctx.agente.id,
+      conversaId,
+      execucaoId: ctx.execucaoId,
+      midiaId,
+      numeroDestino: ctx.pendencia.numero_destino,
+      reenviar,
+    });
+    if (resultado.ok && "enviado" in resultado && resultado.enviado) {
+      ctx.acaoCriticaExecutada = true;
+      ctx.respostaEnviada = true;
+    }
+    return resultado;
   }
 
   if (nome === "consultar_contato") {
@@ -3202,7 +3285,15 @@ function contextoPreconsultasParaModelo(executadas: Array<{ nome: TipoFerramenta
       const resultados = Array.isArray(item.resultado?.resultados) ? item.resultado.resultados : [];
       if (resultados.length) {
         blocos.push(
-          `BASE JÁ CONSULTADA:\n${resultados.map((r: any) => `[${r.titulo}] ${r.trecho}`).join("\n")}`
+          "BASE JÁ CONSULTADA:\n" + resultados.map((r: any) => {
+            const lista = normalizarMateriais(r.materiais);
+            const complemento = lista.length
+              ? "\nMateriais autorizados ligados a este conhecimento: " +
+                lista.map((m) => m.midia_id + " (quando: " + m.quando_enviar + ")").join("; ") +
+                ". Use enviar_material somente se a necessidade justificar."
+              : "";
+            return "[" + r.titulo + "] " + r.trecho + complemento;
+          }).join("\n")
         );
       }
     } else if (item.nome === "consultar_agenda") {
@@ -3346,6 +3437,14 @@ function promessaOperacionalNaoExecutada(
   if (/\b(?:vou|irei)\s+(?:cancelar|desmarcar)\b/.test(texto) &&
       !ferramentaExecutadaComSucesso(ctx, "cancelar_agendamento")) {
     return "cancelar_agendamento";
+  }
+
+  if (
+    /\b(?:vou|irei|vamos)\s+(?:te\s+)?(?:enviar|mandar|encaminhar)\b.{0,90}\b(?:video|tutorial|arquivo|documento|pdf|imagem|catalogo|apresentacao)\b/.test(texto) &&
+    !ferramentaExecutadaComSucesso(ctx, "enviar_material")
+  ) {
+    return ctx.ferramentasAtivas.has("enviar_material")
+      ? "enviar_material" : "acao_sem_ferramenta";
   }
 
   const prometeuConsultaConhecimento =

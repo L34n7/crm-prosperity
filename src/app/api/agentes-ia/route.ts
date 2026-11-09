@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validarMateriaisEmpresa } from "@/lib/agentes-ia/materiais-servidor";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
@@ -31,6 +32,7 @@ const FERRAMENTAS_VALIDAS = new Set([
   "gerar_cotacao_veicular",
   "registrar_interesse_preferencia",
   "realizar_venda",
+  "enviar_material",
 ]);
 const FERRAMENTAS_AGENDA = new Set([
   "consultar_agenda",
@@ -425,7 +427,7 @@ async function carregarAgentes(empresaId: string) {
     supabaseAdmin
       .from("agente_ia_conhecimentos")
       .select(
-        "id, agente_id, titulo, categoria, conteudo, palavras_chave, prioridade, ativo, created_at, updated_at"
+        "id, agente_id, titulo, categoria, conteudo, palavras_chave, prioridade, materiais_json, ativo, created_at, updated_at"
       )
       .eq("empresa_id", empresaId)
       .order("prioridade", { ascending: false })
@@ -966,12 +968,22 @@ export async function PATCH(request: Request) {
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean);
+      let materiais;
+      try {
+        materiais = await validarMateriaisEmpresa(contexto.empresaId, body.materiais_json);
+      } catch (error) {
+        return NextResponse.json(
+          { ok: false, error: error instanceof Error ? error.message : "Materiais inválidos." },
+          { status: 400 },
+        );
+      }
       const { error } = await supabaseAdmin.from("agente_ia_conhecimentos").insert({
         empresa_id: contexto.empresaId,
         agente_id: id,
         titulo,
         categoria: String(body.categoria || "").trim() || null,
         conteudo,
+        materiais_json: materiais,
         palavras_chave: palavras,
         prioridade: Number.isFinite(Number(body.prioridade))
           ? Number(body.prioridade)
@@ -1068,6 +1080,19 @@ export async function PATCH(request: Request) {
     if (Array.isArray(body.ferramentas)) {
       const ferramentas = ferramentasBody(body.ferramentas);
       for (const ferramenta of ferramentas) {
+        if (ferramenta.tipo === "enviar_material") {
+          try {
+            const materiais = await validarMateriaisEmpresa(
+              contexto.empresaId, ferramenta.config_json.materiais,
+            );
+            ferramenta.config_json = { ...ferramenta.config_json, materiais };
+          } catch (error) {
+            return NextResponse.json(
+              { ok: false, error: error instanceof Error ? error.message : "Materiais inválidos." },
+              { status: 400 },
+            );
+          }
+        }
         if (ferramenta.tipo !== "gerar_cotacao_veicular") continue;
         const config = ferramenta.config_json;
         const ativo = config.pos_cotacao_ativo === true;

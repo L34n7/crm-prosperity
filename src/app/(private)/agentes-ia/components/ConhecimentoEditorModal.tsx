@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { BookOpen, Loader2, Save, X } from "lucide-react";
+import type { MaterialVinculado } from "@/lib/agentes-ia/materiais-config";
+import MateriaisVinculadosEditor from "./MateriaisVinculadosEditor";
 import styles from "./AgenteModals.module.css";
 
 export type ConhecimentoEditavel = {
@@ -11,6 +13,7 @@ export type ConhecimentoEditavel = {
   conteudo: string;
   palavras_chave?: string[];
   prioridade?: number;
+  materiais_json?: MaterialVinculado[];
 };
 
 type Props = {
@@ -32,6 +35,7 @@ export default function ConhecimentoEditorModal({
   const [palavrasChave, setPalavrasChave] = useState(
     (conhecimento.palavras_chave || []).join(", ")
   );
+  const [materiais, setMateriais] = useState<MaterialVinculado[]>(conhecimento.materiais_json || []);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -60,6 +64,7 @@ export default function ConhecimentoEditorModal({
             conteudo,
             palavras_chave: palavrasChave,
             prioridade: conhecimento.prioridade ?? 0,
+            materiais_json: materiais,
           }),
         }
       );
@@ -128,6 +133,12 @@ export default function ConhecimentoEditorModal({
               <small className={styles.hint}>Separe por vírgulas. Elas ajudam a recuperar o conhecimento sem virar contexto fixo.</small>
             </label>
           </div>
+          <MateriaisVinculadosEditor
+            value={materiais}
+            onChange={setMateriais}
+            onError={setErro}
+            titulo="Materiais vinculados"
+          />
         </div>
 
         {erro && <div className={styles.error}>{erro}</div>}

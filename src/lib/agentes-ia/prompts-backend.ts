@@ -25,6 +25,10 @@ export function regrasPorFerramentaGeral(ferramentas:ReadonlySet<string>):string
     regras.push("- Em reagendamento use remarcar_agendamento; não crie outro. Cancelar/remarcar usam o compromisso ativo do backend, sem UUID inventado.");
     regras.push("- Se o ESTADO OPERACIONAL mostrar agendamento ativo e o cliente pedir outro dia/horário ou escolher uma nova opção de data/hora, trate como reagendamento mesmo que ele não repita as palavras 'remarcar' ou 'reagendar'.");
   }
+  if(ferramentas.has("enviar_material")){
+    regras.push("- Materiais: só envie vídeos, áudios, imagens ou documentos quando fizerem sentido para a conversa. Use enviar_material com um UUID autorizado pela configuração direta ou retornado em um conhecimento consultado. Não invente arquivos, não dispare sem necessidade e nunca diga que enviou antes de ok=true.");
+    regras.push("- Após o envio de um material, continue a conversa pelo objetivo atual, sem reiniciar perguntas. Evite enviar o mesmo arquivo mais de uma vez salvo pedido explícito de reenvio.");
+  }
   if(ferramentas.has("transferir_humano")){
     regras.push("- Transferência usa o destino configurado. mensagem_cliente é enviada ao cliente; nunca use esse campo como anotação interna nem para repetir a pergunta dele.");
   }
