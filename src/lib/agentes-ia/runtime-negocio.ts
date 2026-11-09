@@ -938,9 +938,11 @@ export async function processarPendenciaNegocio(
     const opcoesAntesDaResposta=[...estado.cotacao_opcoes_fipe];
     const respostaRejeitouOpcoes=ferramentas.has("gerar_cotacao_veicular")
       && opcoesAntesDaResposta.length>0
-      && !ajustePedido && clienteRejeitouVersoesFipe(pendencia.conteudo_agregado);
+      && ajustePedido?.acao!=="atendente"
+      && clienteRejeitouVersoesFipe(pendencia.conteudo_agregado);
     const modeloCorrigidoForaDaLista=ferramentas.has("gerar_cotacao_veicular")
-      && opcoesAntesDaResposta.length>0 && !respostaRejeitouOpcoes && !ajustePedido
+      && opcoesAntesDaResposta.length>0 && !respostaRejeitouOpcoes
+      && ajustePedido?.acao!=="atendente"&&ajustePedido?.acao!=="outro_veiculo"
       ?novoModeloForaDaLista(pendencia.conteudo_agregado,opcoesAntesDaResposta):null;
     if(modeloCorrigidoForaDaLista){
       // Uma resposta de modelo novo invalida toda lista de OUTROS veículos.
@@ -954,6 +956,14 @@ export async function processarPendenciaNegocio(
       estado.cotacao_dados.modelo=[
         modeloCorrigidoForaDaLista,acabamento||"",
       ].filter(Boolean).join(" ");
+      // Os itens da lista rejeitada não são origem confiável para uma
+      // nova família. Mantenha somente ano/uso e o novo nome confirmado.
+      estado.cotacao_pedido_mensagens=[
+        modeloCorrigidoForaDaLista,
+        estado.cotacao_dados.ano_modelo||"",
+        estado.cotacao_dados.uso||"",
+      ].filter(Boolean);
+      estado.cotacao_ignorar_historico=true;
       estado.cotacao_opcoes_fipe=[];
       estado.cotacao_opcoes_fipe_origem=[];
       estado.cotacao_referencias_fipe=[];
@@ -1002,7 +1012,8 @@ export async function processarPendenciaNegocio(
 
     // Correção explícita prevalece sobre a etapa e a lista FIPE filtrada.
     // Uma cotação anterior pode ser corrigida sem criar um pedido NOVO.
-    const ajusteEfetivo: AjusteCotacao|null=ajustePedido&&(
+    const ajusteEfetivo: AjusteCotacao|null=!modeloCorrigidoForaDaLista&&
+      !respostaRejeitouOpcoes&&ajustePedido&&(
       estado.cotacao_pendente||
       estado.cotacao_opcoes_fipe.length>0||
       estado.cotacao_opcoes_fipe_origem.length>0||
