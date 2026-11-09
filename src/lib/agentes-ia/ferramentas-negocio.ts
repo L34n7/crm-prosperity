@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
-import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { statusConfiguracaoCotacao, listarPlanosEmpresa } from "@/lib/cotacoes-veiculares/configuracao";
+import {
+  codigosPlanosFerramentaCotacao,
+  planosPermitidosFerramentaCotacao,
+} from "@/lib/cotacoes-veiculares/planos-ferramenta";
 import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
 import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, ErroConsultaFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
 import {ErroIdentificacaoModeloFipe} from "@/lib/cotacoes-veiculares/erros-identificacao";
@@ -166,8 +170,10 @@ export async function carregarFerramentasNegocioAtivas(empresaId: string, agente
     }
   }
   if (mapa.has("gerar_cotacao_veicular")) {
-    const status = await statusConfiguracaoCotacao(empresaId);
-    if (!status.pronta) mapa.delete("gerar_cotacao_veicular");
+    const config=mapa.get("gerar_cotacao_veicular")||{};
+    const selecionados=codigosPlanosFerramentaCotacao(config);
+    const status=await statusConfiguracaoCotacao(empresaId,selecionados);
+    if(!status.pronta)mapa.delete("gerar_cotacao_veicular");
   }
   return mapa;
 }
@@ -390,6 +396,31 @@ export async function executarFerramentaNegocio(params: {
   mensagemIds: string[];
 }) {
   if (params.tipo === "gerar_cotacao_veicular") {
+    // Esta autorização é lida do BD no momento da execução, e NÃO dos
+    // argumentos enviados pelo modelo. Não permitir que a IA escolha
+    // planos omitidos da configuração do agente.
+    const {data:registroFerramenta,error:erroFerramenta}=await supabaseAdmin
+      .from("agente_ia_ferramentas")
+      .select("ativo,config_json")
+      .eq("empresa_id",params.empresaId)
+      .eq("agente_id",params.agenteId)
+      .eq("tipo","gerar_cotacao_veicular")
+      .maybeSingle();
+    if(erroFerramenta)throw new Error(erroFerramenta.message);
+    if(!registroFerramenta?.ativo)return {
+      ok:false,code:"COTACAO_FERRAMENTA_DESATIVADA",
+      error:"A ferramenta de cotação não está habilitada para este agente.",
+    };
+    const selecao=codigosPlanosFerramentaCotacao(
+      (registroFerramenta.config_json||{}) as Record<string,unknown>,
+    );
+    const planosEmpresa=await listarPlanosEmpresa(params.empresaId,true);
+    const planosAutorizados=planosPermitidosFerramentaCotacao(planosEmpresa,selecao);
+    if(!planosAutorizados.length)return {
+      ok:false,code:"COTACAO_PLANOS_NAO_CONFIGURADOS",
+      error:"Selecione pelo menos um plano ativo na ferramenta de cotação do agente.",
+    };
+    const codigosPlanosAutorizados=planosAutorizados.map(p=>p.codigo);
     const args = params.argumentos || {};
     const ano = textoCurto(args.ano,30);
     const modeloBruto=textoCurto(args.modelo,150);
@@ -565,7 +596,7 @@ export async function executarFerramentaNegocio(params: {
         opcionaisPorPlano[codigo]=codigos.filter((v:unknown)=>typeof v==="string").slice(0,60);
     }
     const assinatura=crypto.createHash("sha256")
-      .update(JSON.stringify([params.empresaId,params.conversaId,params.mensagemIds,categoria,fipe.codeFipe,fipe.modelYear,uso,energia,opcionaisPorPlano]))
+      .update(JSON.stringify([params.empresaId,params.conversaId,params.mensagemIds,categoria,fipe.codeFipe,fipe.modelYear,uso,energia,opcionaisPorPlano,[...codigosPlanosAutorizados].sort()]))
       .digest("hex");
     const {cotacoes,calculos,grupo_id}=await salvarCotacaoPlanos({
       empresaId:params.empresaId,agenteId:params.agenteId,conversaId:params.conversaId,
@@ -573,7 +604,9 @@ export async function executarFerramentaNegocio(params: {
       veiculo:fipe.brand+" "+fipe.model,modeloFipe:fipe.model,codigoFipe:fipe.codeFipe,anoModelo:fipe.modelYear,
       valorFipeCentavos:fipe.valorCentavos,
       referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
-      opcionaisPorPlano,idempotencyKey:"agente-ia:"+assinatura,
+      opcionaisPorPlano,
+      planosPermitidos:codigosPlanosAutorizados,
+      idempotencyKey:"agente-ia:"+assinatura,
     });
     const textoCliente=formatarPropostaVeicular({
       veiculo:fipe.brand+" "+fipe.model,
