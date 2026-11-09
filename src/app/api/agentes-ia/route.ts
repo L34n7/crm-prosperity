@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { validarMateriaisEmpresa } from "@/lib/agentes-ia/materiais-servidor";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
+import { statusConfiguracaoCotacao, listarPlanosEmpresa } from "@/lib/cotacoes-veiculares/configuracao";
+import {
+  codigosPlanosFerramentaCotacao,
+  planosPermitidosFerramentaCotacao,
+} from "@/lib/cotacoes-veiculares/planos-ferramenta";
 import {
   FOLLOWUP_INATIVIDADE_PADRAO,
   erroValidacaoFollowupInatividade,
@@ -1095,6 +1099,19 @@ export async function PATCH(request: Request) {
         }
         if (ferramenta.tipo !== "gerar_cotacao_veicular") continue;
         const config = ferramenta.config_json;
+        let codigosPlanos:string[]|null;
+        try {
+          codigosPlanos=codigosPlanosFerramentaCotacao(config);
+          // Valida contra os planos ATIVOS desta empresa. A seleção nunca
+          // aceita códigos desativados/excluídos nem de outro tenant.
+          const planos=await listarPlanosEmpresa(contexto.empresaId,true);
+          planosPermitidosFerramentaCotacao(planos,codigosPlanos);
+        } catch(error){
+          return NextResponse.json({
+            ok:false,code:"COTACAO_PLANOS_INVALIDOS",
+            error:error instanceof Error?error.message:"Seleção de planos inválida.",
+          },{status:400});
+        }
         const ativo = config.pos_cotacao_ativo === true;
         const texto = String(config.pos_cotacao_texto || "").trim();
         const midiaId = String(config.pos_cotacao_midia_id || "").trim();
@@ -1137,10 +1154,15 @@ export async function PATCH(request: Request) {
           pos_cotacao_ativo: ativo,
           pos_cotacao_texto: texto,
           pos_cotacao_midia_id: midiaId || null,
+          planos_cotacao_codigos: codigosPlanos,
         };
       }
-      if(ferramentas.some(item=>item.tipo==="gerar_cotacao_veicular" && item.ativo)){
-        const status=await statusConfiguracaoCotacao(contexto.empresaId);
+      const cotacaoAtiva=ferramentas.find(item=>
+        item.tipo==="gerar_cotacao_veicular"&&item.ativo
+      );
+      if(cotacaoAtiva){
+        const codigos=codigosPlanosFerramentaCotacao(cotacaoAtiva.config_json);
+        const status=await statusConfiguracaoCotacao(contexto.empresaId,codigos);
         if(!status.pronta) return NextResponse.json({
           ok:false,code:"COTACAO_NAO_CONFIGURADA",
           error:"Conclua a configuração comercial no módulo Cotação antes de ativar a ferramenta. "+
