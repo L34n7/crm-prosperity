@@ -631,6 +631,21 @@ export async function executarFerramentaNegocio(params: {
           nome:item.nome,valor_mensal:formatarDinheiro(item.centavos/100),
         })),
         coberturas:calculo.coberturas,
+        taxas_contratacao:{
+          adesao:calculo.adesao_ativa
+            ?calculo.adesao_centavos===null?"A confirmar":
+              formatarDinheiro(calculo.adesao_centavos/100)
+            :"Não aplicada",
+          rastreador_obrigatorio:calculo.rastreador_obrigatorio,
+          instalacao_unica:calculo.rastreador_obrigatorio
+            ?formatarDinheiro(calculo.rastreador_instalacao_centavos/100)
+            :"Não se aplica",
+          rastreador_mensalidade:calculo.rastreador_obrigatorio
+            ?calculo.rastreador_mensalidade_inclusa
+              ?"Já incluída na mensalidade"
+              :formatarDinheiro(calculo.rastreador_mensalidade_adicional_centavos/100)+"/mês"
+            :"Não se aplica",
+        },
         condicoes:calculo.observacoes,
       })),
       observacao:"A proposta é apresentada com a mensalidade base, sem opcionais. Os opcionais são listados separadamente e a FIPE é usada apenas internamente.",
