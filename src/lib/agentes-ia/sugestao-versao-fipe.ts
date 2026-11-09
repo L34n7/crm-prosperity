@@ -5,7 +5,8 @@
 function padronizar(texto:string):string{
  return String(texto||"").normalize("NFD")
   .replace(/[\u0300-\u036f]/g,"").toLowerCase()
-  .replace(/\s+/g,"").replace(/×/g,"x");
+  .replace(/×/g,"x").replace(/\b(\d+)\s*x\s*(\d+)\b/g,"$1x$2")
+  .replace(/\s+/g," ").trim();
 }
 const tracao=/\b(?:4|5|6|8|10|12)x(?:2|4|6|8)\b/;
 
