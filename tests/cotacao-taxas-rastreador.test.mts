@@ -45,6 +45,7 @@ test("FIPE reconhece tipo real para categoria especial, mas nao cobra rastreador
   assert.equal(quote(6000000,"especiais","trucks").rastreador_obrigatorio,false);
   assert.equal(quote(6000000,"caminhao_pesado","trucks").rastreador_obrigatorio,false);
   assert.equal(quote(6000000,"van_utilitario").rastreador_obrigatorio,false);
+  assert.equal(quote(6000000,"van_utilitario","cars").rastreador_obrigatorio,false);
   assert.equal(quote(6000000,"app_taxi","cars").rastreador_obrigatorio,true);
 });
 
