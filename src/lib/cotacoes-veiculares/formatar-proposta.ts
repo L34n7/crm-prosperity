@@ -1,4 +1,4 @@
-import {descricaoLegivelFipe} from "./orientacao-versoes";
+import {descricaoLegivelFipe} from "./orientacao-versoes.ts";
 /**
  * Proposta comercial compartilhada entre o agente IA e "Copiar comparativo".
  * A FIPE e a tabela de origem continuam no cálculo interno, nunca no texto do cliente.
