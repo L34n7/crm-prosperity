@@ -387,6 +387,7 @@ export function mensagensDoPedidoCotacao(params:{
 export function consolidarDadosCotacao(
   mensagens: string[],
   anterior: DadosCotacaoConfirmados = DADOS_COTACAO_VAZIOS,
+  corrigindoModelo=false,
 ): DadosCotacaoConfirmados {
   const dados = { ...normalizarDadosCotacao(anterior) };
   for (const mensagem of mensagens) {
@@ -405,7 +406,8 @@ export function consolidarDadosCotacao(
       termosAtuais.includes(novo)&&novo!==atual;
     if (!dados.modelo || !modeloMencionadoCotacao(dados.modelo) ||
         (mencionado&&atual&&novo&&
-          (umaEdicaoModelo(atual,novo)||identificadorCompartilhado)))
+          (corrigindoModelo||umaEdicaoModelo(atual,novo)||
+           identificadorCompartilhado)))
       dados.modelo = mencionado || dados.modelo || null;
     const anos = [...texto.matchAll(/\b(?:19|20)\d{2}\b/g)].map((m) => m[0]);
     const unicoAnoTambemModelo = anos.length === 1 &&
