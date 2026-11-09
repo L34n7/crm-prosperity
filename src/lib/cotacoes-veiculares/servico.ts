@@ -53,23 +53,38 @@ export type ParametrosCotacao={
   uso:UsoVeiculo;energia:EnergiaVeiculo;origem:"manual"|"agente_ia";
   veiculo?:string;modeloFipe?:string;codigoFipe?:string;
   opcionaisPorPlano?:Record<string,string[]>;
+  /** Restrição interna para cotações automáticas; null/ausente = todos os planos ativos. */
+  planosPermitidos?:string[]|null;
 };
 export async function calcularCotacaoPlanos(p:ParametrosCotacao){
   if(!categoriaValida(p.categoria)||!Number.isSafeInteger(p.valorFipeCentavos)||
     p.valorFipeCentavos<=0||p.valorFipeCentavos>2000000000)
     throw new Error("Informe uma categoria e valor FIPE válidos.");
   const [status,planos,faixas,faixasEspeciais,arquivos]=await Promise.all([
-    statusConfiguracaoCotacao(p.empresaId),listarPlanosEmpresa(p.empresaId,true),
+    statusConfiguracaoCotacao(
+      p.empresaId,p.origem==="agente_ia"?p.planosPermitidos:null
+    ),listarPlanosEmpresa(p.empresaId,true),
     consultarFaixas(p.empresaId,p.categoria),
     p.categoria==="especiais" ? Promise.resolve([]) : consultarFaixas(p.empresaId,"especiais"),
     listarArquivosPlano(p.empresaId),
   ]);
   if(!planos.length)throw new Error("Crie ao menos um plano antes de cotar.");
+  const codigosPermitidos=p.origem==="agente_ia"&&p.planosPermitidos
+    ?new Set(p.planosPermitidos):null;
+  if(codigosPermitidos &&
+     [...codigosPermitidos].some(codigo=>!planos.some(plano=>plano.codigo===codigo)))
+    throw new Error("Um dos planos selecionados para o agente não está ativo.");
+  const planosDaCotacao=codigosPermitidos
+    ?planos.filter(plano=>codigosPermitidos.has(plano.codigo))
+    :planos;
+  if(!planosDaCotacao.length)throw new Error(
+    "Selecione ao menos um plano ativo para gerar a cotação."
+  );
   if(p.origem==="agente_ia"&&!status.pronta)
     throw new Error("Configuração comercial pendente: "+status.pendencias.slice(0,2).join(" "));
   const resultados=[];
   const tetosFipe:number[]=[];
-  for(const plano of planos){
+  for(const plano of planosDaCotacao){
     const meta=arquivos.find(a=>a.plano===plano.codigo);
     const modeloConsulta=p.modeloFipe||p.veiculo||"";
     const especial=Boolean(modeloConsulta) && await verificarEspecialEmpresa(
