@@ -211,6 +211,13 @@ export function clientePediuNovoVeiculoCotacao(mensagem: string): boolean {
   if (!texto) return false;
   if (/\b(?:outro plano|outro opcional|outra cobertura|outra forma de pagamento)\b/.test(texto))
     return false;
+  // Mudança explícita de categoria também inicia novo pedido: "quero
+  // ver uma moto" não é uma dúvida sobre a proposta do carro anterior.
+  if(/^(?:quero|gostaria|vou|vamos|bora|pode|posso|agora)\s+
+      (?:ver|cotar|simular|consultar|olhar|pesquisar)\s+
+      (?:(?:um|uma|outro|outra|novo|nova|mais um|mais uma)\s+)?
+      (?:carro|moto|motocicleta|caminhao|veiculo|automovel)\b/x
+    .test(texto))return true;
   if (/^(?:(?:vamos|bora|quero|faz|faca|gera|gere|pode|agora)\s+)?(?:outro|outra|proximo|proxima)(?:\s+(?:veiculo|carro|moto|cotacao|orcamento|proposta))?$/.test(texto))
     return true;
   if (/^(?:qual|quais|quanto|como|porque|por que|me explica)\b/.test(texto))
@@ -242,7 +249,7 @@ export const DADOS_COTACAO_VAZIOS: DadosCotacaoConfirmados = {
 const PALAVRAS_GERAIS_COTACAO = new Set(
   ("a o as os e eu de da do das dos um uma meu minha seus seu do meu do seu carro carros veiculo veiculos moto motos " +
   "quero gostaria preciso posso pode poderia podemos faz faca fazer fazermos vamos bora agora depois novo nova outra outro " +
-  "como funciona funcionar funcionamento seguro seguros protecao explica explicar entendi ja disse falei informe informei " +
+  "como funciona funcionar funcionamento seguro seguros protecao explica explicar entendi ja disse falei informe informei ver vejo veja olhar olhe procurar pesquisar quero ver " +
   "boa tarde bom dia boa noite oi ola oii tudo bem saudacao duvida duvidas " +
   "legal show perfeito maravilha combinado tranquilo blz beleza obrigado valeu " +
   "proximo proxima cotar cote cotacao cotacoes orcamento proposta propostas simular simulacao gerar gere gera " +
