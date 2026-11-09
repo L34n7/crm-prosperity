@@ -600,7 +600,7 @@ export async function executarFerramentaNegocio(params: {
       .digest("hex");
     const {cotacoes,calculos,grupo_id}=await salvarCotacaoPlanos({
       empresaId:params.empresaId,agenteId:params.agenteId,conversaId:params.conversaId,
-      origem:"agente_ia",categoria,uso,energia,
+      origem:"agente_ia",categoria,uso,energia,tipoFipe:tipo,
       veiculo:fipe.brand+" "+fipe.model,modeloFipe:fipe.model,codigoFipe:fipe.codeFipe,anoModelo:fipe.modelYear,
       valorFipeCentavos:fipe.valorCentavos,
       referenciaFipe:fipe.referenceMonth+" | "+fipe.codeFipe,
