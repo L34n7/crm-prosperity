@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { CATEGORIAS_COTACAO,type CategoriaCotacao,type PlanoCotacao } from "./catalogo";
 import { type EnergiaVeiculo,type UsoVeiculo } from "./comercial";
 import { consultarRegraComercial, listarPlanosEmpresa, listarArquivosPlano,statusConfiguracaoCotacao } from "./configuracao";
+import {planosPermitidosFerramentaCotacao} from "./planos-ferramenta";
 export { CATEGORIAS_COTACAO };
 export type { CategoriaCotacao, PlanoCotacao };
 const admin=getSupabaseAdmin();
@@ -69,14 +70,9 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
     listarArquivosPlano(p.empresaId),
   ]);
   if(!planos.length)throw new Error("Crie ao menos um plano antes de cotar.");
-  const codigosPermitidos=p.origem==="agente_ia"&&p.planosPermitidos
-    ?new Set(p.planosPermitidos):null;
-  if(codigosPermitidos &&
-     [...codigosPermitidos].some(codigo=>!planos.some(plano=>plano.codigo===codigo)))
-    throw new Error("Um dos planos selecionados para o agente não está ativo.");
-  const planosDaCotacao=codigosPermitidos
-    ?planos.filter(plano=>codigosPermitidos.has(plano.codigo))
-    :planos;
+  const planosDaCotacao=planosPermitidosFerramentaCotacao(
+    planos,p.origem==="agente_ia"?p.planosPermitidos??null:null,
+  );
   if(!planosDaCotacao.length)throw new Error(
     "Selecione ao menos um plano ativo para gerar a cotação."
   );
