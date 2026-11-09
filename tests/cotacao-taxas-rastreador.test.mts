@@ -5,6 +5,7 @@ import {
   calcularTaxasContratacao,
   normalizarCondicoesContratacao,
   validarCondicoesContratacao,
+  condicoesExclusivasDoPlano,
 } from "../src/lib/cotacoes-veiculares/condicoes-contratacao.ts";
 import {formatarPropostaVeicular} from "../src/lib/cotacoes-veiculares/formatar-proposta.ts";
 
@@ -136,4 +137,38 @@ test("proposta com valor informado apresenta total correto das taxas únicas",()
   const mensagem=proposta(taxas);
   assert.match(mensagem,/Adesão: R\$\s*100,00/);
   assert.match(mensagem,/Total das taxas únicas: R\$\s*250,00/);
+});
+
+test("condições são independentes: alterar Premium não muda Completo",()=>{
+  const configuradas={
+    premium:{...savecar,adesao_centavos:10000},
+    completo:{...savecar,adesao_centavos:15000},
+  };
+  assert.equal(condicoesExclusivasDoPlano(configuradas,"premium").adesao_centavos,10000);
+  assert.equal(condicoesExclusivasDoPlano(configuradas,"completo").adesao_centavos,15000);
+  const novaPremium={...configuradas.premium,adesao_centavos:20000};
+  const atualizadas={...configuradas,premium:novaPremium};
+  assert.equal(condicoesExclusivasDoPlano(atualizadas,"premium").adesao_centavos,20000);
+  assert.equal(condicoesExclusivasDoPlano(atualizadas,"completo").adesao_centavos,15000);
+});
+
+test("plano novo não herda taxas de outro plano nem padrão global",()=>{
+  const configuradas={premium:savecar};
+  const novo=condicoesExclusivasDoPlano(configuradas,"completo");
+  assert.deepEqual(novo,CONDICOES_CONTRATACAO_PADRAO);
+  assert.equal(novo.rastreador_ativo,false);
+  assert.equal(novo.adesao_ativa,false);
+});
+
+test("cada plano preserva rastreador próprio para a cotação",()=>{
+  const configuradas={
+    premium:{...savecar,rastreador_instalacao_centavos:15000},
+    completo:{...savecar,rastreador_instalacao_centavos:18000},
+  };
+  const calcular=(plano:string)=>calcularTaxasContratacao({
+    condicoes:condicoesExclusivasDoPlano(configuradas,plano),
+    categoria:"auto_leves",tipoFipe:"cars",valorFipeCentavos:6500000,
+  });
+  assert.equal(calcular("premium").rastreador_instalacao_centavos,15000);
+  assert.equal(calcular("completo").rastreador_instalacao_centavos,18000);
 });
