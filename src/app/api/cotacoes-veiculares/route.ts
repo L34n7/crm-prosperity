@@ -124,7 +124,7 @@ export async function POST(req:Request){
   const parametros={empresaId,categoria:categoriaInterna.categoria,
     veiculo,modeloFipe:veiculoFipe.model,codigoFipe:veiculoFipe.codeFipe,
     valorFipeCentavos:precoFipeCentavos(veiculoFipe.price),uso,energia,
-    origem:"manual" as const,opcionaisPorPlano};
+    origem:"manual" as const,opcionaisPorPlano,tipoFipe:tipo};
   if(acao==="simular")return NextResponse.json({ok:true,calculos:await calcularCotacaoPlanos(parametros)});
   const ano=veiculoFipe.modelYear;
   const resultado=await salvarCotacaoPlanos({...parametros,veiculo,anoModelo:ano,
@@ -167,7 +167,10 @@ export async function PATCH(req:Request){
   if(new Set(grupos).size!==grupos.length)
     throw new Error("Não é possível combinar opcionais do mesmo grupo, como dois prazos de carro reserva.");
   const base=Number(cotacao.mensalidade_base_centavos);
-  const total=base+escolhidos.reduce((n,o)=>n+o.centavos,0);
+  const taxaRastreador=Number(snapshot.rastreador_mensalidade_adicional_centavos||0);
+  if(!Number.isSafeInteger(taxaRastreador)||taxaRastreador<0||taxaRastreador>100000000)
+    throw new Error("Snapshot de rastreador inválido.");
+  const total=base+escolhidos.reduce((n,o)=>n+o.centavos,0)+taxaRastreador;
   if(!Number.isSafeInteger(total)||total<0||total>100000000)
     throw new Error("Total de mensalidade inválido.");
   const opcionais=escolhidos.map(({codigo,nome,centavos})=>({codigo,nome,centavos}));
