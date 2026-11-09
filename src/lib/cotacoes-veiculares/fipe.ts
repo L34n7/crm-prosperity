@@ -157,6 +157,27 @@ async function consultarCandidatosPorAno(params:{
   return {validos,erros:0};
 }
 
+/** Anos oficiais encontrados para os mesmos códigos de modelo. Não
+ * adivinha datas e não muda automaticamente o ano pedido pelo cliente.
+ */
+async function anosDisponiveisDaFamilia(params:{
+  tipo:TipoFipe;marca:string;candidatos:OpcaoFipe[];
+}):Promise<string[]>{
+  const respostas=await Promise.allSettled(
+    params.candidatos.slice(0,6).map(modelo=>
+      listarAnosFipe(params.tipo,params.marca,modelo.code))
+  );
+  const anos=new Set<string>();
+  for(const resposta of respostas){
+    if(resposta.status!=="fulfilled")continue;
+    for(const item of resposta.value){
+      const ano=anoModeloSolicitado(item.name)||anoModeloSolicitado(item.code);
+      if(ano)anos.add(ano);
+    }
+  }
+  return [...anos].sort((a,b)=>Number(a)-Number(b)).slice(0,7);
+}
+
 function alternativasAno(versoes:ModeloComAno[],limite=8){
   return versoes.slice(0,limite).map(v=>v.modelo.name).join("; ");
 }
@@ -219,6 +240,10 @@ export async function encontrarVeiculoFipe(params: {
       await listarAnosFipe(params.tipo,marca.code,params.codigoModelo),params.ano);
     if(!anos.length)throw diagnosticarIdentificacaoFipe({
       modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+      anosDisponiveis:await anosDisponiveisDaFamilia({
+        tipo:params.tipo,marca:marca.code,
+        candidatos:[{code:params.codigoModelo,name:params.modelo}],
+      }),
     });
     if(anos.length!==1)throw new Error("A FIPE tem mais de uma opção para o ano-modelo "+
       anoModelo+". Confirme o combustível.");
@@ -266,6 +291,9 @@ export async function encontrarVeiculoFipe(params: {
     if(sugestoes.erros)throw new Error("Consulta FIPE indisponível ao conferir as versões.");
     throw diagnosticarIdentificacaoFipe({
       modelo:params.modelo,anoModelo,possuiModeloNaMarca:true,
+      anosDisponiveis:await anosDisponiveisDaFamilia({
+        tipo:params.tipo,marca:marca.code,candidatos,
+      }),
     });
   }
   if(compativeis.length>1){
