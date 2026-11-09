@@ -3,6 +3,14 @@
  * Nunca cria fabricantes, dados de preço ou modelos por semelhança.
  */
 export type MarcaFipeCatalogo={name:string;code:string};
+
+export class ErroMarcaNaoEncontradaFipe extends Error{
+  constructor(public readonly marcaInformada:string){
+    super("A marca "+String(marcaInformada||"").slice(0,100)+
+      " não corresponde de forma inequívoca aos fabricantes cadastrados na FIPE.");
+    this.name="ErroMarcaNaoEncontradaFipe";
+  }
+}
 const normalizar=(valor:string)=>String(valor||"").normalize("NFD")
  .replace(/[\u0300-\u036f]/g,"").toLowerCase()
  .replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
