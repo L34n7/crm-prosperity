@@ -2,7 +2,7 @@ import "server-only";
 import { modelosCompativeisFipe, modelosDaMesmaFamiliaFipe } from "./modelos-compatibilidade";
 import {agruparModelosPorAnoFipe} from "./modelos-ano";
 import {diagnosticarIdentificacaoFipe} from "./erros-identificacao";
-import {resolverMarcaCatalogoFipe} from "./resolver-marca";
+import {resolverMarcaCatalogoFipe,ErroMarcaNaoEncontradaFipe} from "./resolver-marca";
 import { ordenarAlternativasFipe, perguntaUnicaVersoesFipe, type VersaoFipe } from "./orientacao-versoes";
 export { modelosCompativeisFipe } from "./modelos-compatibilidade";
 
@@ -75,10 +75,7 @@ function unico(itens: OpcaoFipe[], busca: string) {
   // exatamente uma marca oficial compatível com UMA edição.
   const resolvida=resolverMarcaCatalogoFipe(itens,busca);
   if(resolvida)return resolvida.marca;
-  throw new Error(
-    "Marca não localizada de forma inequívoca no catálogo FIPE. "+
-    "Confirme a fabricante antes de consultar o modelo."
-  );
+  throw new ErroMarcaNaoEncontradaFipe(busca);
 }
 /** "2004/2005" corresponde ao ano-modelo 2005; 2004 é fabricação. */
 export function anoModeloSolicitado(ano:string):string{
