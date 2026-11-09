@@ -1,11 +1,7 @@
 "use client";
 
 import type {CondicoesContratacao} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
-import {
-  formatarCentavosMoedaBR,
-  centavosDaDigitacaoMoedaBR,
-  centavosDoTextoColadoMoedaBR,
-} from "@/lib/cotacoes-veiculares/mascara-moeda";
+import CampoMoeda from "./CampoMoeda";
 import styles from "./CondicoesContratacaoEditor.module.css";
 
 type Props={
@@ -18,44 +14,6 @@ type Props={
 
 const MAX_TAXA_CENTAVOS=100_000_000;
 const MAX_FIPE_CENTAVOS=2_000_000_000;
-
-type CampoMoedaProps={
-  centavos:number|null;
-  maximoCentavos:number;
-  onChange:(centavos:number|null)=>void;
-  placeholder?:string;
-  permitirVazio?:boolean;
-};
-
-/** Campo controlado: máscara visual, cálculo e persistência usam centavos
- * inteiros. Colar "R$ 1.000,00" também é aceito sem perder precisão.
- */
-function CampoMoeda({
-  centavos,maximoCentavos,onChange,placeholder,permitirVazio=false,
-}:CampoMoedaProps){
-  function atualizar(valor:number|null|undefined){
-    if(valor===undefined)return;
-    onChange(valor===null&&!permitirVazio?0:valor);
-  }
-  return (
-    <input type="text" inputMode="numeric" autoComplete="off"
-      placeholder={placeholder||"0,00"}
-      value={formatarCentavosMoedaBR(centavos)}
-      onFocus={e=>e.currentTarget.select()}
-      onChange={e=>atualizar(
-        centavosDaDigitacaoMoedaBR(e.target.value,maximoCentavos)
-      )}
-      onPaste={e=>{
-        // Evita que o navegador duplique a inserção após a conversão.
-        const valor=centavosDoTextoColadoMoedaBR(
-          e.clipboardData.getData("text"),maximoCentavos
-        );
-        e.preventDefault();
-        atualizar(valor);
-      }}
-    />
-  );
-}
 
 export default function CondicoesContratacaoEditor({
   value,onChange,podeConfigurar,carregando,erro,
