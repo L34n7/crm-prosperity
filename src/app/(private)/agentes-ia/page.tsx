@@ -35,6 +35,7 @@ import type { MaterialVinculado } from "@/lib/agentes-ia/materiais-config";
 import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerramentaSelect";
 import FollowupInatividadeEditor from "./components/FollowupInatividadeEditor";
 import CotacaoPosCotacaoEditor from "./components/CotacaoPosCotacaoEditor";
+import CotacaoPlanosFerramentaEditor from "./components/CotacaoPlanosFerramentaEditor";
 import {
   erroValidacaoFollowupInatividade,
   normalizarFollowupInatividade,
@@ -247,7 +248,7 @@ const FERRAMENTAS = [
   {
     tipo: "gerar_cotacao_veicular",
     titulo: "Gerar cotação veicular",
-    descricao: "Consulta a FIPE e gera ambos os planos com as regras comerciais da empresa. Disponível após configurar o módulo Cotação.",
+    descricao: "Consulta a FIPE e gera somente os planos permitidos na configuração deste agente, conforme as regras comerciais da empresa.",
   },
   {
     tipo: "consultar_imoveis",
@@ -2259,6 +2260,14 @@ export default function AgentesIaPage() {
                           )}
                         {ferramenta.tipo === "gerar_cotacao_veicular" &&
                           ferramentaAtiva(ferramenta.tipo) && (
+                            <>
+                            <CotacaoPlanosFerramentaEditor
+                              config={configFerramenta(ferramenta.tipo)}
+                              onChange={(chave, valor) =>
+                                atualizarConfigFerramenta(ferramenta.tipo, chave, valor)
+                              }
+                              onError={setErro}
+                            />
                             <CotacaoPosCotacaoEditor
                               config={configFerramenta(ferramenta.tipo)}
                               onChange={(chave, valor) =>
@@ -2267,6 +2276,7 @@ export default function AgentesIaPage() {
                               onError={setErro}
                               onSuccess={setSucesso}
                             />
+                            </>
                           )}
                         {ferramenta.tipo === "transferir_humano" &&
                           ferramentaAtiva(ferramenta.tipo) && (
