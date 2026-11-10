@@ -114,7 +114,9 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
     if(grupos.length!==new Set(grupos).size)
       throw new Error("Existem opcionais incompatíveis em "+plano.nome+".");
     const base=Number(faixa.valor_centavos);
+    const mensalidadeSemRastreador=base+extras.reduce((total,item)=>total+Number(item.valor_centavos),0);
     const taxas=calcularTaxasContratacao({
+      mensalidadeSemRastreadorCentavos:mensalidadeSemRastreador,
       condicoes:condicoesEfetivasPlano(configTaxas,plano.codigo),
       valorFipeCentavos:p.valorFipeCentavos,
       categoria:p.categoria,
@@ -128,8 +130,7 @@ export async function calcularCotacaoPlanos(p:ParametrosCotacao){
         codigo:o.codigo,nome:o.nome,centavos:Number(o.valor_centavos),
         grupo_exclusivo:o.grupo_exclusivo||"",
       })),
-      total_centavos:base+extras.reduce((total,item)=>total+Number(item.valor_centavos),0)
-        +taxas.rastreador_mensalidade_adicional_centavos,
+      total_centavos:mensalidadeSemRastreador+taxas.rastreador_mensalidade_adicional_centavos,
       ...taxas,
       cota_participacao_centavos:Math.max(
         Math.round(p.valorFipeCentavos*Number(regra.participacao_percentual)/100),

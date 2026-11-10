@@ -5,6 +5,7 @@ import type {CategoriaCotacao} from "./catalogo";
  */
 export type CondicoesContratacao={
   adesao_ativa:boolean;
+  adesao_tipo:"fixa"|"mensalidade_mais_taxa";
   adesao_centavos:number|null;
   rastreador_ativo:boolean;
   rastreador_carro_acima_centavos:number|null;
@@ -15,6 +16,7 @@ export type CondicoesContratacao={
 };
 export const CONDICOES_CONTRATACAO_PADRAO:CondicoesContratacao={
   adesao_ativa:false,
+  adesao_tipo:"fixa",
   adesao_centavos:null,
   rastreador_ativo:false,
   rastreador_carro_acima_centavos:null,
@@ -43,8 +45,11 @@ export function validarCondicoesContratacao(valor:unknown):CondicoesContratacao{
   for(const k of ["adesao_ativa","rastreador_ativo","rastreador_mensalidade_inclusa"]){
     if(typeof v[k]!=="boolean")throw new Error("A configuração "+k+" deve ser booleana.");
   }
+  if(v.adesao_tipo!=="fixa"&&v.adesao_tipo!=="mensalidade_mais_taxa")
+    throw new Error("Selecione uma modalidade de cobrança da adesão válida.");
   const c:CondicoesContratacao={
     adesao_ativa:v.adesao_ativa as boolean,
+    adesao_tipo:v.adesao_tipo as CondicoesContratacao["adesao_tipo"],
     adesao_centavos:valorCentavos(v.adesao_centavos,"adesão",MAX_TAXA_CENTAVOS),
     rastreador_ativo:v.rastreador_ativo as boolean,
     rastreador_carro_acima_centavos:valorCentavos(
@@ -85,13 +90,48 @@ export function condicoesExclusivasDoPlano(
 
 export type TaxasDaCotacao={
   adesao_ativa:boolean;
+  adesao_tipo:CondicoesContratacao["adesao_tipo"];
+  adesao_adicional_centavos:number|null;
   adesao_centavos:number|null;
+  primeiro_pagamento_centavos:number|null;
   rastreador_obrigatorio:boolean;
   rastreador_instalacao_centavos:number;
   rastreador_mensalidade_inclusa:boolean;
   rastreador_mensalidade_adicional_centavos:number;
   taxas_unicas_centavos:number|null;
 };
+
+/** Recalcula a adesão com a mensalidade efetiva (opcionais e rastreador inclusos).
+ * A adesão já contém a primeira mensalidade: somá-la novamente cobraria em dobro.
+ * Taxas únicas representam apenas o acréscimo de adesão e a instalação.
+ */
+export function recalcularAdesaoDinamica(p:{
+  adesao_ativa?:boolean;
+  adesao_tipo?:CondicoesContratacao["adesao_tipo"];
+  adesao_adicional_centavos?:number|null;
+  rastreador_obrigatorio?:boolean;
+  rastreador_instalacao_centavos?:number;
+},mensalidadeCentavos:number):Partial<Pick<TaxasDaCotacao,
+  "adesao_centavos"|"primeiro_pagamento_centavos"|"taxas_unicas_centavos">>{
+  if(!p.adesao_ativa||p.adesao_tipo!=="mensalidade_mais_taxa")return {};
+  if(!Number.isSafeInteger(mensalidadeCentavos)||mensalidadeCentavos<0||
+     mensalidadeCentavos>MAX_TAXA_CENTAVOS)
+    throw new Error("Não é possível calcular a adesão sem uma mensalidade válida.");
+  const adicional=p.adesao_adicional_centavos;
+  if(adicional===null||adicional===undefined)return {
+    adesao_centavos:null,primeiro_pagamento_centavos:null,taxas_unicas_centavos:null,
+  };
+  if(!Number.isSafeInteger(adicional)||adicional<0||adicional>MAX_TAXA_CENTAVOS)
+    throw new Error("Taxa adicional de adesão inválida.");
+  const instalacao=p.rastreador_obrigatorio?(p.rastreador_instalacao_centavos??0):0;
+  if(!Number.isSafeInteger(instalacao)||instalacao<0||instalacao>MAX_TAXA_CENTAVOS)
+    throw new Error("Taxa de instalação inválida.");
+  return {
+    adesao_centavos:mensalidadeCentavos+adicional,
+    primeiro_pagamento_centavos:mensalidadeCentavos+adicional+instalacao,
+    taxas_unicas_centavos:adicional+instalacao,
+  };
+}
 
 /** tipoFipe é a identidade real cars/motorcycles/trucks, inclusive se
  * comercialmente um automóvel foi classificado em "especiais".
@@ -102,6 +142,7 @@ export function calcularTaxasContratacao(p:{
   valorFipeCentavos:number;
   categoria:CategoriaCotacao;
   tipoFipe?:"cars"|"motorcycles"|"trucks"|null;
+  mensalidadeSemRastreadorCentavos?:number;
 }):TaxasDaCotacao{
   const c=p.condicoes;
   // Categoria comercial prevalece para vans e caminhões: mesmo que
@@ -120,15 +161,27 @@ export function calcularTaxasContratacao(p:{
   const instalacao=obrigatorio?c.rastreador_instalacao_centavos:0;
   const adicional=obrigatorio&&!c.rastreador_mensalidade_inclusa
     ?c.rastreador_mensalidade_adicional_centavos:0;
+  const dinamica=c.adesao_ativa&&c.adesao_tipo==="mensalidade_mais_taxa";
+  const recalculo=dinamica?recalcularAdesaoDinamica({
+    adesao_ativa:true,adesao_tipo:c.adesao_tipo,
+    adesao_adicional_centavos:c.adesao_centavos,
+    rastreador_obrigatorio:obrigatorio,rastreador_instalacao_centavos:instalacao,
+  },p.mensalidadeSemRastreadorCentavos===undefined?-1:
+    p.mensalidadeSemRastreadorCentavos+adicional):{};
   return {
     adesao_ativa:c.adesao_ativa,
-    adesao_centavos:c.adesao_ativa?c.adesao_centavos:null,
+    adesao_tipo:c.adesao_tipo,
+    adesao_adicional_centavos:dinamica?c.adesao_centavos:null,
+    adesao_centavos:dinamica?(recalculo.adesao_centavos??null):
+      (c.adesao_ativa?c.adesao_centavos:null),
+    primeiro_pagamento_centavos:dinamica?(recalculo.primeiro_pagamento_centavos??null):null,
     rastreador_obrigatorio:obrigatorio,
     rastreador_instalacao_centavos:instalacao,
     rastreador_mensalidade_inclusa:c.rastreador_mensalidade_inclusa,
     rastreador_mensalidade_adicional_centavos:adicional,
-    // Taxa de adesão pendente impede apresentar total definitivo.
-    taxas_unicas_centavos:c.adesao_ativa&&c.adesao_centavos===null?null:
+    // Para adesão dinâmica, apenas o acréscimo e a instalação são taxas únicas.
+    taxas_unicas_centavos:dinamica?(recalculo.taxas_unicas_centavos??null):
+      c.adesao_ativa&&c.adesao_centavos===null?null:
       (c.adesao_ativa?(c.adesao_centavos??0):0)+instalacao,
   };
 }

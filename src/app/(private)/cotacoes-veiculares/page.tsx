@@ -14,7 +14,7 @@ import { ENERGIAS_VEICULO, USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo, typ
 import PlanosCotacao, {type ArquivoPlano} from "./PlanosCotacao";
 import SeletorFipe from "./SeletorFipe";
 import {formatarPropostaVeicular} from "@/lib/cotacoes-veiculares/formatar-proposta";
-import type {TaxasDaCotacao} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
+import {recalcularAdesaoDinamica,type TaxasDaCotacao} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
 import styles from "./page.module.css";
 
 type Faixa = {
@@ -243,10 +243,11 @@ export default function CotacoesVeicularesPage() {
       ?restantes.filter(e=>catalogo.find(v=>v.codigo===e.codigo)?.grupo_exclusivo!==alvo.grupo_exclusivo)
       :restantes;
     const escolhidos=ativar?[...semIncompativeis,{codigo:alvo.codigo,nome:alvo.nome,centavos:alvo.centavos}]:semIncompativeis;
-    return {...c,opcionais:escolhidos,
-      total_centavos:c.mensalidade_base_centavos+
-        escolhidos.reduce((total,e)=>total+e.centavos,0)+
-        Number(c.rastreador_mensalidade_adicional_centavos||0)};
+    const mensalidade=c.mensalidade_base_centavos+
+      escolhidos.reduce((total,e)=>total+e.centavos,0)+
+      Number(c.rastreador_mensalidade_adicional_centavos||0);
+    return {...c,opcionais:escolhidos,total_centavos:mensalidade,
+      ...recalcularAdesaoDinamica(c,mensalidade)};
   }
   async function atualizarOpcionalSalvo(id:string,codigos:string[]):Promise<CotacaoDetalhe>{
     const res=await fetch("/api/cotacoes-veiculares",{
@@ -298,7 +299,8 @@ export default function CotacoesVeicularesPage() {
       setCotacoes(prev=>prev.map(v=>v.id===atualizado.id?{...v,total_centavos:atualizado.total_centavos}:v));
       if(idsSalvos[item.plano]===item.id){
         setCalculos(prev=>prev?{planos:prev.planos.map(c=>c.plano===item.plano?{
-          ...c,opcionais:atualizado.opcionais_json,total_centavos:atualizado.total_centavos}:c)}:prev);
+          ...c,opcionais:atualizado.opcionais_json,total_centavos:atualizado.total_centavos,
+          ...recalcularAdesaoDinamica(c,atualizado.total_centavos)}:c)}:prev);
       }
       setErroDetalhes("");
     }catch(e){setErroDetalhes(e instanceof Error?e.message:"Não foi possível atualizar a proposta.");}
@@ -539,12 +541,17 @@ export default function CotacoesVeicularesPage() {
                   <strong className={styles.planPrice}>{moeda(c.total_centavos)}<small> / mês</small></strong>
                   <dl className={styles.detail}>
                     <div><dt>Mensalidade base</dt><dd>{moeda(c.mensalidade_base_centavos)}</dd></div>
-                    {c.adesao_ativa&&<div><dt>Adesão (única)</dt>
+                    {c.adesao_ativa&&<div><dt>{c.adesao_tipo==="mensalidade_mais_taxa"?"Adesão (inclui 1ª mensalidade)":"Adesão (única)"}</dt>
                       <dd>{c.adesao_centavos==null?"A confirmar":moeda(c.adesao_centavos)}</dd></div>}
                     {c.rastreador_obrigatorio&&<>
                       <div><dt>Rastreador</dt><dd>Obrigatório</dd></div>
                       <div><dt>Instalação (única)</dt><dd>{moeda(c.rastreador_instalacao_centavos||0)}</dd></div>
                       <div><dt>Mensalidade do rastreador</dt><dd>{c.rastreador_mensalidade_inclusa?"Inclusa na mensalidade":moeda(c.rastreador_mensalidade_adicional_centavos||0)+"/mês"}</dd></div>
+                    </>}
+                    {c.adesao_ativa&&c.adesao_tipo==="mensalidade_mais_taxa"&&<>
+                      <div><dt>Taxa adicional da adesão</dt><dd>{c.adesao_adicional_centavos==null?"A confirmar":moeda(c.adesao_adicional_centavos)}</dd></div>
+                      <div><dt>Total para contratar</dt><dd>{c.primeiro_pagamento_centavos==null?"A confirmar":moeda(c.primeiro_pagamento_centavos)}</dd></div>
+                      <div><dt>Próxima mensalidade (30 dias)</dt><dd>{moeda(c.total_centavos)}</dd></div>
                     </>}
                     <div><dt>Cota de participação</dt><dd>{moeda(c.cota_participacao_centavos)}</dd></div>
                     <div><dt>Terceiros</dt><dd>{c.terceiros_limite_centavos?moeda(c.terceiros_limite_centavos):"Não disponível"}</dd></div>
@@ -660,13 +667,18 @@ export default function CotacoesVeicularesPage() {
                       </div>
                       <dl className={styles.detail}>
                         <div><dt>Mensalidade base</dt><dd>{moeda(item.mensalidade_base_centavos)}</dd></div>
-                        {snap?.adesao_ativa&&<div><dt>Adesão (única)</dt>
+                        {snap?.adesao_ativa&&<div><dt>{snap.adesao_tipo==="mensalidade_mais_taxa"?"Adesão (inclui 1ª mensalidade)":"Adesão (única)"}</dt>
                           <dd>{snap.adesao_centavos==null?"A confirmar":moeda(snap.adesao_centavos)}</dd></div>}
                         {snap?.rastreador_obrigatorio&&<>
                           <div><dt>Rastreador</dt><dd>Obrigatório</dd></div>
                           <div><dt>Instalação (única)</dt><dd>{moeda(snap.rastreador_instalacao_centavos||0)}</dd></div>
                           <div><dt>Mensalidade do rastreador</dt>
                             <dd>{snap.rastreador_mensalidade_inclusa?"Inclusa":moeda(snap.rastreador_mensalidade_adicional_centavos||0)+"/mês"}</dd></div>
+                        </>}
+                        {snap?.adesao_ativa&&snap.adesao_tipo==="mensalidade_mais_taxa"&&<>
+                          <div><dt>Taxa adicional da adesão</dt><dd>{snap.adesao_adicional_centavos==null?"A confirmar":moeda(snap.adesao_adicional_centavos)}</dd></div>
+                          <div><dt>Total para contratar</dt><dd>{snap.primeiro_pagamento_centavos==null?"A confirmar":moeda(snap.primeiro_pagamento_centavos)}</dd></div>
+                          <div><dt>Próxima mensalidade (30 dias)</dt><dd>{moeda(item.total_centavos)}</dd></div>
                         </>}
                         <div><dt>Categoria</dt><dd>{CATEGORIAS_COTACAO[item.categoria as CategoriaCotacao]||item.categoria}</dd></div>
                         <div><dt>Código do produto</dt><dd>{item.codigo_produto}</dd></div>

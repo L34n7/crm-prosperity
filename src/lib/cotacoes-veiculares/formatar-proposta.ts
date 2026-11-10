@@ -17,8 +17,12 @@ export type PlanoProposta={
   opcionais_disponiveis?:OpcionalProposta[];
   observacoes:string;
   tabela_validada:boolean;
+  total_centavos?:number;
   adesao_ativa?:boolean;
+  adesao_tipo?:"fixa"|"mensalidade_mais_taxa";
+  adesao_adicional_centavos?:number|null;
   adesao_centavos?:number|null;
+  primeiro_pagamento_centavos?:number|null;
   rastreador_obrigatorio?:boolean;
   rastreador_instalacao_centavos?:number;
   rastreador_mensalidade_inclusa?:boolean;
@@ -67,6 +71,10 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
 
   for(const plano of dados.planos){
     const adicionalRastreador=Number(plano.rastreador_mensalidade_adicional_centavos||0);
+    const mensalidadeEfetiva=typeof plano.total_centavos==="number"
+      ?plano.total_centavos:plano.mensalidade_base_centavos+
+        plano.opcionais.reduce((soma,o)=>soma+o.centavos,0)+adicionalRastreador;
+    const adesaoDinamica=plano.adesao_ativa&&plano.adesao_tipo==="mensalidade_mais_taxa";
     linhas.push(
       "",
       "━━━━━━━━━━━━━━━━━━",
@@ -77,8 +85,10 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
       "_Valor do plano, sem opcionais._",
       ...(plano.rastreador_obrigatorio&&adicionalRastreador>0?[
         "• Rastreador: + "+moeda(adicionalRastreador)+"/mês",
-        "💰 *Mensalidade com rastreador: "+
-          moeda(plano.mensalidade_base_centavos+adicionalRastreador)+"/mês*",
+      ]:[]),
+      ...(mensalidadeEfetiva!==plano.mensalidade_base_centavos?[
+        "💰 *Mensalidade final com adicionais selecionados: "+
+          moeda(mensalidadeEfetiva)+"/mês*",
       ]:[]),
       "",
       "📌 *BENEFÍCIOS DO PLANO*",
@@ -107,10 +117,16 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
     if(plano.adesao_ativa||plano.rastreador_obrigatorio){
       linhas.push("","🧾 *TAXAS DE CONTRATAÇÃO*");
       if(plano.adesao_ativa){
-        linhas.push("• Adesão: "+(plano.adesao_centavos===null||
-          plano.adesao_centavos===undefined
-          ?"valor a confirmar com a equipe"
-          :moeda(plano.adesao_centavos)+" (pagamento único)"));
+        if(adesaoDinamica){
+          linhas.push("• Adesão (primeira mensalidade de "+moeda(mensalidadeEfetiva)+
+            " + taxa adicional de "+(plano.adesao_adicional_centavos==null
+              ?"valor a confirmar":moeda(plano.adesao_adicional_centavos))+"): "+
+            (plano.adesao_centavos==null?"a confirmar":moeda(plano.adesao_centavos)));
+        }else{
+          linhas.push("• Adesão: "+(plano.adesao_centavos==null
+            ?"valor a confirmar com a equipe"
+            :moeda(plano.adesao_centavos)+" (pagamento único)"));
+        }
       }
       if(plano.rastreador_obrigatorio){
         linhas.push(
@@ -123,11 +139,17 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
               moeda(adicionalRastreador)+"/mês",
         );
       }
-      if(plano.taxas_unicas_centavos!==null&&
-         plano.taxas_unicas_centavos!==undefined)
+      if(adesaoDinamica){
+        linhas.push(
+          "• *Total para contratar agora: "+(plano.primeiro_pagamento_centavos==null
+            ?"a confirmar":moeda(plano.primeiro_pagamento_centavos))+"*",
+          "• Próxima mensalidade (em 30 dias): "+moeda(mensalidadeEfetiva),
+        );
+      }else if(plano.taxas_unicas_centavos!=null){
         linhas.push("• Total das taxas únicas: "+moeda(plano.taxas_unicas_centavos));
-      else if(plano.adesao_ativa)
+      }else if(plano.adesao_ativa){
         linhas.push("• Total das taxas únicas: a confirmar após definir a adesão");
+      }
     }
     if(!observacoesComuns&&plano.observacoes?.trim()){
       linhas.push("","📝 *CONDIÇÕES DO "+tituloPlano(plano.plano_nome).toLocaleUpperCase("pt-BR")+"*",
@@ -139,7 +161,7 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
 
   linhas.push(
     "",
-    "ℹ️ _Os opcionais são cobrados à parte. A cota de participação não integra a mensalidade._",
+    "ℹ️ _Opcionais não selecionados são cobrados à parte. A cota de participação não integra a mensalidade._",
     "_Proposta informativa, sujeita às condições comerciais da associação._",
     ...(!dados.planos.every(p=>p.tabela_validada)?
       ["_Valores sujeitos à validação comercial._"]:[]),

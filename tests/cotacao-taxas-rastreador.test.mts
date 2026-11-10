@@ -6,6 +6,7 @@ import {
   normalizarCondicoesContratacao,
   validarCondicoesContratacao,
   condicoesExclusivasDoPlano,
+  recalcularAdesaoDinamica,
 } from "../src/lib/cotacoes-veiculares/condicoes-contratacao.ts";
 import {formatarPropostaVeicular} from "../src/lib/cotacoes-veiculares/formatar-proposta.ts";
 
@@ -171,4 +172,60 @@ test("cada plano preserva rastreador próprio para a cotação",()=>{
   });
   assert.equal(calcular("premium").rastreador_instalacao_centavos,15000);
   assert.equal(calcular("completo").rastreador_instalacao_centavos,18000);
+});
+
+test("adesão dinâmica SaveCar: mensalidade 463,17 + 150 e instalação 150",()=>{
+  const condicoes={...savecar,adesao_tipo:"mensalidade_mais_taxa" as const,
+    adesao_centavos:15000};
+  const t=calcularTaxasContratacao({
+    condicoes,categoria:"auto_leves",tipoFipe:"cars",
+    valorFipeCentavos:8609800,mensalidadeSemRastreadorCentavos:46317,
+  });
+  assert.equal(t.adesao_adicional_centavos,15000);
+  assert.equal(t.adesao_centavos,61317);
+  assert.equal(t.taxas_unicas_centavos,30000);
+  assert.equal(t.primeiro_pagamento_centavos,76317);
+  const mensagem=formatarPropostaVeicular({
+    veiculo:"Chevrolet SPIN LT 1.8",uso:"Particular",
+    planos:[{plano_nome:"Premium",mensalidade_base_centavos:46317,
+      total_centavos:46317,cota_participacao_centavos:645735,
+      terceiros_limite_centavos:10000000,assistencia_km_total:600,
+      assistencias_ano:12,carro_reserva_incluso_dias:0,coberturas:[],
+      opcionais:[],observacoes:"",tabela_validada:true,...t}],
+  });
+  assert.match(mensagem,/Adesão \(primeira mensalidade de R\$\s*463,17 \+ taxa adicional de R\$\s*150,00\): R\$\s*613,17/);
+  assert.match(mensagem,/Total para contratar agora: R\$\s*763,17/);
+  assert.match(mensagem,/Próxima mensalidade \(em 30 dias\): R\$\s*463,17/);
+  assert.doesNotMatch(mensagem,/Total das taxas únicas: R\$\s*763,17/);
+});
+
+test("adesão dinâmica respeita limiar FIPE e opcionais sem duplicar mensalidade",()=>{
+  const condicoes={...savecar,adesao_tipo:"mensalidade_mais_taxa" as const,
+    adesao_centavos:15000};
+  const semRastreador=calcularTaxasContratacao({
+    condicoes,categoria:"auto_leves",tipoFipe:"cars",
+    valorFipeCentavos:5000000,mensalidadeSemRastreadorCentavos:30000,
+  });
+  assert.equal(semRastreador.rastreador_obrigatorio,false);
+  assert.equal(semRastreador.adesao_centavos,45000);
+  assert.equal(semRastreador.primeiro_pagamento_centavos,45000);
+  const comOpcionais=recalcularAdesaoDinamica({
+    ...semRastreador,adesao_adicional_centavos:15000,
+  },33200);
+  assert.equal(comOpcionais.adesao_centavos,48200);
+  assert.equal(comOpcionais.primeiro_pagamento_centavos,48200);
+  assert.throws(()=>calcularTaxasContratacao({
+    condicoes,categoria:"auto_leves",valorFipeCentavos:6000000,
+  }),/mensalidade válida/);
+});
+
+test("adesão fixa de outras empresas continua separada da mensalidade",()=>{
+  const t=calcularTaxasContratacao({
+    condicoes:{...savecar,adesao_tipo:"fixa",adesao_centavos:15000},
+    categoria:"auto_leves",valorFipeCentavos:6000000,
+  });
+  assert.equal(t.adesao_centavos,15000);
+  assert.equal(t.taxas_unicas_centavos,30000);
+  assert.equal(t.primeiro_pagamento_centavos,null);
+  assert.deepEqual(recalcularAdesaoDinamica(t,46317),{});
 });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import {recalcularAdesaoDinamica} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { buscarNichoEmpresa } from "@/lib/nichos/empresa-nicho";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -174,9 +175,17 @@ export async function PATCH(req:Request){
   if(!Number.isSafeInteger(total)||total<0||total>100000000)
     throw new Error("Total de mensalidade inválido.");
   const opcionais=escolhidos.map(({codigo,nome,centavos})=>({codigo,nome,centavos}));
+  const valoresAdesao=recalcularAdesaoDinamica({
+    adesao_ativa:snapshot.adesao_ativa===true,
+    adesao_tipo:snapshot.adesao_tipo==="mensalidade_mais_taxa"?"mensalidade_mais_taxa":"fixa",
+    adesao_adicional_centavos:snapshot.adesao_adicional_centavos==null
+      ?null:Number(snapshot.adesao_adicional_centavos),
+    rastreador_obrigatorio:snapshot.rastreador_obrigatorio===true,
+    rastreador_instalacao_centavos:Number(snapshot.rastreador_instalacao_centavos||0),
+  },total);
   const {data:atualizada,error:erroUpdate}=await admin.from("cotacao_veicular_cotacoes")
     .update({opcionais_json:opcionais,total_centavos:total,
-      regras_snapshot:{...snapshot,opcionais,total_centavos:total}})
+      regras_snapshot:{...snapshot,opcionais,total_centavos:total,...valoresAdesao}})
     .eq("empresa_id",auth.empresaId!).eq("id",id).select("*").single();
   if(erroUpdate)throw erroUpdate;
   return NextResponse.json({ok:true,cotacao:atualizada});

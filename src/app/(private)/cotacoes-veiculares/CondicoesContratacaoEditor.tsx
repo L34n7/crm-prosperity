@@ -47,14 +47,33 @@ export default function CondicoesContratacaoEditor({
             </span>
           </label>
           {value.adesao_ativa&&(
-            <label className={styles.moneyField}>
-              <span>Valor da taxa de adesão (R$)</span>
-              <CampoMoeda centavos={value.adesao_centavos}
-                maximoCentavos={MAX_TAXA_CENTAVOS}
-                permitirVazio placeholder="A confirmar"
-                onChange={v=>alterar("adesao_centavos",v)}/>
-              <small>Deixe em branco se a equipe ainda não informou o valor. A cotação mostrará “a confirmar”, sem inventar uma taxa.</small>
-            </label>
+            <>
+              <strong>Como a adesão é calculada?</strong>
+              <label className={styles.choice}>
+                <input type="radio" name="adesao_tipo"
+                  checked={value.adesao_tipo==="mensalidade_mais_taxa"}
+                  onChange={()=>alterar("adesao_tipo","mensalidade_mais_taxa")}/>
+                <span>Primeira mensalidade + taxa adicional (próxima mensalidade em 30 dias).</span>
+              </label>
+              <label className={styles.choice}>
+                <input type="radio" name="adesao_tipo"
+                  checked={value.adesao_tipo==="fixa"}
+                  onChange={()=>alterar("adesao_tipo","fixa")}/>
+                <span>Taxa de adesão fixa, cobrada separadamente da mensalidade.</span>
+              </label>
+              <label className={styles.moneyField}>
+                <span>{value.adesao_tipo==="mensalidade_mais_taxa"
+                  ?"Taxa adicional sobre a primeira mensalidade (R$)"
+                  :"Valor fixo da taxa de adesão (R$)"}</span>
+                <CampoMoeda centavos={value.adesao_centavos}
+                  maximoCentavos={MAX_TAXA_CENTAVOS}
+                  permitirVazio placeholder="A confirmar"
+                  onChange={v=>alterar("adesao_centavos",v)}/>
+                <small>{value.adesao_tipo==="mensalidade_mais_taxa"
+                  ?"Exemplo: mensalidade de R$ 463,17 + R$ 150,00 = adesão de R$ 613,17. A instalação, se obrigatória, é somada apenas no primeiro pagamento."
+                  :"Deixe em branco se o valor ainda não foi informado. A proposta exibirá “a confirmar”."}</small>
+              </label>
+            </>
           )}
         </div>
         <div className={styles.group}>
@@ -123,7 +142,7 @@ export default function CondicoesContratacaoEditor({
         Digite somente os números: pontos e vírgulas são adicionados automaticamente. Exemplo: 1.000,00.
       </p>
       <p className={styles.note}>
-        As taxas únicas serão informadas separadamente na proposta. A mensalidade do plano só terá acréscimo se você escolher cobrar o rastreador à parte.
+        Na adesão com primeira mensalidade incluída, a cotação mostra o total para contratar e o valor recorrente após 30 dias, sem cobrar a primeira mensalidade novamente. A instalação é avulsa quando obrigatória.
       </p>
     </section>
   );
