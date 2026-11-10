@@ -7,6 +7,7 @@ import {
 } from "@/lib/cotacoes-veiculares/servico";
 import { listarRegrasComerciais, listarPlanosEmpresa, statusConfiguracaoCotacao } from "@/lib/cotacoes-veiculares/configuracao";
 import {validarCondicoesContratacao} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
+import {gerarCodigosOpcionais} from "@/lib/cotacoes-veiculares/codigos-opcionais";
 import {
   regraVazia, type OpcionalComercial, type RegraComercialPlano, validarRegraComercial,
   USOS_VEICULO, ENERGIAS_VEICULO,
@@ -38,6 +39,28 @@ function erro(e:unknown,status=400) {
     e instanceof Error?e.message:
     "Não foi possível salvar as regras. Confira os campos e tente novamente.";
   return NextResponse.json({ok:false,error:texto},{status});
+}
+
+async function normalizarOpcionaisDaEmpresa(
+  empresaId:string,plano:string,itens:OpcionalComercial[],
+):Promise<OpcionalComercial[]>{
+  if(!Array.isArray(itens)||itens.length>60||itens.some(item=>!item||
+    typeof item!=="object"||typeof item.nome!=="string"))
+    throw new Error("Lista de opcionais inválida.");
+  const {data,error}=await getSupabaseAdmin().from("cotacao_veicular_opcionais_empresa")
+    .select("codigo,nome").eq("empresa_id",empresaId).eq("plano",plano)
+    .limit(1000);
+  if(error)throw error;
+  return gerarCodigosOpcionais(itens,(data||[]) as {codigo:string;nome:string}[]);
+}
+
+function verificarCategorias(categorias:unknown,categoriaBase:string):string[]{
+  if(!Array.isArray(categorias)||categorias.length<1||categorias.length>8||
+    categorias.some(c=>!categoriaValida(c)) ||
+    new Set(categorias).size!==categorias.length ||
+    !categorias.includes(categoriaBase))
+    throw new Error("Selecione categorias válidas, incluindo a categoria da regra.");
+  return categorias as string[];
 }
 
 export async function GET(req:Request) {
@@ -111,12 +134,54 @@ export async function POST(req:Request) {
         });
         if(error)throw error;
       }
+    }else if(acao==="regras_grupos"){
+      const gruposRecebidos=body.grupos;
+      const plano=String(body.plano||"");
+      const planos=await listarPlanosEmpresa(auth.empresaId!,true);
+      if(!planos.some(p=>p.codigo===plano)||!Array.isArray(gruposRecebidos)||
+        gruposRecebidos.length<1||gruposRecebidos.length>2)
+        throw new Error("Informe uma ou duas regras válidas para um plano ativo.");
+      const usadas=new Set<string>();
+      const gruposNormalizados:Array<{
+        regra:RegraComercialPlano;opcionais:OpcionalComercial[];categorias:string[];
+      }>=[];
+      for(const grupo of gruposRecebidos){
+        if(!grupo||typeof grupo!=="object")throw new Error("Regra inválida.");
+        const bruto=grupo as Record<string,unknown>;
+        const regra=bruto.regra as RegraComercialPlano;
+        if(!regra||typeof regra!=="object"||regra.plano!==plano||
+           !categoriaValida(regra.categoria))
+          throw new Error("Regra ou plano inválidos.");
+        const categorias=verificarCategorias(bruto.categorias,regra.categoria);
+        if(categorias.some(c=>usadas.has(c)))
+          throw new Error("Uma categoria não pode pertencer a duas regras.");
+        categorias.forEach(c=>usadas.add(c));
+        if(!Array.isArray(bruto.opcionais))throw new Error("Lista de opcionais inválida.");
+        const opcionais=await normalizarOpcionaisDaEmpresa(
+          auth.empresaId!,plano,bruto.opcionais as OpcionalComercial[],
+        );
+        const falha=validarRegraComercial(regra,opcionais);
+        if(falha)throw new Error(falha);
+        if(!regra.usos_permitidos.every(v=>v in USOS_VEICULO)||
+           !regra.energias_permitidas.every(v=>v in ENERGIAS_VEICULO))
+          throw new Error("Finalidade de uso ou motorização inválida.");
+        gruposNormalizados.push({regra,opcionais,categorias});
+      }
+      const condicoes=validarCondicoesContratacao(body.condicoes);
+      const {error}=await getSupabaseAdmin().rpc("cotacao_veicular_salvar_grupos_com_taxas",{
+        p_empresa_id:auth.empresaId,p_plano:plano,
+        p_grupos:gruposNormalizados,p_condicoes:condicoes,
+      });
+      if(error)throw error;
     }else if(acao==="regra"){
       const regra=body.regra as RegraComercialPlano;
       if(!regra||typeof regra!=="object"||!categoriaValida(regra.categoria)||
          !(await listarPlanosEmpresa(auth.empresaId!,true)).some(plano=>plano.codigo===regra.plano))throw new Error("Categoria ou plano inválido.");
       if(!Array.isArray(body.opcionais))throw new Error("Lista de opcionais inválida.");
-      const opcionais=body.opcionais as OpcionalComercial[];
+      const opcionais=await normalizarOpcionaisDaEmpresa(
+        auth.empresaId!,regra.plano,
+        body.opcionais as OpcionalComercial[],
+      );
       const erroValidacao=validarRegraComercial(regra,opcionais);
       if(erroValidacao)throw new Error(erroValidacao);
       if(!regra.usos_permitidos.every(v=>v in USOS_VEICULO)||

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import {CATEGORIAS_COTACAO,type CategoriaCotacao,type PlanoEmpresa} from "@/lib/cotacoes-veiculares/catalogo";
 import type {RegraComercialPlano,OpcionalComercial} from "@/lib/cotacoes-veiculares/comercial";
-import ConfiguracaoComercialEditor, {type EditorHandle} from "./ConfiguracaoComercialEditor";
+import ConfiguracaoComercialEditor, {type EditorHandle,type GrupoRegrasPayload} from "./ConfiguracaoComercialEditor";
 import styles from "./page.module.css";
 
 export type ArquivoPlano={
@@ -31,6 +31,7 @@ type Modal={codigo:string|null;passo:1|2};
 type ArquivoPendente={tipo:"precos"|"especiais";arquivo:File};
 const dinheiro=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v/100);
 const dataHora=(v:string)=>new Date(v).toLocaleString("pt-BR");
+const TODAS_CATEGORIAS=Object.keys(CATEGORIAS_COTACAO) as CategoriaCotacao[];
 const PLANO_RASCUNHO:PlanoEmpresa={
  empresa_id:"",codigo:"rascunho",nome:"Novo plano",ordem:0,ativo:true,
 };
@@ -50,6 +51,14 @@ export default function PlanosCotacao({
   const [errosEtapa,setErrosEtapa]=useState<Record<string,string>>({});
   const [tentativa,setTentativa]=useState(0);
   const editorRef=useRef<EditorHandle|null>(null);
+  const segundoEditorRef=useRef<EditorHandle|null>(null);
+  const [categoriasPrimeira,setCategoriasPrimeira]=useState<CategoriaCotacao[]>(TODAS_CATEGORIAS);
+  const [segundaAberta,setSegundaAberta]=useState(false);
+  const [regrasSegunda,setRegrasSegunda]=useState<RegraComercialPlano[]>([]);
+  const [opcionaisSegunda,setOpcionaisSegunda]=useState<
+    (OpcionalComercial&{plano:string;categoria:string})[]>([]);
+  const [carregandoSegunda,setCarregandoSegunda]=useState(false);
+  const [erroSegunda,setErroSegunda]=useState("");
   const pendenteRef=useRef<string|null>(null);
   const nomePendenteRef=useRef<string>("");
   const nomeRef=useRef<HTMLInputElement|null>(null);
@@ -63,6 +72,48 @@ export default function PlanosCotacao({
   const opcionaisDoPlano=useMemo(()=>opcionais.filter(o=>o.plano===modal?.codigo),[opcionais,modal?.codigo]);
   const meta=arquivos.find(a=>a.plano===modal?.codigo);
   const itens=faixas.filter(f=>f.plano===modal?.codigo);
+  const categoriasSegunda=TODAS_CATEGORIAS.filter(c=>!categoriasPrimeira.includes(c));
+  const categoriaSegunda=categoriasSegunda[0];
+  function alterarCategoriaPrimeira(cat:CategoriaCotacao,marcada:boolean){
+    setCategoriasPrimeira(atuais=>{
+      const novas=marcada?[...atuais,cat]:atuais.filter(c=>c!==cat);
+      return novas.length?TODAS_CATEGORIAS.filter(c=>novas.includes(c)):atuais;
+    });
+    setErro("");
+  }
+
+  useEffect(()=>{
+    if(!modal||!segundaAberta||!categoriaSegunda){
+      setRegrasSegunda([]);setOpcionaisSegunda([]);setErroSegunda("");
+      setCarregandoSegunda(false);return;
+    }
+    if(!modal.codigo){
+      setRegrasSegunda([]);setOpcionaisSegunda([]);setErroSegunda("");
+      setCarregandoSegunda(false);return;
+    }
+    const abort=new AbortController();
+    setCarregandoSegunda(true);setErroSegunda("");setRegrasSegunda([]);setOpcionaisSegunda([]);
+    void (async()=>{
+      try{
+        const qs=new URLSearchParams({categoria:categoriaSegunda});
+        const response=await fetch("/api/cotacoes-veiculares/comercial?"+qs,{
+          cache:"no-store",signal:abort.signal,
+        });
+        const data=await response.json();
+        if(!response.ok||!data.ok)throw new Error(data.error||"Falha ao carregar 2ª Regras.");
+        if(abort.signal.aborted)return;
+        setRegrasSegunda((data.regras||[]).filter(
+          (regra:RegraComercialPlano)=>regra.plano===modal.codigo));
+        setOpcionaisSegunda((data.opcionais||[]).filter(
+          (extra:OpcionalComercial&{plano:string})=>extra.plano===modal.codigo));
+      }catch(e){
+        if(!abort.signal.aborted)
+          setErroSegunda(e instanceof Error?e.message:"Falha ao carregar a segunda regra.");
+      }finally{if(!abort.signal.aborted)setCarregandoSegunda(false);}
+    })();
+    return ()=>abort.abort();
+  },[modal?.codigo,Boolean(modal),segundaAberta,categoriaSegunda]);
+
 
   useEffect(()=>{
     if(!modal)return;
@@ -80,6 +131,8 @@ export default function PlanosCotacao({
     setModal({codigo:planoAtual?.codigo||null,passo:1});
     setArquivo(null);setRemoverArquivo(null);setPrecoEditando(null);
     setErro("");setSucesso("");setErrosEtapa({});
+    setCategoriasPrimeira(TODAS_CATEGORIAS);setSegundaAberta(false);
+    setRegrasSegunda([]);setOpcionaisSegunda([]);setErroSegunda("");
   }
   function fechar(){
     if(ocupado)return;
@@ -129,6 +182,17 @@ export default function PlanosCotacao({
     // Valida todos os campos ANTES de criar o plano: nenhum cadastro vazio é gerado.
     const editor=editorRef.current;
     if(!editor?.validate())return;
+    if(categoriasSegunda.length&&!segundaAberta){
+      setErro("As categorias desmarcadas precisam de uma 2ª Regras. Clique em Novas regras por categoria.");
+      return;
+    }
+    if(segundaAberta){
+      if(carregandoSegunda||erroSegunda){
+        setErro(erroSegunda||"Aguarde o carregamento da segunda regra.");
+        return;
+      }
+      if(!segundoEditorRef.current?.validate())return;
+    }
     setOcupado(true);setErro("");setErrosEtapa({});
     try{
       const nomeNormalizado=nome.trim().replace(/\s+/g," ");
@@ -146,8 +210,24 @@ export default function PlanosCotacao({
           nomePendenteRef.current=nomeNormalizado;
         }
       }
-      const salvo=await editor.validateAndSave(codigo||undefined,true);
-      if(!salvo)return; // Preserva o rascunho e permite tentar novamente.
+      const primeira=editor.getDraft(codigo||undefined);
+      const segunda=segundaAberta?segundoEditorRef.current?.getDraft(codigo||undefined):null;
+      if(!primeira||(segundaAberta&&!segunda)){
+        setErro("Revise os campos das regras antes de avançar.");
+        return;
+      }
+      const grupos:GrupoRegrasPayload[]=[primeira];
+      if(segunda)grupos.push(segunda);
+      const response=await fetch("/api/cotacoes-veiculares/comercial",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          acao:"regras_grupos",plano:codigo,
+          grupos,condicoes:editor.getCondicoes(),
+        }),
+      });
+      const data=await response.json();
+      if(!response.ok||!data.ok)
+        throw new Error(data.error||"Não foi possível salvar os grupos de regras.");
       if(modal.codigo && plano?.nome!==nomeNormalizado){
         await planoApi("renomear",modal.codigo,nomeNormalizado,false);
       }
@@ -345,7 +425,7 @@ export default function PlanosCotacao({
           {modal.passo===1&&<div className={styles.planStepContent}>
             <span className={styles.planStepEyebrow}>01 / NOME E REGRAS</span>
             <h3>Identificação e condições do plano</h3>
-            <p>Informe o nome e configure as regras comerciais. Você pode aplicar as mesmas regras a várias categorias.</p>
+            <p>Configure a 1ª Regras para as categorias atendidas. Caso alguma tenha condições diferentes, crie a 2ª Regras.</p>
             <label key={"nome-"+(errosEtapa.nome?tentativa:0)}
               className={styles.planWizardField+" "+(errosEtapa.nome?styles.requiredFieldInvalid:"")}>
               <span className={styles.planNameLabel}>Nome do plano <span className={styles.requiredAsterisk}>*</span></span>
@@ -357,18 +437,42 @@ export default function PlanosCotacao({
               {erroCampo("nome")}
             </label>
             {plano&&<small className={styles.smallNote}>Alterar o nome não modifica as cotações anteriores.</small>}
-            <label className={styles.planWizardField}>Categoria de veículos
-              <select value={categoria} disabled={ocupado}
-                onChange={e=>onCategoria(e.target.value as CategoriaCotacao)}>
-                {Object.entries(CATEGORIAS_COTACAO).map(([c,titulo])=><option key={c} value={c}>{titulo}</option>)}
-              </select>
-            </label>
             {(!plano||plano.ativo)
               ?<div className={styles.planWizardEmbedded}>
                 <ConfiguracaoComercialEditor ref={editorRef} categoria={categoria}
                   planos={planosDoModal} regras={regrasDoPlano} opcionais={opcionaisDoPlano}
-                  rascunho={!plano} nomeRascunho={nome}
-                  podeConfigurar={podeConfigurar} onSaved={onUpdated}/>
+                  rascunho={!plano} nomeRascunho={nome} grupoTitulo="1ª Regras"
+                  categoriasSelecionadas={categoriasPrimeira}
+                  categoriasDisponiveis={TODAS_CATEGORIAS}
+                  onCategoriaToggle={alterarCategoriaPrimeira}
+                  podeConfigurar={podeConfigurar} onSaved={onUpdated}>
+                  {categoriasSegunda.length>0&&(!segundaAberta
+                    ?<button type="button" className={styles.ruleSecondButton}
+                        onClick={()=>{setSegundaAberta(true);setErro("");}} disabled={!podeConfigurar||ocupado}>
+                        <Plus size={19}/> Novas regras por categoria
+                        <span>{categoriasSegunda.length} categoria(s) disponível(is)</span>
+                      </button>
+                    :<div className={styles.ruleSecondContainer}>
+                      <div className={styles.ruleSecondControls}>
+                        <span>Regras específicas para as categorias restantes</span>
+                        <button type="button" className={styles.secondary}
+                          disabled={ocupado} onClick={()=>{setSegundaAberta(false);setErroSegunda("");}}>
+                          <X size={15}/> Remover 2ª Regras
+                        </button>
+                      </div>
+                      {carregandoSegunda?<div className={styles.ruleSecondLoading}>
+                        <Loader2 size={19}/> Carregando as regras cadastradas...
+                      </div>:erroSegunda?<div className={styles.error} role="alert">{erroSegunda}</div>:
+                      <ConfiguracaoComercialEditor
+                        key={"segunda-"+categoriaSegunda+"-"+(modal?.codigo||"rascunho")}
+                        ref={segundoEditorRef} categoria={categoriaSegunda}
+                        planos={planosDoModal} regras={regrasSegunda} opcionais={opcionaisSegunda}
+                        rascunho={!plano} nomeRascunho={nome} grupoTitulo="2ª Regras"
+                        categoriasSelecionadas={categoriasSegunda}
+                        categoriasDisponiveis={categoriasSegunda}
+                        esconderCondicoes podeConfigurar={podeConfigurar} onSaved={onUpdated}/>}
+                    </div>)}
+                </ConfiguracaoComercialEditor>
               </div>
               :<p className={styles.smallNote}>Ative o plano para continuar a configuração.</p>}
           </div>}
