@@ -240,6 +240,20 @@ function obj(value: unknown): Record<string, any> {
     : {};
 }
 
+// Use o mesmo critério da contratação no cron de migração legado.
+// Contas gratuitas não podem gerar assinaturas recorrentes pagas.
+function assinaturaEmpresaGratuita(empresa: {
+  assinatura_gateway: string | null;
+  assinatura_metadata_json: unknown;
+}): boolean {
+  const metadata = obj(empresa.assinatura_metadata_json);
+  return (
+    String(empresa.assinatura_gateway || "") === "CRM_FREE_CHECKOUT_KEY" ||
+    metadata.free_vitalicio === true ||
+    String(metadata.tipo_oferta || "") === "free"
+  );
+}
+
 function planoRelacao(value: unknown) {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }
@@ -572,13 +586,7 @@ export async function garantirAssinaturaProsperityPay(empresaId: string) {
   if (error || !empresa) throw error ?? new Error("Empresa não encontrada.");
 
   const plano = planoRelacao(empresa.planos);
-  const metadataEmpresa = obj(empresa.assinatura_metadata_json);
-  const assinaturaGratuita =
-    String(empresa.assinatura_gateway || "") === "CRM_FREE_CHECKOUT_KEY" ||
-    metadataEmpresa.free_vitalicio === true ||
-    String(metadataEmpresa.tipo_oferta || "") === "free";
-
-  if (assinaturaGratuita) {
+  if (assinaturaEmpresaGratuita(empresa)) {
     throw new Error(
       "Este é um plano gratuito. Contrate um plano pago antes de usar recursos recorrentes da Prosperity Pay."
     );
@@ -738,16 +746,24 @@ export async function sincronizarAssinaturasLegadasAtomoProsperityPay(
     .limit(Math.max(100, maximo * 5));
 
   if (candidatasError) throw candidatasError;
-  if (!candidatas?.length) {
+  // Não retentar assinaturas gratuitas: a rotina de contratação as rejeita
+  // deliberadamente, logo nunca poderão ser espelhadas neste fluxo.
+  const elegiveis = (candidatas || []).filter(
+    (empresa) => !assinaturaEmpresaGratuita(empresa),
+  );
+  const ignoradasGratuitas = (candidatas || []).length - elegiveis.length;
+
+  if (!elegiveis.length) {
     return {
       encontradas: 0,
       pendentes: 0,
       sincronizadas: 0,
       erros: 0,
+      ignoradas_gratuitas: ignoradasGratuitas,
     };
   }
 
-  const empresaIds = candidatas.map((empresa) => empresa.id);
+  const empresaIds = elegiveis.map((empresa) => empresa.id);
   const { data: espelhos, error: espelhosError } = await supabase
     .from("prosperity_pay_assinaturas")
     .select("empresa_id,external_subscription_id")
@@ -762,7 +778,7 @@ export async function sincronizarAssinaturasLegadasAtomoProsperityPay(
       .filter(Boolean),
   );
 
-  const targets = candidatas
+  const targets = elegiveis
     .filter((empresa) => !jaEspelhadas.has(empresa.id))
     .slice(0, maximo);
 
@@ -815,11 +831,12 @@ export async function sincronizarAssinaturasLegadasAtomoProsperityPay(
   }
 
   return {
-    encontradas: candidatas.length,
-    pendentes: candidatas.length - jaEspelhadas.size,
+    encontradas: elegiveis.length,
+    pendentes: elegiveis.length - jaEspelhadas.size,
     processadas: targets.length,
     sincronizadas,
     erros,
+    ignoradas_gratuitas: ignoradasGratuitas,
   };
 }
 
