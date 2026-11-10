@@ -50,3 +50,37 @@ export const CATEGORIAS_POR_TIPO_MODELO:Record<TipoModeloFipe,CategoriaCotacao[]
   motorcycles:["motocicleta"],
   trucks:["caminhao_leve","caminhao_pesado","agregado"],
 };
+
+
+export type OpcaoModeloFipe={code:string;name:string};
+export type FamiliaModeloFipe={nome:string;quantidadeVersoes:number};
+
+/** Extrai opções pesquisáveis por família a partir dos modelos reais da FIPE.
+ * Não mantém catálogo de marcas/modelos no código; as sugestões são
+ * construídas dinamicamente a cada consulta de marca e tipo.
+ */
+export function familiasModelosDoCatalogoFipe(
+  modelos:OpcaoModeloFipe[],
+):FamiliaModeloFipe[]{
+  const familias=new Map<string,FamiliaModeloFipe>();
+  for(const item of modelos){
+    const nome=String(item.name||"").trim();
+    const partes=nome.split(/[\s/(]+/).filter(Boolean);
+    if(!partes.length)continue;
+    // As famílias compostas cujo primeiro elemento é uma letra isolada
+    // ("C 180", "A 3") precisam de um segundo elemento de identificação.
+    const familia=partes[0].length===1&&partes[1]
+      ?partes[0]+" "+partes[1]:partes[0];
+    const chave=normalizarChaveModelo(familia);
+    if(chave.length<2)continue;
+    const atual=familias.get(chave);
+    if(atual){atual.quantidadeVersoes++;continue;}
+    familias.set(chave,{
+      nome:familia===familia.toUpperCase()&&/^[A-Z]{5,}$/.test(familia)
+        ?familia.charAt(0)+familia.slice(1).toLowerCase():familia,
+      quantidadeVersoes:1,
+    });
+  }
+  return [...familias.values()].sort((a,b)=>
+    a.nome.localeCompare(b.nome,"pt-BR",{numeric:true}));
+}

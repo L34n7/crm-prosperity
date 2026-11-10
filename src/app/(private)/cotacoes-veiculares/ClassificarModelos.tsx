@@ -10,6 +10,7 @@ import {
   CATEGORIAS_POR_TIPO_MODELO,type TipoModeloFipe,
 } from "@/lib/cotacoes-veiculares/regras-modelos";
 import styles from "./page.module.css";
+import BuscaModeloFipe from "./BuscaModeloFipe";
 
 type Regra={
   id:string;tipo_fipe:TipoModeloFipe;marca:string;modelo:string;
@@ -37,6 +38,7 @@ export default function ClassificarModelos({podeConfigurar}:{
   const [edicao,setEdicao]=useState<Edicao|null>(null);
   const [excluir,setExcluir]=useState<Regra|null>(null);
   const [busca,setBusca]=useState("");
+  const [fipeValido,setFipeValido]=useState(false);
   const [erro,setErro]=useState("");
   const [sucesso,setSucesso]=useState("");
 
@@ -67,18 +69,21 @@ export default function ClassificarModelos({podeConfigurar}:{
   function fecharModal(){
     if(salvando)return;
     setAberto(false);setEdicao(null);setExcluir(null);setErro("");setSucesso("");
+    setFipeValido(false);
   }
   function incluir(){
     setEdicao(novaEdicao());setExcluir(null);setErro("");setSucesso("");
+    setFipeValido(false);
   }
   function editar(regra:Regra){
     setEdicao({...regra});setExcluir(null);setErro("");setSucesso("");
+    setFipeValido(false);
   }
   async function salvar(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(!edicao||salvando||!podeConfigurar)return;
-    if(edicao.marca.trim().length<2||edicao.modelo.trim().length<2){
-      setErro("Informe uma marca e um modelo válidos.");return;
+    if(!fipeValido||edicao.marca.trim().length<2||edicao.modelo.trim().length<2){
+      setErro("Selecione primeiro a marca e depois o modelo nas opções da FIPE.");return;
     }
     setSalvando(true);setErro("");setSucesso("");
     try{
@@ -170,22 +175,21 @@ export default function ClassificarModelos({podeConfigurar}:{
                   onChange={e=>{
                     const tipo=e.target.value as TipoModeloFipe;
                     setEdicao(prev=>prev?{...prev,tipo_fipe:tipo,
+                      marca:"",modelo:"",
                       categoria:CATEGORIAS_POR_TIPO_MODELO[tipo][0]}:null);
+                    setFipeValido(false);
                   }}>
                   {Object.entries(nomesTipos).map(([v,label])=>
                     <option key={v} value={v}>{label}</option>)}
                 </select>
               </label>
-              <label>Marca
-                <input required maxLength={80} value={edicao.marca} disabled={salvando}
-                  placeholder="Ex.: Chevrolet ou Fiat"
-                  onChange={e=>setEdicao(prev=>prev?{...prev,marca:e.target.value}:null)}/>
-              </label>
-              <label>Modelo (família)
-                <input required maxLength={100} value={edicao.modelo} disabled={salvando}
-                  placeholder="Ex.: Spin ou Fiorino"
-                  onChange={e=>setEdicao(prev=>prev?{...prev,modelo:e.target.value}:null)}/>
-              </label>
+              <BuscaModeloFipe key={edicao.tipo_fipe+"-"+(edicao.id||"novo")}
+                tipo={edicao.tipo_fipe} marca={edicao.marca} modelo={edicao.modelo}
+                disabled={salvando}
+                onChange={(marca,modelo)=>setEdicao(prev=>prev?{
+                  ...prev,marca,modelo,
+                }:null)}
+                onValidityChange={setFipeValido}/>
               <label>Tabela comercial
                 <select required value={edicao.categoria} disabled={salvando}
                   onChange={e=>setEdicao(prev=>prev?{
@@ -197,7 +201,7 @@ export default function ClassificarModelos({podeConfigurar}:{
             </div>
             <p className={styles.modelClassHint}>
               <ShieldCheck size={16}/> Informe a família, sem ano ou motorização.
-              Exemplo: &quot;Spin&quot; abrange as versões Spin LT, LTZ e outras encontradas na FIPE.
+              Exemplo: &quot;Spin&quot; abrange as versões Spin LT, LTZ e outras encontradas na FIPE. Escolha somente opções do catálogo.
               A consulta FIPE continua obrigatória.
             </p>
             <div className={styles.modelClassFormActions}>
