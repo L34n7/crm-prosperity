@@ -1,5 +1,5 @@
 "use client";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { Plus, Save, Trash2, X } from "lucide-react";
 import { CATEGORIAS_COTACAO, type CategoriaCotacao, type PlanoEmpresa } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO,USOS_VEICULO,regraVazia,validarRegraComercial,
@@ -15,18 +15,32 @@ import {
 } from "@/lib/cotacoes-veiculares/condicoes-contratacao";
 type RegraBanco=RegraComercialPlano;
 type OpcionalBanco=OpcionalComercial&{plano:string;categoria:string};
+export type GrupoRegrasPayload={
+ regra:RegraComercialPlano;opcionais:OpcionalComercial[];
+ categorias:CategoriaCotacao[];
+};
 export type EditorHandle={
  validate:()=>boolean;
  validateAndSave:(persistedCodigo?:string,skipRefresh?:boolean)=>Promise<boolean>;
+ getDraft:(persistedCodigo?:string)=>GrupoRegrasPayload|null;
+ getCondicoes:()=>CondicoesContratacao;
 };
 type Props={
  categoria:CategoriaCotacao;planos:PlanoEmpresa[];
  regras:RegraBanco[];opcionais:OpcionalBanco[];
  podeConfigurar:boolean;onSaved:()=>Promise<void>;
  rascunho?:boolean; nomeRascunho?:string;
+ grupoTitulo?:string;
+ categoriasSelecionadas?:CategoriaCotacao[];
+ categoriasDisponiveis?:CategoriaCotacao[];
+ onCategoriaToggle?:(categoria:CategoriaCotacao,ativo:boolean)=>void;
+ esconderCondicoes?:boolean;
+ children?:ReactNode;
 };
 const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function ConfiguracaoComercialEditor({
  categoria,planos,regras,opcionais,podeConfigurar,onSaved,rascunho=false,nomeRascunho,
+ grupoTitulo="1ª Regras",categoriasSelecionadas,categoriasDisponiveis,
+ onCategoriaToggle,esconderCondicoes=false,children,
 },ref){
  const [rascunhos,setRascunhos]=useState<Record<string,RegraComercialPlano>>({});
  const [extras,setExtras]=useState<Record<string,OpcionalComercial[]>>({});
@@ -35,7 +49,6 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
  const [errosCampos,setErrosCampos]=useState<Record<string,string>>({});
  const [tentativa,setTentativa]=useState(0);
  const camposRef=useRef<HTMLElement|null>(null);
- const [copiarPara,setCopiarPara]=useState<Record<string,CategoriaCotacao[]>>({});
  const [salvando,setSalvando]=useState<string|null>(null);
  const [erro,setErro]=useState(""),[sucesso,setSucesso]=useState("");
  const [condicoes,setCondicoes]=useState<CondicoesContratacao>({
@@ -84,7 +97,7 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
     grupo_exclusivo:v.grupo_exclusivo||"",ativo:v.ativo,
    }));
   }
-  setRascunhos(r);setExtras(o);setNovasCoberturas({});setCopiarPara({});
+  setRascunhos(r);setExtras(o);setNovasCoberturas({});
   const preenchidos:Record<string,string[]>={};
   for(const plano of planos.filter(p=>p.ativo)){
     const regra=regras.find(v=>v.plano===plano.codigo);
@@ -118,15 +131,8 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
   if(!remover&&atuais.length>=30){setErro("Limite de 30 coberturas por plano.");return;}
   setSalvando(codigo);setErro("");setSucesso("");
   try{
-   if(!rascunho){
-    const res=await fetch("/api/cotacoes-veiculares/comercial",{
-     method:"POST",headers:{"Content-Type":"application/json"},
-     body:JSON.stringify({acao:remover?"remover_cobertura":"adicionar_cobertura",
-       categoria,plano:codigo,cobertura}),
-    });
-    const json=await res.json();
-    if(!res.ok||!json.ok)throw new Error(json.error||"Falha ao salvar cobertura.");
-   }
+   // Atualiza apenas o rascunho. A gravação é atômica ao avançar, sem
+   // alterar antecipadamente as regras de uma categoria em produção.
    setNovasCoberturas(v=>({...v,[codigo]:""}));
    setRascunhos(atual=>{
     const regraAtual=atual[codigo];if(!regraAtual)return atual;
@@ -136,17 +142,15 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
     return {...atual,[codigo]:{...regraAtual,coberturas:lista}};
    });
    setErrosCampos(prev=>{const copy={...prev};delete copy.coberturas;return copy;});
-   setSucesso(remover?"Cobertura removida.":rascunho
-     ?"Cobertura adicionada ao cadastro. Será salva ao avançar."
-     :"Cobertura salva.");
+   setSucesso(remover?"Cobertura removida do rascunho.":"Cobertura adicionada. Será salva ao avançar.");
   }catch(e){setErro(e instanceof Error?e.message:"Falha ao salvar cobertura.");}
   finally{setSalvando(null);}
  }
  function adicionalNovo(codigo:string){
-  const atuais=extras[codigo]||[],used=new Set(atuais.map(v=>v.codigo));
-  let n=1;while(used.has("extra_"+n))n++;
+  const atuais=extras[codigo]||[];
+  // O código técnico é definido no servidor a partir do nome após salvar.
   setExtras(v=>({...v,[codigo]:[...atuais,{
-   codigo:"extra_"+n,nome:"",valor_centavos:0,grupo_exclusivo:"",ativo:true,
+   codigo:"",nome:"",valor_centavos:0,grupo_exclusivo:"",ativo:true,
   }]}));
  }
  function mudarExtra(codigo:string,i:number,k:keyof OpcionalComercial,v:string|number|boolean){
@@ -190,15 +194,17 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
     const item=items[i];
     if(!item.nome.trim()||item.nome.trim().length<2)
       invalidos["extra_nome_"+i]="Informe o nome do opcional.";
-    if(!/^[a-z0-9_]{2,50}$/.test(item.codigo))
-      invalidos["extra_codigo_"+i]="Informe um código válido (letras minúsculas, números e _).";
-    if(!Number.isSafeInteger(item.valor_centavos)||item.valor_centavos<0)
+     if(!Number.isSafeInteger(item.valor_centavos)||item.valor_centavos<0)
       invalidos["extra_valor_"+i]="Informe um valor válido para o opcional.";
   }
   if(!Object.keys(invalidos).length){
-    const problema=validarRegraComercial(regra,items);
+    const problema=validarRegraComercial(regra,items.map((item,i)=>({
+      ...item,codigo:item.codigo||"novo_opcional_"+i,
+    })));
     if(problema)invalidos.geral=problema;
   }
+  if(categoriasSelecionadas&&!categoriasSelecionadas.length)
+    invalidos.categorias="Selecione ao menos uma categoria.";
   setErrosCampos(invalidos);
   if(Object.keys(invalidos).length){
     setTentativa(n=>n+1);
@@ -217,7 +223,7 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
   const regra=rascunhos[codigo],items=extras[codigo]||[];
   setSalvando(codigo);setErro("");setSucesso("");
   try{
-   const categorias=[categoria,...(copiarPara[codigo]||[]).filter(c=>c!==categoria)];
+   const categorias=categoriasSelecionadas?.length?categoriasSelecionadas:[categoria];
    const res=await fetch("/api/cotacoes-veiculares/comercial",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
@@ -243,6 +249,15 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
     const codigo=planos.find(p=>p.ativo)?.codigo;
     return codigo?salvar(codigo,persistedCodigo||codigo,skipRefresh):false;
   },
+  getDraft:(persistedCodigo)=>{
+    const codigo=planos.find(p=>p.ativo)?.codigo;
+    const regra=codigo?rascunhos[codigo]:null;
+    if(!codigo||!regra||!validarCampos(codigo))return null;
+    const categorias=categoriasSelecionadas?.length?categoriasSelecionadas:[categoria];
+    return {regra:{...regra,plano:persistedCodigo||codigo,categoria:categorias[0]},
+      opcionais:extras[codigo]||[],categorias};
+  },
+  getCondicoes:()=>condicoes,
  }));
  function campoErro(campo:string){
   return errosCampos[campo]?
@@ -254,8 +269,8 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
  }
  const ativos=planos.filter(p=>p.ativo);
  return <section ref={camposRef} className={styles.panel}>
-  <div className={styles.sectionHeading}><h2>Regras e coberturas</h2>
-   <p>Configure as condições para a categoria selecionada. Quando forem iguais, aplique-as a outras categorias sem preencher tudo novamente.</p></div>
+  {!esconderCondicoes&&<div className={styles.sectionHeading}><h2>Regras e coberturas</h2>
+   <p>Defina as condições comerciais do plano e distribua as categorias entre conjuntos de regras, quando necessário.</p></div>}
   {erro&&<p role="alert" className={styles.error}>{erro}</p>}
   {sucesso&&<p role="status" className={styles.success}>{sucesso}</p>}
   {!ativos.length&&<p className={styles.smallNote}>Crie um plano para começar a configurar suas regras.</p>}
@@ -266,8 +281,32 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
       !validarRegraComercial(r,opcionais.filter(o=>o.plano===cod)));
     return <article key={cod} className={styles.commercialCard}>
      <div className={styles.commercialCardHeading}>
-      <h3>{rascunho?(nomeRascunho?.trim()||"Novo plano"):p.nome}</h3><span className={salvo?styles.goodStatus:styles.pendingStatus}>
+      <h3>{grupoTitulo}</h3><span className={salvo?styles.goodStatus:styles.pendingStatus}>
        {salvo?"Regras salvas":"Regras ainda incompletas"}</span>
+     </div>
+     <div className={styles.ruleApplyBox+" "+styles.ruleCategoriesFirst}
+       data-required-error={campoInvalido("categorias")?"true":undefined}>
+       <strong>Selecione para quais categorias essa regra vai funcionar</strong>
+       <p>Marque as categorias que terão as mesmas coberturas, assistência e opcionais nesta regra.</p>
+       <div className={styles.ruleCategoryGrid}>
+         {Object.entries(CATEGORIAS_COTACAO)
+           .filter(([chave])=>!categoriasDisponiveis||
+             categoriasDisponiveis.includes(chave as CategoriaCotacao))
+           .map(([chave,nome])=>{
+             const codigoCategoria=chave as CategoriaCotacao;
+             const marcado=(categoriasSelecionadas||[categoria]).includes(codigoCategoria);
+             return <label key={chave} className={styles.ruleCategoryChoice}>
+               <input type="checkbox" checked={marcado}
+                 disabled={!podeConfigurar||salvando!==null||!onCategoriaToggle}
+                 onChange={e=>onCategoriaToggle?.(codigoCategoria,e.target.checked)}/>
+               <span>{nome}</span>
+             </label>;
+           })}
+       </div>
+       <span className={styles.ruleCategoryInfo}>
+         {(categoriasSelecionadas||[categoria]).length} categoria(s) selecionada(s).
+       </span>
+       {campoErro("categorias")}
      </div>
      <div className={styles.fields}>
       <label key={"participacao_percentual-"+(campoInvalido("participacao_percentual")?tentativa:0)} className={campoInvalido("participacao_percentual")?styles.requiredFieldInvalid:undefined}>Participação (%)<input aria-invalid={campoInvalido("participacao_percentual")} type="number" min="0" max="100" step=".001" disabled={!podeConfigurar}
@@ -337,9 +376,6 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
        <label key={"extra_nome_"+i+"-"+(campoInvalido("extra_nome_"+i)?tentativa:0)}
        className={campoInvalido("extra_nome_"+i)?styles.requiredFieldInvalid:undefined}>Nome<input aria-invalid={campoInvalido("extra_nome_"+i)} disabled={!podeConfigurar} value={item.nome}
         onChange={e=>mudarExtra(cod,i,"nome",e.target.value)}/>{campoErro("extra_nome_"+i)}</label>
-       <label key={"extra_codigo_"+i+"-"+(campoInvalido("extra_codigo_"+i)?tentativa:0)}
-       className={campoInvalido("extra_codigo_"+i)?styles.requiredFieldInvalid:undefined}>Código<input aria-invalid={campoInvalido("extra_codigo_"+i)} disabled={!podeConfigurar} value={item.codigo}
-        onChange={e=>mudarExtra(cod,i,"codigo",e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,""))}/>{campoErro("extra_codigo_"+i)}</label>
        <label key={"extra_valor_"+i+"-"+(campoInvalido("extra_valor_"+i)?tentativa:0)}
        className={campoInvalido("extra_valor_"+i)?styles.requiredFieldInvalid:undefined}>Valor mensal (R$)<CampoMoeda aria-invalid={campoInvalido("extra_valor_"+i)}
         disabled={!podeConfigurar} maximoCentavos={Number.MAX_SAFE_INTEGER}
@@ -356,33 +392,12 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
         <Trash2 size={15}/> Remover</button>
       </div>
      </div>)}
-     <div className={styles.ruleApplyBox}>
-       <strong>Aplicar estas regras também em outras categorias?</strong>
-       <p>Opcional. Marque apenas as categorias que possuem as mesmas condições. O salvamento substitui as regras e opcionais já existentes nas categorias marcadas, mas não altera os preços.</p>
-       <div className={styles.ruleCategoryGrid}>
-         {Object.entries(CATEGORIAS_COTACAO).filter(([c])=>c!==categoria).map(([codigo,nome])=>{
-           const marcado=(copiarPara[cod]||[]).includes(codigo as CategoriaCotacao);
-           return <label key={codigo} className={styles.ruleCategoryChoice}>
-             <input type="checkbox" disabled={!podeConfigurar||salvando!==null} checked={marcado}
-               onChange={e=>setCopiarPara(prev=>{
-                 const lista=prev[cod]||[];
-                 return {...prev,[cod]:e.target.checked?
-                   [...lista,codigo as CategoriaCotacao]:
-                   lista.filter(c=>c!==codigo)};
-               })}/>
-             <span>{nome}</span>
-           </label>;
-         })}
-       </div>
-       <span className={styles.ruleCategoryInfo}>
-         {1+(copiarPara[cod]||[]).length} categoria(s) selecionada(s), incluindo a atual.
-       </span>
-     </div>
      {campoErro("geral")}
     </article>;
    })}
   </div>
-  {codigoCondicoes&&(
+  {children}
+  {codigoCondicoes&&!esconderCondicoes&&(
     <div className={styles.commercialConditionsBlock}>
       <CondicoesContratacaoEditor
         value={condicoes}
