@@ -8,6 +8,8 @@ import { ENERGIAS_VEICULO,USOS_VEICULO,regraVazia,validarRegraComercial,
 import styles from "./page.module.css";
 import CondicoesContratacaoEditor from "./CondicoesContratacaoEditor";
 import CampoMoeda from "./CampoMoeda";
+import GrupoOpcionalField from "./GrupoOpcionalField";
+import {listarGruposOpcionais} from "@/lib/cotacoes-veiculares/grupos-opcionais";
 import {
   CONDICOES_CONTRATACAO_PADRAO,
   validarCondicoesContratacao,
@@ -370,7 +372,7 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
      <div className={styles.commercialExtrasHeading}><strong>Opcionais</strong>
       <button type="button" className={styles.secondary} disabled={!podeConfigurar} onClick={()=>adicionalNovo(cod)}>
        <Plus size={15}/> Adicionar opcional</button></div>
-     <p className={styles.smallNote}>Se dois opcionais não podem ser combinados, use o mesmo grupo exclusivo.</p>
+     <p className={styles.smallNote}>Organize os opcionais em grupos quando somente uma alternativa puder ser contratada.</p>
      {(extras[cod]||[]).map((item,i)=><div key={i} className={styles.commercialExtra}>
       <div className={styles.commercialExtraFields}>
        <label key={"extra_nome_"+i+"-"+(campoInvalido("extra_nome_"+i)?tentativa:0)}
@@ -381,8 +383,10 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
         disabled={!podeConfigurar} maximoCentavos={Number.MAX_SAFE_INTEGER}
         centavos={item.valor_centavos}
         onChange={v=>mudarExtra(cod,i,"valor_centavos",v??0)}/>{campoErro("extra_valor_"+i)}</label>
-       <label>Grupo exclusivo<input disabled={!podeConfigurar} value={item.grupo_exclusivo}
-        onChange={e=>mudarExtra(cod,i,"grupo_exclusivo",e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,""))}/></label>
+       <GrupoOpcionalField value={item.grupo_exclusivo}
+        grupos={listarGruposOpcionais(extras[cod]||[])}
+        disabled={!podeConfigurar}
+        onChange={grupo=>mudarExtra(cod,i,"grupo_exclusivo",grupo)}/>
       </div>
       <div className={styles.commercialExtraActions}>
        <label><input type="checkbox" disabled={!podeConfigurar} checked={item.ativo}
