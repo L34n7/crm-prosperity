@@ -32,7 +32,7 @@ import {
   type DadosCotacaoConfirmados,
 } from "./pedido-cotacao";
 import {
-  clienteCorrigiuVersaoCotacao,
+  clienteCorrigiuVersaoCotacao,clienteCorrigiuPropostaAnteriorCotacao,
   motorizacaoCorrigidaCotacao,
   aplicarMotorizacaoCorrigida,
   versaoCorrigidaFoiInformada,
@@ -1213,18 +1213,21 @@ export async function processarPendenciaNegocio(
       });
     // Corrigir uma proposta já emitida não é iniciar nova cotação:
     // "pode gerar" depois de prometer recálculo mantém modelo/ano/uso.
+    const corrigiuPropostaAnterior=clienteCorrigiuPropostaAnteriorCotacao({
+      cotacaoAtualPendente:estado.cotacao_pendente,
+      novoPedidoExplicito:pedidoNovoExplicito,
+      existeCotacaoAnterior,
+      mensagem:pendencia.conteudo_agregado,
+    });
     if((ajusteEfetivo&&ajusteEfetivo.acao!=="outro_veiculo") ||
-       (!pedidoNovoExplicito&&existeCotacaoAnterior&&
-        (recalculoPrometidoPendente||
-         clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado))))
+       recalculoPrometidoPendente||corrigiuPropostaAnterior)
       querOutraCotacao=false;
     const corrigiuVeiculo=ferramentas.has("gerar_cotacao_veicular")
       && !pedidoNovoExplicito && existeCotacaoAnterior
       && (Boolean(ajusteEfetivo&&ajusteEfetivo.acao!=="atendente"&&
           ajusteEfetivo.acao!=="outro_veiculo"&&
           ajusteEfetivo.acao!=="modelo")||
-        clienteCorrigiuVersaoCotacao(pendencia.conteudo_agregado)||
-        recalculoPrometidoPendente);
+        corrigiuPropostaAnterior||recalculoPrometidoPendente);
     const confirmacaoCotacaoPrometida=estado.cotacao_pendente
       && confirmouProsseguirCotacao(pendencia.conteudo_agregado)
       && promessaCotacaoSemFerramenta([ultimaRespostaAgente]);

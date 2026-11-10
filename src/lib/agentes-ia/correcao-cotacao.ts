@@ -30,6 +30,21 @@ export function clienteCorrigiuVersaoCotacao(mensagem: string): boolean {
     Boolean(ajuste && ajuste.acao!=="atendente");
 }
 
+/** Uma nova cotação PENDENTE não pode ser classificada como correção
+ * da última proposta emitida, mesmo quando há propostas antigas na conversa.
+ * Correções explícitas de versão do pedido pendente continuam no ajuste
+ * contextual de FIPE (ajusteCotacaoNoPedidoAtual).
+ */
+export function clienteCorrigiuPropostaAnteriorCotacao(params:{
+  cotacaoAtualPendente:boolean;
+  novoPedidoExplicito:boolean;
+  existeCotacaoAnterior:boolean;
+  mensagem:string;
+}):boolean{
+  return !params.cotacaoAtualPendente&&!params.novoPedidoExplicito&&
+    params.existeCotacaoAnterior&&clienteCorrigiuVersaoCotacao(params.mensagem);
+}
+
 /** Última tração POSITIVAMENTE corrigida pelo cliente, não pela IA.
  * Descarta trechos negados: "não é 4x2, é 8x2" -> 8x2;
  * "é 8x2, não 4x2" -> 8x2; "não é 4x2" -> sem versão suficiente.

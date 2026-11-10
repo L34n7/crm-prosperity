@@ -5,12 +5,12 @@ import {
   planosPermitidosFerramentaCotacao,
 } from "@/lib/cotacoes-veiculares/planos-ferramenta";
 import { USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo } from "@/lib/cotacoes-veiculares/comercial";
-import { encontrarVeiculoFipe, ErroIdentificacaoVersaoFipe, ErroConsultaFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
+import { encontrarVeiculoFipe, listarMarcasFipe, ErroIdentificacaoVersaoFipe, ErroConsultaFipe, type TipoFipe } from "@/lib/cotacoes-veiculares/fipe";
 import {ErroIdentificacaoModeloFipe} from "@/lib/cotacoes-veiculares/erros-identificacao";
 import {registrarConsultaFipe} from "@/lib/cotacoes-veiculares/classificacao";
 import {usoComercialInferivelFipe} from "@/lib/cotacoes-veiculares/uso-automatico";
 import {identificarMarcaFipe} from "@/lib/cotacoes-veiculares/identificacao";
-import {marcaDeclaradaNoPedido,ErroMarcaNaoEncontradaFipe} from "@/lib/cotacoes-veiculares/resolver-marca";
+import {marcaDeclaradaNoPedido,grafiaProximaMarcaNoPedido,marcaCorrigidaConfereComCatalogoFipe,ErroMarcaNaoEncontradaFipe} from "@/lib/cotacoes-veiculares/resolver-marca";
 import {descricaoLegivelFipe} from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import { salvarCotacaoPlanos } from "@/lib/cotacoes-veiculares/servico";
 import {formatarPropostaVeicular,dividirPropostaWhatsApp} from "@/lib/cotacoes-veiculares/formatar-proposta";
@@ -447,11 +447,31 @@ export async function executarFerramentaNegocio(params: {
     // passa adiante quando aparece neste pedido, ou quando a versão FIPE
     // já foi escolhida pelo código oficial persistido no backend.
     // Impede que "JAC" da cotação anterior seja usado para "XJ6".
-    const marcaDaSolicitacao=marcaArgumento&&(
-      !mensagensDoPedido.length||
-      marcaDeclaradaNoPedido(marcaArgumento,mensagensDoPedido)||
-      codigoVerificado)
+    const marcaExataDeclarada=marcaArgumento&&
+      marcaDeclaradaNoPedido(marcaArgumento,mensagensDoPedido);
+    let marcaDaSolicitacao=marcaArgumento&&(
+      !mensagensDoPedido.length||marcaExataDeclarada||codigoVerificado)
       ?marcaArgumento:null;
+    if(!marcaDaSolicitacao&&marcaArgumento&&!codigoVerificado){
+      // Se a IA reconheceu a fabricante, mas o cliente a escreveu com UMA
+      // letra faltando/trocada, confira a grafia nas marcas REAIS da FIPE.
+      // Não confie só na sugestão da IA ou numa marca de cotação anterior.
+      const grafia=grafiaProximaMarcaNoPedido(marcaArgumento,mensagensDoPedido);
+      if(grafia){
+        const catalogos=await Promise.allSettled(
+          (["cars","motorcycles","trucks"] as TipoFipe[]).map(listarMarcasFipe)
+        );
+        // Para garantir unicidade entre categorias, não aceitar resultado
+        // parcial caso algum catálogo esteja temporariamente indisponível.
+        if(catalogos.every(item=>item.status==="fulfilled")){
+          const oficiais=catalogos.flatMap(item=>
+            item.status==="fulfilled"?item.value:[]);
+          if(marcaCorrigidaConfereComCatalogoFipe(
+            marcaArgumento,grafia,oficiais
+          ))marcaDaSolicitacao=marcaArgumento;
+        }
+      }
+    }
     const identificacao=await identificarMarcaFipe({
       empresaId:params.empresaId,marca:marcaDaSolicitacao,modelo,
     });

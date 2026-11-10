@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   resolverMarcaCatalogoFipe,marcaDeclaradaNoPedido,
+  grafiaProximaMarcaNoPedido,marcaCorrigidaConfereComCatalogoFipe,
   ErroMarcaNaoEncontradaFipe,
 } from "../src/lib/cotacoes-veiculares/resolver-marca.ts";
 import {
@@ -15,7 +16,7 @@ import {
 import {
   clienteRejeitouVersoesFipe,novoModeloForaDaLista,
 } from "../src/lib/agentes-ia/reorientacao-versoes-cotacao.ts";
-import {versaoCorrigidaFoiInformada}
+import {versaoCorrigidaFoiInformada,clienteCorrigiuPropostaAnteriorCotacao}
  from "../src/lib/agentes-ia/correcao-cotacao.ts";
 import {sugestaoUnicaTracaoFipe}
  from "../src/lib/agentes-ia/sugestao-versao-fipe.ts";
@@ -157,4 +158,63 @@ test("codigo de geracao nao conhecido solicita modelo comercial sem inventar ali
  });
  assert.equal(falha.codigo,"FIPE_MODELO_NAO_ENCONTRADO");
  assert.match(falha.perguntaCliente,/nome comercial/i);
+});
+
+test("10/11: Mitsubish recupera Mitsubishi somente se fabricante oficial única",()=>{
+ const mensagens=["Vamos fazer uma cotação","Eclipse","2005","Mitsubish"];
+ const marcas=[
+  {name:"Mitsubishi",code:"44"},
+  {name:"Honda",code:"12"},
+  {name:"Toyota",code:"29"},
+  {name:"Mitsubishi",code:"100"},
+ ];
+ assert.equal(marcaDeclaradaNoPedido("Mitsubishi",mensagens),false);
+ const grafia=grafiaProximaMarcaNoPedido("Mitsubishi",mensagens);
+ assert.equal(grafia,"mitsubish");
+ assert.equal(marcaCorrigidaConfereComCatalogoFipe("Mitsubishi",
+   grafia!,marcas),true);
+ assert.equal(grafiaProximaMarcaNoPedido("Mitsubishi",[
+   "Não é Mitsubishi","Eclipse","2005",
+ ]),null);
+ assert.equal(grafiaProximaMarcaNoPedido("Mitsubishi",[
+   "Eclipse","Mitsubishii",
+ ]),"mitsubishii");
+ assert.equal(marcaCorrigidaConfereComCatalogoFipe("Mitsubishi",
+   "Mitsubish",[{name:"Mitsubishi",code:"1"},
+     {name:"Mitsubishh",code:"2"}]),false);
+ assert.equal(marcaCorrigidaConfereComCatalogoFipe("Mitsubishi",
+   "Mitsubish",[{name:"Mercedes",code:"1"}]),false);
+});
+
+test("10/11: nova XJ6 rejeita Jaguar sem bloquear cotação Yamaha",()=>{
+ const anterior={existeCotacaoAnterior:true,novoPedidoExplicito:false};
+ assert.equal(clienteCorrigiuPropostaAnteriorCotacao({
+   ...anterior,cotacaoAtualPendente:true,mensagem:"Não é jaguar",
+ }),false);
+ assert.equal(clienteCorrigiuPropostaAnteriorCotacao({
+   ...anterior,cotacaoAtualPendente:true,mensagem:"É yamaha",
+ }),false);
+ assert.equal(clienteCorrigiuPropostaAnteriorCotacao({
+   ...anterior,cotacaoAtualPendente:true,mensagem:"2013",
+ }),false);
+ assert.equal(marcaDeclaradaNoPedido("Jaguar",[
+   "Quero cotar outro","Xj 6","Não é jaguar","É yamaha","2013",
+ ]),false);
+ assert.equal(marcaDeclaradaNoPedido("Yamaha",[
+   "Quero cotar outro","Xj 6","Não é jaguar","É yamaha","2013",
+ ]),true);
+ assert.equal(versaoCorrigidaFoiInformada([
+   "Quero cotar outro","Xj 6","Não é jaguar","É yamaha","2013",
+ ]),false); // A versão nunca foi selecionada; não pode bloquear a ferramenta.
+ // Correções de uma proposta anterior já emitida continuam funcionando.
+ assert.equal(clienteCorrigiuPropostaAnteriorCotacao({
+   ...anterior,cotacaoAtualPendente:false,mensagem:"Não é essa versão",
+ }),true);
+ assert.equal(clienteCorrigiuPropostaAnteriorCotacao({
+   ...anterior,cotacaoAtualPendente:false,mensagem:"É outro ano, 2012",
+ }),true);
+ assert.equal(clienteCorrigiuPropostaAnteriorCotacao({
+   ...anterior,cotacaoAtualPendente:false,mensagem:"Não é jaguar",
+   novoPedidoExplicito:true,
+ }),false);
 });

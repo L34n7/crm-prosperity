@@ -53,6 +53,43 @@ export function resolverMarcaCatalogoFipe<T extends MarcaFipeCatalogo>(
    ?{marca:corrigidas[0],origem:"correcao_unica"}:null;
 }
 
+/** Captura apenas uma grafia plausível de marca em resposta curta do pedido
+ * atual. Este resultado NÃO autoriza cotar: a unicidade precisa ser validada
+ * contra o catálogo oficial FIPE antes de encaminhar a fabricante.
+ */
+export function grafiaProximaMarcaNoPedido(
+  marca:string,mensagens:string[],
+):string|null{
+ const alvo=normalizar(marca);
+ if(alvo.length<5)return null;
+ for(let i=mensagens.length-1;i>=0;i--){
+   const texto=normalizar(mensagens[i]);
+   // "Não é Jaguar" é uma NEGATIVA: jamais transformá-la em marca declarada.
+   if(/^(?:nao|nem|nunca)\b/.test(texto))continue;
+   const candidata=texto.replace(
+     /^(?:(?:a|o)\s+)?(?:marca\s+)?(?:e|eh|era)\s+/,""
+   ).replace(/^marca\s+/,"");
+   if(!candidata||candidata.includes(" ")||
+      !/^[a-z]{5,}$/.test(candidata))continue;
+   if(distanciaDeUmaEdicao(candidata,alvo))return candidata;
+ }
+ return null;
+}
+
+/** Deduplica marcas iguais presentes em carros/motos/caminhões antes de
+ * autorizar a correção de UMA letra. Se houver mais de uma marca oficial
+ * compatível, permanece pendente a confirmação com o cliente.
+ */
+export function marcaCorrigidaConfereComCatalogoFipe(
+  marca:string,grafia:string,marcas:MarcaFipeCatalogo[],
+):boolean{
+ const unicas=new Map<string,MarcaFipeCatalogo>();
+ for(const item of marcas)unicas.set(normalizar(item.name),item);
+ const resolvida=resolverMarcaCatalogoFipe([...unicas.values()],grafia);
+ return resolvida?.origem==="correcao_unica"&&
+   normalizar(resolvida.marca.name)===normalizar(marca);
+}
+
 /** A marca só pode ser tratada como declarada quando foi informada no
  * pedido ATUAL, não porque o modelo a recuperou de outra cotação.
  */
@@ -62,7 +99,10 @@ export function marcaDeclaradaNoPedido(
  const alvo=normalizar(marca);
  if(!alvo)return false;
  return mensagens.some(frase=>{
-   const texto=" "+normalizar(frase)+" ";
+   const textoNormalizado=normalizar(frase);
+   // A negativa "não é Jaguar" não declara Jaguar como fabricante.
+   if(/^(?:nao|nem|nunca)\b/.test(textoNormalizado))return false;
+   const texto=" "+textoNormalizado+" ";
    return texto.includes(" "+alvo+" ");
  });
 }
