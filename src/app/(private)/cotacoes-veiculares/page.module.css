@@ -1634,3 +1634,96 @@
   }
   .quoteComparisonPanel .comparisonActions>button svg{width:15px;height:15px}
 }
+
+
+/* Configurações > Classificar modelo: regras comerciais por família FIPE. */
+.configurationStack{display:flex;flex-direction:column;gap:28px;min-width:0;width:100%}
+.modelClassCard{display:flex;align-items:center;gap:19px;min-width:0;width:100%;box-sizing:border-box;padding:23px 25px;border-radius:20px;border:1px solid var(--crm-border,#d9e7e9);background:linear-gradient(118deg,var(--crm-surface,#fff) 0%,#f5faf9 60%,#eff7f7 100%);box-shadow:0 12px 30px rgba(15,65,84,.055)}
+.modelClassIcon{display:grid;place-items:center;width:54px;height:54px;flex:0 0 54px;border-radius:16px;background:linear-gradient(145deg,#ddf5ed,#e5f0fa);border:1px solid #c8e8df;color:#1c8279}
+.modelClassDescription{display:flex;flex-direction:column;align-items:flex-start;min-width:0;flex:1}
+.modelClassDescription h2{margin:6px 0 7px;color:var(--crm-text-strong,#264453);font-size:21px;font-weight:820;letter-spacing:-.03em}
+.modelClassDescription p{max-width:740px;margin:0;color:var(--crm-text-muted,#6a8090);font-size:13px;line-height:1.6}
+.modelClassCount{display:inline-flex;align-items:center;gap:6px;color:#218276;font-size:11px;font-weight:770;margin-top:12px}
+.modelClassOpen,.modelClassAdd{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:10px 16px;border-radius:11px;border:1px solid #187d76;background:linear-gradient(135deg,#218f83,#126b75);color:#fff;font-size:12.5px;font-weight:790;white-space:nowrap;cursor:pointer;box-shadow:0 5px 14px rgba(20,121,113,.17);transition:transform .15s,box-shadow .15s}
+.modelClassOpen:hover,.modelClassAdd:hover{transform:translateY(-1px);box-shadow:0 8px 17px rgba(20,121,113,.24)}
+.modelClassOpen:disabled,.modelClassAdd:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.modelClassModal{display:flex;flex-direction:column;width:min(100%,1050px);height:min(86dvh,800px);max-height:calc(100dvh - 28px);min-width:0;overflow:hidden;border:1px solid var(--crm-border,#d8e5e8);border-radius:23px;background:var(--crm-surface,#fff);box-shadow:0 30px 100px rgba(7,23,33,.28);color:var(--crm-text,#244451)}
+.modelClassModal .planWizardTitle h2{font-size:21px}
+.modelClassModal .modelClassIcon{width:45px;height:45px;flex-basis:45px;border-radius:13px}
+.modelClassBody{display:flex;flex:1;flex-direction:column;gap:17px;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px}
+.modelClassToolbar{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.modelClassIntro{min-width:0;flex:1}
+.modelClassIntro strong{font-size:17px;letter-spacing:-.02em;color:var(--crm-text-strong,#244653)}
+.modelClassIntro p{margin:6px 0 0;color:var(--crm-text-muted,#718594);font-size:12px;line-height:1.5}
+.modelClassListTop{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.modelClassListTop>span{font-size:11px;font-weight:760;color:#7a8e98;white-space:nowrap}
+.modelClassSearch{display:flex;align-items:center;gap:9px;flex:1;max-width:420px;min-width:190px;min-height:42px;padding:0 12px;border:1px solid #dce8ea;border-radius:11px;background:#f9fcfc;color:#73919a}
+.modelClassSearch:focus-within{border-color:#88cfc3;box-shadow:0 0 0 3px #e4f6f1}
+.modelClassSearch input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:#253f4b;font-size:12.5px}
+.modelClassSearch input::placeholder{color:#9aaab4}
+.modelClassTableWrap{min-width:0;border:1px solid #e0e9eb;border-radius:14px;overflow:auto;background:#fff}
+.modelClassTable{width:100%;border-collapse:collapse;min-width:640px;text-align:left}
+.modelClassTable th{padding:13px 16px;background:#f4f8f9;border-bottom:1px solid #e2ebee;color:#738996;font-size:10px;text-transform:uppercase;letter-spacing:.085em;font-weight:800}
+.modelClassTable td{padding:15px 16px;border-bottom:1px solid #ebf0f1;vertical-align:middle;font-size:12.5px;color:#304c59}
+.modelClassTable tbody tr:last-child td{border-bottom:0}
+.modelClassTable tbody tr:hover{background:#fbfdfd}
+.modelClassVehicle{display:flex;align-items:center;gap:11px}
+.modelClassVehicle>span{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#eaf5f2;color:#258376}
+.modelClassVehicle>div{display:flex;flex-direction:column;min-width:0;gap:4px}
+.modelClassVehicle strong,.modelClassModelName{display:block;font-size:12.5px;color:#254452;font-weight:780;overflow-wrap:anywhere}
+.modelClassVehicle small,.modelClassFamily{display:block;margin-top:4px;color:#81939f;font-size:10.5px}
+.modelClassCategory{display:inline-flex;max-width:100%;min-height:27px;align-items:center;padding:5px 9px;border-radius:8px;background:#eaf6f2;border:1px solid #cbe7dd;color:#257766;font-size:11px;font-weight:800;white-space:nowrap}
+.modelClassActions{display:flex;align-items:center;gap:7px}
+.modelClassActions button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:34px;padding:7px 9px;border:1px solid #dce7e9;border-radius:8px;background:#fff;color:#356473;font-size:11px;font-weight:780;cursor:pointer;white-space:nowrap}
+.modelClassActions button:hover{background:#edf7f6;border-color:#afd9d1}
+.modelClassActions .modelClassDanger{color:#ac5457;border-color:#f1dad9}
+.modelClassActions .modelClassDanger:hover{background:#fff0ef;border-color:#efbfbd}
+.modelClassActions button:disabled{opacity:.5;cursor:not-allowed}
+.modelClassReadonly{font-size:11px;color:#93a3ac}
+.modelClassEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:225px;padding:25px;text-align:center;color:#39867d}
+.modelClassEmpty strong{font-size:14px;color:#345563}
+.modelClassEmpty p{margin:0;max-width:320px;font-size:12px;line-height:1.5;color:#82959f}
+.modelClassFootnote{margin:0;padding:11px 13px;border:1px solid #dfebea;border-radius:10px;background:#f9fbfb;font-size:11px;line-height:1.65;color:#7a8e99}
+.modelClassFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;padding:15px 24px;background:#f9fcfc;border-top:1px solid #e3ecee}
+.modelClassFooter span{font-size:11px;color:#8498a3}
+.modelClassFooter button,.modelClassFormActions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:9px 17px;border-radius:10px;font-size:12px;font-weight:760;cursor:pointer}
+.modelClassForm{display:flex;flex-direction:column;gap:16px;padding:19px;border:1px solid #d1e7e3;border-radius:16px;background:linear-gradient(143deg,#f7fcfb,#f0f8f6)}
+.modelClassFormHeading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.modelClassFormHeading span{font-size:10px;font-weight:830;letter-spacing:.14em;color:#28867b}
+.modelClassFormHeading h3{margin:4px 0 0;font-size:17px;letter-spacing:-.02em;color:#284a57}
+.modelClassFormHeading button{display:grid;place-items:center;width:31px;height:31px;border:0;border-radius:8px;background:#e4f1ed;color:#668591;cursor:pointer}
+.modelClassFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.modelClassFields label{display:flex;flex-direction:column;gap:7px;min-width:0;font-size:11px;font-weight:780;color:#587481}
+.modelClassFields input,.modelClassFields select{width:100%;min-width:0;min-height:43px;padding:10px 12px;border:1px solid #cddfe0;border-radius:10px;background:#fff;color:#2b4553;font:inherit;font-size:13.5px;box-sizing:border-box}
+.modelClassFields input:focus,.modelClassFields select:focus{outline:2px solid #b0e5d7;outline-offset:1px}
+.modelClassHint{display:flex;align-items:flex-start;gap:8px;margin:0;color:#618b85;font-size:11px;line-height:1.65}
+.modelClassHint svg{flex:0 0 16px;margin-top:1px}
+.modelClassFormActions{display:flex;justify-content:flex-end;gap:9px}
+.modelClassConfirmOverlay{position:fixed;inset:0;z-index:11080;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(10,24,34,.6);backdrop-filter:blur(3px)}
+@media(max-width:740px){
+  .configurationStack{gap:21px}
+  .modelClassCard{align-items:flex-start;padding:17px;gap:12px;flex-wrap:wrap}
+  .modelClassIcon{width:44px;height:44px;flex:0 0 44px}
+  .modelClassDescription{flex:1 1 calc(100% - 60px)}
+  .modelClassDescription h2{font-size:18px}
+  .modelClassOpen{width:100%}
+  .modelClassModal{height:min(92dvh,900px);max-height:calc(100dvh - 18px);border-radius:17px}
+  .modelClassBody{padding:15px;gap:14px}
+  .modelClassModal .planWizardHeader{padding:15px}
+  .modelClassFooter{padding:13px 15px}
+  .modelClassForm{padding:15px}
+  .modelClassFields{grid-template-columns:minmax(0,1fr);gap:12px}
+  .modelClassFields input,.modelClassFields select{font-size:16px}
+  .modelClassListTop{align-items:stretch}
+  .modelClassSearch{max-width:none;min-width:0;flex:1 1 100%}
+  .modelClassTable{display:block;min-width:0}
+  .modelClassTable thead{display:none}
+  .modelClassTable tbody{display:block;padding:8px}
+  .modelClassTable tr{display:grid;gap:3px;margin:0 0 9px;padding:11px;border:1px solid #e2ecee;border-radius:12px;background:#fff}
+  .modelClassTable tr:last-child{margin-bottom:0}
+  .modelClassTable td{display:block;border:0!important;padding:5px 2px}
+  .modelClassTable td:last-child{padding-top:10px;border-top:1px solid #ebf0f1!important}
+  .modelClassActions button{flex:1}
+  .modelClassCategory{white-space:normal}
+  .modelClassFormActions button{flex:1;padding:9px 11px}
+}

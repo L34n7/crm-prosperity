@@ -4,12 +4,26 @@ import { CATEGORIAS_COTACAO,type CategoriaCotacao } from "./catalogo";
 import { precoFipeCentavos,type TipoFipe,type DetalheFipe } from "./fipe";
 import {motorizacaoDaFipe,type UsoVeiculo} from "./comercial";
 import {categoriaAutomaticaPorFipe,categoriaBaseEfetivaFipe} from "./classificacao-automatica";
+import {selecionarRegraModelo,type RegraModeloCotacao} from "./regras-modelos";
 
 export type ClassificacaoFipe={
  categoria:CategoriaCotacao|null;categoria_base:CategoriaCotacao|null;
  origem:"automatica"|"manual";pendente:boolean;
 };
 const admin=getSupabaseAdmin();
+
+async function regraComercialDoModelo(params:{
+  empresaId:string;tipo:TipoFipe;marca:string;modelo:string;
+}):Promise<RegraModeloCotacao|null>{
+  const {data,error}=await admin.from("cotacao_veicular_regras_modelos")
+    .select("tipo_fipe,marca,modelo,categoria")
+    .eq("empresa_id",params.empresaId).eq("tipo_fipe",params.tipo)
+    .limit(500);
+  if(error)throw new Error("Falha ao consultar classificação por modelo: "+error.message);
+  return selecionarRegraModelo((data||[]) as RegraModeloCotacao[],{
+    tipo_fipe:params.tipo,marca:params.marca,modelo:params.modelo,
+  });
+}
 export async function classificarVeiculoFipe(params:{
  empresaId:string;tipo:TipoFipe;codigoFipe:string;modelo:string;uso:UsoVeiculo;
 }):Promise<ClassificacaoFipe>{
@@ -73,12 +87,15 @@ export async function registrarConsultaFipe(params:{
  );
  const chave={empresa_id:empresaId,tipo_fipe:tipo,
    codigo_fipe:veiculo.codeFipe,codigo_ano_fipe:anoCodigo};
- const [classificacao,consulta]=await Promise.all([
+ const [classificacao,consulta,regraModelo]=await Promise.all([
    classificarVeiculoFipe({
      empresaId,tipo,codigoFipe:veiculo.codeFipe,modelo:veiculo.model,uso,
    }),
    admin.from("cotacao_veicular_catalogo_fipe")
      .select("categoria").match(chave).maybeSingle(),
+   regraComercialDoModelo({
+     empresaId,tipo,marca:veiculo.brand,modelo:veiculo.model,
+   }),
  ]);
  if(consulta.error)throw new Error(consulta.error.message);
  const categoriaExistente=consulta.data?.categoria as CategoriaCotacao|null|undefined;
@@ -87,8 +104,14 @@ export async function registrarConsultaFipe(params:{
    origemClassificacao:classificacao.origem,
    categoriaCatalogo:categoriaExistente,
  });
- const categoria=categoriaBase==="auto_leves"&&(uso==="aplicativo"||uso==="taxi")
-   ?"app_taxi":categoriaBase;
+ // A regra por FAMÍLIA prevalece sobre o automático e o catálogo por
+ // ano, mas nunca sobre a classificação manual específica do código FIPE.
+ // O catálogo conserva a categoria-base; remover uma regra deve voltar ao
+ // comportamento anterior, sem deixar categorias comerciais gravadas no cache.
+ const categoriaRegra=classificacao.origem==="manual"?null:regraModelo?.categoria;
+ const categoriaBaseEfetiva=categoriaRegra||categoriaBase;
+ const categoria=categoriaBaseEfetiva==="auto_leves"&&(uso==="aplicativo"||uso==="taxi")
+   ?"app_taxi":categoriaBaseEfetiva;
  const valores={
    marca:veiculo.brand.slice(0,160),modelo:veiculo.model.slice(0,240),
    ano_modelo:veiculo.modelYear,combustivel:veiculo.fuel.slice(0,80),energia,
@@ -116,6 +139,6 @@ export async function registrarConsultaFipe(params:{
      });
    if(error)throw new Error("Falha ao inserir catálogo FIPE: "+error.message);
  }
- return {categoria,categoria_base:categoriaBase,origem:classificacao.origem,
-   pendente:!categoria};
+ return {categoria,categoria_base:categoriaBaseEfetiva,
+   origem:categoriaRegra?"manual":classificacao.origem,pendente:!categoria};
 }

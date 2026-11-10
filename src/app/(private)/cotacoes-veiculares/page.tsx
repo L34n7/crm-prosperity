@@ -12,6 +12,7 @@ import {
 } from "@/lib/cotacoes-veiculares/catalogo";
 import { ENERGIAS_VEICULO, USOS_VEICULO, motorizacaoDaFipe, type UsoVeiculo, type EnergiaVeiculo, type RegraComercialPlano, type OpcionalComercial } from "@/lib/cotacoes-veiculares/comercial";
 import PlanosCotacao, {type ArquivoPlano} from "./PlanosCotacao";
+import ClassificarModelos from "./ClassificarModelos";
 import SeletorFipe from "./SeletorFipe";
 import {formatarPropostaVeicular} from "@/lib/cotacoes-veiculares/formatar-proposta";
 import {recalcularAdesaoDinamica,type TaxasDaCotacao} from "@/lib/cotacoes-veiculares/condicoes-contratacao";
@@ -361,7 +362,7 @@ export default function CotacoesVeicularesPage() {
       {sucesso&&<div className={styles.success} role="status">{sucesso}</div>}
       <nav className={styles.tabs} aria-label="Seções de cotação">
         <button type="button" aria-pressed={aba==="nova"} className={aba==="nova"?styles.active:""} onClick={()=>setAba("nova")}><Calculator size={17}/><span>Nova cotação</span></button>
-        <button type="button" aria-pressed={aba==="tabela"} className={aba==="tabela"?styles.active:""} onClick={()=>setAba("tabela")}><Settings2 size={17}/><span className={styles.tabLabelDesktop}>Planos</span><span className={styles.tabLabelMobile}>Planos</span></button>
+        <button type="button" aria-pressed={aba==="tabela"} className={aba==="tabela"?styles.active:""} onClick={()=>setAba("tabela")}><Settings2 size={17}/><span className={styles.tabLabelDesktop}>Configurações</span><span className={styles.tabLabelMobile}>Configurações</span></button>
         <button type="button" aria-pressed={aba==="historico"} className={aba==="historico"?styles.active:""} onClick={()=>setAba("historico")}><ClipboardList size={17}/><span>Histórico</span></button>
       </nav>
 
@@ -601,15 +602,16 @@ export default function CotacoesVeicularesPage() {
         </section>
       </div>}
 
-      {!carregando&&aba==="tabela"&&<>
+      {!carregando&&aba==="tabela"&&<div className={styles.configurationStack}>
         <PlanosCotacao planos={planos} arquivos={arquivos} categoria={categoria}
           onCategoria={setCategoria} faixas={faixas} regras={regras} opcionais={catalogoExtras}
           podeConfigurar={podeConfigurar} onUpdated={atualizarTudo}/>
+        <ClassificarModelos podeConfigurar={podeConfigurar}/>
         {status.pendencias.length>0&&<div className={styles.completionStatus}>
           <strong>O que falta para habilitar a cotação automática</strong>
           <ul>{status.pendencias.slice(0,12).map((p,i)=><li key={i}>{p}</li>)}</ul>
         </div>}
-      </>}
+      </div>}
       {!carregando&&aba==="historico"&&<section className={styles.panel}>
         <div className={styles.sectionHeading}><h2>Histórico de cotações</h2>
           <p>Os planos da mesma proposta são exibidos juntos, com data, origem e situação.</p></div>
