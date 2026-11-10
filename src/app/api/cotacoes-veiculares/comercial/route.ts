@@ -42,14 +42,14 @@ function erro(e:unknown,status=400) {
 }
 
 async function normalizarOpcionaisDaEmpresa(
-  empresaId:string,plano:string,categorias:string[],itens:OpcionalComercial[],
+  empresaId:string,plano:string,itens:OpcionalComercial[],
 ):Promise<OpcionalComercial[]>{
   if(!Array.isArray(itens)||itens.length>60||itens.some(item=>!item||
     typeof item!=="object"||typeof item.nome!=="string"))
     throw new Error("Lista de opcionais inválida.");
   const {data,error}=await getSupabaseAdmin().from("cotacao_veicular_opcionais_empresa")
     .select("codigo,nome").eq("empresa_id",empresaId).eq("plano",plano)
-    .in("categoria",categorias);
+    .limit(1000);
   if(error)throw error;
   return gerarCodigosOpcionais(itens,(data||[]) as {codigo:string;nome:string}[]);
 }
@@ -158,7 +158,7 @@ export async function POST(req:Request) {
         categorias.forEach(c=>usadas.add(c));
         if(!Array.isArray(bruto.opcionais))throw new Error("Lista de opcionais inválida.");
         const opcionais=await normalizarOpcionaisDaEmpresa(
-          auth.empresaId!,plano,categorias,bruto.opcionais as OpcionalComercial[],
+          auth.empresaId!,plano,bruto.opcionais as OpcionalComercial[],
         );
         const falha=validarRegraComercial(regra,opcionais);
         if(falha)throw new Error(falha);
@@ -179,7 +179,7 @@ export async function POST(req:Request) {
          !(await listarPlanosEmpresa(auth.empresaId!,true)).some(plano=>plano.codigo===regra.plano))throw new Error("Categoria ou plano inválido.");
       if(!Array.isArray(body.opcionais))throw new Error("Lista de opcionais inválida.");
       const opcionais=await normalizarOpcionaisDaEmpresa(
-        auth.empresaId!,regra.plano,[regra.categoria],
+        auth.empresaId!,regra.plano,
         body.opcionais as OpcionalComercial[],
       );
       const erroValidacao=validarRegraComercial(regra,opcionais);
