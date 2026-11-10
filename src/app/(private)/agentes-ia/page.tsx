@@ -34,6 +34,8 @@ import MateriaisVinculadosEditor from "./components/MateriaisVinculadosEditor";
 import type { MaterialVinculado } from "@/lib/agentes-ia/materiais-config";
 import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerramentaSelect";
 import FollowupInatividadeEditor from "./components/FollowupInatividadeEditor";
+import DelayDinamicoEditor from "./components/DelayDinamicoEditor";
+import { normalizarDelayDinamico } from "@/lib/agentes-ia/delay-dinamico";
 import CotacaoPosCotacaoEditor from "./components/CotacaoPosCotacaoEditor";
 import CotacaoPlanosFerramentaEditor from "./components/CotacaoPlanosFerramentaEditor";
 import {
@@ -404,6 +406,7 @@ function normalizarAgente(
   clone.metadata_json = {
     ...metadata,
     followup_inatividade: normalizarFollowupInatividade(metadata.followup_inatividade),
+    delay_dinamico: normalizarDelayDinamico(metadata.delay_dinamico),
   };
   clone.fallback_tipo = ["fluxo", "transferir_humano", "nenhum"].includes(
     clone.fallback_tipo
@@ -543,6 +546,8 @@ export default function AgentesIaPage() {
     () => normalizarFollowupInatividade(editor?.metadata_json?.followup_inatividade),
     [editor?.metadata_json]
   );
+
+  const delayDinamico = normalizarDelayDinamico(editor?.metadata_json?.delay_dinamico);
 
   const todosFluxosEconomico = (editor?.fluxos_ids || []).length === 0;
   const gatilhosValidos = (editor?.gatilhos || []).filter((item) => item.valor.trim());
@@ -929,6 +934,7 @@ export default function AgentesIaPage() {
           instrucoes: editor.instrucoes,
           max_mensagens_contexto: editor.max_mensagens_contexto,
           debounce_ms: editor.debounce_ms,
+          delay_dinamico: delayDinamico,
           followup_inatividade: followupInatividade,
           modo_atendimento: editor.modo_atendimento,
           fluxos_ids: editor.fluxos_ids || [],
@@ -1539,6 +1545,18 @@ export default function AgentesIaPage() {
                       </label>
                     </div>
 
+                    <DelayDinamicoEditor
+                      value={delayDinamico}
+                      onChange={(delay_dinamico) => {
+                        setEditor({
+                          ...editor,
+                          metadata_json: {
+                            ...(editor.metadata_json || {}),
+                            delay_dinamico,
+                          },
+                        });
+                      }}
+                    />
                     <FollowupInatividadeEditor
                       value={followupInatividade}
                       onChange={(followup) => {

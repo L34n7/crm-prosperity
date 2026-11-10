@@ -8,6 +8,7 @@ import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import { registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
+import { calcularDelayDinamicoMs, normalizarDelayDinamico } from "./delay-dinamico";
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
@@ -627,10 +628,19 @@ async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
     : mensagens.map(item=>textoWhatsappComQuebras(item,3500)).filter(Boolean).slice(0,3);
   if(ctx.cotacaoFormatada&&limpas.some(texto=>texto.length>4000))
     throw new Error("Mensagem de cotação excedeu o limite seguro de caracteres do WhatsApp.");
+  const delayDinamico = normalizarDelayDinamico(ctx.agente?.metadata_json?.delay_dinamico);
   for (let indice = 0; indice < limpas.length; indice++) {
-    if (indice > 0) {
+    if (delayDinamico.ativo) {
+      const tempo = calcularDelayDinamicoMs(limpas[indice], delayDinamico);
+      if (tempo > 0) await new Promise((resolve) => setTimeout(resolve, tempo));
+    } else if (indice > 0) {
       const delay = Math.min(1200, Math.max(450, 350 + limpas[indice - 1].length * 2));
       await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    if (delayDinamico.ativo && !ctx.acaoCriticaExecutada) {
+      const { data: atual } = await supabaseAdmin.from("agente_ia_pendencias")
+        .select("versao").eq("id", ctx.pendencia.id).maybeSingle();
+      if (Number(atual?.versao || 0) > Number(ctx.pendencia.versao)) break;
     }
     await enviarMensagem({
       empresaId: ctx.pendencia.empresa_id,

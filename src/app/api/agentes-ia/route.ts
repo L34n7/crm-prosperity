@@ -13,6 +13,7 @@ import {
   normalizarFollowupInatividade,
 } from "@/lib/agentes-ia/followup-config";
 import { listarGruposDistribuicao } from "@/lib/agendas/capacidade";
+import { DELAY_DINAMICO_PADRAO, normalizarDelayDinamico } from "@/lib/agentes-ia/delay-dinamico";
 import { obterGrupoDistribuicao } from "@/lib/agendas/distribuicao";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -788,6 +789,7 @@ export async function POST(request: Request) {
         debounce_ms: 1200,
         integracoes_whatsapp_ids: [],
         metadata_json: {
+          delay_dinamico: { ...DELAY_DINAMICO_PADRAO },
           followup_inatividade: {
             ...FOLLOWUP_INATIVIDADE_PADRAO,
             intervalos_minutos: [...FOLLOWUP_INATIVIDADE_PADRAO.intervalos_minutos],
@@ -1202,6 +1204,7 @@ export async function PATCH(request: Request) {
     const followupInatividade = normalizarFollowupInatividade(
       body.followup_inatividade ?? metadataAtual.followup_inatividade
     );
+    const delayDinamico = normalizarDelayDinamico(body.delay_dinamico ?? metadataAtual.delay_dinamico);
     const erroFollowup = erroValidacaoFollowupInatividade(followupInatividade);
     if (erroFollowup) {
       return NextResponse.json(
@@ -1268,6 +1271,7 @@ export async function PATCH(request: Request) {
       metadata_json: {
         ...metadataAtual,
         followup_inatividade: followupInatividade,
+        delay_dinamico: delayDinamico,
       },
       updated_by: contexto.usuario.id,
       updated_at: new Date().toISOString(),
