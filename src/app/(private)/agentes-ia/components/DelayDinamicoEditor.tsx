@@ -20,6 +20,9 @@ export default function DelayDinamicoEditor({ value, onChange }: Props) {
   const amostra = config.unidade === "palavras"
     ? "Olá, posso te mostrar como o sistema funciona na prática e como ele ajuda sua equipe a atender os clientes."
     : "O CRM organiza os atendimentos e automatiza as respostas.";
+  const totalExemplo = config.unidade === "palavras"
+    ? amostra.trim().split(/\s+/u).length
+    : Array.from(amostra).length;
   const segundosExemplo = (calcularDelayDinamicoMs(amostra, { ...config, ativo: true }) / 1000)
     .toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
@@ -92,7 +95,7 @@ export default function DelayDinamicoEditor({ value, onChange }: Props) {
             </label>
           </div>
           <p className={styles.previa}>
-            Exemplo: uma mensagem de {config.unidade === "palavras" ? "20 palavras" : "54 caracteres"} aguarda aproximadamente <strong>{segundosExemplo}s</strong>.
+            Exemplo: uma mensagem de {totalExemplo} {config.unidade} aguarda aproximadamente <strong>{segundosExemplo}s</strong>.
             O limite máximo evita esperas exageradas.
           </p>
         </>

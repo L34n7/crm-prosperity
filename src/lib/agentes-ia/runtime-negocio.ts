@@ -8,7 +8,7 @@ import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import { registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
-import { calcularDelayDinamicoMs, normalizarDelayDinamico } from "./delay-dinamico";
+import { calcularDelayDinamicoMs, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, normalizarDelayDinamico } from "./delay-dinamico";
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
@@ -629,10 +629,17 @@ async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
   if(ctx.cotacaoFormatada&&limpas.some(texto=>texto.length>4000))
     throw new Error("Mensagem de cotação excedeu o limite seguro de caracteres do WhatsApp.");
   const delayDinamico = normalizarDelayDinamico(ctx.agente?.metadata_json?.delay_dinamico);
+  let atrasoTotalMs = 0;
   for (let indice = 0; indice < limpas.length; indice++) {
     if (delayDinamico.ativo) {
-      const tempo = calcularDelayDinamicoMs(limpas[indice], delayDinamico);
-      if (tempo > 0) await new Promise((resolve) => setTimeout(resolve, tempo));
+      const tempo = Math.min(
+        calcularDelayDinamicoMs(limpas[indice], delayDinamico),
+        Math.max(0, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS - atrasoTotalMs),
+      );
+      if (tempo > 0) {
+        await new Promise((resolve) => setTimeout(resolve, tempo));
+        atrasoTotalMs += tempo;
+      }
     } else if (indice > 0) {
       const delay = Math.min(1200, Math.max(450, 350 + limpas[indice - 1].length * 2));
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -882,7 +889,7 @@ export async function processarPendenciaNegocio(
       supabaseAdmin
         .from("agentes_ia")
         .select(
-          "id, empresa_id, nome, status, modelo, prompt_sistema, tom_voz, instrucoes, max_mensagens_contexto, fallback_tipo, fallback_fluxo_id, fallback_transferencia_json"
+          "id, empresa_id, nome, status, modelo, prompt_sistema, tom_voz, instrucoes, max_mensagens_contexto, metadata_json, fallback_tipo, fallback_fluxo_id, fallback_transferencia_json"
         )
         .eq("empresa_id", pendencia.empresa_id)
         .eq("id", pendencia.agente_id)

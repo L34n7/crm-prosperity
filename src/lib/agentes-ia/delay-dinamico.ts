@@ -9,6 +9,9 @@ export type ConfigDelayDinamico = {
   maximo_segundos: number;
 };
 
+/** Evita exceder o tempo de execução em respostas com muitos balões (ex.: cotações). */
+export const LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS = 24000;
+
 export const DELAY_DINAMICO_PADRAO: ConfigDelayDinamico = {
   ativo: false,
   unidade: "palavras",

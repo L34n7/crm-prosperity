@@ -25,7 +25,7 @@ import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribu
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
-import { calcularDelayDinamicoMs, normalizarDelayDinamico } from "./delay-dinamico";
+import { calcularDelayDinamicoMs, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, normalizarDelayDinamico } from "./delay-dinamico";
 import { enviarMaterialDoAgente } from "./enviar-material";
 import { normalizarMateriais } from "./materiais-config";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
@@ -1961,11 +1961,18 @@ async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[])
   }
   const limpas = protegerMensagensSaida(mensagens,MAX_MENSAGENS_SAIDA);
   let mensagensEnviadas = 0;
+  let atrasoTotalMs = 0;
   const delayDinamico = normalizarDelayDinamico(ctx.agente.metadata_json?.delay_dinamico);
   for (let indice = 0; indice < limpas.length; indice++) {
     if (delayDinamico.ativo) {
-      const tempo = calcularDelayDinamicoMs(limpas[indice], delayDinamico);
-      if (tempo > 0) await esperar(tempo);
+      const tempo = Math.min(
+        calcularDelayDinamicoMs(limpas[indice], delayDinamico),
+        Math.max(0, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS - atrasoTotalMs),
+      );
+      if (tempo > 0) {
+        await esperar(tempo);
+        atrasoTotalMs += tempo;
+      }
     } else if (indice > 0) {
       const anterior = limpas[indice - 1];
       const delay = Math.min(1350, Math.max(550, 420 + anterior.length * 3));
