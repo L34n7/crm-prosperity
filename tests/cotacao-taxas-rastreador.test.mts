@@ -174,17 +174,17 @@ test("cada plano preserva rastreador próprio para a cotação",()=>{
   assert.equal(calcular("completo").rastreador_instalacao_centavos,18000);
 });
 
-test("adesão dinâmica SaveCar: mensalidade 463,17 + 150 e instalação 150",()=>{
+test("adesão dinâmica SaveCar: mostra apenas o valor final de adesão, sem fórmula",()=>{
   const condicoes={...savecar,adesao_tipo:"mensalidade_mais_taxa" as const,
-    adesao_centavos:15000};
+    adesao_centavos:15003};
   const t=calcularTaxasContratacao({
     condicoes,categoria:"auto_leves",tipoFipe:"cars",
     valorFipeCentavos:8609800,mensalidadeSemRastreadorCentavos:46317,
   });
-  assert.equal(t.adesao_adicional_centavos,15000);
-  assert.equal(t.adesao_centavos,61317);
-  assert.equal(t.taxas_unicas_centavos,30000);
-  assert.equal(t.primeiro_pagamento_centavos,76317);
+  assert.equal(t.adesao_adicional_centavos,15003);
+  assert.equal(t.adesao_centavos,61320);
+  assert.equal(t.taxas_unicas_centavos,30003);
+  assert.equal(t.primeiro_pagamento_centavos,76320);
   const mensagem=formatarPropostaVeicular({
     veiculo:"Chevrolet SPIN LT 1.8",uso:"Particular",
     planos:[{plano_nome:"Premium",mensalidade_base_centavos:46317,
@@ -193,8 +193,9 @@ test("adesão dinâmica SaveCar: mensalidade 463,17 + 150 e instalação 150",()
       assistencias_ano:12,carro_reserva_incluso_dias:0,coberturas:[],
       opcionais:[],observacoes:"",tabela_validada:true,...t}],
   });
-  assert.match(mensagem,/Adesão \(primeira mensalidade de R\$\s*463,17 \+ taxa adicional de R\$\s*150,00\): R\$\s*613,17/);
-  assert.match(mensagem,/Total para contratar agora: R\$\s*763,17/);
+  assert.match(mensagem,/• Adesão: R\$\s*613,20/);
+  assert.doesNotMatch(mensagem,/primeira mensalidade de|taxa adicional de|150,03/);
+  assert.match(mensagem,/Total para contratar agora: R\$\s*763,20/);
   assert.match(mensagem,/Próxima mensalidade \(em 30 dias\): R\$\s*463,17/);
   assert.doesNotMatch(mensagem,/Total das taxas únicas: R\$\s*763,17/);
 });

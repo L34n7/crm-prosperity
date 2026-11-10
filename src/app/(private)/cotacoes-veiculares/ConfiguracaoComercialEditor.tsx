@@ -383,13 +383,15 @@ const ConfiguracaoComercialEditor=forwardRef<EditorHandle,Props>(function Config
    })}
   </div>
   {codigoCondicoes&&(
-    <CondicoesContratacaoEditor
-      value={condicoes}
-      onChange={setCondicoes}
-      podeConfigurar={podeConfigurar}
-      carregando={condicoesCarregando}
-      erro={condicoesErro}
-    />
+    <div className={styles.commercialConditionsBlock}>
+      <CondicoesContratacaoEditor
+        value={condicoes}
+        onChange={setCondicoes}
+        podeConfigurar={podeConfigurar}
+        carregando={condicoesCarregando}
+        erro={condicoesErro}
+      />
+    </div>
   )}
  </section>;
 });

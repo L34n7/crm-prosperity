@@ -117,16 +117,8 @@ export function formatarPropostaVeicular(dados:DadosProposta):string{
     if(plano.adesao_ativa||plano.rastreador_obrigatorio){
       linhas.push("","🧾 *TAXAS DE CONTRATAÇÃO*");
       if(plano.adesao_ativa){
-        if(adesaoDinamica){
-          linhas.push("• Adesão (primeira mensalidade de "+moeda(mensalidadeEfetiva)+
-            " + taxa adicional de "+(plano.adesao_adicional_centavos==null
-              ?"valor a confirmar":moeda(plano.adesao_adicional_centavos))+"): "+
-            (plano.adesao_centavos==null?"a confirmar":moeda(plano.adesao_centavos)));
-        }else{
-          linhas.push("• Adesão: "+(plano.adesao_centavos==null
-            ?"valor a confirmar com a equipe"
-            :moeda(plano.adesao_centavos)+" (pagamento único)"));
-        }
+        linhas.push("• Adesão: "+(plano.adesao_centavos==null
+          ?"valor a confirmar com a equipe":moeda(plano.adesao_centavos)));
       }
       if(plano.rastreador_obrigatorio){
         linhas.push(

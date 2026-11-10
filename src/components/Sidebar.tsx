@@ -352,7 +352,7 @@ export default function Sidebar({
         ]
       : []),
     ...(nichoConfig.modulos.includes("seguro_veicular.cotacoes")
-      ? [{ label: "Cotação", href: "/cotacoes-veiculares", icon: Calculator }]
+      ? [{ label: "Cotação veicular", href: "/cotacoes-veiculares", icon: Calculator }]
       : []),
     ...(nichoConfig.modulos.includes("imobiliario.imoveis")
       ? [

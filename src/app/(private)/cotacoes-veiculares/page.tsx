@@ -330,13 +330,13 @@ export default function CotacoesVeicularesPage() {
   const alertaTabela=!carregando&&configuracaoCarregada&&!status.pronta;
 
   return (<>
-    <Header title="Cotação" subtitle="Simule, configure e acompanhe propostas de proteção veicular."/>
+    <Header title="Cotação veicular" subtitle="Simule, configure e acompanhe propostas de proteção veicular."/>
     <main className={styles.page}>
       <section className={styles.hero}>
         <div className={styles.heroIcon}><CarFront size={27}/></div>
         <div className={styles.heroText}>
           <span className={styles.eyebrow}>Seguro Veicular</span>
-          <h1>Cotação de proteção veicular</h1>
+          <h1>Cotação veicular</h1>
           <p>Compare automaticamente todos os planos cadastrados pela sua empresa.</p>
         </div>
         {carregando
@@ -541,7 +541,7 @@ export default function CotacoesVeicularesPage() {
                   <strong className={styles.planPrice}>{moeda(c.total_centavos)}<small> / mês</small></strong>
                   <dl className={styles.detail}>
                     <div><dt>Mensalidade base</dt><dd>{moeda(c.mensalidade_base_centavos)}</dd></div>
-                    {c.adesao_ativa&&<div><dt>{c.adesao_tipo==="mensalidade_mais_taxa"?"Adesão (inclui 1ª mensalidade)":"Adesão (única)"}</dt>
+                    {c.adesao_ativa&&<div><dt>Adesão</dt>
                       <dd>{c.adesao_centavos==null?"A confirmar":moeda(c.adesao_centavos)}</dd></div>}
                     {c.rastreador_obrigatorio&&<>
                       <div><dt>Rastreador</dt><dd>Obrigatório</dd></div>
@@ -549,7 +549,6 @@ export default function CotacoesVeicularesPage() {
                       <div><dt>Mensalidade do rastreador</dt><dd>{c.rastreador_mensalidade_inclusa?"Inclusa na mensalidade":moeda(c.rastreador_mensalidade_adicional_centavos||0)+"/mês"}</dd></div>
                     </>}
                     {c.adesao_ativa&&c.adesao_tipo==="mensalidade_mais_taxa"&&<>
-                      <div><dt>Taxa adicional da adesão</dt><dd>{c.adesao_adicional_centavos==null?"A confirmar":moeda(c.adesao_adicional_centavos)}</dd></div>
                       <div><dt>Total para contratar</dt><dd>{c.primeiro_pagamento_centavos==null?"A confirmar":moeda(c.primeiro_pagamento_centavos)}</dd></div>
                       <div><dt>Próxima mensalidade (30 dias)</dt><dd>{moeda(c.total_centavos)}</dd></div>
                     </>}
@@ -667,7 +666,7 @@ export default function CotacoesVeicularesPage() {
                       </div>
                       <dl className={styles.detail}>
                         <div><dt>Mensalidade base</dt><dd>{moeda(item.mensalidade_base_centavos)}</dd></div>
-                        {snap?.adesao_ativa&&<div><dt>{snap.adesao_tipo==="mensalidade_mais_taxa"?"Adesão (inclui 1ª mensalidade)":"Adesão (única)"}</dt>
+                        {snap?.adesao_ativa&&<div><dt>Adesão</dt>
                           <dd>{snap.adesao_centavos==null?"A confirmar":moeda(snap.adesao_centavos)}</dd></div>}
                         {snap?.rastreador_obrigatorio&&<>
                           <div><dt>Rastreador</dt><dd>Obrigatório</dd></div>
@@ -676,7 +675,6 @@ export default function CotacoesVeicularesPage() {
                             <dd>{snap.rastreador_mensalidade_inclusa?"Inclusa":moeda(snap.rastreador_mensalidade_adicional_centavos||0)+"/mês"}</dd></div>
                         </>}
                         {snap?.adesao_ativa&&snap.adesao_tipo==="mensalidade_mais_taxa"&&<>
-                          <div><dt>Taxa adicional da adesão</dt><dd>{snap.adesao_adicional_centavos==null?"A confirmar":moeda(snap.adesao_adicional_centavos)}</dd></div>
                           <div><dt>Total para contratar</dt><dd>{snap.primeiro_pagamento_centavos==null?"A confirmar":moeda(snap.primeiro_pagamento_centavos)}</dd></div>
                           <div><dt>Próxima mensalidade (30 dias)</dt><dd>{moeda(item.total_centavos)}</dd></div>
                         </>}
