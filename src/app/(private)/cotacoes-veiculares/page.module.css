@@ -1795,18 +1795,18 @@
   padding:12px 13px;border:1px solid #d8e9e6;border-radius:12px;
   background:linear-gradient(135deg,#f9fcfc,#eff8f6)}
 .extraGroupField>label{display:block;color:var(--crm-text-muted,#537682);font-size:11px;font-weight:780}
-.extraGroupRow{display:flex;align-items:stretch;flex-wrap:wrap;gap:9px;min-width:0}
-.extraGroupRow select{flex:1 1 230px;min-width:0;box-sizing:border-box;min-height:43px;
+.extraGroupRow{display:flex;align-items:stretch;flex-wrap:nowrap;gap:9px;min-width:0}
+.extraGroupRow select{flex:1 1 auto;width:100%;min-width:0;box-sizing:border-box;min-height:43px;
   padding:9px 12px;border:1px solid #cfe1df;border-radius:10px;
   background:var(--crm-surface,#fff);font:inherit;font-size:13px;font-weight:700;color:#285360;
   cursor:pointer}
 .extraGroupRow select:focus-visible,.extraGroupNewButton:focus-visible,
 .extraGroupCreate input:focus-visible,.extraGroupCreate button:focus-visible{
   outline:2px solid #56b6a7;outline-offset:2px}
-.extraGroupNewButton{display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  flex:0 0 auto;min-height:43px;padding:10px 13px;border:1px solid #b8dbd3;
-  border-radius:10px;background:#e6f5f0;color:#187567;white-space:nowrap;
-  font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+.extraGroupNewButton{display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 43px;width:43px;height:43px;padding:0;border:1px solid #b8dbd3;
+  border-radius:10px;background:#e6f5f0;color:#187567;
+  cursor:pointer}
 .extraGroupNewButton:hover:not(:disabled){background:#d7f0e8;border-color:#95d1c4}
 .extraGroupNewButton:disabled,.extraGroupRow select:disabled{opacity:.56;cursor:not-allowed}
 .extraGroupHelp{margin:0;color:#65838a;font-size:11px;line-height:1.65}
@@ -1830,8 +1830,8 @@
 .extraGroupCreateError{font-size:11px;color:#b93844}
 @media(max-width:680px){
   .extraGroupField{padding:12px}
-  .extraGroupRow select{flex:1 1 100%;min-height:46px;font-size:16px}
-  .extraGroupNewButton{flex:1 1 100%;min-height:44px}
+  .extraGroupRow select{flex:1 1 auto;width:100%;min-height:46px;font-size:16px}
+  .extraGroupNewButton{flex:0 0 46px;width:46px;height:46px}
   .extraGroupCreateRow input{flex:1 1 calc(100% - 95px);min-height:44px!important;font-size:16px!important}
   .extraGroupNamePrefix{min-height:44px}
   .extraGroupCreateSave{flex:1}
