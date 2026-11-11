@@ -8,7 +8,7 @@ import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import { registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
-import { calcularDelayDinamicoMs, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, LIMITE_DELAY_PRIMEIRO_BALAO_MS, normalizarDelayDinamico } from "./delay-dinamico";
+import { calcularDelayEnvioBalaoMs, normalizarDelayDinamico } from "./delay-dinamico";
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
@@ -632,11 +632,7 @@ async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
   let atrasoTotalMs = 0;
   for (let indice = 0; indice < limpas.length; indice++) {
     if (delayDinamico.ativo) {
-      const tempo = Math.min(
-        calcularDelayDinamicoMs(limpas[indice], delayDinamico),
-        indice === 0 ? LIMITE_DELAY_PRIMEIRO_BALAO_MS : Number.POSITIVE_INFINITY,
-        Math.max(0, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS - atrasoTotalMs),
-      );
+      const tempo = calcularDelayEnvioBalaoMs(limpas[indice], delayDinamico, indice, atrasoTotalMs);
       if (tempo > 0) {
         await new Promise((resolve) => setTimeout(resolve, tempo));
         atrasoTotalMs += tempo;
