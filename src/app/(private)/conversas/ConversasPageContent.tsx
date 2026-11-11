@@ -2174,9 +2174,20 @@ export default function ConversasPageContent() {
         mimeType = "audio/webm";
       }
 
-      const mediaRecorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
+      // Controla o bitrate de voz para reduzir o risco de ultrapassar o
+      // limite de 4,5 MB por requisição da Vercel em gravações longas.
+      // Alguns navegadores não aceitam a configuração: mantém o fallback.
+      let mediaRecorder: MediaRecorder;
+      try {
+        mediaRecorder = new MediaRecorder(stream, {
+          ...(mimeType ? { mimeType } : {}),
+          audioBitsPerSecond: 64000,
+        });
+      } catch {
+        mediaRecorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+      }
 
       mediaRecorderRef.current = mediaRecorder;
 
@@ -5471,6 +5482,20 @@ async function baixarConversaPDF() {
 
       for (let index = 0; index < arquivos.length; index += 1) {
         const arquivo = arquivos[index];
+
+        // O proxy da Vercel pode devolver uma página HTML com HTTP 413,
+        // antes mesmo de alcançar esta API. Evita o erro genérico do Safari.
+        const limiteUploadBytes = 4_200_000;
+        if (arquivo.size > limiteUploadBytes) {
+          const tamanho = (arquivo.size / 1_000_000)
+            .toFixed(1)
+            .replace(".", ",");
+          throw new Error(
+            `O arquivo tem ${tamanho} MB e ultrapassa o limite de envio direto (4,2 MB). ` +
+              "Para áudios longos, grave em partes menores e tente novamente."
+          );
+        }
+
         const formData = new FormData();
 
         formData.append("conversa_id", conversaSelecionada.id);
@@ -5493,13 +5518,35 @@ async function baixarConversaPDF() {
           body: formData,
         });
 
-        const data = await res.json();
+        // Safari pode lançar "The string did not match the expected pattern"
+        // se res.json() tentar interpretar HTML de erro (por exemplo HTTP 413).
+        const tipoResposta = res.headers.get("content-type") || "";
+        const data: { ok?: boolean; error?: string; message?: string } | null =
+          tipoResposta.includes("application/json")
+            ? await res.json().catch(() => null)
+            : null;
 
-        if (!res.ok) {
+        if (!res.ok || data?.ok === false) {
+          if (res.status === 413) {
+            throw new Error(
+              "O arquivo ultrapassou o limite de tamanho aceito pelo servidor (4,5 MB). " +
+                "Grave o áudio em partes menores antes de reenviar."
+            );
+          }
+          const mensagemErro =
+            data?.error ||
+            `O servidor não conseguiu processar o arquivo (HTTP ${res.status}). Verifique a conexão e tente novamente.`;
           throw new Error(
             arquivos.length > 1
-              ? `Falha ao enviar a imagem ${index + 1} de ${arquivos.length}: ${data.error || "erro no envio"}`
-              : data.error || "Erro ao enviar mídia"
+              ? `Falha ao enviar a imagem ${index + 1} de ${arquivos.length}: ${mensagemErro}`
+              : mensagemErro
+          );
+        }
+
+        if (!data) {
+          throw new Error(
+            "O servidor retornou uma resposta inesperada ao receber o arquivo. " +
+              "Tente novamente e, se continuar, grave o áudio em partes menores."
           );
         }
 
@@ -5587,7 +5634,13 @@ async function baixarConversaPDF() {
         }
       }
 
-      setErro(error instanceof Error ? error.message : "Erro ao enviar mídia");
+      const mensagemErro = error instanceof Error ? error.message : "Erro ao enviar mídia";
+      setErro(
+        /the string did not match the expected pattern/i.test(mensagemErro)
+          ? "O navegador não conseguiu concluir o envio deste áudio. " +
+            "Tente novamente; se o arquivo for longo, grave em partes menores."
+          : mensagemErro
+      );
     } finally {
       setEnviando(false);
     }
