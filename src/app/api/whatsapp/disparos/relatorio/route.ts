@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { podeVisualizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { formatarErroMetaWhatsApp } from "@/lib/whatsapp/meta-error-messages";
 import { listarIntegracoesWhatsappPermitidas } from "@/lib/whatsapp/integracoes-multiplas";
 import {
   WHATSAPP_TEMPLATE_PRICING,
@@ -1061,8 +1062,11 @@ export async function GET(req: NextRequest) {
         horizontal: "center",
       };
 
-      if (linha.erro && status === "falha") {
-        statusCell.note = linha.erro;
+      if ((linha.erro || linha.erro_codigo_meta) && status === "falha") {
+        statusCell.note = formatarErroMetaWhatsApp(
+          linha.erro_codigo_meta,
+          linha.erro
+        );
       }
     });
 
@@ -1642,8 +1646,11 @@ export async function POST(req: NextRequest) {
         horizontal: "center",
       };
 
-      if (linha.erro && status === "falha") {
-        statusCell.note = linha.erro;
+      if ((linha.erro || linha.erro_codigo_meta) && status === "falha") {
+        statusCell.note = formatarErroMetaWhatsApp(
+          linha.erro_codigo_meta,
+          linha.erro
+        );
       }
     });
 

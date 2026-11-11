@@ -65,6 +65,15 @@ const ERROS_META_WHATSAPP: Record<
     significado: "A conta WhatsApp Business está bloqueada ou desativada pela Meta.",
     acao: "Verifique o WhatsApp Manager e solicite análise à Meta quando disponível.",
   },
+  131037: {
+    nome: "Nome de exibição sem aprovação para envio",
+    significado:
+      "A Meta recusou o envio porque o número fornecido pelo WhatsApp (como os números +1 555) não tem a aprovação do nome de exibição exigida para enviar mensagens. O nome pode aparecer no Gerenciador e o número estar CONNECTED, mas a Meta ainda pode bloquear esse envio. O problema é no número remetente, não no template nem nos contatos.",
+    resumo:
+      "O nome de exibição do número fornecido pela Meta precisa de aprovação para liberar os envios.",
+    acao:
+      "No Gerenciador do WhatsApp, abra o número exato da integração e confira a análise do nome de exibição. Se estiver pendente ou recusado, solicite aprovação de um nome ligado à marca. Se aparecer APPROVED ou AVAILABLE_WITHOUT_REVIEW, mas o erro 131037 continuar, confirme o Phone Number ID utilizado no envio e abra um chamado na Meta com esse ID, o código 131037 e o fbtrace_id. Não repita o disparo em massa até a situação ser resolvida.",
+  },
   131042: {
     nome: "Business Eligibility Payment Issue",
     significado: "A conta possui pendência de cobrança ou problema com a forma de pagamento na Meta.",
@@ -164,7 +173,7 @@ export type GravidadeErroMetaWhatsApp = 1 | 2 | 3;
 
 // 1: destinatário/ocorrência isolada; 2: ação preventiva; 3: bloqueio de conta.
 const CODIGOS_META_CRITICOS = new Set([
-  190, 368, 130497, 131031, 131042, 131044, 132016,
+  190, 368, 130497, 131031, 131037, 131042, 131044, 132016,
 ]);
 const CODIGOS_META_ATENCAO = new Set([
   2, 131000, 131008, 131009, 131048, 131053, 131058,

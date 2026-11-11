@@ -1764,6 +1764,16 @@ function consequenciaFalhaNoContato(codigo: number | null): ConsequenciaFalhaCon
         "Esse erro, por si só, não marca o telefone para revisão. Aguarde a liberação antes de tentar novamente.",
     };
   }
+  if (codigo === 131037) {
+    return {
+      tipo: "remetente",
+      titulo: "Bloqueio no número remetente, não no contato",
+      explicacao:
+        "O erro 131037 é uma exigência de aprovação do nome de exibição do número utilizado para enviar. " +
+        "O problema não está nos destinatários nem no template: esta falha não coloca os contatos em revisão ou pausa automaticamente. " +
+        "Resolva a aprovação do número no Gerenciador da Meta antes de reenviar a campanha.",
+    };
+  }
   if (codigo === 131048) {
     return {
       tipo: "remetente",
@@ -9030,7 +9040,7 @@ export default function DisparosWhatsAppPage() {
                                             <strong>{tipo.codigo ? `${tipo.codigo} · ${tipo.nome}` : tipo.nome}</strong>
                                           </div>
                                           <span className={styles.campaignIssueCompactDescription} title={tipo.resumo}>{tipo.resumo}</span>
-                                          {tipo.codigo === 131026 || tipo.codigo === 131049 || tipo.codigo === 131048 ? (
+                                          {tipo.codigo === 131026 || tipo.codigo === 131049 || tipo.codigo === 131048 || tipo.codigo === 131037 ? (
                                             <span className={`${styles.campaignIssueContactStatus} ${
                                               tipo.codigo === 131026 ? styles.campaignIssueContactReview :
                                               tipo.codigo === 131049 ? styles.campaignIssueContactPause :
@@ -9144,10 +9154,10 @@ export default function DisparosWhatsAppPage() {
                 <h4>O que fazer</h4>
                 <p>{falhaModal.acao}</p>
               </section>
-              {(falhaModal.codigo === 131026 || falhaModal.codigo === 131049) && (
+              {(falhaModal.codigo === 131026 || falhaModal.codigo === 131049 || falhaModal.codigo === 131037 || falhaModal.codigo === 131048) && (
                 <section className={`${styles.campaignFailureModalSection} ${styles.campaignFailureContactImpact}`}
                   data-tipo={consequenciaFalhaNoContato(falhaModal.codigo).tipo}>
-                  <h4>O contato fica em pausa ou em revisão?</h4>
+                  <h4>{falhaModal.codigo === 131037 || falhaModal.codigo === 131048 ? "O problema está no remetente ou no contato?" : "O contato fica em pausa ou em revisão?"}</h4>
                   <strong className={styles.campaignFailureContactImpactTitle}>
                     {consequenciaFalhaNoContato(falhaModal.codigo).titulo}
                   </strong>
