@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   calcularDelayDinamicoMs,
   calcularDelayEnvioBalaoMs,
-  ACRESCIMO_DELAY_ENTRE_BALOES_MS,
   normalizarDelayDinamico,
   LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS,
   LIMITE_DELAY_PRIMEIRO_BALAO_MS,
@@ -42,7 +41,7 @@ test("delay é estável para a mesma mensagem e suporta Unicode", () => {
 
 test("limites por primeiro balão e por resposta evitam esperas longas", () => {
   assert.equal(LIMITE_DELAY_PRIMEIRO_BALAO_MS, 1200);
-  assert.equal(LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, 9000);
+  assert.equal(LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, 24000);
 });
 
 test("primeiro balão mantém seu tempo original, mesmo em resposta longa", () => {
@@ -51,20 +50,51 @@ test("primeiro balão mantém seu tempo original, mesmo em resposta longa", () =
   assert.equal(calcularDelayEnvioBalaoMs(texto, ligado, 0, 0), antes);
 });
 
-test("segundo balão ganha 1,5s; respostas com um balão não ficam mais lentas", () => {
-  const texto = "A automação do CRM atende o contato, registra o histórico e encaminha o interessado para a equipe.";
-  const baseMs = calcularDelayDinamicoMs(texto, ligado);
-  assert.equal(ACRESCIMO_DELAY_ENTRE_BALOES_MS, 1500);
-  assert.equal(calcularDelayEnvioBalaoMs(texto, ligado, 1, 1200), baseMs + 1500);
-  assert.equal(calcularDelayEnvioBalaoMs(texto, ligado, 0, 0), Math.min(baseMs, 1200));
-  assert.equal(calcularDelayEnvioBalaoMs(texto, { ativo: false }, 1, 0), 0);
+test("cada balão seguinte usa o próprio tamanho, com pausas maiores", () => {
+  const textoLongo = "a".repeat(244);
+  const textoCurto = "b".repeat(111);
+  const segundo = calcularDelayEnvioBalaoMs(textoLongo, ligado, 1, 1200);
+  const terceiro = calcularDelayEnvioBalaoMs(textoCurto, ligado, 2, 1200 + segundo);
+  assert.ok(segundo >= 6100 && segundo <= 8200, `segundo: ${segundo}`);
+  assert.ok(terceiro >= 4300 && terceiro <= 5800, `terceiro: ${terceiro}`);
+  assert.ok(segundo > terceiro + 1000);
+  assert.equal(calcularDelayEnvioBalaoMs(textoCurto, { ativo: false }, 2, 0), 0);
+  assert.equal(calcularDelayEnvioBalaoMs(textoCurto, ligado, 0, 0), 1200);
 });
 
-test("somatório de atrasos respeita o teto de 9s", () => {
-  const longo = "Informações detalhadas sobre as funcionalidades e integrações do CRM. ".repeat(30);
-  const d1 = calcularDelayEnvioBalaoMs(longo, ligado, 0, 0);
-  const d2 = calcularDelayEnvioBalaoMs(longo, ligado, 1, d1);
-  const d3 = calcularDelayEnvioBalaoMs(longo, ligado, 2, d1+d2);
-  const d4 = calcularDelayEnvioBalaoMs(longo, ligado, 3, d1+d2+d3);
-  assert.equal(d1+d2+d3+d4, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS);
+test("pausas entre mensagens respeitam as quatro faixas por caracteres", () => {
+  for (const [length, min, max] of [
+    [20, 3000, 3900],
+    [60, 3000, 3900],
+    [61, 4300, 5800],
+    [150, 4300, 5800],
+    [151, 6100, 8200],
+    [300, 6100, 8200],
+    [301, 8500, 10500],
+    [10000, 8500, 10500],
+  ] as const) {
+    const atual = calcularDelayEnvioBalaoMs("x".repeat(length), ligado, 1, 0);
+    assert.ok(atual >= min && atual <= max, `${length} caracteres: ${atual}ms`);
+  }
+});
+
+test("primeira mensagem curta preserva sua naturalidade anterior", () => {
+  const curto = "Meu nome é Leandro, sou consultor de vendas.";
+  assert.equal(calcularDelayEnvioBalaoMs(curto, ligado, 0, 0), calcularDelayDinamicoMs(curto, ligado));
+});
+
+test("o teto de 24s limita respostas com muitos balões sem encurtar três balões normais", () => {
+  const textos = ["a".repeat(290), "b".repeat(244), "c".repeat(111)];
+  let soma = 0;
+  const intervalos = textos.map((item, i) => {
+    const delay = calcularDelayEnvioBalaoMs(item, ligado, i, soma);
+    soma += delay;
+    return delay;
+  });
+  assert.ok(intervalos[1] >= 6100 && intervalos[2] >= 4300);
+  assert.ok(soma < LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS);
+  for (let i = 0; i < 10; i++) {
+    soma += calcularDelayEnvioBalaoMs("z".repeat(900), ligado, i + 3, soma);
+  }
+  assert.equal(soma, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS);
 });

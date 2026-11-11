@@ -5,9 +5,8 @@
 export type ConfigDelayDinamico = { ativo: boolean };
 
 export const DELAY_DINAMICO_PADRAO: ConfigDelayDinamico = { ativo: false };
-export const LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS = 9000;
-/** Tempo adicional apenas entre balões; não prolonga a primeira resposta. */
-export const ACRESCIMO_DELAY_ENTRE_BALOES_MS = 1500;
+export const LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS = 24000;
+/** A primeira resposta permanece rápida; cada balão seguinte usa sua própria faixa por caracteres. */
 export const LIMITE_DELAY_PRIMEIRO_BALAO_MS = 1200;
 
 export function normalizarDelayDinamico(valor: unknown): ConfigDelayDinamico {
@@ -31,10 +30,7 @@ function variacaoNaturalMs(texto: string) {
   return (hash >>> 0) % 201 - 100;
 }
 
-/**
- * Retorna o delay de um balão, limitado a 2,6 s. O limite de 1,2 s para o
- * primeiro balão e 5 s por resposta é aplicado no ponto de envio.
- */
+/** Delay-base por caracteres, utilizado também na primeira mensagem (com teto próprio). */
 export function calcularDelayDinamicoMs(texto: string, valor: unknown): number {
   if (!normalizarDelayDinamico(valor).ativo) return 0;
   const conteudo = String(texto || "").trim();
@@ -61,9 +57,38 @@ export function calcularDelayDinamicoMs(texto: string, valor: unknown): number {
 }
 
 /**
- * Delay efetivo de cada envio: preserva o primeiro balão e acrescenta
- * aproximadamente 1,5s somente nos balões seguintes, respeitando o teto total.
- * Retorna zero quando a função estiver desativada.
+ * Intervalos mais naturais ENTRE balões sequenciais. O tempo cresce por faixa
+ * e tem variação pequena (estável em tentativas repetidas) conforme o conteúdo.
+ * Textos muito longos não geram minutos de espera.
+ */
+function calcularDelayEntreBaloesMs(texto: string): number {
+  const conteudo = String(texto || "").trim();
+  if (!conteudo) return 0;
+  const tamanho = Array.from(conteudo).length;
+  let minimo: number;
+  let maximo: number;
+  let tempo: number;
+  if (tamanho <= 60) {
+    minimo = 3000; maximo = 3900;
+    tempo = interpolar(tamanho, 1, 60, minimo, maximo);
+  } else if (tamanho <= 150) {
+    minimo = 4300; maximo = 5800;
+    tempo = interpolar(tamanho, 61, 150, minimo, maximo);
+  } else if (tamanho <= 300) {
+    minimo = 6100; maximo = 8200;
+    tempo = interpolar(tamanho, 151, 300, minimo, maximo);
+  } else {
+    minimo = 8500; maximo = 10500;
+    tempo = interpolar(Math.min(tamanho, 800), 301, 800, minimo, maximo);
+  }
+  const variacao = variacaoNaturalMs(conteudo) * 2;
+  return Math.round(Math.max(minimo, Math.min(maximo, tempo + variacao)));
+}
+
+/**
+ * Primeiro balão: até 1,2s extra, para não penalizar o tempo de geração da IA.
+ * Demais balões: pausas individuais proporcionais ao texto (3s a 10,5s).
+ * Teto de 24s acumulados evita bloquear execuções muito longas, como cotações.
  */
 export function calcularDelayEnvioBalaoMs(
   texto: string,
@@ -71,12 +96,11 @@ export function calcularDelayEnvioBalaoMs(
   indiceBalao: number,
   atrasoAcumuladoMs: number,
 ): number {
-  const baseMs = calcularDelayDinamicoMs(texto, configuracao);
-  if (baseMs <= 0) return 0;
-  const acrescimoMs = indiceBalao > 0 ? ACRESCIMO_DELAY_ENTRE_BALOES_MS : 0;
-  const limiteIndividualMs = indiceBalao === 0
-    ? LIMITE_DELAY_PRIMEIRO_BALAO_MS
-    : Number.POSITIVE_INFINITY;
-  const saldoMs = Math.max(0, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS - Math.max(0, atrasoAcumuladoMs));
-  return Math.min(baseMs + acrescimoMs, limiteIndividualMs, saldoMs);
+  const config = normalizarDelayDinamico(configuracao);
+  if (!config.ativo) return 0;
+  const tempo = indiceBalao === 0
+    ? Math.min(calcularDelayDinamicoMs(texto, config), LIMITE_DELAY_PRIMEIRO_BALAO_MS)
+    : calcularDelayEntreBaloesMs(texto);
+  const saldo = Math.max(0, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS - Math.max(0, atrasoAcumuladoMs));
+  return Math.min(tempo, saldo);
 }
