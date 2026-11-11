@@ -41,8 +41,9 @@ export default function GrupoOpcionalField({
       </select>
       <button type="button" className={styles.extraGroupNewButton}
         disabled={disabled} aria-expanded={criando}
+        aria-label="Adicionar grupo opcional" title="Adicionar grupo opcional"
         onClick={()=>{setCriando(antes=>!antes);setNome("");setErro("");}}>
-        <Plus size={15}/> Criar grupo
+        <Plus size={19} aria-hidden="true"/>
       </button>
     </div>
     {criando&&<form className={styles.extraGroupCreate} onSubmit={criar}>
@@ -64,8 +65,8 @@ export default function GrupoOpcionalField({
       <small>O grupo será selecionado neste opcional e salvo ao avançar.</small>
     </form>}
     <p id={selectId+"-ajuda"} className={styles.extraGroupHelp}>
-      Opcionais do mesmo grupo são alternativas: o cliente pode escolher apenas
-      um deles na cotação. Use &quot;Sem grupo&quot; para permitir a combinação com outros opcionais.
+      O grupo serve para impedir que dois opcionais sejam habilitados ao mesmo tempo.
+      Agrupe os opcionais quando eles competirem pelo mesmo serviço.
     </p>
   </div>;
 }
