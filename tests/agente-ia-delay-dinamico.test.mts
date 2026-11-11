@@ -19,14 +19,14 @@ test("inativo por padrão; config antigas só preservam a ativação", () => {
 
 test("faixas por caracteres produzem atrasos curtos e progressivos", () => {
   for (const [tamanho, menor, maior] of [
-    [20, 500, 800],
-    [60, 500, 800],
-    [61, 900, 1300],
-    [150, 900, 1300],
-    [151, 1400, 2000],
-    [300, 1400, 2000],
-    [301, 2100, 2600],
-    [20000, 2100, 2600],
+    [20, 800, 1300],
+    [60, 800, 1300],
+    [61, 1600, 2800],
+    [150, 1600, 2800],
+    [151, 3300, 5200],
+    [300, 3300, 5200],
+    [301, 5400, 7000],
+    [20000, 5400, 7000],
   ] as const) {
     const valor = calcularDelayDinamicoMs("a".repeat(tamanho), ligado);
     assert.ok(valor >= menor && valor <= maior, `${tamanho} caracteres: ${valor}ms`);
@@ -40,11 +40,11 @@ test("delay é estável para a mesma mensagem e suporta Unicode", () => {
 });
 
 test("limites por primeiro balão e por resposta evitam esperas longas", () => {
-  assert.equal(LIMITE_DELAY_PRIMEIRO_BALAO_MS, 1200);
+  assert.equal(LIMITE_DELAY_PRIMEIRO_BALAO_MS, 7000);
   assert.equal(LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, 40000);
 });
 
-test("primeiro balão mantém seu tempo original, mesmo em resposta longa", () => {
+test("primeiro balão tem atraso próprio pelo tamanho, sem corte de 1,2s", () => {
   const texto = "O CRM reúne atendimento, automações, IA e histórico para que a equipe acompanhe as oportunidades.";
   const antes = Math.min(calcularDelayDinamicoMs(texto, ligado), LIMITE_DELAY_PRIMEIRO_BALAO_MS);
   assert.equal(calcularDelayEnvioBalaoMs(texto, ligado, 0, 0), antes);
@@ -112,4 +112,18 @@ test("simulação do teste real: o segundo e o terceiro balão têm tempos difer
   assert.ok(tempos[2] >= 6500 && tempos[2] <= 8700, `terceiro balão: ${tempos[2]} ms`);
   assert.ok(tempos[1] > tempos[2]);
   assert.ok(acumulado < LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS);
+});
+
+test("a primeira mensagem de 250–350 caracteres aguarda significativamente mais, mas preserva variação por tamanho", () => {
+  const media = calcularDelayEnvioBalaoMs("m".repeat(250), ligado, 0, 0);
+  const longa = calcularDelayEnvioBalaoMs("l".repeat(350), ligado, 0, 0);
+  const curta = calcularDelayEnvioBalaoMs("o".repeat(45), ligado, 0, 0);
+  assert.ok(media >= 3300 && media <= 5200, `primeiro médio: ${media}`);
+  assert.ok(longa >= 5400 && longa <= 7000, `primeiro longo: ${longa}`);
+  assert.ok(curta >= 800 && curta <= 1300, `primeiro curto: ${curta}`);
+  assert.ok(longa > media && media > curta);
+  const segundo = calcularDelayEnvioBalaoMs("s".repeat(337), ligado, 1, longa);
+  const terceiro = calcularDelayEnvioBalaoMs("t".repeat(99), ligado, 2, longa + segundo);
+  assert.ok(segundo >= 12800 && terceiro >= 6500);
+  assert.ok(longa + segundo + terceiro < LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS);
 });
