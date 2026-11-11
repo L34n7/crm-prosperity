@@ -69,7 +69,7 @@ export function recuperarRespostaEstruturada(
  */
 export function textoEhMarcadorInternoAgente(resposta:string):boolean{
   const marcador=String(resposta||"").trim().replace(/^["'\`]+|["'\`]+$/g,"").trim();
-  return /^(?:memoria[_\s-]?delta(?:[_\s-]?(?:mensagens?|texto|resposta))?|delta[_\s-]?memoria(?:[_\s-]?mensagens?)?|estado[_\s-]?estruturado(?:[_\s-]?mensagem)?|metadata[_\s-]?json)$/iu.test(marcador);
+  return /^(?:memoria[_\s-]?delta(?:[_\s-]?(?:mensage(?:m|ns)|texto|resposta))?|delta[_\s-]?memoria(?:[_\s-]?mensage(?:m|ns))?|estado[_\s-]?estruturado(?:[_\s-]?mensagem)?|metadata[_\s-]?json)$/iu.test(marcador);
 }
 
 export function textoPareceEstruturaInterna(resposta:string):boolean{
