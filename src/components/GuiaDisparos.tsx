@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
   CreditCard,
   FileCheck2,
   PlayCircle,
@@ -118,7 +119,12 @@ export default function GuiaDisparos({ aberto, onAbertoChange, etapaAtual }: Gui
           <div className={styles.cabecalho}>
             <div>
               <span className={styles.sobretitulo}>Orientações</span>
-              <h2>Guia de Disparos</h2>
+              <div className={styles.tituloLinha}>
+                <span className={styles.tituloIcone} aria-hidden="true">
+                  <CircleHelp size={19} strokeWidth={2} />
+                </span>
+                <h2>Guia de Disparos</h2>
+              </div>
             </div>
             <button
               ref={fecharRef}

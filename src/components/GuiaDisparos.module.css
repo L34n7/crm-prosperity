@@ -88,7 +88,7 @@
   gap: 12px;
   margin: 0 -23px;
   padding: 19px 23px 15px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--crm-primary) 14%, var(--crm-surface)) 0%, var(--crm-surface) 92%);
+  background: linear-gradient(90deg, #e4f6f1 0%, #ffffff 100%);
   border-bottom: 1px solid var(--crm-border);
 }
 
@@ -97,10 +97,36 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: .09em;
-  color: var(--crm-text-muted);
+  color: #2e8b92;
 }
 
-.cabecalho h2 { margin: 3px 0 0; font-size: 20px; line-height: 1.24; font-weight: 800; }
+.tituloLinha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.tituloIcone {
+  display: inline-flex;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #bce4dc;
+  border-radius: 11px;
+  background: #d7f0e9;
+  color: #2e8b92;
+}
+
+.cabecalho h2 {
+  margin: 0;
+  color: #2e8b92;
+  font-size: 20px;
+  line-height: 1.24;
+  font-weight: 800;
+}
 .fechar { border: 0; background: var(--crm-surface-soft); color: var(--crm-text-muted); border-radius: 10px; padding: 8px; cursor: pointer; display: grid; place-items: center; }
 .fechar:hover { color: var(--crm-text-strong); }
 .introducao { color: var(--crm-text-muted); font-size: 13px; line-height: 1.6; margin: 16px 0 19px; }

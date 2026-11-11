@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  CircleHelp,
   MessagesSquare,
   Moon,
   Route,
@@ -2922,7 +2923,12 @@ return (
           <div className={styles.metaGuideHeader}>
             <div>
               <span className={styles.metaGuideEyebrow}>Orientações</span>
-              <h2>Guia de conexão Meta</h2>
+              <div className={styles.metaGuideTitleRow}>
+                <span className={styles.metaGuideTitleIcon} aria-hidden="true">
+                  <CircleHelp size={19} strokeWidth={2} />
+                </span>
+                <h2>Guia de conexão Meta</h2>
+              </div>
             </div>
 
             <button

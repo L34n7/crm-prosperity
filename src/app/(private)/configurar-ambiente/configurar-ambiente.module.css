@@ -1608,23 +1608,43 @@
   gap: 14px;
   margin: -18px -18px 12px;
   padding: 18px 18px 12px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--crm-primary) 14%, var(--crm-surface)) 0%, var(--crm-surface) 92%);
+  background: linear-gradient(90deg, #e4f6f1 0%, #ffffff 100%);
   border-bottom: 1px solid var(--crm-border);
 }
 
 .metaGuideEyebrow {
   display: block;
   margin-bottom: 3px;
-  color: var(--crm-text-muted);
+  color: #2e8b92;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
+.metaGuideTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.metaGuideTitleIcon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #bce4dc;
+  border-radius: 11px;
+  background: #d7f0e9;
+  color: #2e8b92;
+}
+
 .metaGuideHeader h2 {
   margin: 0;
-  color: var(--crm-text-strong);
+  color: #2e8b92;
   font-size: 20px;
   line-height: 1.2;
   letter-spacing: -0.02em;

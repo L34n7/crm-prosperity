@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
   FileCheck2,
   PlayCircle,
   X,
@@ -149,7 +150,12 @@ export default function GuiaTemplates({ aberto, onAbertoChange, etapaAtual }: Pr
           <header className={styles.cabecalho}>
             <div>
               <span className={styles.sobretitulo}>Orientações</span>
-              <h2>Guia de Templates</h2>
+              <div className={styles.tituloLinha}>
+                <span className={styles.tituloIcone} aria-hidden="true">
+                  <CircleHelp size={19} strokeWidth={2} />
+                </span>
+                <h2>Guia de Templates</h2>
+              </div>
             </div>
             <button
               ref={fecharRef}

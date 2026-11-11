@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
-  BookOpen, ChevronDown, ChevronLeft, ChevronRight, FileCheck2, PlayCircle, X,
+  BookOpen, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, FileCheck2, PlayCircle, X,
 } from "lucide-react";
 import type { GuiaModuloConfig } from "@/lib/central-de-conhecimento/guias";
 import styles from "./GuiaDisparos.module.css";
@@ -81,7 +81,12 @@ export default function GuiaModulo({
           <header className={styles.cabecalho}>
             <div>
               <span className={styles.sobretitulo}>Orientações</span>
-              <h2>{guia.titulo}</h2>
+              <div className={styles.tituloLinha}>
+                <span className={styles.tituloIcone} aria-hidden="true">
+                  <CircleHelp size={19} strokeWidth={2} />
+                </span>
+                <h2>{guia.titulo}</h2>
+              </div>
             </div>
             <button
               ref={botaoFecharRef}
