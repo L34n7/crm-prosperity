@@ -4091,8 +4091,17 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
             : "Me conta um pouco mais para eu te ajudar por aqui.",
         ];
       }
-      // Auditoria e envio compartilham as mesmas mensagens, sempre sem payload.
+      // Auditoria e envio compartilham apenas mensagens seguras.
+      const quantidadeAntesFiltro=saidaFinal.mensagens.length;
       saidaFinal.mensagens=protegerMensagensSaida(saidaFinal.mensagens,MAX_MENSAGENS_SAIDA);
+      if(saidaFinal.mensagens.length<quantidadeAntesFiltro){
+        console.warn("[AGENTE_IA] Mensagem interna/saída inválida removida antes do WhatsApp",{
+          execucaoId,removidas:quantidadeAntesFiltro-saidaFinal.mensagens.length,
+        });
+      }
+      if(!saidaFinal.mensagens.length){
+        saidaFinal.mensagens=["Não consegui preparar minha resposta. Pode repetir a última pergunta?"];
+      }
       const resultadoEnvio = await enviarMensagensAgente(ctx, saidaFinal.mensagens);
       if (resultadoEnvio.supersedido) {
         const finalAgora = new Date().toISOString();

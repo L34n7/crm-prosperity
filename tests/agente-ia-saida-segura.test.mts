@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  textoWhatsappComQuebras,recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida,
+  textoWhatsappComQuebras,recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida,textoEhMarcadorInternoAgente,
 } from "../src/lib/agentes-ia/resposta-estruturada.ts";
 
 test("lista FIPE com quebras de linha chega intacta ao texto do WhatsApp",()=>{
@@ -59,4 +59,25 @@ test("payload truncado jamais vai ao WhatsApp",()=>{
 test("o teto de mensagens se aplica mesmo a um payload concatenado",()=>{
   const json=JSON.stringify({mensagens:["A","B","C","D"],memoria_delta:{}});
   assert.deepEqual(protegerMensagensSaida([json],2),["A","B"]);
+});
+
+test("regressão de produção: memoria_delta_mensagem não sai como terceiro balão",()=>{
+  const resposta=[
+    "Perfeito — a IA pode trabalhar objeções do seu negócio.",
+    "Qual objeção aparece com mais frequência: preço, confiança ou vou pensar?",
+    "memoria_delta_mensagem",
+  ];
+  assert.deepEqual(protegerMensagensSaida(resposta),resposta.slice(0,2));
+  assert.equal(textoEhMarcadorInternoAgente("memoria_delta_mensagem"),true);
+  assert.equal(textoPareceEstruturaInterna("memoria_delta_mensagem"),true);
+});
+test("marcador interno isolado não é enviado, sem censurar frases legítimas",()=>{
+  assert.deepEqual(protegerMensagensSaida(["memoria_delta_mensagem"]),[]);
+  assert.deepEqual(protegerMensagensSaida(["memoria_delta","estado_estruturado","delta_memoria_mensagem"]),[]);
+  assert.deepEqual(protegerMensagensSaida(["Nossa memória registra informações relevantes.","Vou explicar o que significa memoria_delta."]),
+    ["Nossa memória registra informações relevantes.","Vou explicar o que significa memoria_delta."]);
+});
+test("marcador interno dentro de JSON válido também é removido",()=>{
+  const resposta=JSON.stringify({mensagens:["Primeira mensagem.","memoria_delta_mensagem","Última mensagem."],memoria_delta:{estagio:"interessado"}});
+  assert.deepEqual(protegerMensagensSaida([resposta]),["Primeira mensagem.","Última mensagem."]);
 });

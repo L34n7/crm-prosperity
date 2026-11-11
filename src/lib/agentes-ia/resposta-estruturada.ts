@@ -62,11 +62,21 @@ export function recuperarRespostaEstruturada(
   return null;
 }
 
-export function textoPareceEstruturaInterna(resposta:string):boolean{
-  return /^\s*(?:[{\[]|[\`]{3}\s*json\b)/i.test(resposta)||
-    /["'](?:mensagens|memoria_delta)["']\s*:/.test(resposta);
+/**
+ * Identificadores auxiliares da resposta estruturada não são mensagens.
+ * O teste cobre apenas o conteúdo do balão INTEIRO, preservando textos
+ * legítimos que expliquem esses nomes em uma frase.
+ */
+export function textoEhMarcadorInternoAgente(resposta:string):boolean{
+  const marcador=String(resposta||"").trim().replace(/^["'\`]+|["'\`]+$/g,"").trim();
+  return /^(?:memoria[_\s-]?delta(?:[_\s-]?(?:mensagens?|texto|resposta))?|delta[_\s-]?memoria(?:[_\s-]?mensagens?)?|estado[_\s-]?estruturado(?:[_\s-]?mensagem)?|metadata[_\s-]?json)$/iu.test(marcador);
 }
 
+export function textoPareceEstruturaInterna(resposta:string):boolean{
+  return textoEhMarcadorInternoAgente(resposta)||
+    /^\s*(?:[{\[]|[\`]{3}\s*json\b)/i.test(resposta)||
+    /["'](?:mensagens|memoria_delta)["']\s*:/.test(resposta);
+}
 
 /** Última barreira antes do WhatsApp: nenhum caminho deve enviar o
  * JSON interno da IA, mesmo que a normalização anterior seja ignorada.
@@ -78,12 +88,12 @@ export function protegerMensagensSaida(
   const seguras:string[]=[];
   for(const item of mensagens){
     const texto=String(item??"").trim();
-    if(!texto)continue;
+    if(!texto||textoEhMarcadorInternoAgente(texto))continue;
     if(textoPareceEstruturaInterna(texto)){
       const recuperada=recuperarRespostaEstruturada(texto);
       if(recuperada){
-        seguras.push(...recuperada.mensagens
-          .map(m=>textoWhatsappComQuebras(m,3500)).filter(Boolean));
+        // A proteção também alcança marcadores dentro do array de JSON válido.
+        seguras.push(...protegerMensagensSaida(recuperada.mensagens,limite-seguras.length));
       }else{
         seguras.push("Não consegui organizar minha resposta. Pode repetir a última pergunta?");
       }
