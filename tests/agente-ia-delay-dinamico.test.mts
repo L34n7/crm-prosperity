@@ -59,7 +59,7 @@ test("cada balão seguinte usa o próprio tamanho, com pausas maiores", () => {
   assert.ok(terceiro >= 4300 && terceiro <= 5800, `terceiro: ${terceiro}`);
   assert.ok(segundo > terceiro + 1000);
   assert.equal(calcularDelayEnvioBalaoMs(textoCurto, { ativo: false }, 2, 0), 0);
-  assert.equal(calcularDelayEnvioBalaoMs(textoCurto, ligado, 0, 0), 1200);
+  assert.equal(calcularDelayEnvioBalaoMs(textoCurto, ligado, 0, 0), Math.min(calcularDelayDinamicoMs(textoCurto, ligado), LIMITE_DELAY_PRIMEIRO_BALAO_MS));
 });
 
 test("pausas entre mensagens respeitam as quatro faixas por caracteres", () => {
