@@ -88,7 +88,7 @@
   gap: 12px;
   margin: 0 -23px;
   padding: 19px 23px 15px;
-  background: var(--crm-surface);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--crm-primary) 14%, var(--crm-surface)) 0%, var(--crm-surface) 92%);
   border-bottom: 1px solid var(--crm-border);
 }
 
@@ -136,7 +136,7 @@
 .resultados { margin-top: 18px; padding: 15px; border-radius: 13px; border: 1px solid var(--crm-border); }
 .resultados strong { font-size: 13px; }
 .video { margin-top: 22px; }
-.videoTitulo { display: flex; align-items: center; gap: 8px; }
+.videoTitulo { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .videoTitulo svg { color: var(--crm-primary-text); }
 .videoTitulo h3 { margin: 0; font-size: 14px; }
 .videoPlaceholder { margin-top: 10px; aspect-ratio: 16 / 9; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; background: var(--crm-surface-soft); border: 1px dashed var(--crm-border); border-radius: 14px; color: var(--crm-text-muted); text-align: center; padding: 12px; }
