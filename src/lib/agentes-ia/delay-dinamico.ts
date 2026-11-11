@@ -1,63 +1,59 @@
-export type UnidadeDelayDinamico = "palavras" | "caracteres";
+/**
+ * Delay de digitação automático. Os valores são parte do comportamento do
+ * aplicativo, não são configuráveis por agente (apenas ativo/desativado).
+ */
+export type ConfigDelayDinamico = { ativo: boolean };
 
-export type ConfigDelayDinamico = {
-  ativo: boolean;
-  unidade: UnidadeDelayDinamico;
-  quantidade: number;
-  segundos_por_bloco: number;
-  minimo_segundos: number;
-  maximo_segundos: number;
-};
-
-/** Evita exceder o tempo de execução em respostas com muitos balões (ex.: cotações). */
-export const LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS = 24000;
-
-export const DELAY_DINAMICO_PADRAO: ConfigDelayDinamico = {
-  ativo: false,
-  unidade: "palavras",
-  quantidade: 12,
-  segundos_por_bloco: 1,
-  minimo_segundos: 0.7,
-  maximo_segundos: 6,
-};
-
-function limitarNumero(valor: unknown, padrao: number, minimo: number, maximo: number) {
-  if (valor === null || valor === undefined || valor === "") return padrao;
-  const numero = Number(valor);
-  if (!Number.isFinite(numero)) return padrao;
-  return Math.min(maximo, Math.max(minimo, numero));
-}
+export const DELAY_DINAMICO_PADRAO: ConfigDelayDinamico = { ativo: false };
+export const LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS = 5000;
+export const LIMITE_DELAY_PRIMEIRO_BALAO_MS = 1200;
 
 export function normalizarDelayDinamico(valor: unknown): ConfigDelayDinamico {
-  const entrada = valor && typeof valor === "object" && !Array.isArray(valor)
+  const config = valor && typeof valor === "object" && !Array.isArray(valor)
     ? valor as Record<string, unknown>
     : {};
-  const unidade: UnidadeDelayDinamico = entrada.unidade === "caracteres" ? "caracteres" : "palavras";
-  const minimo = limitarNumero(entrada.minimo_segundos, DELAY_DINAMICO_PADRAO.minimo_segundos, 0, 5);
-  const maximo = Math.max(minimo, limitarNumero(entrada.maximo_segundos, DELAY_DINAMICO_PADRAO.maximo_segundos, 0.5, 8));
-  return {
-    ativo: entrada.ativo === true,
-    unidade,
-    quantidade: Math.round(limitarNumero(entrada.quantidade, unidade === "caracteres" ? 60 : 12, 1, 500)),
-    segundos_por_bloco: limitarNumero(entrada.segundos_por_bloco, 1, 0.1, 5),
-    minimo_segundos: minimo,
-    maximo_segundos: maximo,
-  };
+  return { ativo: config.ativo === true };
 }
 
-/** Atraso individual do balão; não altera o debounce de entrada. */
+function interpolar(valor: number, inicial: number, final: number, de: number, ate: number) {
+  const proporcao = Math.min(1, Math.max(0, (valor - inicial) / Math.max(1, final - inicial)));
+  return de + (ate - de) * proporcao;
+}
+
+/** Variação estável de -100 a +100 ms por conteúdo (sem gerar esperas aleatórias a cada retry). */
+function variacaoNaturalMs(texto: string) {
+  let hash = 2166136261;
+  for (const char of texto) {
+    hash = Math.imul(hash ^ (char.codePointAt(0) || 0), 16777619);
+  }
+  return (hash >>> 0) % 201 - 100;
+}
+
+/**
+ * Retorna o delay de um balão, limitado a 2,6 s. O limite de 1,2 s para o
+ * primeiro balão e 5 s por resposta é aplicado no ponto de envio.
+ */
 export function calcularDelayDinamicoMs(texto: string, valor: unknown): number {
-  const config = normalizarDelayDinamico(valor);
-  if (!config.ativo) return 0;
-  const limpo = String(texto || "").trim();
-  if (!limpo) return 0;
-  const total = config.unidade === "palavras"
-    ? (limpo.match(/\S+/gu)?.length ?? 0)
-    : Array.from(limpo).length;
-  if (!total) return 0;
-  const segundos = Math.max(
-    config.minimo_segundos,
-    Math.min(config.maximo_segundos, total / config.quantidade * config.segundos_por_bloco),
-  );
-  return Math.round(segundos * 1000);
+  if (!normalizarDelayDinamico(valor).ativo) return 0;
+  const conteudo = String(texto || "").trim();
+  if (!conteudo) return 0;
+  const tamanho = Array.from(conteudo).length;
+
+  let minimo: number;
+  let maximo: number;
+  let tempo: number;
+  if (tamanho <= 60) {
+    minimo = 500; maximo = 800;
+    tempo = interpolar(tamanho, 1, 60, minimo, maximo);
+  } else if (tamanho <= 150) {
+    minimo = 900; maximo = 1300;
+    tempo = interpolar(tamanho, 61, 150, minimo, maximo);
+  } else if (tamanho <= 300) {
+    minimo = 1400; maximo = 2000;
+    tempo = interpolar(tamanho, 151, 300, minimo, maximo);
+  } else {
+    minimo = 2100; maximo = 2600;
+    tempo = interpolar(Math.min(tamanho, 750), 301, 750, minimo, maximo);
+  }
+  return Math.round(Math.min(maximo, Math.max(minimo, tempo + variacaoNaturalMs(conteudo))));
 }

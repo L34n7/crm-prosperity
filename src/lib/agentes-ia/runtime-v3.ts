@@ -25,7 +25,7 @@ import { resolverAtribuicaoTransferencia } from "@/lib/conversas/resolver-atribu
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
-import { calcularDelayDinamicoMs, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, normalizarDelayDinamico } from "./delay-dinamico";
+import { calcularDelayDinamicoMs, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS, LIMITE_DELAY_PRIMEIRO_BALAO_MS, normalizarDelayDinamico } from "./delay-dinamico";
 import { enviarMaterialDoAgente } from "./enviar-material";
 import { normalizarMateriais } from "./materiais-config";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
@@ -1967,6 +1967,7 @@ async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[])
     if (delayDinamico.ativo) {
       const tempo = Math.min(
         calcularDelayDinamicoMs(limpas[indice], delayDinamico),
+        indice === 0 ? LIMITE_DELAY_PRIMEIRO_BALAO_MS : Number.POSITIVE_INFINITY,
         Math.max(0, LIMITE_DELAY_TOTAL_POR_RESPOSTA_MS - atrasoTotalMs),
       );
       if (tempo > 0) {
