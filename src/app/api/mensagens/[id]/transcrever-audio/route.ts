@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
-import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
+import {
+  transcreverAudioComIA,
+  OpenAITranscriptionAuthenticationError,
+} from "@/lib/ia/transcrever-audio";
+import {
+  baixarAudioWhatsApp,
+  WhatsAppMediaAuthenticationError,
+} from "@/lib/whatsapp/baixar-audio-whatsapp";
 import { getUsuarioBasico } from "@/lib/auth/get-usuario-contexto";
-import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
+import { getWhatsAppMediaAccessToken } from "@/lib/whatsapp/access-token";
 import { podeTranscreverAudio } from "@/lib/auth/authorization";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -90,14 +96,14 @@ export async function POST(
     const { data: integracao } = conversa?.integracao_whatsapp_id
       ? await supabaseAdmin
           .from("integracoes_whatsapp")
-          .select("token_ref, config_json")
+          .select("token_ref, config_json, phone_number_id, status")
           .eq("id", conversa.integracao_whatsapp_id)
           .eq("empresa_id", contexto.usuario.empresa_id)
           .maybeSingle()
       : { data: null };
     const audioBuffer = await baixarAudioWhatsApp(
       mediaId,
-      integracao ? getWhatsAppAccessToken(integracao) : null
+      integracao ? getWhatsAppMediaAccessToken(integracao) : null
     );
 
     const transcricao = await transcreverAudioComIA({
@@ -141,7 +147,16 @@ export async function POST(
       jaExistia: false,
     });
   } catch (error: unknown) {
-    console.error("[TRANSCRICAO AUDIO] Erro:", error);
+    const erroCredencial =
+      error instanceof WhatsAppMediaAuthenticationError ||
+      error instanceof OpenAITranscriptionAuthenticationError;
+    if (erroCredencial) {
+      console.warn("[TRANSCRICAO AUDIO] Falha de autenticacao no provedor:", {
+        origem: error instanceof WhatsAppMediaAuthenticationError ? "meta_midia" : "openai",
+      });
+    } else {
+      console.error("[TRANSCRICAO AUDIO] Erro:", error);
+    }
 
     return NextResponse.json(
       {
@@ -149,8 +164,13 @@ export async function POST(
           error instanceof Error
             ? error.message
             : "Erro ao transcrever áudio.",
+        codigo: erroCredencial
+          ? error instanceof WhatsAppMediaAuthenticationError
+            ? error.code
+            : "OPENAI_TRANSCRIPTION_AUTH"
+          : undefined,
       },
-      { status: 500 }
+      { status: erroCredencial ? 503 : 500 }
     );
   }
 }

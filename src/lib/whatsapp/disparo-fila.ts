@@ -835,18 +835,26 @@ async function republicarItemDisparoQstash(params: {
 }
 
 async function cancelarMensagensCampanhaQstash(campanhaId: string) {
-  if (!process.env.QSTASH_TOKEN) {
-    return;
-  }
+  if (!process.env.QSTASH_TOKEN) return;
 
+  // A API do QStash limita cada lote a 500 mensagens. Uma chamada única
+  // deixava milhares de entregas agendadas após o cancelamento da campanha.
   try {
-    await qstash.messages.cancel({
-      filter: {
-        label: labelCampanhaQstash(campanhaId),
-      },
-      count: 1000,
+    for (let rodada = 0; rodada < 40; rodada += 1) {
+      const resultado = await qstash.messages.cancel({
+        filter: { label: labelCampanhaQstash(campanhaId) },
+        count: 500,
+      });
+
+      if (Number(resultado?.cancelled || 0) === 0) return;
+    }
+
+    console.warn("[WHATSAPP DISPARO QSTASH] Limite de lotes de cancelamento atingido:", {
+      campanhaId,
     });
   } catch (error) {
+    // O status cancelado no banco impede que o worker envie a mensagem,
+    // mesmo que alguma publicacao remota nao seja removida.
     console.warn("[WHATSAPP DISPARO QSTASH] Erro ao cancelar campanha:", {
       campanhaId,
       erro: error,
@@ -916,26 +924,15 @@ export async function cancelarCampanhaDisparo(params: {
   const campanhaAtiva = ["pendente", "enviando"].includes(
     String(campanhaAtual.status || "")
   );
-  const cancelamentoManualEmRecuperacao =
-    campanhaAtual.status === "cancelada" &&
-    metadataCampanha.cancelamento_manual === true;
+  // Recuperacao idempotente, inclusive apos cancelamento automatico.
+  const cancelamentoEmRecuperacao = campanhaAtual.status === "cancelada";
 
-  if (!campanhaAtiva && !cancelamentoManualEmRecuperacao) {
+  if (!campanhaAtiva && !cancelamentoEmRecuperacao) {
     return {
       ok: false as const,
       motivo: "campanha_nao_esta_ativa",
       status: campanhaAtual.status,
     };
-  }
-
-  const { data: itensAbertos, error: itensError } = await supabaseAdmin
-    .from("whatsapp_disparo_itens")
-    .select("id, status, telefone_normalizado, consome_limite_meta")
-    .eq("campanha_id", params.campanhaId)
-    .in("status", ["pendente", "processando"]);
-
-  if (itensError) {
-    throw new Error(`Erro ao buscar itens da campanha: ${itensError.message}`);
   }
 
   if (campanhaAtiva) {
@@ -974,73 +971,38 @@ export async function cancelarCampanhaDisparo(params: {
     }
   }
 
-  await cancelarMensagensCampanhaQstash(params.campanhaId);
-
-  const idsAbertos = (itensAbertos || []).map((item) => item.id);
-
-  if (idsAbertos.length > 0) {
-    const { error: itensCancelamentoError } = await supabaseAdmin
-      .from("whatsapp_disparo_itens")
-      .update({
-        status: "cancelado",
-        erro: motivo,
-        locked_at: null,
-        processed_at: agora,
-        updated_at: agora,
-        metadata_json: {
-          ...metadadosCancelamento,
-        },
-      })
-      .in("id", idsAbertos)
-      .in("status", ["pendente", "processando"]);
-
-    if (itensCancelamentoError) {
-      throw new Error(
-        `Campanha cancelada, mas houve erro ao cancelar itens: ${itensCancelamentoError.message}`
-      );
+  // Uma unica operacao no PostgreSQL evita URLs gigantes com .in("id", ids).
+  // A RPC valida empresa + campanha cancelada e preserva metadata por item.
+  const { data: cancelamentoLote, error: erroLote } = await supabaseAdmin.rpc(
+    "cancelar_itens_whatsapp_campanha_seguro",
+    {
+      p_campanha_id: params.campanhaId,
+      p_empresa_id: params.empresaId,
+      p_motivo: motivo,
+      p_metadata_json: metadadosCancelamento,
     }
-  }
-
-  const telefonesPendentes = Array.from(
-    new Set(
-      (itensAbertos || [])
-        .filter(
-          (item) =>
-            item.status === "pendente" && item.consome_limite_meta === true
-        )
-        .map((item) => String(item.telefone_normalizado || "").trim())
-        .filter(Boolean)
-    )
   );
-  const reservaIds = Array.isArray(campanhaAtual.limite_meta_reserva_ids)
-    ? campanhaAtual.limite_meta_reserva_ids.filter(Boolean)
-    : [];
 
-  if (reservaIds.length > 0 && telefonesPendentes.length > 0) {
-    const { error: reservasError } = await supabaseAdmin
-      .from("whatsapp_meta_conversas_iniciadas")
-      .update({
-        status: "cancelado",
-        updated_at: agora,
-        metadata_json: {
-          campanha_disparo_id: params.campanhaId,
-          ...metadadosCancelamento,
-        },
-      })
-      .in("id", reservaIds)
-      .in("telefone_normalizado", telefonesPendentes)
-      .eq("status", "reservado");
-
-    if (reservasError) {
-      console.warn(
-        "[WHATSAPP DISPARO FILA] Campanha cancelada com reservas pendentes:",
-        {
-          campanhaId: params.campanhaId,
-          erro: reservasError,
-        }
-      );
-    }
+  if (erroLote) {
+    throw new Error(
+      `Campanha cancelada, mas houve erro ao reconciliar os itens: ${erroLote.message}`
+    );
   }
+
+  const resultadoLote = Array.isArray(cancelamentoLote)
+    ? cancelamentoLote[0]
+    : cancelamentoLote;
+  if (Number(resultadoLote?.itens_cancelados || 0) > 0 ||
+      Number(resultadoLote?.reservas_liberadas || 0) > 0) {
+    console.info("[WHATSAPP DISPARO] Cancelamento reconciliado:", {
+      campanhaId: params.campanhaId,
+      itens: resultadoLote?.itens_cancelados || 0,
+      reservas: resultadoLote?.reservas_liberadas || 0,
+    });
+  }
+
+  // Primeiro bloqueamos os itens no banco; em seguida limpamos as filas remotas.
+  await cancelarMensagensCampanhaQstash(params.campanhaId);
 
   const resumo = await recalcularCampanha(params.campanhaId);
   await sincronizarAgendamentosCampanha(params.campanhaId);

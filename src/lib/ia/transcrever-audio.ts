@@ -10,6 +10,15 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+export class OpenAITranscriptionAuthenticationError extends Error {
+  readonly code = "OPENAI_TRANSCRIPTION_AUTH";
+
+  constructor() {
+    super("A OpenAI recusou a credencial de transcrição. Verifique a configuração do serviço.");
+    this.name = "OpenAITranscriptionAuthenticationError";
+  }
+}
+
 export async function transcreverAudioComIA({
   audioBuffer,
   fileName = "audio.ogg",
@@ -36,11 +45,23 @@ export async function transcreverAudioComIA({
   });
 
   const modelo = "gpt-4o-mini-transcribe";
-  const transcricao = await openai.audio.transcriptions.create({
-    model: modelo,
-    file: arquivo,
-    language: "pt",
-  });
+  let transcricao: Awaited<ReturnType<typeof openai.audio.transcriptions.create>>;
+  try {
+    transcricao = await openai.audio.transcriptions.create({
+      model: modelo,
+      file: arquivo,
+      language: "pt",
+    });
+  } catch (error) {
+    if (error instanceof OpenAI.AuthenticationError) {
+      console.error("[TRANSCRICAO OPENAI] Autenticacao rejeitada pelo provedor:", {
+        modelo,
+        status: error.status,
+      });
+      throw new OpenAITranscriptionAuthenticationError();
+    }
+    throw error;
+  }
 
   if (empresaId) {
     await registrarUsoTokensIa({

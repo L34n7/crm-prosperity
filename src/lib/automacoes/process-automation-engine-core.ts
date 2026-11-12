@@ -10330,17 +10330,43 @@ export async function enviarMensagemAutomacao(params: {
     ? conversa.integracoes_whatsapp[0]
     : conversa.integracoes_whatsapp;
 
-  const phoneNumberId =
-    integracao.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || "";
+  // Conversas historicas podem ficar sem integracao apos a desconexao.
+  // Nunca acessar phone_number_id de uma relacao nula ou usar outro numero.
+  const phoneNumberId = String(integracao?.phone_number_id || "").trim();
+  const integracaoAtiva = integracao?.status === "ativa";
+  if (!integracaoAtiva || !phoneNumberId) {
+    const motivo = !integracao
+      ? "Conversa sem integração WhatsApp ativa. Envio automático não realizado."
+      : integracao.status !== "ativa"
+        ? "Integração WhatsApp inativa. Envio automático não realizado."
+        : "Integração WhatsApp sem identificação do número. Envio não realizado.";
 
-  const accessToken = getWhatsAppAccessToken(integracao);
+    await registrarLog({
+      empresaId,
+      execucaoId,
+      noId,
+      tipoEvento: "envio_texto_bloqueado_integracao_indisponivel",
+      descricao: motivo,
+      entrada: {
+        conversa_id: conversaId,
+        integracao_whatsapp_id: conversa.integracao_whatsapp_id,
+        status_integracao: integracao?.status || null,
+      },
+      saida: { enviado: false },
+    });
 
-  if (!phoneNumberId) {
-    throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado.");
+    return {
+      ok: false,
+      status: null,
+      status_envio: "cancelado",
+      messageId: null,
+      erro: motivo,
+    };
   }
 
+  const accessToken = getWhatsAppAccessToken(integracao);
   if (!accessToken) {
-    throw new Error("WHATSAPP_ACCESS_TOKEN não configurado.");
+    throw new Error("Token da integração WhatsApp indisponível para o envio automático.");
   }
 
   const inicioJanela24h = Date.now();

@@ -13,8 +13,15 @@ import { saveIncomingWhatsAppMessage } from "@/lib/whatsapp/save-incoming-messag
 import { processAutomationEngine } from "@/lib/automacoes/process-automation-engine";
 import { updateWhatsAppMessageStatus } from "@/lib/whatsapp/update-message-status";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { baixarAudioWhatsApp } from "@/lib/whatsapp/baixar-audio-whatsapp";
-import { transcreverAudioComIA } from "@/lib/ia/transcrever-audio";
+import {
+  baixarAudioWhatsApp,
+  WhatsAppMediaAuthenticationError,
+} from "@/lib/whatsapp/baixar-audio-whatsapp";
+import { getWhatsAppMediaAccessToken } from "@/lib/whatsapp/access-token";
+import {
+  transcreverAudioComIA,
+  OpenAITranscriptionAuthenticationError,
+} from "@/lib/ia/transcrever-audio";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { atribuirCampanhaPorMensagemWhatsApp } from "@/lib/rastreamento/atribuir-campanha-whatsapp";
 import { salvarAtribuicaoMetaAnuncio } from "@/lib/whatsapp/meta-attribution";
@@ -885,6 +892,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       let transcricaoAudio: string | null = null;
       let audioSemTranscricao = false;
       let falhaAoTranscreverAudio = false;
+      let codigoErroTranscricao: string | null = null;
 
       if (message.tipoMensagem === "audio") {
         if (deveTranscreverAudioAutomaticamente) {
@@ -897,7 +905,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             if (mediaId) {
               const audioBuffer = await baixarAudioWhatsApp(
                 mediaId,
-                getWhatsAppAccessToken(integration)
+                getWhatsAppMediaAccessToken(integration)
               );
 
               transcricaoAudio = await transcreverAudioComIA({
@@ -933,7 +941,24 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             audioSemTranscricao = true;
             falhaAoTranscreverAudio = true;
 
-            console.error("[WEBHOOK WHATSAPP] Erro ao transcrever audio:", audioError);
+            if (audioError instanceof WhatsAppMediaAuthenticationError) {
+              codigoErroTranscricao = audioError.code;
+              console.warn("[WEBHOOK WHATSAPP] Autenticacao de midia da Meta indisponivel:", {
+                empresaId: integration.empresa_id,
+                integracaoId: integration.id,
+                etapa: audioError.etapa,
+                statusHttp: audioError.statusHttp,
+                codigoMeta: audioError.codigoMeta,
+              });
+            } else if (audioError instanceof OpenAITranscriptionAuthenticationError) {
+              codigoErroTranscricao = audioError.code;
+              console.warn("[WEBHOOK WHATSAPP] Autenticacao da OpenAI para transcricao indisponivel:", {
+                empresaId: integration.empresa_id,
+                integracaoId: integration.id,
+              });
+            } else {
+              console.error("[WEBHOOK WHATSAPP] Erro ao transcrever audio:", audioError);
+            }
           }
         } else {
           textoAutomacao = "";
@@ -957,6 +982,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
           transcricao_audio: transcricaoAudio || null,
           transcricao_modelo: transcricaoAudio ? "gpt-4o-mini-transcribe" : null,
           transcricao_automatica: !!transcricaoAudio,
+          transcricao_erro_codigo: codigoErroTranscricao,
         },
         conversaProtocoloId: protocoloAtivo?.id ?? null,
       };

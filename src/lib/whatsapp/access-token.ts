@@ -67,6 +67,24 @@ export function getWhatsAppAccessToken(
   return "";
 }
 
+// Midias devem ser baixadas com o token da integracao que recebeu o audio.
+// A chave global so pode servir ao numero legado explicitamente correspondente.
+export function getWhatsAppMediaAccessToken(
+  integration: IntegrationWithToken & { phone_number_id?: string | null }
+) {
+  const especifico = getWhatsAppAccessToken(integration, {
+    allowGlobalFallback: false,
+  });
+  if (especifico) return especifico;
+
+  const phoneNumberId = String(integration.phone_number_id || "").trim();
+  const legacyNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || "").trim();
+  if (phoneNumberId && phoneNumberId === legacyNumberId) {
+    return getWhatsAppAccessToken(integration);
+  }
+  return "";
+}
+
 export function hasWhatsAppAccessToken(
   integration: IntegrationWithToken
 ) {
