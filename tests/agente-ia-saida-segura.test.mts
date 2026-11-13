@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  textoWhatsappComQuebras,recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida,textoEhMarcadorInternoAgente,
+  textoWhatsappComQuebras,recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida,textoEhMarcadorInternoAgente,textoFollowupUnicoSeguro,
 } from "../src/lib/agentes-ia/resposta-estruturada.ts";
 
 test("lista FIPE com quebras de linha chega intacta ao texto do WhatsApp",()=>{
@@ -80,4 +80,52 @@ test("marcador interno isolado não é enviado, sem censurar frases legítimas",
 test("marcador interno dentro de JSON válido também é removido",()=>{
   const resposta=JSON.stringify({mensagens:["Primeira mensagem.","memoria_delta_mensagem","Última mensagem."],memoria_delta:{estagio:"interessado"}});
   assert.deepEqual(protegerMensagensSaida([resposta]),["Primeira mensagem.","Última mensagem."]);
+});
+
+
+test("regressão 13/11 12:35: prefixo mensagens com dois balões nunca chega ao WhatsApp",()=>{
+  const primeiro="Oi! Eu sou o Leonardo, consultor de vendas do CRM Prosperity. Que bom falar com você! 😊";
+  const segundo="É até difícil resumir tudo, mas vou te contar o principal: o CRM centraliza o WhatsApp e organiza as oportunidades. O que procura hoje?";
+  const cru="mensagens: "+JSON.stringify([primeiro,segundo]);
+  assert.deepEqual(recuperarRespostaEstruturada(cru),{mensagens:[primeiro,segundo]});
+  assert.equal(textoPareceEstruturaInterna(cru),true);
+  assert.deepEqual(protegerMensagensSaida([cru]),[primeiro,segundo]);
+  assert.equal(textoFollowupUnicoSeguro(cru),segundo);
+});
+test("regressão 13/11 16:35: prefixo mensagens com uma mensagem",()=>{
+  const original="Você vai continuar respondendo tudo manualmente enquanto seus leads esperam? Vamos retomar?";
+  const cru="mensagens: "+JSON.stringify([original]);
+  assert.deepEqual(protegerMensagensSaida([cru]),[original]);
+  assert.equal(textoFollowupUnicoSeguro(cru),original);
+});
+test("suporta cercas JSON e campo memoria_delta depois do array",()=>{
+  const cerca=String.fromCharCode(96).repeat(3);
+  const markdown=cerca+"json\nmensagens: [\"Uma proposta\", \"Podemos conversar?\"]\n"+cerca;
+  assert.deepEqual(protegerMensagensSaida([markdown]),["Uma proposta","Podemos conversar?"]);
+  assert.equal(textoFollowupUnicoSeguro(markdown),"Podemos conversar?");
+  const comMemoria='mensagens: ["Oi, tudo bem?"]\nmemoria_delta: {"estagio":"interessado"}';
+  assert.deepEqual(protegerMensagensSaida([comMemoria]),["Oi, tudo bem?"]);
+  const json=JSON.stringify({mensagens:["Saudação","Explicação"],memoria_delta:{estagio:"novo"}});
+  assert.equal(textoFollowupUnicoSeguro(json),"Explicação");
+});
+test("estruturas truncadas ou vazias não são publicadas como follow-up",()=>{
+  const invalidos=[
+    'mensagens: ["Mensagem cortada"',
+    'mensagens: [isso não é JSON]',
+    'mensagens: []',
+    'memoria_delta: {"estagio":"novo"}',
+  ];
+  for(const invalido of invalidos){
+    assert.equal(textoPareceEstruturaInterna(invalido),true,invalido);
+    assert.equal(textoFollowupUnicoSeguro(invalido),"",invalido);
+    assert.doesNotMatch(protegerMensagensSaida([invalido]).join(" "),/^\s*(?:mensagens|memoria_delta)\s*:/i);
+  }
+});
+test("mensagens de texto comuns continuam intactas e texto em array é filtrado",()=>{
+  const comum="Você encontra todas as mensagens e seus atendimentos no CRM.";
+  assert.deepEqual(protegerMensagensSaida([comum]),[comum]);
+  assert.equal(textoFollowupUnicoSeguro(comum),comum);
+  const comMarcador='mensagens: '+JSON.stringify(["Oi","memoria_delta_mensagem","Vamos conversar?"]);
+  assert.deepEqual(protegerMensagensSaida([comMarcador]),["Oi","Vamos conversar?"]);
+  assert.equal(textoFollowupUnicoSeguro(comMarcador),"Vamos conversar?");
 });
