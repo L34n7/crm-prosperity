@@ -8,12 +8,15 @@ import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import VideoTutoriais from "@/components/VideoTutoriais";
 import { obterVideosDoModulo } from "@/lib/central-de-conhecimento/videos";
+import { obterGuiaContextualAmbiente } from "@/lib/central-de-conhecimento/guia-configurar-ambiente";
 import { montarWhatsappUrl } from "@/lib/contatos/sistema";
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
 import {
   AlertTriangle,
   CheckCircle2,
+  BookOpen,
+  ChevronRight,
   ChevronDown,
   CircleHelp,
   MessagesSquare,
@@ -1612,8 +1615,9 @@ async function salvarNichoEAvancar() {
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
 
-    if (etapaQuiz === 2) {
+    if (etapaQuiz >= 1 && etapaQuiz <= 4) {
       timeout = setTimeout(() => {
+        setGuiaMetaFechandoRapido(false);
         setGuiaMetaAberto(true);
       }, 250);
     } else {
@@ -1708,6 +1712,18 @@ async function salvarNichoEAvancar() {
     integracao?.onboarding_status === "concluido" &&
     numeroRegistrado &&
     webhookConfigurado;
+
+  const guiaConfiguracao = obterGuiaContextualAmbiente(
+    etapaQuiz,
+    fluxoNumeroAdicional,
+    modoCoexistencia,
+    ambienteConcluido,
+  );
+  const ancoraDocumentacaoGuia =
+    etapaQuiz === 0 ? "introducao" :
+    etapaQuiz === 1 ? (fluxoNumeroAdicional ? "numero-adicional" : "segmento") :
+    etapaQuiz === 2 ? "modo-meta" :
+    etapaQuiz === 3 ? "ativacao" : "finalizacao";
 
   const totalEtapasQuiz = 4;
   const etapaVisualQuiz = etapaQuiz;
@@ -2906,7 +2922,8 @@ return (
           guiaMetaAberto ? styles.metaGuideDrawerOpen : ""
         } ${guiaMetaFechandoRapido ? styles.metaGuideDrawerFastClose : ""}`}
         aria-hidden={!guiaMetaAberto}
-        aria-label="Guia de conexão Meta"
+        aria-label={guiaConfiguracao.titulo}
+        inert={!guiaMetaAberto}
       >
 
       <button
@@ -2927,7 +2944,7 @@ return (
                 <span className={styles.metaGuideTitleIcon} aria-hidden="true">
                   <CircleHelp size={19} strokeWidth={2} />
                 </span>
-                <h2>Guia de conexão Meta</h2>
+                <h2>{guiaConfiguracao.titulo}</h2>
               </div>
             </div>
 
@@ -2942,9 +2959,10 @@ return (
           </div>
 
           <p className={styles.metaGuideIntro}>
-            Acompanhe este guia enquanto conclui a conexão na janela da Meta.
+            {guiaConfiguracao.introducao}
           </p>
 
+          {etapaQuiz === 2 ? (
           <ol className={styles.metaGuideSteps}>
             <li className={styles.metaGuideStep}>
               <span className={styles.metaGuideStepNumber}>1</span>
@@ -2974,7 +2992,7 @@ return (
             </li>
 
             <li
-              className={`${styles.metaGuideStep} ${styles.metaGuideStepAlert}`}
+              className={`${styles.metaGuideStep} ${!modoCoexistencia ? styles.metaGuideStepAlert : ""}`}
             >
               <span className={styles.metaGuideAlertIcon}>
                 <AlertTriangle size={18} strokeWidth={2.4} />
@@ -2982,17 +3000,42 @@ return (
               <div>
                 <strong>4. Número do WhatsApp</strong>
                 <p>
-                  Escolha <b>Adicionar um novo número</b> para usar o WhatsApp no
-                  CRM.
+                  {modoCoexistencia
+                    ? "Selecione seu número já existente no WhatsApp Business App para utilizá-lo também no CRM."
+                    : <>Escolha <b>Adicionar um novo número</b> para usar o WhatsApp somente no CRM.</>}
                 </p>
                 <p className={styles.metaGuideImportant}>
-                  <b>Importante:</b> o número não pode estar ativo no aplicativo
-                  WhatsApp/WhatsApp Business nem conectado a outro CRM.
+                  {modoCoexistencia
+                    ? <><b>Importante:</b> mantenha o número ativo no WhatsApp Business App e siga os requisitos de elegibilidade apresentados pela Meta.</>
+                    : <><b>Importante:</b> o número não pode estar ativo no aplicativo WhatsApp/WhatsApp Business nem conectado a outro CRM.</>}
                 </p>
               </div>
             </li>
           </ol>
+          ) : (
+            <ol className={styles.metaGuideSteps}>
+              {guiaConfiguracao.passos.map((passo, indice) => (
+                <li key={passo.titulo} className={styles.metaGuideStep}>
+                  <span className={styles.metaGuideStepNumber}>{indice + 1}</span>
+                  <div>
+                    <strong>{passo.titulo}</strong>
+                    <p>{passo.descricao}</p>
+                    {passo.ancora && (
+                      <Link
+                        href={`/central-de-conhecimento/configurar-ambiente#${passo.ancora}`}
+                        className={styles.metaGuideStepLink}
+                        onClick={recolherGuiaMeta}
+                      >
+                        Saiba mais
+                      </Link>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
 
+          {etapaQuiz === 2 && !modoCoexistencia && (
           <div className={styles.metaGuideCare}>
               <div className={styles.metaGuideCareContent}>
                 <h3>Cuidados antes de validar</h3>
@@ -3014,6 +3057,26 @@ return (
                 </strong>
               </div>
           </div>
+          )}
+
+          {etapaQuiz === 2 && modoCoexistencia && (
+            <div className={styles.metaGuideCare}>
+              <div className={styles.metaGuideCareContent}>
+                <h3>Cuidados com a Coexistência</h3>
+                <p>Mantenha o número no WhatsApp Business App, siga as instruções da Meta e confirme que o número é elegível para uso simultâneo.</p>
+                <p>A importação inicial de conversas é opcional e será tratada após a conexão.</p>
+              </div>
+            </div>
+          )}
+
+          {etapaQuiz !== 2 && guiaConfiguracao.aviso && (
+            <div className={styles.metaGuideCare}>
+              <div className={styles.metaGuideCareContent}>
+                <h3>Cuidados nesta etapa</h3>
+                <p>{guiaConfiguracao.aviso}</p>
+              </div>
+            </div>
+          )}
 
           <section className={styles.metaGuideVideos} aria-label="Vídeos sobre a integração WhatsApp">
             <div className={styles.metaGuideVideosHeading}>
@@ -3021,13 +3084,23 @@ return (
               <p>Orientações para problemas comuns de conexão.</p>
             </div>
             <VideoTutoriais videos={obterVideosDoModulo("configurar-ambiente")} compacto />
-            <Link href="/central-de-conhecimento/perfil-whatsapp#videos" className={styles.metaGuideVideosLink}>
-              Ver outros detalhes sobre a integração
+            <Link href="/central-de-conhecimento/configurar-ambiente#videos" className={styles.metaGuideVideosLink}>
+              Ver este vídeo na Central de Conhecimento
             </Link>
           </section>
 
+          <Link
+            href={`/central-de-conhecimento/configurar-ambiente#${ancoraDocumentacaoGuia}`}
+            className={styles.metaGuideDocsButton}
+            onClick={recolherGuiaMeta}
+          >
+            <BookOpen size={18} aria-hidden="true" />
+            <span>Ver documentação completa</span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </Link>
+
           <a
-            href={AJUDA_PERMISSOES_META_URL}
+            href={etapaQuiz === 2 ? AJUDA_PERMISSOES_META_URL : AJUDA_WHATSAPP_URL}
             className={styles.metaGuideWhatsappButton}
             target="_blank"
             rel="noopener noreferrer"
@@ -3036,13 +3109,13 @@ return (
 
             <div>
               <strong>Precisa de ajuda nessa etapa?</strong>
-              <p>Fale com o suporte para revisar as permissões da Meta.</p>
+              <p>{etapaQuiz === 2 ? "Fale com o suporte para revisar as permissões da Meta." : "Fale com o suporte para concluir a configuração do WhatsApp."}</p>
             </div>
           </a>
         </div>
       </aside>
 
-      {etapaQuiz === 2 && !guiaMetaAberto && (
+      {!guiaMetaAberto && (
         <button
           type="button"
           className={styles.metaGuideCollapsedBadge}

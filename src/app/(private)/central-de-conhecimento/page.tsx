@@ -2,11 +2,17 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, BookOpen, ContactRound, FileCheck2, MessageCircle, Search, Send } from "lucide-react";
+import { ArrowRight, BookOpen, ContactRound, FileCheck2, MessageCircle, Search, Send, Settings2 } from "lucide-react";
 import Header from "@/components/Header";
 import styles from "./central-de-conhecimento.module.css";
 
 const artigos = [
+  {
+    titulo: "Configurar Ambiente",
+    descricao: "Conecte a conta Meta, ative o WhatsApp, configure o webhook e resolva problemas de integração.",
+    caminho: "/central-de-conhecimento/configurar-ambiente",
+    assuntos: ["Configuração", "Meta", "Cloud API", "Coexistência", "PIN", "Webhook", "Pagamento", "Desconectada"],
+  },
   {
     titulo: "Disparos WhatsApp",
     descricao: "Aprenda a preparar campanhas, escolher destinatários, agendar envios, consultar cobranças e entender os resultados.",
@@ -84,6 +90,7 @@ export default function CentralDeConhecimentoPage() {
                   {artigo.caminho.endsWith("/templates") ? <FileCheck2 size={23} /> :
                    artigo.caminho.endsWith("/contatos") ? <ContactRound size={23} /> :
                    artigo.caminho.endsWith("/perfil-whatsapp") ? <MessageCircle size={23} /> :
+                   artigo.caminho.endsWith("/configurar-ambiente") ? <Settings2 size={23} /> :
                    <Send size={23} />}
                 </span>
                 <span className={styles.cardEtiqueta}>Guia completo</span>
