@@ -12,6 +12,7 @@ import { calcularDelayEnvioBalaoMs, normalizarDelayDinamico } from "./delay-dina
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
 import { executarContingenciaAgente } from "./fallback";
 import { agendarFollowupAgenteIa } from "./followup-inatividade";
+import { podeIniciarCicloFollowup } from "./followup-ciclo";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import { respostaTrazDistincaoFipe, perguntaUnicaVersoesFipe, interpretarRespostaOpcoesFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
@@ -2825,14 +2826,13 @@ export async function processarPendenciaNegocio(
       .eq("id", execucaoId);
 
     const ultimaMensagemContatoId = pendencia.mensagem_ids.at(-1) || "";
-    const ultimaMensagemSaida = saidaFinal.mensagens.at(-1) || "";
-    const deveAgendarFollowup =
-      ctx.respostaEnviada &&
-      !ctx.acaoCriticaExecutada &&
-      Boolean(saidaFinal.estado.proxima_acao) &&
-      ultimaMensagemSaida.includes("?") &&
-      Boolean(ultimaMensagemContatoId) &&
-      Boolean(pendencia.numero_destino);
+    const deveAgendarFollowup = podeIniciarCicloFollowup({
+      respostaEnviada: ctx.respostaEnviada,
+      acaoCriticaExecutada: ctx.acaoCriticaExecutada,
+      ultimaMensagemContatoId,
+      numeroDestino: pendencia.numero_destino,
+      mensagensSaida: saidaFinal.mensagens,
+    });
 
     if (deveAgendarFollowup) {
       await agendarFollowupAgenteIa({
@@ -2841,7 +2841,7 @@ export async function processarPendenciaNegocio(
         conversaId: pendencia.conversa_id,
         numeroDestino: pendencia.numero_destino || "",
         ultimaMensagemContatoId,
-        proximaAcao: saidaFinal.estado.proxima_acao,
+        proximaAcao: saidaFinal.estado.proxima_acao || "continuar atendimento",
         tentativa: 1,
         referenciaExecucaoId: execucaoId,
         cancelarAnteriores: true,

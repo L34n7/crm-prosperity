@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { mensagemPermiteAcompanhamento } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -98,8 +99,7 @@ function mensagemEncerraObjetivoFollowup(valor: unknown) {
 
 function mensagemMantemFollowupPendente(valor: unknown) {
   const texto = String(valor || "").trim();
-  if (!texto || mensagemEncerraObjetivoFollowup(texto)) return false;
-  return (texto.match(/\?/g) || []).length === 1;
+  return mensagemPermiteAcompanhamento(texto) && !mensagemEncerraObjetivoFollowup(texto);
 }
 
 function saidaMantemSequenciaFollowup(params: {
@@ -142,12 +142,8 @@ function estadoEncerraFollowup(
   ) {
     return true;
   }
-  return (
-    /\baguard\w*\b.*\b(?:retorno|contato|resposta)\b.*\bcliente\b/.test(
-      proxima,
-    ) ||
-    /\bcliente\b.*\b(?:retornar|responder|chamar)\b/.test(proxima)
-  );
+  // Aguardar retorno do cliente é um estado elegível, não um objetivo concluído.
+  return /\b(?:concluid\w*|encerrad\w*|transferid\w*|convertid\w*|perdid\w*|cancelad\w*)\b/.test(proxima);
 }
 
 function palavrasFollowup(valor: unknown) {

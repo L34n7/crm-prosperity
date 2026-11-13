@@ -26,6 +26,7 @@ import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { calcularDelayEnvioBalaoMs, normalizarDelayDinamico } from "./delay-dinamico";
+import { podeIniciarCicloFollowup } from "./followup-ciclo";
 import { enviarMaterialDoAgente } from "./enviar-material";
 import { normalizarMateriais } from "./materiais-config";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
@@ -4189,15 +4190,14 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     }).eq("id", execucaoId);
 
     const ultimaMensagemContatoId = pendencia.mensagem_ids.at(-1) || "";
-    const ultimaMensagemSaida = saidaFinal.mensagens.at(-1) || "";
-    const deveAgendarFollowup =
-      !ctx.transferidoHumano &&
-      !ctx.acaoCriticaExecutada &&
-      ctx.respostaEnviada &&
-      Boolean(saidaFinal.estado.proxima_acao) &&
-      ultimaMensagemSaida.includes("?") &&
-      Boolean(ultimaMensagemContatoId) &&
-      Boolean(pendencia.numero_destino);
+    const deveAgendarFollowup = podeIniciarCicloFollowup({
+      respostaEnviada: ctx.respostaEnviada,
+      acaoCriticaExecutada: ctx.acaoCriticaExecutada,
+      ultimaMensagemContatoId,
+      numeroDestino: pendencia.numero_destino,
+      mensagensSaida: saidaFinal.mensagens,
+      transferidoHumano: ctx.transferidoHumano,
+    });
 
     if (deveAgendarFollowup) {
       await agendarFollowupAgenteIa({
@@ -4206,7 +4206,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         conversaId: pendencia.conversa_id,
         numeroDestino: pendencia.numero_destino || "",
         ultimaMensagemContatoId,
-        proximaAcao: saidaFinal.estado.proxima_acao,
+        proximaAcao: saidaFinal.estado.proxima_acao || "continuar atendimento",
         tentativa: 1,
         referenciaExecucaoId: execucaoId,
         cancelarAnteriores: true,
