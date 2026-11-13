@@ -16,7 +16,7 @@ import { podeIniciarCicloFollowup } from "./followup-ciclo";
 import {desejaContratarCotacao,escolheuPlanoDaCotacao,indicouEscolhaPlanoCotacao,planoEscolhidoNaCotacao} from "./contratacao-cotacao";
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import { respostaTrazDistincaoFipe, perguntaUnicaVersoesFipe, interpretarRespostaOpcoesFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
-import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,textoWhatsappComQuebras} from "./resposta-estruturada";
+import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,textoWhatsappComQuebras,protegerMensagensSaida} from "./resposta-estruturada";
 import {modeloSugeridoConfirmadoCotacao} from "./modelo-sugerido-cotacao";
 import {clienteRejeitouVersoesFipe,novoModeloForaDaLista} from "./reorientacao-versoes-cotacao";
 import {querCompararPlanos,usoComparativoNoContexto,citouVeiculoDiferente} from "./comparacao-intencao";
@@ -624,9 +624,12 @@ async function aguardarEntregaMidiaPosCotacao(ctx: ContextoRuntime) {
 
 async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
   if (!ctx.pendencia.numero_destino) return;
+  // Última barreira compartilhada com o runtime de conversas: nunca
+  // publicar envelopes "mensagens: [...]" ou JSON interno do modelo.
+  const verificadas=protegerMensagensSaida(mensagens,ctx.cotacaoFormatada?12:3);
   const limpas = ctx.cotacaoFormatada
-    ? mensagens.map(item=>String(item||"").trim()).filter(Boolean).slice(0,12)
-    : mensagens.map(item=>textoWhatsappComQuebras(item,3500)).filter(Boolean).slice(0,3);
+    ? verificadas.map(item=>String(item||"").trim()).filter(Boolean)
+    : verificadas.map(item=>textoWhatsappComQuebras(item,3500)).filter(Boolean);
   if(ctx.cotacaoFormatada&&limpas.some(texto=>texto.length>4000))
     throw new Error("Mensagem de cotação excedeu o limite seguro de caracteres do WhatsApp.");
   const delayDinamico = normalizarDelayDinamico(ctx.agente?.metadata_json?.delay_dinamico);
