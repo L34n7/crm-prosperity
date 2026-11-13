@@ -33,6 +33,7 @@ import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida} from "./resposta-estruturada";
 import {regrasGeraisBackend,regrasPorFerramentaGeral} from "./prompts-backend";
+import { mensagemEhDuvidaSobreAgendaDoProduto } from "./intencao-agenda-informativa";
 import {
   agendarFollowupAgenteIa,
   cancelarFollowupsPendentesAgenteIa,
@@ -1150,6 +1151,9 @@ function mensagemConfirmaAgendamento(valor: unknown) {
 function consultaConhecimentoAutomatica(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   if (!texto) return null;
+  if (mensagemEhDuvidaSobreAgendaDoProduto(mensagem)) {
+    return "agenda Google Calendar agendamentos IA funcionalidades";
+  }
   if (/\b(endereco|localizacao|onde fica|como chegar|fica onde|localizado|localizada)\b/.test(texto)) {
     return textoCurto(mensagem, 140);
   }
@@ -1483,6 +1487,9 @@ function mensagemRecusaReferenciaTemporal(mensagem: string) {
 }
 
 function mensagemTemIntencaoAgenda(mensagem: string, estado: EstadoConversa) {
+  // Explicar a função de agenda do CRM não autoriza consultar horários
+  // da agenda do consultor nem iniciar marcação com o próprio lead.
+  if (mensagemEhDuvidaSobreAgendaDoProduto(mensagem)) return false;
   const texto = normalizarTextoIntencao(mensagem);
   if (mensagemRecusaReferenciaTemporal(mensagem)) {
     return estadoTemAgendaEmAndamento(estado);
