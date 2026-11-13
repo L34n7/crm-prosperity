@@ -312,6 +312,8 @@ export type Janela24hConversa = {
   ultimaMensagemRecebidaEm: string | null;
   janelaExpiraEm: string | null;
   motivoBloqueio: string | null;
+  metaFreeEntryExpiraEm?: string | null;
+  metaFreeEntryAtiva?: boolean;
 };
 
 export type Janela24hApiPayload = Partial<Janela24hConversa> & {
@@ -1553,6 +1555,11 @@ export function normalizarJanela24hConversa(
     ultimaMensagemRecebidaEm,
     janelaExpiraEm,
     motivoBloqueio,
+    metaFreeEntryExpiraEm: janela.metaFreeEntryExpiraEm ?? null,
+    metaFreeEntryAtiva: Boolean(
+      janela.metaFreeEntryExpiraEm &&
+      new Date(janela.metaFreeEntryExpiraEm).getTime() > Date.now()
+    ),
   };
 }
 

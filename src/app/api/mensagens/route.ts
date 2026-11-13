@@ -11,7 +11,6 @@ import {
 import { usuarioPodeVisualizarConversa as usuarioPodeAcessarConversa } from "@/lib/conversas/visibilidade";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
-import { encerrarConversaExpirada } from "@/lib/whatsapp/encerrar-conversa-expirada";
 import {
   CONVERSA_HISTORICO_IMPORTADO_MENSAGEM,
   isConversaHistoricoImportado,
@@ -947,8 +946,8 @@ export async function POST(request: Request) {
   });
 
   if (!janela24h.podeEnviarMensagemLivre) {
-    await encerrarConversaExpirada(conversa_id);
-
+    // Somente o cron encerra a sessão; campanhas Meta podem continuar
+    // ativas para templates, apesar da janela de mensagem livre expirada.
     return NextResponse.json(
       {
         ok: false,

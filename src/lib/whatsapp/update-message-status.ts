@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolverVencimentoPontoEntradaMeta } from "@/lib/whatsapp/meta-free-entry-window";
 import { sendMetaPaymentBlockedEmail } from "@/lib/email/send-meta-payment-blocked-email";
 import { sendMetaAccountBlockedEmail } from "@/lib/email/send-meta-account-blocked-email";
 import {
@@ -520,6 +521,35 @@ export async function updateWhatsAppMessageStatus({
 
   if (findError) {
     throw new Error(`Erro ao localizar mensagem: ${findError.message}`);
+  }
+
+  if (mensagemAtual?.conversa_id && mensagemAtual?.empresa_id) {
+    const janelaMeta = resolverVencimentoPontoEntradaMeta({
+      status,
+      pricingType: typeof metadata?.pricing_type === "string" ? metadata.pricing_type : null,
+      originType: typeof metadata?.conversation_origin_type === "string"
+        ? metadata.conversation_origin_type : null,
+      expirationTimestamp: typeof metadata?.expiration_timestamp === "string"
+        ? metadata.expiration_timestamp : null,
+      eventTimestamp: timestamp,
+    });
+    if (janelaMeta) {
+      try {
+        // Webhooks atrasados não podem sobrescrever o prazo mais recente.
+        const { error: expiracaoError } = await supabaseAdmin
+          .from("conversas")
+          .update({
+            meta_free_entry_expires_at: janelaMeta.expiraEm,
+            meta_free_entry_status_at: janelaMeta.eventoEm,
+          })
+          .eq("empresa_id", mensagemAtual.empresa_id)
+          .eq("id", mensagemAtual.conversa_id)
+          .or(`meta_free_entry_status_at.is.null,meta_free_entry_status_at.lte.${janelaMeta.eventoEm}`);
+        if (expiracaoError) throw expiracaoError;
+      } catch (error) {
+        console.error("[META FREE ENTRY] Erro ao atualizar prazo operacional:", error);
+      }
+    }
   }
 
   if (!mensagemAtual) {

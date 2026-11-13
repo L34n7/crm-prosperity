@@ -6933,9 +6933,25 @@ const templateFooterTexto = useMemo(() => {
     }
 
     if (mostrarDisparoIndividual) {
+      const campanhaMetaAtiva = Boolean(
+        janela24hConversa?.metaFreeEntryExpiraEm &&
+        new Date(janela24hConversa.metaFreeEntryExpiraEm).getTime() > Date.now()
+      );
       return {
-        titulo: "Janela de 24h encerrada",
-        texto: (
+        titulo: campanhaMetaAtiva
+          ? "Campanha Meta ativa · mensagem livre encerrada"
+          : "Janela de 24h encerrada",
+        texto: campanhaMetaAtiva ? (
+          <>
+            Este lead permanece em atendimento até{" "}
+            <strong>
+              {new Date(janela24hConversa!.metaFreeEntryExpiraEm!).toLocaleString("pt-BR")}
+            </strong>
+            {" "}conforme o vencimento informado pela Meta. Após 24h sem resposta
+            do contato, só é permitido enviar <strong>template aprovado</strong>
+            no Disparo individual. A IA e as automações respeitam essa regra.
+          </>
+        ) : (
           <>
             A janela de atendimento expirou. Para voltar a conversar, envie um
             template aprovado pelo <strong>Disparo individual</strong> e aguarde a
@@ -6943,7 +6959,7 @@ const templateFooterTexto = useMemo(() => {
           </>
         ),
         icone: "🕒",
-        variante: "danger" as const,
+        variante: campanhaMetaAtiva ? "info" as const : "danger" as const,
       };
     }
 
