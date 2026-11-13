@@ -2250,12 +2250,21 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     const vinculados = ctx.ferramentasAtivas.has("enviar_material")
       ? ctx.ferramentasAtivas.get("enviar_material")?.materiais
       : [];
+    // Os arquivos reservados ao envio automático após link NÃO são
+    // anunciados à IA nas consultas gerais de conhecimento.
+    const configCotacaoLink = configuracaoCotacaoPorLink(
+      ctx.agente.metadata_json?.cotacao_link,
+    );
+    const idsExclusivosDoLink = new Set(configCotacaoLink
+      ? materiaisAposLink(vinculados,configCotacaoLink.conhecimento_id)
+      : []);
     const resultados = encontrados.map((item: any) => ({
       id: String(item.id),
       titulo: item.titulo,
       categoria: item.categoria,
       trecho: String(item.trecho || "").slice(0, MAX_CARACTERES_TRECHO_CONHECIMENTO),
-      materiais: materiaisDeConhecimento(vinculados,String(item.id)),
+      materiais: materiaisDeConhecimento(vinculados,String(item.id))
+        .filter(material=>!idsExclusivosDoLink.has(material.midia_id)),
     }));
     return { ok: true, consulta, resultados };
   }
@@ -2275,6 +2284,15 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
       && materialAutorizadoPorConhecimento(item,consultados));
     if(!midiaId||!permitido)
       return {ok:false,error:"Material não autorizado ou conhecimento vinculado não consultado."};
+    // Materiais declarados como "após o link da cotação" são exclusivos do
+    // fluxo determinístico. Impede envio em perguntas gerais sobre cobertura.
+    const configLink= configuracaoCotacaoPorLink(
+      ctx.agente.metadata_json?.cotacao_link,
+    );
+    if(configLink&&materiaisAposLink(configurados,configLink.conhecimento_id).includes(midiaId)){
+      return {ok:false,code:"MATERIAL_EXCLUSIVO_COTACAO_LINK",
+        error:"Este material é enviado automaticamente somente após um pedido de cotação com link. Responda à pergunta atual sem enviar imagens."};
+    }
     if(!ctx.pendencia.numero_destino)
       return {ok:false,error:"Contato sem telefone para receber o material."};
     const texto=normalizarTextoIntencao(ctx.pendencia.conteudo_agregado);
@@ -3329,7 +3347,9 @@ function contextoPreconsultasParaModelo(executadas: Array<{ nome: TipoFerramenta
 
 function ferramentaExecutadaComSucesso(ctx: ContextoExecucao, nome: TipoFerramenta) {
   return ctx.ferramentasExecutadas.some(
-    (item) => item?.nome === nome && item?.resultado?.ok === true
+    (item) => item?.nome === nome && item?.resultado?.ok === true &&
+      (nome !== "enviar_material" ||
+        item.resultado?.enviado === true || item.resultado?.enfileirado === true)
   );
 }
 
@@ -3857,7 +3877,9 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
             execucaoId,
             midiaId,
             numeroDestino: pendencia.numero_destino || "",
-            reenviar: false,
+            // Um NOVO pedido de cotação deve anexar os materiais novamente,
+            // mesmo se o cliente já os recebeu no mesmo atendimento.
+            reenviar: true,
           });
         } catch (error) {
           resultado = {
@@ -3878,6 +3900,12 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       const errosMateriais = ctx.ferramentasExecutadas.filter(
         item => item.resultado?.ok !== true,
       ).length;
+      const materiaisEntregues = ctx.ferramentasExecutadas.filter(
+        item => item.resultado?.ok === true && item.resultado?.enviado === true,
+      ).length;
+      const materiaisIgnorados = ctx.ferramentasExecutadas.filter(
+        item => item.resultado?.ja_enviado === true,
+      ).length;
       await supabaseAdmin.from("agente_ia_execucoes").update({
         status: "concluido",
         resposta: configLink.mensagem,
@@ -3892,6 +3920,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
           cotacao_link_backend: true,
           link_enviado_antes_materiais: true,
           materiais_configurados: ids.length,
+          materiais_enviados: materiaisEntregues,
+          materiais_ignorados_por_repeticao: materiaisIgnorados,
           materiais_falharam: errosMateriais,
           conhecimento_materiais_id: configLink.conhecimento_id,
           erro_consulta_materiais: erroConsultaMateriais,
@@ -4114,6 +4144,54 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       };
     }
 
+    // A IA pode consumir todas as rodadas consultando conhecimentos e
+    // ferramentas sem produzir um balão. Recupere com uma rodada final
+    // SOMENTE de texto, usando os resultados já obtidos, antes de recorrer
+    // a qualquer resposta de contingência.
+    let recuperacaoRespostaVazia = false;
+    let falhaRecuperacaoResposta: string | null = null;
+    if (!ctx.respostaDeterministica?.length && !ctx.transferidoHumano
+        && !saidaFinal.mensagens.length) {
+      recuperacaoRespostaVazia = true;
+      try {
+        const respostaRecuperacao:any = await openai.responses.create({
+          model: modelo,
+          instructions: instructions +
+            "\n\nRECUPERAÇÃO OBRIGATÓRIA: As ferramentas já foram consultadas e não serão disponibilizadas nesta rodada. " +
+            "Responda AGORA a última pergunta do cliente com informações que constem no histórico e nas consultas realizadas. " +
+            "Não se apresente novamente, não repita a pergunta e não use uma resposta genérica. " +
+            "Se faltar um detalhe que depende do plano, explique o limite do que sabe e indique que a proposta pode esclarecer o restante.",
+          input: [...inputIa, {
+            role:"developer",
+            content:"Finalize o atendimento respondendo à pergunta atual em uma ou duas mensagens. " +
+              "Ferramentas não estão disponíveis. Não invente valores, coberturas específicas ou ações realizadas.",
+          }],
+          tools: [],
+          reasoning: {effort:"none"},
+          text: {verbosity:"low",format:FORMATO_SAIDA},
+        } as any);
+        tokensInput += Number(respostaRecuperacao.usage?.input_tokens||0);
+        tokensOutput += Number(respostaRecuperacao.usage?.output_tokens||0);
+        tokensTotal += Number(respostaRecuperacao.usage?.total_tokens||0);
+        const texto=String(respostaRecuperacao.output_text||"").trim();
+        const recuperada=recuperarRespostaEstruturada(texto);
+        saidaFinal=normalizarSaida(
+          recuperada,contexto.estado,
+          texto&&!textoPareceEstruturaInterna(texto)?texto:"",
+        );
+        // Antes de aceitar uma promessa de ação, confirme que ela foi
+        // realmente executada por alguma ferramenta deste atendimento.
+        if(promessaOperacionalNaoExecutada(saidaFinal.mensagens,ctx)){
+          saidaFinal.mensagens=[];
+        }
+      }catch(error){
+        falhaRecuperacaoResposta=error instanceof Error?error.message:String(error);
+        console.error("[AGENTE_IA] Falha na recuperação de resposta vazia",{
+          execucaoId,erro:falhaRecuperacaoResposta,
+        });
+      }
+    }
+
     if (ctx.agendaIdsAutorizadas.length && ctx.agendaAutorizada) {
       const houveMutacaoAgenda = ctx.ferramentasExecutadas.some(
         (item) =>
@@ -4183,10 +4261,15 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
 
     if (!ctx.transferidoHumano) {
       if (!saidaFinal.mensagens.length) {
+        console.warn("[AGENTE_IA] Sem resposta após rodada de recuperação",{
+          execucaoId,agenteId:agente.id,
+          ferramentas:ctx.ferramentasExecutadas.map(item=>item.nome),
+          erroRecuperacao:falhaRecuperacaoResposta,
+        });
         saidaFinal.mensagens = [
           ctx.acaoCriticaExecutada
-            ? "Pronto, essa etapa foi concluída."
-            : "Me conta um pouco mais para eu te ajudar por aqui.",
+            ? "A ação solicitada foi processada, mas não consegui concluir a explicação. Pode repetir sua dúvida?"
+            : "Não consegui responder sua última pergunta com segurança. Pode reformulá-la para eu ajudar melhor?",
         ];
       }
       // Auditoria e envio compartilham apenas mensagens seguras.
@@ -4295,6 +4378,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       updated_at: finalAgora,
       metadata_json: {
         quantidade_mensagens_saida: saidaFinal.mensagens.length,
+        recuperacao_resposta_vazia: recuperacaoRespostaVazia,
+        erro_recuperacao_resposta: falhaRecuperacaoResposta,
         estado_estruturado: saidaFinal.estado,
         resposta_deterministica_pos_ferramenta: Boolean(ctx.respostaDeterministica?.length),
         agendamentos_ativos_confirmados: ctx.agendamentosAtivos.length,
