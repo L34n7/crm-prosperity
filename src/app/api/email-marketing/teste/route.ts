@@ -31,6 +31,10 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!acesso.usuario.empresa_id) {
+    return NextResponse.json({ ok: false, error: "Empresa não identificada." }, { status: 400 });
+  }
+
   const body = await request.json().catch(() => null);
   const destinatario = String(body?.email || "").trim().toLowerCase();
 
