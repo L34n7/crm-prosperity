@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   MAX_INTERVALO_FOLLOWUP_MINUTOS,
+  MAX_TENTATIVAS_FOLLOWUP,
+  MAX_CARACTERES_PROMPT_FOLLOWUP,
   normalizarFollowupInatividade,
   type FollowupInatividadeConfig,
   type FollowupTentativaConfig,
@@ -38,7 +40,7 @@ function resumoMidias(midias: MidiaOpcao[]) {
 }
 
 function ordinal(indice: number) {
-  return indice === 0 ? "1ª" : indice === 1 ? "2ª" : "3ª";
+  return `${indice + 1}ª`;
 }
 
 function labelTipo(tipo: FollowupTipoEnvio) {
@@ -300,9 +302,11 @@ export default function FollowupInatividadeEditor({
                   atualizar({ tentativas: Number(event.target.value) })
                 }
               >
-                <option value={1}>1 tentativa</option>
-                <option value={2}>2 tentativas</option>
-                <option value={3}>3 tentativas</option>
+                {Array.from({ length: MAX_TENTATIVAS_FOLLOWUP }, (_, indice) => (
+                  <option key={indice + 1} value={indice + 1}>
+                    {indice + 1} {indice === 0 ? "tentativa" : "tentativas"}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -403,10 +407,27 @@ export default function FollowupInatividadeEditor({
                   </div>
 
                   {etapa.tipo === "ia" && (
-                    <small className={styles.fieldHint}>
-                      A mensagem é criada pelo agente usando o contexto atual,
-                      evitando repetir as tentativas anteriores.
-                    </small>
+                    <div style={{ display: "grid", gap: 6, marginTop: 10 }}>
+                      <label className={styles.field}>
+                        <span>Instrução adicional para esta tentativa (opcional)</span>
+                        <textarea
+                          rows={4}
+                          maxLength={MAX_CARACTERES_PROMPT_FOLLOWUP}
+                          value={etapa.prompt_adicional}
+                          placeholder="Ex.: Seja provocativo: destaque as oportunidades perdidas quando um interessado demora a receber resposta e mostre como um agente de vendas pode ajudar. Convide o cliente a continuar."
+                          onChange={(event) =>
+                            atualizarEtapa(indice, { prompt_adicional: event.target.value })
+                          }
+                        />
+                      </label>
+                      <small className={styles.fieldHint}>
+                        Personalize o tom e a abordagem desta tentativa, sem alterar o
+                        prompt principal. Deixe vazio para usar a estratégia padrão.
+                      </small>
+                      <small className={styles.fieldHint} style={{ textAlign: "right" }}>
+                        {etapa.prompt_adicional.length}/{MAX_CARACTERES_PROMPT_FOLLOWUP} caracteres
+                      </small>
+                    </div>
                   )}
 
                   {etapa.tipo === "texto" && (
@@ -507,8 +528,9 @@ export default function FollowupInatividadeEditor({
 
           <small className={styles.fieldHint}>
             Os tempos são contados desde a última mensagem do cliente e devem
-            ser crescentes. Ex.: 30 min, 3 horas e 22 horas. O limite por
-            tentativa é de 23 horas para permanecer dentro da janela válida do WhatsApp.
+            ser crescentes. Ex.: 30 min, 3, 12, 16, 20 e 23 horas.
+            Até seis tentativas podem ser configuradas dentro da janela de 24 horas.
+            Se o cliente responder, um novo ciclo começa com os prazos configurados.
           </small>
         </>
       )}
