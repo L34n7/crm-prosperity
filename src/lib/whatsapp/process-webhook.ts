@@ -35,6 +35,7 @@ import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { processCoexistenceWebhookBody } from "@/lib/whatsapp/process-coexistence-webhook";
 import { processTemplateWebhookUpdates } from "@/lib/whatsapp/process-template-webhook";
 import { empresaComRecebimentoWhatsappSuspenso } from "@/lib/whatsapp/inadimplencia";
+import { recuperarInteresseMensagemIndisponivel } from "@/lib/whatsapp/recuperar-mensagem-indisponivel-anuncio";
 import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { processarAlertaFranquiaService } from "@/lib/whatsapp/service-quota";
 import { registrarPricingStatusEventoMeta } from "@/lib/whatsapp/pricing-status-events";
@@ -870,6 +871,36 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
 
       const metadataJson = (message.metadataJson || {}) as any;
 
+      // Recuperar apenas saudações automáticas indisponíveis com evidência
+      // de anúncio ou de primeira mensagem; preservar o payload original.
+      const candidataAnuncio =
+        message.tipoMensagem === "unsupported" &&
+        String(metadataJson?.unsupported?.type || "").toLowerCase() === "unknown" &&
+        /^this message is currently unavailable[.!]?$/i.test(
+          String(metadataJson?.unsupported?.details || "").trim()
+        );
+      let primeiraMensagemContato = false;
+      if (candidataAnuncio && !message.referral) {
+        const { data: mensagemAnterior, error: erroAnterior } = await supabaseAdmin
+          .from("mensagens").select("id")
+          .eq("empresa_id", integration.empresa_id)
+          .eq("conversa_id", conversation.id)
+          .eq("remetente_tipo", "contato").limit(1).maybeSingle();
+        if (erroAnterior) {
+          console.error("[WEBHOOK WHATSAPP] Falha ao consultar primeira entrada indisponível:", erroAnterior);
+        } else {
+          primeiraMensagemContato = !mensagemAnterior;
+        }
+      }
+      const interesseAnuncioRecuperado = recuperarInteresseMensagemIndisponivel({
+        tipoMensagem: message.tipoMensagem,
+        tipoUnsupported: metadataJson?.unsupported?.type,
+        detalheUnsupported: metadataJson?.unsupported?.details,
+        possuiReferral: Boolean(message.referral),
+        primeiraMensagemContato,
+      });
+      const tipoMensagemAtendimento = interesseAnuncioRecuperado ? "texto" : message.tipoMensagem;
+
       // CRM_AGENDA_BUTTON_SKIP_COMMON_TRIGGER_V1
       const payloadAcaoAgenda = String(
         message.rawMessage?.button?.payload ||
@@ -884,6 +915,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
         );
 
       let textoAutomacao =
+        interesseAnuncioRecuperado ||
         message.text?.trim() ||
         metadataJson?.interactive?.button_reply?.id ||
         metadataJson?.interactive?.button_reply?.title ||
@@ -970,13 +1002,19 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       const payloadSalvarMensagem: any = {
         empresaId: integration.empresa_id,
         conversaId: conversation.id,
-        conteudo: transcricaoAudio || message.conteudo,
-        tipoMensagem: message.tipoMensagem,
+        conteudo: interesseAnuncioRecuperado || transcricaoAudio || message.conteudo,
+        tipoMensagem: tipoMensagemAtendimento,
         statusEnvio: "entregue",
         mensagemExternaId: message.messageId,
         timestamp: message.timestamp,
         metadataJson: {
           ...(message.metadataJson || {}),
+          ...(interesseAnuncioRecuperado ? {
+            mensagem_indisponivel_convertida_em_interesse: true,
+            conteudo_original_indisponivel: message.conteudo || null,
+            tipo_original_whatsapp: "unsupported",
+            recuperacao_origem: message.referral ? "referral_anuncio" : "primeiro_contato_indisponivel",
+          } : {}),
           whatsapp_profile_name: message.profileName || null,
           whatsapp_wa_id: message.waId || null,
           transcricao_audio: transcricaoAudio || null,
@@ -1041,8 +1079,8 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
               integracaoWhatsappId: integration.id,
               mensagemId: mensagemInternaId,
               mensagemExternaId: message.messageId,
-              tipoMensagem: message.tipoMensagem,
-              texto: message.text || message.conteudo,
+              tipoMensagem: tipoMensagemAtendimento,
+              texto: interesseAnuncioRecuperado || message.text || message.conteudo,
               contextoMensagemExternaId:
                 message.rawMessage?.context?.id || null,
             })
@@ -1221,12 +1259,12 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
       const arquivoNome = extrairArquivoNome(message, metadataJson);
 
       const ehArquivoParaAutomacao = ["imagem", "documento"].includes(
-        message.tipoMensagem
+        tipoMensagemAtendimento
       );
 
       const podeRodarAutomacao =
         !automacaoJaProcessada &&
-        ((["texto", "botao", "audio"].includes(message.tipoMensagem) &&
+        ((["texto", "botao", "audio"].includes(tipoMensagemAtendimento) &&
           !!textoAutomacao.trim()) ||
           (ehArquivoParaAutomacao && !!mediaId));
 
@@ -1243,7 +1281,7 @@ export async function processWhatsAppWebhookBody(body: WhatsAppWebhookBody) {
             message.conteudo ||
             "arquivo_recebido",
           numeroDestino: message.from,
-          mensagemTipo: tipoMensagemParaAutomacao(message.tipoMensagem),
+          mensagemTipo: tipoMensagemParaAutomacao(tipoMensagemAtendimento),
           mensagemEstruturada:
             message.tipoMensagem === "botao" ||
             Boolean(
