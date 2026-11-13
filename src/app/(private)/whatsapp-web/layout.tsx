@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { empresaPodeAcessarWhatsappWebLocal } from "@/lib/whatsapp-web/acesso";
+import { PERMISSAO_WHATSAPP_WEB_LOCAL } from "@/lib/permissoes/internas";
 
 export default async function WhatsappWebLayout({
   children,
@@ -13,9 +14,10 @@ export default async function WhatsappWebLayout({
     redirect(resultado.status === 401 ? "/login" : "/painel");
   }
 
-  const permitido = await empresaPodeAcessarWhatsappWebLocal(
-    resultado.usuario.empresa_id
-  );
+  // Acesso restrito: a permissão comum de Disparos não habilita o agente local.
+  const permitido =
+    resultado.usuario.permissoes.includes(PERMISSAO_WHATSAPP_WEB_LOCAL) &&
+    await empresaPodeAcessarWhatsappWebLocal(resultado.usuario.empresa_id);
 
   if (!permitido) {
     redirect("/painel");

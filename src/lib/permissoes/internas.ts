@@ -1,11 +1,13 @@
 export const PERMISSAO_INTERNA_EMPRESAS = "empresas.acesso_interno";
 export const PERMISSAO_RELATORIOS_INTERNOS = "relatorios_internos.visualizar";
+export const PERMISSAO_WHATSAPP_WEB_LOCAL = "whatsapp_web_local.acesso_interno";
 export const PERMISSAO_RELATORIOS = "relatorios.visualizar";
 export const PERMISSAO_WHITE_LABEL_CLIENTES = "white_label.clientes.gerenciar";
 
 export const PERMISSOES_INTERNAS_OCULTAS = [
   PERMISSAO_INTERNA_EMPRESAS,
   PERMISSAO_RELATORIOS_INTERNOS,
+  PERMISSAO_WHATSAPP_WEB_LOCAL,
 ] as const;
 
 export const PERMISSOES_OCULTAS_NA_TELA = [

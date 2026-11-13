@@ -48,6 +48,7 @@ import type { AssinaturaEmpresa } from "@/lib/assinaturas/status";
 import {
   PERMISSAO_INTERNA_EMPRESAS,
   PERMISSAO_RELATORIOS_INTERNOS,
+  PERMISSAO_WHATSAPP_WEB_LOCAL,
   PERMISSAO_WHITE_LABEL_CLIENTES,
 } from "@/lib/permissoes/internas";
 import { PERMISSAO_VISUALIZAR_DISPAROS } from "@/lib/whatsapp/disparo-permissoes";
@@ -242,7 +243,7 @@ const menuItems: MenuItem[] = [
     label: "WhatsApp Web local",
     href: "/whatsapp-web",
     icon: MessageCircle,
-    permissao: PERMISSAO_VISUALIZAR_DISPAROS,
+    permissao: PERMISSAO_WHATSAPP_WEB_LOCAL,
   },
   {
     label: "Perfil WhatsApp",
