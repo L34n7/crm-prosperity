@@ -3847,9 +3847,37 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
 
       // O conteúdo da biblioteca é validado por empresa na própria função
       // enviarMaterialDoAgente e nunca é inferido a partir da resposta da IA.
-      const ids = ferramentasAtivas.has("enviar_material")
-        ? materiaisAposLink(ferramentasAtivas.get("enviar_material")?.materiais)
-        : [];
+      let ids: string[] = [];
+      let erroConsultaMateriais: string | null = null;
+      if (ferramentasAtivas.has("enviar_material")) {
+        if (configLink.conhecimento_id) {
+          // O conhecimento de cotação passa a ser a fonte única de mídias.
+          // A ferramenta mantém somente a autorização para enviá-las.
+          const { data: conhecimento, error: erroConhecimento } = await supabaseAdmin
+            .from("agente_ia_conhecimentos")
+            .select("materiais_json")
+            .eq("empresa_id", pendencia.empresa_id)
+            .eq("agente_id", agente.id)
+            .eq("id", configLink.conhecimento_id)
+            .eq("ativo", true)
+            .maybeSingle();
+          if (erroConhecimento) {
+            erroConsultaMateriais = erroConhecimento.message;
+            console.error("[AGENTE_IA] Erro ao carregar mídias do conhecimento de cotação", {
+              agenteId: agente.id,
+              conhecimentoId: configLink.conhecimento_id,
+              erro: erroConhecimento.message,
+            });
+          } else if (!conhecimento) {
+            erroConsultaMateriais = "Conhecimento vinculado não encontrado ou inativo.";
+          } else {
+            ids = materiaisAposLink(conhecimento.materiais_json);
+          }
+        } else {
+          // Compatibilidade para agentes anteriores à organização por base.
+          ids = materiaisAposLink(ferramentasAtivas.get("enviar_material")?.materiais);
+        }
+      }
       let supersedidoDuranteMateriais = false;
       for (const midiaId of ids) {
         if (await execucaoFoiSupersedida(pendencia)) {
@@ -3901,6 +3929,8 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
           link_enviado_antes_materiais: true,
           materiais_configurados: ids.length,
           materiais_falharam: errosMateriais,
+          conhecimento_materiais_id: configLink.conhecimento_id,
+          erro_consulta_materiais: erroConsultaMateriais,
           supersedido_durante_materiais: supersedidoDuranteMateriais,
         },
       }).eq("id", execucaoId);

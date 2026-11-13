@@ -37,6 +37,13 @@ test("fluxo só é ativado com configuração explícita e link",()=>{
   assert.equal(configuracaoCotacaoPorLink({ativo:false,mensagem}),null);
   assert.equal(configuracaoCotacaoPorLink({ativo:true,mensagem:"Olá"}),null);
   assert.equal(configuracaoCotacaoPorLink({ativo:true,mensagem})?.mensagem,mensagem);
+  const id="e991f757-92fe-4545-9955-d5da1fbf11af";
+  assert.equal(configuracaoCotacaoPorLink({
+    ativo:true,mensagem,conhecimento_id:id,
+  })?.conhecimento_id,id);
+  assert.equal(configuracaoCotacaoPorLink({
+    ativo:true,mensagem,conhecimento_id:"conhecimento-outra-empresa",
+  })?.conhecimento_id,null);
 });
 
 test("seleciona apenas três mídias vinculadas ao envio APÓS o link, em ordem",()=>{
