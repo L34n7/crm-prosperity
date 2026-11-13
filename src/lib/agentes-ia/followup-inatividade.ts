@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { textoFollowupUnicoSeguro } from "./resposta-estruturada";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
@@ -516,12 +517,9 @@ function historicoParaModelo(mensagens: Array<Record<string, unknown>>) {
 }
 
 function textoFollowupSeguro(valor: unknown) {
-  return String(valor || "")
-    .trim()
-    .replace(/^['\"\`]+|['\"\`]+$/g, "")
+  return textoFollowupUnicoSeguro(valor,700)
     .replace(/^\s*🎤\s*áudio\s*/i, "")
-    .trim()
-    .slice(0, 700);
+    .trim();
 }
 
 function followupPrometeAgendamentoSemFerramenta(texto: string) {
@@ -712,6 +710,12 @@ async function enviarFollowupTexto(params: {
   numeroDestino: string;
   texto: string;
 }) {
+  // Barreia final: nem o follow-up de IA nem um texto configurado pode
+  // entregar envelopes internos do modelo à API do WhatsApp.
+  const textoSeguro=textoFollowupSeguro(params.texto);
+  if(!textoSeguro){
+    throw new Error("Follow-up descartado: resposta estruturada inválida para WhatsApp.");
+  }
   const { data: conversa } = await supabaseAdmin
     .from("conversas")
     .select("integracao_whatsapp_id")
@@ -733,7 +737,7 @@ async function enviarFollowupTexto(params: {
     phoneNumberId: integracao.phone_number_id,
     accessToken,
     to: params.numeroDestino,
-    body: params.texto,
+    body: textoSeguro,
   });
   const agora = new Date().toISOString();
   const { data: protocolo } = await supabaseAdmin
@@ -752,7 +756,7 @@ async function enviarFollowupTexto(params: {
     conversa_protocolo_id: protocolo?.id || null,
     remetente_tipo: "bot",
     remetente_id: null,
-    conteudo: params.texto,
+    conteudo: textoSeguro,
     tipo_mensagem: "texto",
     origem: "automatica",
     status_envio: envio.ok ? "enviada" : "falha",
@@ -1114,6 +1118,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       "FOLLOW-UP DE INATIVIDADE:",
       "- O cliente parou de responder e a janela de 24 horas ainda está aberta.",
       "- Escreva UMA única mensagem curta e natural para retomar exatamente o ponto pendente.",
+      "- REGRA DE FORMATO DO FOLLOW-UP: responda APENAS o texto final, sem prefixo mensagens:, arrays, JSON ou memoria_delta. Não aplique aqui a apresentação em dois balões da abertura inicial e não se apresente novamente.",
       `- Esta é a tentativa ${tentativa}. ${estrategiaTentativaFollowup(tentativa)}`,
       tentativa > 1
         ? "- REGRA PRIORITÁRIA: esta nova mensagem precisa ser claramente DIFERENTE dos follow-ups anteriores. Não reutilize a mesma abertura, a mesma pergunta central, a mesma estrutura nem apenas troque palavras por sinônimos. Mantenha o objetivo, mas avance por outro ângulo."
