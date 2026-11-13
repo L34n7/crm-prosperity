@@ -41,6 +41,7 @@ import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida} from "./resposta-estruturada";
+import { consultaFaqProduto } from "./preconsulta-faq-produto";
 import {regrasGeraisBackend,regrasPorFerramentaGeral} from "./prompts-backend";
 import { mensagemEhDuvidaSobreAgendaDoProduto } from "./intencao-agenda-informativa";
 import {
@@ -1161,6 +1162,11 @@ function mensagemConfirmaAgendamento(valor: unknown) {
 function consultaConhecimentoAutomatica(mensagem: string) {
   const texto = normalizarTextoIntencao(mensagem);
   if (!texto) return null;
+  // Perguntas frequentes fora dos gatilhos comerciais já existentes
+  // precisam consultar o conhecimento da empresa antes da resposta.
+  // A pesquisa usa a pergunta original e o agente mantém escopo por empresa.
+  const consultaFaq = consultaFaqProduto(mensagem);
+  if (consultaFaq) return consultaFaq;
   if (mensagemEhDuvidaSobreAgendaDoProduto(mensagem)) {
     return "agenda Google Calendar agendamentos IA funcionalidades";
   }
