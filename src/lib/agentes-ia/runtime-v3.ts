@@ -3830,7 +3830,6 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
     );
     if (
       configLink &&
-      !ferramentasAtivas.has("gerar_cotacao_veicular") &&
       solicitouCotacaoPorLink(pendencia.conteudo_agregado)
     ) {
       const envioTexto = await enviarMensagensAgente(ctx, [configLink.mensagem]);
