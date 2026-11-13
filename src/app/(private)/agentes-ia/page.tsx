@@ -470,7 +470,22 @@ export default function AgentesIaPage() {
     palavras_chave: "",
   });
   const [conhecimentoEditando, setConhecimentoEditando] = useState<Conhecimento | null>(null);
+  const [conhecimentoParaExcluir, setConhecimentoParaExcluir] = useState<Conhecimento | null>(null);
+  const [excluindoConhecimento, setExcluindoConhecimento] = useState(false);
+  const [erroExclusaoConhecimento, setErroExclusaoConhecimento] = useState("");
   const [testeAberto, setTesteAberto] = useState(false);
+
+  useEffect(() => {
+    if (!conhecimentoParaExcluir) return;
+    const cancelarComEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !excluindoConhecimento) {
+        setConhecimentoParaExcluir(null);
+        setErroExclusaoConhecimento("");
+      }
+    };
+    window.addEventListener("keydown", cancelarComEscape);
+    return () => window.removeEventListener("keydown", cancelarComEscape);
+  }, [conhecimentoParaExcluir, excluindoConhecimento]);
 
   const selecionado = useMemo(
     () => agentes.find((agente) => agente.id === selecionadoId) || null,
@@ -1045,15 +1060,34 @@ export default function AgentesIaPage() {
     }
   }
 
-  async function excluirConhecimento(conhecimentoId: string) {
-    if (!editor) return;
+  function solicitarExclusaoConhecimento(conhecimento: Conhecimento) {
+    setConhecimentoParaExcluir(conhecimento);
+    setErroExclusaoConhecimento("");
+  }
+
+  function cancelarExclusaoConhecimento() {
+    if (excluindoConhecimento) return;
+    setConhecimentoParaExcluir(null);
+    setErroExclusaoConhecimento("");
+  }
+
+  async function excluirConhecimentoConfirmado() {
+    if (!editor || !conhecimentoParaExcluir || excluindoConhecimento) return;
+    const agenteId = editor.id;
+    const conhecimentoId = conhecimentoParaExcluir.id;
+    if (!(editor.conhecimentos || []).some((item) => item.id === conhecimentoId)) {
+      setErroExclusaoConhecimento("Este conhecimento não está mais vinculado ao agente selecionado.");
+      return;
+    }
+    setExcluindoConhecimento(true);
+    setErroExclusaoConhecimento("");
     setErro("");
     try {
       const res = await fetch("/api/agentes-ia", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: editor.id,
+          id: agenteId,
           acao: "excluir_conhecimento",
           conhecimento_id: conhecimentoId,
         }),
@@ -1064,10 +1098,14 @@ export default function AgentesIaPage() {
         normalizarAgente(agente, integracoes, nichoEmpresa)
       );
       setAgentes(agentesNormalizados);
-      const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
+      const atualizado = agentesNormalizados.find((item: Agente) => item.id === agenteId);
       if (atualizado) setEditor(cloneAgente(atualizado));
+      setConhecimentoParaExcluir(null);
+      setSucesso("Conhecimento excluído.");
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao excluir conhecimento.");
+      setErroExclusaoConhecimento(error instanceof Error ? error.message : "Erro ao excluir conhecimento.");
+    } finally {
+      setExcluindoConhecimento(false);
     }
   }
 
@@ -2423,8 +2461,10 @@ export default function AgentesIaPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => excluirConhecimento(item.id)}
-                              title="Excluir"
+                              onClick={() => solicitarExclusaoConhecimento(item)}
+                              title="Excluir conhecimento"
+                              aria-label={"Excluir conhecimento " + item.titulo}
+                              aria-haspopup="dialog"
                             >
                               <Trash2 size={15} />
                             </button>
@@ -2464,6 +2504,52 @@ export default function AgentesIaPage() {
           </section>
         </div>
       </main>
+
+      {conhecimentoParaExcluir && editor && (
+        <div
+          className={styles.modalOverlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) cancelarExclusaoConhecimento();
+          }}
+        >
+          <div
+            className={styles.deleteModal}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-knowledge-title"
+            aria-describedby="delete-knowledge-description"
+          >
+            <div className={styles.deleteModalIcon}><AlertTriangle size={24} /></div>
+            <div className={styles.deleteModalContent}>
+              <span className={styles.deleteEyebrow}>Confirmar exclusão</span>
+              <h2 id="delete-knowledge-title">Excluir conhecimento?</h2>
+              <p id="delete-knowledge-description">
+                Você está prestes a excluir o conhecimento <strong>“{conhecimentoParaExcluir.titulo}”</strong>.
+              </p>
+              <div className={styles.deleteWarning}>
+                Esta ação é permanente. O agente perderá esse conteúdo e os vínculos do conhecimento com materiais serão removidos.
+              </div>
+              {erroExclusaoConhecimento && (
+                <p className={styles.deleteModalError} role="alert">{erroExclusaoConhecimento}</p>
+              )}
+            </div>
+            <div className={styles.deleteModalActions}>
+              <button type="button" className={styles.secondaryButton}
+                onClick={cancelarExclusaoConhecimento} disabled={excluindoConhecimento} autoFocus>
+                Cancelar
+              </button>
+              <button type="button" className={styles.dangerButton}
+                onClick={excluirConhecimentoConfirmado} disabled={excluindoConhecimento}>
+                {excluindoConhecimento
+                  ? <Loader2 size={17} className={styles.spin} />
+                  : <Trash2 size={17} />}
+                {excluindoConhecimento ? "Excluindo..." : "Sim, excluir conhecimento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmandoExclusao && editor && editor.status !== "ativo" && (
         <div
