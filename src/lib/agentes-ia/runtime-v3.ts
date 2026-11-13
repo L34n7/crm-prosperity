@@ -29,6 +29,11 @@ import { calcularDelayEnvioBalaoMs, normalizarDelayDinamico } from "./delay-dina
 import { podeIniciarCicloFollowup } from "./followup-ciclo";
 import { enviarMaterialDoAgente } from "./enviar-material";
 import { normalizarMateriais } from "./materiais-config";
+import {
+  configuracaoCotacaoPorLink,
+  materiaisAposLink,
+  solicitouCotacaoPorLink,
+} from "./cotacao-link-direto";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
@@ -3815,6 +3820,98 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       }).eq("id", execucaoId);
       await finalizarPendencia({ pendencia, lockToken, status: "processado" });
       return { ok: true, processado: true, fallback: true, motivo: "saldo_tokens_ia_esgotado" };
+    }
+
+    // Para os agentes opt-in, o link da cotação deve anteceder QUALQUER
+    // material. O fluxo é executado pelo backend, sem ficar à mercê da
+    // ordem de chamadas de ferramentas escolhida pelo modelo.
+    const configLink = configuracaoCotacaoPorLink(
+      (agente as AgenteRow).metadata_json?.cotacao_link,
+    );
+    if (
+      configLink &&
+      !ferramentasAtivas.has("gerar_cotacao_veicular") &&
+      solicitouCotacaoPorLink(pendencia.conteudo_agregado)
+    ) {
+      const envioTexto = await enviarMensagensAgente(ctx, [configLink.mensagem]);
+      if (envioTexto.supersedido || !envioTexto.mensagensEnviadas) {
+        await supabaseAdmin.from("agente_ia_execucoes").update({
+          status: "cancelado",
+          erro: "mensagem_mais_recente_antes_link",
+          finished_at: new Date().toISOString(),
+          latencia_ms: Date.now() - inicio,
+          updated_at: new Date().toISOString(),
+        }).eq("id", execucaoId);
+        await finalizarPendencia({ pendencia, lockToken, status: "processado" });
+        return { ok: true, processado: true, supersedido: true };
+      }
+
+      // O conteúdo da biblioteca é validado por empresa na própria função
+      // enviarMaterialDoAgente e nunca é inferido a partir da resposta da IA.
+      const ids = ferramentasAtivas.has("enviar_material")
+        ? materiaisAposLink(ferramentasAtivas.get("enviar_material")?.materiais)
+        : [];
+      let supersedidoDuranteMateriais = false;
+      for (const midiaId of ids) {
+        if (await execucaoFoiSupersedida(pendencia)) {
+          supersedidoDuranteMateriais = true;
+          break;
+        }
+        let resultado: Record<string, unknown>;
+        try {
+          resultado = await enviarMaterialDoAgente({
+            empresaId: pendencia.empresa_id,
+            agenteId: agente.id,
+            conversaId: pendencia.conversa_id,
+            execucaoId,
+            midiaId,
+            numeroDestino: pendencia.numero_destino || "",
+            reenviar: false,
+          });
+        } catch (error) {
+          resultado = {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+        ctx.ferramentasExecutadas.push({
+          nome: "enviar_material",
+          argumentos: { midia_id: midiaId },
+          resultado,
+        });
+        if (resultado.ok === true && resultado.enviado === true) {
+          ctx.acaoCriticaExecutada = true;
+        }
+      }
+      const agoraLink = new Date().toISOString();
+      const errosMateriais = ctx.ferramentasExecutadas.filter(
+        item => item.resultado?.ok !== true,
+      ).length;
+      await supabaseAdmin.from("agente_ia_execucoes").update({
+        status: "concluido",
+        resposta: configLink.mensagem,
+        ferramentas_json: ctx.ferramentasExecutadas,
+        tokens_input: 0,
+        tokens_output: 0,
+        tokens_total: 0,
+        latencia_ms: Date.now() - inicio,
+        finished_at: agoraLink,
+        updated_at: agoraLink,
+        metadata_json: {
+          cotacao_link_backend: true,
+          link_enviado_antes_materiais: true,
+          materiais_configurados: ids.length,
+          materiais_falharam: errosMateriais,
+          supersedido_durante_materiais: supersedidoDuranteMateriais,
+        },
+      }).eq("id", execucaoId);
+      await finalizarPendencia({ pendencia, lockToken, status: "processado" });
+      return {
+        ok: true, processado: true,
+        cotacaoLinkEnviado: true,
+        materiaisConfigurados: ids.length,
+        materiaisFalharam: errosMateriais,
+      };
     }
 
     if (!process.env.OPENAI_API_KEY?.trim()) throw new Error("OPENAI_API_KEY não configurada.");
