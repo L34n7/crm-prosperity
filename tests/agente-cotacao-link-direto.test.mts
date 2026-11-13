@@ -61,3 +61,14 @@ test("seleciona apenas três mídias vinculadas ao envio APÓS o link, em ordem"
     {midia_id:ids[0],quando_enviar:"Somente quando pedir panfleto"},
   ]),[]);
 });
+
+test("cotação por link filtra mídias apenas do conhecimento escolhido",()=>{
+  const id="e991f757-92fe-4545-9955-d5da1fbf11af";
+  const outro="51b68956-37fb-4b8e-9bc2-efc5187d379c";
+  const materiais=[
+    {midia_id:"1efd002f-c83f-43e9-8326-ece90ed24f1f",quando_enviar:"Após enviar o link de cotação ao cliente",conhecimento_ids:[id]},
+    {midia_id:"b236cf39-980a-40e8-9416-8e7bc7ac2a37",quando_enviar:"Após enviar o link de cotação ao cliente",conhecimento_ids:[outro]},
+  ];
+  assert.deepEqual(materiaisAposLink(materiais,id),[materiais[0].midia_id]);
+  assert.deepEqual(materiaisAposLink(materiais,outro),[materiais[1].midia_id]);
+});

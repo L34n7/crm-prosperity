@@ -72,7 +72,7 @@ type Conhecimento = {
   conteudo: string;
   palavras_chave?: string[];
   prioridade?: number;
-  materiais_json?: MaterialVinculado[];
+  ativo?: boolean;
 };
 
 type GatilhoAgente = {
@@ -468,7 +468,6 @@ export default function AgentesIaPage() {
     categoria: "",
     conteudo: "",
     palavras_chave: "",
-    materiais_json: [] as MaterialVinculado[],
   });
   const [conhecimentoEditando, setConhecimentoEditando] = useState<Conhecimento | null>(null);
   const [testeAberto, setTesteAberto] = useState(false);
@@ -1040,7 +1039,7 @@ export default function AgentesIaPage() {
       setAgentes(agentesNormalizados);
       const atualizado = agentesNormalizados.find((item: Agente) => item.id === editor.id);
       if (atualizado) setEditor(cloneAgente(atualizado));
-      setNovoConhecimento({ titulo: "", categoria: "", conteudo: "", palavras_chave: "", materiais_json: [] });
+      setNovoConhecimento({ titulo: "", categoria: "", conteudo: "", palavras_chave: "" });
     } catch (error) {
       setErro(error instanceof Error ? error.message : "Erro ao adicionar conhecimento.");
     }
@@ -2271,6 +2270,7 @@ export default function AgentesIaPage() {
                               onChange={(materiais) => atualizarConfigFerramenta("enviar_material", "materiais", materiais)}
                               onError={setErro}
                               onSuccess={setSucesso}
+                              conhecimentos={editor.conhecimentos.filter(item=>item.ativo!==false)}
                             />
                           )}
                         {ferramenta.tipo === "gerar_cotacao_veicular" &&
@@ -2325,7 +2325,7 @@ export default function AgentesIaPage() {
                       <BookOpen size={18} />
                       <div>
                         <h3>Base de conhecimento</h3>
-                        <p>Conteúdo aprovado e pesquisável pelo agente.</p>
+                        <p>Conteúdo aprovado e pesquisável pelo agente. Materiais e vínculos são organizados em Ferramentas → Enviar material.</p>
                       </div>
                     </div>
                     <div className={styles.scopeHint}>
@@ -2396,15 +2396,6 @@ export default function AgentesIaPage() {
                           Ajudam na recuperação do conteúdo. Não são adicionadas como um bloco fixo em cada resposta da IA.
                         </small>
                       </label>
-                      <div style={{ gridColumn: "1 / -1" }}>
-                        <MateriaisVinculadosEditor
-                          titulo="Materiais vinculados a este conhecimento"
-                          value={novoConhecimento.materiais_json}
-                          onChange={(materiais_json) => setNovoConhecimento((atual) => ({ ...atual, materiais_json }))}
-                          onError={setErro}
-                          onSuccess={setSucesso}
-                        />
-                      </div>
                       <button
                         type="button"
                         className={styles.secondaryButton}
@@ -2420,7 +2411,6 @@ export default function AgentesIaPage() {
                             <strong>{item.titulo}</strong>
                             {item.categoria && <small>{item.categoria}</small>}
                             <p>{item.conteudo}</p>
-                            {!!item.materiais_json?.length && <small>{item.materiais_json.length} material(is) vinculado(s)</small>}
                           </div>
                           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                             <button
