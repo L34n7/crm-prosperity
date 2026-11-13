@@ -3,6 +3,7 @@ import { normalizarMateriais } from "./materiais-config";
 export type ConfigCotacaoPorLink = {
   ativo: true;
   mensagem: string;
+  conhecimento_id: string | null;
 };
 
 function normalizarTexto(valor: string): string {
@@ -17,7 +18,9 @@ export function configuracaoCotacaoPorLink(valor: unknown): ConfigCotacaoPorLink
   const mensagem = typeof config.mensagem === "string" ? config.mensagem.trim() : "";
   if (config.ativo !== true || mensagem.length < 20 || mensagem.length > 900) return null;
   if (!/https:\/\/\S+/.test(mensagem)) return null;
-  return { ativo: true, mensagem };
+  const id=typeof config.conhecimento_id==="string"?config.conhecimento_id.trim():"";
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return { ativo: true, mensagem, conhecimento_id:uuid.test(id)?id:null };
 }
 
 /** Detecta pedido comercial; não antecipa links em dúvidas de assistência. */
@@ -39,8 +42,9 @@ export function solicitouCotacaoPorLink(mensagem: string): boolean {
   return false;
 }
 
-/** Só entra no envio automático material configurado para depois do link.
- * A lista é obtida da própria ferramenta e será validada pela empresa no envio.
+/** Somente materiais vinculados ao envio depois do link entram no
+ * fluxo. A origem é o conhecimento configurado por agente; para agentes
+ * antigos sem conhecimento_id, a ferramenta permanece como fallback.
  */
 export function materiaisAposLink(valor: unknown): string[] {
   return normalizarMateriais(valor)
