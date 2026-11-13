@@ -16,6 +16,8 @@ test("detecta pedidos efetivos de cotação sem acionamento pela IA",()=>{
     "Gostaria de uma simulação para o veículo",
     "Quanto custa a proteção do carro?",
     "quero seguro para meu carro",
+    "estou procurando um seguro pro meu carro",
+    "Estou buscando uma proteção para minha moto",
     "manda o link da cotação",
     "me envia o endereço para cotar",
   ]) assert.equal(solicitouCotacaoPorLink(entrada),true,entrada);
@@ -29,6 +31,10 @@ test("não interrompe saudação, atendimento ou negativa",()=>{
     "não quero cotação",
     "não preciso de orçamento",
     "quanto custa o rastreador?",
+    "como funciona o seguro",
+    "cobre tudo?",
+    "tem proteção para terceiros?",
+    "qual a diferença entre seguro e proteção?",
   ]) assert.equal(solicitouCotacaoPorLink(entrada),false,entrada);
 });
 

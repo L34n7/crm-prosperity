@@ -37,7 +37,7 @@ export function solicitouCotacaoPorLink(mensagem: string): boolean {
   if (/\b(preco|valor|quanto custa|quanto fica|mensalidade)\b.{0,75}\b(protecao|seguro|veiculo|carro|moto|caminhao)\b/.test(texto))
     return true;
   if (/\b(protecao|seguro)\b.{0,50}\b(carro|moto|veiculo|caminhao)\b/.test(texto) &&
-      /\b(quero|preciso|gostaria|contratar|fazer|solicitar)\b/.test(texto))
+      /\b(quero|preciso|gostaria|contratar|fazer|solicitar|procuro|procurando|buscando|pesquisando)\b/.test(texto))
     return true;
   return false;
 }
