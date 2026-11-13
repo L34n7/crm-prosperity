@@ -21,3 +21,8 @@ test("vou pensar continua elegível; pedidos explícitos de parada não",()=>{
  assert.equal(contatoPediuPausaExplicita("Não quero mais mensagens"),true);
  assert.equal(contatoPediuPausaExplicita("Te chamo depois"),true);
 });
+
+test("pedido de não contato temporário também é respeitado",()=>{
+ assert.equal(contatoPediuPausaExplicita("Por enquanto não"),true);
+ assert.equal(contatoPediuPausaExplicita("Vou te chamar depois"),true);
+});

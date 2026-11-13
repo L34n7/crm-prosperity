@@ -25,6 +25,8 @@ export function contatoPediuPausaExplicita(valor: unknown): boolean {
     .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   if (!texto) return false;
   return /\b(?:nao quero|nao tenho interesse|sem interesse|pare|para de|nao me chame|nao me mande)\b/.test(texto) ||
+    /\b(?:agora|por enquanto)\s+nao\b/.test(texto) ||
     /\b(?:te retorno|te chamo|falo com voce)\s+(?:depois|mais tarde)\b/.test(texto) ||
-    /\b(?:depois|mais tarde)\s+(?:te retorno|te chamo|falo)\b/.test(texto);
+    /\b(?:depois|mais tarde)\s+(?:te retorno|te chamo|falo)\b/.test(texto) ||
+    /\b(?:vou|irei)\s+(?:te\s+)?(?:chamar|retornar|voltar)\s+(?:depois|mais tarde)\b/.test(texto);
 }
