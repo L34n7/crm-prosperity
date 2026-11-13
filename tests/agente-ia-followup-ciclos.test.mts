@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { podeIniciarCicloFollowup, mensagemPermiteAcompanhamento } from "../src/lib/agentes-ia/followup-ciclo.ts";
+import { podeIniciarCicloFollowup, mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "../src/lib/agentes-ia/followup-ciclo.ts";
 test("pitch sem pergunta pode rearmar follow-up a cada nova resposta do cliente",()=>{
  const b={respostaEnviada:true,acaoCriticaExecutada:false,ultimaMensagemContatoId:"primeira",numeroDestino:"5511999999999",mensagensSaida:["Veja o checkout e comece pelo plano Básico."]};
  assert.equal(mensagemPermiteAcompanhamento(b.mensagensSaida[0]),true);
@@ -14,4 +14,10 @@ test("não armar se transferência, sem envio ou sem contato",()=>{
  assert.equal(podeIniciarCicloFollowup({...b,respostaEnviada:false}),false);
  assert.equal(podeIniciarCicloFollowup({...b,ultimaMensagemContatoId:""}),false);
  assert.equal(podeIniciarCicloFollowup({...b,mensagensSaida:[]}),false);
+});
+test("vou pensar continua elegível; pedidos explícitos de parada não",()=>{
+ assert.equal(contatoPediuPausaExplicita("Vou pensar sobre o plano"),false);
+ assert.equal(contatoPediuPausaExplicita("Vou avaliar e vejo"),false);
+ assert.equal(contatoPediuPausaExplicita("Não quero mais mensagens"),true);
+ assert.equal(contatoPediuPausaExplicita("Te chamo depois"),true);
 });

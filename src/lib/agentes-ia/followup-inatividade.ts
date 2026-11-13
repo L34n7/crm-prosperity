@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { mensagemPermiteAcompanhamento } from "./followup-ciclo";
+import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -74,16 +74,8 @@ function classificarObjetivoFollowup(valor: unknown): ObjetivoFollowup {
 }
 
 function clientePediuPausaNoFollowup(valor: unknown) {
-  const texto = normalizarValidadeFollowup(valor);
-  if (!texto) return false;
-  return (
-    /\b(?:vou|irei)\s+(?:analisar|ver|avaliar|pensar)\b/.test(texto) ||
-    /\b(?:depois|mais tarde)\s+(?:retorno|te retorno|te chamo|falo)\b/.test(texto) ||
-    /\b(?:assim que puder|quando puder)\s+(?:retorno|te retorno|te chamo|falo)\b/.test(texto) ||
-    /\b(?:te retorno|te chamo|falo com voce)\s+(?:depois|mais tarde)\b/.test(texto) ||
-    /\b(?:agora|por enquanto)\s+nao\b/.test(texto) ||
-    /\b(?:nao quero|nao tenho interesse|sem interesse)\b/.test(texto)
-  );
+  // Não bloquear o acompanhamento só porque o lead disse "vou pensar".
+  return contatoPediuPausaExplicita(valor);
 }
 
 function mensagemEncerraObjetivoFollowup(valor: unknown) {
@@ -93,7 +85,7 @@ function mensagemEncerraObjetivoFollowup(valor: unknown) {
     /\b(?:nos vemos|te aguardamos|combinado|ate mais)\b/.test(texto) ||
     /\b(?:ficou|esta|ja esta)\s+(?:agendad\w*|remarcad\w*|cancelad\w*|confirmad\w*)\b/.test(texto) ||
     /\b(?:agendad\w*|remarcad\w*|cancelad\w*)\s+com sucesso\b/.test(texto) ||
-    /\b(?:fico|estou)\s+a disposicao\b/.test(texto)
+    false // "fico à disposição" é despedida comercial, não conclusão do negócio.
   );
 }
 

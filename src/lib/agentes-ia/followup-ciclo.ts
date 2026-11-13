@@ -17,3 +17,14 @@ export function podeIniciarCicloFollowup(p: {
 export function mensagemPermiteAcompanhamento(texto: unknown): boolean {
   return Boolean(String(texto || "").trim());
 }
+
+/** Respeita pedidos explícitos de pausa, recusa ou não contato.
+ * Uma objeção como "vou pensar" não configura pedido de parar. */
+export function contatoPediuPausaExplicita(valor: unknown): boolean {
+  const texto = String(valor || "").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!texto) return false;
+  return /\b(?:nao quero|nao tenho interesse|sem interesse|pare|para de|nao me chame|nao me mande)\b/.test(texto) ||
+    /\b(?:te retorno|te chamo|falo com voce)\s+(?:depois|mais tarde)\b/.test(texto) ||
+    /\b(?:depois|mais tarde)\s+(?:te retorno|te chamo|falo)\b/.test(texto);
+}
