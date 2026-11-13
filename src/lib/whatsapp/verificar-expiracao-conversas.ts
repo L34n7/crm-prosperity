@@ -105,7 +105,7 @@ async function buscarExpiracaoPersistidaConversa({
 }) {
   const { data: conversa, error } = await supabaseAdmin
     .from("conversas")
-    .select("last_inbound_message_at, window_expires_at, meta_free_entry_expires_at, atendimento_humano_ate")
+    .select("last_inbound_message_at, window_expires_at")
     .eq("empresa_id", empresaId)
     .eq("id", conversaId)
     .maybeSingle();
@@ -119,8 +119,6 @@ async function buscarExpiracaoPersistidaConversa({
       conversa?.last_inbound_message_at ?? null
     ),
     windowExpiresAt: dataValidaOuNull(conversa?.window_expires_at ?? null),
-    metaFreeEntryExpiraEm: dataValidaOuNull(conversa?.meta_free_entry_expires_at ?? null),
-    atendimentoHumanoAte: dataValidaOuNull(conversa?.atendimento_humano_ate ?? null),
   };
 }
 
@@ -137,8 +135,6 @@ export async function verificarEEncerrarConversaSe24hExpirada({
 }) {
   let ultimaMensagemContatoAt = dataValidaOuNull(lastInboundMessageAt);
   let windowExpiresAt: string | null = null;
-  let metaFreeEntryExpiraEm: string | null = null;
-  let atendimentoHumanoAte: string | null = null;
 
   if (!ultimaMensagemContatoAt || janela24hExpirada(ultimaMensagemContatoAt, agora)) {
     const ultimaMensagemBanco = await buscarUltimaMensagemRecebidaContato({
@@ -152,7 +148,7 @@ export async function verificarEEncerrarConversaSe24hExpirada({
     );
   }
 
-  if (!ultimaMensagemContatoAt || janela24hExpirada(ultimaMensagemContatoAt, agora)) {
+  if (!ultimaMensagemContatoAt) {
     const expiracaoPersistida = await buscarExpiracaoPersistidaConversa({
       empresaId,
       conversaId,
@@ -163,12 +159,7 @@ export async function verificarEEncerrarConversaSe24hExpirada({
       expiracaoPersistida.lastInboundMessageAt
     );
     windowExpiresAt = expiracaoPersistida.windowExpiresAt;
-    metaFreeEntryExpiraEm = expiracaoPersistida.metaFreeEntryExpiraEm;
-    atendimentoHumanoAte = expiracaoPersistida.atendimentoHumanoAte;
   }
-
-  const expansaoOperacionalAtiva = [metaFreeEntryExpiraEm, atendimentoHumanoAte]
-    .some((limite) => limite && new Date(limite).getTime() > agora.getTime());
 
   const expirouPelaMensagemRecebida = janela24hExpirada(
     ultimaMensagemContatoAt,
@@ -179,7 +170,7 @@ export async function verificarEEncerrarConversaSe24hExpirada({
     !!windowExpiresAt &&
     agora.getTime() >= new Date(windowExpiresAt).getTime();
 
-  if (expansaoOperacionalAtiva || (!expirouPelaMensagemRecebida && !expirouPelaJanelaPersistida)) {
+  if (!expirouPelaMensagemRecebida && !expirouPelaJanelaPersistida) {
     return {
       expirada: false,
       encerrada: false,

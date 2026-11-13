@@ -15,7 +15,7 @@ export async function encerrarConversaExpirada({
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, empresa_id, status, closed_at, meta_free_entry_expires_at, atendimento_humano_ate")
+    .select("id, empresa_id, status, closed_at")
     .eq("id", conversaId)
     .maybeSingle();
 
@@ -27,9 +27,7 @@ export async function encerrarConversaExpirada({
     throw new Error("Conversa não encontrada.");
   }
 
-  if (conversa.status === "encerrado_24h" && conversa.closed_at) return;
-  if ([conversa.meta_free_entry_expires_at, conversa.atendimento_humano_ate]
-    .some((limite) => limite && new Date(limite).getTime() > Date.now())) {
+  if (conversa.status === "encerrado_24h" && conversa.closed_at) {
     return;
   }
 

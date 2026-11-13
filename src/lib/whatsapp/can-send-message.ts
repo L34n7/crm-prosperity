@@ -13,8 +13,6 @@ export type CanSendMessageResult = {
   ultimaMensagemRecebidaEm: string | null;
   janelaExpiraEm: string | null;
   motivoBloqueio: string | null;
-  metaFreeEntryExpiraEm?: string | null;
-  metaFreeEntryAtiva?: boolean;
 };
 
 const JANELA_24H_EM_MS = 24 * 60 * 60 * 1000;
@@ -30,7 +28,7 @@ export async function canSendFreeformWhatsAppMessage({
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("origem_atendimento, historico_importado, meta_free_entry_expires_at")
+    .select("origem_atendimento, historico_importado")
     .eq("id", conversaId)
     .maybeSingle();
 
@@ -82,15 +80,9 @@ export async function canSendFreeformWhatsAppMessage({
   const janelaExpiraEm = new Date(janelaExpiraMs).toISOString();
 
   const podeEnviarMensagemLivre = agoraMs <= janelaExpiraMs;
-  const metaFreeEntryExpiraEm = conversa?.meta_free_entry_expires_at ?? null;
-  const metaFreeEntryAtiva = Boolean(
-    metaFreeEntryExpiraEm && new Date(metaFreeEntryExpiraEm).getTime() > agoraMs
-  );
 
   return {
     podeEnviarMensagemLivre,
-    metaFreeEntryExpiraEm,
-    metaFreeEntryAtiva,
     ultimaMensagemRecebidaEm,
     janelaExpiraEm,
     motivoBloqueio: podeEnviarMensagemLivre
