@@ -31,6 +31,7 @@ import HorarioAtendimentoEditor from "@/components/agentes-ia/HorarioAtendimento
 import AgenteTesteModal from "./components/AgenteTesteModal";
 import ConhecimentoEditorModal from "./components/ConhecimentoEditorModal";
 import MateriaisVinculadosEditor from "./components/MateriaisVinculadosEditor";
+import type { MaterialVinculado } from "@/lib/agentes-ia/materiais-config";
 import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerramentaSelect";
 import FollowupInatividadeEditor from "./components/FollowupInatividadeEditor";
 import DelayDinamicoEditor from "./components/DelayDinamicoEditor";
@@ -2324,7 +2325,7 @@ export default function AgentesIaPage() {
                       <BookOpen size={18} />
                       <div>
                         <h3>Base de conhecimento</h3>
-                        <p>Conteúdo aprovado e pesquisável pelo agente.</p>
+                        <p>Conteúdo aprovado e pesquisável pelo agente. Materiais e vínculos são organizados em Ferramentas → Enviar material.</p>
                       </div>
                     </div>
                     <div className={styles.scopeHint}>

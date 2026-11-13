@@ -128,6 +128,9 @@ export default function MateriaisVinculadosEditor({
       const nova=conclusao.midia as MidiaOpcao;
       setMidias(prev=>[nova,...prev.filter(item=>item.id!==nova.id)]);
       setRascunho(prev=>{
+        const vazio=prev.findIndex(item=>!item.midia_id);
+        if(vazio>=0)return prev.map((item,i)=>
+          i===vazio?{...item,midia_id:nova.id}:item);
         if(prev.length>=MAX_MATERIAIS_POR_VINCULO)return prev;
         return [...prev,{midia_id:nova.id,quando_enviar:"",conhecimento_ids:[]}];
       });
