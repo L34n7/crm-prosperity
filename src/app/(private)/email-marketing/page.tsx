@@ -184,6 +184,7 @@ export default function EmailMarketingPage() {
   const [totalContatosComEmail, setTotalContatosComEmail] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [erroConfiguracao, setErroConfiguracao] = useState("");
+  const [erroCampanhas, setErroCampanhas] = useState("");
   const [templateModal, setTemplateModal] = useState(false);
   const [templateEditando, setTemplateEditando] =
     useState<EmailTemplateItem | null>(null);
@@ -207,6 +208,7 @@ export default function EmailMarketingPage() {
   const carregarDados = useCallback(async (silencioso = false) => {
     if (!silencioso) setCarregando(true);
     setErroConfiguracao("");
+    setErroCampanhas("");
 
     try {
       const [statusRes, templatesRes, remetentesRes, campanhasRes, audienciaRes] =
@@ -217,7 +219,7 @@ export default function EmailMarketingPage() {
           fetch("/api/email-marketing/campanhas", { cache: "no-store" }),
           fetch("/api/email-marketing/audiencia?limite=1", {
             cache: "no-store",
-          }),
+          }).catch(() => null),
         ]);
 
       const [statusData, templatesData, remetentesData, campanhasData, audienciaData] =
@@ -226,38 +228,45 @@ export default function EmailMarketingPage() {
           templatesRes.json(),
           remetentesRes.json(),
           campanhasRes.json(),
-          audienciaRes.json(),
+          audienciaRes?.json().catch(() => ({ ok: false })) || Promise.resolve({ ok: false }),
         ]);
 
-      const respostas = [
+      // Uma falha da audiência não pode ocultar as campanhas já existentes.
+      const falhasAuxiliares = [
         [statusRes, statusData],
         [templatesRes, templatesData],
         [remetentesRes, remetentesData],
-        [campanhasRes, campanhasData],
-        [audienciaRes, audienciaData],
       ] as const;
-
-      const falha = respostas.find(
-        ([response, data]) => !response.ok || !data?.ok
+      const falhaAuxiliar = falhasAuxiliares.find(
+        ([resposta, dados]) => !resposta.ok || !dados?.ok
       );
 
-      if (falha) {
-        throw new Error(
-          falha[1]?.error || "Não foi possível carregar o E-mail Marketing."
-        );
+      if (statusRes.ok && statusData.ok) {
+        setConfiguracao(statusData.configuracao || null);
+        setMetricas(statusData.metricas || metricasIniciais);
       }
-
-      setConfiguracao(statusData.configuracao || null);
-      setMetricas(statusData.metricas || metricasIniciais);
-      const todosTemplates = (templatesData.templates || []) as EmailTemplateItem[];
-      setTemplates(todosTemplates.filter(item => item.status !== "arquivado"));
-      setTemplatesArquivados(todosTemplates.filter(item => item.status === "arquivado" && Boolean(item.empresa_id)));
-      setRemetentes(remetentesData.remetentes || []);
-      setCampanhas(campanhasData.campanhas || []);
-      setListas(audienciaData.listas || []);
-      setTotalContatosComEmail(
-        Number(audienciaData.total_contatos_com_email || 0)
-      );
+      if (templatesRes.ok && templatesData.ok) {
+        const todosTemplates = (templatesData.templates || []) as EmailTemplateItem[];
+        setTemplates(todosTemplates.filter(item => item.status !== "arquivado"));
+        setTemplatesArquivados(todosTemplates.filter(item => item.status === "arquivado" && Boolean(item.empresa_id)));
+      }
+      if (remetentesRes.ok && remetentesData.ok) {
+        setRemetentes(remetentesData.remetentes || []);
+      }
+      if (campanhasRes.ok && campanhasData.ok) {
+        setCampanhas(campanhasData.campanhas || []);
+      } else {
+        setErroCampanhas(campanhasData?.error || "Não foi possível carregar as campanhas.");
+      }
+      if (audienciaRes?.ok && audienciaData?.ok) {
+        setListas(audienciaData.listas || []);
+        setTotalContatosComEmail(Number(audienciaData.total_contatos_com_email || 0));
+      } else {
+        console.warn("[EMAIL MARKETING] Falha na audiência: histórico de campanhas preservado.");
+      }
+      if (falhaAuxiliar) {
+        setErroConfiguracao(falhaAuxiliar[1]?.error || "Alguns dados do E-mail Marketing não puderam ser carregados.");
+      }
     } catch (error) {
       setErroConfiguracao(
         error instanceof Error
@@ -716,7 +725,7 @@ export default function EmailMarketingPage() {
                     </tbody>
                   </table>
                 </div>
-              ) : erroConfiguracao ? (
+              ) : erroCampanhas ? (
                 <div className={styles.campaignLoadFailure} role="alert">
                   <strong>Não foi possível carregar as campanhas.</strong>
                   <p>Suas campanhas não foram excluídas. Verifique a conexão e tente novamente.</p>

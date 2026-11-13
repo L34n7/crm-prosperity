@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { recalcularMetricasCampanhaEmail } from "@/lib/email-marketing/campanhas";
-import { registrarDescadastroNaResend } from "@/lib/email-marketing/supressoes";
+import { registrarDescadastroNaResend, ResendSupressoesSemPermissaoError } from "@/lib/email-marketing/supressoes";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -40,16 +40,16 @@ async function descadastrar(token: string) {
   const { destinatario, campanha } = validacao;
   if (destinatario.descadastrado_em) return { ok: true as const };
 
-  // Primeiro registra na lista oficial da conta Resend desta empresa.
-  // Sem confirmação do provedor, não marca o descadastro como realizado.
+  // Opt-out explícito deve ser respeitado mesmo com chave apenas Sending access.
+  let confirmadoResend = false;
   try {
     await registrarDescadastroNaResend(campanha.empresa_id, destinatario.email);
+    confirmadoResend = true;
   } catch (error) {
-    return {
-      ok: false as const,
-      status: 502,
-      error: error instanceof Error ? error.message : "Resend indisponível.",
-    };
+    if (!(error instanceof ResendSupressoesSemPermissaoError)) {
+      console.error("[EMAIL MARKETING] Resend indisponível ao registrar descadastro.", error);
+    }
+    // Mantém o endereço bloqueado localmente; sincroniza quando houver permissão.
   }
 
   const agora = new Date().toISOString();
@@ -64,8 +64,8 @@ async function descadastrar(token: string) {
   }
 
   const campos = {
-    motivo: "manual",
-    fonte: "resend",
+    motivo: confirmadoResend ? "manual" : "descadastro",
+    fonte: confirmadoResend ? "resend" : "email_marketing",
     metadata_json: {
       origem: "descadastro_confirmado",
       campanha_id: campanha.id,
@@ -107,7 +107,7 @@ async function descadastrar(token: string) {
     tipo: "email.unsubscribed",
     destinatario_email: destinatario.email.toLowerCase(),
     ocorrido_em: agora,
-    payload_json: { origem: "confirmacao_post", sincronizado_resend: true },
+    payload_json: { origem: "confirmacao_post", sincronizado_resend: confirmadoResend },
   });
   await recalcularMetricasCampanhaEmail(campanha.id);
   return { ok: true as const };

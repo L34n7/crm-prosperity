@@ -4,6 +4,15 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const supabaseAdmin = getSupabaseAdmin();
 const VALIDADE_CACHE_MS = 10 * 60_000;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SEM_PERMISSAO_CACHE_MS = 5 * 60_000;
+const semPermissaoAte = new Map<string, number>();
+
+export class ResendSupressoesSemPermissaoError extends Error {
+  constructor() {
+    super("A chave Resend não tem permissão para consultar a lista de supressões.");
+    this.name = "ResendSupressoesSemPermissaoError";
+  }
+}
 
 type SupressaoResend = {
   id: string;
@@ -46,6 +55,9 @@ async function requisitarResend<T>(
       continue;
     }
 
+    if (resposta.status === 401 || resposta.status === 403) {
+      throw new ResendSupressoesSemPermissaoError();
+    }
     if (!resposta.ok) {
       throw new Error(
         "Não foi possível consultar a lista de supressão da Resend (HTTP " +
@@ -107,7 +119,7 @@ async function buscarLocais(empresaId: string): Promise<SupressaoLocal[]> {
 async function emailsComDescadastroPrecoce(locais: SupressaoLocal[]) {
   const suspeitos = new Set<string>();
   const ids = locais
-    .filter((r) => r.motivo === "descadastro" && r.fonte === "email_marketing")
+    .filter((r) => r.motivo === "descadastro" && r.fonte === "email_marketing" && r.metadata_json?.origem !== "descadastro_confirmado")
     .map((r) => String(r.metadata_json?.destinatario_id || ""))
     .filter((id) => /^[0-9a-f-]{36}$/i.test(id));
 
@@ -141,9 +153,11 @@ function motivoResend(origem: SupressaoResend["origin"]) {
  * locais obsoletos. Descadastros em até 10 segundos do envio são suspeitos de
  * pré-visualização automática e não são migrados sem confirmação humana.
  *
- * Se a consulta da Resend falhar, o envio é interrompido (fail closed).
+ * Com chave de envio restrita, mantém a lista local sem liberar endereços
+ * sem autorização; falhas de rede reais continuam impedindo novos disparos.
  */
 export async function sincronizarSupressoesResend(empresaId: string) {
+  if ((semPermissaoAte.get(empresaId) || 0) > Date.now()) return;
   const { data: integracao, error: erroIntegracao } = await supabaseAdmin
     .from("email_marketing_integracoes")
     .select("habilitado, supressoes_sincronizadas_em")
@@ -162,7 +176,18 @@ export async function sincronizarSupressoesResend(empresaId: string) {
 
   const inicio = new Date().toISOString();
   const apiKey = await getEmailMarketingResendApiKey(empresaId);
-  let provedor = await listarResend(apiKey);
+  let provedor: Map<string, SupressaoResend>;
+  try {
+    provedor = await listarResend(apiKey);
+    semPermissaoAte.delete(empresaId);
+  } catch (error) {
+    if (error instanceof ResendSupressoesSemPermissaoError) {
+      semPermissaoAte.set(empresaId, Date.now() + SEM_PERMISSAO_CACHE_MS);
+      console.warn("[EMAIL MARKETING] Chave Resend restrita: usando supressões locais da empresa.", { empresaId });
+      return;
+    }
+    throw error;
+  }
   const locais = await buscarLocais(empresaId);
   const suspeitos = await emailsComDescadastroPrecoce(locais);
 
@@ -172,7 +197,7 @@ export async function sincronizarSupressoesResend(empresaId: string) {
     .filter((item) =>
       item.motivo === "descadastro" &&
       item.fonte === "email_marketing" &&
-      !suspeitos.has(normalizarEmail(item.email)) &&
+      (item.metadata_json?.origem === "descadastro_confirmado" || !suspeitos.has(normalizarEmail(item.email))) &&
       !provedor.has(normalizarEmail(item.email))
     )
     .map((item) => normalizarEmail(item.email))
@@ -277,9 +302,9 @@ export async function registrarDescadastroNaResend(empresaId: string, email: str
     signal: AbortSignal.timeout(15_000),
   });
 
-  if (resposta.status === 409) {
-    await requisitarResend(apiKey, "/suppressions/" + encodeURIComponent(endereco));
-    return;
+  if (resposta.status === 409) return;
+  if (resposta.status === 401 || resposta.status === 403) {
+    throw new ResendSupressoesSemPermissaoError();
   }
   if (!resposta.ok) {
     throw new Error("A Resend não confirmou o descadastro (HTTP " + resposta.status + ").");

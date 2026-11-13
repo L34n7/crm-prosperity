@@ -119,12 +119,8 @@ export async function GET(request: Request) {
     )
   );
 
-  try {
-    await sincronizarSupressoesResend(empresaId);
-  } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Falha ao consultar a Resend." }, { status: 502 });
-  }
-
+  // GET de audiência nunca depende da disponibilidade/permissões da API Resend.
+  // Sincronização ocorre na análise da audiência e ao preparar campanhas.
   // Consulte apenas os e-mails da página, isolados por empresa.
   const supressoesResult = emailsPagina.length
     ? await supabaseAdmin
