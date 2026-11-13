@@ -49,7 +49,26 @@ export async function enviarMaterialDoAgente(params: Parametros) {
   // Evita reenviar o mesmo arquivo por reformulação ou nova rodada da IA.
   // A repetição só é autorizada quando o cliente pede explicitamente reenvio.
   if (!params.reenviar) {
-    const desde = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    // Permite uma redefinição pontual do intervalo para testes autorizados,
+    // sem alterar ou apagar o histórico do WhatsApp. A configuração é por
+    // empresa E agente; após 30 minutos o valor deixa de ter efeito.
+    const { data: ferramenta, error: erroFerramenta } = await supabase
+      .from("agente_ia_ferramentas")
+      .select("config_json")
+      .eq("empresa_id", empresaId)
+      .eq("agente_id", params.agenteId)
+      .eq("tipo", "enviar_material")
+      .maybeSingle();
+    if (erroFerramenta) throw new Error(erroFerramenta.message);
+    const agoraMs = Date.now();
+    const janelaOriginal = agoraMs - 30 * 60 * 1000;
+    const resetMs = Date.parse(
+      String(ferramenta?.config_json?.material_dedup_reset_at || "")
+    );
+    const inicioJanela = Number.isFinite(resetMs) && resetMs <= agoraMs
+      ? Math.max(janelaOriginal, resetMs)
+      : janelaOriginal;
+    const desde = new Date(inicioJanela).toISOString();
     const { data: anterior, error: erroAnterior } = await supabase
       .from("mensagens")
       .select("id")
