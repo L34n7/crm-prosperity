@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { validarMateriaisEmpresa } from "@/lib/agentes-ia/materiais-servidor";
+import { validarMateriaisFerramenta } from "@/lib/agentes-ia/materiais-servidor";
+import { normalizarMateriais } from "@/lib/agentes-ia/materiais-config";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { statusConfiguracaoCotacao, listarPlanosEmpresa } from "@/lib/cotacoes-veiculares/configuracao";
@@ -974,23 +975,13 @@ export async function PATCH(request: Request) {
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean);
-      let materiais;
-      try {
-        materiais = await validarMateriaisEmpresa(contexto.empresaId, body.materiais_json);
-      } catch (error) {
-        return NextResponse.json(
-          { ok: false, error: error instanceof Error ? error.message : "Materiais inválidos." },
-          { status: 400 },
-        );
-      }
       const { error } = await supabaseAdmin.from("agente_ia_conhecimentos").insert({
         empresa_id: contexto.empresaId,
         agente_id: id,
         titulo,
         categoria: String(body.categoria || "").trim() || null,
         conteudo,
-        materiais_json: materiais,
-        palavras_chave: palavras,
+         palavras_chave: palavras,
         prioridade: Number.isFinite(Number(body.prioridade))
           ? Number(body.prioridade)
           : 0,
@@ -1017,6 +1008,35 @@ export async function PATCH(request: Request) {
         .eq("agente_id", id)
         .eq("id", conhecimentoId);
       if (error) throw new Error(error.message);
+      // A exclusão do conhecimento não pode deixar referências inválidas
+      // na ferramenta, que poderiam bloquear o próximo salvamento do agente.
+      const {data:ferramenta,error:erroFerramenta}=await supabaseAdmin
+        .from("agente_ia_ferramentas")
+        .select("config_json")
+        .eq("empresa_id",contexto.empresaId).eq("agente_id",id)
+        .eq("tipo","enviar_material").maybeSingle();
+      if(erroFerramenta)throw new Error(erroFerramenta.message);
+      if(ferramenta){
+        const atuais=normalizarMateriais(ferramenta.config_json?.materiais);
+        const limpos=atuais.map(item=>{
+          const relacionados=(item.conhecimento_ids||[]).filter(k=>k!==conhecimentoId);
+          return {
+            ...item,
+            ...(relacionados.length?{conhecimento_ids:relacionados}:{}),
+            ...(!relacionados.length?{conhecimento_ids:[]}:{}),
+          };
+        });
+        if(atuais.some(item=>(item.conhecimento_ids||[]).includes(conhecimentoId))){
+          const {error:erroAtualizacao}=await supabaseAdmin
+            .from("agente_ia_ferramentas")
+            .update({
+              config_json:{...ferramenta.config_json,materiais:limpos},
+              updated_at:new Date().toISOString(),
+            }).eq("empresa_id",contexto.empresaId).eq("agente_id",id)
+              .eq("tipo","enviar_material");
+          if(erroAtualizacao)throw new Error(erroAtualizacao.message);
+        }
+      }
       return NextResponse.json({ ok: true, agentes: await carregarAgentes(contexto.empresaId) });
     }
 
@@ -1088,8 +1108,8 @@ export async function PATCH(request: Request) {
       for (const ferramenta of ferramentas) {
         if (ferramenta.tipo === "enviar_material") {
           try {
-            const materiais = await validarMateriaisEmpresa(
-              contexto.empresaId, ferramenta.config_json.materiais,
+            const materiais = await validarMateriaisFerramenta(
+              contexto.empresaId, id, ferramenta.config_json.materiais,
             );
             ferramenta.config_json = { ...ferramenta.config_json, materiais };
           } catch (error) {

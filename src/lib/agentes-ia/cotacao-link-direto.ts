@@ -46,8 +46,10 @@ export function solicitouCotacaoPorLink(mensagem: string): boolean {
  * fluxo. A origem é o conhecimento configurado por agente; para agentes
  * antigos sem conhecimento_id, a ferramenta permanece como fallback.
  */
-export function materiaisAposLink(valor: unknown): string[] {
+export function materiaisAposLink(valor: unknown, conhecimentoId?: string | null): string[] {
   return normalizarMateriais(valor)
+    .filter(item => !conhecimentoId ||
+      (item.conhecimento_ids || []).includes(conhecimentoId))
     .filter(item => {
       const regra = normalizarTexto(item.quando_enviar);
       return /\b(apos|depois|em seguida)\b/.test(regra)

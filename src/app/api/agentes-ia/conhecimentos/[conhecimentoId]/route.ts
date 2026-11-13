@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { validarMateriaisEmpresa } from "@/lib/agentes-ia/materiais-servidor";
-import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
+ import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -73,7 +72,7 @@ export async function PATCH(
           .maybeSingle(),
         supabaseAdmin
           .from("agente_ia_conhecimentos")
-          .select("id, prioridade, materiais_json")
+          .select("id, prioridade")
           .eq("empresa_id", empresaId)
           .eq("agente_id", agenteId)
           .eq("id", conhecimentoId)
@@ -89,18 +88,6 @@ export async function PATCH(
       );
     }
 
-    let materiais;
-    try {
-      materiais = body.materiais_json === undefined
-        ? conhecimento.materiais_json
-        : await validarMateriaisEmpresa(empresaId, body.materiais_json);
-    } catch (error) {
-      return NextResponse.json(
-        { ok: false, error: error instanceof Error ? error.message : "Materiais inválidos." },
-        { status: 400 },
-      );
-    }
-
     const prioridadeInformada = Number(body.prioridade);
     const prioridade = Number.isFinite(prioridadeInformada)
       ? prioridadeInformada
@@ -112,8 +99,7 @@ export async function PATCH(
         titulo,
         categoria,
         conteudo,
-        materiais_json: materiais,
-        palavras_chave: normalizarPalavrasChave(body.palavras_chave),
+         palavras_chave: normalizarPalavrasChave(body.palavras_chave),
         prioridade,
         updated_by: auth.usuario.id,
         updated_at: new Date().toISOString(),
@@ -121,7 +107,7 @@ export async function PATCH(
       .eq("empresa_id", empresaId)
       .eq("agente_id", agenteId)
       .eq("id", conhecimentoId)
-      .select("id, titulo, categoria, conteudo, palavras_chave, prioridade, materiais_json")
+      .select("id, titulo, categoria, conteudo, palavras_chave, prioridade")
       .maybeSingle();
 
     if (updateError) throw new Error(updateError.message);

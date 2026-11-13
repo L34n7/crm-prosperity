@@ -28,7 +28,10 @@ import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { calcularDelayEnvioBalaoMs, normalizarDelayDinamico } from "./delay-dinamico";
 import { podeIniciarCicloFollowup } from "./followup-ciclo";
 import { enviarMaterialDoAgente } from "./enviar-material";
-import { normalizarMateriais } from "./materiais-config";
+import {
+  normalizarMateriais, materiaisDeConhecimento,
+  materialAutorizadoPorConhecimento,
+} from "./materiais-config";
 import {
   configuracaoCotacaoPorLink,
   materiaisAposLink,
@@ -146,6 +149,7 @@ type ContextoExecucao = {
   conversa: any;
   ferramentasAtivas: Map<TipoFerramenta, Record<string, unknown>>;
   ferramentasExecutadas: Array<Record<string, any>>;
+  materiaisPendentes: Array<{midiaId:string;reenviar:boolean}>;
   acaoCriticaExecutada: boolean;
   transferidoHumano: boolean;
   respostaEnviada: boolean;
@@ -946,17 +950,17 @@ function definicoesFerramentas(ativas: Map<TipoFerramenta, Record<string, unknow
   }
   if (ativas.has("enviar_material")) {
     const materiais = normalizarMateriais(ativas.get("enviar_material")?.materiais);
-    const diretos = materiais.map((item) =>
-      item.midia_id + ": " + item.quando_enviar
-    ).join(" | ");
+    const diretos = materiais.filter(item=>!(item.conhecimento_ids||[]).length)
+      .map(item=>item.midia_id+": "+item.quando_enviar).join(" | ");
+    const vinculados = materiais.filter(item=>(item.conhecimento_ids||[]).length).length;
     defs.push({
       type: "function",
       name: "enviar_material",
       description: "Envia pelo WhatsApp um arquivo já autorizado no CRM, somente quando realmente relevante. " +
-        "Materiais diretos (ID e condição): " + (diretos || "nenhum") +
-        ". Materiais vinculados ao conhecimento exigem consultar_conhecimento antes de enviar. " +
-        "Use apenas um ID efetivamente disponibilizado; nunca invente IDs nem confirme envio sem ok=true. " +
-        "Não envie arquivos de forma repetitiva ou sem motivo.",
+        "Materiais sem vínculo (ID e condição): " + (diretos || "nenhum") +
+        ". Existem "+vinculados+" materiais associados a conhecimentos; consulte a base antes de solicitar esses arquivos. " +
+        "Só use IDs apresentados nesta descrição ou nos resultados de consultar_conhecimento. " +
+        "Quando autorizado, o material será enviado após a resposta em texto, sem repetir ou prometer envio prematuro.",
       strict: true,
       parameters: {
         type: "object",
@@ -2243,61 +2247,43 @@ async function executarFerramenta(nome: TipoFerramenta, args: any, ctx: Contexto
     });
     if (error) throw new Error(error.message);
     const encontrados = (data || []).slice(0, MAX_RESULTADOS_CONHECIMENTO);
-    let materiaisPorConhecimento = new Map<string, unknown>();
-    if (ctx.ferramentasAtivas.has("enviar_material") && encontrados.length) {
-      const { data: vinculos, error: erroVinculos } = await supabaseAdmin
-        .from("agente_ia_conhecimentos")
-        .select("id,materiais_json")
-        .eq("empresa_id", empresaId)
-        .eq("agente_id", ctx.agente.id)
-        .eq("ativo", true)
-        .in("id", encontrados.map((item: any) => String(item.id)));
-      if (erroVinculos) throw new Error(erroVinculos.message);
-      materiaisPorConhecimento = new Map(
-        (vinculos || []).map((item) => [String(item.id), item.materiais_json]),
-      );
-    }
+    const vinculados = ctx.ferramentasAtivas.has("enviar_material")
+      ? ctx.ferramentasAtivas.get("enviar_material")?.materiais
+      : [];
     const resultados = encontrados.map((item: any) => ({
       id: String(item.id),
       titulo: item.titulo,
       categoria: item.categoria,
       trecho: String(item.trecho || "").slice(0, MAX_CARACTERES_TRECHO_CONHECIMENTO),
-      materiais: normalizarMateriais(materiaisPorConhecimento.get(String(item.id))),
+      materiais: materiaisDeConhecimento(vinculados,String(item.id)),
     }));
     return { ok: true, consulta, resultados };
   }
 
   if (nome === "enviar_material") {
     const midiaId = String(args.midia_id || "").trim();
-    const diretos = normalizarMateriais(
+    const configurados = normalizarMateriais(
       ctx.ferramentasAtivas.get("enviar_material")?.materiais,
     );
-    const consultados = ctx.ferramentasExecutadas
-      .filter((item) => item.nome === "consultar_conhecimento" && item.resultado?.ok === true)
-      .flatMap((item) => Array.isArray(item.resultado.resultados) ? item.resultado.resultados : [])
-      .flatMap((item: any) => normalizarMateriais(item.materiais));
-    if (!midiaId || ![...diretos, ...consultados].some((item) => item.midia_id === midiaId)) {
-      return { ok: false, error: "Material não autorizado ou conhecimento ainda não consultado." };
-    }
-    if (!ctx.pendencia.numero_destino) {
-      return { ok: false, error: "Contato sem telefone para receber o material." };
-    }
-    const texto = normalizarTextoIntencao(ctx.pendencia.conteudo_agregado);
-    const reenviar = /\b(?:reenviar|reenvia|enviar novamente|manda de novo|mandar de novo|envia de novo|nao chegou|nao abriu)\b/.test(texto);
-    const resultado = await enviarMaterialDoAgente({
-      empresaId,
-      agenteId: ctx.agente.id,
-      conversaId,
-      execucaoId: ctx.execucaoId,
-      midiaId,
-      numeroDestino: ctx.pendencia.numero_destino,
-      reenviar,
-    });
-    if (resultado.ok && "enviado" in resultado && resultado.enviado) {
-      ctx.acaoCriticaExecutada = true;
-      ctx.respostaEnviada = true;
-    }
-    return resultado;
+    const consultados = new Set<string>(
+      ctx.ferramentasExecutadas
+        .filter(item=>item.nome==="consultar_conhecimento"&&item.resultado?.ok===true)
+        .flatMap(item=>Array.isArray(item.resultado.resultados)?item.resultado.resultados:[])
+        .map((item:{id?:string})=>String(item.id||"")),
+    );
+    const permitido=configurados.some(item=>item.midia_id===midiaId
+      && materialAutorizadoPorConhecimento(item,consultados));
+    if(!midiaId||!permitido)
+      return {ok:false,error:"Material não autorizado ou conhecimento vinculado não consultado."};
+    if(!ctx.pendencia.numero_destino)
+      return {ok:false,error:"Contato sem telefone para receber o material."};
+    const texto=normalizarTextoIntencao(ctx.pendencia.conteudo_agregado);
+    const reenviar=/\b(?:reenviar|reenvia|enviar novamente|manda de novo|mandar de novo|envia de novo|nao chegou|nao abriu)\b/.test(texto);
+    if(ctx.materiaisPendentes.some(item=>item.midiaId===midiaId))
+      return {ok:true,enfileirado:true,ja_agendado:true};
+    ctx.materiaisPendentes.push({midiaId,reenviar});
+    return {ok:true,enfileirado:true,
+      informacao:"Envio autorizado. O arquivo será enviado após a resposta em texto."};
   }
 
   if (nome === "consultar_contato") {
@@ -3797,6 +3783,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       conversa,
       ferramentasAtivas,
       ferramentasExecutadas: [],
+      materiaisPendentes: [],
       acaoCriticaExecutada: false,
       transferidoHumano: false,
       respostaEnviada: false,
@@ -3845,39 +3832,16 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         return { ok: true, processado: true, supersedido: true };
       }
 
-      // O conteúdo da biblioteca é validado por empresa na própria função
-      // enviarMaterialDoAgente e nunca é inferido a partir da resposta da IA.
-      let ids: string[] = [];
-      let erroConsultaMateriais: string | null = null;
-      if (ferramentasAtivas.has("enviar_material")) {
-        if (configLink.conhecimento_id) {
-          // O conhecimento de cotação passa a ser a fonte única de mídias.
-          // A ferramenta mantém somente a autorização para enviá-las.
-          const { data: conhecimento, error: erroConhecimento } = await supabaseAdmin
-            .from("agente_ia_conhecimentos")
-            .select("materiais_json")
-            .eq("empresa_id", pendencia.empresa_id)
-            .eq("agente_id", agente.id)
-            .eq("id", configLink.conhecimento_id)
-            .eq("ativo", true)
-            .maybeSingle();
-          if (erroConhecimento) {
-            erroConsultaMateriais = erroConhecimento.message;
-            console.error("[AGENTE_IA] Erro ao carregar mídias do conhecimento de cotação", {
-              agenteId: agente.id,
-              conhecimentoId: configLink.conhecimento_id,
-              erro: erroConhecimento.message,
-            });
-          } else if (!conhecimento) {
-            erroConsultaMateriais = "Conhecimento vinculado não encontrado ou inativo.";
-          } else {
-            ids = materiaisAposLink(conhecimento.materiais_json);
-          }
-        } else {
-          // Compatibilidade para agentes anteriores à organização por base.
-          ids = materiaisAposLink(ferramentasAtivas.get("enviar_material")?.materiais);
-        }
-      }
+      // Material autorizado exclusivamente pela ferramenta do agente.
+      // O vínculo com o conhecimento decide quais imagens acompanham
+      // este fluxo determinístico, sempre DEPOIS do link em texto.
+      const ids = ferramentasAtivas.has("enviar_material")
+        ? materiaisAposLink(
+            ferramentasAtivas.get("enviar_material")?.materiais,
+            configLink.conhecimento_id,
+          )
+        : [];
+      const erroConsultaMateriais: string | null = null;
       let supersedidoDuranteMateriais = false;
       for (const midiaId of ids) {
         if (await execucaoFoiSupersedida(pendencia)) {
@@ -4274,6 +4238,31 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
           duranteEnvio: true,
           mensagensEnviadas: resultadoEnvio.mensagensEnviadas,
         };
+      }
+    }
+
+    // Arquivos solicitados pela IA são efetivamente enviados somente após
+    // a mensagem textual, preservando a ordem no WhatsApp.
+    if (!ctx.transferidoHumano && ctx.respostaEnviada && ctx.materiaisPendentes.length) {
+      for (const material of ctx.materiaisPendentes) {
+        if (await execucaoFoiSupersedida(pendencia)) break;
+        let resultado: Record<string, unknown>;
+        try {
+          resultado=await enviarMaterialDoAgente({
+            empresaId:pendencia.empresa_id,agenteId:agente.id,
+            conversaId:pendencia.conversa_id,execucaoId,
+            midiaId:material.midiaId,
+            numeroDestino:pendencia.numero_destino||"",
+            reenviar:material.reenviar,
+          });
+        } catch(error) {
+          resultado={ok:false,error:error instanceof Error?error.message:String(error)};
+        }
+        const registro=ctx.ferramentasExecutadas.find(item=>
+          item.nome==="enviar_material"&&item.argumentos?.midia_id===material.midiaId
+          &&item.resultado?.enfileirado);
+        if(registro)registro.resultado=resultado;
+        if(resultado.ok===true&&resultado.enviado===true)ctx.acaoCriticaExecutada=true;
       }
     }
 
