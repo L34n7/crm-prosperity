@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { sincronizarSupressoesResend } from "@/lib/email-marketing/supressoes";
 
 const supabaseAdmin = getSupabaseAdmin();
 const PAGE_SIZE = 1000;
@@ -216,20 +217,23 @@ export async function resolverAudienciaEmail(params: {
 export async function buscarEmailsSuprimidos(
   empresaId: string
 ): Promise<Set<string>> {
-  const { data, error } = await supabaseAdmin
-    .from("email_suppressions")
-    .select("email, empresa_id")
-    .or("empresa_id.is.null,empresa_id.eq." + empresaId);
-
-  if (error) {
-    throw new Error("Erro ao consultar supressões: " + error.message);
+  await sincronizarSupressoesResend(empresaId);
+  const suprimidos = new Set<string>();
+  for (let inicio = 0; ; inicio += 1000) {
+    const { data, error } = await supabaseAdmin
+      .from("email_suppressions")
+      .select("email")
+      .eq("empresa_id", empresaId)
+      .order("id")
+      .range(inicio, inicio + 999);
+    if (error) throw new Error("Erro ao consultar supressões: " + error.message);
+    for (const item of data || []) {
+      const email = String(item.email || "").trim().toLowerCase();
+      if (email) suprimidos.add(email);
+    }
+    if (!data || data.length < 1000) break;
   }
-
-  return new Set(
-    (data || [])
-      .map((item) => String(item.email || "").trim().toLowerCase())
-      .filter(Boolean)
-  );
+  return suprimidos;
 }
 
 export async function recalcularMetricasCampanhaEmail(campanhaId: string) {

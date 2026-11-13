@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getEmailMarketingResend, validarAcessoEmailMarketing, buscarIntegracaoEmailMarketing, EMAIL_MARKETING_EMPRESA_LEGADA } from "@/lib/email-marketing/admin";
 import { aplicarFallbacksVariaveis, renderizarVariaveis, sanitizarHtmlEmail, type VariaveisEmailMarketing } from "@/lib/email-marketing/conteudo";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buscarEmailsSuprimidos } from "@/lib/email-marketing/campanhas";
 
 const supabaseAdmin = getSupabaseAdmin();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -76,12 +77,15 @@ export async function POST(request: Request) {
   }
 
   const destinatario = String(contato.email).trim().toLowerCase();
+  let bloqueado = false;
+  try {
+    bloqueado = (await buscarEmailsSuprimidos(empresaId)).has(destinatario);
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Falha ao consultar a Resend." }, { status: 502 });
+  }
   const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const [{ data: supressoes, error: erroSupressao }, { count: qtdTestes, error: erroLimite }, { data: variaveisCustom, error: erroVariaveis }] =
+  const [ { count: qtdTestes, error: erroLimite }, { data: variaveisCustom, error: erroVariaveis }] =
     await Promise.all([
-      supabaseAdmin.from("email_suppressions").select("id")
-        .or("empresa_id.is.null,empresa_id.eq." + empresaId)
-        .ilike("email", destinatario).limit(1),
       supabaseAdmin.from("email_eventos").select("id", { count: "exact", head: true })
         .eq("empresa_id", empresaId)
         .eq("tipo", "email.sent")
@@ -93,10 +97,10 @@ export async function POST(request: Request) {
         .eq("metadata_json->>tipo", "global_empresa")
         .eq("metadata_json->>ativo", "true").limit(100),
     ]);
-  if (erroSupressao || erroLimite || erroVariaveis) {
+  if (erroLimite || erroVariaveis) {
     return NextResponse.json({ ok: false, error: "Não foi possível validar o envio de teste." }, { status: 500 });
   }
-  if (supressoes?.length) {
+  if (bloqueado) {
     return NextResponse.json({ ok: false, error: "Este contato está em uma lista de supressão e não pode receber o teste." }, { status: 409 });
   }
   if ((qtdTestes ?? 0) >= LIMITE_TESTES_HORA) {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sincronizarSupressoesResend } from "@/lib/email-marketing/supressoes";
 import {
   buscarIntegracaoEmailMarketing,
   validarAcessoEmailMarketing,
@@ -168,6 +169,12 @@ export async function POST(request: Request) {
       { ok: false, error: "Selecione pelo menos um contato." },
       { status: 400 }
     );
+  }
+
+  try {
+    await sincronizarSupressoesResend(empresaId);
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Falha ao consultar a Resend." }, { status: 502 });
   }
 
   const [

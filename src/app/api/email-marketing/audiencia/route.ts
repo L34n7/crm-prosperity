@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { validarAcessoEmailMarketing } from "@/lib/email-marketing/admin";
+import { sincronizarSupressoesResend } from "@/lib/email-marketing/supressoes";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -118,12 +119,18 @@ export async function GET(request: Request) {
     )
   );
 
-  // Consulte apenas os e-mails da página, incluindo supressões globais.
+  try {
+    await sincronizarSupressoesResend(empresaId);
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Falha ao consultar a Resend." }, { status: 502 });
+  }
+
+  // Consulte apenas os e-mails da página, isolados por empresa.
   const supressoesResult = emailsPagina.length
     ? await supabaseAdmin
         .from("email_suppressions")
         .select("email, motivo")
-        .or("empresa_id.is.null,empresa_id.eq." + empresaId)
+        .eq("empresa_id", empresaId)
         .in("email", emailsPagina)
     : { data: [], error: null };
 
@@ -206,6 +213,12 @@ export async function POST(request: Request) {
       { ok: false, error: "Selecione pelo menos um contato." },
       { status: 400 }
     );
+  }
+
+  try {
+    await sincronizarSupressoesResend(empresaId);
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Falha ao consultar a Resend." }, { status: 502 });
   }
 
   const { data, error } = await supabaseAdmin.rpc(

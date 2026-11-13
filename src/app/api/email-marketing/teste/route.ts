@@ -4,6 +4,7 @@ import {
   validarAcessoEmailMarketing,
 } from "@/lib/email-marketing/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { buscarEmailsSuprimidos } from "@/lib/email-marketing/campanhas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -40,7 +41,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const [{ data: remetente, error: remetenteError }, { data: supressoes, error: supressaoError }] =
+  let bloqueado = false;
+  try {
+    bloqueado = (await buscarEmailsSuprimidos(acesso.usuario.empresa_id)).has(destinatario);
+  } catch (error) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Falha ao consultar a Resend." }, { status: 502 });
+  }
+
+  const [{ data: remetente, error: remetenteError }] =
     await Promise.all([
       supabaseAdmin
         .from("email_remetentes")
@@ -52,11 +60,6 @@ export async function POST(request: Request) {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      supabaseAdmin
-        .from("email_suppressions")
-        .select("id, motivo")
-        .ilike("email", destinatario)
-        .limit(1),
     ]);
 
   if (remetenteError || !remetente) {
@@ -71,14 +74,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (supressaoError) {
-    return NextResponse.json(
-      { ok: false, error: supressaoError.message },
-      { status: 500 }
-    );
-  }
-
-  if (supressoes?.length) {
+  if (bloqueado) {
     return NextResponse.json(
       {
         ok: false,

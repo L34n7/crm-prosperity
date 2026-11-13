@@ -68,7 +68,7 @@ export async function emailMarketingWebhookConfigurado(empresaId: string) {
   return Boolean(integracao?.habilitado && segredoWebhook(integracao, empresaId));
 }
 
-export async function getEmailMarketingResend(empresaId: string) {
+export async function getEmailMarketingResendApiKey(empresaId: string) {
   const integracao = await buscarIntegracaoEmailMarketing(empresaId);
   if (!integracao?.habilitado) {
     throw new Error("O módulo E-mail Marketing está desabilitado para esta empresa.");
@@ -77,7 +77,11 @@ export async function getEmailMarketingResend(empresaId: string) {
   if (!key) {
     throw new Error("Configure a API Key do Resend para esta empresa.");
   }
-  return new Resend(key);
+  return key;
+}
+
+export async function getEmailMarketingResend(empresaId: string) {
+  return new Resend(await getEmailMarketingResendApiKey(empresaId));
 }
 
 export async function getEmailMarketingWebhookSecret(empresaId: string) {
