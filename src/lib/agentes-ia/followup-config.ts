@@ -1,4 +1,5 @@
-export const MAX_TENTATIVAS_FOLLOWUP = 3;
+export const MAX_TENTATIVAS_FOLLOWUP = 6;
+export const MAX_CARACTERES_PROMPT_FOLLOWUP = 2000;
 export const MAX_INTERVALO_FOLLOWUP_MINUTOS = 23 * 60;
 
 export type FollowupTipoEnvio = "ia" | "texto" | "audio";
@@ -10,6 +11,7 @@ export type FollowupTentativaConfig = {
   intervalo_minutos: number;
   tipo: FollowupTipoEnvio;
   texto: string;
+  prompt_adicional: string;
   midia_id: string | null;
   midia_nome: string | null;
   midia_url: string | null;
@@ -29,6 +31,7 @@ const ETAPAS_PADRAO: FollowupTentativaConfig[] = [
     intervalo_minutos: 30,
     tipo: "ia",
     texto: "",
+    prompt_adicional: "",
     midia_id: null,
     midia_nome: null,
     midia_url: null,
@@ -39,6 +42,7 @@ const ETAPAS_PADRAO: FollowupTentativaConfig[] = [
     intervalo_minutos: 180,
     tipo: "ia",
     texto: "",
+    prompt_adicional: "",
     midia_id: null,
     midia_nome: null,
     midia_url: null,
@@ -49,6 +53,40 @@ const ETAPAS_PADRAO: FollowupTentativaConfig[] = [
     intervalo_minutos: 720,
     tipo: "ia",
     texto: "",
+    prompt_adicional: "",
+    midia_id: null,
+    midia_nome: null,
+    midia_url: null,
+  },
+  {
+    intervalo_valor: 16,
+    intervalo_unidade: "horas",
+    intervalo_minutos: 960,
+    tipo: "ia",
+    texto: "",
+    prompt_adicional: "",
+    midia_id: null,
+    midia_nome: null,
+    midia_url: null,
+  },
+  {
+    intervalo_valor: 20,
+    intervalo_unidade: "horas",
+    intervalo_minutos: 1200,
+    tipo: "ia",
+    texto: "",
+    prompt_adicional: "",
+    midia_id: null,
+    midia_nome: null,
+    midia_url: null,
+  },
+  {
+    intervalo_valor: 23,
+    intervalo_unidade: "horas",
+    intervalo_minutos: 1380,
+    tipo: "ia",
+    texto: "",
+    prompt_adicional: "",
     midia_id: null,
     midia_nome: null,
     midia_url: null,
@@ -141,6 +179,7 @@ function normalizarEtapa(
     intervalo_minutos: intervaloMinutos,
     tipo: tipoValido(obj.tipo),
     texto: String(obj.texto || "").slice(0, 2000),
+    prompt_adicional: String(obj.prompt_adicional || "").slice(0, MAX_CARACTERES_PROMPT_FOLLOWUP),
     midia_id: String(obj.midia_id || "").trim() || null,
     midia_nome: String(obj.midia_nome || "").trim().slice(0, 255) || null,
     midia_url: String(obj.midia_url || "").trim().slice(0, 2000) || null,
@@ -179,6 +218,22 @@ export function normalizarFollowupInatividade(
     intervalos_minutos: etapas.map((item) => item.intervalo_minutos),
     etapas,
   };
+}
+
+/** Aplica instrução comercial opcional só aos acompanhamentos gerados pela IA. */
+export function instrucaoPersonalizadaFollowup(
+  etapa: FollowupTentativaConfig,
+  tentativa: number,
+): string {
+  const prompt = etapa.tipo === "ia" ? String(etapa.prompt_adicional || "").trim() : "";
+  if (!prompt) return "";
+  return [
+    "ORIENTAÇÃO PERSONALIZADA DA EMPRESA — " + tentativa + "ª TENTATIVA:",
+    prompt.slice(0, MAX_CARACTERES_PROMPT_FOLLOWUP),
+    "Aplique a estratégia acima neste contato, sem copiar o prompt literalmente como mensagem.",
+    "Nunca invente preços, números, benefícios, escassez ou resultados garantidos.",
+    "Respeite pedidos de parar e não faça ataques pessoais ou pressão humilhante.",
+  ].join("\n");
 }
 
 export function erroValidacaoFollowupInatividade(
