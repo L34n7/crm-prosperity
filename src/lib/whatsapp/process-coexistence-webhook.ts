@@ -280,16 +280,6 @@ async function processMessageEchoes(body: WhatsAppWebhookBody) {
       continue;
     }
 
-    // Excluir no WhatsApp Business altera a mensagem original, quando ela já
-    // está registrada. Não cria um balão duplicado com "conteúdo indisponível".
-    if (String(echo.type || "").toLowerCase() === "revoke") {
-      const resultado = await tratarRevogacaoEcoBusinessApp({
-        empresaId: integration.empresa_id,
-        message: echo.rawMessage,
-      });
-      if (resultado.found) continue;
-    }
-
     const contact = await findOrCreateWhatsAppContact({
       empresaId: integration.empresa_id,
       phone: echo.to,
@@ -300,6 +290,19 @@ async function processMessageEchoes(body: WhatsAppWebhookBody) {
       contatoId: contact.id,
       integracaoWhatsappId: integration.id,
     });
+
+    // O mesmo WAMID tem prefixos diferentes na Cloud API e no Business App.
+    // Apaga a mensagem original (mesma empresa/conversa) em vez de inserir
+    // um balão adicional para o evento "revoke".
+    if (String(echo.type || "").toLowerCase() === "revoke") {
+      const resultado = await tratarRevogacaoEcoBusinessApp({
+        empresaId: integration.empresa_id,
+        conversaId: conversation.id,
+        message: echo.rawMessage,
+      });
+      if (resultado.found) continue;
+    }
+
     const protocolId = await findActiveProtocolId(conversation.id);
 
     const savedMessage = await saveCoexistenceMessage({

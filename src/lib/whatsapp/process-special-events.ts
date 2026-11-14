@@ -4,6 +4,7 @@ import type {
   WhatsAppIncomingRawMessage,
   WhatsAppWebhookBody,
 } from "@/lib/whatsapp/meta";
+import { obterSufixoIdentidadeWhatsapp } from "@/lib/whatsapp/mensagem-id-coexistencia";
 
 type WhatsAppReaction = {
   emoji?: string;
@@ -133,6 +134,10 @@ function wait(ms: number) {
 async function findTargetMessage(params: {
   empresaId: string;
   externalId: string;
+  // Somente revogações emitidas pelo Business App podem usar o sufixo do ID.
+  // Cloud API e WhatsApp Business usam prefixos WAMID distintos para a
+  // mesma mensagem. O fallback fica restrito à conversa e a um match único.
+  conversaIdBusinessApp?: string;
 }): Promise<StoredMessage | null> {
   const supabaseAdmin = getSupabaseAdmin();
 
@@ -150,6 +155,35 @@ async function findTargetMessage(params: {
 
     if (data) {
       return data as StoredMessage;
+    }
+
+    const suffix = params.conversaIdBusinessApp
+      ? obterSufixoIdentidadeWhatsapp(params.externalId)
+      : null;
+    if (suffix) {
+      const { data: candidatos, error: erroCandidatos } = await supabaseAdmin
+        .from("mensagens")
+        .select("id, conversa_id, conteudo, tipo_mensagem, metadata_json")
+        .eq("empresa_id", params.empresaId)
+        .eq("conversa_id", params.conversaIdBusinessApp!)
+        .like("mensagem_externa_id", `%${suffix}`)
+        .limit(2);
+
+      if (erroCandidatos) {
+        throw new Error(
+          `Erro ao correlacionar ID Coexistence da mensagem original: ${erroCandidatos.message}`
+        );
+      }
+      if (candidatos?.length === 1) {
+        return candidatos[0] as StoredMessage;
+      }
+      if (candidatos && candidatos.length > 1) {
+        console.warn("[WHATSAPP EVENT] Sufixo WAMID ambiguo na conversa; revogacao nao vinculada.", {
+          empresaId: params.empresaId,
+          conversaId: params.conversaIdBusinessApp,
+        });
+        return null;
+      }
     }
 
     if (tentativa < 2) {
@@ -255,6 +289,7 @@ async function handleRevoke(params: {
   empresaId: string;
   message: WhatsAppSpecialMessage;
   source?: "business_app";
+  conversaId?: string;
 }) {
   const originalMessageId = originalMessageIdFromRevoke(params.message);
   if (!originalMessageId) return { found: false, originalMessageId: null };
@@ -262,6 +297,7 @@ async function handleRevoke(params: {
   const target = await findTargetMessage({
     empresaId: params.empresaId,
     externalId: originalMessageId,
+    conversaIdBusinessApp: params.source === "business_app" ? params.conversaId : undefined,
   });
   if (!target) return { found: false, originalMessageId };
 
@@ -310,10 +346,12 @@ async function handleRevoke(params: {
  */
 export async function tratarRevogacaoEcoBusinessApp(params: {
   empresaId: string;
+  conversaId: string;
   message: WhatsAppIncomingRawMessage;
 }) {
   return handleRevoke({
     empresaId: params.empresaId,
+    conversaId: params.conversaId,
     message: params.message as WhatsAppSpecialMessage,
     source: "business_app",
   });
