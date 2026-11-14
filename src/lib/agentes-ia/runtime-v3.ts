@@ -42,6 +42,7 @@ import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida} from "./resposta-estruturada";
 import { consultaFaqProduto } from "./preconsulta-faq-produto";
+import { protegerRespostaPosCompraProsperity } from "./protecao-poscompra-prosperity";
 import {regrasGeraisBackend,regrasPorFerramentaGeral} from "./prompts-backend";
 import { mensagemEhDuvidaSobreAgendaDoProduto } from "./intencao-agenda-informativa";
 import {
@@ -4278,6 +4279,14 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
             : "Não consegui responder sua última pergunta com segurança. Pode reformulá-la para eu ajudar melhor?",
         ];
       }
+      // Caso específico já observado: o cliente comprou e recebeu, por erro
+      // do modelo, o link de NOVO cadastro em vez do link de login. A última
+      // barreira impede esse retrocesso de funil exclusivamente no Leonardo.
+      saidaFinal.mensagens=protegerRespostaPosCompraProsperity({
+        agenteId:agente.id,
+        ultimaMensagemCliente:pendencia.conteudo_agregado,
+        mensagens:saidaFinal.mensagens,
+      });
       // Auditoria e envio compartilham apenas mensagens seguras.
       const quantidadeAntesFiltro=saidaFinal.mensagens.length;
       saidaFinal.mensagens=protegerMensagensSaida(saidaFinal.mensagens,MAX_MENSAGENS_SAIDA);
