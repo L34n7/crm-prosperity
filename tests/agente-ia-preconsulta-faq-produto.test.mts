@@ -24,6 +24,27 @@ test("FAQ comercial de maior risco consulta a base específica",()=>{
     "Tem email marketing?",
   ]) assert.equal(consultaFaqProduto(pergunta),pergunta,pergunta);
 });
+test("perguntas observadas na venda real consultam a base especializada",()=>{
+  const perguntas=[
+    "Ele tem disparos com variável?",
+    "A lista é em CSV com nomes",
+    "Esse template com {{1}} funciona?",
+    "Posso usar nome_contato na campanha?",
+    "Estou com erro em variáveis do disparo",
+    "Tem uma tela do sistema?",
+    "Quero ver funcionando",
+    "Como desvincular o parceiro anterior?",
+    "Os números estão em outra BM",
+    "Quero adicionar mais um número",
+    "Pronto, como faço agora pra acessar?",
+    "Já fiz login, como configuro?",
+    "Já paguei. Onde encontro o link do login?",
+    "Como criar login para funcionário?",
+  ];
+  for(const pergunta of perguntas){
+    assert.equal(consultaFaqProduto(pergunta),pergunta,pergunta);
+  }
+});
 test("saudação simples e continuação curta não exigem pré-consulta",()=>{
   for(const msg of ["Oi","Oii","Bom dia","Pode ser","Sim","Vou avaliar e retorno","Quero conhecer"]) {
     assert.equal(consultaFaqProduto(msg),null,msg);
