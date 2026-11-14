@@ -15,6 +15,7 @@ import {
   WHATSAPP_META_BLOCK_DESCRIPTION,
 } from "@/lib/whatsapp/meta-block";
 import type { TemplatePayloadDisparo } from "@/lib/whatsapp/send-template-disparo";
+import { validarConsentimentoSemOptOut } from "@/lib/whatsapp/disparo-consentimento-sem-opt-out";
 
 type JsonObject = Record<string, unknown>;
 
@@ -490,7 +491,7 @@ async function enfileirarGrupo(agendamentos: AgendamentoDisparo[]) {
       supabaseAdmin
         .from("whatsapp_templates")
         .select(
-          "id, empresa_id, integracao_whatsapp_id, nome, idioma, categoria, status, payload"
+          "id, empresa_id, integracao_whatsapp_id, nome, idioma, categoria, status, opt_out_habilitado, payload"
         )
         .eq("id", templateId)
         .eq("empresa_id", empresaId)
@@ -517,6 +518,17 @@ async function enfileirarGrupo(agendamentos: AgendamentoDisparo[]) {
 
   if (template.integracao_whatsapp_id !== integracaoWhatsappId) {
     throw new Error("O template agendado nao pertence a integracao informada.");
+  }
+
+  const consentimentoAgendado = objeto(payload.consentimento_template_sem_opt_out);
+  const validacaoConsentimento = validarConsentimentoSemOptOut({
+    categoria: template.categoria,
+    optOutHabilitado: template.opt_out_habilitado,
+    cienciaRiscos: consentimentoAgendado.ciencia_riscos === true && consentimentoAgendado.template_id === template.id,
+    autorizacaoContatos: consentimentoAgendado.autorizacao_contatos === true && consentimentoAgendado.template_id === template.id,
+  });
+  if (!validacaoConsentimento.ok) {
+    throw new Error(validacaoConsentimento.error);
   }
 
   if (integracaoError || !integracao) {
@@ -650,6 +662,9 @@ async function enfileirarGrupo(agendamentos: AgendamentoDisparo[]) {
           total_contatos_opt_in: Number(payload.total_contatos_opt_in || 0),
           responsabilidade_lista_fria_confirmada:
             payload.responsabilidade_lista_fria_confirmada === true,
+          consentimento_template_sem_opt_out: validacaoConsentimento.necessario
+            ? consentimentoAgendado
+            : null,
           template_payload:
             (template.payload || null) as TemplatePayloadDisparo | null,
         },

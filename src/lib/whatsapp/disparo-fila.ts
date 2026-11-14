@@ -16,6 +16,7 @@ import { qstash } from "@/lib/qstash/client";
 import { resolverDisparoAgendadoParaFila } from "@/lib/whatsapp/disparo-agendado-variaveis";
 import { atualizarReservaLimiteMeta } from "@/lib/whatsapp/meta-limites";
 import { telefoneEstaSuprimido } from "@/lib/whatsapp/opt-out";
+import { validarConsentimentoSemOptOut } from "@/lib/whatsapp/disparo-consentimento-sem-opt-out";
 import {
   classificarDestinatariosPorOptIn,
   validarPoliticaListaDisparo,
@@ -1839,21 +1840,32 @@ async function processarItemDisparo(item: DisparoItemRow) {
       objeto(campanha.metadata_json)
         .responsabilidade_lista_fria_confirmada === true,
   });
-  const utilityFrioSemOptOut =
-    politicaLista.categoria === "utility" &&
-    classificacaoLista.totalFrios > 0 &&
-    template.opt_out_habilitado !== true;
+  const consentimentoRegistrado = objeto(
+    objeto(campanha.metadata_json).consentimento_template_sem_opt_out
+  );
+  const consentimentoSemOptOut = validarConsentimentoSemOptOut({
+    categoria: template.categoria,
+    optOutHabilitado: template.opt_out_habilitado,
+    cienciaRiscos:
+      consentimentoRegistrado.ciencia_riscos === true &&
+      consentimentoRegistrado.template_id === template.id,
+    autorizacaoContatos:
+      consentimentoRegistrado.autorizacao_contatos === true &&
+      consentimentoRegistrado.template_id === template.id,
+  });
   const templateEhMarketing =
     String(template.categoria || "").trim().toLowerCase() === "marketing";
 
-  if (!politicaLista.ok || utilityFrioSemOptOut) {
+  if (!politicaLista.ok || !consentimentoSemOptOut.ok) {
     const agora = new Date().toISOString();
-    const motivoCancelamento = utilityFrioSemOptOut
-      ? "Envio cancelado: o contato e lista fria para este numero e o template utility nao possui opt-out."
-      : politicaLista.error;
-    const motivoCodigo = utilityFrioSemOptOut
-      ? "template_utility_sem_opt_out"
-      : String(politicaLista.code || "politica_lista_fria");
+    const motivoCancelamento = !politicaLista.ok
+      ? politicaLista.error
+      : !consentimentoSemOptOut.ok
+        ? consentimentoSemOptOut.error
+        : "Confirmação de envio não encontrada.";
+    const motivoCodigo = !politicaLista.ok
+      ? String(politicaLista.code || "politica_lista_fria")
+      : "confirmacao_sem_opt_out_ausente";
 
     await supabaseAdmin
       .from("whatsapp_disparo_itens")
